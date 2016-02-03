@@ -216,6 +216,22 @@ let g:user_emmet_settings = {
   \ 'lang' : 'ja',
   \ 'html' : {
   \   'filters' : 'html',
+  \   'snippets' : {
+  \      'html:5' : "<!DOCTYPE html>\n"
+  \               ."<html lang=\"ja\">\n"
+  \               ."<head>\n"
+  \               ."\t<meta charset=\"${charset}\">\n"
+  \               ."\t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n"
+  \               ."\t<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no\">\n"
+  \               ."\t<meta name=\"format-detection\" content=\"telephone=no,address=no,email=no\">\n"
+  \               ."\t<meta name=\"description\" content=\"\">\n"
+  \               ."\t<title></title>\n"
+  \               ."\t<link rel=\"shortcut icon\" href=\"/favicon.ico\">\n"
+  \               ."\t<link rel=\"stylesheet\" href=\"/style.css\">\n"
+  \               ."</head>\n"
+  \               ."<body>\n\t${child}|\n</body>\n"
+  \               ."</html>"
+  \   }
   \ },
   \ 'css' : {
   \   'filters' : 'fc',
