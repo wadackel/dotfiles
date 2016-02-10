@@ -67,6 +67,7 @@ set regexpengine=1
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
+set completeopt=menuone
 set number
 set incsearch
 set wrapscan
