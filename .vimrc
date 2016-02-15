@@ -96,6 +96,19 @@ inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
 
 
+" commandモードはEmacs風に
+cmap <C-f> <Right>
+cmap <C-b> <Left>
+cmap <C-a> <Home>
+cmap <C-e> <End>
+cmap <C-d> <Del>
+cmap <C-h> <BackSpace>
+
+
+" visualモードで検索文字列を指定
+vnoremap * "zy:let @/ = '\V' . substitute(escape(@z, '\/'), '\n', '\\n', 'g')<CR>n
+
+
 "タブ、空白、改行の可視化
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
@@ -104,10 +117,13 @@ set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 " neocomplete
 " Disable AutoComplPop.
 let g:acp_enableAtStartup = 0
+
 " Use neocomplete.
 let g:neocomplete#enable_at_startup = 1
+
 " Use smartcase.
 let g:neocomplete#enable_smart_case = 1
+
 " Set minimum syntax keyword length.
 let g:neocomplete#sources#syntax#min_keyword_length = 2
 let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
@@ -127,11 +143,11 @@ inoremap <expr><C-l>     neocomplete#complete_common_string()
 inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
 function! s:my_cr_function()
   return (pumvisible() ? "\<C-y>" : "" ) . "\<CR>"
-  " For no inserting <CR> key.
-  "return pumvisible() ? "\<C-y>" : "\<CR>"
 endfunction
+
 " <TAB>: completion.
 inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+
 " <C-h>, <BS>: close popup and delete backword char.
 inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
 inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
@@ -278,4 +294,3 @@ augroup EmmitVim
 " Markdown
 let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
-
