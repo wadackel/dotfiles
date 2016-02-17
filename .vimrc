@@ -96,6 +96,10 @@ inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
 
 
+" 0レジスタのを貼り付け
+vnoremap <silent> <C-p> "0p<CR>
+
+
 " commandモードはEmacs風に
 cmap <C-f> <Right>
 cmap <C-b> <Left>
