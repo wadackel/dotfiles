@@ -64,7 +64,7 @@ set background=dark
 
 
 " 各種基本設定
-set regexpengine=1
+" set regexpengine=1
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
@@ -87,6 +87,7 @@ set laststatus=2
 set noswapfile
 set ambiwidth=double
 set wildmode=longest,full
+set noshowmode
 nnoremap p "0p
 nnoremap P "0P
 
@@ -173,18 +174,20 @@ inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
 inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
 
 
-" Lightline
+" lightline
 let g:lightline = {
-  \ 'colorscheme': 'jellybeans',
+  \ 'colorscheme': 'wombat',
   \ 'active': {
   \   'left': [ [ 'mode', 'paste' ],
-  \             [ 'fugitive', 'filename' ] ]
+  \             [ 'fugitive', 'readonly', 'filename', 'modified' ] ]
   \ },
   \ 'component_function': {
   \   'fugitive': 'LightLineFugitive',
-  \   'modified': 'LightLineModified',
-  \   'filename': 'LightLineFilename'
-  \ }
+  \   'readonly': 'LightLineReadonly',
+  \   'modified': 'LightLineModified'
+  \ },
+  \ 'separator': { 'left': "\ue0b0", 'right': "\ue0b2" },
+  \ 'subseparator': { 'left': "\ue0b1", 'right': "\ue0b3" }
   \ }
 
 function! LightLineModified()
@@ -199,13 +202,22 @@ function! LightLineModified()
   endif
 endfunction
 
-function! LightLineFugitive()
-  return exists('*fugitive#head') ? fugitive#head() : ''
+function! LightLineReadonly()
+  if &filetype == "help"
+    return ""
+  elseif &readonly
+    return "\ue0a2"
+  else
+    return ""
+  endif
 endfunction
 
-function! LightLineFilename()
-  return ('' != expand('%:t') ? expand('%:t') : '[No Name]') .
-       \ ('' != LightLineModified() ? ' ' . LightLineModified() : '')
+function! LightLineFugitive()
+  if exists("*fugitive#head")
+    let _ = fugitive#head()
+    return strlen(_) ? "\ue0a0 "._ : ''
+  endif
+  return ''
 endfunction
 
 
