@@ -44,6 +44,7 @@ NeoBundle 'kewah/vim-cssfmt'
 NeoBundle 'kmnk/vim-unite-giti'
 NeoBundle 'tpope/vim-fugitive'
 NeoBundle 'Valloric/MatchTagAlways'
+NeoBundle 'dhruvasagar/vim-table-mode'
 
 " ColorScheme
 NeoBundle 'w0ng/vim-hybrid'
@@ -90,6 +91,8 @@ set wildmode=longest,full
 set noshowmode
 nnoremap p "0p
 nnoremap P "0P
+
+let mapleader = ","
 
 
 " 括弧の補完
