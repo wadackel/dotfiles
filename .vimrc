@@ -65,13 +65,14 @@ set background=dark
 
 
 " 各種基本設定
-" set regexpengine=1
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
 set completeopt=menuone
 set number
 set incsearch
+set ignorecase
+set smartcase
 set wrapscan
 set showmatch
 set showmode
@@ -89,16 +90,35 @@ set noswapfile
 set ambiwidth=double
 set wildmode=longest,full
 set noshowmode
+set imsearch=0
+set backspace=indent,eol,start
 nnoremap p "0p
 nnoremap P "0P
 
 let mapleader = ","
 
 
+" スーパーユーザとして保存
+cnoremap w!! w !sudo tee > /dev/null %
+
+
+" 検索後の位置調整
+nnoremap n nzz
+nnoremap N Nzz
+nnoremap * *zz
+nnoremap # #zz
+nnoremap g* g*zz
+nnoremap g# g#zz
+
+
 " 括弧の補完
 inoremap {<Enter> {}<Left><CR><ESC><S-o>
 inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
+
+
+" insertモード時の<Delete>
+inoremap <C-d> <Delete>
 
 
 " 0レジスタのを貼り付け
