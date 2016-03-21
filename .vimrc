@@ -92,14 +92,16 @@ set wildmode=longest,full
 set noshowmode
 set imsearch=0
 set backspace=indent,eol,start
-nnoremap p "0p
-nnoremap P "0P
+set matchpairs& matchpairs+=<:>
 
+
+" ビープ音を消す
+set vb t_vb=
+set novisualbell
+
+
+" <Leader>を`,`に設定
 let mapleader = ","
-
-
-" スーパーユーザとして保存
-cnoremap w!! w !sudo tee > /dev/null %
 
 
 " 検索後の位置調整
@@ -111,18 +113,26 @@ nnoremap g* g*zz
 nnoremap g# g#zz
 
 
+" j, k による移動を折り返されたテキストでも自然に振る舞うように変更
+nnoremap j gj
+nnoremap k gk
+
+
+" スーパーユーザとして保存
+cnoremap w!! w !sudo tee > /dev/null %
+
+
 " 括弧の補完
 inoremap {<Enter> {}<Left><CR><ESC><S-o>
 inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
 
 
-" insertモード時の<Delete>
-inoremap <C-d> <Delete>
-
-
 " 0レジスタのを貼り付け
 vnoremap <silent> <C-p> "0p<CR>
+vnoremap <silent> <C-P> "0P<CR>
+nnoremap <C-p> "0p
+nnoremap <C-P> "0P
 
 
 " commandモードはEmacs風に
