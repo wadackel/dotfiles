@@ -57,6 +57,10 @@ filetype indent on
 NeoBundleCheck
 
 
+" `%` 移動の拡張
+source $VIMRUNTIME/macros/matchit.vim
+
+
 " Colorschemeの設定
 syntax on
 let g:hybrid_custom_term_colors = 1
