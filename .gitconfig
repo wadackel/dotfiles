@@ -12,6 +12,8 @@
 [alias]
   st = status
   co = checkout
+  cm = commit
+  ca = commit --amend
   ba = branch -a
   bd = branch -d
   graph = log --graph --date=short --decorate=short --pretty=format:'%Cgreen%h %Creset%cd %Cblue%cn %Creset%s'
