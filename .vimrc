@@ -45,6 +45,7 @@ NeoBundle 'kmnk/vim-unite-giti'
 NeoBundle 'tpope/vim-fugitive'
 NeoBundle 'Valloric/MatchTagAlways'
 NeoBundle 'dhruvasagar/vim-table-mode'
+NeoBundle 'Chiel92/vim-autoformat'
 
 " ColorScheme
 NeoBundle 'w0ng/vim-hybrid'
