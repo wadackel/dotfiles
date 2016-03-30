@@ -261,8 +261,11 @@ endfunction
 
 " NERDTree
 map <C-n> :NERDTreeToggle<CR>
-nmap <C-K> <Plug>(caw:i:toggle)
-vmap <C-K> <Plug>(caw:i:toggle)
+
+
+" caw
+nmap <C-K> <Plug>(caw:hatpos:toggle)
+vmap <C-K> <Plug>(caw:hatpos:toggle)
 
 
 " </で閉じタグを自動補完
