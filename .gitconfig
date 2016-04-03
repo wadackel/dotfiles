@@ -21,8 +21,7 @@
   d = diff
   b = branch
   ba = branch -a
-  bd = branch -d
-  bD = branch -D
+  bd = branch -D
   pullp = pull --prune
   nerge = merge --no-ff
   unstage = reset HEAD --
