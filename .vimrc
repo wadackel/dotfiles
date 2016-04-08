@@ -17,6 +17,7 @@ call neobundle#begin(expand('~/.vim/bundle/'))
 NeoBundle 'Shougo/unite.vim'
 NeoBundle 'Shougo/neocomplete.vim'
 NeoBundle 'scrooloose/nerdtree'
+NeoBundle 'jistr/vim-nerdtree-tabs'
 NeoBundle 'kana/vim-submode'
 NeoBundle 'itchyny/lightline.vim'
 NeoBundle 'editorconfig/editorconfig-vim'
@@ -260,7 +261,8 @@ endfunction
 
 
 " NERDTree
-map <C-n> :NERDTreeToggle<CR>
+map <C-n> :NERDTreeTabsToggle<CR>
+map <C-m> :NERDTreeToggle<CR>
 
 
 " caw
