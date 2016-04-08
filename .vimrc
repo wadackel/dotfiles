@@ -46,6 +46,7 @@ NeoBundle 'tpope/vim-fugitive'
 NeoBundle 'Valloric/MatchTagAlways'
 NeoBundle 'dhruvasagar/vim-table-mode'
 NeoBundle 'Chiel92/vim-autoformat'
+NeoBundle 'parkr/vim-jekyll'
 
 " ColorScheme
 NeoBundle 'w0ng/vim-hybrid'
@@ -372,3 +373,16 @@ let g:vim_markdown_folding_disabled=1
 " Cssfmt
 nnoremap <silent> <leader>cs :Cssfmt<CR>
 vnoremap <silent> <leader>cs :CssfmtVisual<CR>
+
+
+" Jekyll
+let g:jekyll_post_template =  [
+  \ '---',
+  \ 'title: "JEKYLL_TITLE"',
+  \ 'category: unknown',
+  \ '---',
+  \ '']
+
+let g:jekyll_build_command = 'npm run build'
+let g:jekyll_post_extension = '.md'
+let g:jekyll_post_filetype = 'markdown'
