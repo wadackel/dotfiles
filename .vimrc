@@ -76,6 +76,7 @@ set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
 set completeopt=menuone
 set number
+set nohlsearch
 set incsearch
 set ignorecase
 set smartcase
@@ -89,7 +90,7 @@ set shiftwidth=2
 set autoindent
 set smartindent
 set expandtab
-set nowrap
+set wrap
 set clipboard=unnamed
 set laststatus=2
 set noswapfile
