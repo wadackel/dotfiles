@@ -265,7 +265,10 @@ endfunction
 
 
 " NERDTree
+" let NERDTreeShowHidden=1;
 map <C-n> :NERDTreeToggle<CR>
+let NERDTreeIgnore=['\~$', '\.git$', '\.DS_Store']
+let NERDTreeShowHidden=1
 
 
 " caw
