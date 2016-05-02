@@ -178,6 +178,11 @@ set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
 
+" ファイルタイプショートカット
+au FileType md setlocal filetype=markdown
+au FileType js setlocal filetype=javascript
+
+
 " neocomplete
 " Disable AutoComplPop.
 let g:acp_enableAtStartup = 0
