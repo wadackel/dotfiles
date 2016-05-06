@@ -48,6 +48,7 @@ NeoBundle 'Valloric/MatchTagAlways'
 NeoBundle 'dhruvasagar/vim-table-mode'
 NeoBundle 'Chiel92/vim-autoformat'
 NeoBundle 'deton/jasegment.vim'
+NeoBundle 'sudo.vim'
 
 " ColorScheme
 NeoBundle 'w0ng/vim-hybrid'
