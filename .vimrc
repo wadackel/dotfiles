@@ -48,6 +48,8 @@ NeoBundle 'Valloric/MatchTagAlways'
 NeoBundle 'dhruvasagar/vim-table-mode'
 NeoBundle 'Chiel92/vim-autoformat'
 NeoBundle 'deton/jasegment.vim'
+NeoBundle 'scrooloose/syntastic'
+NeoBundle 'gcorne/vim-sass-lint'
 NeoBundle 'sudo.vim'
 
 " ColorScheme
@@ -386,3 +388,8 @@ let g:vim_markdown_folding_disabled=1
 " Cssfmt
 nnoremap <silent> <leader>cs :Cssfmt<CR>
 vnoremap <silent> <leader>cs :CssfmtVisual<CR>
+
+
+" lint
+let g:syntastic_sass_checkers=["sass_lint"]
+let g:syntastic_scss_checkers=["sass_lint"]
