@@ -79,6 +79,7 @@ set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
 set completeopt=menuone
+set autoread
 set number
 set nohlsearch
 set incsearch
@@ -103,7 +104,10 @@ set noswapfile
 set ambiwidth=double
 set wildmode=longest,full
 set noshowmode
+set iminsert=0
 set imsearch=0
+set noimdisable
+set noimcmdline
 set backspace=indent,eol,start
 set matchpairs& matchpairs+=<:>
 
@@ -135,17 +139,14 @@ nnoremap k gk
 cnoremap w!! w !sudo tee > /dev/null %
 
 
+" 画面の再描画 (redraw!のalias)
+cnoremap refresh redraw!
+
+
 " 括弧の補完
 inoremap {<Enter> {}<Left><CR><ESC><S-o>
 inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
-
-
-" 0レジスタのを貼り付け
-vnoremap <silent> <C-p> "0p<CR>
-vnoremap <silent> <C-P> "0P<CR>
-nnoremap <C-p> "0p
-nnoremap <C-P> "0P
 
 
 " commandモードはEmacs風に
@@ -155,6 +156,13 @@ cmap <C-a> <Home>
 cmap <C-e> <End>
 cmap <C-d> <Del>
 cmap <C-h> <BackSpace>
+
+
+" 0レジスタのを貼り付け
+vnoremap <silent> <C-p> "0p<CR>
+vnoremap <silent> <C-P> "0P<CR>
+nnoremap <C-p> "0p
+nnoremap <C-P> "0P
 
 
 " quickfixの移動
@@ -273,7 +281,13 @@ endfunction
 
 
 " NERDTree
-" let NERDTreeShowHidden=1;
+" 引数なしでvimを開いたらNERDTreeを起動、引数ありならNERDTreeは起動しない
+" ref. http://kokukuma.blogspot.jp/2011/12/vim-essential-plugin-nerdtree.html
+let file_name = expand("%")
+if has('vim_starting') &&  file_name == ""
+  autocmd VimEnter * NERDTree ./
+endif
+
 map <C-n> :NERDTreeToggle<CR>
 let NERDTreeIgnore=['\~$', '\.git$', '\.DS_Store']
 let NERDTreeShowHidden=1
@@ -391,5 +405,10 @@ vnoremap <silent> <leader>cs :CssfmtVisual<CR>
 
 
 " lint
-let g:syntastic_sass_checkers=["sass_lint"]
-let g:syntastic_scss_checkers=["sass_lint"]
+let g:syntastic_mode_map = {
+    \ "mode": "active",
+    \ "active_filetypes": ["sass", "scss"],
+    \ "passive_filetypes": ["html", "php"] }
+
+let g:syntastic_sass_checkers = ["sass_lint"]
+let g:syntastic_scss_checkers = ["sass_lint"]
