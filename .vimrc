@@ -139,8 +139,12 @@ nnoremap k gk
 cnoremap w!! w !sudo tee > /dev/null %
 
 
-" 画面の再描画 (redraw!のalias)
-cnoremap refresh redraw!
+" 画面の再描画 (redraw!のalias, :Refresh)
+:command! Refresh call RefreshFunc()
+
+function RefreshFunc()
+  redraw!
+endfunction
 
 
 " 括弧の補完
