@@ -17,6 +17,7 @@ call neobundle#begin(expand('~/.vim/bundle/'))
 NeoBundle 'Shougo/unite.vim'
 NeoBundle 'Shougo/neocomplete.vim'
 NeoBundle 'scrooloose/nerdtree'
+NeoBundle 'ctrlpvim/ctrlp.vim'
 NeoBundle 'kana/vim-submode'
 NeoBundle 'itchyny/lightline.vim'
 NeoBundle 'editorconfig/editorconfig-vim'
@@ -160,13 +161,6 @@ cmap <C-a> <Home>
 cmap <C-e> <End>
 cmap <C-d> <Del>
 cmap <C-h> <BackSpace>
-
-
-" 0レジスタのを貼り付け
-vnoremap <silent> <C-p> "0p<CR>
-vnoremap <silent> <C-P> "0P<CR>
-nnoremap <C-p> "0p
-nnoremap <C-P> "0P
 
 
 " quickfixの移動
