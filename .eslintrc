@@ -1,0 +1,24 @@
+{
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 6,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "commonjs": true,
+    "shared-node-browser": true,
+    "es6": true
+  }
+  "rules": {
+    "semi": "error",
+    "indent": ["error", 2],
+    "quotes": ["error", "double"],
+    "linebreak-style": ["error", "unix"],
+    "no-console": "off"
+  }
+}
