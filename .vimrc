@@ -412,7 +412,7 @@ nnoremap <silent> <leader>cs :Cssfmt<CR>
 vnoremap <silent> <leader>cs :CssfmtVisual<CR>
 
 
-" lint
+" syntastic
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_auto_loc_list = 1
 let g:syntastic_check_on_open = 0
@@ -426,3 +426,6 @@ let g:syntastic_mode_map = {
 let g:syntastic_sass_checkers = ["sass_lint"]
 let g:syntastic_scss_checkers = ["sass_lint"]
 let g:syntastic_javascript_checkers = ["eslint"]
+
+" syntastic - eslint
+let g:syntastic_javascript_eslint_args = "--no-ignore"
