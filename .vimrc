@@ -50,6 +50,7 @@ NeoBundle 'dhruvasagar/vim-table-mode'
 NeoBundle 'Chiel92/vim-autoformat'
 NeoBundle 'deton/jasegment.vim'
 NeoBundle 'scrooloose/syntastic'
+NeoBundle 'mtscout6/syntastic-local-eslint.vim'
 NeoBundle 'gcorne/vim-sass-lint'
 NeoBundle 'sudo.vim'
 
@@ -291,6 +292,11 @@ let NERDTreeIgnore=['\~$', '\.git$', '\.DS_Store']
 let NERDTreeShowHidden=1
 
 
+" ctrlp
+let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
+let g:ctrlp_show_hidden = 1
+
+
 " caw
 nmap <C-K> <Plug>(caw:hatpos:toggle)
 vmap <C-K> <Plug>(caw:hatpos:toggle)
@@ -407,10 +413,16 @@ vnoremap <silent> <leader>cs :CssfmtVisual<CR>
 
 
 " lint
+let g:syntastic_always_populate_loc_list = 1
+let g:syntastic_auto_loc_list = 1
+let g:syntastic_check_on_open = 0
+let g:syntastic_check_on_wq = 0
+
 let g:syntastic_mode_map = {
     \ "mode": "active",
-    \ "active_filetypes": ["sass", "scss"],
+    \ "active_filetypes": ["sass", "scss", "javascript"],
     \ "passive_filetypes": ["html", "php"] }
 
 let g:syntastic_sass_checkers = ["sass_lint"]
 let g:syntastic_scss_checkers = ["sass_lint"]
+let g:syntastic_javascript_checkers = ["eslint"]
