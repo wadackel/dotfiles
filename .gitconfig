@@ -5,7 +5,7 @@
   default = simple
 [core]
   editor = vim -c \"set fenc=utf-8\"
-	attributesfile = ~/.gitattributes
+  attributesfile = ~/.gitattributes
 [color]
   ui = auto
 [merge]
@@ -14,19 +14,40 @@
   aliass = !git config --get-regexp alias
   me = !git config --get-regexp user
   st = status
-  stat = status --short --branch
-  co = checkout
-  cm = commit
-  ca = commit --amend
-  d = diff
-  b = branch
-  ba = branch -a
-  bd = branch -D
-  pullp = pull --prune
-  nerge = merge --no-ff
-  unstage = reset HEAD --
-  cancel = reset --soft HEAD^
+  unstage = reset -q HEAD --
+  discard = checkout --
+  nevermind = !git reset --hard HEAD && git clean -d -f
+  uncommit = reset --mixed HEAD~
+  save = commit -m
+  resave = commit --amend
+  invert = revert
+  last = log -1 HEAD --format=format:"%Cred%H"
+  summary = status -u -s
   graph = log --graph --date=short --decorate=short --pretty=format:'%Cgreen%h %Creset%cd %Cblue%cn %Cred%d %Creset%s'
+  history = log -10 --format=format:'%Cgreen%h %Creset• %s (%cN, %ar)'
+  branchout = checkout -b
+  tags = tag
+  branches = branch -a
+  stashes = stash list
+  remotes = remote -v
+  prestage = diff -w --word-diff=color
+  precommit = diff --cached -w --word-diff=color --word-diff-regex='[^[:space:]<>]+'
+  move = mv
+  remove = rm
+  unmerged = branch --no-merged
+  unstash = stash pop
+  what = show -w
+  untrack = rm -r --cached
+  rewrite = rebase -i
+  amend = commit --amend
+  back = checkout "-"
+  contributors = shortlog -s -n
+  filetrail = git log --follow -p -w
+  mergetrail = log --ancestry-path --merges
+  unmerged = diff --name-only --diff-filter=U
+  cancel = reset --soft HEAD^
+  nerge = merge --no-ff
+  prune = pull --prune
 [filter "lfs"]
   clean = git-lfs clean %f
   smudge = git-lfs smudge %f
