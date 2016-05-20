@@ -11,7 +11,7 @@
 [merge]
   tool = vimdiff2
 [alias]
-  aliass = !git config --get-regexp alias
+  aliases = !git config --get-regexp alias
   me = !git config --get-regexp user
   st = status
   unstage = reset -q HEAD --
