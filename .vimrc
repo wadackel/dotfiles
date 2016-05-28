@@ -51,6 +51,7 @@ NeoBundle 'Chiel92/vim-autoformat'
 NeoBundle 'deton/jasegment.vim'
 NeoBundle 'scrooloose/syntastic'
 NeoBundle 'mtscout6/syntastic-local-eslint.vim'
+NeoBundle 'thinca/vim-qfreplace'
 NeoBundle 'gcorne/vim-sass-lint'
 NeoBundle 'sudo.vim'
 
