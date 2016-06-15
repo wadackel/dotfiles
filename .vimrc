@@ -302,6 +302,11 @@ let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
 let g:ctrlp_show_hidden = 1
 
 
+" fugitive
+nnoremap <silent> gs :Gstatus<CR>
+nnoremap <silent> gd :Gdiff<CR>
+
+
 " caw
 nmap <C-K> <Plug>(caw:hatpos:toggle)
 vmap <C-K> <Plug>(caw:hatpos:toggle)
