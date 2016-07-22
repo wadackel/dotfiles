@@ -29,6 +29,7 @@
   branchout = checkout -b
   branches = branch -a
   cleanbranches = !"git branch --merged | grep -v '*' | xargs -I % git branch -d %"
+  writelines = !"git ls-files | xargs -n1 git --no-pager blame -w | wc -l"
   stashes = stash list
   remotes = remote -v
   prestage = diff -w --word-diff=color
