@@ -440,6 +440,17 @@ let g:syntastic_javascript_checkers = ["eslint"]
 " syntastic - eslint
 let g:syntastic_javascript_eslint_args = "--no-ignore"
 
-" syntastic - sass-lint
-let g:syntastic_scss_sass_lint_args = "-c ~/.sass-lint.yml"
-let g:syntastic_sass_sass_lint_args = "-c ~/.sass-lint.yml"
+" syntastic - local sass-lint
+let s:sasslint_path = system('PATH=$(npm bin):$PATH && which sass-lint')
+let s:sasslint_exec_path = substitute(s:sasslint_path, '^\n*\s*\(.\{-}\)\n*\s*$', '\1', '')
+let s:sasslint_config_file = resolve(fnamemodify(s:sasslint_exec_path, ":h") . "/../../.sass-lint.yml")
+
+if filereadable(s:sasslint_config_file)
+  let g:synstastic_enable_sass_checker = 1
+  let g:synstastic_enable_scss_checker = 1
+  let b:syntastic_sass_sass_lint_exec = s:sasslint_exec_path
+  let b:syntastic_sass_sass_lint_exec = s:sasslint_exec_path
+else
+  let g:synstastic_enable_sass_checker = 0
+  let g:synstastic_enable_scss_checker = 0
+endif

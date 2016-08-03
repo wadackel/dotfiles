@@ -4,4 +4,3 @@ ln -sf ~/dotfiles/.vimrc ~/.vimrc
 ln -sf ~/dotfiles/.gitconfig ~/.gitconfig
 ln -sf ~/dotfiles/.gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/.eslintrc ~/.eslintrc
-ln -sf ~/dotfiles/.sass-lint.yml ~/.sass-lint.yml
