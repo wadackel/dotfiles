@@ -14,6 +14,7 @@
   aliases = !git config --get-regexp alias
   me = !git config --get-regexp user
   st = status
+  ss = status --short
   unstage = reset -q HEAD --
   discard = checkout --
   nevermind = !git reset --hard HEAD && git clean -d -f
@@ -50,6 +51,6 @@
   cancel = reset --soft HEAD^
   nerge = merge --no-ff
 [filter "lfs"]
-  clean = git-lfs clean %f
-  smudge = git-lfs smudge %f
-  required = true
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
