@@ -66,6 +66,18 @@ filetype indent on
 NeoBundleCheck
 
 
+" 不要なプラグインを停止
+let g:loaded_gzip          = 1
+let g:loaded_tar           = 1
+let g:loaded_tarPlugin     = 1
+let g:loaded_zip           = 1
+let g:loaded_zipPlugin     = 1
+let g:loaded_rrhelper      = 1
+let g:loaded_2html_plugin  = 1
+let g:loaded_vimball       = 1
+let g:loaded_vimballPlugin = 1
+
+
 " `%` 移動の拡張
 source $VIMRUNTIME/macros/matchit.vim
 
@@ -122,6 +134,38 @@ set novisualbell
 
 " <Leader>を`,`に設定
 let mapleader = ","
+
+
+" .vimrcのリロード
+if has('vim_starting')
+  function s:reload_vimrc() abort
+    execute printf('source %s', $MYVIMRC)
+    if has('gui_running')
+      execute printf('source %s', $MYGVIMRC)
+    endif
+    redraw
+    echo printf('.vimrc/.gvimrc has reloaded (%s).', strftime('%c'))
+  endfunction
+endif
+
+nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
+nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
+
+
+" シンタックスのToggle
+nnoremap <silent> <leader>st :call <SID>toggle_syntax()<CR>
+
+function! s:toggle_syntax() abort
+  if exists('g:syntax_on')
+    syntax off
+    redraw
+    echo 'syntax off'
+  else
+    syntax on
+    redraw
+    echo 'syntax on'
+  endif
+endfunction
 
 
 " 検索後の位置調整
@@ -196,6 +240,15 @@ set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 " ファイルタイプショートカット
 au FileType md setlocal filetype=markdown
 au FileType js setlocal filetype=javascript
+
+
+" ファイルサイズを表示
+function! GetFilesize(file)
+  let size = getfsize(expand(a:file))
+  echo 'Size of ' a:file ' is ' size ' bytes'
+endfunction
+
+map <leader>fs :call GetFilesize(@%)<CR>
 
 
 " neocomplete
