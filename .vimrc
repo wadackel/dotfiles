@@ -27,6 +27,8 @@ NeoBundle 'othree/html5-syntax.vim'
 NeoBundle 'nikvdp/ejs-syntax'
 NeoBundle 'mattn/emmet-vim'
 NeoBundle 'myhere/vim-nodejs-complete'
+NeoBundle 'gavocanov/vim-js-indent'
+NeoBundle 'mxw/vim-jsx'
 NeoBundle 'othree/yajs.vim'
 NeoBundle 'othree/es.next.syntax.vim'
 NeoBundle 'moll/vim-node'
@@ -151,8 +153,10 @@ nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
 nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
 
 
-" シンタックスのToggle
-nnoremap <silent> <leader>st :call <SID>toggle_syntax()<CR>
+" Toggle系オプション
+nnoremap <silent> <Leader>t :<C-u>setl expandtab! expandtab?<CR>
+nnoremap <silent> <Leader>w :<C-u>setl wrap! wrap?<CR>
+nnoremap <silent> <Leader>s :call <SID>toggle_syntax()<CR>
 
 function! s:toggle_syntax() abort
   if exists('g:syntax_on')
@@ -188,7 +192,7 @@ cnoremap w!! w !sudo tee > /dev/null %
 " 画面の再描画 (redraw!のalias, :Refresh)
 :command! Refresh call RefreshFunc()
 
-function RefreshFunc()
+function! RefreshFunc()
   redraw!
 endfunction
 
@@ -367,7 +371,7 @@ if &term =~ "xterm"
   let &t_te .= "\e[?2004l"
   let &pastetoggle = "\e[201~"
 
-  function XTermPasteBegin(ret)
+  function! XTermPasteBegin(ret)
     set paste
     return a:ret
   endfunction
@@ -416,6 +420,9 @@ call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
 call submode#map('bufmove', 'n', '', '>', '<C-w>>')
 call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
+
+
+let g:SimpleJsIndenter_BriefMode = 1
 
 
 " Emmet
