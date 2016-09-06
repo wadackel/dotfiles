@@ -356,6 +356,11 @@ nnoremap <silent> gs :Gstatus<CR>
 nnoremap <silent> gd :Gdiff<CR>
 
 
+" Unite x giti
+nnoremap <silent> gl :Unite giti/log<CR>
+nnoremap <silent> gb :Unite giti/branch_all<CR>
+
+
 " caw
 nmap <C-K> <Plug>(caw:hatpos:toggle)
 vmap <C-K> <Plug>(caw:hatpos:toggle)
