@@ -1,70 +1,137 @@
-" NeoBundle
-if 0 | endif
+let g:dein#install_max_processes = 48
+augroup PluginInstall
+  autocmd!
+  autocmd VimEnter * if dein#check_install() | call dein#install() | endif
+augroup END
+command! -nargs=0 PluginUpdate call dein#update()
 
-filetype off
+let s:plugin_dir = expand('~/.vim/bundle/')
+let s:dein_dir = s:plugin_dir . 'repos/github.com/Shougo/dein.vim'
+execute 'set runtimepath+=' . s:dein_dir
 
-if has('vim_starting')
-  if &compatible
-    set nocompatible
-  endif
-
-  set runtimepath+=~/.vim/bundle/neobundle.vim
+if !isdirectory(s:dein_dir)
+  call mkdir(s:dein_dir, 'p')
+  silent execute printf('!git clone %s %s', 'https://github.com/Shougo/dein.vim', s:dein_dir)
 endif
 
-call neobundle#begin(expand('~/.vim/bundle/'))
+if dein#load_state(s:plugin_dir)
+  call dein#begin(s:plugin_dir)
 
-" Plugins
-NeoBundle 'Shougo/unite.vim'
-NeoBundle 'Shougo/neocomplete.vim'
-NeoBundle 'scrooloose/nerdtree'
-NeoBundle 'ctrlpvim/ctrlp.vim'
-NeoBundle 'kana/vim-submode'
-NeoBundle 'itchyny/lightline.vim'
-NeoBundle 'editorconfig/editorconfig-vim'
-NeoBundle 'tyru/caw.vim.git'
-NeoBundle 'airblade/vim-gitgutter'
-NeoBundle 'othree/html5-syntax.vim'
-NeoBundle 'nikvdp/ejs-syntax'
-NeoBundle 'mattn/emmet-vim'
-NeoBundle 'myhere/vim-nodejs-complete'
-NeoBundle 'gavocanov/vim-js-indent'
-NeoBundle 'mxw/vim-jsx'
-NeoBundle 'othree/yajs.vim'
-NeoBundle 'othree/es.next.syntax.vim'
-NeoBundle 'moll/vim-node'
-NeoBundle 'mattn/jscomplete-vim'
-NeoBundle 'kchmck/vim-coffee-script'
-NeoBundle 'digitaltoad/vim-jade'
-NeoBundle 'tpope/vim-surround'
-NeoBundle 'hail2u/vim-css3-syntax'
-NeoBundle 'cakebaker/scss-syntax.vim'
-NeoBundle 'plasticboy/vim-markdown'
-NeoBundle 'h1mesuke/vim-alignta'
-NeoBundle 'tukiyo/previm'
-NeoBundle 'tyru/open-browser.vim'
-NeoBundle 'lilydjwg/colorizer'
-NeoBundle 'kewah/vim-cssfmt'
-NeoBundle 'kmnk/vim-unite-giti'
-NeoBundle 'tpope/vim-fugitive'
-NeoBundle 'Valloric/MatchTagAlways'
-NeoBundle 'dhruvasagar/vim-table-mode'
-NeoBundle 'Chiel92/vim-autoformat'
-NeoBundle 'deton/jasegment.vim'
-NeoBundle 'scrooloose/syntastic'
-NeoBundle 'mtscout6/syntastic-local-eslint.vim'
-NeoBundle 'thinca/vim-qfreplace'
-NeoBundle 'gcorne/vim-sass-lint'
-NeoBundle 'sudo.vim'
+  " base
+  call dein#add('Shougo/dein.vim')
+  " call dein#add('Shougo/vimproc.vim', {
+  "       \ 'build': {
+  "       \     'mac': 'make -f make_mac.mak',
+  "       \     'linux': 'make',
+  "       \     'unix': 'gmake',
+  "       \    },
+  "       \ })
+  call dein#add('vim-jp/vimdoc-ja')
+  call dein#add('Shougo/neocomplete.vim', {
+        \ 'if' : has('lua')
+        \ })
+  call dein#add('Shougo/neosnippet')
+  call dein#add('Shougo/neosnippet-snippets')
+  call dein#add('Shougo/neossh.vim')
+  call dein#add('vim-jp/vital.vim')
 
-" ColorScheme
-NeoBundle 'w0ng/vim-hybrid'
+  " unite
+  call dein#add('Shougo/unite.vim')
+  call dein#add('ujihisa/unite-colorscheme', {'depends' : 'Shougo/unite.vim'})
+  call dein#add('kmnk/vim-unite-giti', {'depends': 'Shougo/unite.vim'})
 
-call neobundle#end()
+  " editing
+  call dein#add('mattn/emmet-vim')
+  call dein#add('tpope/vim-surround')
+  call dein#add('editorconfig/editorconfig-vim')
+  call dein#add('h1mesuke/vim-alignta')
+  call dein#add('Chiel92/vim-autoformat')
+
+  " filer
+  call dein#add('scrooloose/nerdtree')
+  call dein#add('ctrlpvim/ctrlp.vim')
+  call dein#add('Shougo/vimfiler', {'lazy' : 1})
+
+  " sign
+  call dein#add('airblade/vim-gitgutter')
+  call dein#add('Valloric/MatchTagAlways')
+
+  " git
+  call dein#add('tpope/vim-fugitive')
+  call dein#add('jaxbot/github-issues.vim', {'lazy' : 1})
+  call dein#add('moznion/github-commit-comment.vim', {'lazy' : 1})
+  call dein#add('rhysd/github-complete.vim')
+  call dein#add('tyru/open-browser-github.vim')
+  call dein#add('tyru/open-browser.vim')
+  call dein#add('takahirojin/gbr.vim')
+
+  " toml
+  call dein#add('cespare/vim-toml',  {'on_ft' : 'toml'})
+
+  " markdown
+  call dein#add('plasticboy/vim-markdown', {'on_ft': ['markdown', 'md']})
+  call dein#add('tukiyo/previm', {'on_ft': ['markdown', 'md']})
+  call dein#add('dhruvasagar/vim-table-mode', {'on_ft': ['markdown', 'md']})
+
+  " javascript
+  call dein#add('gavocanov/vim-js-indent', {'on_ft' : 'javascript'})
+  call dein#add('myhere/vim-nodejs-complete', {'on_ft': 'javascript'})
+  call dein#add('mxw/vim-jsx', {'on_ft': 'javascript'})
+  call dein#add('othree/yajs.vim', {'on_ft': 'javascript'})
+  call dein#add('othree/es.next.syntax.vim', {'on_ft': 'javascript'})
+  call dein#add('moll/vim-node', {'on_ft': 'javascript'})
+  call dein#add('mattn/jscomplete-vim', {'on_ft': 'javascript'})
+
+  " coffee
+  call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
+
+  " typescript
+  call dein#add('leafgarland/typescript-vim', {'on_ft' : 'typescript'})
+  call dein#add('clausreinke/typescript-tools', {'on_ft' : 'typescript'})
+
+  " css
+  call dein#add('lilydjwg/colorizer')
+  call dein#add('kewah/vim-cssfmt')
+
+  " statusline
+  call dein#add('itchyny/lightline.vim')
+
+  " syntax checking
+  call dein#add('scrooloose/syntastic')
+  call dein#add('mtscout6/syntastic-local-eslint.vim', {'depends': 'scrooloose/syntastic'})
+  call dein#add('gcorne/vim-sass-lint')
+
+  " syntax
+  call dein#add('Shougo/context_filetype.vim')
+  call dein#add('hail2u/vim-css3-syntax')
+  call dein#add('elzr/vim-json')
+  call dein#add('othree/html5-syntax.vim')
+  call dein#add('nikvdp/ejs-syntax')
+  call dein#add('digitaltoad/vim-jade')
+  call dein#add('cakebaker/scss-syntax.vim')
+
+  " gist
+  call dein#add('mattn/gist-vim')
+  call dein#add('lambdalisue/vim-gista')
+
+  " colorschema
+  call dein#add('w0ng/vim-hybrid')
+
+  " tmp (後で分ける)
+  call dein#add('kana/vim-submode')
+  call dein#add('tyru/caw.vim.git')
+  call dein#add('deton/jasegment.vim')
+  call dein#add('thinca/vim-qfreplace')
+  call dein#add('vim-scripts/sudo.vim')
+
+
+  call dein#end()
+  call dein#save_state()
+endif
 
 filetype plugin indent on
-filetype indent on
 
-NeoBundleCheck
+
 
 
 " 不要なプラグインを停止
