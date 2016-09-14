@@ -320,6 +320,20 @@ endfunction
 
 map <leader>fs :call GetFilesize(@%)<CR>
 
+" ファイルパス/名前をコピー&出力
+function! CopyPath()
+  let @*=expand('%:p')
+  echo @*
+endfunction
+
+function! CopyFileName()
+  let @*=expand('%:t')
+  echo @*
+endfunction
+
+nmap <leader>fp :call CopyPath()<CR>
+nmap <leader>ff :call CopyFileName()<CR>
+
 
 " neocomplete
 " Disable AutoComplPop.
