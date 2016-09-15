@@ -19,17 +19,11 @@ if dein#load_state(s:plugin_dir)
 
   " base
   call dein#add('Shougo/dein.vim')
-  " call dein#add('Shougo/vimproc.vim', {
-  "       \ 'build': {
-  "       \     'mac': 'make -f make_mac.mak',
-  "       \     'linux': 'make',
-  "       \     'unix': 'gmake',
-  "       \    },
-  "       \ })
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/neocomplete.vim', {
         \ 'if' : has('lua')
         \ })
+  call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
   call dein#add('Shougo/neosnippet')
   call dein#add('Shougo/neosnippet-snippets')
   call dein#add('Shougo/neossh.vim')
@@ -48,9 +42,8 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Chiel92/vim-autoformat')
 
   " filer
-  call dein#add('scrooloose/nerdtree')
+  call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
   call dein#add('ctrlpvim/ctrlp.vim')
-  call dein#add('Shougo/vimfiler', {'lazy' : 1})
 
   " sign
   call dein#add('airblade/vim-gitgutter')
@@ -104,7 +97,6 @@ if dein#load_state(s:plugin_dir)
   " syntax
   call dein#add('Shougo/context_filetype.vim')
   call dein#add('hail2u/vim-css3-syntax')
-  call dein#add('elzr/vim-json')
   call dein#add('othree/html5-syntax.vim')
   call dein#add('nikvdp/ejs-syntax')
   call dein#add('digitaltoad/vim-jade')
@@ -421,10 +413,13 @@ function! LightLineFugitive()
 endfunction
 
 
-" NERDTree
-map <C-n> :NERDTreeToggle<CR>
-let NERDTreeIgnore=['\~$', '\.git$', '\.DS_Store']
-let NERDTreeShowHidden=1
+" VimFiler
+let g:vimfiler_as_default_explorer = 1
+let g:vimfiler_safe_mode_by_default = 0
+let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
+
+map <C-N> :VimFiler -split -simple -winwidth=40 -toggle -no-quit<CR>
+map <C-J> :VimFilerBufferDir -split -simple -winwidth=40 -toggle -no-quit<CR>
 
 
 " ctrlp
