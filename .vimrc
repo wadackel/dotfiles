@@ -81,6 +81,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('othree/es.next.syntax.vim', {'on_ft': 'javascript'})
   call dein#add('moll/vim-node', {'on_ft': 'javascript'})
   call dein#add('mattn/jscomplete-vim', {'on_ft': 'javascript'})
+  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
 
   " coffee
   call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
@@ -577,6 +578,10 @@ augroup EmmitVim
 " Markdown
 let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
+
+
+" Flowtype
+let g:flow#autoclose = 1
 
 
 " table-mode
