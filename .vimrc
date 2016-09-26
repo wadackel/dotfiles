@@ -513,6 +513,7 @@ let g:vimfiler_as_default_explorer = 1
 let g:vimfiler_safe_mode_by_default = 0
 let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
 
+autocmd FileType vimfiler nmap <buffer> <CR> <Plug>(vimfiler_expand_or_edit)
 map <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
 map <C-J> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
 
