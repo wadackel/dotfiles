@@ -178,7 +178,7 @@ set clipboard=unnamed
 set laststatus=2
 set noswapfile
 set ambiwidth=double
-set wildmode=longest,full
+set wildmode=list:full
 set noshowmode
 set iminsert=0
 set imsearch=0
