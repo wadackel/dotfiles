@@ -127,6 +127,7 @@ filetype plugin indent on
 
 " 画面分割用のキーマップ
 " http://qiita.com/tekkoc/items/98adcadfa4bdc8b5a6ca
+nnoremap sT :<C-u>Unite tab<CR>
 nnoremap sb :<C-u>Unite buffer_tab -buffer-name=file<CR>
 nnoremap sB :<C-u>Unite buffer -buffer-name=file<CR>
 nnoremap sF :<C-u>Unite -buffer-name=file file<CR>

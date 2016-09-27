@@ -64,6 +64,8 @@ set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
 " <Leader>を`,`に設定
 let mapleader = ","
+
+
 " .vimrcのリロード
 if has('vim_starting')
   function! s:reload_vimrc() abort
@@ -267,7 +269,6 @@ nnoremap sO <C-w>=
 nnoremap sN :<C-u>bn<CR>
 nnoremap sP :<C-u>bp<CR>
 nnoremap st :<C-u>tabnew<CR>
-nnoremap sT :<C-u>Unite tab<CR>
 nnoremap ss :<C-u>sp<CR>
 nnoremap sv :<C-u>vs<CR>
 nnoremap sq :<C-u>q<CR>
