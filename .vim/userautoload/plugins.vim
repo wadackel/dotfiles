@@ -36,6 +36,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/unite.vim')
   call dein#add('ujihisa/unite-colorscheme', {'depends' : 'Shougo/unite.vim'})
   call dein#add('kmnk/vim-unite-giti', {'depends': 'Shougo/unite.vim'})
+  call dein#add('pasela/unite-webcolorname', {'depends': 'Shougo/unite.vim'})
 
   " editing
   call dein#add('mattn/emmet-vim')
@@ -91,7 +92,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('clausreinke/typescript-tools', {'on_ft' : 'typescript'})
 
   " css
-  call dein#add('lilydjwg/colorizer')
   call dein#add('kewah/vim-cssfmt')
 
   " statusline
