@@ -299,6 +299,7 @@ let g:vim_markdown_folding_disabled=1
 
 
 " Flowtype
+let g:flow#enable = 0 " Default is disable
 let g:flow#autoclose = 1
 
 
