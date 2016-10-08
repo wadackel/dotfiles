@@ -232,7 +232,7 @@ endfunction
 " ctrlpの置き換え
 if executable('ag')
   let g:ctrlp_use_caching = 0
-  let g:ctrlp_user_command = 'ag %s -i --nocolor --nogroup -g ""'
+  let g:ctrlp_user_command = 'ag %s -i --hidden --nocolor --nogroup -g ""'
 endif
 
 
@@ -308,7 +308,7 @@ let g:vim_markdown_folding_disabled=1
 
 
 " Flowtype
-let g:flow#enable = 0 " Default is disable
+" let g:flow#enable = 0 " Default is disable
 let g:flow#autoclose = 1
 
 

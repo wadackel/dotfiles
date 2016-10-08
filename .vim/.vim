@@ -1,1 +1,1 @@
-/Users/uds/dotfiles/.vim
+/Users/tsuyoshiwada/dotfiles/.vim

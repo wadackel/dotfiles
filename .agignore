@@ -1,2 +1,17 @@
+*~
+*.swp
+*.bak
+tmp
+old
+.vim/bundle
+.vim/dict
+.git
+.svn
+zsh-completions
+lib
+libs
 vendor
 node_modules
+node_modules
+*.egg
+*.egg-infovendor
