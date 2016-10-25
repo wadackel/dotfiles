@@ -99,14 +99,13 @@ if dein#load_state(s:plugin_dir)
   call dein#add('itchyny/lightline.vim')
 
   " syntax checking
-  call dein#add('scrooloose/syntastic')
-  call dein#add('mtscout6/syntastic-local-eslint.vim', {'depends': 'scrooloose/syntastic'})
-  call dein#add('gcorne/vim-sass-lint')
+  call dein#add('neomake/neomake')
+  call dein#add('benjie/neomake-local-eslint.vim')
 
   " syntax
   call dein#add('Shougo/context_filetype.vim')
   call dein#add('hail2u/vim-css3-syntax')
-  call dein#add('othree/html5-syntax.vim')
+  call dein#add('othree/html5.vim')
   call dein#add('nikvdp/ejs-syntax')
   call dein#add('digitaltoad/vim-jade')
   call dein#add('cakebaker/scss-syntax.vim')
@@ -118,9 +117,12 @@ if dein#load_state(s:plugin_dir)
   " colorschema
   call dein#add('w0ng/vim-hybrid')
 
-
   call dein#end()
   call dein#save_state()
+endif
+
+if dein#check_install()
+  call dein#install()
 endif
 
 filetype plugin indent on
@@ -321,35 +323,10 @@ nnoremap <silent> <leader>cs :Cssfmt<CR>
 vnoremap <silent> <leader>cs :CssfmtVisual<CR>
 
 
-" syntastic
-let g:syntastic_always_populate_loc_list = 1
-let g:syntastic_auto_loc_list = 1
-let g:syntastic_check_on_open = 0
-let g:syntastic_check_on_wq = 0
-
-let g:syntastic_mode_map = {
-    \ "mode": "active",
-    \ "active_filetypes": ["sass", "scss", "javascript"],
-    \ "passive_filetypes": ["html", "php"] }
-
-let g:syntastic_sass_checkers = ["sass_lint"]
-let g:syntastic_scss_checkers = ["sass_lint"]
-let g:syntastic_javascript_checkers = ["eslint"]
-
-" syntastic - eslint
-let g:syntastic_javascript_eslint_args = "--no-ignore"
-
-" syntastic - local sass-lint
-let s:sasslint_path = system('PATH=$(npm bin):$PATH && which sass-lint')
-let s:sasslint_exec_path = substitute(s:sasslint_path, '^\n*\s*\(.\{-}\)\n*\s*$', '\1', '')
-let s:sasslint_config_file = resolve(fnamemodify(s:sasslint_exec_path, ":h") . "/../../.sass-lint.yml")
-
-if filereadable(s:sasslint_config_file)
-  let g:synstastic_enable_sass_checker = 1
-  let g:synstastic_enable_scss_checker = 1
-  let b:syntastic_sass_sass_lint_exec = s:sasslint_exec_path
-  let b:syntastic_sass_sass_lint_exec = s:sasslint_exec_path
-else
-  let g:synstastic_enable_sass_checker = 0
-  let g:synstastic_enable_scss_checker = 0
-endif
+" neomake
+autocmd! BufWritePost * Neomake
+let g:neomake_python_enabled_makers = ['javascript', 'scss', 'sass', 'css']
+let g:neomake_javascript_enabled_makers = ['eslint']
+let g:neomake_error_sign = {'text': '>>', 'texthl': 'Error'}
+let g:neomake_warning_sign = {'text': '>>',  'texthl': 'Todo'}
+let g:neomake_open_list = 4
