@@ -245,7 +245,7 @@ let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
 
 autocmd FileType vimfiler nmap <buffer> <CR> <Plug>(vimfiler_expand_or_edit)
 map <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
-map <C-J> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
+map <C-H> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
 
 
 " ctrlp
