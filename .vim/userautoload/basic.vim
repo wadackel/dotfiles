@@ -82,6 +82,10 @@ nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
 nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
 
 
+" helpをqだけで閉じる
+autocmd! FileType help nnoremap <buffer> q <C-w>c
+
+
 " Toggle系オプション
 nnoremap <silent> <Leader>t :<C-u>setl expandtab! expandtab?<CR>
 nnoremap <silent> <Leader>w :<C-u>setl wrap! wrap?<CR>

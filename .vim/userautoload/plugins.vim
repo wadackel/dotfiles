@@ -324,9 +324,9 @@ vnoremap <silent> <leader>cs :CssfmtVisual<CR>
 
 
 " neomake
-autocmd! BufWritePost * Neomake
-let g:neomake_python_enabled_makers = ['javascript', 'scss', 'sass', 'css']
-let g:neomake_javascript_enabled_makers = ['eslint']
+autocmd! BufWritePost *.js,*.jsx,*.scss,*.sass,*.css Neomake
 let g:neomake_error_sign = {'text': '>>', 'texthl': 'Error'}
 let g:neomake_warning_sign = {'text': '>>',  'texthl': 'Todo'}
 let g:neomake_open_list = 4
+
+let g:neomake_javascript_enabled_makers = ['eslint']
