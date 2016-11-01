@@ -1,3 +1,7 @@
+if &compatible
+  set nocompatible
+endif
+
 let g:dein#install_max_processes = 48
 augroup PluginInstall
   autocmd!
@@ -16,12 +20,12 @@ endif
 
 if dein#load_state(s:plugin_dir)
   call dein#begin(s:plugin_dir)
+  call dein#add('Shougo/dein.vim')
 
   " vim-scripts
   call dein#add('vim-scripts/sudo.vim')
 
   " base
-  call dein#add('Shougo/dein.vim')
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/neocomplete.vim', {
         \ 'if' : has('lua')
