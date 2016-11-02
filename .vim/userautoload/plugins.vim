@@ -64,8 +64,8 @@ if dein#load_state(s:plugin_dir)
 
   " git
   call dein#add('tpope/vim-fugitive')
-  call dein#add('jaxbot/github-issues.vim', {'lazy' : 1})
-  call dein#add('moznion/github-commit-comment.vim', {'lazy' : 1})
+  call dein#add('jaxbot/github-issues.vim')
+  call dein#add('moznion/github-commit-comment.vim')
   call dein#add('rhysd/github-complete.vim')
   call dein#add('tyru/open-browser-github.vim')
   call dein#add('tyru/open-browser.vim')
