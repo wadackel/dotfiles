@@ -314,7 +314,6 @@ let g:vim_markdown_folding_disabled=1
 
 
 " Flowtype
-" let g:flow#enable = 0 " Default is disable
 let g:flow#autoclose = 1
 
 
@@ -333,4 +332,19 @@ let g:neomake_error_sign = {'text': '>>', 'texthl': 'Error'}
 let g:neomake_warning_sign = {'text': '>>',  'texthl': 'Todo'}
 let g:neomake_open_list = 4
 
+" neomake - javascript
 let g:neomake_javascript_enabled_makers = ['eslint']
+
+" neomake - css,scss,sass
+" TODO: refactor
+let b:neomake_scss_stylelint_exe = substitute(system('PATH=$(npm bin):$PATH && which stylelint'), '^\n*\s*\(.\{-}\)\n*\s*$', '\1', '')
+let g:neomake_scss_enabled_makers = ['stylelint']
+let g:neomake_scss_stylelint_maker = {
+  \ 'exe': b:neomake_scss_stylelint_exe,
+  \ 'args': ['--syntax', 'scss'],
+  \ 'errorformat':
+    \ '%+P%f,' .
+      \ '%*\s%l:%c  %t  %m,' .
+    \ '%-Q'
+\ }
+
