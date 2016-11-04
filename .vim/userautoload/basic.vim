@@ -277,3 +277,7 @@ nnoremap ss :<C-u>sp<CR>
 nnoremap sv :<C-u>vs<CR>
 nnoremap sq :<C-u>q<CR>
 nnoremap sQ :<C-u>bd<CR>
+
+
+" 選択範囲内をExpressionレジスタで評価->置換
+vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
