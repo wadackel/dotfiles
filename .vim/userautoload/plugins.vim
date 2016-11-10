@@ -120,6 +120,7 @@ if dein#load_state(s:plugin_dir)
 
   " colorschema
   call dein#add('w0ng/vim-hybrid')
+  call dein#add('tyrannicaltoucan/vim-quantum')
 
   call dein#end()
   call dein#save_state()
