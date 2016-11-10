@@ -9,9 +9,9 @@ try
     set termguicolors
   endif
 
-  let g:quantum_black = 1
-  colorscheme quantum
-  " colorscheme hybrid
+  " let g:quantum_black = 1
+  " colorscheme quantum
+  colorscheme hybrid
 
 catch /^Vim\%((\a\+)\)\=:E185/
   " 行番号

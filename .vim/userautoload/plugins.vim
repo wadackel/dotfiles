@@ -41,7 +41,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/unite.vim')
   call dein#add('ujihisa/unite-colorscheme', {'depends' : 'Shougo/unite.vim'})
   call dein#add('kmnk/vim-unite-giti', {'depends': 'Shougo/unite.vim'})
-  call dein#add('pasela/unite-webcolorname', {'depends': 'Shougo/unite.vim'})
 
   " editing
   call dein#add('mattn/emmet-vim')
@@ -64,12 +63,9 @@ if dein#load_state(s:plugin_dir)
 
   " git
   call dein#add('tpope/vim-fugitive')
-  call dein#add('jaxbot/github-issues.vim')
-  call dein#add('moznion/github-commit-comment.vim')
   call dein#add('rhysd/github-complete.vim')
   call dein#add('tyru/open-browser-github.vim')
   call dein#add('tyru/open-browser.vim')
-  call dein#add('takahirojin/gbr.vim')
 
   " toml
   call dein#add('cespare/vim-toml',  {'on_ft' : 'toml'})
@@ -113,10 +109,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('nikvdp/ejs-syntax')
   call dein#add('digitaltoad/vim-jade')
   call dein#add('cakebaker/scss-syntax.vim')
-
-  " gist
-  call dein#add('mattn/gist-vim')
-  call dein#add('lambdalisue/vim-gista')
 
   " colorschema
   call dein#add('w0ng/vim-hybrid')
