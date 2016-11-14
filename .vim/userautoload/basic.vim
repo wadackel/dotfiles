@@ -40,7 +40,10 @@ set expandtab
 set wrap
 set clipboard=unnamed
 set laststatus=2
-set noswapfile
+if ! isdirectory($HOME.'/.vim/swap')
+  call mkdir($HOME.'/.vim/swap', 'p')
+endif
+set directory=~/.vim/swap
 set ambiwidth=double
 set wildmode=list:full
 set noshowmode
