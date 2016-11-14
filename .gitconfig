@@ -50,7 +50,11 @@
   unmerged = diff --name-only --diff-filter=U
   cancel = reset --soft HEAD^
   nerge = merge --no-ff
+
+  # example) git prout 12 patch-1
+  prout = "!f() { git fetch origin pull/$1/head:$2; git checkout $2;}; f"
+
 [filter "lfs"]
-	required = true
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
+  required = true
+  clean = git-lfs clean -- %f
+  smudge = git-lfs smudge -- %f
