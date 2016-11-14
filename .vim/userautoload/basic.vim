@@ -90,6 +90,7 @@ autocmd! FileType help nnoremap <buffer> q <C-w>c
 nnoremap <silent> <Leader>t :<C-u>setl expandtab! expandtab?<CR>
 nnoremap <silent> <Leader>w :<C-u>setl wrap! wrap?<CR>
 nnoremap <silent> <Leader>s :call <SID>toggle_syntax()<CR>
+nnoremap <silent> <Leader>h :<C-u>setl hlsearch!<CR>
 
 function! s:toggle_syntax() abort
   if exists('g:syntax_on')
