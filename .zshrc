@@ -58,7 +58,13 @@ alias ll="ls -l"
 alias la="ls -la"
 
 # tree
-alias tree="ls -R | grep ":$" | sed -e 's/:$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /' -e 's/-/|/'"
+if type tree > /dev/null 2>&1; then
+  local TREE="tree -a -f"
+else
+  local TREE="ls -R | grep ":$" | sed -e 's/:$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /' -e 's/-/|/'"
+fi
+
+alias tree=TREE
 
 
 # <Tab> でパス名の補完候補を表示したあと、
