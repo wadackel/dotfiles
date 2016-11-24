@@ -96,8 +96,8 @@ nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
 nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
 
 
-" helpをqだけで閉じる
-autocmd! FileType help nnoremap <buffer> q <C-w>c
+" help & quickfixをqだけで閉じる
+autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
 
 
 " Toggle系オプション
