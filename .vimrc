@@ -401,7 +401,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('clausreinke/typescript-tools', {'on_ft' : 'typescript'})
 
   " css
-  call dein#add('kewah/vim-cssfmt')
+  call dein#add('kewah/vim-stylefmt')
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -621,9 +621,9 @@ let g:flow#autoclose = 1
 let g:table_mode_corner = '|'
 
 
-" Cssfmt
-nnoremap <silent> <leader>cs :Cssfmt<CR>
-vnoremap <silent> <leader>cs :CssfmtVisual<CR>
+" Stylefmt
+nnoremap <silent> <leader>cs :Stylefmt<CR>
+vnoremap <silent> <leader>cs :StylefmtVisual<CR>
 
 
 " neomake
