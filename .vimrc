@@ -305,6 +305,25 @@ nnoremap <C-w>O :<C-u>tabo<CR>
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
 
+" Checkboxのトグル
+nnoremap <silent> <Leader>c :call ToggleCheckbox()<CR>
+
+function! ToggleCheckbox()
+  let line = getline('.')
+
+  if match(line, "[\*\-] \\[ \\]") > -1
+    let line = substitute(line, "\\([\*\-]\\) \\[ \\]", "\\1 [x]", "")
+
+  elseif match(line, "[\*\-] \\[x\\]") > -1
+    let line = substitute(line, "\\([\*\-]\\) \\[x\\]", "\\1 [ ]", "")
+
+  endif
+
+  call setline('.', line)
+endfunction
+
+
+
 
 
 " =============================================================
