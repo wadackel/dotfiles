@@ -384,6 +384,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('plasticboy/vim-markdown', {'on_ft': ['markdown', 'md']})
   call dein#add('tukiyo/previm', {'on_ft': ['markdown', 'md']})
   call dein#add('dhruvasagar/vim-table-mode', {'on_ft': ['markdown', 'md']})
+  call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
 
   " javascript
   call dein#add('gavocanov/vim-js-indent', {'on_ft' : 'javascript'})
@@ -454,6 +455,8 @@ let g:acp_enableAtStartup = 0
 
 " Use neocomplete.
 let g:neocomplete#enable_at_startup = 1
+let g:neocomplete#disable_auto_complete = 1
+inoremap <expr><C-f> pumvisible() ? "\<down>" : neocomplete#start_manual_complete()
 
 " Use smartcase.
 let g:neocomplete#enable_smart_case = 1
@@ -481,6 +484,9 @@ endfunction
 
 " <TAB>: completion.
 inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+
+" Enter
+inoremap <expr><CR>  pumvisible() ? neocomplcache#close_popup() : "<CR>"
 
 " <C-h>, <BS>: close popup and delete backword char.
 inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
@@ -673,7 +679,3 @@ catch /^Vim\%((\a\+)\)\=:E185/
 
   colorscheme desert
 endtry
-
-
-
-
