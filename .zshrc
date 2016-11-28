@@ -72,6 +72,9 @@ alias tree=TREE
 # 候補を選ぶには <Tab> か Ctrl-N,B,F,P
 zstyle ':completion:*:default' menu select=1
 
+# <Shift-Tab>で補完候補の逆順
+bindkey "^[[Z" reverse-menu-complete
+
 # 単語の一部として扱われる文字のセットを指定する
 # ここではデフォルトのセットから / を抜いたものとする
 # こうすると、 Ctrl-W でカーソル前の1単語を削除したとき、 / までで削除が止まる
