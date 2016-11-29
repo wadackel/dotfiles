@@ -62,6 +62,7 @@ set noimcmdline
 set backspace=indent,eol,start
 set matchpairs& matchpairs+=<:>
 set lazyredraw
+set nrformats=
 
 " 起動時のメッセージ非表示
 set shortmess& shortmess+=I
@@ -78,6 +79,11 @@ set novisualbell
 "タブ、空白、改行の可視化
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
+
+
+" increment, decrement で選択状態を維持
+vnoremap <c-a> <c-a>gv
+vnoremap <c-x> <c-x>gv
 
 
 " .vimrcのリロード
