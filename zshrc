@@ -66,6 +66,9 @@ fi
 
 alias tree=TREE
 
+# tmux
+alias tmux="TERM=xterm-256color tmux"
+
 
 # <Tab> でパス名の補完候補を表示したあと、
 # 続けて <Tab> を押すと候補からパス名を選択できるようになる
