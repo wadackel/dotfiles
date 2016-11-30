@@ -414,10 +414,8 @@ if dein#load_state(s:plugin_dir)
 
   " javascript
   call dein#add('gavocanov/vim-js-indent', {'on_ft' : 'javascript'})
-  call dein#add('othree/yajs.vim', {'on_ft': 'javascript'})
-  call dein#add('othree/es.next.syntax.vim', {'on_ft': 'javascript'})
-  call dein#add('mattn/jscomplete-vim', {'on_ft': 'javascript'})
-  call dein#add('mxw/vim-jsx', {'on_ft': 'javascript'})
+  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
+  call dein#add('MaxMEllon/vim-jsx-pretty', {'on_ft': 'javascript'})
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
 
   " coffee
@@ -641,8 +639,19 @@ let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
 
 
+" JavaScript
+let g:javascript_plugin_flow = 1
+
+
+" JSX
+let g:jsx_ext_required = 0
+
+
 " Flowtype
+" やたら重いので無効化 -> ローカルのflowを呼ぶPRがあるのでwatchしておく
 let g:flow#autoclose = 1
+let g:flow#enable = 0
+let g:flow#omnifunc = 1
 
 
 " table-mode
