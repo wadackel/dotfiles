@@ -216,8 +216,8 @@ autocmd FileType html inoremap <silent> <buffer> </ </<C-x><C-o>
 
 
 " ファイルタイプショートカット
-au FileType md setlocal filetype=markdown
-au FileType js setlocal filetype=javascript
+autocmd FileType md setlocal filetype=markdown
+autocmd FileType js setlocal filetype=javascript
 
 
 " ファイルサイズを表示
@@ -241,6 +241,15 @@ endfunction
 
 nmap <leader>fp :call CopyPath()<CR>
 nmap <leader>ff :call CopyFileName()<CR>
+
+
+" カーソル位置の復元
+augroup restoreCursorPosition
+  autocmd BufReadPost *
+      \ if line("'\"") > 1 && line("'\"") <= line("$") |
+      \   exe "normal! g`\"" |
+      \ endif
+augroup END
 
 
 " タブの操作/移動
@@ -332,6 +341,22 @@ endfunction
 
 
 
+" =============================================================
+" Filetypes
+" =============================================================
+augroup fileTypeDetect
+  autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
+  autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
+augroup END
+
+augroup fileTypeIndent
+  autocmd!
+  autocmd BufNewFile,BufRead *.php setlocal tabstop=4 softtabstop=4 shiftwidth=4
+  autocmd BufNewFile,BufRead *.blade.php setlocal tabstop=2 softtabstop=2 shiftwidth=2
+augroup END
+
+
+
 
 " =============================================================
 " Plugins
@@ -413,7 +438,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
 
   " javascript
-  call dein#add('gavocanov/vim-js-indent', {'on_ft' : 'javascript'})
+  call dein#add('othree/es.next.syntax.vim', {'on_ft': 'javascript'})
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('MaxMEllon/vim-jsx-pretty', {'on_ft': 'javascript'})
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
@@ -427,6 +452,9 @@ if dein#load_state(s:plugin_dir)
 
   " css
   call dein#add('kewah/vim-stylefmt')
+
+  " PHP
+  call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
 
   " statusline
   call dein#add('itchyny/lightline.vim')
