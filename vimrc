@@ -1,3 +1,25 @@
+" 開発中のプラグインなど
+let s:dev_plugin_install = 0
+
+if s:dev_plugin_install
+  let s:devdir = $HOME . '/.vim-dev'
+  if isdirectory(s:devdir)
+    exe 'set runtimepath+=' . s:devdir
+    for plug in split(glob(s:devdir . '/*'), '\n')
+      exe 'set runtimepath+=' . plug
+    endfor
+  endif
+
+endif
+
+
+" ローカルな設定の読み込み
+if filereadable(expand('~/.vimrc.local'))
+  source ~/.vimrc.local
+endif
+
+
+
 " =============================================================
 " Basic
 " =============================================================
@@ -339,6 +361,11 @@ function! ToggleCheckbox()
 endfunction
 
 
+" Tips (keymap example)
+nnoremap smp :SlackMemoPost<CR>
+nnoremap sml :SlackMemoList<CR>
+
+
 
 
 " =============================================================
@@ -400,6 +427,8 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/neossh.vim')
   call dein#add('vim-jp/vital.vim')
   call dein#add('rking/ag.vim')
+  call dein#add('mattn/webapi-vim')
+  call dein#add('thinca/vim-quickrun')
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -427,6 +456,12 @@ if dein#load_state(s:plugin_dir)
   " git
   call dein#add('tpope/vim-fugitive')
   call dein#add('tyru/open-browser.vim')
+
+  " gist
+  call dein#add('mattn/gist-vim')
+
+  " memo
+  call dein#add('tsuyoshiwada/slack-memo-vim', {'depends': 'mattn/webapi-vim'})
 
   " toml
   call dein#add('cespare/vim-toml',  {'on_ft' : 'toml'})
