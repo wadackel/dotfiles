@@ -393,7 +393,12 @@ if &compatible
   set nocompatible
 endif
 
+" dein configurations.
 let g:dein#install_max_processes = 48
+let g:dein#install_progress_type = 'title'
+let g:dein#install_message_type = 'none'
+let g:dein#enable_notification = 1
+
 augroup PluginInstall
   autocmd!
   autocmd VimEnter * if dein#check_install() | call dein#install() | endif
@@ -424,8 +429,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
   call dein#add('Shougo/neosnippet')
   call dein#add('Shougo/neosnippet-snippets')
-  call dein#add('Shougo/neossh.vim')
-  call dein#add('vim-jp/vital.vim')
   call dein#add('rking/ag.vim')
   call dein#add('mattn/webapi-vim')
   call dein#add('thinca/vim-quickrun')
