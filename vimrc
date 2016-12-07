@@ -364,6 +364,7 @@ endfunction
 " Tips (keymap example)
 nnoremap smp :SlackMemoPost<CR>
 nnoremap sml :SlackMemoList<CR>
+nnoremap smc :SlackMemoCtrlP<CR>
 
 
 
@@ -493,6 +494,9 @@ if dein#load_state(s:plugin_dir)
 
   " PHP
   call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
+
+  " Golang
+  call dein#add('fatih/vim-go', {'on_ft': 'go'})
 
   " statusline
   call dein#add('itchyny/lightline.vim')
