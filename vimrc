@@ -76,7 +76,8 @@ if ! isdirectory($HOME.'/.vim/swap')
 endif
 set directory=~/.vim/swap
 set ambiwidth=double
-set wildmode=list:full
+set wildmenu
+set wildmode=longest,full
 set noshowmode
 set iminsert=0
 set imsearch=0
