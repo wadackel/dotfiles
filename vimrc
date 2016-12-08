@@ -495,8 +495,9 @@ if dein#load_state(s:plugin_dir)
   " PHP
   call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
 
-  " Golang
+  " golang
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
+  exe "set rtp+=".globpath($GOPATH, "src/github.com/nsf/gocode/vim")
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -722,6 +723,10 @@ let g:jsx_ext_required = 0
 let g:flow#autoclose = 1
 let g:flow#enable = 0
 let g:flow#omnifunc = 1
+
+
+" golang
+let g:go_fmt_command = "goimports"
 
 
 " table-mode
