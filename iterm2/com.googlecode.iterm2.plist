@@ -2388,6 +2388,20 @@
 			<key>Text</key>
 			<string></string>
 		</dict>
+		<key>0x3c-0x120000</key>
+		<dict>
+			<key>Action</key>
+			<integer>52</integer>
+			<key>Text</key>
+			<string></string>
+		</dict>
+		<key>0x3e-0x120000</key>
+		<dict>
+			<key>Action</key>
+			<integer>51</integer>
+			<key>Text</key>
+			<string></string>
+		</dict>
 		<key>0x9-0x40000</key>
 		<dict>
 			<key>Action</key>
@@ -2537,9 +2551,9 @@
 	<key>NSWindow Frame SessionsPreferences</key>
 	<string>0 674 606 456 0 0 2048 1130 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>646 459 937 465 0 0 2048 1130 </string>
+	<string>449 359 918 495 0 0 2048 1130 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
-	<string>0 39 2035 1091 0 0 2048 1130 </string>
+	<string>0 0 2035 1130 0 0 2048 1130 </string>
 	<key>NSWindow Frame iTerm Window 1</key>
 	<string>0 0 1720 1130 0 0 2048 1130 </string>
 	<key>New Bookmarks</key>
@@ -2548,7 +2562,7 @@
 			<key>ASCII Anti Aliased</key>
 			<true/>
 			<key>Ambiguous Double Width</key>
-			<true/>
+			<false/>
 			<key>Ansi 0 Color</key>
 			<dict>
 				<key>Blue Component</key>
@@ -3845,6 +3859,8 @@
 	<false/>
 	<key>NoSyncTimeOfFirstLaunchOfVersionWithTip</key>
 	<real>492082635.73944902</real>
+	<key>OpenBookmark</key>
+	<false/>
 	<key>PMPrintingExpandedStateForPrint2</key>
 	<false/>
 	<key>PointerActions</key>
@@ -3897,7 +3913,7 @@
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2016-11-30T01:48:08Z</date>
+	<date>2016-12-13T01:13:29Z</date>
 	<key>SUSendProfileInfo</key>
 	<false/>
 	<key>ShowFullScreenTabBar</key>
