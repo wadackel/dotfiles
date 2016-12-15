@@ -498,7 +498,6 @@ if dein#load_state(s:plugin_dir)
 
   " golang
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
-  exe "set rtp+=".globpath($GOPATH, "src/github.com/nsf/gocode/vim")
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -564,6 +563,12 @@ if !exists('g:neocomplete#keyword_patterns')
     let g:neocomplete#keyword_patterns = {}
 endif
 let g:neocomplete#keyword_patterns['default'] = '\h\w*'
+
+" source
+if !exists('g:neocomplete#sources#omni#input_patterns')
+  let g:neocomplete#sources#omni#input_patterns = {}
+endif
+let g:neocomplete#sources#omni#input_patterns.go = '\h\w\.\w*'
 
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
@@ -727,7 +732,13 @@ let g:flow#omnifunc = 1
 
 
 " golang
+let g:go_highlight_functions = 1
+let g:go_highlight_methods = 1
+let g:go_highlight_structs = 1
 let g:go_fmt_command = "goimports"
+
+autocmd FileType go :highlight goErr ctermfg=237
+autocmd FileType go :match goErr /\<err\>/
 
 
 " table-mode
