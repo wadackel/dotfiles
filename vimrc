@@ -782,7 +782,6 @@ let g:neomake_scss_stylelint_maker = {
 syntax on
 set background=dark
 
-
 " プラグインが有効な場合とそれ以外で分ける
 try
   if has("termguicolors")
