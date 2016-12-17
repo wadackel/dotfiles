@@ -19,6 +19,7 @@ setopt auto_cd
 # Library
 # ====================================================
 export GOPATH=${HOME}/go
+export PATH=${PATH}:${GOPATH}/bin
 
 
 
