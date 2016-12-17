@@ -751,7 +751,7 @@ vnoremap <silent> <leader>cs :StylefmtVisual<CR>
 
 
 " neomake
-autocmd! BufWritePost *.js,*.jsx,*.scss,*.sass,*.css Neomake
+autocmd! BufWritePost *.js,*.jsx,*.scss,*.sass,*.css,*.go Neomake
 let g:neomake_error_sign = {'text': '>>', 'texthl': 'Error'}
 let g:neomake_warning_sign = {'text': '>>',  'texthl': 'Todo'}
 let g:neomake_open_list = 4
