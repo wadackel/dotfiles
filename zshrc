@@ -88,6 +88,9 @@ alias tmls="tmux ls"
 alias tma="tmux a"
 alias tmd="tmux d"
 
+# golang
+alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
+
 # <Tab> で候補選択
 zstyle ':completion:*:default' menu select=1
 
