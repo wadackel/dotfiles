@@ -516,6 +516,7 @@ if dein#load_state(s:plugin_dir)
 
   " colorschema
   call dein#add('w0ng/vim-hybrid')
+  call dein#add('rhysd/vim-color-spring-night')
 
   call dein#end()
   call dein#save_state()
@@ -563,12 +564,6 @@ if !exists('g:neocomplete#keyword_patterns')
     let g:neocomplete#keyword_patterns = {}
 endif
 let g:neocomplete#keyword_patterns['default'] = '\h\w*'
-
-" source
-" if !exists('g:neocomplete#sources#omni#input_patterns')
-"   let g:neocomplete#sources#omni#input_patterns = {}
-" endif
-" let g:neocomplete#sources#omni#input_patterns.go = '\h\w\.\w*'
 
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
@@ -731,14 +726,19 @@ let g:flow#enable = 0
 let g:flow#omnifunc = 1
 
 
-" golang
+" vim-go
+let g:go_fmt_command = "goimports"
 let g:go_highlight_functions = 1
 let g:go_highlight_methods = 1
 let g:go_highlight_structs = 1
-let g:go_fmt_command = "goimports"
+let g:go_highlight_operators = 1
+let g:go_term_enabled = 1
+let g:go_highlight_build_constraints = 1
 
-autocmd FileType go :highlight goErr ctermfg=237
-autocmd FileType go :match goErr /\<err\>/
+augroup GolangSettings
+  autocmd FileType go :highlight goErr cterm=bold ctermfg=214
+  autocmd FileType go :match goErr /\<err\>/
+augroup END
 
 
 " table-mode
@@ -789,7 +789,14 @@ try
     set termguicolors
   endif
 
-  colorscheme hybrid
+  func! s:overwrite_spring_night()
+    exe 'highlight LineNr guifg=#3c3c3c guibg=NONE'
+  endfunc
+
+  autocmd ColorScheme * call s:overwrite_spring_night()
+
+  colorscheme spring-night
+  " colorscheme hybrid
 
 catch /^Vim\%((\a\+)\)\=:E185/
   " 行番号
