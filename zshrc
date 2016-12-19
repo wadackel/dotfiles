@@ -19,6 +19,7 @@ setopt auto_cd
 # Library
 # ====================================================
 export GOPATH=${HOME}/go
+export PATH=${PATH}:${GOPATH}/bin
 
 
 
@@ -60,10 +61,15 @@ setopt inc_append_history
 # Aliases & Custom functions
 # ====================================================
 
-# ls
-alias ls="ls -G"
-alias ll="ls -l"
-alias la="ls -la"
+# basic
+alias ls='ls -G'
+alias ll='ls -l'
+alias la='ls -la'
+alias md='mkdir -pv'
+alias cp='cp -p'
+alias df='df -h'
+alias rmrf='rm -rf'
+
 
 # other
 alias v=vim
@@ -88,6 +94,9 @@ alias tmls="tmux ls"
 alias tma="tmux a"
 alias tmd="tmux d"
 
+# golang
+alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
+
 # <Tab> で候補選択
 zstyle ':completion:*:default' menu select=1
 
@@ -98,6 +107,16 @@ bindkey "^[[Z" reverse-menu-complete
 WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 
 
+# Utility
+# mkdir hoge && cd $_
+function mkcd() {
+  if [[ -d $1 ]]; then
+    echo "It already exsits! Cd to the directory."
+    cd $1
+  else
+    mkdir -p $1 && cd $1
+  fi
+}
 
 
 # ====================================================
