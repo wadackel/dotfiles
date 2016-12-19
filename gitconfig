@@ -52,7 +52,7 @@
   nerge = merge --no-ff
 
   # example) git prout 12 patch-1
-  prout = "!f() { git fetch origin pull/$1/head:$2; git checkout $2;}; f"
+  prout = "!f() { git fetch origin pull/$1/head:$2 -f; git checkout $2;}; f"
 
 [filter "lfs"]
   required = true
