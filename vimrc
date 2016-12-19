@@ -243,29 +243,6 @@ autocmd FileType md setlocal filetype=markdown
 autocmd FileType js setlocal filetype=javascript
 
 
-" ファイルサイズを表示
-function! GetFilesize(file)
-  let size = getfsize(expand(a:file))
-  echo 'Size of ' a:file ' is ' size ' bytes'
-endfunction
-
-map <leader>fs :call GetFilesize(@%)<CR>
-
-" ファイルパス/名前をコピー&出力
-function! CopyPath()
-  let @*=expand('%:p')
-  echo @*
-endfunction
-
-function! CopyFileName()
-  let @*=expand('%:t')
-  echo @*
-endfunction
-
-nmap <leader>fp :call CopyPath()<CR>
-nmap <leader>ff :call CopyFileName()<CR>
-
-
 " カーソル位置の復元
 augroup restoreCursorPosition
   autocmd BufReadPost *
@@ -295,18 +272,6 @@ nmap    t [Tag]
 for n in range(1, 9)
   execute 'nnoremap <silent> [Tag]'.n  ':<C-u>tabnext'.n.'<CR>'
 endfor
-
-" tc 新しいタブを一番右に作る
-map <silent> [Tag]c :tablast <bar> tabnew<CR>
-
-" tx タブを閉じる
-map <silent> [Tag]x :tabclose<CR>
-
-" tn 次のタブ
-map <silent> [Tag]n :tabnext<CR>
-
-" tp 前のタブ
-map <silent> [Tag]p :tabprevious<CR>
 
 
 " 画面分割用のキーマップ
@@ -342,24 +307,6 @@ nnoremap <C-w>O :<C-u>tabo<CR>
 
 " 選択範囲内をExpressionレジスタで評価->置換
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
-
-
-" Checkboxのトグル
-nnoremap <silent> <Leader>c :call ToggleCheckbox()<CR>
-
-function! ToggleCheckbox()
-  let line = getline('.')
-
-  if match(line, "[\*\-] \\[ \\]") > -1
-    let line = substitute(line, "\\([\*\-]\\) \\[ \\]", "\\1 [x]", "")
-
-  elseif match(line, "[\*\-] \\[x\\]") > -1
-    let line = substitute(line, "\\([\*\-]\\) \\[x\\]", "\\1 [ ]", "")
-
-  endif
-
-  call setline('.', line)
-endfunction
 
 
 " Tips (keymap example)
