@@ -378,7 +378,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
   call dein#add('Shougo/neosnippet')
   call dein#add('Shougo/neosnippet-snippets')
-  call dein#add('rking/ag.vim')
+  call dein#add('mileszs/ack.vim')
   call dein#add('mattn/webapi-vim')
   call dein#add('thinca/vim-quickrun')
 
@@ -580,8 +580,11 @@ endfunction
 
 
 " Ag
-" ctrlpの置き換え
 if executable('ag')
+  " for ack.vim
+  let g:ackprg = 'ag --vimgrep'
+
+  " ctrlpの置き換え
   let g:ctrlp_use_caching = 0
   let g:ctrlp_user_command = 'ag %s -i --hidden --nocolor --nogroup -g ""'
 endif
