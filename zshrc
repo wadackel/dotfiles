@@ -63,8 +63,8 @@ setopt inc_append_history
 
 # basic
 alias ls='ls -G'
-alias ll='ls -l'
-alias la='ls -la'
+alias ll='ls -lF'
+alias la='ls -laF'
 alias md='mkdir -pv'
 alias cp='cp -p'
 alias df='df -h'
