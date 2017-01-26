@@ -429,13 +429,14 @@ if dein#load_state(s:plugin_dir)
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('MaxMEllon/vim-jsx-pretty', {'on_ft': 'javascript'})
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
+  call dein#add('jason0x43/vim-js-indent', {'on_ft': 'javascript'})
 
   " coffee
   call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
 
   " typescript
   call dein#add('leafgarland/typescript-vim', {'on_ft' : 'typescript'})
-  call dein#add('clausreinke/typescript-tools', {'on_ft' : 'typescript'})
+  call dein#add('Quramy/tsuquyomi', {'on_ft' : 'typescript'})
 
   " css
   call dein#add('kewah/vim-stylefmt')
@@ -663,6 +664,16 @@ let g:vim_markdown_folding_disabled=1
 
 " JavaScript
 let g:javascript_plugin_flow = 1
+
+
+" TypeScript
+autocmd FileType typescript setlocal completeopt-=menu
+autocmd FileType typescript let b:caw_oneline_comment = '//'
+autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
+
+let g:js_indent_typescript = 1
+let g:tsuquyomi_disable_quickfix = 1
+
 
 
 " JSX
