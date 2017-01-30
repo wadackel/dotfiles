@@ -429,14 +429,13 @@ if dein#load_state(s:plugin_dir)
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('MaxMEllon/vim-jsx-pretty', {'on_ft': 'javascript'})
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
-  call dein#add('jason0x43/vim-js-indent', {'on_ft': 'javascript'})
 
   " coffee
   call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
 
   " typescript
-  call dein#add('leafgarland/typescript-vim', {'on_ft' : 'typescript'})
-  call dein#add('Quramy/tsuquyomi', {'on_ft' : 'typescript'})
+  call dein#add('leafgarland/typescript-vim', {'on_ft': 'typescript'})
+  call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
 
   " css
   call dein#add('kewah/vim-stylefmt')
@@ -451,8 +450,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('itchyny/lightline.vim')
 
   " syntax checking
-  call dein#add('neomake/neomake')
-  call dein#add('benjie/neomake-local-eslint.vim')
+  call dein#add('w0rp/ale')
 
   " syntax
   call dein#add('Shougo/context_filetype.vim')
@@ -545,8 +543,8 @@ let g:lightline = {
   \   'readonly': 'LightLineReadonly',
   \   'modified': 'LightLineModified'
   \ },
-  \ 'separator': { 'left': '', 'right': '' },
-  \ 'subseparator': { 'left': '|', 'right': '|' }
+  \ 'separator': { 'left': "\u2b80", 'right': "\u2b82" },
+  \ 'subseparator': { 'left': "\u2b81", 'right': "\u2b83" }
   \ }
 
 function! LightLineModified()
@@ -565,7 +563,7 @@ function! LightLineReadonly()
   if &filetype == "help"
     return ""
   elseif &readonly
-    return "\ue0a2"
+    return "\u2b64"
   else
     return ""
   endif
@@ -573,8 +571,8 @@ endfunction
 
 function! LightLineFugitive()
   if exists("*fugitive#head")
-    let _ = fugitive#head()
-    return strlen(_) ? "\ue0a0 "._ : ''
+    let branch = fugitive#head()
+    return branch !=# '' ? "\u2b60 ".branch : ''
   endif
   return ''
 endfunction
@@ -662,22 +660,14 @@ let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
 
 
-" JavaScript
-let g:javascript_plugin_flow = 1
-
-
 " TypeScript
 autocmd FileType typescript setlocal completeopt-=menu
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
-let g:js_indent_typescript = 1
-let g:tsuquyomi_disable_quickfix = 1
 
-
-
-" JSX
-let g:jsx_ext_required = 0
+" JavaScript
+let g:javascript_plugin_flow = 1
 
 
 " Flowtype
@@ -685,6 +675,10 @@ let g:jsx_ext_required = 0
 let g:flow#autoclose = 1
 let g:flow#enable = 0
 let g:flow#omnifunc = 1
+
+
+" JSX
+let g:jsx_ext_required = 0
 
 
 " vim-go
@@ -711,27 +705,14 @@ nnoremap <silent> <leader>cs :Stylefmt<CR>
 vnoremap <silent> <leader>cs :StylefmtVisual<CR>
 
 
-" neomake
-autocmd! BufWritePost *.js,*.jsx,*.scss,*.sass,*.css,*.go Neomake
-let g:neomake_error_sign = {'text': '>>', 'texthl': 'Error'}
-let g:neomake_warning_sign = {'text': '>>',  'texthl': 'Todo'}
-let g:neomake_open_list = 4
+" ALE
+let g:ale_open_list = 1
+let g:ale_set_quickfix = 1
+let g:ale_sign_column_always = 1
 
-" neomake - javascript
-let g:neomake_javascript_enabled_makers = ['eslint']
-
-" neomake - css,scss,sass
-let b:neomake_scss_stylelint_exe = substitute(system('PATH=$(npm bin):$PATH && which stylelint'), '^\n*\s*\(.\{-}\)\n*\s*$', '\1', '')
-let g:neomake_scss_enabled_makers = ['stylelint']
-let g:neomake_scss_stylelint_maker = {
-  \ 'exe': b:neomake_scss_stylelint_exe,
-  \ 'args': ['--syntax', 'scss'],
-  \ 'errorformat':
-    \ '%+P%f,' .
-      \ '%*\s%l:%c  %t  %m,' .
-    \ '%-Q'
-\ }
-
+let g:ale_lint_on_save = 1
+let g:ale_lint_on_text_changed = 0
+let g:ale_lint_on_enter = 0
 
 
 

@@ -2552,17 +2552,17 @@
 		<integer>1</integer>
 	</dict>
 	<key>NSWindow Frame NSFontPanel</key>
-	<string>668 100 445 223 0 0 1280 777 </string>
+	<string>628 153 945 686 0 0 1680 1028 </string>
 	<key>NSWindow Frame Preferences</key>
 	<string>532 591 606 456 0 0 1920 1057 </string>
 	<key>NSWindow Frame SUStatusFrame</key>
 	<string>638 674 400 129 0 0 1680 1028 </string>
 	<key>NSWindow Frame SUUpdateAlert</key>
-	<string>-1125 433 620 392 -1280 280 1280 778 </string>
+	<string>528 477 620 392 0 0 1680 1028 </string>
 	<key>NSWindow Frame SessionsPreferences</key>
-	<string>329 49 606 456 0 0 1920 1058 </string>
+	<string>269 47 606 456 0 0 1680 1028 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>547 479 796 473 0 0 1680 1028 </string>
+	<string>474 507 918 495 0 0 1680 1028 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
 	<string>0 0 1676 1028 0 0 1680 1028 </string>
 	<key>NSWindow Frame iTerm Window 1</key>
@@ -3137,11 +3137,11 @@
 			<key>Name</key>
 			<string>Default</string>
 			<key>Non Ascii Font</key>
-			<string>RictyForPowerline-Regular 17</string>
+			<string>RictyDiminishedDiscord-RegularForPowerline 17</string>
 			<key>Non-ASCII Anti Aliased</key>
 			<true/>
 			<key>Normal Font</key>
-			<string>RictyForPowerline-Regular 17</string>
+			<string>RictyDiminished-RegularForPowerline 17</string>
 			<key>Option Key Sends</key>
 			<integer>0</integer>
 			<key>Prompt Before Closing 2</key>
@@ -3201,7 +3201,7 @@
 			<key>Use Non-ASCII Font</key>
 			<true/>
 			<key>Vertical Spacing</key>
-			<real>1.0245317206325302</real>
+			<real>1.0719714796686748</real>
 			<key>Visual Bell</key>
 			<true/>
 			<key>Window Type</key>
@@ -3956,7 +3956,7 @@
 		</dict>
 	</dict>
 	<key>PrefsCustomFolder</key>
-	<string>/Users/tsuyoshiwada/dotfiles/iterm2</string>
+	<string>~/dotfiles/iterm2</string>
 	<key>Print In Black And White</key>
 	<true/>
 	<key>PromptOnQuit</key>
@@ -3974,7 +3974,7 @@
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2016-12-13T05:57:55Z</date>
+	<date>2017-01-26T04:36:33Z</date>
 	<key>ShowFullScreenTabBar</key>
 	<true/>
 	<key>TabStyle</key>
@@ -3988,7 +3988,7 @@
 	<key>findRegex_iTerm</key>
 	<false/>
 	<key>iTerm Version</key>
-	<string>3.0.12</string>
+	<string>3.0.13</string>
 	<key>kCPKSelectionViewPreferredModeKey</key>
 	<integer>0</integer>
 	<key>kCPKSelectionViewShowHSBTextFieldsKey</key>
