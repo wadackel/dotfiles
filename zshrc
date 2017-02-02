@@ -128,35 +128,57 @@ autoload -Uz vcs_info
 
 # 色の設定
 autoload -U colors ; colors
-local DEFAULT=%{$reset_color%}
-local RED=%{$fg[red]%}
-local MAGENTA=%{$fg[magenta]%}
-local GREEN=%{$fg[green]%}
-local YELLOW=%{$fg[yellow]%}
-local BLUE=%{$fg[blue]%}
-local PURPLE=%{$fg[purple]%}
-local CYAN=%{$fg[cyan]%}
-local WHITE=%{$fg[white]%}
+
 
 # PROMPT変数内で変数参照
 setopt prompt_subst
 
 zstyle ':vcs_info:git:*' check-for-changes true
-zstyle ':vcs_info:git:*' stagedstr "%F{green}!" #commit されていないファイルがある
-zstyle ':vcs_info:git:*' unstagedstr "%F{magenta}+" #add されていないファイルがある
-zstyle ':vcs_info:*' formats "%F{green}%c%u(%b)%f" #通常
-zstyle ':vcs_info:*' actionformats '[%b|%a]' #rebase 途中,merge コンフリクト等 formats 外の表示
+zstyle ':vcs_info:git:*' stagedstr "%F{163} !" #commit されていないファイルがある
+zstyle ':vcs_info:git:*' unstagedstr "%F{14} *" #add されていないファイルがある
+zstyle ':vcs_info:*' formats '%F{244} %b%c%u%f' #通常
+zstyle ':vcs_info:*' actionformats '%b%F{green}|%{$reset_color%}%a' #rebase 途中,merge コンフリクト等 formats 外の表示
 
-# `vcs_info` 呼び出し
-precmd () { vcs_info }
+# Pre
+precmd () {
+  print
+  vcs_info
+}
+
+PROMPT='%{%F{14}%}%~%{${DEFAULT}%}${vcs_info_msg_0_}
+%F{169}❯%{$reset_color%} %{${DEFAULT}%}'
+
+# 右プロンプト (memo)
+function memo(){
+  memotxt=''
+  for str in $@
+  do
+  memotxt="${memotxt} ${str}"
+  done
+}
+
+RPROMPT='${memotxt}'
+
+# ブランチ名だけ色を変えたい (途中)
+# zstyle ':vcs_info:git:*' formats '%b' '%c' '%u'
+# zstyle ':vcs_info:git:*' actionformats '%b@%r|%a' '%c' '%u'
+#
+# function vcs_echo {
+#   local st branch color
+#   st=`git status 2> /dev/null`
+#   if [[ -z "$st" ]]; then return; fi
+#   branch="$vcs_info_msg_0_"
+#   if   [[ -n "$vcs_info_msg_1_" ]]; then color='%F{14}' #staged
+#   elif [[ -n "$vcs_info_msg_2_" ]]; then color='%F{169}' #unstaged
+#   elif [[ -n `echo "$st" | grep "^Untracked"` ]]; then color=${fg[green]} # untracked
+#   else color='%F{242}'
+#   fi
+#   echo "%{$color%}%{$branch%}%{$reset_color%}" | sed -e s/@/"%F{yellow}@%f%{$color%}"/
+# }
 
 # 左プロンプト
-PROMPT='%{${CYAN}%}[%n@%m]%{${DEFAULT}%}'
-PROMPT=$PROMPT'${vcs_info_msg_0_} %{${YELLOW}%}%}$%{${DEFAULT}%} '
-
-# 右プロンプト
-RPROMPT='%{${GREEN}%}[%~]%{${DEFAULT}%}'
-
+# PROMPT='%{%F{14}%}%~%{${DEFAULT}%} `vcs_echo`
+# %F{169}❯%{$reset_color%} ${DEFAULT}'
 
 
 
@@ -176,11 +198,6 @@ function tmux_automatically_attach_session()
         ! is_exists 'tmux' && return 1
 
         if is_tmux_runnning; then
-            echo "${fg_bold[red]} _____ __  __ _   ___  __ ${reset_color}"
-            echo "${fg_bold[red]}|_   _|  \/  | | | \ \/ / ${reset_color}"
-            echo "${fg_bold[red]}  | | | |\/| | | | |\  /  ${reset_color}"
-            echo "${fg_bold[red]}  | | | |  | | |_| |/  \  ${reset_color}"
-            echo "${fg_bold[red]}  |_| |_|  |_|\___//_/\_\ ${reset_color}"
         elif is_screen_running; then
             echo "This is on screen."
         fi
