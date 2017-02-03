@@ -240,3 +240,42 @@ function tmux_automatically_attach_session()
     fi
 }
 tmux_automatically_attach_session
+
+
+
+
+
+# ====================================================
+# Plugins
+#
+# Note: fzfに依存しているので別途インストールする
+# https://github.com/junegunn/fzf
+# ====================================================
+
+# fzf
+export FZF_DEFAULT_OPTS='-d 40% --multi --reverse --exit-0 --select-1 --ansi'
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# zplug
+source ~/.zplug/init.zsh
+
+zplug "zsh-users/zsh-history-substring-search"
+zplug "b4b4r07/enhancd", use:init.sh
+zplug "zsh-users/zsh-completions"
+zplug "mollifier/cd-gitroot"
+
+# Install
+if ! zplug check --verbose; then
+  printf 'Install? [y/N]: '
+  if read -q; then
+    echo; zplug install
+  fi
+fi
+
+zplug load
+
+# cd-gitroot
+alias cdu='cd-gitroot'
+
+# enhancd
+ENHANCD_HOOK_AFTER_CD=ls
