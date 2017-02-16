@@ -423,12 +423,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('tukiyo/previm', {'on_ft': ['markdown', 'md']})
   call dein#add('dhruvasagar/vim-table-mode', {'on_ft': ['markdown', 'md']})
   call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
-
-  " javascript
-  call dein#add('othree/es.next.syntax.vim', {'on_ft': 'javascript'})
-  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
-  call dein#add('MaxMEllon/vim-jsx-pretty', {'on_ft': 'javascript'})
-  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
+  call dein#add('mzlogin/vim-markdown-toc', {'on_ft': ['markdown', 'md']})
 
   " coffee
   call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
@@ -436,6 +431,12 @@ if dein#load_state(s:plugin_dir)
   " typescript
   call dein#add('leafgarland/typescript-vim', {'on_ft': 'typescript'})
   call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
+
+  " javascript
+  call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('othree/yajs.vim', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('othree/es.next.syntax.vim', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
 
   " css
   call dein#add('kewah/vim-stylefmt')
@@ -473,6 +474,7 @@ if dein#check_install()
 endif
 
 filetype plugin indent on
+syntax enable
 
 
 " 画面分割用のキーマップ
@@ -510,6 +512,11 @@ if !exists('g:neocomplete#keyword_patterns')
     let g:neocomplete#keyword_patterns = {}
 endif
 let g:neocomplete#keyword_patterns['default'] = '\h\w*'
+
+if !exists('g:neocomplete#force_omni_input_patterns')
+    let g:neocomplete#force_omni_input_patterns = {}
+endif
+let g:neocomplete#force_omni_input_patterns.typescript = '[^. *\t]\.\w*\|\h\w*::'
 
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
@@ -661,24 +668,15 @@ let g:vim_markdown_folding_disabled=1
 
 
 " TypeScript
-autocmd FileType typescript setlocal completeopt-=menu
+" autocmd FileType typescript setlocal completeopt-=menu
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
 
-" JavaScript
-let g:javascript_plugin_flow = 1
-
-
 " Flowtype
-" やたら重いので無効化 -> ローカルのflowを呼ぶPRがあるのでwatchしておく
 let g:flow#autoclose = 1
 let g:flow#enable = 0
 let g:flow#omnifunc = 1
-
-
-" JSX
-let g:jsx_ext_required = 0
 
 
 " vim-go

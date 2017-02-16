@@ -32,10 +32,10 @@ export PATH=${PATH}:${GOPATH}/bin
 export HISTFILE=${HOME}/.zsh_history
 
 # メモリに保存される履歴の件数
-export HISTSIZE=1000
+export HISTSIZE=1000000
 
 # 履歴ファイルに保存される履歴の件数
-export SAVEHIST=100000
+export SAVEHIST=1000000
 
 # ヒストリに追加されるコマンド行が古いものと同じなら古いものを削除
 setopt hist_ignore_all_dups
@@ -76,6 +76,14 @@ bindkey "^R" history-incremental-search-backward
 
 
 # ====================================================
+# Extensition
+# ====================================================
+autoload -Uz zmv
+alias zmv='noglob zmv -W'
+
+
+
+# ====================================================
 # Aliases & Custom functions
 # ====================================================
 
@@ -91,6 +99,7 @@ alias rmrf='rm -rf'
 
 # other
 alias v=vim
+alias vi=vim
 alias g=git
 
 # tree
@@ -295,6 +304,7 @@ alias cdu='cd-gitroot'
 
 # enhancd
 ENHANCD_HOOK_AFTER_CD=ls
+ENHANCD_DISABLE_DOT=1
 
 # fzf
 export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'
