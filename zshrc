@@ -164,7 +164,7 @@ zstyle ':vcs_info:git:*' check-for-changes true
 zstyle ':vcs_info:git:*' stagedstr "%F{163} !" #commit されていないファイルがある
 zstyle ':vcs_info:git:*' unstagedstr "%F{14} *" #add されていないファイルがある
 zstyle ':vcs_info:*' formats '%F{244} %b%c%u%f' #通常
-zstyle ':vcs_info:*' actionformats '%b%F{green}|%{$reset_color%}%a' #rebase 途中,merge コンフリクト等 formats 外の表示
+zstyle ':vcs_info:*' actionformats ' %F{244}%b %F{163}!%a' #rebase 途中,merge コンフリクト等 formats 外の表示
 
 # Pre
 precmd () {
