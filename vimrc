@@ -309,20 +309,18 @@ nnoremap <C-w>O :<C-u>tabo<CR>
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
 
-" Tips (keymap example)
-nnoremap smp :SlackMemoPost<CR>
-nnoremap sml :SlackMemoList<CR>
-nnoremap smc :SlackMemoCtrlP<CR>
-
-
 
 
 " =============================================================
 " Filetypes
 " =============================================================
 augroup fileTypeDetect
+  autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
+  autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript
+
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
+  autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
 augroup END
 
 augroup fileTypeIndent
@@ -384,6 +382,7 @@ if dein#load_state(s:plugin_dir)
 
   " unite
   call dein#add('Shougo/unite.vim')
+  call dein#add('Shougo/unite-outline', {'depends': 'Shougo/unite.vim'})
   call dein#add('kmnk/vim-unite-giti', {'depends': 'Shougo/unite.vim'})
 
   " editing
@@ -429,7 +428,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
 
   " typescript
-  call dein#add('leafgarland/typescript-vim', {'on_ft': 'typescript'})
+  call dein#add('leafgarland/typescript-vim')
   call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
 
   " javascript
@@ -494,7 +493,6 @@ call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 
 " neocomplete
-" Disable AutoComplPop.
 let g:acp_enableAtStartup = 0
 
 " Use neocomplete.
@@ -507,16 +505,36 @@ let g:neocomplete#enable_smart_case = 1
 let g:neocomplete#sources#syntax#min_keyword_length = 2
 let g:neocomplete#lock_buffer_name_pattern = '\*ku\*'
 
+" Define dictionary.
+let g:neocomplete#sources#dictionary#dictionaries = {
+    \ 'default' : '',
+    \ 'vimshell' : $HOME.'/.vimshell_hist',
+    \ 'scheme' : $HOME.'/.gosh_completions'
+    \ }
+
 " Define keyword.
 if !exists('g:neocomplete#keyword_patterns')
     let g:neocomplete#keyword_patterns = {}
 endif
 let g:neocomplete#keyword_patterns['default'] = '\h\w*'
 
+" Enable omni completion.
+autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
+autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
+autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
+autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
+autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+
+" Enable heavy omni completion.
+let g:neocomplete#sources#vim#complete_functions = {
+    \ 'Unite' : 'unite#complete_source',
+    \ 'VimFiler' : 'vimfiler#complete',
+    \}
+let g:neocomplete#force_overwrite_completefunc = 1
 if !exists('g:neocomplete#force_omni_input_patterns')
     let g:neocomplete#force_omni_input_patterns = {}
 endif
-let g:neocomplete#force_omni_input_patterns.typescript = '[^. *\t]\.\w*\|\h\w*::'
+let g:neocomplete#force_omni_input_patterns.typescript = '[^. \t]\.\%(\h\w*\)\?'
 
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
@@ -621,6 +639,12 @@ nnoremap <silent> gl :Unite giti/log<CR>
 nnoremap <silent> gb :Unite giti/branch_all<CR>
 
 
+" SlackMemoVim
+nnoremap smp :SlackMemoPost<CR>
+nnoremap sml :SlackMemoList<CR>
+nnoremap smc :SlackMemoCtrlP<CR>
+
+
 " caw
 nmap <C-K> <Plug>(caw:hatpos:toggle)
 vmap <C-K> <Plug>(caw:hatpos:toggle)
@@ -668,7 +692,6 @@ let g:vim_markdown_folding_disabled=1
 
 
 " TypeScript
-" autocmd FileType typescript setlocal completeopt-=menu
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
