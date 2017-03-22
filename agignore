@@ -15,3 +15,7 @@ node_modules
 node_modules
 *.egg
 *.egg-infovendor
+*.jpg
+*.png
+*.gif
+*.mp4
