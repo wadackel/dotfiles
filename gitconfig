@@ -51,8 +51,7 @@
   cancel = reset --soft HEAD^
   nerge = merge --no-ff
 
-  # example) git prout origin 12 patch-1
-  prout = "!f() { git fetch $1 pull/$2/head:$3 -f; git checkout $3;}; f"
+  cleanpr = "!git for-each-ref refs/heads/pr/* --format='%(refname)' | while read ref ; do branch=${ref#refs/heads/} ; git branch -D $branch ; done"
 
   # example) git lines tsuyoshiwada 2016-12-20 2016-12-21
   lines = "!f() { git log --numstat --pretty=\"%H\" --author=$1 --since=$2 --until=$3 --no-merges | awk 'NF==3 {plus+=$1; minus+=$2} END {printf(\"%d (+%d, -%d)\\n\", plus+minus, plus, minus)}';}; f"
