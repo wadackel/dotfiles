@@ -738,6 +738,7 @@ let g:ale_lint_on_enter = 0
 
 let g:ale_linters = {
 \   'html': [],
+\   'go': ['gofmt -e', 'go vet', 'golint', 'gosimple', 'staticcheck'],
 \}
 
 
