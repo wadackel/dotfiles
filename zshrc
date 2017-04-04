@@ -118,8 +118,8 @@ alias -g X="| xargs"
 # tmux
 alias tmux="TERM=xterm-256color tmux"
 alias tmls="tmux ls"
-alias tma="tmux a"
-alias tmd="tmux d"
+alias tma="tmux a -t"
+alias tmd="tmux d -t"
 
 # golang
 alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
