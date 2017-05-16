@@ -317,6 +317,7 @@ vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
   autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript
+  autocmd BufRead,BufNew,BufNewFile *.js.flow set filetype=typescript
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
@@ -435,7 +436,8 @@ if dein#load_state(s:plugin_dir)
   call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
   call dein#add('othree/yajs.vim', {'on_ft': ['javascript', 'typescript']})
   call dein#add('othree/es.next.syntax.vim', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
+  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
 
   " css
   call dein#add('kewah/vim-stylefmt')
@@ -694,12 +696,6 @@ let g:vim_markdown_folding_disabled=1
 " TypeScript
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
-
-
-" Flowtype
-let g:flow#autoclose = 1
-let g:flow#enable = 0
-let g:flow#omnifunc = 1
 
 
 " vim-go
