@@ -384,7 +384,6 @@ if dein#load_state(s:plugin_dir)
   " unite
   call dein#add('Shougo/unite.vim')
   call dein#add('Shougo/unite-outline', {'depends': 'Shougo/unite.vim'})
-  call dein#add('kmnk/vim-unite-giti', {'depends': 'Shougo/unite.vim'})
 
   " editing
   call dein#add('mattn/emmet-vim')
@@ -407,6 +406,8 @@ if dein#load_state(s:plugin_dir)
 
   " git
   call dein#add('tpope/vim-fugitive')
+  call dein#add('idanarye/vim-merginal', {'depends': 'tpope/vim-fugitive'})
+  call dein#add('cohama/agit.vim')
   call dein#add('tyru/open-browser.vim')
 
   " gist
@@ -636,9 +637,12 @@ nnoremap <silent> gs :Gstatus<CR>
 nnoremap <silent> gd :Gdiff<CR>
 
 
-" Unite x giti
-nnoremap <silent> gl :Unite giti/log<CR>
-nnoremap <silent> gb :Unite giti/branch_all<CR>
+" Agit
+nnoremap <silent> gl :Agit<CR>
+
+
+" Merginal
+nnoremap <silent> gb :Merginal<CR>
 
 
 " SlackMemoVim
