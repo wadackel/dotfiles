@@ -433,6 +433,9 @@ if dein#load_state(s:plugin_dir)
   call dein#add('leafgarland/typescript-vim')
   call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
 
+  " flow
+  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
+
   " javascript
   call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
   call dein#add('othree/yajs.vim', {'on_ft': ['javascript', 'typescript']})
@@ -524,9 +527,9 @@ let g:neocomplete#keyword_patterns['default'] = '\h\w*'
 " Enable omni completion.
 autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
 autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
-autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
 autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
 autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+autocmd FileType javascript setlocal omnifunc=flowcomplete#Complete
 
 " Enable heavy omni completion.
 let g:neocomplete#sources#vim#complete_functions = {
@@ -695,6 +698,23 @@ augroup EmmitVim
 " Markdown
 let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
+
+
+" flow
+let g:flow#enable = 0
+let g:flow#autoclose = 1
+let g:flow#omnifunc = 1
+
+" use local flow
+let local_flow = finddir('node_modules', '.;') . '/.bin/flow'
+
+if matchstr(local_flow, "^\/\\w") == ''
+    let local_flow= getcwd() . "/" . local_flow
+endif
+
+if executable(local_flow)
+  let g:flow#flowpath = local_flow
+endif
 
 
 " TypeScript
