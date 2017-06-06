@@ -438,8 +438,9 @@ if dein#load_state(s:plugin_dir)
 
   " javascript
   call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('othree/yajs.vim', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('othree/es.next.syntax.vim', {'on_ft': ['javascript', 'typescript']})
+  " call dein#add('othree/yajs.vim', {'on_ft': ['javascript', 'typescript']})
+  " call dein#add('othree/es.next.syntax.vim', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
 
@@ -715,6 +716,8 @@ endif
 if executable(local_flow)
   let g:flow#flowpath = local_flow
 endif
+
+let g:javascript_plugin_flow = 1
 
 
 " TypeScript
