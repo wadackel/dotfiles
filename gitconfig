@@ -8,6 +8,8 @@
   attributesfile = ~/.gitattributes
 [color]
   ui = auto
+[fetch]
+  prune = true
 [merge]
   tool = vimdiff2
 [alias]
