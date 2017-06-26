@@ -186,27 +186,6 @@ function memo(){
 
 RPROMPT='${memotxt}'
 
-# ブランチ名だけ色を変えたい (途中)
-# zstyle ':vcs_info:git:*' formats '%b' '%c' '%u'
-# zstyle ':vcs_info:git:*' actionformats '%b@%r|%a' '%c' '%u'
-#
-# function vcs_echo {
-#   local st branch color
-#   st=`git status 2> /dev/null`
-#   if [[ -z "$st" ]]; then return; fi
-#   branch="$vcs_info_msg_0_"
-#   if   [[ -n "$vcs_info_msg_1_" ]]; then color='%F{14}' #staged
-#   elif [[ -n "$vcs_info_msg_2_" ]]; then color='%F{169}' #unstaged
-#   elif [[ -n `echo "$st" | grep "^Untracked"` ]]; then color=${fg[green]} # untracked
-#   else color='%F{242}'
-#   fi
-#   echo "%{$color%}%{$branch%}%{$reset_color%}" | sed -e s/@/"%F{yellow}@%f%{$color%}"/
-# }
-
-# 左プロンプト
-# PROMPT='%{%F{14}%}%~%{${DEFAULT}%} `vcs_echo`
-# %F{169}❯%{$reset_color%} ${DEFAULT}'
-
 
 
 # tmux
@@ -270,6 +249,8 @@ tmux_automatically_attach_session
 
 
 
+# gitignore.io
+function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 
 # ====================================================
@@ -316,4 +297,3 @@ function select-history() {
 }
 zle -N select-history
 bindkey '^T' select-history
-
