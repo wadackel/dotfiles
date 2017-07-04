@@ -395,6 +395,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('tyru/caw.vim.git')
   call dein#add('deton/jasegment.vim')
   call dein#add('thinca/vim-qfreplace')
+  call dein#add('jceb/vim-editqf')
 
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
