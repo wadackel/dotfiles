@@ -286,6 +286,7 @@ alias cdu='cd-gitroot'
 # enhancd
 ENHANCD_HOOK_AFTER_CD=ls
 ENHANCD_DISABLE_DOT=1
+ENHANCD_DISABLE_HYPHEN=1
 
 # fzf
 export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'

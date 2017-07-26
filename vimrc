@@ -321,6 +321,7 @@ augroup fileTypeDetect
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
+  autocmd BufRead,BufNew,BufNewFile .stylelintrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
 augroup END
 
@@ -415,6 +416,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('mattn/gist-vim')
 
   " memo
+  call dein#add('glidenote/memolist.vim')
   call dein#add('tsuyoshiwada/slack-memo-vim', {'depends': 'mattn/webapi-vim'})
 
   " toml
@@ -654,6 +656,17 @@ nnoremap smp :SlackMemoPost<CR>
 nnoremap sml :SlackMemoList<CR>
 nnoremap smc :SlackMemoCtrlP<CR>
 
+" Memo List
+let g:memolist_path = '~/Dropbox/memolist'
+let g:memolist_memo_suffix = "md"
+let g:memolist_template_dir_path = "~/dotfiles/templates/memolist"
+let g:memolist_delimiter_yaml_start = '---'
+let g:memolist_delimiter_yaml_end  = '---'
+
+nnoremap <Leader>mc :MemoNew<CR>
+nnoremap <Leader>ml :MemoList<CR>
+nnoremap <Leader>mg :MemoGrep<CR>
+
 
 " caw
 nmap <C-K> <Plug>(caw:hatpos:toggle)
@@ -672,16 +685,18 @@ let g:user_emmet_settings = {
   \      'html:5' : "<!DOCTYPE html>\n"
   \               ."<html lang=\"ja\">\n"
   \               ."<head>\n"
-  \               ."\t<meta charset=\"${charset}\">\n"
-  \               ."\t<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n"
-  \               ."\t<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no\">\n"
-  \               ."\t<meta name=\"format-detection\" content=\"telephone=no,address=no,email=no\">\n"
-  \               ."\t<meta name=\"description\" content=\"\">\n"
-  \               ."\t<title></title>\n"
-  \               ."\t<link rel=\"shortcut icon\" href=\"/favicon.ico\">\n"
-  \               ."\t<link rel=\"stylesheet\" href=\"/style.css\">\n"
+  \               ."  <meta charset=\"${charset}\">\n"
+  \               ."  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n"
+  \               ."  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">\n"
+  \               ."  <meta name=\"format-detection\" content=\"telephone=no,address=no,email=no\">\n"
+  \               ."  <meta name=\"description\" content=\"\">\n"
+  \               ."  <link rel=\"shortcut icon\" href=\"/favicon.ico\">\n"
+  \               ."  <link rel=\"stylesheet\" href=\"/style.css\">\n"
+  \               ."  <title></title>\n"
   \               ."</head>\n"
-  \               ."<body>\n\t${child}|\n</body>\n"
+  \               ."<body>\n"
+  \               ."  ${child}|\n"
+  \               ."</body>\n"
   \               ."</html>"
   \   }
   \ },
