@@ -321,6 +321,7 @@ augroup fileTypeDetect
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
+  autocmd BufRead,BufNew,BufNewFile .stylelintrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
 augroup END
 
