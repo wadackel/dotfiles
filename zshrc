@@ -120,6 +120,7 @@ alias tmux="TERM=xterm-256color tmux"
 alias tmls="tmux ls"
 alias tma="tmux a -t"
 alias tmd="tmux d -t"
+alias tmr="tmux kill-session -t"
 
 # golang
 alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
