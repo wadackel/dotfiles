@@ -666,6 +666,7 @@ let g:memolist_delimiter_yaml_end  = '---'
 nnoremap <Leader>mc :MemoNew<CR>
 nnoremap <Leader>ml :MemoList<CR>
 nnoremap <Leader>mg :MemoGrep<CR>
+nnoremap <Leader>mp :exe 'CtrlP' g:memolist_path<CR>
 
 
 " caw
