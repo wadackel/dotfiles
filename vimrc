@@ -628,9 +628,18 @@ let g:vimfiler_as_default_explorer = 1
 let g:vimfiler_safe_mode_by_default = 0
 let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
 
-autocmd FileType vimfiler nmap <buffer> <CR> <Plug>(vimfiler_expand_or_edit)
 map <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
 map <C-H> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
+
+augroup vimfiler
+  autocmd!
+  autocmd FileType vimfiler call s:vimfiler_settings()
+augroup END
+
+function! s:vimfiler_settings()
+  nnoremap <buffer> <CR> <Plug>(vimfiler_expand_or_edit)
+  nnoremap <silent><buffer><expr> t vimfiler#do_switch_action('tabopen')
+endfunction
 
 
 " ctrlp
