@@ -637,7 +637,6 @@ augroup vimfiler
 augroup END
 
 function! s:vimfiler_settings()
-  nnoremap <buffer> <CR> <Plug>(vimfiler_expand_or_edit)
   nnoremap <silent><buffer><expr> t vimfiler#do_switch_action('tabopen')
 endfunction
 
