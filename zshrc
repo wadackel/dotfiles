@@ -16,11 +16,12 @@ setopt auto_cd
 
 
 # ====================================================
-# Library
+# Path
 # ====================================================
+export PATH=/usr/local/bin:${PATH}
 export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
-export PATH=/usr/local/bin:${PATH}
+export PATH=$HOME/.nodebrew/current/bin:$PATH
 
 
 
