@@ -100,35 +100,78 @@ set vb t_vb=
 set novisualbell
 
 
-"タブ、空白、改行の可視化
+" タブ、空白、改行の可視化
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
+
+" 基本キーマップ
+
+" <C-c> の動作を <Esc> に合わせる
+inoremap <C-c> <Esc>
 
 " increment, decrement で選択状態を維持
 vnoremap <c-a> <c-a>gv
 vnoremap <c-x> <c-x>gv
 
+" j, k による移動を折り返されたテキストでも自然に振る舞うように変更
+nnoremap j gj
+nnoremap k gk
 
-" .vimrcのリロード
-if has('vim_starting')
-  function! s:reload_vimrc() abort
-    execute printf('source %s', $MYVIMRC)
-    if has('gui_running')
-      execute printf('source %s', $MYGVIMRC)
-    endif
-    redraw
-    echo printf('.vimrc/.gvimrc has reloaded (%s).', strftime('%c'))
-  endfunction
-endif
+" x でレジスタを使わずに切り取り
+nnoremap x "_x
 
-nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
-nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
+" マーク使わないので無効化
+nnoremap m <Nop>
 
+" 行頭, 文末の移動
+nnoremap M g^
+vnoremap M g^
+nnoremap H g0
+vnoremap H g0
+nnoremap L g$
+vnoremap L g$
 
-" help & quickfixをqだけで閉じる
-autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
+" スクリーン内での移動
+nnoremap gh H
+nnoremap gm M
+nnoremap gl L
+vnoremap gh H
+vnoremap gm M
+vnoremap gl L
 
+" visualモードで検索文字列を指定
+xnoremap * :<C-u>call <SID>VSetSearch()<CR>/<C-R>=@/<CR><CR>
+xnoremap # :<C-u>call <SID>VSetSearch()<CR>?<C-R>=@/<CR><CR>
+
+function! s:VSetSearch()
+  let tmp = @s
+  norm! gv"sy
+  let @/ = '\V' . substitute(escape(@s, '/\'), '\n', '\\n', 'g')
+  let @s = tmp
+endfunction
+
+" 検索後の位置調整
+nnoremap n nzz
+nnoremap N Nzz
+nnoremap * *zz
+nnoremap # #zz
+nnoremap g* g*zz
+nnoremap g# g#zz
+
+" commandモードはEmacs風に
+cmap <C-f> <Right>
+cmap <C-b> <Left>
+cmap <C-a> <Home>
+cmap <C-e> <End>
+cmap <C-d> <Del>
+cmap <C-h> <BackSpace>
+
+" quickfixの移動
+nnoremap [q :cprevious<CR>
+nnoremap ]q :cnext<CR>
+nnoremap [Q :<C-u>cfirst<CR>
+nnoremap ]Q :<C-u>clast<CR>
 
 " Toggle系オプション
 nnoremap <silent> <Leader>t :<C-u>setl expandtab! expandtab?<CR>
@@ -148,72 +191,39 @@ function! s:toggle_syntax() abort
   endif
 endfunction
 
-
-" 検索後の位置調整
-nnoremap n nzz
-nnoremap N Nzz
-nnoremap * *zz
-nnoremap # #zz
-nnoremap g* g*zz
-nnoremap g# g#zz
-
-
-" j, k による移動を折り返されたテキストでも自然に振る舞うように変更
-nnoremap j gj
-nnoremap k gk
-
-
-" x でレジスタを使わずに切り取り
-nnoremap x "_x
-
 " スーパーユーザとして保存
 cnoremap w!! w !sudo tee > /dev/null %
-
-
-" 画面の再描画 (redraw!のalias, :Refresh)
-:command! Refresh call RefreshFunc()
-
-function! RefreshFunc()
-  redraw!
-endfunction
-
 
 " 括弧の補完
 inoremap {<Enter> {}<Left><CR><ESC><S-o>
 inoremap [<Enter> []<Left><CR><ESC><S-o>
 inoremap (<Enter> ()<Left><CR><ESC><S-o>
 
+" 選択範囲内をExpressionレジスタで評価->置換
+vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
-" commandモードはEmacs風に
-cmap <C-f> <Right>
-cmap <C-b> <Left>
-cmap <C-a> <Home>
-cmap <C-e> <End>
-cmap <C-d> <Del>
-cmap <C-h> <BackSpace>
-
-
-" quickfixの移動
-nnoremap [q :cprevious<CR>
-nnoremap ]q :cnext<CR>
-nnoremap [Q :<C-u>cfirst<CR>
-nnoremap ]Q :<C-u>clast<CR>
+" help & quickfixをqだけで閉じる
+autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
 
 
 " quickfixを自動で開く
 autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
 
 
-" visualモードで検索文字列を指定
-xnoremap * :<C-u>call <SID>VSetSearch()<CR>/<C-R>=@/<CR><CR>
-xnoremap # :<C-u>call <SID>VSetSearch()<CR>?<C-R>=@/<CR><CR>
+" .vimrcのリロード
+if has('vim_starting')
+  function! s:reload_vimrc() abort
+    execute printf('source %s', $MYVIMRC)
+    if has('gui_running')
+      execute printf('source %s', $MYGVIMRC)
+    endif
+    redraw
+    echo printf('.vimrc/.gvimrc has reloaded (%s).', strftime('%c'))
+  endfunction
+endif
 
-function! s:VSetSearch()
-  let tmp = @s
-  norm! gv"sy
-  let @/ = '\V' . substitute(escape(@s, '/\'), '\n', '\\n', 'g')
-  let @s = tmp
-endfunction
+nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
+nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
 
 
 " ペースト時のオートインデントを無効化
@@ -300,13 +310,8 @@ nnoremap sv :<C-u>vs<CR>
 nnoremap sq :<C-u>q<CR>
 nnoremap sQ :<C-u>bd<CR>
 
-
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
-
-
-" 選択範囲内をExpressionレジスタで評価->置換
-vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
 
 
@@ -647,16 +652,16 @@ let g:ctrlp_show_hidden = 1
 
 
 " fugitive
-nnoremap <silent> gs :Gstatus<CR>
-nnoremap <silent> gd :Gdiff<CR>
+nnoremap <silent> <Leader>gs :Gstatus<CR>
+nnoremap <silent> <Leader>gd :Gdiff<CR>
 
 
 " Agit
-nnoremap <silent> gl :Agit<CR>
+nnoremap <silent> <Leader>gl :Agit<CR>
 
 
 " Merginal
-nnoremap <silent> gb :Merginal<CR>
+nnoremap <silent> <Leader>gb :Merginal<CR>
 
 
 " SlackMemoVim
