@@ -175,6 +175,7 @@ nnoremap ]Q :<C-u>clast<CR>
 
 " ; と :
 noremap ; :
+noremap : ;
 noremap @; @:
 noremap @: @;
 
@@ -638,8 +639,8 @@ let g:vimfiler_as_default_explorer = 1
 let g:vimfiler_safe_mode_by_default = 0
 let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
 
-map <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
-map <C-H> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
+nnoremap <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
+nnoremap <C-H> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
 
 augroup vimfiler
   autocmd!
