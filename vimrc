@@ -734,6 +734,9 @@ augroup EmmitVim
 " Markdown
 let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled=1
+let g:previm_disable_default_css = 1
+let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
+
 
 
 " flow
