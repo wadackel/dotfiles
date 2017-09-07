@@ -99,10 +99,13 @@ set formatoptions-=o
 set vb t_vb=
 set novisualbell
 
-
 " タブ、空白、改行の可視化
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
+
+" terminal
+set termkey=<C-R>
+set termsize=15x0
 
 
 " 基本キーマップ
