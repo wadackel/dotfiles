@@ -828,7 +828,7 @@ try
 
   func! s:overwrite_spring_night()
     exe 'highlight LineNr guifg=#3c3c3c guibg=NONE'
-    exe 'highlight Normal guibg=#282828'
+    exe 'highlight Normal guibg=#222222'
   endfunc
 
   autocmd ColorScheme * call s:overwrite_spring_night()
