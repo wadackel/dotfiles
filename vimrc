@@ -105,7 +105,6 @@ set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
 " terminal
 set termkey=<C-R>
-set termsize=15x0
 
 
 " 基本キーマップ
@@ -119,7 +118,9 @@ vnoremap <c-x> <c-x>gv
 
 " j, k による移動を折り返されたテキストでも自然に振る舞うように変更
 nnoremap j gj
+vnoremap j gj
 nnoremap k gk
+vnoremap k gk
 
 " x でレジスタを使わずに切り取り
 nnoremap x "_x
