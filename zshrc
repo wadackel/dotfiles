@@ -118,7 +118,7 @@ alias -g G="| grep"
 alias -g X="| xargs"
 
 # tmux
-alias tmux="TERM=xterm-256color tmux"
+# alias tmux="TERM=xterm-256color tmux"
 alias tmls="tmux ls"
 alias tma="tmux a -t"
 alias tmd="tmux d -t"
@@ -222,7 +222,9 @@ function tmux_automatically_attach_session()
                 tmux list-sessions
                 echo -n "Tmux: attach? (y/N/num) "
                 read
-                if [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
+                if [[ "$REPLY" =~ ^[Nn]$ ]]; then
+                    return 0
+                elif [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
                     tmux attach-session
                     if [ $? -eq 0 ]; then
                         echo "$(tmux -V) attached session"

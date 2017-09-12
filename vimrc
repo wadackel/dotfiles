@@ -43,6 +43,10 @@ source $VIMRUNTIME/macros/matchit.vim
 " <Leader>を`,`に設定
 let mapleader = ","
 
+" for tmux
+set termguicolors
+let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
 
 " 各種基本設定
 set encoding=utf-8
