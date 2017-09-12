@@ -582,7 +582,7 @@ inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
 
 " lightline
 let g:lightline = {
-  \ 'colorscheme': 'wombat',
+  \ 'colorscheme': 'darcula',
   \ 'active': {
   \   'left': [ [ 'mode', 'paste' ],
   \             [ 'fugitive', 'readonly', 'filename', 'modified' ] ]
