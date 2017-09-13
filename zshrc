@@ -100,9 +100,10 @@ alias rmrf='rm -rf'
 
 
 # other
-alias v=vim
-alias vi=vim
-alias g=git
+alias v="vim"
+alias g="git"
+alias d="docker"
+alias dc="docker-compose"
 
 # tree
 if type tree > /dev/null 2>&1; then
@@ -119,6 +120,7 @@ alias -g X="| xargs"
 
 # tmux
 # alias tmux="TERM=xterm-256color tmux"
+alias tm="tmux"
 alias tmls="tmux ls"
 alias tma="tmux a -t"
 alias tmd="tmux d -t"
