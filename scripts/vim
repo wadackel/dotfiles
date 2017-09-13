@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+
+CMD=$1
+DIR=`pwd`
+SRC="$DIR/src"
+VIM_SRC="$SRC/vim"
+
+function vim_clone_or_pull() {
+  if [ ! -d $SRC ]; then
+    mkdir -p $SRC
+  fi
+
+  cd $SRC
+
+  if [ ! -d $VIM_SRC ]; then
+    git clone https://github.com/vim/vim.git --depth 10
+  else
+    cd vim
+    git pull
+  fi
+
+  cd $DIR
+}
+
+function vim_build() {
+  cd $VIM_SRC
+
+  ./configure \
+    --with-features=huge \
+    --enable-multibyte \
+    --enable-fontset \
+    --enable-terminal \
+    --enable-cscope \
+    --enable-luainterp \
+    --enable-pythoninterp \
+    --with-lua-prefix=/usr/local \
+    --prefix=/usr/local \
+    --with-compiledby=tsuyoshiwada
+
+  if [ "$?" != "0" ]; then
+    return 1
+  fi
+
+  make
+
+  if [ "$?" != "0" ]; then
+    make distclean
+    return 1
+  fi
+
+  make install
+
+  if [ "$?" != "0" ]; then
+    make distclean
+    return 1
+  fi
+
+  echo "Vim path = `which vim`"
+  echo "version info"
+  vim --version
+
+  cd $DIR
+}
+
+function vim_uninstall() {
+  if [ ! -d $VIM_SRC ]; then
+    return 1
+  fi
+
+  cd $VIM_SRC
+
+  make uninstall
+
+  cd $DIR
+}
+
+
+if [[ $CMD == "help" ]]; then
+  echo "todo"
+  exit 0
+
+elif [[ $CMD == "install" ]]; then
+  vim_clone_or_pull
+  vim_build
+  exit 0
+
+elif [[ $CMD == "update" ]]; then
+  vim_clone_or_pull
+  vim_uninstall
+  vim_build
+  exit 0
+
+elif [[ $CMD == "uninstall" ]]; then
+  vim_uninstall
+  exit 0
+fi
+
