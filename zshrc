@@ -276,6 +276,10 @@ zplug "zsh-users/zsh-autosuggestions"
 zplug "b4b4r07/enhancd", use:init.sh
 zplug "zsh-users/zsh-completions"
 zplug "mollifier/cd-gitroot"
+zplug "stedolan/jq", \
+    from:gh-r, \
+    as:command, \
+    rename-to:jq
 
 # Install
 if ! zplug check --verbose; then
