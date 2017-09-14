@@ -90,8 +90,16 @@ elif [[ $CMD == "update" ]]; then
   vim_build
   exit 0
 
+elif [[ $CMD == "build" ]]; then
+  vim_build
+  exit 0
+
 elif [[ $CMD == "uninstall" ]]; then
   vim_uninstall
   exit 0
+
+else
+  echo "See help, './scripts/vim help'"
+  exit 1
 fi
 
