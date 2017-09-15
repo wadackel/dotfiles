@@ -55,7 +55,6 @@ set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
 set completeopt=menuone
 set autoread
 set t_ut=
-set number
 set nohlsearch
 set incsearch
 set formatoptions+=mM
@@ -108,7 +107,9 @@ set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
 " terminal
-set termkey=<C-R>
+if has('terminal')
+  set termkey=<C-r>
+endif
 
 
 " 基本キーマップ
@@ -327,6 +328,29 @@ nnoremap sQ :<C-u>bd<CR>
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
 
+" terminal 内での操作
+if has('terminal')
+  " 前後タブの移動
+  tnoremap <C-[>sn <C-r>:tabnext<CR>
+  tnoremap <C-[>sp <C-r>:tabprevious<CR>
+  tnoremap <C-[>st <C-r>:tabnew<CR>
+
+  " 上下左右
+  tnoremap <C-[>j <C-r>j
+  tnoremap <C-[>J <C-r>J
+  tnoremap <C-[>k <C-r>k
+  tnoremap <C-[>K <C-r>K
+  tnoremap <C-[>h <C-r>h
+  tnoremap <C-[>H <C-r>H
+  tnoremap <C-[>l <C-r>l
+  tnoremap <C-[>L <C-r>L
+
+  " 10行のサイズに
+  tnoremap <silent> <C-[>- <C-r>:exe 'resize 10'<CR>
+
+  " visual mode
+  tnoremap <C-[><C-n> <C-\><C-n>
+endif
 
 
 
