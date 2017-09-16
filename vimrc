@@ -331,25 +331,25 @@ nnoremap <C-w>O :<C-u>tabo<CR>
 " terminal 内での操作
 if has('terminal')
   " 前後タブの移動
-  tnoremap <C-[>sn <C-r>:tabnext<CR>
-  tnoremap <C-[>sp <C-r>:tabprevious<CR>
-  tnoremap <C-[>st <C-r>:tabnew<CR>
+  tnoremap <C-[><C-n> <C-r>:tabnext<CR>
+  tnoremap <C-[><C-p> <C-r>:tabprevious<CR>
+  tnoremap <C-[><C-t> <C-r>:tabnew<CR>
 
   " 上下左右
-  tnoremap <C-[>j <C-r>j
+  tnoremap <C-[><C-h> <C-r>h
+  tnoremap <C-[><C-j> <C-r>j
+  tnoremap <C-[><C-k> <C-r>k
+  tnoremap <C-[><C-l> <C-r>l
   tnoremap <C-[>J <C-r>J
-  tnoremap <C-[>k <C-r>k
   tnoremap <C-[>K <C-r>K
-  tnoremap <C-[>h <C-r>h
   tnoremap <C-[>H <C-r>H
-  tnoremap <C-[>l <C-r>l
   tnoremap <C-[>L <C-r>L
 
   " 10行のサイズに
-  tnoremap <silent> <C-[>- <C-r>:exe 'resize 10'<CR>
+  tnoremap <silent> <C-[><C--> <C-r>:exe 'resize 10'<CR>
 
   " visual mode
-  tnoremap <C-[><C-n> <C-\><C-n>
+  tnoremap <C-[><C-v> <C-\><C-n>
 endif
 
 
