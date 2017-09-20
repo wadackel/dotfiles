@@ -2391,6 +2391,8 @@
 	<false/>
 	<key>DisableWindowSizeSnap</key>
 	<true/>
+	<key>EnableDivisionView</key>
+	<false/>
 	<key>FlashTabBarInFullscreen</key>
 	<false/>
 	<key>GlobalKeyMap</key>
@@ -2516,6 +2518,8 @@
 	<integer>105</integer>
 	<key>HotkeyCode</key>
 	<integer>34</integer>
+	<key>HotkeyMigratedFromSingleToMulti</key>
+	<true/>
 	<key>HotkeyModifiers</key>
 	<integer>262401</integer>
 	<key>IRMemory</key>
@@ -2527,15 +2531,17 @@
 	<key>MaxVertically</key>
 	<false/>
 	<key>NSColorPanelMode</key>
-	<string>0</string>
+	<string>6</string>
 	<key>NSColorPickerPreferredRGBEntryMode</key>
 	<integer>2</integer>
+	<key>NSFontPanelAttributes</key>
+	<string>1, 1</string>
 	<key>NSNavLastRootDirectory</key>
-	<string>~/dotfiles/iterm2</string>
+	<string>~/Documents</string>
 	<key>NSNavPanelExpandedSizeForOpenMode</key>
-	<string>{712, 459}</string>
+	<string>{1016, 569}</string>
 	<key>NSNavPanelExpandedSizeForSaveMode</key>
-	<string>{712, 521}</string>
+	<string>{712, 448}</string>
 	<key>NSQuotedKeystrokeBinding</key>
 	<string></string>
 	<key>NSRepeatCountBinding</key>
@@ -2551,7 +2557,7 @@
 	gAKACoAN0xAJChEVGVdOUy5rZXlzoxITFIADgASABaMWFxiABoAHgAiACVpJZGVudGlm
 	aWVyVVdpZHRoVkhpZGRlblEwI0BowAAAAAAACNIhIiMkWiRjbGFzc25hbWVYJGNsYXNz
 	ZXNcTlNEaWN0aW9uYXJ5oiMlWE5TT2JqZWN00xAJCicrGaMSExSAA4AEgAWjLC0YgAuA
-	DIAIgAlRMSNAczAAAAAAANIhIjM0Xk5TTXV0YWJsZUFycmF5ozM1JVdOU0FycmF5XxAP
+	DIAIgAlRMSNAdKAAAAAAANIhIjM0Xk5TTXV0YWJsZUFycmF5ozM1JVdOU0FycmF5XxAP
 	TlNLZXllZEFyY2hpdmVy0Tg5VUFycmF5gAEACAARABoAIwAtADIANwBGAEwAUQBcAGMA
 	ZgBoAGoAbABzAHsAfwCBAIMAhQCJAIsAjQCPAJEAnACiAKkAqwC0ALUAugDFAM4A2wDe
 	AOcA7gDyAPQA9gD4APwA/gEAAQIBBAEGAQ8BFAEjAScBLwFBAUQBSgAAAAAAAAIBAAAA
@@ -2567,40 +2573,31 @@
 	</data>
 	<key>NSTableView Supports v2 KeyBingingTable</key>
 	<true/>
-	<key>NSToolbar Configuration Terminal Toolbar</key>
-	<dict>
-		<key>TB Display Mode</key>
-		<integer>1</integer>
-		<key>TB Icon Size Mode</key>
-		<integer>1</integer>
-		<key>TB Is Shown</key>
-		<integer>0</integer>
-		<key>TB Size Mode</key>
-		<integer>1</integer>
-	</dict>
 	<key>NSToolbar Configuration com.apple.NSColorPanel</key>
 	<dict>
 		<key>TB Is Shown</key>
 		<integer>1</integer>
 	</dict>
 	<key>NSWindow Frame NSColorPanel</key>
-	<string>638 410 228 297 0 0 1680 1028 </string>
+	<string>570 450 228 297 0 0 2048 1130 </string>
 	<key>NSWindow Frame NSFontPanel</key>
-	<string>601 155 945 552 0 0 1680 1028 </string>
+	<string>474 314 595 266 0 0 2048 1130 </string>
 	<key>NSWindow Frame Preferences</key>
-	<string>532 591 606 456 0 0 1920 1057 </string>
+	<string>269 168 606 456 0 0 2048 1129 </string>
 	<key>NSWindow Frame SUStatusFrame</key>
-	<string>638 690 400 129 0 0 1680 1050 </string>
+	<string>822 750 400 129 0 0 2048 1130 </string>
 	<key>NSWindow Frame SUUpdateAlert</key>
-	<string>528 477 620 392 0 0 1680 1028 </string>
+	<string>672 381 700 622 0 0 2048 1130 </string>
 	<key>NSWindow Frame SessionsPreferences</key>
-	<string>269 47 606 456 0 0 1680 1028 </string>
+	<string>0 674 606 456 0 0 2048 1130 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>620 269 918 498 0 0 1680 1028 </string>
+	<string>964 489 796 473 0 0 2048 1130 </string>
+	<key>NSWindow Frame UKCrashReporter</key>
+	<string>141 283 592 584 0 0 2048 1130 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
-	<string>0 0 1676 1028 0 0 1680 1028 </string>
+	<string>0 0 2043 1130 0 0 2048 1130 </string>
 	<key>NSWindow Frame iTerm Window 1</key>
-	<string>0 0 1676 1028 0 0 1680 1028 </string>
+	<string>324 0 1720 1130 0 0 2048 1130 </string>
 	<key>New Bookmarks</key>
 	<array>
 		<dict>
@@ -2758,12 +2755,16 @@
 			<true/>
 			<key>Background Color</key>
 			<dict>
+				<key>Alpha Component</key>
+				<real>1</real>
 				<key>Blue Component</key>
-				<real>0.11759774386882782</real>
+				<real>0.10980392156862745</real>
+				<key>Color Space</key>
+				<string>sRGB</string>
 				<key>Green Component</key>
-				<real>0.11759574711322784</real>
+				<real>0.10980392156862745</real>
 				<key>Red Component</key>
-				<real>0.11759926378726959</real>
+				<real>0.10980392156862745</real>
 			</dict>
 			<key>Background Image Is Tiled</key>
 			<false/>
@@ -3247,13 +3248,13 @@
 				<key>Alpha Component</key>
 				<real>1</real>
 				<key>Blue Component</key>
-				<real>0.14390188455581665</real>
+				<real>0.10980392156862745</real>
 				<key>Color Space</key>
-				<string>Calibrated</string>
+				<string>sRGB</string>
 				<key>Green Component</key>
-				<real>0.14390188455581665</real>
+				<real>0.10980392156862745</real>
 				<key>Red Component</key>
-				<real>0.14390188455581665</real>
+				<real>0.10980392156862745</real>
 			</dict>
 			<key>Tags</key>
 			<array/>
@@ -3282,75 +3283,27 @@
 			<key>Visual Bell</key>
 			<false/>
 			<key>Window Type</key>
-			<integer>12</integer>
+			<integer>0</integer>
 			<key>Working Directory</key>
 			<string>/</string>
 		</dict>
 	</array>
-	<key>NoSyncConfirmBeta</key>
-	<true/>
 	<key>NoSyncDoNotWarnBeforeMultilinePaste</key>
 	<true/>
 	<key>NoSyncDoNotWarnBeforeMultilinePaste_selection</key>
 	<integer>0</integer>
-	<key>NoSyncDoNotWarnBeforePastingOneLineEndingInNewlineAtShellPrompt</key>
-	<true/>
-	<key>NoSyncDoNotWarnBeforePastingOneLineEndingInNewlineAtShellPrompt_selection</key>
-	<integer>0</integer>
-	<key>NoSyncHaveShownPromoWithId_4</key>
+	<key>NoSyncHaveWarnedAboutIncompatibleSoftware</key>
 	<true/>
 	<key>NoSyncInstallationId</key>
-	<string>E2F0DA36-7954-44A1-B847-3318A1F453DD</string>
-	<key>NoSyncLastTipTime</key>
-	<real>480704605.75204802</real>
+	<string>9828D3CE-2F89-4C31-A9CF-0D63CED8D25A</string>
 	<key>NoSyncNeverRemindPrefsChangesLostForFile</key>
 	<true/>
 	<key>NoSyncNeverRemindPrefsChangesLostForFile_selection</key>
 	<integer>1</integer>
 	<key>NoSyncPermissionToShowTip</key>
-	<true/>
-	<key>NoSyncSuppressAnnyoingBellOffer</key>
-	<true/>
+	<false/>
 	<key>NoSyncTimeOfFirstLaunchOfVersionWithTip</key>
-	<real>477847097.38770097</real>
-	<key>NoSyncTimeOfLastPromo</key>
-	<real>477847024.31058502</real>
-	<key>NoSyncTimeOfLastPromoDownload</key>
-	<real>477847016.89937502</real>
-	<key>NoSyncTipsDisabled</key>
-	<true/>
-	<key>NoSyncTipsToNotShow</key>
-	<array>
-		<string>000</string>
-		<string>0000</string>
-		<string>0001</string>
-		<string>0002</string>
-		<string>0003</string>
-		<string>0004</string>
-		<string>0005</string>
-		<string>0006</string>
-		<string>0007</string>
-		<string>0008</string>
-		<string>0009</string>
-		<string>0010</string>
-		<string>0011</string>
-		<string>0012</string>
-		<string>0013</string>
-		<string>0014</string>
-		<string>0015</string>
-		<string>0016</string>
-		<string>0017</string>
-		<string>0018</string>
-		<string>0019</string>
-		<string>0020</string>
-		<string>0021</string>
-		<string>0022</string>
-		<string>0023</string>
-	</array>
-	<key>NoSyncWarnAboutAmbiguousWidth</key>
-	<true/>
-	<key>NoSyncWarnAboutAmbiguousWidth_selection</key>
-	<integer>0</integer>
+	<real>492082635.73944902</real>
 	<key>OpenBookmark</key>
 	<false/>
 	<key>PMPrintingExpandedStateForPrint2</key>
@@ -3396,18 +3349,18 @@
 	<false/>
 	<key>QuitWhenAllWindowsClosed</key>
 	<true/>
-	<key>SUAutomaticallyUpdate</key>
-	<false/>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedAlternateAppNameKey</key>
 	<string>iTerm</string>
 	<key>SUFeedURL</key>
-	<string>https://iterm2.com/appcasts/final.xml?shard=7</string>
+	<string>https://iterm2.com/appcasts/final.xml?shard=59</string>
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2017-04-28T13:19:16Z</date>
+	<date>2017-09-20T01:03:02Z</date>
+	<key>SUSendProfileInfo</key>
+	<false/>
 	<key>ShowBookmarkName</key>
 	<false/>
 	<key>ShowFullScreenTabBar</key>
@@ -3426,6 +3379,8 @@
 	<integer>0</integer>
 	<key>TmuxDashboardLimit</key>
 	<integer>10</integer>
+	<key>UKCrashReporterLastCrashReportDate</key>
+	<real>1491281280</real>
 	<key>UseBorder</key>
 	<true/>
 	<key>WindowNumber</key>
@@ -3437,12 +3392,12 @@
 	<key>findRegex_iTerm</key>
 	<false/>
 	<key>iTerm Version</key>
-	<string>3.0.15</string>
+	<string>3.1.1</string>
 	<key>kCPKSelectionViewPreferredModeKey</key>
 	<integer>0</integer>
 	<key>kCPKSelectionViewShowHSBTextFieldsKey</key>
 	<false/>
 	<key>kCPKUseSystemColorPicker</key>
-	<true/>
+	<false/>
 </dict>
 </plist>

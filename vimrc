@@ -44,7 +44,10 @@ source $VIMRUNTIME/macros/matchit.vim
 let mapleader = ","
 
 " for tmux
-set termguicolors
+if has("termguicolors")
+  set termguicolors
+endif
+
 let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
 let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
 
@@ -850,19 +853,14 @@ set background=dark
 
 " プラグインが有効な場合とそれ以外で分ける
 try
-  if has("termguicolors")
-    set termguicolors
-  endif
-
   func! s:overwrite_spring_night()
     exe 'highlight LineNr guifg=#3c3c3c guibg=NONE'
-    exe 'highlight Normal guibg=#222222'
+    exe 'highlight Normal guibg=#1c1c1c'
   endfunc
 
   autocmd ColorScheme * call s:overwrite_spring_night()
 
   colorscheme spring-night
-  " colorscheme hybrid
 
 catch /^Vim\%((\a\+)\)\=:E185/
   " 行番号
