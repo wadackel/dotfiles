@@ -117,6 +117,10 @@ endif
 
 " 基本キーマップ
 
+" leader を \ に退避
+nnoremap \ ,
+vnoremap \ ,
+
 " <C-c> の動作を <Esc> に合わせる
 inoremap <C-c> <Esc>
 
@@ -143,6 +147,11 @@ nnoremap H g0
 vnoremap H g0
 nnoremap L g$
 vnoremap L g$
+
+nnoremap mH 0
+vnoremap mH 0
+nnoremap mL $
+vnoremap mL $
 
 " スクリーン内での移動
 nnoremap gh H
