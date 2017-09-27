@@ -2589,9 +2589,9 @@
 	<key>NSWindow Frame SUUpdateAlert</key>
 	<string>672 381 700 622 0 0 2048 1130 </string>
 	<key>NSWindow Frame SessionsPreferences</key>
-	<string>0 674 606 456 0 0 2048 1130 </string>
+	<string>0 661 606 469 0 0 2048 1130 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>964 489 796 473 0 0 2048 1130 </string>
+	<string>928 169 796 473 0 0 2048 1130 </string>
 	<key>NSWindow Frame UKCrashReporter</key>
 	<string>141 283 592 584 0 0 2048 1130 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
@@ -3358,7 +3358,7 @@
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2017-09-20T01:03:02Z</date>
+	<date>2017-09-27T01:02:32Z</date>
 	<key>SUSendProfileInfo</key>
 	<false/>
 	<key>ShowBookmarkName</key>
@@ -3377,6 +3377,10 @@
 	<integer>3</integer>
 	<key>TabViewType</key>
 	<integer>0</integer>
+	<key>TerminalMargin</key>
+	<integer>10</integer>
+	<key>TerminalVMargin</key>
+	<integer>10</integer>
 	<key>TmuxDashboardLimit</key>
 	<integer>10</integer>
 	<key>UKCrashReporterLastCrashReportDate</key>
@@ -3392,7 +3396,7 @@
 	<key>findRegex_iTerm</key>
 	<false/>
 	<key>iTerm Version</key>
-	<string>3.1.1</string>
+	<string>3.1.2</string>
 	<key>kCPKSelectionViewPreferredModeKey</key>
 	<integer>0</integer>
 	<key>kCPKSelectionViewShowHSBTextFieldsKey</key>
