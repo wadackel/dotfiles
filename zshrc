@@ -129,6 +129,9 @@ alias tmr="tmux kill-session -t"
 # golang
 alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
 
+# vim github repository
+alias gotovim="open https://github.com/vim/vim -a Google\ Chrome"
+
 # <Tab> で候補選択
 zstyle ':completion:*:default' menu select=1
 
