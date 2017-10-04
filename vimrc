@@ -452,6 +452,8 @@ if dein#load_state(s:plugin_dir)
   call dein#add('deton/jasegment.vim')
   call dein#add('thinca/vim-qfreplace')
   call dein#add('jceb/vim-editqf')
+  call dein#add('haya14busa/incsearch.vim')
+  call dein#add('haya14busa/incsearch-fuzzy.vim')
 
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
@@ -732,6 +734,18 @@ endfunction
 " ctrlp
 let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
 let g:ctrlp_show_hidden = 1
+
+
+" incsearch
+map /  <Plug>(incsearch-forward)
+map ?  <Plug>(incsearch-backward)
+map g/ <Plug>(incsearch-stay)
+
+
+" incsearch-fuzzy
+map z/ <Plug>(incsearch-fuzzy-/)
+map z? <Plug>(incsearch-fuzzy-?)
+map zg/ <Plug>(incsearch-fuzzy-stay)
 
 
 " fugitive
