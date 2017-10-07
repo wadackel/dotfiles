@@ -705,7 +705,8 @@ endfunction
 " Ag
 if executable('ag')
   " for ack.vim
-  let g:ackprg = 'ag --vimgrep'
+  let g:ackprg = 'ag --vimgrep -s -H --nocolor --nogroup --column'
+  let g:ack_default_options = ' -s -H --nocolor --nogroup --column'
 
   " ctrlpの置き換え
   let g:ctrlp_use_caching = 0
