@@ -17,6 +17,7 @@ function vim_clone_or_pull() {
   else
     cd vim
     git pull
+    make distclean
   fi
 
   cd $DIR
