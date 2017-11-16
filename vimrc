@@ -501,7 +501,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-  " call dein#add('fleischie/vim-styled-components', {'on_ft': ['javascript']})
 
   " css
   call dein#add('kewah/vim-stylefmt')
@@ -894,8 +893,10 @@ let g:ale_lint_on_enter = 0
 
 let g:ale_linters = {
 \   'html': [],
-\   'go': ['gofmt -e', 'go vet', 'golint', 'gosimple', 'staticcheck'],
+\   'go': ['gometalinter', 'gofmt'],
 \}
+
+let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
 
 
