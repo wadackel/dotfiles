@@ -702,6 +702,10 @@ function! LightLineFugitive()
 endfunction
 
 
+" Clever-f
+let g:clever_f_across_no_line = 1
+
+
 " Ag
 if executable('ag')
   " for ack.vim
