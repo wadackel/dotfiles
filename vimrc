@@ -452,6 +452,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('deton/jasegment.vim')
   call dein#add('thinca/vim-qfreplace')
   call dein#add('jceb/vim-editqf')
+  call dein#add('rhysd/clever-f.vim')
   call dein#add('haya14busa/incsearch.vim')
   call dein#add('haya14busa/incsearch-fuzzy.vim')
 
@@ -852,6 +853,14 @@ let g:javascript_plugin_flow = 1
 " TypeScript
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
+
+" tsuquyomi
+" 定義を水平分割で開く
+let g:tsuquyomi_definition_split = 1
+" ALEでエラー表示するので quickfix 無効化
+let g:tsuquyomi_disable_quickfix = 1
+" インポートにシングルクォートを使用
+let g:tsuquyomi_single_quote_import = 1
 
 
 " vim-go
