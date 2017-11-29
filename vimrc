@@ -859,8 +859,6 @@ autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
 " tsuquyomi
-" 定義を水平分割で開く
-let g:tsuquyomi_definition_split = 1
 " ALEでエラー表示するので quickfix 無効化
 let g:tsuquyomi_disable_quickfix = 1
 " インポートにシングルクォートを使用
