@@ -453,6 +453,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('thinca/vim-qfreplace')
   call dein#add('jceb/vim-editqf')
   call dein#add('rhysd/clever-f.vim')
+  call dein#add('easymotion/vim-easymotion')
   call dein#add('haya14busa/incsearch.vim')
   call dein#add('haya14busa/incsearch-fuzzy.vim')
 
@@ -704,6 +705,9 @@ endfunction
 
 " Clever-f
 let g:clever_f_across_no_line = 1
+let g:clever_f_repeat_last_char_inputs = []
+
+
 
 
 " Ag
@@ -739,6 +743,16 @@ endfunction
 " ctrlp
 let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
 let g:ctrlp_show_hidden = 1
+
+
+" easymotion
+let g:EasyMotion_do_mapping = 0
+let g:EasyMotion_smartcase = 1
+
+map <Leader> <Plug>(easymotion-prefix)
+nmap <Leader>f <Plug>(easymotion-overwin-f)
+map <Leader>j <Plug>(easymotion-j)
+map <Leader>k <Plug>(easymotion-k)
 
 
 " incsearch
