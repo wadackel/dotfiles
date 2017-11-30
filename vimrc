@@ -877,6 +877,8 @@ autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 let g:tsuquyomi_disable_quickfix = 1
 " インポートにシングルクォートを使用
 let g:tsuquyomi_single_quote_import = 1
+" 補完表示を詳細に
+let g:tsuquyomi_completion_detail = 1
 
 
 " vim-go
