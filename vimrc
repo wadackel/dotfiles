@@ -751,6 +751,7 @@ let g:EasyMotion_smartcase = 1
 
 map <Leader> <Plug>(easymotion-prefix)
 nmap <Leader>f <Plug>(easymotion-overwin-f)
+xmap <Leader>f <Plug>(easymotion-f)
 map <Leader>j <Plug>(easymotion-j)
 map <Leader>k <Plug>(easymotion-k)
 
