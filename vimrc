@@ -194,6 +194,12 @@ nnoremap ]q :cnext<CR>
 nnoremap [Q :<C-u>cfirst<CR>
 nnoremap ]Q :<C-u>clast<CR>
 
+" locationlistの移動
+nnoremap [w :lprevious<CR>
+nnoremap ]w :lnext<CR>
+nnoremap [W :<C-u>lfirst<CR>
+nnoremap ]W :<C-u>llast<CR>
+
 " ; と :
 noremap ; :
 noremap : ;
@@ -201,7 +207,6 @@ noremap @; @:
 noremap @: @;
 
 " Toggle系オプション
-nnoremap <silent> <Leader>t :<C-u>setl expandtab! expandtab?<CR>
 nnoremap <silent> <Leader>w :<C-u>setl wrap! wrap?<CR>
 nnoremap <silent> <Leader>s :call <SID>toggle_syntax()<CR>
 nnoremap <silent> <Leader>h :<C-u>setl hlsearch!<CR>
@@ -894,6 +899,8 @@ let g:go_highlight_build_constraints = 1
 augroup GolangSettings
   autocmd FileType go :highlight goErr cterm=bold ctermfg=214
   autocmd FileType go :match goErr /\<err\>/
+  autocmd FileType go nnoremap <silent> <buffer> <C-^> :GoReferrers<CR>
+  autocmd FileType go nnoremap <silent> <buffer> <Leader>i :GoInfo<CR>
 augroup END
 
 
