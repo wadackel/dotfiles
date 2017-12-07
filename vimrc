@@ -109,11 +109,6 @@ set novisualbell
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
-" terminal
-if has('terminal')
-  set termkey=<C-r>
-endif
-
 
 " 基本キーマップ
 
@@ -237,25 +232,8 @@ vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 " help & quickfixをqだけで閉じる
 autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
 
-
 " quickfixを自動で開く
 autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
-
-
-" .vimrcのリロード
-if has('vim_starting')
-  function! s:reload_vimrc() abort
-    execute printf('source %s', $MYVIMRC)
-    if has('gui_running')
-      execute printf('source %s', $MYGVIMRC)
-    endif
-    redraw
-    echo printf('.vimrc/.gvimrc has reloaded (%s).', strftime('%c'))
-  endfunction
-endif
-
-nmap <silent> <Plug>(my-reload-vimrc) :<C-u>call <SID>reload_vimrc()<CR>
-nmap <Leader><Leader>r <Plug>(my-reload-vimrc)
 
 
 " ペースト時のオートインデントを無効化
@@ -345,8 +323,18 @@ nnoremap sQ :<C-u>bd<CR>
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
 
-" terminal 内での操作
 if has('terminal')
+  set termkey=<C-r>
+
+  " terminal 表示
+  nnoremap <silent> <Leader>tt :<C-u>terminal ++curwin ++close<CR>
+  nnoremap <silent> <Leader>ts :<C-u>execute 'topleft split \| terminal ++curwin ++close'<CR>
+  tnoremap <silent> <Leader>ts <C-r>:execute 'topleft split \| terminal ++curwin ++close'<CR>
+  nnoremap <silent> <Leader>tv :<C-u>execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
+  tnoremap <silent> <Leader>tv <C-r>:execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
+  nnoremap <silent> <Leader>tk :<C-u>terminal ++rows=15 ++close<CR>
+  tnoremap <silent> <Leader>tk <C-r>:terminal ++rows=15 ++close<CR>
+
   " 前後タブの移動
   tnoremap <C-[><C-n> <C-r>:tabnext<CR>
   tnoremap <C-[><C-p> <C-r>:tabprevious<CR>
@@ -362,11 +350,11 @@ if has('terminal')
   tnoremap <C-[>H <C-r>H
   tnoremap <C-[>L <C-r>L
 
-  " 10行のサイズに
-  tnoremap <silent> <C-[><C--> <C-r>:exe 'resize 10'<CR>
-
   " visual mode
-  tnoremap <C-[><C-v> <C-\><C-n>
+  tnoremap <C-[><C-v> <C-r>N
+
+  " close terminal
+  tnoremap <C-r><C-r> <C-r><C-c>
 endif
 
 
@@ -440,7 +428,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/neosnippet-snippets')
   call dein#add('mileszs/ack.vim')
   call dein#add('mattn/webapi-vim')
-  call dein#add('thinca/vim-quickrun')
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -709,9 +696,9 @@ endfunction
 
 
 " Clever-f
+let g:clever_f_smart_case = 1
 let g:clever_f_across_no_line = 1
 let g:clever_f_repeat_last_char_inputs = []
-
 
 
 
