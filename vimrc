@@ -468,7 +468,6 @@ if dein#load_state(s:plugin_dir)
 
   " memo
   call dein#add('glidenote/memolist.vim')
-  call dein#add('tsuyoshiwada/slack-memo-vim', {'depends': 'mattn/webapi-vim'})
 
   " toml
   call dein#add('cespare/vim-toml',  {'on_ft' : 'toml'})
@@ -773,11 +772,6 @@ nnoremap <silent> <Leader>gl :Agit<CR>
 nnoremap <silent> <Leader>gb :Merginal<CR>
 
 
-" SlackMemoVim
-nnoremap smp :SlackMemoPost<CR>
-nnoremap sml :SlackMemoList<CR>
-nnoremap smc :SlackMemoCtrlP<CR>
-
 " Memo List
 let g:memolist_path = '~/Dropbox/memolist'
 let g:memolist_memo_suffix = "md"
@@ -892,7 +886,19 @@ augroup END
 
 
 " table-mode
+" corner character
 let g:table_mode_corner = '|'
+" 自動整列は使わない
+let g:table_mode_auto_align = 0
+" 使わなそうなマッピングは適当なところに退避
+let g:table_mode_delete_row_map = '<Leader><C-+>0'
+let g:table_mode_delete_column_map = '<Leader><C-+>1'
+let g:table_mode_sort_map = '<Leader><C-+>2'
+let g:table_mode_tableize_map = '<Leader><C-+>3'
+let g:table_mode_add_formula_map = '<Leader><C-+>4'
+let g:table_mode_eval_formula_map = '<Leader><C-+>5'
+let g:table_mode_echo_cell_map = '<Leader><C-+>6'
+let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 
 " Stylefmt
