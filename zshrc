@@ -27,6 +27,22 @@ export PATH=$HOME/.nodebrew/current/bin:$PATH
 
 
 # ====================================================
+# Google Cloud SDK
+# ====================================================
+
+# gcloud
+source "${HOME}/google-cloud-sdk/path.zsh.inc"
+source "${HOME}/google-cloud-sdk/completion.zsh.inc"
+
+alias appserver="${HOME}/google-cloud-sdk/bin/dev_appserver.py"
+
+# goapp
+export PATH=${PATH}:${HOME}/go_appengine/
+
+
+
+
+# ====================================================
 # History
 # ====================================================
 
