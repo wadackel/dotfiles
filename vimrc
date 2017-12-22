@@ -355,14 +355,6 @@ if has('terminal')
 
   " close terminal
   tnoremap <C-r><C-r> <C-r><C-c>
-
-  " :! の様に terminal を使う
-  function! s:TmpTerminalExec(...)
-    execute 'terminal ++rows=10 ++close ' . join(a:000, ' ')
-    wincmd p
-  endfunction
-
-  command! -nargs=+ T :call <SID>TmpTerminalExec(<f-args>)
 endif
 
 
@@ -705,6 +697,7 @@ endfunction
 " Clever-f
 let g:clever_f_smart_case = 1
 let g:clever_f_across_no_line = 1
+let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
 
 
