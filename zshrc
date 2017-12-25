@@ -230,52 +230,52 @@ function is_ssh_running() { [ ! -z "$SSH_CONECTION" ]; }
 
 function tmux_automatically_attach_session()
 {
-    if is_screen_or_tmux_running; then
-        ! is_exists 'tmux' && return 1
+  if is_screen_or_tmux_running; then
+    ! is_exists 'tmux' && return 1
 
-        if is_tmux_runnning; then
-        elif is_screen_running; then
-            echo "This is on screen."
-        fi
-    else
-        if shell_has_started_interactively && ! is_ssh_running; then
-            if ! is_exists 'tmux'; then
-                echo 'Error: tmux command not found' 2>&1
-                return 1
-            fi
-
-            if tmux has-session >/dev/null 2>&1 && tmux list-sessions | grep -qE '.*]$'; then
-                # detached session exists
-                tmux list-sessions
-                echo -n "Tmux: attach? (y/N/num) "
-                read
-                if [[ "$REPLY" =~ ^[Nn]$ ]]; then
-                    return 0
-                elif [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
-                    tmux attach-session
-                    if [ $? -eq 0 ]; then
-                        echo "$(tmux -V) attached session"
-                        return 0
-                    fi
-                elif [[ "$REPLY" =~ ^[0-9]+$ ]]; then
-                    tmux attach -t "$REPLY"
-                    if [ $? -eq 0 ]; then
-                        echo "$(tmux -V) attached session"
-                        return 0
-                    fi
-                fi
-            fi
-
-            if is_osx && is_exists 'reattach-to-user-namespace'; then
-                # on OS X force tmux's default command
-                # to spawn a shell in the user's namespace
-                tmux_config=$(cat $HOME/.tmux.conf <(echo 'set-option -g default-command "reattach-to-user-namespace -l $SHELL"'))
-                tmux -f <(echo "$tmux_config") new-session && echo "$(tmux -V) created new session supported OS X"
-            else
-                tmux new-session && echo "tmux created new session"
-            fi
-        fi
+    if is_tmux_runnning; then
+    elif is_screen_running; then
+      echo "This is on screen."
     fi
+  else
+    if shell_has_started_interactively && ! is_ssh_running; then
+      if ! is_exists 'tmux'; then
+        echo 'Error: tmux command not found' 2>&1
+        return 1
+      fi
+
+      if tmux has-session >/dev/null 2>&1 && tmux list-sessions | grep -qE '.*]$'; then
+        # detached session exists
+        tmux list-sessions
+        echo -n "Tmux: attach? (y/N/num) "
+        read
+        if [[ "$REPLY" =~ ^[Nn]$ ]]; then
+          return 0
+        elif [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
+          tmux attach-session
+          if [ $? -eq 0 ]; then
+            echo "$(tmux -V) attached session"
+            return 0
+          fi
+        elif [[ "$REPLY" =~ ^[0-9]+$ ]]; then
+          tmux attach -t "$REPLY"
+          if [ $? -eq 0 ]; then
+            echo "$(tmux -V) attached session"
+            return 0
+          fi
+        fi
+      fi
+
+      if is_osx && is_exists 'reattach-to-user-namespace'; then
+        # on OS X force tmux's default command
+        # to spawn a shell in the user's namespace
+        tmux_config=$(cat $HOME/.tmux.conf <(echo 'set-option -g default-command "reattach-to-user-namespace -l $SHELL"'))
+        tmux -f <(echo "$tmux_config") new-session && echo "$(tmux -V) created new session supported OS X"
+      else
+        tmux new-session && echo "tmux created new session"
+      fi
+    fi
+  fi
 }
 tmux_automatically_attach_session
 
@@ -289,48 +289,50 @@ function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 # Plugins
 # ====================================================
 
-# zplug
-source ~/.zplug/init.zsh
+if [[ -x `which zplug` ]]; then
+  # zplug
+  source ~/.zplug/init.zsh
 
-# fzf
-zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
-zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
+  # fzf
+  zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
+  zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
 
-# others
-zplug "zsh-users/zsh-autosuggestions"
-zplug "b4b4r07/enhancd", use:init.sh
-zplug "zsh-users/zsh-completions"
-zplug "mollifier/cd-gitroot"
-zplug "stedolan/jq", \
-    from:gh-r, \
-    as:command, \
-    rename-to:jq
+  # others
+  zplug "zsh-users/zsh-autosuggestions"
+  zplug "b4b4r07/enhancd", use:init.sh
+  zplug "zsh-users/zsh-completions"
+  zplug "mollifier/cd-gitroot"
+  zplug "stedolan/jq", \
+      from:gh-r, \
+      as:command, \
+      rename-to:jq
 
-# Install
-if ! zplug check --verbose; then
-  printf 'Install? [y/N]: '
-  if read -q; then
-    echo; zplug install
+  # Install
+  if ! zplug check --verbose; then
+    printf 'Install? [y/N]: '
+    if read -q; then
+      echo; zplug install
+    fi
   fi
+
+  zplug load
+
+  # cd-gitroot
+  alias cdu='cd-gitroot'
+
+  # enhancd
+  ENHANCD_HOOK_AFTER_CD=ls
+  ENHANCD_DISABLE_DOT=1
+  ENHANCD_DISABLE_HYPHEN=1
+
+  # fzf
+  export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'
+
+  # fzf x history select
+  function select-history() {
+    BUFFER=$(history -n -r 1 | fzf --no-sort +m --query "$LBUFFER" --prompt="History ❯ ")
+    CURSOR=$#BUFFER
+  }
+  zle -N select-history
+  bindkey '^T' select-history
 fi
-
-zplug load
-
-# cd-gitroot
-alias cdu='cd-gitroot'
-
-# enhancd
-ENHANCD_HOOK_AFTER_CD=ls
-ENHANCD_DISABLE_DOT=1
-ENHANCD_DISABLE_HYPHEN=1
-
-# fzf
-export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'
-
-# fzf x history select
-function select-history() {
-  BUFFER=$(history -n -r 1 | fzf --no-sort +m --query "$LBUFFER" --prompt="History ❯ ")
-  CURSOR=$#BUFFER
-}
-zle -N select-history
-bindkey '^T' select-history

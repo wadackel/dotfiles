@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+
+# install core tool
+ask() {
+  printf "$* (Y/n)"
+  local answer
+  read answer
+
+  case $answer in
+    [yN] | [yN]es | "YES" ) return 0 ;;
+    * ) return 1 ;;
+  esac
+}
+
+if [[ ! -x `which brew` ]]; then
+  if ask "Homebrew install?"; then
+    /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    brew doctor
+    brew update
+    brew install $(cat ~/dotfiles/scripts/brew-pkg-list)
+
+    # git-lfs
+    git lfs install
+
+    # nodebrew
+    nodebrew setup
+
+    # fpath
+    fpath=(/usr/local/share/zsh/functions/ ${fpath}) | zsh
+  fi
+fi
+
+if [[ ! -x `which zplug` ]]; then
+  if ask "zplug install?"; then
+    curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
+  fi
+fi
+
+
+# setting files
+ln -sf ~/dotfiles/agignore ~/.agignore
+ln -sf ~/dotfiles/bashrc ~/.bashrc
+ln -sf ~/dotfiles/gitattributes ~/.gitattributes
+ln -sf ~/dotfiles/gitconfig ~/.gitconfig
+ln -sf ~/dotfiles/tmux.conf ~/.tmux.conf
+ln -sf ~/dotfiles/vimrc ~/.vimrc
+ln -sf ~/dotfiles/zshrc ~/.zshrc
+ln -sf ~/dotfiles/hyper.js ~/.hyper.js
