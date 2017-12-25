@@ -868,6 +868,12 @@ let g:tsuquyomi_single_quote_import = 1
 " 補完表示を詳細に
 let g:tsuquyomi_completion_detail = 1
 
+" 型情報の表示
+augroup TSSettings
+  autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
+augroup END
+
+
 
 " vim-go
 let g:go_fmt_command = "goimports"
