@@ -31,13 +31,19 @@ export PATH=$HOME/.nodebrew/current/bin:$PATH
 # ====================================================
 
 # gcloud
-source "${HOME}/google-cloud-sdk/path.zsh.inc"
-source "${HOME}/google-cloud-sdk/completion.zsh.inc"
+# install: https://cloud.google.com/sdk/downloads?hl=ja#interactive
+if [[ -f "${HOME}/google-cloud-sdk/path.zsh.inc" ]]; then
+  source "${HOME}/google-cloud-sdk/path.zsh.inc"
+  source "${HOME}/google-cloud-sdk/completion.zsh.inc"
 
-alias appserver="${HOME}/google-cloud-sdk/bin/dev_appserver.py"
+  alias appserver="${HOME}/google-cloud-sdk/bin/dev_appserver.py"
+fi
 
 # goapp
-export PATH=${PATH}:${HOME}/go_appengine/
+# install: https://cloud.google.com/appengine/docs/standard/go/download?hl=ja
+if [[ -x `which goapp` ]]; then
+  export PATH=${PATH}:${HOME}/go_appengine/
+fi
 
 
 
