@@ -334,3 +334,5 @@ function select-history() {
 }
 zle -N select-history
 bindkey '^T' select-history
+
+export PATH="$HOME/.yarn/bin:$PATH"
