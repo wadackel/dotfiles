@@ -290,8 +290,8 @@ function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 # Plugins
 # ====================================================
 
-if [[ -x `which zplug` ]]; then
-  # zplug
+# zplug
+if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   source ~/.zplug/init.zsh
 
   # fzf
