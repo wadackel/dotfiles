@@ -1,3 +1,8 @@
+fpath=(/usr/local/share/zsh/functions/ ${fpath})
+
+
+
+
 # ====================================================
 # Basic
 # ====================================================
@@ -23,6 +28,7 @@ export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
 export PATH=$HOME/.nodebrew/current/bin:$PATH
 export PATH="$HOME/.yarn/bin:$PATH"
+
 
 
 
@@ -233,11 +239,6 @@ function tmux_automatically_attach_session()
 {
   if is_screen_or_tmux_running; then
     ! is_exists 'tmux' && return 1
-
-    if is_tmux_runnning; then
-    elif is_screen_running; then
-      echo "This is on screen."
-    fi
   else
     if shell_has_started_interactively && ! is_ssh_running; then
       if ! is_exists 'tmux'; then

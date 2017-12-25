@@ -76,11 +76,7 @@ function vim_uninstall() {
 }
 
 
-if [[ $CMD == "help" ]]; then
-  echo "todo"
-  exit 0
-
-elif [[ $CMD == "install" ]]; then
+if [[ $CMD == "install" ]]; then
   vim_clone_or_pull
   vim_build
   exit 0
@@ -100,7 +96,7 @@ elif [[ $CMD == "uninstall" ]]; then
   exit 0
 
 else
-  echo "See help, './scripts/vim help'"
+  echo "Undefined command..."
   exit 1
 fi
 
