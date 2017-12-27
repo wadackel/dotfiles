@@ -46,10 +46,10 @@ let mapleader = ","
 " for tmux
 if has("termguicolors")
   set termguicolors
+  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
 endif
 
-let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
 
 " 各種基本設定
 set encoding=utf-8
@@ -350,6 +350,9 @@ if has('terminal')
   tnoremap <C-[>H <C-r>H
   tnoremap <C-[>L <C-r>L
 
+  " タブサイズ
+  tnoremap <C-[>= <C-r>=
+
   " visual mode
   tnoremap <C-[><C-v> <C-r>N
 
@@ -392,8 +395,8 @@ endif
 
 " dein configurations.
 let g:dein#install_max_processes = 48
-let g:dein#install_progress_type = 'title'
-let g:dein#install_message_type = 'none'
+let g:dein#install_progress_type = 'echo'
+let g:dein#install_message_type = 'echo'
 let g:dein#enable_notification = 1
 
 augroup PluginInstall
