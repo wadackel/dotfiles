@@ -26,9 +26,13 @@ setopt auto_cd
 export PATH=/usr/local/bin:${PATH}
 export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
-export PATH=$HOME/.nodebrew/current/bin:$PATH
 export PATH="$HOME/.yarn/bin:$PATH"
 
+
+# nodenev
+if [[ -x `which nodenv` ]]; then
+  eval "$(nodenv init -)"
+fi
 
 
 
