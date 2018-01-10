@@ -2,6 +2,7 @@ git
 git-lfs
 jq
 lua
+nodenv
 reattach-to-user-namespace
 the_silver_searcher
 tmux
