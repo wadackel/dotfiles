@@ -232,6 +232,9 @@ vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 " help & quickfixをqだけで閉じる
 autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
 
+" quickfixは折り返しを無効化する
+autocmd! FileType qf setlocal nowrap
+
 " quickfixを自動で開く
 autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
 
