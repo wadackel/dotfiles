@@ -459,6 +459,10 @@ if dein#load_state(s:plugin_dir)
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
   call dein#add('ctrlpvim/ctrlp.vim')
 
+  " formatter
+  call dein#add('kewah/vim-stylefmt')
+  call dein#add('prettier/vim-prettier', {'on_ft': ['javascript', 'typescript', 'css', 'less', 'scss', 'json', 'graphql', 'markdown']})
+
   " sign
   call dein#add('airblade/vim-gitgutter')
   call dein#add('Valloric/MatchTagAlways')
@@ -501,9 +505,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
   call dein#add('posva/vim-vue')
-
-  " css
-  call dein#add('kewah/vim-stylefmt')
 
   " PHP
   call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
