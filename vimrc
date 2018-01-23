@@ -937,6 +937,7 @@ let g:ale_lint_on_enter = 0
 let g:ale_linters = {
 \   'html': [],
 \   'go': ['gometalinter', 'gofmt'],
+\   'typescript': ['tslint', 'tsserver', 'typecheck'],
 \}
 
 let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
