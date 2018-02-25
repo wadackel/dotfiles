@@ -8,7 +8,6 @@ old
 .git
 .svn
 zsh-completions
-lib
 libs
 vendor
 node_modules
