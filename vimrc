@@ -512,6 +512,10 @@ if dein#load_state(s:plugin_dir)
   " golang
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
 
+  " Rust
+  call dein#add('rust-lang/rust.vim', {'on_ft': 'rust'})
+  call dein#add('racer-rust/vim-racer', {'on_ft': 'rust'})
+
   " statusline
   call dein#add('itchyny/lightline.vim')
 
@@ -882,7 +886,6 @@ augroup TSSettings
 augroup END
 
 
-
 " vim-go
 let g:go_fmt_command = "goimports"
 let g:go_highlight_functions = 1
@@ -898,6 +901,10 @@ augroup GolangSettings
   autocmd FileType go nnoremap <silent> <buffer> <C-^> :GoReferrers<CR>
   autocmd FileType go nnoremap <silent> <buffer> <Leader>i :GoInfo<CR>
 augroup END
+
+
+" rust.vim
+let g:rustfmt_autosave = 1
 
 
 " table-mode
@@ -939,6 +946,8 @@ let g:ale_linters = {
 \   'go': ['gometalinter', 'gofmt'],
 \   'typescript': ['tslint', 'tsserver', 'typecheck'],
 \}
+
+let g:ale_javascript_eslint_options = '--no-ignore'
 
 let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 

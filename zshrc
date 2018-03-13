@@ -27,6 +27,7 @@ export PATH=/usr/local/bin:${PATH}
 export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
 export PATH="$HOME/.yarn/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
 
 
 # nodenev
