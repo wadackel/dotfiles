@@ -605,6 +605,7 @@ if !exists('g:neocomplete#force_omni_input_patterns')
     let g:neocomplete#force_omni_input_patterns = {}
 endif
 let g:neocomplete#force_omni_input_patterns.typescript = '[^. \t]\.\%(\h\w*\)\?'
+let g:neocomplete#force_omni_input_patterns.rust = '[^.[:digit:] *\t]\%(\.\|\::\)\%(\h\w*\)\?'
 
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
