@@ -156,17 +156,6 @@ vnoremap gh H
 vnoremap gm M
 vnoremap gl L
 
-" visualモードで検索文字列を指定
-xnoremap * :<C-u>call <SID>VSetSearch()<CR>/<C-R>=@/<CR><CR>
-xnoremap # :<C-u>call <SID>VSetSearch()<CR>?<C-R>=@/<CR><CR>
-
-function! s:VSetSearch()
-  let tmp = @s
-  norm! gv"sy
-  let @/ = '\V' . substitute(escape(@s, '/\'), '\n', '\\n', 'g')
-  let @s = tmp
-endfunction
-
 " 検索後の位置調整
 nnoremap n nzz
 nnoremap N Nzz
@@ -430,18 +419,16 @@ if dein#load_state(s:plugin_dir)
         \ 'if' : has('lua')
         \ })
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
-  call dein#add('Shougo/neosnippet')
-  call dein#add('Shougo/neosnippet-snippets')
   call dein#add('mileszs/ack.vim')
   call dein#add('mattn/webapi-vim')
 
   " unite
   call dein#add('Shougo/unite.vim')
-  call dein#add('Shougo/unite-outline', {'depends': 'Shougo/unite.vim'})
 
   " editing
   call dein#add('mattn/emmet-vim')
   call dein#add('tpope/vim-surround')
+  call dein#add('thinca/vim-visualstar')
   call dein#add('editorconfig/editorconfig-vim')
   call dein#add('h1mesuke/vim-alignta')
   call dein#add('Chiel92/vim-autoformat')
@@ -457,10 +444,10 @@ if dein#load_state(s:plugin_dir)
 
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
+  " call dein#add('cocopon/vaffle.vim')
   call dein#add('ctrlpvim/ctrlp.vim')
 
   " formatter
-  call dein#add('kewah/vim-stylefmt')
   call dein#add('prettier/vim-prettier', {'on_ft': ['javascript', 'typescript', 'css', 'less', 'scss', 'json', 'graphql', 'markdown']})
 
   " sign
@@ -596,17 +583,6 @@ autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
 autocmd FileType javascript setlocal omnifunc=flowcomplete#Complete
 
 " Enable heavy omni completion.
-let g:neocomplete#sources#vim#complete_functions = {
-    \ 'Unite' : 'unite#complete_source',
-    \ 'VimFiler' : 'vimfiler#complete',
-    \}
-let g:neocomplete#force_overwrite_completefunc = 1
-if !exists('g:neocomplete#force_omni_input_patterns')
-    let g:neocomplete#force_omni_input_patterns = {}
-endif
-let g:neocomplete#force_omni_input_patterns.typescript = '[^. \t]\.\%(\h\w*\)\?'
-let g:neocomplete#force_omni_input_patterns.rust = '[^.[:digit:] *\t]\%(\.\|\::\)\%(\h\w*\)\?'
-
 " Plugin key-mappings.
 inoremap <expr><C-g>     neocomplete#undo_completion()
 inoremap <expr><C-l>     neocomplete#complete_common_string()
@@ -712,7 +688,6 @@ let g:clever_f_smart_case = 1
 let g:clever_f_across_no_line = 1
 let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
-
 
 
 " Ag
@@ -876,8 +851,10 @@ autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 " tsuquyomi
 " ALEでエラー表示するので quickfix 無効化
 let g:tsuquyomi_disable_quickfix = 1
+
 " インポートにシングルクォートを使用
 let g:tsuquyomi_single_quote_import = 1
+
 " 補完表示を詳細に
 let g:tsuquyomi_completion_detail = 1
 
@@ -909,10 +886,13 @@ let g:rustfmt_autosave = 1
 
 
 " table-mode
+
 " corner character
 let g:table_mode_corner = '|'
+
 " 自動整列は使わない
 let g:table_mode_auto_align = 0
+
 " 使わなそうなマッピングは適当なところに退避
 let g:table_mode_delete_row_map = '<Leader><C-+>0'
 let g:table_mode_delete_column_map = '<Leader><C-+>1'
@@ -922,11 +902,6 @@ let g:table_mode_add_formula_map = '<Leader><C-+>4'
 let g:table_mode_eval_formula_map = '<Leader><C-+>5'
 let g:table_mode_echo_cell_map = '<Leader><C-+>6'
 let g:table_mode_tableize_d_map = '<Leader><C-+>7'
-
-
-" Stylefmt
-nnoremap <silent> <leader>cs :Stylefmt<CR>
-vnoremap <silent> <leader>cs :StylefmtVisual<CR>
 
 
 " ALE
