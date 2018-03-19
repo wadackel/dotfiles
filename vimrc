@@ -550,7 +550,6 @@ call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 
 " neocomplete
-let g:acp_enableAtStartup = 0
 
 " Use neocomplete.
 let g:neocomplete#enable_at_startup = 1
@@ -574,6 +573,11 @@ if !exists('g:neocomplete#keyword_patterns')
     let g:neocomplete#keyword_patterns = {}
 endif
 let g:neocomplete#keyword_patterns['default'] = '\h\w*'
+
+if !exists('g:neocomplete#force_omni_input_patterns')
+    let g:neocomplete#force_omni_input_patterns = {}
+endif
+let g:neocomplete#force_omni_input_patterns.typescript = '[^. *\t]\.\w*\|\h\w*::'
 
 " Enable omni completion.
 autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
