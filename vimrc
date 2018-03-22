@@ -172,7 +172,7 @@ cmap <C-e> <End>
 cmap <C-d> <Del>
 cmap <C-h> <BackSpace>
 
-" quickfixの移動
+" QuickFix の移動
 nnoremap [q :cprevious<CR>
 nnoremap ]q :cnext<CR>
 nnoremap [Q :<C-u>cfirst<CR>
@@ -218,14 +218,21 @@ inoremap (<Enter> ()<Left><CR><ESC><S-o>
 " 選択範囲内をExpressionレジスタで評価->置換
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
-" help & quickfixをqだけで閉じる
-autocmd! FileType help,qf nnoremap <buffer> q <C-w>c
 
-" quickfixは折り返しを無効化する
-autocmd! FileType qf setlocal nowrap
+" QuickFix の設定
+augroup QuickfixConfigure
+  autocmd!
 
-" quickfixを自動で開く
-autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
+  " help & QuickFix を q だけで閉じる
+  autocmd FileType help nnoremap <buffer> q <C-w>c
+  autocmd FileType qf nnoremap <buffer> q <C-w>c
+
+  " QuickFix は折り返しを無効化する
+  autocmd FileType qf setlocal nowrap
+
+  " QuickFix を自動で開く
+  autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
+augroup END
 
 
 " ペースト時のオートインデントを無効化
@@ -247,12 +254,12 @@ endif
 
 
 " </で閉じタグを自動補完
-autocmd FileType html inoremap <silent> <buffer> </ </<C-x><C-o>
+autocmd! FileType html inoremap <silent> <buffer> </ </<C-x><C-o>
 
 
 " ファイルタイプショートカット
-autocmd FileType md setlocal filetype=markdown
-autocmd FileType js setlocal filetype=javascript
+autocmd! FileType md setlocal filetype=markdown
+autocmd! FileType js setlocal filetype=javascript
 
 
 " カーソル位置の復元
@@ -851,7 +858,7 @@ autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
 " tsuquyomi
-" ALEでエラー表示するので quickfix 無効化
+" ALEでエラー表示するので QuickFix 無効化
 let g:tsuquyomi_disable_quickfix = 1
 
 " インポートにシングルクォートを使用
