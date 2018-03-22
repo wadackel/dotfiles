@@ -419,7 +419,8 @@ if dein#load_state(s:plugin_dir)
         \ 'if' : has('lua')
         \ })
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
-  call dein#add('mileszs/ack.vim')
+  " call dein#add('mileszs/ack.vim')
+  call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
 
   " unite
@@ -694,18 +695,6 @@ let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
 
 
-" Ag
-if executable('ag')
-  " for ack.vim
-  let g:ackprg = 'ag --vimgrep -s -H --nocolor --nogroup --column'
-  let g:ack_default_options = ' -s -H --nocolor --nogroup --column'
-
-  " ctrlpの置き換え
-  let g:ctrlp_use_caching = 0
-  let g:ctrlp_user_command = 'ag %s -i --hidden --nocolor --nogroup -g ""'
-endif
-
-
 " VimFiler
 let g:vimfiler_as_default_explorer = 1
 let g:vimfiler_safe_mode_by_default = 0
@@ -727,6 +716,15 @@ endfunction
 " ctrlp
 let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
 let g:ctrlp_show_hidden = 1
+
+" ripgrep integration
+if executable('rg')
+  set grepprg=rg\ --color=never
+  let g:ctrlp_user_command = 'rg %s --files --color=never --glob ""'
+  let g:ctrlp_use_caching = 0
+else
+  let g:ctrlp_clear_cache_on_exit = 0
+endif
 
 
 " easymotion
