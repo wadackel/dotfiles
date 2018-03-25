@@ -30,6 +30,12 @@ export PATH="$HOME/.yarn/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 
 
+# depot_tools
+if [[ -e "$HOME/chromium/tools/depot_tools" ]]; then
+  export PATH="$PATH:/$HOME/chromium/tools/depot_tools"
+fi
+
+
 # nodenev
 if [[ -x `which nodenv` ]]; then
   eval "$(nodenv init -)"

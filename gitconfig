@@ -6,6 +6,7 @@
 [core]
   editor = vim -c \"set fenc=utf-8\"
   attributesfile = ~/.gitattributes
+  precomposeUnicode = true
 [color]
   ui = auto
 [fetch]
