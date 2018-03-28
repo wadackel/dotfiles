@@ -450,6 +450,9 @@ if dein#load_state(s:plugin_dir)
   call dein#add('haya14busa/incsearch.vim')
   call dein#add('haya14busa/incsearch-fuzzy.vim')
 
+  " debug
+  call dein#add('thinca/vim-quickrun')
+
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
   " call dein#add('cocopon/vaffle.vim')
@@ -693,6 +696,13 @@ function! LightLineFugitive()
   endif
   return ''
 endfunction
+
+
+" QuickRun
+let g:quickrun_no_default_key_mappings = 1
+
+nnoremap <silent><Leader>q :<C-u>QuickRun<CR>
+vnoremap <silent><Leader>q :QuickRun<CR>
 
 
 " Clever-f
