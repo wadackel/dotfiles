@@ -110,6 +110,12 @@ set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
 
+" `system()` の末尾空白を削除して結果を返す
+function! TrimedSystem(...)
+  return substitute(call('system', a:000), '\n\+$', '', '')
+endfunction
+
+
 " 基本キーマップ
 
 " leader を \ に退避
@@ -434,6 +440,7 @@ if dein#load_state(s:plugin_dir)
   " deoplete - lang
   call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
   call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
+  call dein#add('sebastianmarkow/deoplete-rust', {'on_ft': 'rust'})
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -519,7 +526,6 @@ if dein#load_state(s:plugin_dir)
 
   " Rust
   call dein#add('rust-lang/rust.vim', {'on_ft': 'rust'})
-  call dein#add('racer-rust/vim-racer', {'on_ft': 'rust'})
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -854,6 +860,12 @@ augroup GolangSettings
   autocmd FileType go nnoremap <silent> <buffer> <Leader>i :GoInfo<CR>
 augroup END
 
+
+" deoplete - rust
+let g:deoplete#sources#rust#racer_binary = TrimedSystem('which racer')
+let g:deoplete#sources#rust#rust_source_path = TrimedSystem('rustc --print sysroot') . '/lib/rustlib/src/rust/src'
+let g:deoplete#sources#rust#show_duplicates = 1
+let g:deoplete#sources#rust#disable_keymap = 1
 
 " rust.vim
 let g:rustfmt_autosave = 1
