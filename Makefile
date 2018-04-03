@@ -8,7 +8,7 @@ symlinks:
 
 .PHONY: vim-update
 vim-update:
-	@brew reinstall vim --with-lua --HEAD
+	@brew upgrade vim
 
 .PHONY: colors
 colors:
