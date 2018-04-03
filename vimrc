@@ -489,7 +489,10 @@ if dein#load_state(s:plugin_dir)
   call dein#add('mattn/gist-vim', {'lazy': 1})
 
   " memo
-  call dein#add('glidenote/memolist.vim', {'lazy': 1})
+  call dein#add('glidenote/memolist.vim', {
+    \ 'lazy': 1,
+    \ 'on_cmd': ['MemoNew', 'MemoList'],
+    \ })
 
   " toml
   call dein#add('cespare/vim-toml',  {'on_ft' : 'toml', 'lazy': 1})
