@@ -930,13 +930,6 @@ set background=dark
 
 " プラグインが有効な場合とそれ以外で分ける
 try
-  func! s:overwrite_spring_night()
-    exe 'highlight LineNr guifg=#3c3c3c guibg=NONE'
-    exe 'highlight Normal guibg=#141414'
-  endfunc
-
-  autocmd ColorScheme * call s:overwrite_spring_night()
-
   colorscheme spring-night
 
 catch /^Vim\%((\a\+)\)\=:E185/
