@@ -812,6 +812,7 @@ let g:tsuquyomi_completion_detail = 1
 
 " 型情報の表示
 augroup TSSettings
+  autocmd!
   autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
 augroup END
 
@@ -826,6 +827,7 @@ let g:go_term_enabled = 1
 let g:go_highlight_build_constraints = 1
 
 augroup GolangSettings
+  autocmd!
   autocmd FileType go :highlight goErr cterm=bold ctermfg=214
   autocmd FileType go :match goErr /\<err\>/
   autocmd FileType go nnoremap <silent> <buffer> <C-^> :GoReferrers<CR>
@@ -838,6 +840,12 @@ let g:deoplete#sources#rust#racer_binary = TrimedSystem('which racer')
 let g:deoplete#sources#rust#rust_source_path = TrimedSystem('rustc --print sysroot') . '/lib/rustlib/src/rust/src'
 let g:deoplete#sources#rust#show_duplicates = 1
 let g:deoplete#sources#rust#disable_keymap = 1
+
+augroup RustSettings
+  autocmd!
+  autocmd FileType rust nmap <buffer> <C-]> <Plug>DeopleteRustGoToDefinitionDefault
+  autocmd FileType rust nmap <buffer> <Leader>i <Plug>DeopleteRustShowDocumentation
+augroup END
 
 " rust.vim
 let g:rustfmt_autosave = 1
