@@ -467,7 +467,7 @@ if dein#load_state(s:plugin_dir)
 
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
-  call dein#add('ctrlpvim/ctrlp.vim')
+  " call dein#add('ctrlpvim/ctrlp.vim')
   call dein#add('junegunn/fzf', {'build': './install --all'})
   call dein#add('junegunn/fzf.vim')
 
@@ -671,38 +671,23 @@ function! s:vimfiler_settings()
 endfunction
 
 
-" ctrlp
-let g:ctrlp_custom_ignore = '\v[\/](node_modules|build|\.git|\.hg|\.svn)$'
-let g:ctrlp_show_hidden = 1
+" fzf
+if executable('fzf')
+  let g:fzf_buffers_jump = 1
+  let g:fzf_action = {
+        \ 'ctrl-t': 'tab split',
+        \ 'ctrl-x': 'split',
+        \ 'ctrl-v': 'vsplit' }
 
-" ripgrep integration
-if executable('rg')
-  set grepprg=rg\ --color=never
-  let g:ctrlp_user_command = 'rg %s --files --color=never --hidden --iglob "!.git" --glob ""'
-  let g:ctrlp_use_caching = 0
-else
-  let g:ctrlp_clear_cache_on_exit = 0
+  if executable('rg')
+    command! FZFFileList call fzf#run(fzf#wrap('rg', {
+          \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+          \ 'down': '30%',
+          \ }, <bang>0))
+  endif
+
+  nnoremap <silent> <C-p> :FZFFileList<CR>
 endif
-
-
-" " fzf
-" if executable('fzf')
-"   let g:fzf_buffers_jump = 1
-"
-"   let g:fzf_action = {
-"         \ 'ctrl-t': 'tab split',
-"         \ 'ctrl-s': 'split',
-"         \ 'ctrl-v': 'vsplit' }
-"
-"   if executable('rg')
-"     command! FZFFileList call fzf#run(fzf#wrap('rg', {
-"           \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-"           \ 'down': '30%',
-"           \ 'sink': 'e'}, <bang>0))
-"   endif
-"
-"   nnoremap <silent> <C-p> :FZFFileList<CR>
-" endif
 
 
 " easymotion
