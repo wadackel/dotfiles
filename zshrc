@@ -347,3 +347,5 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   # fzf
   export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'
 fi
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

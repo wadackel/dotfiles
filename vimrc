@@ -468,6 +468,8 @@ if dein#load_state(s:plugin_dir)
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
   call dein#add('ctrlpvim/ctrlp.vim')
+  call dein#add('junegunn/fzf', {'build': './install --all'})
+  call dein#add('junegunn/fzf.vim')
 
   " formatter
   call dein#add('prettier/vim-prettier', {
@@ -681,6 +683,26 @@ if executable('rg')
 else
   let g:ctrlp_clear_cache_on_exit = 0
 endif
+
+
+" " fzf
+" if executable('fzf')
+"   let g:fzf_buffers_jump = 1
+"
+"   let g:fzf_action = {
+"         \ 'ctrl-t': 'tab split',
+"         \ 'ctrl-s': 'split',
+"         \ 'ctrl-v': 'vsplit' }
+"
+"   if executable('rg')
+"     command! FZFFileList call fzf#run(fzf#wrap('rg', {
+"           \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+"           \ 'down': '30%',
+"           \ 'sink': 'e'}, <bang>0))
+"   endif
+"
+"   nnoremap <silent> <C-p> :FZFFileList<CR>
+" endif
 
 
 " easymotion
