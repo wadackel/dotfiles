@@ -544,6 +544,12 @@ if dein#load_state(s:plugin_dir)
   call dein#add('digitaltoad/vim-jade', {'on_ft': 'jade'})
   call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
 
+  " editor
+  call dein#add('junegunn/goyo.vim', {
+    \ 'lazy': 1,
+    \ 'on_cmd': ['Goyo'],
+    \ })
+
   " colorschema
   call dein#add('w0ng/vim-hybrid')
   call dein#add('rhysd/vim-color-spring-night')
