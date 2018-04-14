@@ -197,9 +197,9 @@ noremap @; @:
 noremap @: @;
 
 " Toggle系オプション
-nnoremap <silent> <Leader>w :<C-u>setl wrap! wrap?<CR>
-nnoremap <silent> <Leader>s :call <SID>toggle_syntax()<CR>
-nnoremap <silent> <Leader>h :<C-u>setl hlsearch!<CR>
+nnoremap <silent> \w :<C-u>setl wrap! wrap?<CR>
+nnoremap <silent> \s :call <SID>toggle_syntax()<CR>
+nnoremap <silent> \h :<C-u>setl hlsearch!<CR>
 
 function! s:toggle_syntax() abort
   if exists('g:syntax_on')
@@ -422,6 +422,7 @@ endif
 if dein#load_state(s:plugin_dir)
   call dein#begin(s:plugin_dir)
   call dein#add('Shougo/dein.vim')
+  call dein#add('mattn/benchvimrc-vim', {'lazy': 1, 'on_cmd': ['BenchVimrc']})
 
   " vim-scripts
   call dein#add('vim-scripts/sudo.vim', {'lazy': 1})
@@ -451,7 +452,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('thinca/vim-visualstar')
   call dein#add('editorconfig/editorconfig-vim')
   call dein#add('h1mesuke/vim-alignta')
-  call dein#add('Chiel92/vim-autoformat')
   call dein#add('kana/vim-submode')
   call dein#add('tyru/caw.vim.git')
   call dein#add('deton/jasegment.vim')
@@ -467,7 +467,6 @@ if dein#load_state(s:plugin_dir)
 
   " filer
   call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
-  " call dein#add('ctrlpvim/ctrlp.vim')
   call dein#add('junegunn/fzf', {'build': './install --all'})
   call dein#add('junegunn/fzf.vim')
 
@@ -479,16 +478,12 @@ if dein#load_state(s:plugin_dir)
 
   " sign
   call dein#add('airblade/vim-gitgutter')
+  call dein#add('cohama/agit.vim')
   call dein#add('Valloric/MatchTagAlways')
 
   " git
   call dein#add('tpope/vim-fugitive')
-  call dein#add('idanarye/vim-merginal', {'depends': 'tpope/vim-fugitive'})
-  call dein#add('cohama/agit.vim', {'lazy': 1})
   call dein#add('tyru/open-browser.vim', {'lazy': 1})
-
-  " gist
-  call dein#add('mattn/gist-vim', {'lazy': 1})
 
   " memo
   call dein#add('glidenote/memolist.vim', {
@@ -553,7 +548,6 @@ if dein#load_state(s:plugin_dir)
     \ })
 
   " colorschema
-  call dein#add('w0ng/vim-hybrid')
   call dein#add('rhysd/vim-color-spring-night')
   call dein#add('tyrannicaltoucan/vim-deep-space')
 
@@ -674,6 +668,7 @@ endfunction
 " fzf
 if executable('fzf')
   let g:fzf_buffers_jump = 1
+  let g:fzf_layout = {'down': '~25%'}
   let g:fzf_action = {
         \ 'ctrl-t': 'tab split',
         \ 'ctrl-x': 'split',
@@ -682,7 +677,6 @@ if executable('fzf')
   if executable('rg')
     command! FZFFileList call fzf#run(fzf#wrap('rg', {
           \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-          \ 'down': '30%',
           \ }, <bang>0))
   endif
 
@@ -718,12 +712,18 @@ nnoremap <silent> <Leader>gs :Gstatus<CR>
 nnoremap <silent> <Leader>gd :Gdiff<CR>
 
 
+" GitGutter
+let g:gitgutter_sign_added = '∙'
+let g:gitgutter_sign_modified = '∙'
+let g:gitgutter_sign_removed = '∙'
+let g:gitgutter_sign_modified_removed = '∙'
+
+nnoremap \g :GitGutterToggle<CR>
+
+
 " Agit
 nnoremap <silent> <Leader>gl :Agit<CR>
-
-
-" Merginal
-nnoremap <silent> <Leader>gb :Merginal<CR>
+nnoremap <silent> <Leader>gf :AgitFile<CR>
 
 
 " Memo List
@@ -736,7 +736,15 @@ let g:memolist_delimiter_yaml_end  = '---'
 nnoremap <Leader>mc :MemoNew<CR>
 nnoremap <Leader>ml :MemoList<CR>
 nnoremap <Leader>mg :MemoGrep<CR>
-nnoremap <Leader>mp :exe 'CtrlP' g:memolist_path<CR>
+
+if executable('fzf') && executable('rg')
+  command! FZFMemoList call fzf#run(fzf#wrap('rg', {
+        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+        \ 'dir': g:memolist_path,
+        \ }, <bang>0))
+
+  nnoremap <Leader>mp :FZFMemoList<CR>
+endif
 
 
 " caw
@@ -891,6 +899,9 @@ let g:ale_sign_column_always = 1
 let g:ale_list_window_size = 5
 let g:ale_keep_list_window_open = 0
 
+let g:ale_sign_warning = '▲'
+let g:ale_sign_error = '✗'
+
 let g:ale_lint_on_save = 1
 let g:ale_lint_on_text_changed = 'never'
 let g:ale_lint_on_filetype_changed = 0
@@ -906,6 +917,7 @@ let g:ale_javascript_eslint_options = '--no-ignore'
 
 let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
+nnoremap \b :ALEToggleBuffer<CR>
 
 
 

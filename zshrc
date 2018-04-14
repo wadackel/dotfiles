@@ -320,7 +320,6 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   zplug "zsh-users/zsh-autosuggestions"
   zplug "b4b4r07/enhancd", use:init.sh
   zplug "zsh-users/zsh-completions"
-  zplug "mollifier/cd-gitroot"
   zplug "stedolan/jq", \
       from:gh-r, \
       as:command, \
@@ -335,9 +334,6 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   fi
 
   zplug load
-
-  # cd-gitroot
-  alias cdu='cd-gitroot'
 
   # enhancd
   ENHANCD_HOOK_AFTER_CD=ls
