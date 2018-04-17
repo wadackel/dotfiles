@@ -681,6 +681,9 @@ if executable('fzf')
   endif
 
   nnoremap <silent> <C-p> :FZFFileList<CR>
+  nnoremap <silent> <Leader>b :Buffers<CR>
+  nnoremap <silent> <Leader>; :History:<CR>
+  nnoremap <silent> <Leader>: :History:<CR>
 endif
 
 
