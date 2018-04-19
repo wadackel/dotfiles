@@ -2572,7 +2572,7 @@
 	<key>NSWindow Frame SessionsPreferences</key>
 	<string>269 126 606 469 0 0 1680 1028 </string>
 	<key>NSWindow Frame SharedPreferences</key>
-	<string>496 339 796 473 0 0 1680 1028 </string>
+	<string>496 360 796 473 0 0 1680 1028 </string>
 	<key>NSWindow Frame iTerm Window 0</key>
 	<string>0 28 1680 1000 0 0 1680 1028 </string>
 	<key>New Bookmarks</key>
@@ -3167,7 +3167,7 @@
 			<key>Normal Font</key>
 			<string>RictyDiminished-RegularForPowerline 17</string>
 			<key>Only The Default BG Color Uses Transparency</key>
-			<true/>
+			<false/>
 			<key>Open Toolbelt</key>
 			<false/>
 			<key>Option Key Sends</key>
@@ -3331,7 +3331,7 @@
 	<key>SUHasLaunchedBefore</key>
 	<true/>
 	<key>SULastCheckTime</key>
-	<date>2018-04-18T07:55:49Z</date>
+	<date>2018-04-19T07:36:16Z</date>
 	<key>SUSendProfileInfo</key>
 	<false/>
 	<key>ShowBookmarkName</key>
