@@ -329,7 +329,7 @@ nnoremap sQ :<C-u>bd<CR>
 nnoremap <C-w>O :<C-u>tabo<CR>
 
 if has('terminal')
-  set termkey=<C-r>
+  set termwinkey=<C-r>
 
   " terminal 表示
   nnoremap <silent> <Leader>tt :<C-u>terminal ++curwin ++close<CR>
