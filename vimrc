@@ -441,7 +441,12 @@ if dein#load_state(s:plugin_dir)
   " deoplete - lang
   call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
   call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
-  call dein#add('sebastianmarkow/deoplete-rust', {'on_ft': 'rust'})
+
+  " Language Server Protocol
+  call dein#add('autozimu/LanguageClient-neovim', {
+        \ 'rev': 'next',
+        \ 'build': 'bash install.sh',
+        \ })
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -525,7 +530,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
 
   " Rust
-  call dein#add('rust-lang/rust.vim', {'on_ft': 'rust'})
+  call dein#add('rust-lang/rust.vim')
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -859,20 +864,25 @@ augroup GolangSettings
 augroup END
 
 
-" deoplete - rust
-let g:deoplete#sources#rust#racer_binary = TrimedSystem('which racer')
-let g:deoplete#sources#rust#rust_source_path = TrimedSystem('rustc --print sysroot') . '/lib/rustlib/src/rust/src'
-let g:deoplete#sources#rust#show_duplicates = 1
-let g:deoplete#sources#rust#disable_keymap = 1
+" LanguageClient
+let g:LanguageClient_selectionUI = 'location-list'
 
-augroup RustSettings
-  autocmd!
-  autocmd FileType rust nmap <buffer> <C-]> <Plug>DeopleteRustGoToDefinitionDefault
-  autocmd FileType rust nmap <buffer> <Leader>i <Plug>DeopleteRustShowDocumentation
-augroup END
 
 " rust.vim
 let g:rustfmt_autosave = 1
+
+" rust - rls
+let g:LanguageClient_serverCommands = {
+    \ 'rust': ['rustup', 'run', 'nightly', 'rls'],
+    \ }
+
+augroup RustSettings
+  autocmd!
+  autocmd FileType rust nnoremap <silent> <buffer> <C-]> :call LanguageClient#textDocument_definition()<CR>
+  autocmd FileType rust nnoremap <silent> <buffer> <C-^> :call LanguageClient#textDocument_references()<CR>
+  autocmd FileType rust nnoremap <silent> <buffer> <Leader>i :call LanguageClient#textDocument_hover()<CR>
+  autocmd FileType rust nnoremap <silent> <buffer> <F2> :call LanguageClient#textDocument_rename()<CR>
+augroup END
 
 
 " table-mode
