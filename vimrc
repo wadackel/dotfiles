@@ -843,6 +843,7 @@ let g:tsuquyomi_completion_detail = 1
 augroup TSSettings
   autocmd!
   autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
+  autocmd FileType typescript nnoremap <buffer> <F2> :TsuRenameSymbolCS<CR>
 augroup END
 
 
