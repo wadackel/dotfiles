@@ -41,7 +41,7 @@ fi
 
 # vim
 if ask "vim install?"; then
-  brew install vim --with-lua --HEAD
+  brew install vim --with-lua
 fi
 
 

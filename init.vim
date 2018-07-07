@@ -1,25 +1,3 @@
-" 開発中のプラグインなど
-let s:dev_plugin_install = 0
-
-if s:dev_plugin_install
-  let s:devdir = $HOME . '/.vim-dev'
-  if isdirectory(s:devdir)
-    exe 'set runtimepath+=' . s:devdir
-    for plug in split(glob(s:devdir . '/*'), '\n')
-      exe 'set runtimepath+=' . plug
-    endfor
-  endif
-
-endif
-
-
-" ローカルな設定の読み込み
-if filereadable(expand('~/.vimrc.local'))
-  source ~/.vimrc.local
-endif
-
-
-
 " =============================================================
 " Basic
 " =============================================================
@@ -43,15 +21,15 @@ source $VIMRUNTIME/macros/matchit.vim
 " <Leader>を`,`に設定
 let mapleader = ","
 
-" for tmux
-if has("termguicolors")
-  set termguicolors
-  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-endif
 
+" for tmux
+set termguicolors
+set t_8b=^[[48;2;%lu;%lu;%lum
+set t_8f=^[[38;2;%lu;%lu;%lum<Paste>
 
 " 各種基本設定
+language en_US
+
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
@@ -75,12 +53,13 @@ set autoindent
 set smartindent
 set expandtab
 set wrap
-set clipboard=unnamed
+" set clipboard=unnamed
+set clipboard=unnamed,unnamedplus
 set laststatus=2
-if ! isdirectory($HOME.'/.vim/swap')
-  call mkdir($HOME.'/.vim/swap', 'p')
+if ! isdirectory($HOME.'/.config/nvim/swap')
+  call mkdir($HOME.'/.config/nvim/swap', 'p')
 endif
-set directory=~/.vim/swap
+set directory=~/.config/nvim/swap
 set ambiwidth=double
 set wildmenu
 set wildmode=longest,full
@@ -93,6 +72,7 @@ set backspace=indent,eol,start
 set matchpairs& matchpairs+=<:>
 set lazyredraw
 set nrformats=
+set guicursor=n-v-ve-o-r-c-cr-sm:block,i-ci:block-blinkwait300-blinkon200-blinkoff150
 
 " 起動時のメッセージ非表示
 set shortmess& shortmess+=I
@@ -328,43 +308,51 @@ nnoremap sQ :<C-u>bd<CR>
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
 
-" for Vim8
-if !has('nvim') && has('terminal')
-  set termwinkey=<C-r>
+" terminal
+function! TermHelper(...) abort
+  let h_or_v = get(a:, 1, 'h')
 
-  " terminal 表示
-  nnoremap <silent> <Leader>tt :<C-u>terminal ++curwin ++close<CR>
-  nnoremap <silent> <Leader>ts :<C-u>execute 'topleft split \| terminal ++curwin ++close'<CR>
-  tnoremap <silent> <Leader>ts <C-r>:execute 'topleft split \| terminal ++curwin ++close'<CR>
-  nnoremap <silent> <Leader>tv :<C-u>execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
-  tnoremap <silent> <Leader>tv <C-r>:execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
-  nnoremap <silent> <Leader>tk :<C-u>terminal ++rows=15 ++close<CR>
-  tnoremap <silent> <Leader>tk <C-r>:terminal ++rows=15 ++close<CR>
+  if h_or_v == 'h'
+    topleft split | Eterminal
+  else
+    topleft vsplit | Eterminal
+  endif
+endfun
 
-  " 前後タブの移動
-  tnoremap <C-[><C-n> <C-r>:tabnext<CR>
-  tnoremap <C-[><C-p> <C-r>:tabprevious<CR>
-  tnoremap <C-[><C-t> <C-r>:tabnew<CR>
+command! Hterminal :call TermHelper('h')
+command! Vterminal :call TermHelper('v')
+command! Eterminal :terminal
 
-  " 上下左右
-  tnoremap <C-[><C-h> <C-r>h
-  tnoremap <C-[><C-j> <C-r>j
-  tnoremap <C-[><C-k> <C-r>k
-  tnoremap <C-[><C-l> <C-r>l
-  tnoremap <C-[>J <C-r>J
-  tnoremap <C-[>K <C-r>K
-  tnoremap <C-[>H <C-r>H
-  tnoremap <C-[>L <C-r>L
+" open terminal
+nnoremap <silent> <Leader>tt :Eterminal<CR>
+nnoremap <silent> <Leader>ts :Hterminal<CR>
+nnoremap <silent> <Leader>tv :Vterminal<CR>
 
-  " タブサイズ
-  tnoremap <C-[>= <C-r>=
+tnoremap <silent> <Leader>tt <C-\><C-n>:Eterminal<CR>
+tnoremap <silent> <Leader>ts <C-\><C-n>:Hterminal<CR>
+tnoremap <silent> <Leader>tv <C-\><C-n>:Vterminal<CR>
 
-  " visual mode
-  tnoremap <C-[><C-v> <C-r>N
+" close terminal
+tnoremap <C-[><C-v> <C-\><C-n>
+tnoremap <C-[><C-[> <C-\><C-n>:q<CR>
 
-  " close terminal
-  tnoremap <C-r><C-r> <C-r><C-c>
-endif
+" 前後タブの移動
+tnoremap <C-[><C-n> <C-\><C-n>:tabnext<CR>
+tnoremap <C-[><C-p> <C-\><C-n>:tabprevious<CR>
+tnoremap <C-[><C-t> <C-\><C-n>:tabnew<CR>
+
+" 上下左右
+tnoremap <C-[><C-h> <C-\><C-n><C-w>h
+tnoremap <C-[><C-j> <C-\><C-n><C-w>j
+tnoremap <C-[><C-k> <C-\><C-n><C-w>k
+tnoremap <C-[><C-l> <C-\><C-n><C-w>l
+tnoremap <C-[>J <C-\><C-n><C-w>J
+tnoremap <C-[>K <C-\><C-n><C-w>K
+tnoremap <C-[>H <C-\><C-n><C-w>H
+tnoremap <C-[>L <C-\><C-n><C-w>L
+
+" タブサイズ
+tnoremap <C-[>= <C-\><C-n><C-w>=
 
 
 
@@ -411,7 +399,7 @@ augroup PluginInstall
 augroup END
 command! -nargs=0 PluginUpdate call dein#update()
 
-let s:plugin_dir = expand('~/.vim/bundle/')
+let s:plugin_dir = expand('~/.config/nvim/bundle/')
 let s:dein_dir = s:plugin_dir . 'repos/github.com/Shougo/dein.vim'
 execute 'set runtimepath+=' . s:dein_dir
 
@@ -436,8 +424,6 @@ if dein#load_state(s:plugin_dir)
 
   " deoplete
   call dein#add('Shougo/deoplete.nvim')
-  call dein#add('roxma/nvim-yarp')
-  call dein#add('roxma/vim-hug-neovim-rpc')
 
   " deoplete - lang
   call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
@@ -485,7 +471,6 @@ if dein#load_state(s:plugin_dir)
   " sign
   call dein#add('airblade/vim-gitgutter')
   call dein#add('cohama/agit.vim')
-  call dein#add('Valloric/MatchTagAlways')
 
   " git
   call dein#add('tpope/vim-fugitive')
@@ -512,7 +497,7 @@ if dein#load_state(s:plugin_dir)
 
   " typescript
   call dein#add('leafgarland/typescript-vim')
-  call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
+  call dein#add('mhartington/nvim-typescript', {'build': './install.sh'})
 
   " flow
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
@@ -522,7 +507,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-  call dein#add('posva/vim-vue')
 
   " PHP
   call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
@@ -555,7 +539,7 @@ if dein#load_state(s:plugin_dir)
 
   " colorschema
   call dein#add('rhysd/vim-color-spring-night')
-  call dein#add('tyrannicaltoucan/vim-deep-space')
+  call dein#add('rakr/vim-one')
 
   call dein#end()
   call dein#save_state()
@@ -591,36 +575,78 @@ let g:deoplete#enable_smart_case = 1
 let g:deoplete#file#enable_buffer_path = 1
 let g:deoplete#max_menu_width = 60
 
+" close popup and delete backword char
 inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
 inoremap <expr><BS> deoplete#smart_close_popup()."\<C-h>"
 
+" close popup and save indent
+inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+function! s:my_cr_function() abort
+  return deoplete#close_popup() . "\<CR>"
+endfunction
+
+
+" lightline my theme
+let s:p = {'normal': {}, 'inactive': {}, 'insert': {}, 'replace': {}, 'visual': {}, 'tabline': {}}
+
+let s:nordext0 = ["#2E3440", "NONE"]
+let s:nordext1 = ["#3B4252", 0]
+let s:nordext2 = ["#434C5E", "NONE"]
+let s:nordext3 = ["#2C323D", 8]
+let s:nordext4 = ["#D8DEE9", "NONE"]
+let s:nordext5 = ["#ECEFF4", 7]
+let s:nordext6 = ["#ECEFF4", 15]
+let s:nordext7 = ["#8FBCBB", 14]
+let s:nordext8 = ["#88C0D0", 6]
+let s:nordext9 = ["#81A1C1", 4]
+let s:nordext10 = ["#5E81AC", 12]
+let s:nordext11 = ["#BF616A", 1]
+let s:nordext12 = ["#D08770", 11]
+let s:nordext13 = ["#EBCB8B", 3]
+let s:nordext14 = ["#A3BE8C", 2]
+let s:nordext15 = ["#B48EAD", 5]
+
+let s:p.normal.left = [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.normal.middle = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.normal.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.normal.warning = [ [ s:nordext1, s:nordext13 ] ]
+let s:p.normal.error = [ [ s:nordext1, s:nordext11 ] ]
+
+let s:p.inactive.left =  [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.inactive.middle = [ [ s:nordext5, s:nordext1 ] ]
+let s:p.inactive.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
+
+let s:p.insert.left = [ [ s:nordext1, s:nordext6 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.replace.left = [ [ s:nordext1, s:nordext13 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.visual.left = [ [ s:nordext1, s:nordext7 ], [ s:nordext5, s:nordext1 ] ]
+
+let s:p.tabline.left = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.middle = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.right = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.tabsel = [ [ s:nordext1, s:nordext8 ] ]
+
+let g:lightline#colorscheme#nordext#palette = lightline#colorscheme#flatten(s:p)
 
 " lightline configure
 let g:lightline = {
-  \ 'colorscheme': 'deepspace',
+  \ 'colorscheme': 'nordext',
   \ 'active': {
   \   'left': [ [ 'mode', 'paste' ],
-  \             [ 'fugitive', 'readonly', 'filename', 'modified' ] ]
+  \             [ 'fugitive', 'readonly', 'filename' ] ],
   \ },
   \ 'component_function': {
+  \   'filename': 'LightLineFilename',
   \   'fugitive': 'LightLineFugitive',
   \   'readonly': 'LightLineReadonly',
-  \   'modified': 'LightLineModified'
   \ },
   \ 'separator': { 'left': "\u2b80", 'right': "\u2b82" },
   \ 'subseparator': { 'left': "\u2b81", 'right': "\u2b83" }
   \ }
 
-function! LightLineModified()
-  if &filetype == "help"
-    return ""
-  elseif &modified
-    return "+"
-  elseif &modifiable
-    return ""
-  else
-    return ""
-  endif
+function! LightLineFilename()
+  let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
+  let modified = &modified ? ' ∙' : ''
+  return filename . modified
 endfunction
 
 function! LightLineReadonly()
@@ -809,45 +835,17 @@ let g:previm_disable_default_css = 1
 let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 
 
-
-" flow
-let g:flow#enable = 0
-let g:flow#autoclose = 1
-let g:flow#omnifunc = 1
-
-" use local flow
-let local_flow = finddir('node_modules', '.;') . '/.bin/flow'
-
-if matchstr(local_flow, "^\/\\w") == ''
-    let local_flow= getcwd() . "/" . local_flow
-endif
-
-if executable(local_flow)
-  let g:flow#flowpath = local_flow
-endif
-
-let g:javascript_plugin_flow = 1
-
-
 " TypeScript
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
-" tsuquyomi
-" ALEでエラー表示するので QuickFix 無効化
-let g:tsuquyomi_disable_quickfix = 1
-
-" インポートにシングルクォートを使用
-let g:tsuquyomi_single_quote_import = 1
-
-" 補完表示を詳細に
-let g:tsuquyomi_completion_detail = 1
-
-" 型情報の表示
+" nvim-typescript
 augroup TSSettings
   autocmd!
-  autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
-  autocmd FileType typescript nnoremap <buffer> <F2> :TsuRenameSymbolCS<CR>
+  autocmd FileType typescript nnoremap <buffer> <Leader>i :TSType<CR>
+  autocmd FileType typescript nnoremap <buffer> <C-]> :TSDef<CR>
+  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
+  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename
 augroup END
 
 
@@ -946,15 +944,5 @@ nnoremap \b :ALEToggleBuffer<CR>
 " Colorschemeの設定
 syntax on
 set background=dark
-
-" プラグインが有効な場合とそれ以外で分ける
-try
-  colorscheme deep-space
-  " colorscheme spring-night
-
-catch /^Vim\%((\a\+)\)\=:E185/
-  " 行番号
-  autocmd ColorScheme * highlight LineNr ctermfg=237
-
-  colorscheme desert
-endtry
+colorscheme one
+" colorscheme spring-night

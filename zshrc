@@ -1,8 +1,6 @@
 fpath=(/usr/local/share/zsh/functions/ ${fpath})
 
 
-
-
 # ====================================================
 # Basic
 # ====================================================
@@ -14,10 +12,12 @@ bindkey -e
 autoload -U compinit
 compinit -C
 
+# nobeep
+setopt no_beep
+setopt nolistbeep
+
 # ディレクトリの移動
 setopt auto_cd
-
-
 
 
 # ====================================================
@@ -29,25 +29,20 @@ export PATH=${PATH}:${GOPATH}/bin
 export PATH="$HOME/.yarn/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-
 # depot_tools
 if [[ -e "$HOME/chromium/tools/depot_tools" ]]; then
   export PATH="$PATH:/$HOME/chromium/tools/depot_tools"
 fi
-
 
 # nodenev
 if [[ -x `which nodenv` ]]; then
   eval "$(nodenv init -)"
 fi
 
-
 # Rust
 if [[ -x `which rustc` ]]; then
   export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
 fi
-
-
 
 
 # ====================================================
@@ -68,8 +63,6 @@ fi
 if [[ -x `which goapp` ]]; then
   export PATH=${PATH}:${HOME}/go_appengine/
 fi
-
-
 
 
 # ====================================================
@@ -112,6 +105,13 @@ setopt hist_expand
 # 履歴をインクリメンタルに追加
 setopt inc_append_history
 
+# カーソル位置で補完
+setopt complete_in_word
+
+# `=` 以降のパスも補完
+setopt magic_equal_subst
+
+
 # history bind
 autoload -U history-search-end
 zle -N history-beginning-search-backward-end history-search-end
@@ -121,6 +121,14 @@ bindkey '^P' history-beginning-search-backward-end
 bindkey '^N' history-beginning-search-forward-end
 bindkey "^R" history-incremental-search-backward
 
+zstyle ':completion:*' keep-prefix
+zstyle ':completion:*' recent-dirs-insert both
+
+# 補完候補に色を付ける
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# 曖昧検索
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 
 
 # ====================================================
@@ -128,7 +136,6 @@ bindkey "^R" history-incremental-search-backward
 # ====================================================
 autoload -Uz zmv
 alias zmv='noglob zmv -W'
-
 
 
 # ====================================================
@@ -144,10 +151,8 @@ alias cp='cp -p'
 alias df='df -h'
 alias rmrf='rm -rf'
 
-
 # other
-alias v="vim"
-alias g="git"
+alias vim="nvim"
 alias d="docker"
 alias dc="docker-compose"
 
@@ -165,7 +170,6 @@ alias -g G="| grep"
 alias -g X="| xargs"
 
 # tmux
-# alias tmux="TERM=xterm-256color tmux"
 alias tm="tmux"
 alias tmls="tmux ls"
 alias tma="tmux a -t"
@@ -174,9 +178,6 @@ alias tmr="tmux kill-session -t"
 
 # golang
 alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
-
-# vim github repository
-alias gotovim="open https://github.com/vim/vim -a Google\ Chrome"
 
 # <Tab> で候補選択
 zstyle ':completion:*:default' menu select=1
@@ -199,6 +200,9 @@ function mkcd() {
   fi
 }
 
+# gitignore.io
+function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
+
 
 # ====================================================
 # Styles
@@ -209,7 +213,6 @@ autoload -Uz vcs_info
 
 # 色の設定
 autoload -U colors ; colors
-
 
 # PROMPT変数内で変数参照
 setopt prompt_subst
@@ -239,7 +242,6 @@ function memo(){
 }
 
 RPROMPT='${memotxt}'
-
 
 
 # tmux
@@ -297,11 +299,6 @@ function tmux_automatically_attach_session()
   fi
 }
 tmux_automatically_attach_session
-
-
-
-# gitignore.io
-function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 
 # ====================================================
