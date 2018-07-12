@@ -1,25 +1,3 @@
-" 開発中のプラグインなど
-let s:dev_plugin_install = 0
-
-if s:dev_plugin_install
-  let s:devdir = $HOME . '/.vim-dev'
-  if isdirectory(s:devdir)
-    exe 'set runtimepath+=' . s:devdir
-    for plug in split(glob(s:devdir . '/*'), '\n')
-      exe 'set runtimepath+=' . plug
-    endfor
-  endif
-
-endif
-
-
-" ローカルな設定の読み込み
-if filereadable(expand('~/.vimrc.local'))
-  source ~/.vimrc.local
-endif
-
-
-
 " =============================================================
 " Basic
 " =============================================================
@@ -42,6 +20,7 @@ source $VIMRUNTIME/macros/matchit.vim
 
 " <Leader>を`,`に設定
 let mapleader = ","
+
 
 " for tmux
 if has("termguicolors")
@@ -93,6 +72,7 @@ set backspace=indent,eol,start
 set matchpairs& matchpairs+=<:>
 set lazyredraw
 set nrformats=
+set guicursor=n-v-ve-o-r-c-cr-sm:block,i-ci:block-blinkwait300-blinkon200-blinkoff150
 
 " 起動時のメッセージ非表示
 set shortmess& shortmess+=I
@@ -329,41 +309,36 @@ nnoremap sQ :<C-u>bd<CR>
 nnoremap <C-w>O :<C-u>tabo<CR>
 
 " for Vim8
-if !has('nvim') && has('terminal')
-  set termwinkey=<C-r>
+if has('terminal')
+  set termwinkey=<C-[>
 
-  " terminal 表示
+  " open terminal
   nnoremap <silent> <Leader>tt :<C-u>terminal ++curwin ++close<CR>
   nnoremap <silent> <Leader>ts :<C-u>execute 'topleft split \| terminal ++curwin ++close'<CR>
   tnoremap <silent> <Leader>ts <C-r>:execute 'topleft split \| terminal ++curwin ++close'<CR>
   nnoremap <silent> <Leader>tv :<C-u>execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
   tnoremap <silent> <Leader>tv <C-r>:execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
-  nnoremap <silent> <Leader>tk :<C-u>terminal ++rows=15 ++close<CR>
-  tnoremap <silent> <Leader>tk <C-r>:terminal ++rows=15 ++close<CR>
-
-  " 前後タブの移動
-  tnoremap <C-[><C-n> <C-r>:tabnext<CR>
-  tnoremap <C-[><C-p> <C-r>:tabprevious<CR>
-  tnoremap <C-[><C-t> <C-r>:tabnew<CR>
-
-  " 上下左右
-  tnoremap <C-[><C-h> <C-r>h
-  tnoremap <C-[><C-j> <C-r>j
-  tnoremap <C-[><C-k> <C-r>k
-  tnoremap <C-[><C-l> <C-r>l
-  tnoremap <C-[>J <C-r>J
-  tnoremap <C-[>K <C-r>K
-  tnoremap <C-[>H <C-r>H
-  tnoremap <C-[>L <C-r>L
-
-  " タブサイズ
-  tnoremap <C-[>= <C-r>=
-
-  " visual mode
-  tnoremap <C-[><C-v> <C-r>N
 
   " close terminal
-  tnoremap <C-r><C-r> <C-r><C-c>
+  tnoremap <silent> <C-[><C-[> <C-[><C-c>
+
+  " 前後タブの移動
+  tnoremap <C-[><C-n> <C-[>:tabnext<CR>
+  tnoremap <C-[><C-p> <C-[>:tabprevious<CR>
+  tnoremap <C-[><C-t> <C-[>:tabnew<CR>
+
+  " 上下左右
+  tnoremap <C-[><C-h> <C-[>h
+  tnoremap <C-[><C-j> <C-[>j
+  tnoremap <C-[><C-k> <C-[>k
+  tnoremap <C-[><C-l> <C-[>l
+  tnoremap <C-[>J <C-[>J
+  tnoremap <C-[>K <C-[>K
+  tnoremap <C-[>H <C-[>H
+  tnoremap <C-[>L <C-[>L
+
+  " visual mode
+  tnoremap <C-[><C-v> <C-[>N
 endif
 
 
@@ -431,23 +406,9 @@ if dein#load_state(s:plugin_dir)
   " base
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
+  call dein#add('Shougo/neocomplete.vim')
   call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
-
-  " deoplete
-  call dein#add('Shougo/deoplete.nvim')
-  call dein#add('roxma/nvim-yarp')
-  call dein#add('roxma/vim-hug-neovim-rpc')
-
-  " deoplete - lang
-  call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
-  call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
-
-  " Language Server Protocol
-  call dein#add('autozimu/LanguageClient-neovim', {
-        \ 'rev': 'next',
-        \ 'build': 'bash install.sh',
-        \ })
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -485,7 +446,6 @@ if dein#load_state(s:plugin_dir)
   " sign
   call dein#add('airblade/vim-gitgutter')
   call dein#add('cohama/agit.vim')
-  call dein#add('Valloric/MatchTagAlways')
 
   " git
   call dein#add('tpope/vim-fugitive')
@@ -507,8 +467,11 @@ if dein#load_state(s:plugin_dir)
   call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
   call dein#add('mzlogin/vim-markdown-toc', {'on_ft': ['markdown', 'md']})
 
-  " coffee
-  call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
+  " javascript
+  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
+  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
+  call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
 
   " typescript
   call dein#add('leafgarland/typescript-vim')
@@ -516,13 +479,6 @@ if dein#load_state(s:plugin_dir)
 
   " flow
   call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
-
-  " javascript
-  call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
-  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-  call dein#add('posva/vim-vue')
 
   " PHP
   call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
@@ -532,6 +488,14 @@ if dein#load_state(s:plugin_dir)
 
   " Rust
   call dein#add('rust-lang/rust.vim')
+  call dein#add('racer-rust/vim-racer')
+
+  " HTML
+  call dein#add('othree/html5.vim', {'on_ft': 'html'})
+
+  " Stylesheet (CSS / Sass)
+  call dein#add('hail2u/vim-css3-syntax', {'on_ft': 'css'})
+  call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -539,23 +503,11 @@ if dein#load_state(s:plugin_dir)
   " syntax checking
   call dein#add('w0rp/ale')
 
-  " syntax
+  " syntax extention
   call dein#add('Shougo/context_filetype.vim')
-  call dein#add('hail2u/vim-css3-syntax', {'on_ft': 'css'})
-  call dein#add('othree/html5.vim', {'on_ft': 'html'})
-  call dein#add('nikvdp/ejs-syntax', {'on_ft': 'ejs'})
-  call dein#add('digitaltoad/vim-jade', {'on_ft': 'jade'})
-  call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
-
-  " editor
-  call dein#add('junegunn/goyo.vim', {
-    \ 'lazy': 1,
-    \ 'on_cmd': ['Goyo'],
-    \ })
 
   " colorschema
-  call dein#add('rhysd/vim-color-spring-night')
-  call dein#add('tyrannicaltoucan/vim-deep-space')
+  call dein#add('rakr/vim-one')
 
   call dein#end()
   call dein#save_state()
@@ -585,42 +537,124 @@ call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 
-" deoplete
-let g:deoplete#enable_at_startup = 1
-let g:deoplete#enable_smart_case = 1
-let g:deoplete#file#enable_buffer_path = 1
-let g:deoplete#max_menu_width = 60
+" neocomplete
+let g:acp_enableAtStartup = 0
+let g:neocomplete#enable_at_startup = 1
+let g:neocomplete#enable_smart_case = 1
+let g:neocomplete#sources#syntax#min_keyword_length = 3
 
-inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
-inoremap <expr><BS> deoplete#smart_close_popup()."\<C-h>"
+" Define dictionary.
+let g:neocomplete#sources#dictionary#dictionaries = {
+    \ 'default' : '',
+    \ 'vimshell' : $HOME.'/.vimshell_hist',
+    \ 'scheme' : $HOME.'/.gosh_completions'
+    \ }
 
+" Define keyword.
+if !exists('g:neocomplete#keyword_patterns')
+  let g:neocomplete#keyword_patterns = {}
+endif
+
+let g:neocomplete#keyword_patterns['default'] = '\h\w*'
+
+" Plugin key-mappings.
+inoremap <expr><C-g>     neocomplete#undo_completion()
+inoremap <expr><C-l>     neocomplete#complete_common_string()
+
+" Recommended key-mappings.
+" <CR>: close popup and save indent.
+inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+function! s:my_cr_function()
+  return (pumvisible() ? "\<C-y>" : "" ) . "\<CR>"
+endfunction
+
+" <TAB>: completion.
+inoremap <expr><TAB>  pumvisible() ? "\<C-n>" : "\<TAB>"
+
+" <C-h>, <BS>: close popup and delete backword char.
+inoremap <expr><C-h> neocomplete#smart_close_popup()."\<C-h>"
+inoremap <expr><BS> neocomplete#smart_close_popup()."\<C-h>"
+
+" Enable omni completion.
+autocmd FileType css setlocal omnifunc=csscomplete#CompleteCSS
+autocmd FileType html,markdown setlocal omnifunc=htmlcomplete#CompleteTags
+autocmd FileType javascript setlocal omnifunc=javascriptcomplete#CompleteJS
+autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
+autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
+
+" Enable heavy omni completion.
+if !exists('g:neocomplete#sources#omni#input_patterns')
+  let g:neocomplete#sources#omni#input_patterns = {}
+endif
+
+if !exists('g:neocomplete#force_omni_input_patterns')
+  let g:neocomplete#force_omni_input_patterns = {}
+endif
+
+let g:neocomplete#force_omni_input_patterns.typescript = '[^. *\t]\.\w*\|\h\w*::'
+
+
+" lightline my theme
+let s:p = {'normal': {}, 'inactive': {}, 'insert': {}, 'replace': {}, 'visual': {}, 'tabline': {}}
+
+let s:nordext0 = ["#2E3440", "NONE"]
+let s:nordext1 = ["#3B4252", 0]
+let s:nordext2 = ["#434C5E", "NONE"]
+let s:nordext3 = ["#2C323D", 8]
+let s:nordext4 = ["#D8DEE9", "NONE"]
+let s:nordext5 = ["#ECEFF4", 7]
+let s:nordext6 = ["#ECEFF4", 15]
+let s:nordext7 = ["#8FBCBB", 14]
+let s:nordext8 = ["#88C0D0", 6]
+let s:nordext9 = ["#81A1C1", 4]
+let s:nordext10 = ["#5E81AC", 12]
+let s:nordext11 = ["#BF616A", 1]
+let s:nordext12 = ["#D08770", 11]
+let s:nordext13 = ["#EBCB8B", 3]
+let s:nordext14 = ["#A3BE8C", 2]
+let s:nordext15 = ["#B48EAD", 5]
+
+let s:p.normal.left = [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.normal.middle = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.normal.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.normal.warning = [ [ s:nordext1, s:nordext13 ] ]
+let s:p.normal.error = [ [ s:nordext1, s:nordext11 ] ]
+
+let s:p.inactive.left =  [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.inactive.middle = [ [ s:nordext5, s:nordext1 ] ]
+let s:p.inactive.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
+
+let s:p.insert.left = [ [ s:nordext1, s:nordext6 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.replace.left = [ [ s:nordext1, s:nordext13 ], [ s:nordext5, s:nordext1 ] ]
+let s:p.visual.left = [ [ s:nordext1, s:nordext7 ], [ s:nordext5, s:nordext1 ] ]
+
+let s:p.tabline.left = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.middle = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.right = [ [ s:nordext5, s:nordext3 ] ]
+let s:p.tabline.tabsel = [ [ s:nordext1, s:nordext8 ] ]
+
+let g:lightline#colorscheme#nordext#palette = lightline#colorscheme#flatten(s:p)
 
 " lightline configure
 let g:lightline = {
-  \ 'colorscheme': 'deepspace',
+  \ 'colorscheme': 'nordext',
   \ 'active': {
   \   'left': [ [ 'mode', 'paste' ],
-  \             [ 'fugitive', 'readonly', 'filename', 'modified' ] ]
+  \             [ 'fugitive', 'readonly', 'filename' ] ],
   \ },
   \ 'component_function': {
+  \   'filename': 'LightLineFilename',
   \   'fugitive': 'LightLineFugitive',
   \   'readonly': 'LightLineReadonly',
-  \   'modified': 'LightLineModified'
   \ },
   \ 'separator': { 'left': "\u2b80", 'right': "\u2b82" },
   \ 'subseparator': { 'left': "\u2b81", 'right': "\u2b83" }
   \ }
 
-function! LightLineModified()
-  if &filetype == "help"
-    return ""
-  elseif &modified
-    return "+"
-  elseif &modifiable
-    return ""
-  else
-    return ""
-  endif
+function! LightLineFilename()
+  let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
+  let modified = &modified ? ' ∙' : ''
+  return filename . modified
 endfunction
 
 function! LightLineReadonly()
@@ -875,18 +909,15 @@ let g:LanguageClient_selectionUI = 'location-list'
 
 " rust.vim
 let g:rustfmt_autosave = 1
+let $RUST_SRC_PATH = $HOME . '/.downloads/rust-lang/rust/src'
+let g:racer_cmd = 'racer'
+let g:racer_experimental_completer = 1
 
-" rust - rls
-let g:LanguageClient_serverCommands = {
-    \ 'rust': ['rustup', 'run', 'nightly', 'rls'],
-    \ }
 
 augroup RustSettings
   autocmd!
-  autocmd FileType rust nnoremap <silent> <buffer> <C-]> :call LanguageClient#textDocument_definition()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <C-^> :call LanguageClient#textDocument_references()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <Leader>i :call LanguageClient#textDocument_hover()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <F2> :call LanguageClient#textDocument_rename()<CR>
+  autocmd FileType rust nmap <C-]> <Plug>(rust-def)
+  autocmd FileType rust nmap <leader>i <Plug>(rust-doc)
 augroup END
 
 
@@ -946,15 +977,4 @@ nnoremap \b :ALEToggleBuffer<CR>
 " Colorschemeの設定
 syntax on
 set background=dark
-
-" プラグインが有効な場合とそれ以外で分ける
-try
-  colorscheme deep-space
-  " colorscheme spring-night
-
-catch /^Vim\%((\a\+)\)\=:E185/
-  " 行番号
-  autocmd ColorScheme * highlight LineNr ctermfg=237
-
-  colorscheme desert
-endtry
+colorscheme one

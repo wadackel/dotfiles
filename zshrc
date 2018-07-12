@@ -152,7 +152,6 @@ alias df='df -h'
 alias rmrf='rm -rf'
 
 # other
-alias vim="nvim"
 alias d="docker"
 alias dc="docker-compose"
 

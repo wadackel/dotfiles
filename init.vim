@@ -427,7 +427,6 @@ if dein#load_state(s:plugin_dir)
 
   " deoplete - lang
   call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
-  call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
 
   " Language Server Protocol
   call dein#add('autozimu/LanguageClient-neovim', {
