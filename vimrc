@@ -315,9 +315,9 @@ if has('terminal')
   " open terminal
   nnoremap <silent> <Leader>tt :<C-u>terminal ++curwin ++close<CR>
   nnoremap <silent> <Leader>ts :<C-u>execute 'topleft split \| terminal ++curwin ++close'<CR>
-  tnoremap <silent> <Leader>ts <C-r>:execute 'topleft split \| terminal ++curwin ++close'<CR>
+  tnoremap <silent> <Leader>ts <C-[>:execute 'topleft split \| terminal ++curwin ++close'<CR>
   nnoremap <silent> <Leader>tv :<C-u>execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
-  tnoremap <silent> <Leader>tv <C-r>:execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
+  tnoremap <silent> <Leader>tv <C-[>:execute 'topleft vsplit \| terminal ++curwin ++close'<CR>
 
   " close terminal
   tnoremap <silent> <C-[><C-[> <C-[><C-c>
@@ -941,6 +941,29 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 
 " ALE
+
+" for styled-components with stylelint
+call ale#Set('typescript_stylelint_executable', 'stylelint')
+call ale#Set('typescript_stylelint_use_global', get(g:, 'ale_use_global_executables', 0))
+
+function! AleTsStylelintGetExecutable(buffer) abort
+  return ale#node#FindExecutable(a:buffer, 'typescript_stylelint', [
+        \   'node_modules/.bin/stylelint',
+        \])
+endfunction
+
+function! AleTsStylelintGetCommand(buffer) abort
+  return AleTsStylelintGetExecutable(a:buffer) . ' --stdin-filename %s'
+endfunction
+
+call ale#linter#Define('typescript', {
+\   'name': 'stylelint',
+\   'executable_callback': 'AleTsStylelintGetExecutable',
+\   'command_callback': 'AleTsStylelintGetCommand',
+\   'callback': 'ale#handlers#css#HandleStyleLintFormat',
+\})
+
+" global options
 let g:ale_open_list = 1
 let g:ale_set_loclist = 1
 let g:ale_set_quickfix = 0
@@ -959,7 +982,7 @@ let g:ale_lint_on_enter = 0
 let g:ale_linters = {
 \   'html': [],
 \   'go': ['gometalinter', 'gofmt'],
-\   'typescript': ['tslint', 'tsserver', 'typecheck'],
+\   'typescript': ['tslint', 'tsserver', 'typecheck', 'stylelint'],
 \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
