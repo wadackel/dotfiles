@@ -997,7 +997,10 @@ nnoremap \b :ALEToggleBuffer<CR>
 " Colors
 " =============================================================
 
-" Colorschemeの設定
+" ColorSchemeの上書き
+autocmd ColorScheme * highlight Normal guibg=#282a36
+
+" ColorSchemeの設定
 syntax on
 set background=dark
 colorscheme one
