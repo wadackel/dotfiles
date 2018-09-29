@@ -217,10 +217,10 @@ autoload -U colors ; colors
 setopt prompt_subst
 
 zstyle ':vcs_info:git:*' check-for-changes true
-zstyle ':vcs_info:git:*' stagedstr "%F{163} !" #commit されていないファイルがある
-zstyle ':vcs_info:git:*' unstagedstr "%F{14} *" #add されていないファイルがある
-zstyle ':vcs_info:*' formats '%F{241} %b%c%u%f' #通常
-zstyle ':vcs_info:*' actionformats ' %F{241}%b %F{163}!%a' #rebase 途中,merge コンフリクト等 formats 外の表示
+zstyle ':vcs_info:git:*' stagedstr "%F{43} !" # commit されていないファイルがある
+zstyle ':vcs_info:git:*' unstagedstr "%F{189} *" # add されていないファイルがある
+zstyle ':vcs_info:*' formats '%F{60} %b%c%u%f' # 通常
+zstyle ':vcs_info:*' actionformats ' %F{60}%b %F{43}!%a' # rebase 途中, merge コンフリクト等 formats 外の表示
 
 # Pre
 precmd () {
@@ -228,8 +228,8 @@ precmd () {
   vcs_info
 }
 
-PROMPT='%{%F{14}%}%~%{${DEFAULT}%}${vcs_info_msg_0_}
-%F{169}❯%{$reset_color%} %{${DEFAULT}%}'
+PROMPT='%{%F{189}%}%~%{${DEFAULT}%}${vcs_info_msg_0_}
+%F{206}❯%{$reset_color%} %{${DEFAULT}%}'
 
 # 右プロンプト (memo)
 function memo(){
