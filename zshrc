@@ -321,13 +321,13 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
       as:command, \
       rename-to:jq
 
-  # Install
-  if ! zplug check --verbose; then
-    printf 'Install? [y/N]: '
-    if read -q; then
-      echo; zplug install
-    fi
-  fi
+  # # Install
+  # if ! zplug check --verbose; then
+  #   printf 'Install? [y/N]: '
+  #   if read -q; then
+  #     echo; zplug install
+  #   fi
+  # fi
 
   zplug load
 
@@ -341,3 +341,8 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# profile
+# if (which zprof > /dev/null 2>&1) ;then
+#   zprof
+# fi
