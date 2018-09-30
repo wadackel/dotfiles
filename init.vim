@@ -23,12 +23,15 @@ let mapleader = ","
 
 
 " for tmux
-set termguicolors
-set t_8b=^[[48;2;%lu;%lu;%lum
-set t_8f=^[[38;2;%lu;%lu;%lum<Paste>
+if has("termguicolors")
+  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  set termguicolors
+endif
+
 
 " 各種基本設定
-language en_US
+language C
 
 set encoding=utf-8
 set fileencoding=utf-8
@@ -53,13 +56,12 @@ set autoindent
 set smartindent
 set expandtab
 set wrap
-" set clipboard=unnamed
-set clipboard=unnamed,unnamedplus
+set clipboard=unnamed
 set laststatus=2
-if ! isdirectory($HOME.'/.config/nvim/swap')
-  call mkdir($HOME.'/.config/nvim/swap', 'p')
+if ! isdirectory($HOME.'/.vim/swap')
+  call mkdir($HOME.'/.vim/swap', 'p')
 endif
-set directory=~/.config/nvim/swap
+set directory=~/.vim/swap
 set ambiwidth=double
 set wildmenu
 set wildmode=longest,full
@@ -257,6 +259,14 @@ augroup restoreCursorPosition
 augroup END
 
 
+" incsearch
+augroup vimrc-incsearch-highlight
+  autocmd!
+  autocmd CmdlineEnter [/\?] :set hlsearch
+  autocmd CmdlineLeave [/\?] :set nohlsearch
+augroup END
+
+
 " タブの操作/移動
 " http://qiita.com/wadako111/items/755e753677dd72d8036d
 
@@ -308,52 +318,22 @@ nnoremap sQ :<C-u>bd<CR>
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
 
-" terminal
-function! TermHelper(...) abort
-  let h_or_v = get(a:, 1, 'h')
 
-  if h_or_v == 'h'
-    topleft split | Eterminal
-  else
-    topleft vsplit | Eterminal
-  endif
-endfun
-
-command! Hterminal :call TermHelper('h')
-command! Vterminal :call TermHelper('v')
-command! Eterminal :terminal
+" Terminal
+autocmd! TermOpen * startinsert
 
 " open terminal
-nnoremap <silent> <Leader>tt :Eterminal<CR>
-nnoremap <silent> <Leader>ts :Hterminal<CR>
-nnoremap <silent> <Leader>tv :Vterminal<CR>
+nnoremap <silent> <Leader>tt :<C-u>terminal<CR>
+nnoremap <silent> <Leader>ts :<C-u>execute 'split \| terminal'<CR>
+nnoremap <silent> <Leader>tv :<C-u>execute 'vsplit \| terminal'<CR>
+tnoremap <silent> <Leader>ts <C-\><C-n>:execute 'split \| terminal'<CR>
+tnoremap <silent> <Leader>tv <C-\><C-n>:execute 'vsplit \| terminal'<CR>
 
-tnoremap <silent> <Leader>tt <C-\><C-n>:Eterminal<CR>
-tnoremap <silent> <Leader>ts <C-\><C-n>:Hterminal<CR>
-tnoremap <silent> <Leader>tv <C-\><C-n>:Vterminal<CR>
+" to normal mode
+tnoremap <silent> <C-[> <C-\><C-n>
 
 " close terminal
-tnoremap <C-[><C-v> <C-\><C-n>
-tnoremap <C-[><C-[> <C-\><C-n>:q<CR>
-
-" 前後タブの移動
-tnoremap <C-[><C-n> <C-\><C-n>:tabnext<CR>
-tnoremap <C-[><C-p> <C-\><C-n>:tabprevious<CR>
-tnoremap <C-[><C-t> <C-\><C-n>:tabnew<CR>
-
-" 上下左右
-tnoremap <C-[><C-h> <C-\><C-n><C-w>h
-tnoremap <C-[><C-j> <C-\><C-n><C-w>j
-tnoremap <C-[><C-k> <C-\><C-n><C-w>k
-tnoremap <C-[><C-l> <C-\><C-n><C-w>l
-tnoremap <C-[>J <C-\><C-n><C-w>J
-tnoremap <C-[>K <C-\><C-n><C-w>K
-tnoremap <C-[>H <C-\><C-n><C-w>H
-tnoremap <C-[>L <C-\><C-n><C-w>L
-
-" タブサイズ
-tnoremap <C-[>= <C-\><C-n><C-w>=
-
+tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 
 
 " =============================================================
@@ -377,8 +357,6 @@ augroup fileTypeIndent
 augroup END
 
 
-
-
 " =============================================================
 " Plugins
 " =============================================================
@@ -399,7 +377,7 @@ augroup PluginInstall
 augroup END
 command! -nargs=0 PluginUpdate call dein#update()
 
-let s:plugin_dir = expand('~/.config/nvim/bundle/')
+let s:plugin_dir = expand('~/.nvim/bundle/')
 let s:dein_dir = s:plugin_dir . 'repos/github.com/Shougo/dein.vim'
 execute 'set runtimepath+=' . s:dein_dir
 
@@ -419,20 +397,9 @@ if dein#load_state(s:plugin_dir)
   " base
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
+  call dein#add('Shougo/deoplete.nvim')
   call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
-
-  " deoplete
-  call dein#add('Shougo/deoplete.nvim')
-
-  " deoplete - lang
-  call dein#add('zchee/deoplete-go', {'on_ft': 'go'})
-
-  " Language Server Protocol
-  call dein#add('autozimu/LanguageClient-neovim', {
-        \ 'rev': 'next',
-        \ 'build': 'bash install.sh',
-        \ })
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -450,8 +417,6 @@ if dein#load_state(s:plugin_dir)
   call dein#add('jceb/vim-editqf')
   call dein#add('rhysd/clever-f.vim')
   call dein#add('easymotion/vim-easymotion')
-  call dein#add('haya14busa/incsearch.vim')
-  call dein#add('haya14busa/incsearch-fuzzy.vim')
 
   " debug
   call dein#add('thinca/vim-quickrun')
@@ -481,8 +446,30 @@ if dein#load_state(s:plugin_dir)
     \ 'on_cmd': ['MemoNew', 'MemoList'],
     \ })
 
-  " toml
-  call dein#add('cespare/vim-toml',  {'on_ft' : 'toml', 'lazy': 1})
+  " javascript
+  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
+  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
+  call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
+
+  " typescript
+  call dein#add('leafgarland/typescript-vim')
+  call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
+  call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
+
+  " golang
+  call dein#add('fatih/vim-go', {'on_ft': 'go'})
+
+  " Rust
+  call dein#add('rust-lang/rust.vim')
+  call dein#add('racer-rust/vim-racer')
+
+  " HTML
+  call dein#add('othree/html5.vim', {'on_ft': 'html'})
+
+  " Stylesheet (CSS / Sass)
+  call dein#add('hail2u/vim-css3-syntax', {'on_ft': 'css'})
+  call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
 
   " markdown
   call dein#add('plasticboy/vim-markdown', {'on_ft': ['markdown', 'md']})
@@ -491,30 +478,8 @@ if dein#load_state(s:plugin_dir)
   call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
   call dein#add('mzlogin/vim-markdown-toc', {'on_ft': ['markdown', 'md']})
 
-  " coffee
-  call dein#add('kchmck/vim-coffee-script', {'on_ft' : 'coffee'})
-
-  " typescript
-  call dein#add('leafgarland/typescript-vim')
-  call dein#add('mhartington/nvim-typescript', {'build': './install.sh'})
-
-  " flow
-  call dein#add('flowtype/vim-flow', {'on_ft': 'javascript'})
-
-  " javascript
-  call dein#add('jason0x43/vim-js-indent', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
-  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
-  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-
-  " PHP
-  call dein#add('jwalton512/vim-blade', {'on_ft': 'php'})
-
-  " golang
-  call dein#add('fatih/vim-go', {'on_ft': 'go'})
-
-  " Rust
-  call dein#add('rust-lang/rust.vim')
+  " toml
+  call dein#add('cespare/vim-toml',  {'on_ft' : 'toml', 'lazy': 1})
 
   " statusline
   call dein#add('itchyny/lightline.vim')
@@ -522,23 +487,12 @@ if dein#load_state(s:plugin_dir)
   " syntax checking
   call dein#add('w0rp/ale')
 
-  " syntax
+  " syntax extention
   call dein#add('Shougo/context_filetype.vim')
-  call dein#add('hail2u/vim-css3-syntax', {'on_ft': 'css'})
-  call dein#add('othree/html5.vim', {'on_ft': 'html'})
-  call dein#add('nikvdp/ejs-syntax', {'on_ft': 'ejs'})
-  call dein#add('digitaltoad/vim-jade', {'on_ft': 'jade'})
-  call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
-
-  " editor
-  call dein#add('junegunn/goyo.vim', {
-    \ 'lazy': 1,
-    \ 'on_cmd': ['Goyo'],
-    \ })
 
   " colorschema
-  call dein#add('rhysd/vim-color-spring-night')
   call dein#add('rakr/vim-one')
+  call dein#add('rhysd/vim-color-spring-night')
 
   call dein#end()
   call dein#save_state()
@@ -552,13 +506,27 @@ filetype plugin indent on
 syntax enable
 
 
-" 画面分割用のキーマップ
-" http://qiita.com/tekkoc/items/98adcadfa4bdc8b5a6ca
-nnoremap sT :<C-u>Unite tab<CR>
-nnoremap sb :<C-u>Unite buffer_tab -buffer-name=file<CR>
-nnoremap sB :<C-u>Unite buffer -buffer-name=file<CR>
-nnoremap sF :<C-u>Unite -buffer-name=file file<CR>
+" deoplete
+let g:deoplete#enable_at_startup = 1
 
+call deoplete#custom#option({
+      \ 'complete_method': 'omnifunc',
+      \ 'smart_case': v:true,
+      \ 'min_pattern_length': 1,
+      \ })
+
+" <C-h>, <BS>: close popup and delete backword char.
+inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
+inoremap <expr><BS>  deoplete#smart_close_popup()."\<C-h>"
+
+" <CR>: close popup and save indent.
+inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
+function! s:my_cr_function() abort
+  return deoplete#close_popup() . "\<CR>"
+endfunction
+
+
+" 画面分割用のキーマップ
 call submode#enter_with('bufmove', 'n', '', 's>', '<C-w>>')
 call submode#enter_with('bufmove', 'n', '', 's<', '<C-w><')
 call submode#enter_with('bufmove', 'n', '', 's+', '<C-w>+')
@@ -566,23 +534,6 @@ call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
 call submode#map('bufmove', 'n', '', '>', '<C-w>>')
 call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
-
-
-" deoplete
-let g:deoplete#enable_at_startup = 1
-let g:deoplete#enable_smart_case = 1
-let g:deoplete#file#enable_buffer_path = 1
-let g:deoplete#max_menu_width = 60
-
-" close popup and delete backword char
-inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
-inoremap <expr><BS> deoplete#smart_close_popup()."\<C-h>"
-
-" close popup and save indent
-inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-function! s:my_cr_function() abort
-  return deoplete#close_popup() . "\<CR>"
-endfunction
 
 
 " lightline my theme
@@ -732,18 +683,6 @@ map <Leader>j <Plug>(easymotion-j)
 map <Leader>k <Plug>(easymotion-k)
 
 
-" incsearch
-map /  <Plug>(incsearch-forward)
-map ?  <Plug>(incsearch-backward)
-map g/ <Plug>(incsearch-stay)
-
-
-" incsearch-fuzzy
-map z/ <Plug>(incsearch-fuzzy-/)
-map z? <Plug>(incsearch-fuzzy-?)
-map zg/ <Plug>(incsearch-fuzzy-stay)
-
-
 " fugitive
 nnoremap <silent> <Leader>gs :Gstatus<CR>
 nnoremap <silent> <Leader>gd :Gdiff<CR>
@@ -838,13 +777,22 @@ let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 autocmd FileType typescript let b:caw_oneline_comment = '//'
 autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
-" nvim-typescript
+
+" tsuquyomi
+" ALEでエラー表示するので QuickFix 無効化
+let g:tsuquyomi_disable_quickfix = 1
+
+" インポートにシングルクォートを使用
+let g:tsuquyomi_single_quote_import = 1
+
+" 補完表示を詳細に
+let g:tsuquyomi_completion_detail = 1
+
+" 型情報の表示
 augroup TSSettings
   autocmd!
-  autocmd FileType typescript nnoremap <buffer> <Leader>i :TSType<CR>
-  autocmd FileType typescript nnoremap <buffer> <C-]> :TSDef<CR>
-  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
-  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename
+  autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
+  autocmd FileType typescript nnoremap <buffer> <F2> :TsuRenameSymbolCS<CR>
 augroup END
 
 
@@ -866,24 +814,16 @@ augroup GolangSettings
 augroup END
 
 
-" LanguageClient
-let g:LanguageClient_selectionUI = 'location-list'
-
-
 " rust.vim
 let g:rustfmt_autosave = 1
-
-" rust - rls
-let g:LanguageClient_serverCommands = {
-    \ 'rust': ['rustup', 'run', 'nightly', 'rls'],
-    \ }
+let $RUST_SRC_PATH = $HOME . '/.downloads/rust-lang/rust/src'
+let g:racer_cmd = 'racer'
+let g:racer_experimental_completer = 1
 
 augroup RustSettings
   autocmd!
-  autocmd FileType rust nnoremap <silent> <buffer> <C-]> :call LanguageClient#textDocument_definition()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <C-^> :call LanguageClient#textDocument_references()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <Leader>i :call LanguageClient#textDocument_hover()<CR>
-  autocmd FileType rust nnoremap <silent> <buffer> <F2> :call LanguageClient#textDocument_rename()<CR>
+  autocmd FileType rust nmap <C-]> <Plug>(rust-def)
+  autocmd FileType rust nmap <leader>i <Plug>(rust-doc)
 augroup END
 
 
@@ -907,6 +847,29 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 
 " ALE
+
+" for styled-components with stylelint
+call ale#Set('typescript_stylelint_executable', 'stylelint')
+call ale#Set('typescript_stylelint_use_global', get(g:, 'ale_use_global_executables', 0))
+
+function! AleTsStylelintGetExecutable(buffer) abort
+  return ale#node#FindExecutable(a:buffer, 'typescript_stylelint', [
+        \   'node_modules/.bin/stylelint',
+        \])
+endfunction
+
+function! AleTsStylelintGetCommand(buffer) abort
+  return AleTsStylelintGetExecutable(a:buffer) . ' --stdin-filename %s'
+endfunction
+
+call ale#linter#Define('typescript', {
+\   'name': 'stylelint',
+\   'executable_callback': 'AleTsStylelintGetExecutable',
+\   'command_callback': 'AleTsStylelintGetCommand',
+\   'callback': 'ale#handlers#css#HandleStyleLintFormat',
+\})
+
+" global options
 let g:ale_open_list = 1
 let g:ale_set_loclist = 1
 let g:ale_set_quickfix = 0
@@ -925,7 +888,7 @@ let g:ale_lint_on_enter = 0
 let g:ale_linters = {
 \   'html': [],
 \   'go': ['gometalinter', 'gofmt'],
-\   'typescript': ['tslint', 'tsserver', 'typecheck'],
+\   'typescript': ['tslint', 'tsserver', 'typecheck', 'stylelint'],
 \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
@@ -940,8 +903,10 @@ nnoremap \b :ALEToggleBuffer<CR>
 " Colors
 " =============================================================
 
-" Colorschemeの設定
+" ColorSchemeの上書き
+autocmd ColorScheme * highlight Normal guibg=#282a36
+
+" ColorSchemeの設定
 syntax on
 set background=dark
 colorscheme one
-" colorscheme spring-night
