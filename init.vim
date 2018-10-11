@@ -453,9 +453,9 @@ if dein#load_state(s:plugin_dir)
   call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
 
   " typescript
+  " call dein#add('HerringtonDarkholme/yats.vim')
   call dein#add('leafgarland/typescript-vim')
-  call dein#add('Quramy/tsuquyomi', {'on_ft': 'typescript'})
-  call dein#add('rudism/deoplete-tsuquyomi', {'on_ft': 'typescript'})
+  call dein#add('mhartington/nvim-typescript', {'build': './install.sh'})
 
   " golang
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
@@ -513,6 +513,8 @@ call deoplete#custom#option({
       \ 'complete_method': 'omnifunc',
       \ 'smart_case': v:true,
       \ 'min_pattern_length': 1,
+      \ 'auto_complete_delay': 5,
+      \ 'auto_refresh_delay': 30,
       \ })
 
 " <C-h>, <BS>: close popup and delete backword char.
@@ -774,25 +776,21 @@ let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 
 
 " TypeScript
-autocmd FileType typescript let b:caw_oneline_comment = '//'
-autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
+let g:nvim_typescript#diagnostics_enable = 1
 
-
-" tsuquyomi
-" ALEでエラー表示するので QuickFix 無効化
-let g:tsuquyomi_disable_quickfix = 1
-
-" インポートにシングルクォートを使用
-let g:tsuquyomi_single_quote_import = 1
-
-" 補完表示を詳細に
-let g:tsuquyomi_completion_detail = 1
-
-" 型情報の表示
 augroup TSSettings
   autocmd!
-  autocmd FileType typescript nnoremap <buffer> <Leader>i :<C-u>echo tsuquyomi#hint()<CR>
-  autocmd FileType typescript nnoremap <buffer> <F2> :TsuRenameSymbolCS<CR>
+
+  autocmd FileType typescript let b:caw_oneline_comment = '//'
+  autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
+
+  autocmd FileType typescript nnoremap <buffer> <C-]> :TSDef<CR>
+  autocmd FileType typescript nnoremap <buffer> <C-w><C-]> :TSDefPreview<CR>
+  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
+  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
+  autocmd FileType typescript nnoremap <buffer> <Leader>i :TSType<CR>
+  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename
+  autocmd FileType typescript nnoremap <buffer> <F3> :TSImport<CR>
 augroup END
 
 
