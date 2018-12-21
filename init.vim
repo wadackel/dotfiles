@@ -31,8 +31,6 @@ endif
 
 
 " 各種基本設定
-language C
-
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
@@ -62,7 +60,8 @@ if ! isdirectory($HOME.'/.vim/swap')
   call mkdir($HOME.'/.vim/swap', 'p')
 endif
 set directory=~/.vim/swap
-set ambiwidth=double
+" `nvim-typescript` で表示崩れが出るので一時的に外す
+" set ambiwidth=double
 set wildmenu
 set wildmode=longest,full
 set noshowmode
@@ -397,7 +396,7 @@ if dein#load_state(s:plugin_dir)
   " base
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
-  call dein#add('Shougo/deoplete.nvim')
+  call dein#add('Shougo/deoplete.nvim', {'rev': '3e3b762'}) " v4.0
   call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
 
@@ -481,6 +480,9 @@ if dein#load_state(s:plugin_dir)
   " toml
   call dein#add('cespare/vim-toml',  {'on_ft' : 'toml', 'lazy': 1})
 
+  " varnish
+  call dein#add('fgsch/vim-varnish')
+
   " statusline
   call dein#add('itchyny/lightline.vim')
 
@@ -510,12 +512,25 @@ syntax enable
 let g:deoplete#enable_at_startup = 1
 
 call deoplete#custom#option({
-      \ 'complete_method': 'omnifunc',
-      \ 'smart_case': v:true,
-      \ 'min_pattern_length': 1,
-      \ 'auto_complete_delay': 5,
-      \ 'auto_refresh_delay': 30,
-      \ })
+     \ 'smart_case': v:true,
+     \ 'min_pattern_length': 1,
+     \ 'auto_complete_delay': 5,
+     \ 'auto_refresh_delay': 30,
+     \ 'num_processes': 10,
+     \ 'on_insert_enter': v:true,
+     \ 'on_text_changed_i': v:true,
+     \ 'refresh_always': v:false,
+     \ })
+
+call deoplete#custom#source('buffer', 'rank', 0)
+call deoplete#custom#var('file', 'enable_buffer_path', v:true)
+
+" Debug:
+" call deoplete#custom#option('profile', v:true)
+" call deoplete#enable_logging('DEBUG', $DEOPLETE_LOG_FILE)
+" call deoplete#custom#source('asm', 'is_debug_enabled', 1)
+" call deoplete#enable()
+
 
 " <C-h>, <BS>: close popup and delete backword char.
 inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
@@ -786,10 +801,10 @@ augroup TSSettings
 
   autocmd FileType typescript nnoremap <buffer> <C-]> :TSDef<CR>
   autocmd FileType typescript nnoremap <buffer> <C-w><C-]> :TSDefPreview<CR>
-  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
+  autocmd FileType typescript nnoremap <buffer> K :TSTypeDef<CR>
   autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
   autocmd FileType typescript nnoremap <buffer> <Leader>i :TSType<CR>
-  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename
+  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename<CR>
   autocmd FileType typescript nnoremap <buffer> <F3> :TSImport<CR>
 augroup END
 
@@ -883,6 +898,8 @@ let g:ale_lint_on_text_changed = 'never'
 let g:ale_lint_on_filetype_changed = 0
 let g:ale_lint_on_enter = 0
 
+let g:ale_fix_on_save = 1
+
 let g:ale_linters = {
 \   'html': [],
 \   'go': ['gometalinter', 'gofmt'],
@@ -890,10 +907,19 @@ let g:ale_linters = {
 \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
-
+let g:ale_typescript_tslint_use_global = 0
+let g:ale_typescript_tslint_config_path = ''
 let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
+let g:ale_fixers = {
+      \   '*': ['remove_trailing_lines', 'trim_whitespace'],
+      \   'javascript': ['prettier', 'eslint'],
+      \   'typescript': ['prettier', 'tslint'],
+      \}
+
 nnoremap \b :ALEToggleBuffer<CR>
+nnoremap \l :ALELint<CR>
+nnoremap \f :ALEFix<CR>
 
 
 
