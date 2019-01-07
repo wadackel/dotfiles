@@ -23,7 +23,7 @@ module.exports = {
     foregroundColor: '#fff',
 
     // terminal background color
-    backgroundColor: '#1C1C1C',
+    backgroundColor: '#262626',
 
     // border color (window, tabs)
     borderColor: '#333',
