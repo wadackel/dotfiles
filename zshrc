@@ -313,9 +313,12 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
 
   # others
-  zplug "zsh-users/zsh-autosuggestions"
-  zplug "b4b4r07/enhancd", use:init.sh
   zplug "zsh-users/zsh-completions"
+  zplug "b4b4r07/enhancd", use:init.sh
+
+  zplug "zsh-users/zsh-autosuggestions", \
+    hook-load:"ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=103'"
+
   zplug "stedolan/jq", \
       from:gh-r, \
       as:command, \
