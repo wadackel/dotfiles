@@ -396,7 +396,7 @@ if dein#load_state(s:plugin_dir)
   " base
   call dein#add('vim-jp/vimdoc-ja')
   call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
-  call dein#add('Shougo/deoplete.nvim', {'rev': '3e3b762'}) " v4.0
+  call dein#add('Shougo/deoplete.nvim')
   call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
 
@@ -449,7 +449,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
   call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-  call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
+  " call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
 
   " typescript
   " call dein#add('HerringtonDarkholme/yats.vim')
@@ -785,7 +785,7 @@ augroup EmmitVim
 
 " Markdown
 let g:previm_open_cmd = 'open -a Google\ Chrome'
-let g:vim_markdown_folding_disabled=1
+let g:vim_markdown_folding_disabled = 1
 let g:previm_disable_default_css = 1
 let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 
@@ -893,17 +893,17 @@ let g:ale_keep_list_window_open = 0
 let g:ale_sign_warning = '▲'
 let g:ale_sign_error = '✗'
 
-let g:ale_lint_on_save = 1
-let g:ale_lint_on_text_changed = 'never'
-let g:ale_lint_on_filetype_changed = 0
-let g:ale_lint_on_enter = 0
+let g:ale_lint_on_save = 0
+let g:ale_lint_on_text_changed = 'normal'
+let g:ale_lint_on_filetype_changed = 1
+let g:ale_lint_on_enter = 1
 
 let g:ale_fix_on_save = 1
 
 let g:ale_linters = {
 \   'html': [],
 \   'go': ['gometalinter', 'gofmt'],
-\   'typescript': ['tslint', 'tsserver', 'typecheck', 'stylelint'],
+\   'typescript': ['tslint', 'tsserver', 'typecheck', 'eslint', 'stylelint'],
 \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
@@ -912,14 +912,15 @@ let g:ale_typescript_tslint_config_path = ''
 let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
 let g:ale_fixers = {
-      \   '*': ['remove_trailing_lines', 'trim_whitespace'],
-      \   'javascript': ['prettier', 'eslint'],
-      \   'typescript': ['prettier', 'tslint'],
+      \  '*': ['remove_trailing_lines', 'trim_whitespace'],
+      \  'markdown': ['prettier'],
+      \  'javascript': ['prettier', 'eslint'],
+      \  'typescript': ['prettier', 'tslint', 'eslint'],
       \}
 
-nnoremap \b :ALEToggleBuffer<CR>
-nnoremap \l :ALELint<CR>
-nnoremap \f :ALEFix<CR>
+nnoremap \ll :ALELint<CR>
+nnoremap \lf :ALEFix<CR>
+nnoremap \lt :ALEToggle<CR>
 
 
 
