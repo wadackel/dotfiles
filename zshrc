@@ -242,6 +242,21 @@ function memo(){
 
 RPROMPT='${memotxt}'
 
+# git checkout <branch_name>
+function git-branch-fzf() {
+  local selected_branch=$(git for-each-ref --format='%(refname)' --sort=-committerdate refs/heads | perl -pne 's{^refs/heads/}{}' | fzf --query "$LBUFFER")
+
+  if [ -n "$selected_branch" ]; then
+    BUFFER="git checkout ${selected_branch}"
+    zle accept-line
+  fi
+
+  zle reset-prompt
+}
+
+zle -N git-branch-fzf
+bindkey "^b" git-branch-fzf
+
 
 # tmux
 ## http://qiita.com/b4b4r07/items/01359e8a3066d1c37edc
@@ -349,9 +364,3 @@ fi
 # if (which zprof > /dev/null 2>&1) ;then
 #   zprof
 # fi
-
-# The next line updates PATH for the Google Cloud SDK.
-if [ -f '/Users/a14978/google-cloud-sdk/path.zsh.inc' ]; then . '/Users/a14978/google-cloud-sdk/path.zsh.inc'; fi
-
-# The next line enables shell command completion for gcloud.
-if [ -f '/Users/a14978/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/a14978/google-cloud-sdk/completion.zsh.inc'; fi
