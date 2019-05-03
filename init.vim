@@ -877,8 +877,8 @@ endfunction
 
 call ale#linter#Define('typescript', {
 \   'name': 'stylelint',
-\   'executable_callback': 'AleTsStylelintGetExecutable',
-\   'command_callback': 'AleTsStylelintGetCommand',
+\   'executable': 'AleTsStylelintGetExecutable',
+\   'command': 'AleTsStylelintGetCommand',
 \   'callback': 'ale#handlers#css#HandleStyleLintFormat',
 \})
 
