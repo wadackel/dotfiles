@@ -34,7 +34,7 @@ endif
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
-set completeopt=menuone
+set completeopt=menuone,preview
 set autoread
 set t_ut=
 set nohlsearch
@@ -60,8 +60,7 @@ if ! isdirectory($HOME.'/.vim/swap')
   call mkdir($HOME.'/.vim/swap', 'p')
 endif
 set directory=~/.vim/swap
-" `nvim-typescript` で表示崩れが出るので一時的に外す
-" set ambiwidth=double
+set ambiwidth=double
 set wildmenu
 set wildmode=longest,full
 set noshowmode
@@ -278,8 +277,8 @@ endfunction
 set showtabline=2 " 常にタブラインを表示
 
 " The prefix key.
-nnoremap    [Tag]   <Nop>
-nmap    t [Tag]
+nnoremap [Tag] <Nop>
+nmap t [Tag]
 
 " Tab jump
 " t1 で1番左のタブ、t2 で1番左から2番目のタブにジャンプ
@@ -340,8 +339,7 @@ tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 " =============================================================
 augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
-  autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript
-  autocmd BufRead,BufNew,BufNewFile *.js.flow set filetype=typescript
+  autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript.tsx
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
@@ -395,10 +393,11 @@ if dein#load_state(s:plugin_dir)
 
   " base
   call dein#add('vim-jp/vimdoc-ja')
-  call dein#add('Shougo/vimproc.vim', {'build' : 'make'})
-  call dein#add('Shougo/deoplete.nvim')
   call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
+
+  " completion
+  call dein#add('neoclide/coc.nvim', {'build': './install.sh'})
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -427,7 +426,7 @@ if dein#load_state(s:plugin_dir)
 
   " formatter
   call dein#add('prettier/vim-prettier', {
-    \ 'on_ft': ['javascript', 'typescript', 'css', 'less', 'scss', 'json', 'graphql', 'markdown'],
+    \ 'on_ft': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown'],
     \ 'lazy': 1,
     \ })
 
@@ -447,14 +446,11 @@ if dein#load_state(s:plugin_dir)
 
   " javascript
   call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
-  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript']})
+  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript', 'typescript.tsx']})
   call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
-  " call dein#add('styled-components/vim-styled-components', {'on_ft': ['typescript', 'javascript']})
 
   " typescript
-  " call dein#add('HerringtonDarkholme/yats.vim')
   call dein#add('leafgarland/typescript-vim')
-  call dein#add('mhartington/nvim-typescript', {'build': './install.sh'})
 
   " golang
   call dein#add('fatih/vim-go', {'on_ft': 'go'})
@@ -508,39 +504,45 @@ filetype plugin indent on
 syntax enable
 
 
-" deoplete
-let g:deoplete#enable_at_startup = 1
+" coc.vim
 
-call deoplete#custom#option({
-     \ 'smart_case': v:true,
-     \ 'min_pattern_length': 1,
-     \ 'auto_complete_delay': 5,
-     \ 'auto_refresh_delay': 30,
-     \ 'num_processes': 10,
-     \ 'on_insert_enter': v:true,
-     \ 'on_text_changed_i': v:true,
-     \ 'refresh_always': v:false,
-     \ })
+" Use tab for trigger completion with characters ahead and navigate.
+inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
 
-call deoplete#custom#source('buffer', 'rank', 0)
-call deoplete#custom#var('file', 'enable_buffer_path', v:true)
-
-" Debug:
-" call deoplete#custom#option('profile', v:true)
-" call deoplete#enable_logging('DEBUG', $DEOPLETE_LOG_FILE)
-" call deoplete#custom#source('asm', 'is_debug_enabled', 1)
-" call deoplete#enable()
-
-
-" <C-h>, <BS>: close popup and delete backword char.
-inoremap <expr><C-h> deoplete#smart_close_popup()."\<C-h>"
-inoremap <expr><BS>  deoplete#smart_close_popup()."\<C-h>"
-
-" <CR>: close popup and save indent.
-inoremap <silent> <CR> <C-r>=<SID>my_cr_function()<CR>
-function! s:my_cr_function() abort
-  return deoplete#close_popup() . "\<CR>"
+function! s:check_back_space() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
+
+" Remap keys for gotos
+nmap <silent> <C-]> <Plug>(coc-definition)
+nmap <silent> K <Plug>(coc-type-definition)
+nmap <silent> <C-^> <Plug>(coc-references)
+
+" Remap for rename current word
+nmap <F2> <Plug>(coc-rename)
+
+" Show documentation in preview window
+nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
+
+" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
+" Coc only does snippet and additional edit on confirm.
+inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  else
+    call CocAction('doHover')
+  endif
+endfunction
+
+" Highlight symbol under cursor on CursorHold
+autocmd CursorHold * silent call CocActionAsync('highlight')
 
 
 " 画面分割用のキーマップ
@@ -598,13 +600,17 @@ let g:lightline#colorscheme#nordext#palette = lightline#colorscheme#flatten(s:p)
 let g:lightline = {
   \ 'colorscheme': 'nordext',
   \ 'active': {
-  \   'left': [ [ 'mode', 'paste' ],
-  \             [ 'fugitive', 'readonly', 'filename' ] ],
+  \   'left': [['mode', 'paste'],
+  \             ['fugitive', 'readonly', 'filename']],
+  \   'right': [['lineinfo'],
+  \             ['percent'],
+  \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
   \ },
   \ 'component_function': {
   \   'filename': 'LightLineFilename',
   \   'fugitive': 'LightLineFugitive',
   \   'readonly': 'LightLineReadonly',
+  \   'cocstatus': 'coc#status',
   \ },
   \ 'separator': { 'left': "\u2b80", 'right': "\u2b82" },
   \ 'subseparator': { 'left': "\u2b81", 'right': "\u2b83" }
@@ -790,23 +796,9 @@ let g:previm_disable_default_css = 1
 let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 
 
-" TypeScript
-let g:nvim_typescript#diagnostics_enable = 1
-
-augroup TSSettings
-  autocmd!
-
-  autocmd FileType typescript let b:caw_oneline_comment = '//'
-  autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
-
-  autocmd FileType typescript nnoremap <buffer> <C-]> :TSDef<CR>
-  autocmd FileType typescript nnoremap <buffer> <C-w><C-]> :TSDefPreview<CR>
-  autocmd FileType typescript nnoremap <buffer> K :TSTypeDef<CR>
-  autocmd FileType typescript nnoremap <buffer> <C-^> :TSRefs<CR>
-  autocmd FileType typescript nnoremap <buffer> <Leader>i :TSType<CR>
-  autocmd FileType typescript nnoremap <buffer> <F2> :TSRename<CR>
-  autocmd FileType typescript nnoremap <buffer> <F3> :TSImport<CR>
-augroup END
+" caw (comment out)
+autocmd FileType typescript, typescript.tsx let b:caw_oneline_comment = '//'
+autocmd FileType typescript, typescript.tsx let b:caw_wrap_oneline_comment = ['/*', '*/']
 
 
 " vim-go
@@ -899,6 +891,9 @@ let g:ale_lint_on_filetype_changed = 1
 let g:ale_lint_on_enter = 1
 
 let g:ale_fix_on_save = 1
+
+let g:ale_completion_enabled = 0
+let g:ale_disable_lsp = 1
 
 let g:ale_linters = {
 \   'html': [],

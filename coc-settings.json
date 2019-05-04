@@ -1,0 +1,5 @@
+{
+  "suggest.minTriggerInputLength": 1,
+  "tsserver.trace.server": "verbose",
+  "tsserver.log": "verbose"
+}
