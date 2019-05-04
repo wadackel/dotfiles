@@ -393,7 +393,7 @@ if dein#load_state(s:plugin_dir)
 
   " base
   call dein#add('vim-jp/vimdoc-ja')
-  call dein#add('jremmen/vim-ripgrep')
+  " call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
 
   " completion
@@ -676,16 +676,29 @@ endfunction
 " fzf
 if executable('fzf')
   let g:fzf_buffers_jump = 1
-  let g:fzf_layout = {'down': '~25%'}
+  let g:fzf_layout = {'down': '~35%'}
   let g:fzf_action = {
         \ 'ctrl-t': 'tab split',
         \ 'ctrl-x': 'split',
         \ 'ctrl-v': 'vsplit' }
 
+  let g:fzf_history_dir = '~/.local/share/fzf-history'
+
+  autocmd! FileType fzf
+  autocmd  FileType fzf set laststatus=0 noshowmode noruler
+        \| autocmd BufLeave <buffer> set laststatus=2 showmode ruler
+
   if executable('rg')
     command! FZFFileList call fzf#run(fzf#wrap('rg', {
           \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
           \ }, <bang>0))
+
+    command! -bang -nargs=* Rg
+          \ call fzf#vim#grep(
+          \ 'rg --column --line-number --hidden --ignore-case --no-heading --color=always '.shellescape(<q-args>), 1,
+          \ <bang>0 ? fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'up:60%')
+          \ : fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'right:50%:hidden', '?'),
+          \ <bang>0)
   endif
 
   nnoremap <silent> <C-p> :FZFFileList<CR>
