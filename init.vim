@@ -520,6 +520,7 @@ endfunction
 
 " Remap keys for gotos
 nmap <silent> <C-]> <Plug>(coc-definition)
+nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
 
@@ -649,7 +650,7 @@ vnoremap <silent><Leader>q :QuickRun<CR>
 
 
 " Clever-f
-let g:clever_f_smart_case = 1
+let g:clever_f_smart_case = 0
 let g:clever_f_across_no_line = 1
 let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
@@ -689,6 +690,9 @@ if executable('fzf')
         \| autocmd BufLeave <buffer> set laststatus=2 showmode ruler
 
   if executable('rg')
+    set grepprg=rg\ --vimgrep\ --no-heading
+    set grepformat=%f:%l:%c:%m,%f:%l:%m
+
     command! FZFFileList call fzf#run(fzf#wrap('rg', {
           \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
           \ }, <bang>0))
@@ -810,8 +814,8 @@ let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
 
 
 " caw (comment out)
-autocmd FileType typescript, typescript.tsx let b:caw_oneline_comment = '//'
-autocmd FileType typescript, typescript.tsx let b:caw_wrap_oneline_comment = ['/*', '*/']
+autocmd FileType typescript let b:caw_oneline_comment = '//'
+autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
 
 
 " vim-go

@@ -1,5 +1,6 @@
 {
   "suggest.minTriggerInputLength": 1,
   "tsserver.trace.server": "verbose",
-  "tsserver.log": "verbose"
+  "tsserver.log": "verbose",
+  "coc.preferences.useQuickfixForLocations": true
 }

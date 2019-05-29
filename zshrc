@@ -117,9 +117,9 @@ autoload -U history-search-end
 zle -N history-beginning-search-backward-end history-search-end
 zle -N history-beginning-search-forward-end history-search-end
 
-bindkey '^P' history-beginning-search-backward-end
-bindkey '^N' history-beginning-search-forward-end
-bindkey "^R" history-incremental-search-backward
+bindkey '^p' history-beginning-search-backward-end
+bindkey '^n' history-beginning-search-forward-end
+bindkey "^r" history-incremental-search-backward
 
 zstyle ':completion:*' keep-prefix
 zstyle ':completion:*' recent-dirs-insert both
@@ -242,20 +242,81 @@ function memo(){
 
 RPROMPT='${memotxt}'
 
-# git checkout <branch_name>
-function git-branch-fzf() {
-  local selected_branch=$(git for-each-ref --format='%(refname)' --sort=-committerdate refs/heads | perl -pne 's{^refs/heads/}{}' | fzf --query "$LBUFFER")
 
-  if [ -n "$selected_branch" ]; then
-    BUFFER="git checkout ${selected_branch}"
+# git 操作
+
+# <CR> で `git status` 呼び出し (git repository 内だけ)
+do_enter() {
+  if [[ -n $BUFFER ]]; then
+    zle accept-line
+    return $status
+  fi
+
+  if [[ -d .git ]]; then
+    if [[ -n "$(git status)" ]]; then
+      git status
+    fi
+  else
     zle accept-line
   fi
 
   zle reset-prompt
 }
 
-zle -N git-branch-fzf
-bindkey "^b" git-branch-fzf
+zle -N do_enter
+bindkey '^m' do_enter
+
+# ブランチの切り替え
+fbr() {
+  local branch
+  branch=$(git branch -a --color | grep -v HEAD | grep -v '*' | sed -E 's/^ +//' | fzf --height 40% | perl -pe 's/\e\[?.*?[\@-~]//g')
+
+  if [[ -z $branch ]]; then
+    zle reset-prompt
+    return
+  fi
+
+  local already_exists
+  already_exists=$(git branch | grep -q "${branch##*/}" &>/dev/null)
+
+  if [[ $branch =~ ^remotes ]]; then
+    if [[ !$already_exists ]]; then
+      git checkout "${branch##*/}"
+    else
+      git checkout -b "${branch##*/}" "${branch#*/}"
+    fi
+  else
+    if [[ !$already_exists ]]; then
+      git checkout "$branch"
+    fi
+  fi
+
+  echo "\n"
+
+  zle reset-prompt
+}
+
+zle -N fbr
+bindkey '^gb' fbr
+
+# commit のブラウズ
+alias glNoGraph='git log --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr% C(auto)%an" "$@"'
+_gitLogLineToHash="echo {} | grep -o '[a-f0-9]\{7\}' | head -1"
+_viewGitLogLine="$_gitLogLineToHash | xargs -I % sh -c 'git show --color=always %'"
+
+fshow_preview() {
+  glNoGraph |
+    fzf --no-sort --reverse --tiebreak=index --no-multi \
+      --ansi --preview="$_viewGitLogLine" \
+      --header "enter to view, ctrl-y to copy hash" \
+      --bind "enter:execute:$_viewGitLogLine | bat --paging always" \
+      --bind "ctrl-y:execute:$_gitLogLineToHash | xargs echo -n | pbcopy"
+
+  zle reset-prompt
+}
+
+zle -N fshow_preview
+bindkey "^gp" fshow_preview
 
 
 # tmux
