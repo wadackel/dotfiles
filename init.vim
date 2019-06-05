@@ -393,11 +393,10 @@ if dein#load_state(s:plugin_dir)
 
   " base
   call dein#add('vim-jp/vimdoc-ja')
-  " call dein#add('jremmen/vim-ripgrep')
   call dein#add('mattn/webapi-vim')
 
   " completion
-  call dein#add('neoclide/coc.nvim', {'build': './install.sh'})
+  call dein#add('neoclide/coc.nvim', {'build': 'coc#util#install()'})
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -511,6 +510,7 @@ inoremap <silent><expr> <TAB>
       \ pumvisible() ? "\<C-n>" :
       \ <SID>check_back_space() ? "\<TAB>" :
       \ coc#refresh()
+
 inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
 
 function! s:check_back_space() abort
@@ -773,12 +773,12 @@ let g:user_emmet_mode = 'iv'
 let g:user_emmet_leader_key = '<C-e>'
 let g:use_emmet_complete_tag = 1
 let g:user_emmet_settings = {
-  \ 'lang' : 'ja',
+  \ 'lang' : 'en',
   \ 'html' : {
   \   'filters' : 'html',
   \   'snippets' : {
-  \      'html:5' : "<!DOCTYPE html>\n"
-  \               ."<html lang=\"ja\">\n"
+  \      'html:5' : "<!doctype html>\n"
+  \               ."<html lang=\"en\">\n"
   \               ."<head>\n"
   \               ."  <meta charset=\"${charset}\">\n"
   \               ."  <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n"
@@ -870,27 +870,6 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 " ALE
 
-" for styled-components with stylelint
-call ale#Set('typescript_stylelint_executable', 'stylelint')
-call ale#Set('typescript_stylelint_use_global', get(g:, 'ale_use_global_executables', 0))
-
-function! AleTsStylelintGetExecutable(buffer) abort
-  return ale#node#FindExecutable(a:buffer, 'typescript_stylelint', [
-        \   'node_modules/.bin/stylelint',
-        \])
-endfunction
-
-function! AleTsStylelintGetCommand(buffer) abort
-  return AleTsStylelintGetExecutable(a:buffer) . ' --stdin-filename %s'
-endfunction
-
-call ale#linter#Define('typescript', {
-\   'name': 'stylelint',
-\   'executable': 'AleTsStylelintGetExecutable',
-\   'command': 'AleTsStylelintGetCommand',
-\   'callback': 'ale#handlers#css#HandleStyleLintFormat',
-\})
-
 " global options
 let g:ale_open_list = 1
 let g:ale_set_loclist = 1
@@ -899,7 +878,7 @@ let g:ale_sign_column_always = 1
 let g:ale_list_window_size = 5
 let g:ale_keep_list_window_open = 0
 
-let g:ale_sign_warning = '▲'
+let g:ale_sign_warning = '⦿'
 let g:ale_sign_error = '✗'
 
 let g:ale_lint_on_save = 0
@@ -912,23 +891,23 @@ let g:ale_fix_on_save = 1
 let g:ale_completion_enabled = 0
 let g:ale_disable_lsp = 1
 
-let g:ale_linters = {
-\   'html': [],
-\   'go': ['gometalinter', 'gofmt'],
-\   'typescript': ['tslint', 'tsserver', 'typecheck', 'eslint', 'stylelint'],
-\}
-
-let g:ale_javascript_eslint_options = '--no-ignore'
-let g:ale_typescript_tslint_use_global = 0
-let g:ale_typescript_tslint_config_path = ''
-let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
+let g:ale_linter_aliases = {
+      \ 'typescript': ['typescript', 'css'],
+      \ 'typescript.tsx': ['typescript', 'css'],
+      \ }
 
 let g:ale_fixers = {
       \  '*': ['remove_trailing_lines', 'trim_whitespace'],
       \  'markdown': ['prettier'],
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
+      \  'typescript.tsx': ['prettier', 'tslint', 'eslint'],
       \}
+
+let g:ale_javascript_eslint_options = '--no-ignore'
+let g:ale_typescript_tslint_use_global = 0
+let g:ale_typescript_tslint_config_path = ''
+let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
 nnoremap \ll :ALELint<CR>
 nnoremap \lf :ALEFix<CR>
