@@ -5,6 +5,8 @@ fpath=(/usr/local/share/zsh/functions/ ${fpath})
 # Basic
 # ====================================================
 
+export LANG=en_US.UTF-8
+
 # キー操作
 bindkey -e
 
@@ -24,6 +26,7 @@ setopt auto_cd
 # Path
 # ====================================================
 export PATH=/usr/local/bin:${PATH}
+export PATH="/usr/local/sbin:$PATH"
 export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
 export PATH="$HOME/.yarn/bin:$PATH"

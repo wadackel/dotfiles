@@ -396,7 +396,7 @@ if dein#load_state(s:plugin_dir)
   call dein#add('mattn/webapi-vim')
 
   " completion
-  call dein#add('neoclide/coc.nvim', {'build': 'coc#util#install()'})
+  call dein#add('neoclide/coc.nvim', {'rev': 'release'})
 
   " unite
   call dein#add('Shougo/unite.vim')
@@ -503,7 +503,7 @@ filetype plugin indent on
 syntax enable
 
 
-" coc.vim
+" coc.nvim
 
 " Use tab for trigger completion with characters ahead and navigate.
 inoremap <silent><expr> <TAB>
@@ -511,7 +511,7 @@ inoremap <silent><expr> <TAB>
       \ <SID>check_back_space() ? "\<TAB>" :
       \ coc#refresh()
 
-inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+imap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
 
 function! s:check_back_space() abort
   let col = col('.') - 1
@@ -661,12 +661,13 @@ let g:vimfiler_as_default_explorer = 1
 let g:vimfiler_safe_mode_by_default = 0
 let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
 
-nnoremap <C-N> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
-nnoremap <C-H> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
+nnoremap <C-n> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
+nnoremap <C-j> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
 
 augroup vimfiler
   autocmd!
   autocmd FileType vimfiler call s:vimfiler_settings()
+  autocmd FileType vimfiler nmap <buffer> <C-j> <Plug>(vimfiler_close)
 augroup END
 
 function! s:vimfiler_settings()
@@ -892,7 +893,7 @@ let g:ale_completion_enabled = 0
 let g:ale_disable_lsp = 1
 
 let g:ale_linter_aliases = {
-      \ 'typescript': ['typescript', 'css'],
+      \ 'typescript': ['typescript'],
       \ 'typescript.tsx': ['typescript', 'css'],
       \ }
 
