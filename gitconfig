@@ -61,6 +61,8 @@
   unmerged = diff --name-only --diff-filter=U
   cancel = reset --soft HEAD^
   nerge = merge --no-ff
+  fixup = commit --fixup
+  autosquash = rebase -i --autosquash
 
   cleanpr = "!git for-each-ref refs/heads/pr/* --format='%(refname)' | while read ref ; do branch=${ref#refs/heads/} ; git branch -D $branch ; done"
 

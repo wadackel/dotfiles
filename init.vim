@@ -545,6 +545,9 @@ endfunction
 " Highlight symbol under cursor on CursorHold
 autocmd CursorHold * silent call CocActionAsync('highlight')
 
+" yank
+nnoremap <silent> <space>y  :<C-u>CocList -A --normal yank<CR>
+
 
 " 画面分割用のキーマップ
 call submode#enter_with('bufmove', 'n', '', 's>', '<C-w>>')
@@ -894,7 +897,7 @@ let g:ale_disable_lsp = 1
 
 let g:ale_linter_aliases = {
       \ 'typescript': ['typescript'],
-      \ 'typescript.tsx': ['typescript', 'css'],
+      \ 'tsx': ['typescript', 'css'],
       \ }
 
 let g:ale_fixers = {
@@ -902,7 +905,7 @@ let g:ale_fixers = {
       \  'markdown': ['prettier'],
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
-      \  'typescript.tsx': ['prettier', 'tslint', 'eslint'],
+      \  'tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
       \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
@@ -913,6 +916,8 @@ let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple
 nnoremap \ll :ALELint<CR>
 nnoremap \lf :ALEFix<CR>
 nnoremap \lt :ALEToggle<CR>
+
+command! ALEToggleFixer execute "let g:ale_fix_on_save = get(g:, 'ale_fix_on_save', 0) ? 0 : 1"
 
 
 
