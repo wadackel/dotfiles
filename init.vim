@@ -367,149 +367,104 @@ augroup END
 " Plugins
 " =============================================================
 
-if &compatible
-  set nocompatible
-endif
+call plug#begin('~/.vim/plugged')
 
-" dein configurations.
-let g:dein#install_max_processes = 48
-let g:dein#install_progress_type = 'echo'
-let g:dein#install_message_type = 'echo'
-let g:dein#enable_notification = 1
+" vim-scripts
+Plug 'vim-scripts/sudo.vim'
 
-augroup PluginInstall
-  autocmd!
-  autocmd VimEnter * if dein#check_install() | call dein#install() | endif
-augroup END
-command! -nargs=0 PluginUpdate call dein#update()
+" base
+Plug 'mattn/webapi-vim'
 
-let s:plugin_dir = expand('~/.nvim/bundle/')
-let s:dein_dir = s:plugin_dir . 'repos/github.com/Shougo/dein.vim'
-execute 'set runtimepath+=' . s:dein_dir
+" completion
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
-if !isdirectory(s:dein_dir)
-  call mkdir(s:dein_dir, 'p')
-  silent execute printf('!git clone %s %s', 'https://github.com/Shougo/dein.vim', s:dein_dir)
-endif
+" editing
+Plug 'mattn/emmet-vim'
+Plug 'tpope/vim-surround'
+Plug 'thinca/vim-visualstar'
+Plug 'editorconfig/editorconfig-vim'
+Plug 'h1mesuke/vim-alignta'
+Plug 'kana/vim-submode'
+Plug 'https://github.com/tyru/caw.vim.git'
+Plug 'tpope/vim-commentary'
+Plug 'deton/jasegment.vim'
+Plug 'thinca/vim-qfreplace'
+Plug 'jceb/vim-editqf'
+Plug 'rhysd/clever-f.vim'
+Plug 'easymotion/vim-easymotion'
 
-if dein#load_state(s:plugin_dir)
-  call dein#begin(s:plugin_dir)
-  call dein#add('Shougo/dein.vim')
-  call dein#add('mattn/benchvimrc-vim', {'lazy': 1, 'on_cmd': ['BenchVimrc']})
+" debug
+Plug 'thinca/vim-quickrun'
 
-  " vim-scripts
-  call dein#add('vim-scripts/sudo.vim', {'lazy': 1})
+" filer
+Plug 'Shougo/unite.vim'
+Plug 'Shougo/vimfiler'
+Plug 'junegunn/fzf', {'do': './install --all'}
+Plug 'junegunn/fzf.vim'
 
-  " base
-  call dein#add('vim-jp/vimdoc-ja')
-  call dein#add('mattn/webapi-vim')
+" formatter
+Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown'] }
 
-  " completion
-  call dein#add('neoclide/coc.nvim', {'rev': 'release'})
+" sign
+Plug 'airblade/vim-gitgutter'
+Plug 'cohama/agit.vim'
 
-  " unite
-  call dein#add('Shougo/unite.vim')
+" git
+Plug 'tpope/vim-fugitive'
+Plug 'tyru/open-browser.vim'
 
-  " editing
-  call dein#add('mattn/emmet-vim')
-  call dein#add('tpope/vim-surround')
-  call dein#add('thinca/vim-visualstar')
-  call dein#add('editorconfig/editorconfig-vim')
-  call dein#add('h1mesuke/vim-alignta')
-  call dein#add('kana/vim-submode')
-  call dein#add('tyru/caw.vim.git')
-  call dein#add('deton/jasegment.vim')
-  call dein#add('thinca/vim-qfreplace')
-  call dein#add('jceb/vim-editqf')
-  call dein#add('rhysd/clever-f.vim')
-  call dein#add('easymotion/vim-easymotion')
+" memo
+Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
 
-  " debug
-  call dein#add('thinca/vim-quickrun')
+" javascript
+Plug 'pangloss/vim-javascript', {'for': 'javascript'}
+Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript.tsx']}
+Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
 
-  " filer
-  call dein#add('Shougo/vimfiler', {'depends': 'Shougo/unite.vim'})
-  call dein#add('junegunn/fzf', {'build': './install --all'})
-  call dein#add('junegunn/fzf.vim')
+" typescript
+Plug 'leafgarland/typescript-vim'
 
-  " formatter
-  call dein#add('prettier/vim-prettier', {
-    \ 'on_ft': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown'],
-    \ 'lazy': 1,
-    \ })
+" golang
+Plug 'fatih/vim-go', {'for': 'go'}
 
-  " sign
-  call dein#add('airblade/vim-gitgutter')
-  call dein#add('cohama/agit.vim')
+" Rust
+Plug 'rust-lang/rust.vim'
+Plug 'racer-rust/vim-racer'
 
-  " git
-  call dein#add('tpope/vim-fugitive')
-  call dein#add('tyru/open-browser.vim', {'lazy': 1})
+" HTML
+Plug 'othree/html5.vim', {'for': 'html'}
 
-  " memo
-  call dein#add('glidenote/memolist.vim', {
-    \ 'lazy': 1,
-    \ 'on_cmd': ['MemoNew', 'MemoList'],
-    \ })
+" Stylesheet (CSS / Sass)
+Plug 'hail2u/vim-css3-syntax', {'for': 'css'}
+Plug 'cakebaker/scss-syntax.vim', {'for': 'scss'}
 
-  " javascript
-  call dein#add('pangloss/vim-javascript', {'on_ft': 'javascript'})
-  call dein#add('chemzqm/vim-jsx-improve', {'on_ft': ['javascript', 'typescript', 'typescript.tsx']})
-  call dein#add('heavenshell/vim-syntax-flowtype', {'on_ft': ['javascript']})
+" markdown
+Plug 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
+Plug 'tukiyo/previm', {'for': ['markdown', 'md']}
+Plug 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
+Plug 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
+Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 
-  " typescript
-  call dein#add('leafgarland/typescript-vim')
+" toml
+Plug 'cespare/vim-toml',  {'for' : 'toml'}
 
-  " golang
-  call dein#add('fatih/vim-go', {'on_ft': 'go'})
+" varnish
+Plug 'fgsch/vim-varnish'
 
-  " Rust
-  call dein#add('rust-lang/rust.vim')
-  call dein#add('racer-rust/vim-racer')
+" statusline
+Plug 'itchyny/lightline.vim'
 
-  " HTML
-  call dein#add('othree/html5.vim', {'on_ft': 'html'})
+" syntax checking
+Plug 'w0rp/ale'
 
-  " Stylesheet (CSS / Sass)
-  call dein#add('hail2u/vim-css3-syntax', {'on_ft': 'css'})
-  call dein#add('cakebaker/scss-syntax.vim', {'on_ft': 'scss'})
+" syntax extention
+Plug 'Shougo/context_filetype.vim'
 
-  " markdown
-  call dein#add('plasticboy/vim-markdown', {'on_ft': ['markdown', 'md']})
-  call dein#add('tukiyo/previm', {'on_ft': ['markdown', 'md']})
-  call dein#add('dhruvasagar/vim-table-mode', {'on_ft': ['markdown', 'md']})
-  call dein#add('rhysd/vim-gfm-syntax', {'on_ft': ['markdown', 'md']})
-  call dein#add('mzlogin/vim-markdown-toc', {'on_ft': ['markdown', 'md']})
+" colorschema
+Plug 'rakr/vim-one'
+Plug 'rhysd/vim-color-spring-night'
 
-  " toml
-  call dein#add('cespare/vim-toml',  {'on_ft' : 'toml', 'lazy': 1})
-
-  " varnish
-  call dein#add('fgsch/vim-varnish')
-
-  " statusline
-  call dein#add('itchyny/lightline.vim')
-
-  " syntax checking
-  call dein#add('w0rp/ale')
-
-  " syntax extention
-  call dein#add('Shougo/context_filetype.vim')
-
-  " colorschema
-  call dein#add('rakr/vim-one')
-  call dein#add('rhysd/vim-color-spring-night')
-
-  call dein#end()
-  call dein#save_state()
-endif
-
-if dein#check_install()
-  call dein#install()
-endif
-
-filetype plugin indent on
-syntax enable
+call plug#end()
 
 
 " coc.nvim
