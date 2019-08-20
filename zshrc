@@ -302,6 +302,15 @@ fbr() {
 zle -N fbr
 bindkey '^gb' fbr
 
+# リポジトリの移動
+function dev() {
+  local to
+  to=$(ghq list -p | fzf)
+  if [[ -n $to ]]; then
+    cd $to
+  fi
+}
+
 # commit のブラウズ
 alias glNoGraph='git log --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr% C(auto)%an" "$@"'
 _gitLogLineToHash="echo {} | grep -o '[a-f0-9]\{7\}' | head -1"
@@ -417,6 +426,7 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   ENHANCD_HOOK_AFTER_CD=ls
   ENHANCD_DISABLE_DOT=1
   ENHANCD_DISABLE_HYPHEN=1
+  ENHANCD_FILTER="fzf:non-existing-filter"
 
   # fzf
   export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'

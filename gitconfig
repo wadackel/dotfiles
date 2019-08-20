@@ -1,6 +1,6 @@
 [user]
   name = tsuyoshiwada
-	email = wadackel@gmail.com
+  email = wadackel@gmail.com
 [push]
   default = simple
 [core]
@@ -72,7 +72,11 @@
 [filter "lfs"]
   required = true
   clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
+  smudge = git-lfs smudge -- %f
+  process = git-lfs filter-process
+
+[ghq]
+  root = ~/develop
+
 [github]
-	user = tsuyoshiwada
+  user = tsuyoshiwada

@@ -204,6 +204,21 @@ inoremap (<Enter> ()<Left><CR><ESC><S-o>
 " 選択範囲内をExpressionレジスタで評価->置換
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
+" 指定データをクリップボードにつながるレジスタへ保存
+function! s:Clip(data)
+  let @*=a:data
+  echo "clipped: " . a:data
+endfunction
+
+" 現在開いているファイルのパス
+command! -nargs=0 ClipPath call s:Clip(expand('%:p'))
+
+" 現在開いているファイルのファイル名
+command! -nargs=0 ClipFile call s:Clip(expand('%:t'))
+
+" 現在開いているファイルのディレクトリパス
+command! -nargs=0 ClipDir  call s:Clip(expand('%:p:h'))
+
 
 " QuickFix の設定
 augroup QuickfixConfigure
@@ -279,12 +294,6 @@ set showtabline=2 " 常にタブラインを表示
 " The prefix key.
 nnoremap [Tag] <Nop>
 nmap t [Tag]
-
-" Tab jump
-" t1 で1番左のタブ、t2 で1番左から2番目のタブにジャンプ
-for n in range(1, 9)
-  execute 'nnoremap <silent> [Tag]'.n  ':<C-u>tabnext'.n.'<CR>'
-endfor
 
 
 " 画面分割用のキーマップ
@@ -718,13 +727,12 @@ endif
 
 " easymotion
 let g:EasyMotion_do_mapping = 0
-let g:EasyMotion_smartcase = 1
+let g:EasyMotion_smartcase = 0
 
 map <Leader> <Plug>(easymotion-prefix)
 nmap <Leader>f <Plug>(easymotion-overwin-f)
 xmap <Leader>f <Plug>(easymotion-s)
-map <Leader>j <Plug>(easymotion-j)
-map <Leader>k <Plug>(easymotion-k)
+map <Leader>s <Plug>(easymotion-s2)
 
 
 " fugitive
