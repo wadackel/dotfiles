@@ -206,46 +206,6 @@ function mkcd() {
 function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 
-# ====================================================
-# Styles
-# ====================================================
-
-# VCSの情報を取得するzsh関数
-autoload -Uz vcs_info
-
-# 色の設定
-autoload -U colors ; colors
-
-# PROMPT変数内で変数参照
-setopt prompt_subst
-
-zstyle ':vcs_info:git:*' check-for-changes true
-zstyle ':vcs_info:git:*' stagedstr "%F{43} !" # commit されていないファイルがある
-zstyle ':vcs_info:git:*' unstagedstr "%F{189} *" # add されていないファイルがある
-zstyle ':vcs_info:*' formats '%F{60} %b%c%u%f' # 通常
-zstyle ':vcs_info:*' actionformats ' %F{60}%b %F{43}!%a' # rebase 途中, merge コンフリクト等 formats 外の表示
-
-# Pre
-precmd () {
-  print
-  vcs_info
-}
-
-PROMPT='%{%F{189}%}%~%{${DEFAULT}%}${vcs_info_msg_0_}
-%F{206}❯%{$reset_color%} %{${DEFAULT}%}'
-
-# 右プロンプト (memo)
-function memo(){
-  memotxt=''
-  for str in $@
-  do
-  memotxt="${memotxt} ${str}"
-  done
-}
-
-RPROMPT='${memotxt}'
-
-
 # git 操作
 
 # <CR> で `git status` 呼び出し (git repository 内だけ)
@@ -433,6 +393,9 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# starship (theme)
+eval "$(starship init zsh)"
 
 # profile
 # if (which zprof > /dev/null 2>&1) ;then

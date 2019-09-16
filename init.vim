@@ -349,10 +349,12 @@ tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
   autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript.tsx
+  autocmd BufRead,BufNew,BufNewFile *.ejs setlocal ft=html
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
   autocmd BufRead,BufNew,BufNewFile .eslintrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .stylelintrc setlocal ft=json
+  autocmd BufRead,BufNew,BufNewFile .prettierrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
 augroup END
 
@@ -403,7 +405,7 @@ Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
 
 " formatter
-Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown'] }
+Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown', 'html'] }
 
 " sign
 Plug 'airblade/vim-gitgutter'
@@ -653,10 +655,6 @@ if executable('fzf')
 
   let g:fzf_history_dir = '~/.local/share/fzf-history'
 
-  autocmd! FileType fzf
-  autocmd  FileType fzf set laststatus=0 noshowmode noruler
-        \| autocmd BufLeave <buffer> set laststatus=2 showmode ruler
-
   if executable('rg')
     set grepprg=rg\ --vimgrep\ --no-heading
     set grepformat=%f:%l:%c:%m,%f:%l:%m
@@ -866,6 +864,7 @@ let g:ale_linter_aliases = {
 let g:ale_fixers = {
       \  '*': ['remove_trailing_lines', 'trim_whitespace'],
       \  'markdown': ['prettier'],
+      \  'html': ['prettier'],
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
       \  'tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
