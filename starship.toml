@@ -4,6 +4,9 @@ add_newline = true
 style_success = "bold fg:37"
 style_failure = "bold fg:204"
 
+[battery]
+disabled = true
+
 [directory]
 truncate_to_repo = false
 style = "bold fg:189"
@@ -21,4 +24,10 @@ style = "fg:189"
 style = "fg:189"
 
 [nodejs]
+disabled = true
+
+[golang]
+disabled = true
+
+[ruby]
 disabled = true

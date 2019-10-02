@@ -4,6 +4,11 @@
   "tsserver.log": "verbose",
   "coc.preferences.useQuickfixForLocations": true,
   "languageserver": {
+    "golang": {
+      "command": "gopls",
+      "rootPatterns": ["go.mod"],
+      "filetypes": ["go"]
+    },
     "ccls": {
       "command": "ccls",
       "filetypes": ["c", "cpp", "objc", "objcpp"],
