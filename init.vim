@@ -349,6 +349,7 @@ tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
   autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript.tsx
+  autocmd BufRead,BufNew,BufNewFile *.mdx set filetype=markdown
   autocmd BufRead,BufNew,BufNewFile *.ejs setlocal ft=html
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
@@ -511,8 +512,11 @@ endfunction
 " Highlight symbol under cursor on CursorHold
 autocmd CursorHold * silent call CocActionAsync('highlight')
 
+" diagnostics
+nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
+
 " yank
-nnoremap <silent> <space>y  :<C-u>CocList -A --normal yank<CR>
+nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
 
 
 " 画面分割用のキーマップ
@@ -647,13 +651,39 @@ endfunction
 " fzf
 if executable('fzf')
   let g:fzf_buffers_jump = 1
-  let g:fzf_layout = {'down': '~35%'}
   let g:fzf_action = {
         \ 'ctrl-t': 'tab split',
         \ 'ctrl-x': 'split',
         \ 'ctrl-v': 'vsplit' }
 
   let g:fzf_history_dir = '~/.local/share/fzf-history'
+
+  let $FZF_DEFAULT_OPTS='--layout=reverse'
+  let g:fzf_layout = { 'window': 'call FloatingFZF()' }
+
+  augroup fzf-transparent-windows
+    autocmd!
+    autocmd FileType fzf set winblend=30
+  augroup END
+
+  function! FloatingFZF()
+    let buf = nvim_create_buf(v:false, v:true)
+    call setbufvar(buf, '&signcolumn', 'no')
+
+    let height = float2nr(&lines * 0.8)
+    let width = float2nr(&columns * 0.95)
+    let col = float2nr((&columns - width) / 2)
+
+    let opts = {
+         \ 'relative': 'editor',
+         \ 'row': float2nr(&lines / 2 - height / 2),
+         \ 'col': col,
+         \ 'width': width,
+         \ 'height': height,
+         \ }
+
+    call nvim_open_win(buf, v:true, opts)
+  endfunction
 
   if executable('rg')
     set grepprg=rg\ --vimgrep\ --no-heading
@@ -858,7 +888,7 @@ let g:ale_disable_lsp = 1
 
 let g:ale_linter_aliases = {
       \ 'typescript': ['typescript'],
-      \ 'tsx': ['typescript', 'css'],
+      \ 'typescript.tsx': ['typescript', 'css'],
       \ }
 
 let g:ale_fixers = {
@@ -867,7 +897,7 @@ let g:ale_fixers = {
       \  'html': ['prettier'],
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
-      \  'tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \  'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
       \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'
@@ -879,8 +909,22 @@ nnoremap \ll :ALELint<CR>
 nnoremap \lf :ALEFix<CR>
 nnoremap \lt :ALEToggle<CR>
 
-command! ALEToggleFixer execute "let g:ale_fix_on_save = get(g:, 'ale_fix_on_save', 0) ? 0 : 1"
 
+" ファイル置換時に BufWritePost 処理をトグル
+function! s:enableBufWritePost()
+  let g:ale_fix_on_save = 1
+  ALEEnable
+  CocEnable
+endfunction
+
+function! s:disableBufWritePost()
+  let g:ale_fix_on_save = 0
+  ALEDisable
+  CocDisable
+endfunction
+
+command! EnableBufWritePost call <SID>enableBufWritePost()
+command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
 " =============================================================
