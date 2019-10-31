@@ -6,6 +6,7 @@
 [core]
   editor = nvim
   attributesfile = ~/.gitattributes
+  excludesfile = ~/.gitignore_global
   precomposeUnicode = true
   ignorecase = false
 [color]

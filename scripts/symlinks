@@ -7,6 +7,7 @@ ln -sf ~/dotfiles/Brewfile ~/.Brewfile
 ln -sf ~/dotfiles/coc-settings.json ~/.config/nvim/coc-settings.json
 ln -sf ~/dotfiles/gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/gitconfig ~/.gitconfig
+ln -sf ~/dotfiles/gitignore_global ~/.gitignore_global
 ln -sf ~/dotfiles/tmux.conf ~/.tmux.conf
 ln -sf ~/dotfiles/vimrc ~/.vimrc
 ln -sf ~/dotfiles/init.vim ~/.config/nvim/init.vim
