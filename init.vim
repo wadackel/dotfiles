@@ -22,14 +22,6 @@ source $VIMRUNTIME/macros/matchit.vim
 let mapleader = ","
 
 
-" for tmux
-if has("termguicolors")
-  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-  set termguicolors
-endif
-
-
 " 各種基本設定
 set encoding=utf-8
 set fileencoding=utf-8
@@ -37,6 +29,7 @@ set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
 set completeopt=menuone,preview
 set autoread
 set t_ut=
+set termguicolors
 set nohlsearch
 set incsearch
 set formatoptions+=mM
@@ -327,7 +320,11 @@ nnoremap <C-w>O :<C-u>tabo<CR>
 
 
 " Terminal
-autocmd! TermOpen * startinsert
+augroup termina-config
+  autocmd!
+  autocmd TermOpen * startinsert
+  autocmd TermOpen * setlocal signcolumn=no
+augroup END
 
 " open terminal
 nnoremap <silent> <Leader>tt :<C-u>terminal<CR>
@@ -341,6 +338,57 @@ tnoremap <silent> <C-[> <C-\><C-n>
 
 " close terminal
 tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
+
+
+" colorscheme 用のオートリロード
+function! s:auto_update_colorscheme(...) abort
+    " if &ft !=# 'vim'
+    "     echoerr 'Execute this command in colorscheme file buffer'
+    " endif
+    setlocal autoread noswapfile
+    let interval = a:0 > 0 ? a:1 : 3000
+    let timer = timer_start(interval, {-> execute('checktime')}, {'repeat' : -1})
+    autocmd! BufReadPost <buffer> source ~/.config/nvim/init.vim
+endfunction
+command! -nargs=? AutoUpdateColorscheme call <SID>auto_update_colorscheme(<f-args>)
+
+function! s:get_syn_id(transparent)
+  let synid = synID(line("."), col("."), 1)
+  if a:transparent
+    return synIDtrans(synid)
+  else
+    return synid
+  endif
+endfunction
+function! s:get_syn_attr(synid)
+  let name = synIDattr(a:synid, "name")
+  let ctermfg = synIDattr(a:synid, "fg", "cterm")
+  let ctermbg = synIDattr(a:synid, "bg", "cterm")
+  let guifg = synIDattr(a:synid, "fg", "gui")
+  let guibg = synIDattr(a:synid, "bg", "gui")
+  return {
+        \ "name": name,
+        \ "ctermfg": ctermfg,
+        \ "ctermbg": ctermbg,
+        \ "guifg": guifg,
+        \ "guibg": guibg}
+endfunction
+function! s:get_syn_info()
+  let baseSyn = s:get_syn_attr(s:get_syn_id(0))
+  echo "name: " . baseSyn.name .
+        \ " ctermfg: " . baseSyn.ctermfg .
+        \ " ctermbg: " . baseSyn.ctermbg .
+        \ " guifg: " . baseSyn.guifg .
+        \ " guibg: " . baseSyn.guibg
+  let linkedSyn = s:get_syn_attr(s:get_syn_id(1))
+  echo "link to"
+  echo "name: " . linkedSyn.name .
+        \ " ctermfg: " . linkedSyn.ctermfg .
+        \ " ctermbg: " . linkedSyn.ctermbg .
+        \ " guifg: " . linkedSyn.guifg .
+        \ " guibg: " . linkedSyn.guibg
+endfunction
+command! SyntaxInfo call s:get_syn_info()
 
 
 " =============================================================
@@ -379,7 +427,24 @@ Plug 'vim-scripts/sudo.vim'
 Plug 'mattn/webapi-vim'
 
 " completion
+
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'neoclide/coc-json', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-html', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-css', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-rls', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-yaml', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-yank', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-tsserver', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn install --frozen-lockfile'}
+
+" Plug 'prabirshrestha/async.vim'
+" Plug 'prabirshrestha/vim-lsp'
+" Plug 'ryanolsonx/vim-lsp-typescript'
+" Plug 'prabirshrestha/asyncomplete.vim'
+" Plug 'prabirshrestha/asyncomplete-lsp.vim'
+" Plug 'prabirshrestha/asyncomplete-file.vim'
+" Plug 'prabirshrestha/asyncomplete-buffer.vim'
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -470,23 +535,78 @@ Plug 'rhysd/vim-color-spring-night'
 call plug#end()
 
 
+" " vim-lsp x asyncomplete
+" let g:lsp_diagnostics_echo_cursor = 1
+" let g:lsp_virtual_text_prefix = " ‣ "
+" let g:asyncomplete_auto_popup = 1
+"
+" nmap <silent> <Leader>i <Plug>(lsp-hover)
+" nmap <silent> <F2> <Plug>(lsp-rename)
+" nmap <silent> <C-^> <Plug>(lsp-references)
+"
+" " highlight PopupWindow ctermbg=lightblue guibg=lightblue
+" "
+" " augroup lsp_float_colours
+" "   autocmd!
+" "   if !has('nvim')
+" "     autocmd User lsp_float_opened
+" "          \ call win_execute(lsp#ui#vim#output#getpreviewwinid(),
+" "          \		       'setlocal wincolor=PopupWindow')
+" "   else
+" "     autocmd User lsp_float_opened
+" "          \ call nvim_win_set_option(lsp#ui#vim#output#getpreviewwinid(),
+" "          \			       'winhighlight', 'Normal:PopupWindow')
+" "   endif
+" " augroup end
+"
+" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
+"     \ 'name': 'file',
+"     \ 'whitelist': ['*'],
+"     \ 'priority': 10,
+"     \ 'completor': function('asyncomplete#sources#file#completor')
+"     \ }))
+"
+" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
+"     \ 'name': 'buffer',
+"     \ 'whitelist': ['*'],
+"     \ 'blacklist': ['go'],
+"     \ 'completor': function('asyncomplete#sources#buffer#completor'),
+"     \ 'config': {
+"     \    'max_buffer_size': 5000000,
+"     \  },
+"     \ }))
+"
+" if executable('typescript-language-server')
+"   au User lsp_setup call lsp#register_server({
+"       \ 'name': 'typescript support using typescript-language-server',
+"       \ 'cmd': {server_info->[&shell, &shellcmdflag, 'typescript-language-server --stdio']},
+"       \ 'root_uri':{server_info->lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json'))},
+"       \ 'whitelist': ['typescript', 'typescript.tsx'],
+"       \ })
+" endif
+"
+" if executable('ccls')
+"   au User lsp_setup call lsp#register_server({
+"       \ 'name': 'ccls',
+"       \ 'cmd': {server_info->['ccls']},
+"       \ 'root_uri': {server_info->lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'compile_commands.json'))},
+"       \ 'initialization_options': {},
+"       \ 'whitelist': ['c', 'cpp', 'objc', 'objcpp', 'cc'],
+"       \ })
+" endif
+
 " coc.nvim
 
-" Use tab for trigger completion with characters ahead and navigate.
-inoremap <silent><expr> <TAB>
-      \ pumvisible() ? "\<C-n>" :
-      \ <SID>check_back_space() ? "\<TAB>" :
-      \ coc#refresh()
+" Use `[g` and `]g` to navigate diagnostics
+nmap <silent> [g <Plug>(coc-diagnostic-prev)
+nmap <silent> ]g <Plug>(coc-diagnostic-next)
 
-imap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
-
-function! s:check_back_space() abort
-  let col = col('.') - 1
-  return !col || getline('.')[col - 1]  =~# '\s'
-endfunction
+" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
+" Coc only does snippet and additional edit on confirm.
+inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Remap keys for gotos
-nmap <silent> <C-]> <Plug>(coc-definition)
+autocmd FileType javascript,typescript,typescript.tsx,rust,go,c nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
@@ -663,7 +783,7 @@ if executable('fzf')
 
   augroup fzf-transparent-windows
     autocmd!
-    autocmd FileType fzf set winblend=30
+    autocmd FileType fzf set winblend=5
   augroup END
 
   function! FloatingFZF()
@@ -724,6 +844,7 @@ nnoremap <silent> <Leader>gd :Gdiff<CR>
 
 
 " GitGutter
+let g:gitgutter_override_sign_column_highlight = 0
 let g:gitgutter_sign_added = '∙'
 let g:gitgutter_sign_modified = '∙'
 let g:gitgutter_sign_removed = '∙'
@@ -931,10 +1052,29 @@ command! DisableBufWritePost call <SID>disableBufWritePost()
 " Colors
 " =============================================================
 
+" autocmd ColorScheme * highlight Normal guibg=#282a36
+" autocmd ColorScheme * highlight GitGutterAdd guibg=NONE
+" autocmd ColorScheme * highlight GitGutterChange guibg=NONE
+" autocmd ColorScheme * highlight GitGutterChangeDelete guibg=NONE
+" autocmd ColorScheme * highlight GitGutterDelete guibg=NONE
+" autocmd ColorScheme * highlight SignifySignAdd guibg=NONE
+" autocmd ColorScheme * highlight SignifySignChange guibg=NONE
+" autocmd ColorScheme * highlight SignifySignChangeDelete guibg=NONE
+" autocmd ColorScheme * highlight SignifySignDelete guibg=NONE
+" autocmd ColorScheme * highlight SignifySignDelete guibg=NONE
+" autocmd ColorScheme * highlight SignColumn guibg=NONE
+"
+" colorscheme spring-night
+" let g:airline_theme = 'spring_night'
+
 " ColorSchemeの上書き
+autocmd ColorScheme * highlight SignColumn guibg=NONE
 autocmd ColorScheme * highlight Normal guibg=#282a36
 
 " ColorSchemeの設定
 syntax on
 set background=dark
 colorscheme one
+
+" syntax on
+" colorscheme dogrun

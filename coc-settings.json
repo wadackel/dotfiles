@@ -1,8 +1,16 @@
 {
+  "coc.preferences.useQuickfixForLocations": true,
+  "coc.preferences.snippets.enable": false,
   "suggest.minTriggerInputLength": 1,
+  "suggest.noselect": true,
+  "suggest.disableMenu": true,
+  "suggest.disableMenuShortcut": true,
+  "suggest.fixInsertedWord": false,
+  "diagnostic.displayByAle": true,
+  "diagnostic.virtualText": true,
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
-  "coc.preferences.useQuickfixForLocations": true,
+  "tslint.autoFixOnSave": true,
   "languageserver": {
     "golang": {
       "command": "gopls",
