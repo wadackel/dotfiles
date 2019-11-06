@@ -530,6 +530,7 @@ Plug 'Shougo/context_filetype.vim'
 
 " colorschema
 Plug 'rakr/vim-one'
+Plug 'wadackel/vim-dogrun'
 Plug 'rhysd/vim-color-spring-night'
 
 call plug#end()
@@ -606,7 +607,7 @@ nmap <silent> ]g <Plug>(coc-diagnostic-next)
 inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Remap keys for gotos
-autocmd FileType javascript,typescript,typescript.tsx,rust,go,c nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
+autocmd! FileType javascript,typescript,typescript.tsx,rust,go,c nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
@@ -649,50 +650,9 @@ call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 
-" lightline my theme
-let s:p = {'normal': {}, 'inactive': {}, 'insert': {}, 'replace': {}, 'visual': {}, 'tabline': {}}
-
-let s:nordext0 = ["#2E3440", "NONE"]
-let s:nordext1 = ["#3B4252", 0]
-let s:nordext2 = ["#434C5E", "NONE"]
-let s:nordext3 = ["#2C323D", 8]
-let s:nordext4 = ["#D8DEE9", "NONE"]
-let s:nordext5 = ["#ECEFF4", 7]
-let s:nordext6 = ["#ECEFF4", 15]
-let s:nordext7 = ["#8FBCBB", 14]
-let s:nordext8 = ["#88C0D0", 6]
-let s:nordext9 = ["#81A1C1", 4]
-let s:nordext10 = ["#5E81AC", 12]
-let s:nordext11 = ["#BF616A", 1]
-let s:nordext12 = ["#D08770", 11]
-let s:nordext13 = ["#EBCB8B", 3]
-let s:nordext14 = ["#A3BE8C", 2]
-let s:nordext15 = ["#B48EAD", 5]
-
-let s:p.normal.left = [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
-let s:p.normal.middle = [ [ s:nordext5, s:nordext3 ] ]
-let s:p.normal.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
-let s:p.normal.warning = [ [ s:nordext1, s:nordext13 ] ]
-let s:p.normal.error = [ [ s:nordext1, s:nordext11 ] ]
-
-let s:p.inactive.left =  [ [ s:nordext1, s:nordext8 ], [ s:nordext5, s:nordext1 ] ]
-let s:p.inactive.middle = [ [ s:nordext5, s:nordext1 ] ]
-let s:p.inactive.right = [ [ s:nordext5, s:nordext1 ], [ s:nordext5, s:nordext1 ] ]
-
-let s:p.insert.left = [ [ s:nordext1, s:nordext6 ], [ s:nordext5, s:nordext1 ] ]
-let s:p.replace.left = [ [ s:nordext1, s:nordext13 ], [ s:nordext5, s:nordext1 ] ]
-let s:p.visual.left = [ [ s:nordext1, s:nordext7 ], [ s:nordext5, s:nordext1 ] ]
-
-let s:p.tabline.left = [ [ s:nordext5, s:nordext3 ] ]
-let s:p.tabline.middle = [ [ s:nordext5, s:nordext3 ] ]
-let s:p.tabline.right = [ [ s:nordext5, s:nordext3 ] ]
-let s:p.tabline.tabsel = [ [ s:nordext1, s:nordext8 ] ]
-
-let g:lightline#colorscheme#nordext#palette = lightline#colorscheme#flatten(s:p)
-
 " lightline configure
 let g:lightline = {
-  \ 'colorscheme': 'nordext',
+  \ 'colorscheme': 'dogrun',
   \ 'active': {
   \   'left': [['mode', 'paste'],
   \             ['fugitive', 'readonly', 'filename']],
@@ -700,20 +660,27 @@ let g:lightline = {
   \             ['percent'],
   \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
   \ },
+  \ 'component': {
+  \   'lineinfo': '¶%3l:%-2v',
+  \ },
   \ 'component_function': {
   \   'filename': 'LightLineFilename',
   \   'fugitive': 'LightLineFugitive',
   \   'readonly': 'LightLineReadonly',
   \   'cocstatus': 'coc#status',
   \ },
-  \ 'separator': { 'left': "\u2b80", 'right': "\u2b82" },
-  \ 'subseparator': { 'left': "\u2b81", 'right': "\u2b83" }
+  \ 'separator': { 'left': '', 'right': ''},
+  \ 'subseparator': { 'left': '❯', 'right': '❮'}
   \ }
 
 function! LightLineFilename()
   let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
-  let modified = &modified ? ' ∙' : ''
+  let modified = &modifiable && &modified ? ' ∙' : ''
   return filename . modified
+endfunction
+
+function! LightlineModified(n)
+  return &modifiable && &modified ? '∙' : ''
 endfunction
 
 function! LightLineReadonly()
@@ -729,10 +696,21 @@ endfunction
 function! LightLineFugitive()
   if exists("*fugitive#head")
     let branch = fugitive#head()
-    return branch !=# '' ? "\u2b60 ".branch : ''
+    return branch !=# '' ? ''.branch : ''
   endif
   return ''
 endfunction
+
+let g:lightline.tabline = {
+      \ 'active': [ 'tabnum', 'filename', 'modified' ],
+      \ 'inactive': [ 'tabnum', 'filename', 'modified' ]
+      \ }
+
+let g:lightline.tab_component_function = {
+      \ 'filename': 'lightline#tab#filename',
+      \ 'modified': 'LightlineModified',
+      \ 'readonly': 'lightline#tab#readonly',
+      \ 'tabnum': 'lightline#tab#tabnum' }
 
 
 " QuickRun
@@ -990,12 +968,12 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 let g:ale_open_list = 1
 let g:ale_set_loclist = 1
 let g:ale_set_quickfix = 0
-let g:ale_sign_column_always = 1
 let g:ale_list_window_size = 5
 let g:ale_keep_list_window_open = 0
+let g:ale_sign_column_always = 1
 
-let g:ale_sign_warning = '⦿'
-let g:ale_sign_error = '✗'
+let g:ale_sign_warning = '⚠'
+let g:ale_sign_error = '⦿'
 
 let g:ale_lint_on_save = 0
 let g:ale_lint_on_text_changed = 'normal'
@@ -1052,29 +1030,5 @@ command! DisableBufWritePost call <SID>disableBufWritePost()
 " Colors
 " =============================================================
 
-" autocmd ColorScheme * highlight Normal guibg=#282a36
-" autocmd ColorScheme * highlight GitGutterAdd guibg=NONE
-" autocmd ColorScheme * highlight GitGutterChange guibg=NONE
-" autocmd ColorScheme * highlight GitGutterChangeDelete guibg=NONE
-" autocmd ColorScheme * highlight GitGutterDelete guibg=NONE
-" autocmd ColorScheme * highlight SignifySignAdd guibg=NONE
-" autocmd ColorScheme * highlight SignifySignChange guibg=NONE
-" autocmd ColorScheme * highlight SignifySignChangeDelete guibg=NONE
-" autocmd ColorScheme * highlight SignifySignDelete guibg=NONE
-" autocmd ColorScheme * highlight SignifySignDelete guibg=NONE
-" autocmd ColorScheme * highlight SignColumn guibg=NONE
-"
-" colorscheme spring-night
-" let g:airline_theme = 'spring_night'
-
-" ColorSchemeの上書き
-autocmd ColorScheme * highlight SignColumn guibg=NONE
-autocmd ColorScheme * highlight Normal guibg=#282a36
-
-" ColorSchemeの設定
 syntax on
-set background=dark
-colorscheme one
-
-" syntax on
-" colorscheme dogrun
+colorscheme dogrun
