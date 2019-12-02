@@ -1,27 +1,27 @@
 add_newline = true
 
 [character]
-style_success = "bold fg:37"
-style_failure = "bold fg:204"
+style_success = "bold fg:79"
+style_failure = "bold fg:170"
+
+[package]
+disabled = true
 
 [battery]
 disabled = true
 
 [directory]
 truncate_to_repo = false
-style = "bold fg:189"
-
-[package]
-disabled = true
+style = "bold fg:104"
 
 [git_branch]
-style = "bold fg:242"
+style = "fg:103"
 
 [git_state]
-style = "fg:189"
+style = "fg:104"
 
 [git_status]
-style = "fg:189"
+style = "fg:104"
 
 [nodejs]
 disabled = true
@@ -30,4 +30,7 @@ disabled = true
 disabled = true
 
 [ruby]
+disabled = true
+
+[rust]
 disabled = true

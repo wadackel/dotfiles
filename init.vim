@@ -14,6 +14,10 @@ let g:loaded_vimball       = 1
 let g:loaded_vimballPlugin = 1
 
 
+" `init.vim` の再読み込み
+command! ReloadVimrc e $MYVIMRC
+
+
 " `%` 移動の拡張
 source $VIMRUNTIME/macros/matchit.vim
 
@@ -339,16 +343,11 @@ tnoremap <silent> <C-[> <C-\><C-n>
 " close terminal
 tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 
-
-" colorscheme 用のオートリロード
 function! s:auto_update_colorscheme(...) abort
-    " if &ft !=# 'vim'
-    "     echoerr 'Execute this command in colorscheme file buffer'
-    " endif
     setlocal autoread noswapfile
     let interval = a:0 > 0 ? a:1 : 3000
     let timer = timer_start(interval, {-> execute('checktime')}, {'repeat' : -1})
-    autocmd! BufReadPost <buffer> source ~/.config/nvim/init.vim
+    autocmd! BufReadPost <buffer> source $MYVIMRC
 endfunction
 command! -nargs=? AutoUpdateColorscheme call <SID>auto_update_colorscheme(<f-args>)
 
@@ -467,6 +466,7 @@ Plug 'thinca/vim-quickrun'
 " filer
 Plug 'Shougo/unite.vim'
 Plug 'Shougo/vimfiler'
+Plug 'liuchengxu/vim-clap'
 Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
 
@@ -479,6 +479,7 @@ Plug 'cohama/agit.vim'
 
 " git
 Plug 'tpope/vim-fugitive'
+Plug 'rhysd/conflict-marker.vim'
 Plug 'tyru/open-browser.vim'
 
 " memo
@@ -490,14 +491,13 @@ Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript
 Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
 
 " typescript
-Plug 'leafgarland/typescript-vim'
+Plug 'HerringtonDarkholme/yats.vim'
 
 " golang
 Plug 'fatih/vim-go', {'for': 'go'}
 
 " Rust
 Plug 'rust-lang/rust.vim'
-Plug 'racer-rust/vim-racer'
 
 " HTML
 Plug 'othree/html5.vim', {'for': 'html'}
@@ -509,6 +509,7 @@ Plug 'cakebaker/scss-syntax.vim', {'for': 'scss'}
 " markdown
 Plug 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
 Plug 'tukiyo/previm', {'for': ['markdown', 'md']}
+Plug 'iamcco/markdown-preview.nvim', {'do': { -> mkdp#util#install() }}
 Plug 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
 Plug 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
 Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
@@ -530,71 +531,12 @@ Plug 'Shougo/context_filetype.vim'
 
 " colorschema
 Plug 'rakr/vim-one'
-Plug 'wadackel/vim-dogrun'
+" Plug 'wadackel/vim-dogrun'
+Plug '~/develop/github.com/wadackel/vim-dogrun'
 Plug 'rhysd/vim-color-spring-night'
 
 call plug#end()
 
-
-" " vim-lsp x asyncomplete
-" let g:lsp_diagnostics_echo_cursor = 1
-" let g:lsp_virtual_text_prefix = " ‣ "
-" let g:asyncomplete_auto_popup = 1
-"
-" nmap <silent> <Leader>i <Plug>(lsp-hover)
-" nmap <silent> <F2> <Plug>(lsp-rename)
-" nmap <silent> <C-^> <Plug>(lsp-references)
-"
-" " highlight PopupWindow ctermbg=lightblue guibg=lightblue
-" "
-" " augroup lsp_float_colours
-" "   autocmd!
-" "   if !has('nvim')
-" "     autocmd User lsp_float_opened
-" "          \ call win_execute(lsp#ui#vim#output#getpreviewwinid(),
-" "          \		       'setlocal wincolor=PopupWindow')
-" "   else
-" "     autocmd User lsp_float_opened
-" "          \ call nvim_win_set_option(lsp#ui#vim#output#getpreviewwinid(),
-" "          \			       'winhighlight', 'Normal:PopupWindow')
-" "   endif
-" " augroup end
-"
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-"     \ 'name': 'file',
-"     \ 'whitelist': ['*'],
-"     \ 'priority': 10,
-"     \ 'completor': function('asyncomplete#sources#file#completor')
-"     \ }))
-"
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-"     \ 'name': 'buffer',
-"     \ 'whitelist': ['*'],
-"     \ 'blacklist': ['go'],
-"     \ 'completor': function('asyncomplete#sources#buffer#completor'),
-"     \ 'config': {
-"     \    'max_buffer_size': 5000000,
-"     \  },
-"     \ }))
-"
-" if executable('typescript-language-server')
-"   au User lsp_setup call lsp#register_server({
-"       \ 'name': 'typescript support using typescript-language-server',
-"       \ 'cmd': {server_info->[&shell, &shellcmdflag, 'typescript-language-server --stdio']},
-"       \ 'root_uri':{server_info->lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json'))},
-"       \ 'whitelist': ['typescript', 'typescript.tsx'],
-"       \ })
-" endif
-"
-" if executable('ccls')
-"   au User lsp_setup call lsp#register_server({
-"       \ 'name': 'ccls',
-"       \ 'cmd': {server_info->['ccls']},
-"       \ 'root_uri': {server_info->lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'compile_commands.json'))},
-"       \ 'initialization_options': {},
-"       \ 'whitelist': ['c', 'cpp', 'objc', 'objcpp', 'cc'],
-"       \ })
-" endif
 
 " coc.nvim
 
@@ -607,7 +549,7 @@ nmap <silent> ]g <Plug>(coc-diagnostic-next)
 inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Remap keys for gotos
-autocmd! FileType javascript,typescript,typescript.tsx,rust,go,c nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
+autocmd! FileType rust,go,c,javascript,typescript,typescript.tsx nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
@@ -652,35 +594,36 @@ call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 " lightline configure
 let g:lightline = {
-  \ 'colorscheme': 'dogrun',
-  \ 'active': {
-  \   'left': [['mode', 'paste'],
-  \             ['fugitive', 'readonly', 'filename']],
-  \   'right': [['lineinfo'],
-  \             ['percent'],
-  \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
-  \ },
-  \ 'component': {
-  \   'lineinfo': '¶%3l:%-2v',
-  \ },
-  \ 'component_function': {
-  \   'filename': 'LightLineFilename',
-  \   'fugitive': 'LightLineFugitive',
-  \   'readonly': 'LightLineReadonly',
-  \   'cocstatus': 'coc#status',
-  \ },
-  \ 'separator': { 'left': '', 'right': ''},
-  \ 'subseparator': { 'left': '❯', 'right': '❮'}
-  \ }
+ \ 'colorscheme': 'dogrun',
+ \ 'active': {
+ \   'left': [['mode', 'paste'],
+ \             ['fugitive', 'readonly', 'filename']],
+ \   'right': [['lineinfo'],
+ \             ['percent'],
+ \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
+ \ },
+ \ 'component': {
+ \   'lineinfo': '%3l:%-2v ¶',
+ \ },
+ \ 'component_function': {
+ \   'filename': 'LightLineFilename',
+ \   'fugitive': 'LightLineFugitive',
+ \   'readonly': 'LightLineReadonly',
+ \   'cocstatus': 'coc#status',
+ \ },
+ \ 'separator': { 'left': '', 'right': ''},
+ \ 'subseparator': { 'left': '❯', 'right': '❮'}
+ \ }
 
 function! LightLineFilename()
   let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
-  let modified = &modifiable && &modified ? ' ∙' : ''
+  let modified = &modified ? ' ∙' : ''
   return filename . modified
 endfunction
 
-function! LightlineModified(n)
-  return &modifiable && &modified ? '∙' : ''
+function! LightlineModified(n) abort
+  let winnr = tabpagewinnr(a:n)
+  return gettabwinvar(a:n, winnr, '&modified') ? '∙' : gettabwinvar(a:n, winnr, '&modifiable') ? '' : '-'
 endfunction
 
 function! LightLineReadonly()
@@ -696,21 +639,23 @@ endfunction
 function! LightLineFugitive()
   if exists("*fugitive#head")
     let branch = fugitive#head()
-    return branch !=# '' ? ''.branch : ''
+    return branch !=# '' ? ' '.branch : ''
   endif
   return ''
 endfunction
 
 let g:lightline.tabline = {
-      \ 'active': [ 'tabnum', 'filename', 'modified' ],
-      \ 'inactive': [ 'tabnum', 'filename', 'modified' ]
-      \ }
+     \ 'active': [ 'tabnum', 'filename', 'modified' ],
+     \ 'inactive': [ 'tabnum', 'filename', 'modified' ]
+     \ }
+
+let g:lightline.tabline_subseparator = { 'left': '', 'right': '' }
 
 let g:lightline.tab_component_function = {
-      \ 'filename': 'lightline#tab#filename',
-      \ 'modified': 'LightlineModified',
-      \ 'readonly': 'lightline#tab#readonly',
-      \ 'tabnum': 'lightline#tab#tabnum' }
+     \ 'filename': 'lightline#tab#filename',
+     \ 'modified': 'LightlineModified',
+     \ 'readonly': 'lightline#tab#readonly',
+     \ 'tabnum': 'lightline#tab#tabnum' }
 
 
 " QuickRun
@@ -746,15 +691,34 @@ function! s:vimfiler_settings()
 endfunction
 
 
+" " vim-clap
+" let g:clap_current_selection_sign = {
+"      \ 'text': '»',
+"      \ 'texthl': 'WarningMsg',
+"      \ 'linehl': 'ClapCurrentSelection',
+"      \ }
+"
+" let g:clap_selected_sign = {
+"      \ 'text': '❯',
+"      \ 'texthl': 'WarningMsg',
+"      \ 'linehl': 'ClapSelected',
+"      \ }
+"
+" nnoremap <C-p> :Clap files<CR>
+" nnoremap <Leader>gg :Clap grep<CR>
+" nnoremap <Leader>b :Clap buffers<CR>
+"
+" command! -nargs=0 History :Clap command_history
+
+
 " fzf
 if executable('fzf')
+  let g:fzf_history_dir = '~/.local/share/fzf-history'
   let g:fzf_buffers_jump = 1
   let g:fzf_action = {
-        \ 'ctrl-t': 'tab split',
-        \ 'ctrl-x': 'split',
-        \ 'ctrl-v': 'vsplit' }
-
-  let g:fzf_history_dir = '~/.local/share/fzf-history'
+       \ 'ctrl-t': 'tab split',
+       \ 'ctrl-x': 'split',
+       \ 'ctrl-v': 'vsplit' }
 
   let $FZF_DEFAULT_OPTS='--layout=reverse'
   let g:fzf_layout = { 'window': 'call FloatingFZF()' }
@@ -773,12 +737,12 @@ if executable('fzf')
     let col = float2nr((&columns - width) / 2)
 
     let opts = {
-         \ 'relative': 'editor',
-         \ 'row': float2nr(&lines / 2 - height / 2),
-         \ 'col': col,
-         \ 'width': width,
-         \ 'height': height,
-         \ }
+        \ 'relative': 'editor',
+        \ 'row': float2nr(&lines / 2 - height / 2),
+        \ 'col': col,
+        \ 'width': width,
+        \ 'height': height,
+        \ }
 
     call nvim_open_win(buf, v:true, opts)
   endfunction
@@ -788,21 +752,22 @@ if executable('fzf')
     set grepformat=%f:%l:%c:%m,%f:%l:%m
 
     command! FZFFileList call fzf#run(fzf#wrap('rg', {
-          \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-          \ }, <bang>0))
+         \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+         \ }, <bang>0))
 
     command! -bang -nargs=* Rg
-          \ call fzf#vim#grep(
-          \ 'rg --column --line-number --hidden --ignore-case --no-heading --color=always '.shellescape(<q-args>), 1,
-          \ <bang>0 ? fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'up:60%')
-          \ : fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'right:50%:hidden', '?'),
-          \ <bang>0)
+         \ call fzf#vim#grep(
+         \ 'rg --column --line-number --hidden --ignore-case --no-heading --color=always '.shellescape(<q-args>), 1,
+         \ <bang>0 ? fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'up:60%')
+         \ : fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'right:50%:hidden', '?'),
+         \ <bang>0)
   endif
 
   nnoremap <silent> <C-p> :FZFFileList<CR>
-  nnoremap <silent> <Leader>b :Buffers<CR>
+  nnoremap <silent> <Leader>bb :Buffers<CR>
+  nnoremap <silent> <Leader>bc :BCommits<CR>
   nnoremap <silent> <Leader>; :History:<CR>
-  nnoremap <silent> <Leader>: :History:<CR>
+  nnoremap <silent> <Leader>/ :History/<CR>
 endif
 
 
@@ -932,19 +897,9 @@ augroup END
 
 " rust.vim
 let g:rustfmt_autosave = 1
-let $RUST_SRC_PATH = $HOME . '/.downloads/rust-lang/rust/src'
-let g:racer_cmd = 'racer'
-let g:racer_experimental_completer = 1
-
-augroup RustSettings
-  autocmd!
-  autocmd FileType rust nmap <C-]> <Plug>(rust-def)
-  autocmd FileType rust nmap <leader>i <Plug>(rust-doc)
-augroup END
 
 
 " table-mode
-
 " corner character
 let g:table_mode_corner = '|'
 
@@ -963,7 +918,6 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 
 " ALE
-
 " global options
 let g:ale_open_list = 1
 let g:ale_set_loclist = 1
@@ -972,7 +926,7 @@ let g:ale_list_window_size = 5
 let g:ale_keep_list_window_open = 0
 let g:ale_sign_column_always = 1
 
-let g:ale_sign_warning = '⚠'
+let g:ale_sign_warning = '⦿'
 let g:ale_sign_error = '⦿'
 
 let g:ale_lint_on_save = 0
@@ -988,6 +942,7 @@ let g:ale_disable_lsp = 1
 let g:ale_linter_aliases = {
       \ 'typescript': ['typescript'],
       \ 'typescript.tsx': ['typescript', 'css'],
+      \ 'typescriptreact': ['typescript', 'css'],
       \ }
 
 let g:ale_fixers = {
@@ -997,6 +952,7 @@ let g:ale_fixers = {
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
       \  'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \  'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
       \}
 
 let g:ale_javascript_eslint_options = '--no-ignore'

@@ -11,6 +11,8 @@
   ignorecase = false
 [color]
   ui = auto
+[merge]
+  tool = nvimdiff
 [diff]
   tool = nvimdiff
 [difftool "nvimdiff"]
@@ -19,8 +21,6 @@
   cmd = "nvim -d -c \"4wincmd w | wincmd J\" \"$LOCAL\" \"$BASE\" \"$REMOTE\"  \"$MERGED\""
 [fetch]
   prune = true
-[merge]
-  tool = vimdiff2
 [alias]
   aliases = !git config --get-regexp alias
   me = !git config --get-regexp user
