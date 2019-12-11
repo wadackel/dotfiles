@@ -426,7 +426,6 @@ Plug 'vim-scripts/sudo.vim'
 Plug 'mattn/webapi-vim'
 
 " completion
-
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'neoclide/coc-json', {'do': 'yarn install --frozen-lockfile'}
 Plug 'neoclide/coc-html', {'do': 'yarn install --frozen-lockfile'}
@@ -447,6 +446,7 @@ Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn install --frozen-lockfile'}
 
 " editing
 Plug 'mattn/emmet-vim'
+Plug 'andymass/vim-matchup'
 Plug 'tpope/vim-surround'
 Plug 'thinca/vim-visualstar'
 Plug 'editorconfig/editorconfig-vim'
@@ -553,6 +553,8 @@ autocmd! FileType rust,go,c,javascript,typescript,typescript.tsx nmap <silent> <
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
+nmap <silent> <Leader>a <Plug>(coc-codeaction)
+nmap <silent> <Leader>r <Plug>(coc-refactor)
 
 " Remap for rename current word
 nmap <F2> <Plug>(coc-rename)

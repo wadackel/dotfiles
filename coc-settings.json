@@ -6,7 +6,7 @@
   "suggest.disableMenu": true,
   "suggest.disableMenuShortcut": true,
   "suggest.fixInsertedWord": false,
-  "diagnostic.displayByAle": true,
+  "diagnostic.displayByAle": false,
   "diagnostic.virtualText": true,
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
