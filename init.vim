@@ -594,6 +594,10 @@ call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
 
 
+" matchup
+let g:matchup_matchparen_offscreen = {}
+
+
 " lightline configure
 let g:lightline = {
  \ 'colorscheme': 'dogrun',
