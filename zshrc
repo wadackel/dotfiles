@@ -42,6 +42,12 @@ if [[ -x `which nodenv` ]]; then
   eval "$(nodenv init -)"
 fi
 
+# pyenv
+if [[ -x `which pyenv` ]]; then
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
+fi
+
 # Rust
 if [[ -x `which rustc` ]]; then
   export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"

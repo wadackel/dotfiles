@@ -18,6 +18,10 @@ let g:loaded_vimballPlugin = 1
 command! ReloadVimrc e $MYVIMRC
 
 
+" python (pyenv)
+let g:python3_host_prog = '~/.pyenv/versions/py3neovim/bin/python'
+
+
 " `%` 移動の拡張
 source $VIMRUNTIME/macros/matchit.vim
 
@@ -202,19 +206,21 @@ inoremap (<Enter> ()<Left><CR><ESC><S-o>
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
 " 指定データをクリップボードにつながるレジスタへ保存
-function! s:Clip(data)
-  let @*=a:data
-  echo "clipped: " . a:data
+function! s:clip(data)
+  let root = finddir('.git/..', expand('%:p:h') . ';') . '/'
+  let data = substitute(a:data, '^' . root, '', '')
+  let @* = data
+  echo '[clipped] ' . data
 endfunction
 
 " 現在開いているファイルのパス
-command! -nargs=0 ClipPath call s:Clip(expand('%:p'))
+command! -nargs=0 ClipPath call s:clip(expand('%:p'))
 
 " 現在開いているファイルのファイル名
-command! -nargs=0 ClipFile call s:Clip(expand('%:t'))
+command! -nargs=0 ClipFile call s:clip(expand('%:t'))
 
 " 現在開いているファイルのディレクトリパス
-command! -nargs=0 ClipDir  call s:Clip(expand('%:p:h'))
+command! -nargs=0 ClipDir  call s:clip(expand('%:p:h'))
 
 
 " QuickFix の設定
@@ -436,14 +442,6 @@ Plug 'neoclide/coc-yank', {'do': 'yarn install --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn install --frozen-lockfile'}
 Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn install --frozen-lockfile'}
 
-" Plug 'prabirshrestha/async.vim'
-" Plug 'prabirshrestha/vim-lsp'
-" Plug 'ryanolsonx/vim-lsp-typescript'
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'prabirshrestha/asyncomplete-lsp.vim'
-" Plug 'prabirshrestha/asyncomplete-file.vim'
-" Plug 'prabirshrestha/asyncomplete-buffer.vim'
-
 " editing
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
@@ -464,8 +462,10 @@ Plug 'easymotion/vim-easymotion'
 Plug 'thinca/vim-quickrun'
 
 " filer
-Plug 'Shougo/unite.vim'
-Plug 'Shougo/vimfiler'
+Plug 'kristijanhusak/defx-git'
+Plug 'kristijanhusak/defx-icons'
+Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
+Plug 'ryanoasis/vim-devicons'
 Plug 'liuchengxu/vim-clap'
 Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
@@ -678,22 +678,96 @@ let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
 
 
-" VimFiler
-let g:vimfiler_as_default_explorer = 1
-let g:vimfiler_safe_mode_by_default = 0
-let g:vimfiler_ignore_pattern = ['^\.git$', '^\.DS_Store$']
+let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 
-nnoremap <C-n> :VimFiler -split -simple -winwidth=35 -toggle -no-quit<CR>
-nnoremap <C-j> :VimFilerBufferDir -split -simple -winwidth=35 -toggle -no-quit<CR>
 
-augroup vimfiler
+" defx
+call defx#custom#option('_', {
+      \ 'columns': 'git:indent:icons:filename:type',
+      \ 'ignored_files': '.DS_Store,.git',
+      \ })
+
+call defx#custom#column('git', 'indicators', {
+     \ 'Modified'  : '∙',
+     \ 'Staged'    : '∙',
+     \ 'Untracked' : '∙',
+     \ 'Renamed'   : '➜',
+     \ 'Unmerged'  : '═',
+     \ 'Ignored'   : '∙',
+     \ 'Deleted'   : '✖',
+     \ 'Unknown'   : '?'
+     \ })
+
+call defx#custom#option('_', {
+     \ 'root_marker': ':',
+     \ })
+
+call defx#custom#column('filename', {
+     \ 'root_marker_highlight': 'Ignore',
+     \ })
+
+nnoremap <silent><C-j> :Defx `expand('%:p:h')` -search=`expand('%:p')` -toggle -split=vertical -winwidth=40 -direction=topleft<CR>
+
+autocmd FileType defx call s:defx_my_settings()
+function! s:defx_my_settings() abort
+  " Define mappings
+  nnoremap <silent><buffer><expr> <CR> defx#do_action('drop')
+  nnoremap <silent><buffer><expr> l defx#do_action('drop')
+  nnoremap <silent><buffer><expr> c defx#do_action('copy')
+  nnoremap <silent><buffer><expr> m defx#do_action('move')
+  nnoremap <silent><buffer><expr> p defx#do_action('paste')
+  nnoremap <silent><buffer><expr> E defx#do_action('multi', [['drop', 'vsplit'], 'quit'])
+  nnoremap <silent><buffer><expr> P defx#do_action('open', 'pedit')
+  nnoremap <silent><buffer><expr> t defx#do_action('open', 'tabe')
+  nnoremap <silent><buffer><expr> o defx#do_action('open_or_close_tree')
+  nnoremap <silent><buffer><expr> K defx#do_action('new_directory')
+  nnoremap <silent><buffer><expr> N defx#do_action('new_file')
+  nnoremap <silent><buffer><expr> M defx#do_action('new_multiple_files')
+  nnoremap <silent><buffer><expr> C defx#do_action('toggle_columns', 'mark:indent:icon:filename:type:size:time')
+  nnoremap <silent><buffer><expr> d defx#do_action('remove')
+  nnoremap <silent><buffer><expr> r defx#do_action('rename')
+  nnoremap <silent><buffer><expr> ! \ defx#do_action('execute_command')
+  nnoremap <silent><buffer><expr> x defx#do_action('execute_system')
+  nnoremap <silent><buffer><expr> yy defx#do_action('yank_path')
+  nnoremap <silent><buffer><expr> . defx#do_action('toggle_ignored_files')
+  nnoremap <silent><buffer><expr> h defx#do_action('cd', ['..'])
+  nnoremap <silent><buffer><expr> ~ defx#do_action('cd')
+  nnoremap <silent><buffer><expr> q defx#do_action('quit')
+  nnoremap <silent><buffer><expr> <Space> defx#do_action('toggle_select') . 'j'
+  nnoremap <silent><buffer><expr> * defx#do_action('toggle_select_all')
+  nnoremap <silent><buffer><expr> j line('.') == line('$') ? 'gg' : 'j'
+  nnoremap <silent><buffer><expr> k line('.') == 1 ? 'G' : 'k'
+  nnoremap <silent><buffer><expr> <C-r> defx#do_action('redraw')
+  nnoremap <silent><buffer><expr> <C-g> defx#do_action('print')
+  nnoremap <silent><buffer><expr> cd defx#do_action('change_vim_cwd')
+  " defx-git
+  nmap <buffer><silent> [c <Plug>(defx-git-prev)
+  nmap <buffer><silent> ]c <Plug>(defx-git-next)
+endfunction
+
+augroup defx_as_netrw
   autocmd!
-  autocmd FileType vimfiler call s:vimfiler_settings()
-  autocmd FileType vimfiler nmap <buffer> <C-j> <Plug>(vimfiler_close)
+  autocmd BufEnter,VimEnter,BufNew,BufWinEnter,BufRead,BufCreate
+        \ * call s:browse_check(expand('<amatch>'))
 augroup END
 
-function! s:vimfiler_settings()
-  nnoremap <silent><buffer><expr> t vimfiler#do_switch_action('tabopen')
+function! s:browse_check(path) abort
+  augroup FileExplorer
+    autocmd!
+  augroup END
+
+  let path = a:path
+  if fnamemodify(path, ':t') ==# '~'
+    let path = '~'
+  endif
+
+  if &filetype ==# 'defx' && line('$') != 1
+    return
+  endif
+
+  if isdirectory(path)
+    exec 'Defx -new ' . path
+  endif
 endfunction
 
 
@@ -954,7 +1028,7 @@ let g:ale_linter_aliases = {
 let g:ale_fixers = {
       \  '*': ['remove_trailing_lines', 'trim_whitespace'],
       \  'markdown': ['prettier'],
-      \  'html': ['prettier'],
+      \  'html': [],
       \  'javascript': ['prettier', 'eslint'],
       \  'typescript': ['prettier', 'tslint', 'eslint'],
       \  'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
