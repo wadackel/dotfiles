@@ -312,7 +312,6 @@ nnoremap sL <C-w>L
 nnoremap sH <C-w>H
 nnoremap sn gt
 nnoremap sp gT
-nnoremap sr <C-w>r
 nnoremap s= <C-w>=
 nnoremap sw <C-w>w
 nnoremap so <C-w>_<C-w><Bar>
@@ -327,6 +326,17 @@ nnoremap sQ :<C-u>bd<CR>
 
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
+
+" Switches to tab with specific number.
+nnoremap <silent> <Leader>1 1gt
+nnoremap <silent> <Leader>2 2gt
+nnoremap <silent> <Leader>3 3gt
+nnoremap <silent> <Leader>4 4gt
+nnoremap <silent> <Leader>5 5gt
+nnoremap <silent> <Leader>6 6gt
+nnoremap <silent> <Leader>7 7gt
+nnoremap <silent> <Leader>8 8gt
+nnoremap <silent> <Leader>9 9gt
 
 
 " Terminal
@@ -396,6 +406,13 @@ endfunction
 command! SyntaxInfo call s:get_syn_info()
 
 
+" ripgrep
+if executable('rg')
+  set grepprg=rg\ --vimgrep\ --no-heading
+  set grepformat=%f:%l:%c:%m,%f:%l:%m
+endif
+
+
 " =============================================================
 " Filetypes
 " =============================================================
@@ -432,6 +449,13 @@ Plug 'vim-scripts/sudo.vim'
 Plug 'mattn/webapi-vim'
 
 " completion
+" Plug 'prabirshrestha/async.vim'
+" Plug 'prabirshrestha/asyncomplete.vim'
+" Plug 'prabirshrestha/asyncomplete-lsp.vim'
+" Plug 'prabirshrestha/asyncomplete-file.vim'
+" Plug 'prabirshrestha/asyncomplete-buffer.vim'
+" Plug 'prabirshrestha/vim-lsp'
+" Plug 'mattn/vim-lsp-settings'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'neoclide/coc-json', {'do': 'yarn install --frozen-lockfile'}
 Plug 'neoclide/coc-html', {'do': 'yarn install --frozen-lockfile'}
@@ -445,8 +469,7 @@ Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn install --frozen-lockfile'}
 " editing
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
-Plug 'tpope/vim-surround'
-Plug 'thinca/vim-visualstar'
+Plug 'machakann/vim-sandwich'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
@@ -456,12 +479,15 @@ Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
 Plug 'jceb/vim-editqf'
 Plug 'rhysd/clever-f.vim'
+Plug 'haya14busa/vim-asterisk'
+Plug 'haya14busa/is.vim'
 Plug 'easymotion/vim-easymotion'
 
 " debug
 Plug 'thinca/vim-quickrun'
 
 " filer
+" Plug 'lambdalisue/fern.vim'
 Plug 'kristijanhusak/defx-git'
 Plug 'kristijanhusak/defx-icons'
 Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
@@ -480,6 +506,7 @@ Plug 'cohama/agit.vim'
 " git
 Plug 'tpope/vim-fugitive'
 Plug 'rhysd/conflict-marker.vim'
+Plug 'APZelos/blamer.nvim'
 Plug 'tyru/open-browser.vim'
 
 " memo
@@ -538,6 +565,37 @@ Plug 'rhysd/vim-color-spring-night'
 call plug#end()
 
 
+" " vim-lsp x asyncomplete
+" let g:lsp_signs_enabled = 1
+" let g:lsp_text_edit_enabled = 1
+" let g:lsp_highlight_references_enabled = 1
+" let g:lsp_diagnostics_echo_cursor = 1
+" let g:lsp_fold_enabled = 0
+" let g:lsp_semantic_enabled = 1
+" let g:asyncomplete_popup_delay = 80
+" " let g:lsp_log_file = expand('~/vim-lsp.log')
+"
+" function! s:on_lsp_buffer_enabled() abort
+"   setlocal omnifunc=lsp#complete
+"   setlocal signcolumn=yes
+"
+"   inoremap <expr> <CR> pumvisible() ? "\<C-y>\<CR>" : "\<CR>"
+"
+"   nmap <silent> <buffer> <C-]> <Plug>(lsp-definition)
+"   nmap <silent> <buffer> <Leader>a <Plug>(lsp-code-action)
+"   nmap <silent> <buffer> <C-^> <Plug>(lsp-references)
+"   nmap <silent> <buffer> <Leader>i <Plug>(lsp-hover)
+"   nmap <silent> <buffer> <f2> <Plug>(lsp-rename)
+"   nmap <silent> <buffer> [g <Plug>(lsp-previous-diagnostic)
+"   nmap <silent> <buffer> ]g <Plug>(lsp-next-diagnostic)
+" endfunction
+"
+" augroup lsp_install
+"   au!
+"   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
+" augroup END
+
+
 " coc.nvim
 
 " Use `[g` and `]g` to navigate diagnostics
@@ -560,12 +618,6 @@ nmap <silent> <Leader>r <Plug>(coc-refactor)
 nmap <F2> <Plug>(coc-rename)
 
 " Show documentation in preview window
-nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
-
-" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
-" Coc only does snippet and additional edit on confirm.
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
-
 function! s:show_documentation()
   if (index(['vim','help'], &filetype) >= 0)
     execute 'h '.expand('<cword>')
@@ -573,6 +625,12 @@ function! s:show_documentation()
     call CocAction('doHover')
   endif
 endfunction
+
+nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
+
+" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
+" Coc only does snippet and additional edit on confirm.
+inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Highlight symbol under cursor on CursorHold
 autocmd CursorHold * silent call CocActionAsync('highlight')
@@ -592,6 +650,44 @@ call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
 call submode#map('bufmove', 'n', '', '>', '<C-w>>')
 call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
+
+
+" vim-sandwich
+let g:sandwich#recipes = deepcopy(g:sandwich#default_recipes)
+
+let g:sandwich#recipes += [
+      \   {
+      \     'external': ['it', 'at'],
+      \     'noremap' : 1,
+      \     'filetype': ['html'],
+      \     'input'   : ['t'],
+      \   },
+      \ ]
+
+let g:sandwich#recipes += [
+     \   {
+     \     'buns'    : ['TagInput(1)', 'TagInput(0)'],
+     \     'expr'    : 1,
+     \     'filetype': ['html'],
+     \     'kind'    : ['add', 'replace'],
+     \     'action'  : ['add'],
+     \     'input'   : ['t'],
+     \   },
+     \ ]
+
+function! TagInput(is_head) abort
+  if a:is_head
+    let s:TagLast = input('Tag Name: ')
+    if s:TagLast !=# ''
+      let tag = printf('<%s>', s:TagLast)
+    else
+      throw 'OperatorSandwichCancel'
+    endif
+  else
+    let tag = printf('</%s>', matchstr(s:TagLast, '^\a[^[:blank:]>/]*'))
+  endif
+  return tag
+endfunction
 
 
 " matchup
@@ -643,11 +739,8 @@ function! LightLineReadonly()
 endfunction
 
 function! LightLineFugitive()
-  if exists("*fugitive#head")
-    let branch = fugitive#head()
-    return branch !=# '' ? ' '.branch : ''
-  endif
-  return ''
+  let branch = fugitive#head()
+  return branch !=# '' ? ' '.branch : ''
 endfunction
 
 let g:lightline.tabline = {
@@ -672,16 +765,29 @@ vnoremap <silent><Leader>q :QuickRun<CR>
 
 
 " Clever-f
-let g:clever_f_smart_case = 0
+let g:clever_f_smart_case = 1
 let g:clever_f_across_no_line = 1
 let g:clever_f_fix_key_direction = 1
 let g:clever_f_repeat_last_char_inputs = []
 
 
-let g:WebDevIconsUnicodeDecorateFolderNodes = 1
+" vim-asterisk
+let g:asterisk#keeppos = 1
+
+map *   <Plug>(asterisk-*)<Plug>(is-nohl-1)
+map #   <Plug>(asterisk-#)<Plug>(is-nohl-1)
+map g*  <Plug>(asterisk-g*)<Plug>(is-nohl-1)
+map g#  <Plug>(asterisk-g#)<Plug>(is-nohl-1)
+map z*  <Plug>(asterisk-z*)<Plug>(is-nohl-1)
+map gz* <Plug>(asterisk-gz*)<Plug>(is-nohl-1)
+map z#  <Plug>(asterisk-z#)<Plug>(is-nohl-1)
+map gz# <Plug>(asterisk-gz#)<Plug>(is-nohl-1)
 
 
 " defx
+let g:WebDevIconsUnicodeDecorateFolderNodes = 1
+
+
 call defx#custom#option('_', {
       \ 'columns': 'git:indent:icons:filename:type',
       \ 'ignored_files': '.DS_Store,.git',
@@ -771,84 +877,73 @@ function! s:browse_check(path) abort
 endfunction
 
 
-" " vim-clap
-" let g:clap_current_selection_sign = {
-"      \ 'text': '»',
-"      \ 'texthl': 'WarningMsg',
-"      \ 'linehl': 'ClapCurrentSelection',
-"      \ }
-"
-" let g:clap_selected_sign = {
-"      \ 'text': '❯',
-"      \ 'texthl': 'WarningMsg',
-"      \ 'linehl': 'ClapSelected',
-"      \ }
-"
-" nnoremap <C-p> :Clap files<CR>
-" nnoremap <Leader>gg :Clap grep<CR>
-" nnoremap <Leader>b :Clap buffers<CR>
-"
-" command! -nargs=0 History :Clap command_history
+" vim-clap
+" git branches
+let s:clap_git_branches = {}
 
-
-" fzf
-if executable('fzf')
-  let g:fzf_history_dir = '~/.local/share/fzf-history'
-  let g:fzf_buffers_jump = 1
-  let g:fzf_action = {
-       \ 'ctrl-t': 'tab split',
-       \ 'ctrl-x': 'split',
-       \ 'ctrl-v': 'vsplit' }
-
-  let $FZF_DEFAULT_OPTS='--layout=reverse'
-  let g:fzf_layout = { 'window': 'call FloatingFZF()' }
-
-  augroup fzf-transparent-windows
-    autocmd!
-    autocmd FileType fzf set winblend=5
-  augroup END
-
-  function! FloatingFZF()
-    let buf = nvim_create_buf(v:false, v:true)
-    call setbufvar(buf, '&signcolumn', 'no')
-
-    let height = float2nr(&lines * 0.8)
-    let width = float2nr(&columns * 0.95)
-    let col = float2nr((&columns - width) / 2)
-
-    let opts = {
-        \ 'relative': 'editor',
-        \ 'row': float2nr(&lines / 2 - height / 2),
-        \ 'col': col,
-        \ 'width': width,
-        \ 'height': height,
-        \ }
-
-    call nvim_open_win(buf, v:true, opts)
-  endfunction
-
-  if executable('rg')
-    set grepprg=rg\ --vimgrep\ --no-heading
-    set grepformat=%f:%l:%c:%m,%f:%l:%m
-
-    command! FZFFileList call fzf#run(fzf#wrap('rg', {
-         \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-         \ }, <bang>0))
-
-    command! -bang -nargs=* Rg
-         \ call fzf#vim#grep(
-         \ 'rg --column --line-number --hidden --ignore-case --no-heading --color=always '.shellescape(<q-args>), 1,
-         \ <bang>0 ? fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'up:60%')
-         \ : fzf#vim#with_preview({'options': '--delimiter : --nth 4..'}, 'right:50%:hidden', '?'),
-         \ <bang>0)
+function! s:clap_git_branches.source() abort
+  if !executable('git')
+    call clap#helper#echo_error('git executable not found')
+    return []
   endif
 
-  nnoremap <silent> <C-p> :FZFFileList<CR>
-  nnoremap <silent> <Leader>bb :Buffers<CR>
-  nnoremap <silent> <Leader>bc :BCommits<CR>
-  nnoremap <silent> <Leader>; :History:<CR>
-  nnoremap <silent> <Leader>/ :History/<CR>
-endif
+  let branches = systemlist('git branch')
+  if v:shell_error
+    call clap#helper#echo_error('Error occurs on calling `git branch`, maybe you are not in a git repository.')
+    return []
+  else
+    return map(branches, 'split(v:val)[-1]')
+  endif
+endfunction
+
+function! s:clap_git_branches.sink(line) abort
+  call system('git switch ' . a:line)
+  if v:shell_error
+    call clap#helper#echo_error('Error occurs on calling `git switch %`, maybe you have any changed files or staged files.')
+  else
+    call clap#helper#echo_info('switched to "' . a:line . '"')
+  endif
+endfunction
+
+let s:clap_git_branches.enable_rooter = v:true
+let g:clap#provider#git_branches# = s:clap_git_branches
+
+" configure
+let g:clap_theme = 'dogrun'
+
+let g:clap_current_selection_sign = {
+    \ 'text': '»',
+    \ 'texthl': 'WarningMsg',
+    \ 'linehl': 'ClapCurrentSelection',
+    \ }
+
+let g:clap_selected_sign = {
+    \ 'text': '❯',
+    \ 'texthl': 'WarningMsg',
+    \ 'linehl': 'ClapSelected',
+    \ }
+
+let g:clap_search_box_border_symbols = {
+    \ 'arrow': ["\ue0b2", "\ue0b0"],
+    \ 'curve': ["\ue0b6", "\ue0b4"],
+    \ 'nil': ['', ''],
+    \ }
+
+let g:clap_prompt_format = '%spinner% %provider_id%❯ '
+let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+let g:clap_builtin_fuzzy_filter_threshold = 1000
+let g:clap_popup_input_delay = 16
+let g:clap_provider_grep_delay = 16
+let g:clap_on_move_delay = 16
+let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --hidden -g '!.git/'"
+
+nnoremap <silent> <C-p> :Clap files ++finder=fd --hidden -E '.git/' --type f<CR>
+nnoremap <silent> <Leader>gg :Clap grep<CR>
+nnoremap <silent> <Leader>bb :Clap buffers<CR>
+nnoremap <silent> <Leader>ch :Clap history<CR>
+nnoremap <silent> <Leader>cl :Clap command_history<CR>
+nnoremap <silent> <Leader>gb :Clap git_branches<CR>
 
 
 " easymotion
@@ -946,10 +1041,13 @@ augroup EmmitVim
 
 
 " Markdown
-let g:previm_open_cmd = 'open -a Google\ Chrome'
 let g:vim_markdown_folding_disabled = 1
-let g:previm_disable_default_css = 1
-let g:previm_custom_css_path = '~/dotfiles/templates/previm/markdown.css'
+
+
+" markdown-preview
+let g:mkdp_preview_options = {
+      \ 'disable_sync_scroll': 0,
+      \ }
 
 
 " caw (comment out)
@@ -1049,13 +1147,13 @@ nnoremap \lt :ALEToggle<CR>
 function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
-  CocEnable
+  " CocEnable
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
-  CocDisable
+  " CocDisable
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()

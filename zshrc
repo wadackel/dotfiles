@@ -6,6 +6,7 @@ fpath=(/usr/local/share/zsh/functions/ ${fpath})
 # ====================================================
 
 export LANG=en_US.UTF-8
+export EDITOR=nvim
 
 # キー操作
 bindkey -e
@@ -25,7 +26,7 @@ setopt auto_cd
 # ====================================================
 # Path
 # ====================================================
-export PATH=/usr/local/bin:${PATH}
+export PATH="/usr/local/bin:$PATH"
 export PATH="/usr/local/sbin:$PATH"
 export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
@@ -371,7 +372,7 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   zplug "b4b4r07/enhancd", use:init.sh
 
   zplug "zsh-users/zsh-autosuggestions", \
-    hook-load:"ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=103'"
+    hook-load:"ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'"
 
   zplug "stedolan/jq", \
       from:gh-r, \
