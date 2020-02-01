@@ -32,6 +32,7 @@ export GOPATH=${HOME}/go
 export PATH=${PATH}:${GOPATH}/bin
 export PATH="$HOME/.yarn/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/flutter/bin:$PATH"
 
 # depot_tools
 if [[ -e "$HOME/chromium/tools/depot_tools" ]]; then

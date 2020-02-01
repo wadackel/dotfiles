@@ -340,7 +340,7 @@ nnoremap <silent> <Leader>9 9gt
 
 
 " Terminal
-augroup termina-config
+augroup terminal-config
   autocmd!
   autocmd TermOpen * startinsert
   autocmd TermOpen * setlocal signcolumn=no
@@ -366,44 +366,6 @@ function! s:auto_update_colorscheme(...) abort
     autocmd! BufReadPost <buffer> source $MYVIMRC
 endfunction
 command! -nargs=? AutoUpdateColorscheme call <SID>auto_update_colorscheme(<f-args>)
-
-function! s:get_syn_id(transparent)
-  let synid = synID(line("."), col("."), 1)
-  if a:transparent
-    return synIDtrans(synid)
-  else
-    return synid
-  endif
-endfunction
-function! s:get_syn_attr(synid)
-  let name = synIDattr(a:synid, "name")
-  let ctermfg = synIDattr(a:synid, "fg", "cterm")
-  let ctermbg = synIDattr(a:synid, "bg", "cterm")
-  let guifg = synIDattr(a:synid, "fg", "gui")
-  let guibg = synIDattr(a:synid, "bg", "gui")
-  return {
-        \ "name": name,
-        \ "ctermfg": ctermfg,
-        \ "ctermbg": ctermbg,
-        \ "guifg": guifg,
-        \ "guibg": guibg}
-endfunction
-function! s:get_syn_info()
-  let baseSyn = s:get_syn_attr(s:get_syn_id(0))
-  echo "name: " . baseSyn.name .
-        \ " ctermfg: " . baseSyn.ctermfg .
-        \ " ctermbg: " . baseSyn.ctermbg .
-        \ " guifg: " . baseSyn.guifg .
-        \ " guibg: " . baseSyn.guibg
-  let linkedSyn = s:get_syn_attr(s:get_syn_id(1))
-  echo "link to"
-  echo "name: " . linkedSyn.name .
-        \ " ctermfg: " . linkedSyn.ctermfg .
-        \ " ctermbg: " . linkedSyn.ctermbg .
-        \ " guifg: " . linkedSyn.guifg .
-        \ " guibg: " . linkedSyn.guibg
-endfunction
-command! SyntaxInfo call s:get_syn_info()
 
 
 " ripgrep
@@ -457,14 +419,15 @@ Plug 'mattn/webapi-vim'
 " Plug 'prabirshrestha/vim-lsp'
 " Plug 'mattn/vim-lsp-settings'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'neoclide/coc-json', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-html', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-css', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-rls', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-yaml', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-yank', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-tsserver', {'do': 'yarn install --frozen-lockfile'}
-Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn install --frozen-lockfile'}
+Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn --frozen-lockfile'}
+Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -492,7 +455,7 @@ Plug 'kristijanhusak/defx-git'
 Plug 'kristijanhusak/defx-icons'
 Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'ryanoasis/vim-devicons'
-Plug 'liuchengxu/vim-clap'
+Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
 Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
 
@@ -544,6 +507,9 @@ Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 " toml
 Plug 'cespare/vim-toml',  {'for' : 'toml'}
 
+" Flutter
+Plug 'dart-lang/dart-vim-plugin'
+
 " varnish
 Plug 'fgsch/vim-varnish'
 
@@ -559,8 +525,11 @@ Plug 'Shougo/context_filetype.vim'
 " colorschema
 Plug 'rakr/vim-one'
 " Plug 'wadackel/vim-dogrun'
-Plug '~/develop/github.com/wadackel/vim-dogrun'
 Plug 'rhysd/vim-color-spring-night'
+Plug 'wadackel/nvim-syntax-info'
+
+" development
+Plug '~/develop/github.com/wadackel/vim-dogrun'
 
 call plug#end()
 
@@ -911,6 +880,8 @@ let g:clap#provider#git_branches# = s:clap_git_branches
 " configure
 let g:clap_theme = 'dogrun'
 
+let g:clap_layout = { 'relative': 'editor' }
+
 let g:clap_current_selection_sign = {
     \ 'text': '»',
     \ 'texthl': 'WarningMsg',
@@ -1077,6 +1048,10 @@ augroup END
 let g:rustfmt_autosave = 1
 
 
+" nvim-syntax-info
+nmap <silent> <Space>si <Plug>(syntax-info-toggle)
+
+
 " table-mode
 " corner character
 let g:table_mode_corner = '|'
@@ -1147,13 +1122,13 @@ nnoremap \lt :ALEToggle<CR>
 function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
-  " CocEnable
+  CocEnable
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
-  " CocDisable
+  CocDisable
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
