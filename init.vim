@@ -904,10 +904,10 @@ let g:clap_prompt_format = '%spinner% %provider_id%❯ '
 let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
 let g:clap_builtin_fuzzy_filter_threshold = 1000
+let g:clap_on_move_delay = 16
 let g:clap_popup_input_delay = 16
 let g:clap_provider_grep_delay = 16
-let g:clap_on_move_delay = 16
-let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --hidden -g '!.git/'"
+let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --no-ignore-dot"
 
 nnoremap <silent> <C-p> :Clap files ++finder=fd --hidden -E '.git/' --type f<CR>
 nnoremap <silent> <Leader>gg :Clap grep<CR>
