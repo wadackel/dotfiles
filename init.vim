@@ -450,11 +450,12 @@ Plug 'easymotion/vim-easymotion'
 Plug 'thinca/vim-quickrun'
 
 " filer
-" Plug 'lambdalisue/fern.vim'
-Plug 'kristijanhusak/defx-git'
-Plug 'kristijanhusak/defx-icons'
-Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'ryanoasis/vim-devicons'
+" Plug 'kristijanhusak/defx-git'
+" Plug 'kristijanhusak/defx-icons'
+" Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
+Plug 'lambdalisue/fern.vim'
+Plug 'lambdalisue/fern-renderer-devicons.vim'
 Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
 Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
@@ -506,6 +507,9 @@ Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 
 " toml
 Plug 'cespare/vim-toml',  {'for' : 'toml'}
+
+" C++
+Plug 'octol/vim-cpp-enhanced-highlight'
 
 " Flutter
 Plug 'dart-lang/dart-vim-plugin'
@@ -668,7 +672,7 @@ let g:lightline = {
  \ 'colorscheme': 'dogrun',
  \ 'active': {
  \   'left': [['mode', 'paste'],
- \             ['fugitive', 'readonly', 'filename']],
+ \             ['branch', 'readonly', 'filename']],
  \   'right': [['lineinfo'],
  \             ['percent'],
  \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
@@ -678,7 +682,7 @@ let g:lightline = {
  \ },
  \ 'component_function': {
  \   'filename': 'LightLineFilename',
- \   'fugitive': 'LightLineFugitive',
+ \   'branch': 'LightLineFugitive',
  \   'readonly': 'LightLineReadonly',
  \   'cocstatus': 'coc#status',
  \ },
@@ -753,97 +757,175 @@ map z#  <Plug>(asterisk-z#)<Plug>(is-nohl-1)
 map gz# <Plug>(asterisk-gz#)<Plug>(is-nohl-1)
 
 
-" defx
+" dev-icons
 let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 
 
-call defx#custom#option('_', {
-      \ 'columns': 'git:indent:icons:filename:type',
-      \ 'ignored_files': '.DS_Store,.git',
-      \ })
+" fern.vim
+let g:fern#disable_default_mappings = 1
+let g:fern#renderer = "devicons"
 
-call defx#custom#column('git', 'indicators', {
-     \ 'Modified'  : '∙',
-     \ 'Staged'    : '∙',
-     \ 'Untracked' : '∙',
-     \ 'Renamed'   : '➜',
-     \ 'Unmerged'  : '═',
-     \ 'Ignored'   : '∙',
-     \ 'Deleted'   : '✖',
-     \ 'Unknown'   : '?'
-     \ })
+nnoremap <silent> <C-j> :Fern %:h -width=40 -drawer -toggle<CR>
 
-call defx#custom#option('_', {
-     \ 'root_marker': ':',
-     \ })
+function! s:init_fern() abort
+  nmap <buffer> <expr>
+        \ <Plug>(fern-my-expand-or-enter)
+        \ fern#smart#drawer(
+        \   "\<Plug>(fern-open-or-expand)",
+        \   "\<Plug>(fern-open-or-enter)",
+        \ )
 
-call defx#custom#column('filename', {
-     \ 'root_marker_highlight': 'Ignore',
-     \ })
+  nmap <buffer> <expr>
+        \ <Plug>(fern-my-collapse-or-leave)
+        \ fern#smart#drawer(
+        \   "\<Plug>(fern-action-collapse)",
+        \   "\<Plug>(fern-action-leave)",
+        \ )
 
-nnoremap <silent><C-j> :Defx `expand('%:p:h')` -search=`expand('%:p')` -toggle -split=vertical -winwidth=40 -direction=topleft<CR>
+  nmap <silent><buffer><nowait> <CR> <Plug>(fern-open-or-enter)
+  nmap <silent><buffer><nowait> o <Plug>(fern-my-expand-or-enter)
+  nmap <silent><buffer><nowait> l <Plug>(fern-my-expand-or-enter)
+  nmap <silent><buffer><nowait> h <Plug>(fern-my-collapse-or-leave)
+  nmap <silent><buffer><nowait> <C-h> <Plug>(fern-action-leave)
+  nmap <silent><buffer><nowait> e <Plug>(fern-action-open)
+  nmap <silent><buffer><nowait> E <Plug>(fern-action-open:side)
+  nmap <silent><buffer><nowait> t <Plug>(fern-action-open:tabedit)
+  nmap <silent><buffer><nowait> i <Plug>(fern-action-reveal)
+  nmap <silent><buffer><nowait> <C-c> <Plug>(fern-action-cancel)
+  nmap <silent><buffer><nowait> r <Plug>(fern-action-reload)
+  nmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
+  nmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark-toggle)j
+  vmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
+  vmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark-toggle)
+  nmap <silent><buffer><nowait> x <Plug>(fern-action-open:system)
+  nmap <silent><buffer><nowait> X <Plug>(fern-action-terminal)
+  nmap <silent><buffer><nowait> N <Plug>(fern-action-new-file)
+  nmap <silent><buffer><nowait> K <Plug>(fern-action-new-dir)
+  nmap <silent><buffer><nowait> c <Plug>(fern-action-copy)
+  nmap <silent><buffer><nowait> m <Plug>(fern-action-move)
+  nmap <silent><buffer><nowait> C <Plug>(fern-action-clipboard-copy)
+  nmap <silent><buffer><nowait> M <Plug>(fern-action-clipboard-move)
+  nmap <silent><buffer><nowait> P <Plug>(fern-action-clipboard-paste)
+  nmap <silent><buffer><nowait> dd <Plug>(fern-action-remove)
+  nmap <silent><buffer><nowait> r <Plug>(fern-action-rename)
 
-autocmd FileType defx call s:defx_my_settings()
-function! s:defx_my_settings() abort
-  " Define mappings
-  nnoremap <silent><buffer><expr> <CR> defx#do_action('drop')
-  nnoremap <silent><buffer><expr> l defx#do_action('drop')
-  nnoremap <silent><buffer><expr> c defx#do_action('copy')
-  nnoremap <silent><buffer><expr> m defx#do_action('move')
-  nnoremap <silent><buffer><expr> p defx#do_action('paste')
-  nnoremap <silent><buffer><expr> E defx#do_action('multi', [['drop', 'vsplit'], 'quit'])
-  nnoremap <silent><buffer><expr> P defx#do_action('open', 'pedit')
-  nnoremap <silent><buffer><expr> t defx#do_action('open', 'tabe')
-  nnoremap <silent><buffer><expr> o defx#do_action('open_or_close_tree')
-  nnoremap <silent><buffer><expr> K defx#do_action('new_directory')
-  nnoremap <silent><buffer><expr> N defx#do_action('new_file')
-  nnoremap <silent><buffer><expr> M defx#do_action('new_multiple_files')
-  nnoremap <silent><buffer><expr> C defx#do_action('toggle_columns', 'mark:indent:icon:filename:type:size:time')
-  nnoremap <silent><buffer><expr> d defx#do_action('remove')
-  nnoremap <silent><buffer><expr> r defx#do_action('rename')
-  nnoremap <silent><buffer><expr> ! \ defx#do_action('execute_command')
-  nnoremap <silent><buffer><expr> x defx#do_action('execute_system')
-  nnoremap <silent><buffer><expr> yy defx#do_action('yank_path')
-  nnoremap <silent><buffer><expr> . defx#do_action('toggle_ignored_files')
-  nnoremap <silent><buffer><expr> h defx#do_action('cd', ['..'])
-  nnoremap <silent><buffer><expr> ~ defx#do_action('cd')
-  nnoremap <silent><buffer><expr> q defx#do_action('quit')
-  nnoremap <silent><buffer><expr> <Space> defx#do_action('toggle_select') . 'j'
-  nnoremap <silent><buffer><expr> * defx#do_action('toggle_select_all')
-  nnoremap <silent><buffer><expr> j line('.') == line('$') ? 'gg' : 'j'
-  nnoremap <silent><buffer><expr> k line('.') == 1 ? 'G' : 'k'
-  nnoremap <silent><buffer><expr> <C-r> defx#do_action('redraw')
-  nnoremap <silent><buffer><expr> <C-g> defx#do_action('print')
-  nnoremap <silent><buffer><expr> cd defx#do_action('change_vim_cwd')
-  " defx-git
-  nmap <buffer><silent> [c <Plug>(defx-git-prev)
-  nmap <buffer><silent> ]c <Plug>(defx-git-next)
+  nnoremap <silent><buffer><nowait> q :<C-u>quit<CR>
 endfunction
 
-augroup defx_as_netrw
+augroup fern_custom
   autocmd!
-  autocmd BufEnter,VimEnter,BufNew,BufWinEnter,BufRead,BufCreate
-        \ * call s:browse_check(expand('<amatch>'))
+  autocmd FileType fern call s:init_fern()
 augroup END
 
-function! s:browse_check(path) abort
-  augroup FileExplorer
-    autocmd!
-  augroup END
+" netrw hijack
+let g:loaded_netrw             = 1
+let g:loaded_netrwPlugin       = 1
+let g:loaded_netrwSettings     = 1
+let g:loaded_netrwFileHandlers = 1
 
-  let path = a:path
-  if fnamemodify(path, ':t') ==# '~'
-    let path = '~'
-  endif
-
-  if &filetype ==# 'defx' && line('$') != 1
+function! s:hijack_directory() abort
+  if !isdirectory(expand('%'))
     return
   endif
-
-  if isdirectory(path)
-    exec 'Defx -new ' . path
-  endif
+  Fern %
 endfunction
+
+augroup fern_as_netrw
+  autocmd!
+  autocmd BufEnter * ++nested call s:hijack_directory()
+augroup END
+
+" defx
+" let g:WebDevIconsUnicodeDecorateFolderNodes = 1
+
+
+" call defx#custom#option('_', {
+"     \ 'columns': 'git:indent:icons:filename:type',
+"     \ 'ignored_files': '.DS_Store,.git',
+"     \ })
+"
+" call defx#custom#column('git', 'indicators', {
+"    \ 'Modified'  : '∙',
+"    \ 'Staged'    : '∙',
+"    \ 'Untracked' : '∙',
+"    \ 'Renamed'   : '➜',
+"    \ 'Unmerged'  : '═',
+"    \ 'Ignored'   : '∙',
+"    \ 'Deleted'   : '✖',
+"    \ 'Unknown'   : '?'
+"    \ })
+"
+" call defx#custom#option('_', {
+"    \ 'root_marker': ':',
+"    \ })
+"
+" call defx#custom#column('filename', {
+"    \ 'root_marker_highlight': 'Ignore',
+"    \ })
+"
+" nnoremap <silent><C-j> :Defx `expand('%:p:h')` -search=`expand('%:p')` -toggle -split=vertical -winwidth=40 -direction=topleft<CR>
+"
+" autocmd FileType defx call s:defx_my_settings()
+" function! s:defx_my_settings() abort
+"   " Define mappings
+"   nnoremap <silent><buffer><expr> <CR> defx#do_action('drop')
+"   nnoremap <silent><buffer><expr> l defx#do_action('drop')
+"   nnoremap <silent><buffer><expr> c defx#do_action('copy')
+"   nnoremap <silent><buffer><expr> m defx#do_action('move')
+"   nnoremap <silent><buffer><expr> p defx#do_action('paste')
+"   nnoremap <silent><buffer><expr> E defx#do_action('multi', [['drop', 'vsplit'], 'quit'])
+"   nnoremap <silent><buffer><expr> P defx#do_action('open', 'pedit')
+"   nnoremap <silent><buffer><expr> t defx#do_action('open', 'tabe')
+"   nnoremap <silent><buffer><expr> o defx#do_action('open_or_close_tree')
+"   nnoremap <silent><buffer><expr> K defx#do_action('new_directory')
+"   nnoremap <silent><buffer><expr> N defx#do_action('new_file')
+"   nnoremap <silent><buffer><expr> M defx#do_action('new_multiple_files')
+"   nnoremap <silent><buffer><expr> C defx#do_action('toggle_columns', 'mark:indent:icon:filename:type:size:time')
+"   nnoremap <silent><buffer><expr> d defx#do_action('remove')
+"   nnoremap <silent><buffer><expr> r defx#do_action('rename')
+"   nnoremap <silent><buffer><expr> ! \ defx#do_action('execute_command')
+"   nnoremap <silent><buffer><expr> x defx#do_action('execute_system')
+"   nnoremap <silent><buffer><expr> yy defx#do_action('yank_path')
+"   nnoremap <silent><buffer><expr> . defx#do_action('toggle_ignored_files')
+"   nnoremap <silent><buffer><expr> h defx#do_action('cd', ['..'])
+"   nnoremap <silent><buffer><expr> ~ defx#do_action('cd')
+"   nnoremap <silent><buffer><expr> q defx#do_action('quit')
+"   nnoremap <silent><buffer><expr> <Space> defx#do_action('toggle_select') . 'j'
+"   nnoremap <silent><buffer><expr> * defx#do_action('toggle_select_all')
+"   nnoremap <silent><buffer><expr> j line('.') == line('$') ? 'gg' : 'j'
+"   nnoremap <silent><buffer><expr> k line('.') == 1 ? 'G' : 'k'
+"   nnoremap <silent><buffer><expr> <C-r> defx#do_action('redraw')
+"   nnoremap <silent><buffer><expr> <C-g> defx#do_action('print')
+"   nnoremap <silent><buffer><expr> cd defx#do_action('change_vim_cwd')
+"   " defx-git
+"   nmap <buffer><silent> [c <Plug>(defx-git-prev)
+"   nmap <buffer><silent> ]c <Plug>(defx-git-next)
+" endfunction
+"
+" augroup defx_as_netrw
+"   autocmd!
+"   autocmd BufEnter,VimEnter,BufNew,BufWinEnter,BufRead,BufCreate
+"       \ * call s:browse_check(expand('<amatch>'))
+" augroup END
+"
+" function! s:browse_check(path) abort
+"   augroup FileExplorer
+"     autocmd!
+"   augroup END
+"
+"   let path = a:path
+"   if fnamemodify(path, ':t') ==# '~'
+"     let path = '~'
+"   endif
+"
+"   if &filetype ==# 'defx' && line('$') != 1
+"     return
+"   endif
+"
+"   if isdirectory(path)
+"     exec 'Defx -new ' . path
+"   endif
+" endfunction
 
 
 " vim-clap
