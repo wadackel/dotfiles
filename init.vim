@@ -451,9 +451,6 @@ Plug 'thinca/vim-quickrun'
 
 " filer
 Plug 'ryanoasis/vim-devicons'
-" Plug 'kristijanhusak/defx-git'
-" Plug 'kristijanhusak/defx-icons'
-" Plug 'Shougo/defx.nvim', { 'do': ':UpdateRemotePlugins' }
 Plug 'lambdalisue/fern.vim'
 Plug 'lambdalisue/fern-renderer-devicons.vim'
 Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
@@ -762,10 +759,11 @@ let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 
 
 " fern.vim
+let g:fern#default_hidden = 1
 let g:fern#disable_default_mappings = 1
 let g:fern#renderer = "devicons"
 
-nnoremap <silent> <C-j> :Fern %:h -width=40 -drawer -toggle<CR>
+nnoremap <silent> <C-j> :Fern . -width=40 -drawer -reveal=% -toggle<CR>
 
 function! s:init_fern() abort
   nmap <buffer> <expr>
@@ -834,98 +832,6 @@ augroup fern_as_netrw
   autocmd!
   autocmd BufEnter * ++nested call s:hijack_directory()
 augroup END
-
-" defx
-" let g:WebDevIconsUnicodeDecorateFolderNodes = 1
-
-
-" call defx#custom#option('_', {
-"     \ 'columns': 'git:indent:icons:filename:type',
-"     \ 'ignored_files': '.DS_Store,.git',
-"     \ })
-"
-" call defx#custom#column('git', 'indicators', {
-"    \ 'Modified'  : '∙',
-"    \ 'Staged'    : '∙',
-"    \ 'Untracked' : '∙',
-"    \ 'Renamed'   : '➜',
-"    \ 'Unmerged'  : '═',
-"    \ 'Ignored'   : '∙',
-"    \ 'Deleted'   : '✖',
-"    \ 'Unknown'   : '?'
-"    \ })
-"
-" call defx#custom#option('_', {
-"    \ 'root_marker': ':',
-"    \ })
-"
-" call defx#custom#column('filename', {
-"    \ 'root_marker_highlight': 'Ignore',
-"    \ })
-"
-" nnoremap <silent><C-j> :Defx `expand('%:p:h')` -search=`expand('%:p')` -toggle -split=vertical -winwidth=40 -direction=topleft<CR>
-"
-" autocmd FileType defx call s:defx_my_settings()
-" function! s:defx_my_settings() abort
-"   " Define mappings
-"   nnoremap <silent><buffer><expr> <CR> defx#do_action('drop')
-"   nnoremap <silent><buffer><expr> l defx#do_action('drop')
-"   nnoremap <silent><buffer><expr> c defx#do_action('copy')
-"   nnoremap <silent><buffer><expr> m defx#do_action('move')
-"   nnoremap <silent><buffer><expr> p defx#do_action('paste')
-"   nnoremap <silent><buffer><expr> E defx#do_action('multi', [['drop', 'vsplit'], 'quit'])
-"   nnoremap <silent><buffer><expr> P defx#do_action('open', 'pedit')
-"   nnoremap <silent><buffer><expr> t defx#do_action('open', 'tabe')
-"   nnoremap <silent><buffer><expr> o defx#do_action('open_or_close_tree')
-"   nnoremap <silent><buffer><expr> K defx#do_action('new_directory')
-"   nnoremap <silent><buffer><expr> N defx#do_action('new_file')
-"   nnoremap <silent><buffer><expr> M defx#do_action('new_multiple_files')
-"   nnoremap <silent><buffer><expr> C defx#do_action('toggle_columns', 'mark:indent:icon:filename:type:size:time')
-"   nnoremap <silent><buffer><expr> d defx#do_action('remove')
-"   nnoremap <silent><buffer><expr> r defx#do_action('rename')
-"   nnoremap <silent><buffer><expr> ! \ defx#do_action('execute_command')
-"   nnoremap <silent><buffer><expr> x defx#do_action('execute_system')
-"   nnoremap <silent><buffer><expr> yy defx#do_action('yank_path')
-"   nnoremap <silent><buffer><expr> . defx#do_action('toggle_ignored_files')
-"   nnoremap <silent><buffer><expr> h defx#do_action('cd', ['..'])
-"   nnoremap <silent><buffer><expr> ~ defx#do_action('cd')
-"   nnoremap <silent><buffer><expr> q defx#do_action('quit')
-"   nnoremap <silent><buffer><expr> <Space> defx#do_action('toggle_select') . 'j'
-"   nnoremap <silent><buffer><expr> * defx#do_action('toggle_select_all')
-"   nnoremap <silent><buffer><expr> j line('.') == line('$') ? 'gg' : 'j'
-"   nnoremap <silent><buffer><expr> k line('.') == 1 ? 'G' : 'k'
-"   nnoremap <silent><buffer><expr> <C-r> defx#do_action('redraw')
-"   nnoremap <silent><buffer><expr> <C-g> defx#do_action('print')
-"   nnoremap <silent><buffer><expr> cd defx#do_action('change_vim_cwd')
-"   " defx-git
-"   nmap <buffer><silent> [c <Plug>(defx-git-prev)
-"   nmap <buffer><silent> ]c <Plug>(defx-git-next)
-" endfunction
-"
-" augroup defx_as_netrw
-"   autocmd!
-"   autocmd BufEnter,VimEnter,BufNew,BufWinEnter,BufRead,BufCreate
-"       \ * call s:browse_check(expand('<amatch>'))
-" augroup END
-"
-" function! s:browse_check(path) abort
-"   augroup FileExplorer
-"     autocmd!
-"   augroup END
-"
-"   let path = a:path
-"   if fnamemodify(path, ':t') ==# '~'
-"     let path = '~'
-"   endif
-"
-"   if &filetype ==# 'defx' && line('$') != 1
-"     return
-"   endif
-"
-"   if isdirectory(path)
-"     exec 'Defx -new ' . path
-"   endif
-" endfunction
 
 
 " vim-clap
