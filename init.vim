@@ -407,9 +407,6 @@ call plug#begin('~/.vim/plugged')
 " vim-scripts
 Plug 'vim-scripts/sudo.vim'
 
-" base
-Plug 'mattn/webapi-vim'
-
 " completion
 " Plug 'prabirshrestha/async.vim'
 " Plug 'prabirshrestha/asyncomplete.vim'
@@ -790,7 +787,7 @@ function! s:init_fern() abort
   nmap <silent><buffer><nowait> t <Plug>(fern-action-open:tabedit)
   nmap <silent><buffer><nowait> i <Plug>(fern-action-reveal)
   nmap <silent><buffer><nowait> <C-c> <Plug>(fern-action-cancel)
-  nmap <silent><buffer><nowait> r <Plug>(fern-action-reload)
+  nmap <silent><buffer><nowait> <F5> <Plug>(fern-action-reload)
   nmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
   nmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark-toggle)j
   vmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
