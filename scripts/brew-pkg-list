@@ -5,6 +5,5 @@ lua
 nodenv
 reattach-to-user-namespace
 ripgrep
-tmux
 tree
 zsh

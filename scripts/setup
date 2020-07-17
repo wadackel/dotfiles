@@ -32,6 +32,29 @@ if [[ ! -x `which brew` ]]; then
   fi
 fi
 
+# tmux
+if [[ ! -x `which tmux` ]]; then
+  if ask "tmux install?"; then
+    mkdir tmux
+    cd tmux
+
+    # /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    # brew update
+    # brew upgrade --all
+    # brew doctor
+    # brew -v
+    #
+    # # install packages
+    # brew install $(cat ~/dotfiles/scripts/brew-pkg-list)
+    #
+    # # git-lfs
+    # git lfs install
+    #
+    # # fpath
+    # fpath=(/usr/local/share/zsh/functions/ ${fpath}) | zsh
+  fi
+fi
+
 # zplug
 if [[ ! -f "${HOME}/.zplug/init.zsh" ]]; then
   if ask "zplug install?"; then

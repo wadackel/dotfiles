@@ -166,15 +166,6 @@ alias rmrf='rm -rf'
 alias d="docker"
 alias dc="docker-compose"
 
-# tree
-if type tree > /dev/null 2>&1; then
-  local TREE="tree -a -f"
-else
-  local TREE="ls -R | grep ":$" | sed -e 's/:$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /' -e 's/-/|/'"
-fi
-
-alias tree=TREE
-
 # global
 alias -g G="| grep"
 alias -g X="| xargs"

@@ -17,6 +17,14 @@ let g:loaded_vimballPlugin = 1
 " `init.vim` の再読み込み
 command! ReloadVimrc e $MYVIMRC
 
+" debug
+command! -nargs=*
+\   Debug
+\   try
+\|      echom <q-args> ":" string(<args>)
+\|  catch
+\|      echom <q-args>
+\|  endtry
 
 " python (pyenv)
 let g:python3_host_prog = '~/.pyenv/versions/py3neovim/bin/python'
@@ -61,7 +69,7 @@ if ! isdirectory($HOME.'/.vim/swap')
   call mkdir($HOME.'/.vim/swap', 'p')
 endif
 set directory=~/.vim/swap
-set ambiwidth=double
+" set ambiwidth=double
 set wildmenu
 set wildmode=longest,full
 set noshowmode
@@ -257,10 +265,6 @@ if &term =~ "xterm"
 endif
 
 
-" </で閉じタグを自動補完
-autocmd! FileType html inoremap <silent> <buffer> </ </<C-x><C-o>
-
-
 " ファイルタイプショートカット
 autocmd! FileType md setlocal filetype=markdown
 autocmd! FileType js setlocal filetype=javascript
@@ -389,6 +393,7 @@ augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile .stylelintrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .prettierrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
+  autocmd BufRead,BufNew,BufNewFile .textlintrc setlocal ft=json
 augroup END
 
 augroup fileTypeIndent
@@ -415,16 +420,17 @@ Plug 'vim-scripts/sudo.vim'
 " Plug 'prabirshrestha/asyncomplete-buffer.vim'
 " Plug 'prabirshrestha/vim-lsp'
 " Plug 'mattn/vim-lsp-settings'
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
+Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -479,7 +485,7 @@ Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
 Plug 'HerringtonDarkholme/yats.vim'
 
 " golang
-Plug 'fatih/vim-go', {'for': 'go'}
+Plug 'mattn/vim-goimports', {'for': 'go'}
 
 " Rust
 Plug 'rust-lang/rust.vim'
@@ -605,8 +611,20 @@ autocmd CursorHold * silent call CocActionAsync('highlight')
 " diagnostics
 nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
 
+" commands
+nnoremap <silent> <space>c :<C-u>CocList commands<CR>
+
+" outline
+nnoremap <silent> <space>o :<C-u>CocList outline<CR>
+
 " yank
 nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
+
+" latest coc list
+nnoremap <silent> <space>p :<C-u>CocListResume<CR>
+
+nnoremap <silent><expr><up> coc#util#has_float() ? coc#util#float_scroll(0) : "\<up>"
+nnoremap <silent><expr><down> coc#util#has_float() ? coc#util#float_scroll(1) : "\<down>"
 
 
 " 画面分割用のキーマップ
@@ -888,13 +906,14 @@ let g:clap_search_box_border_symbols = {
 let g:clap_prompt_format = '%spinner% %provider_id%❯ '
 let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
+let g:clap_insert_mode_only = v:true
 let g:clap_builtin_fuzzy_filter_threshold = 1000
 let g:clap_on_move_delay = 16
 let g:clap_popup_input_delay = 16
 let g:clap_provider_grep_delay = 16
 let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --no-ignore-dot"
 
-nnoremap <silent> <C-p> :Clap files ++finder=fd --hidden -E '.git/' --type f<CR>
+nnoremap <silent> <C-p> :Clap files +no-cache ++finder=fd --hidden -E '.git/' --type f<CR>
 nnoremap <silent> <Leader>gg :Clap grep<CR>
 nnoremap <silent> <Leader>bb :Clap buffers<CR>
 nnoremap <silent> <Leader>ch :Clap history<CR>
@@ -997,12 +1016,16 @@ augroup EmmitVim
 
 
 " Markdown
+let g:vim_markdown_no_default_key_mappings = 1
 let g:vim_markdown_folding_disabled = 1
 
 
 " markdown-preview
+let g:mkdp_auto_close = 0
+let g:mkdp_page_title = '${name}'
+
 let g:mkdp_preview_options = {
-      \ 'disable_sync_scroll': 0,
+      \ 'disable_sync_scroll': 1,
       \ }
 
 
@@ -1076,6 +1099,10 @@ let g:ale_fix_on_save = 1
 
 let g:ale_completion_enabled = 0
 let g:ale_disable_lsp = 1
+
+let g:ale_linters = {
+      \ 'markdown': ['textlint'],
+      \ }
 
 let g:ale_linter_aliases = {
       \ 'typescript': ['typescript'],

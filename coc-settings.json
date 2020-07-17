@@ -10,6 +10,7 @@
   "diagnostic.virtualText": true,
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
+  "tsserver.maxTsServerMemory": 6000,
   "tslint.autoFixOnSave": true,
   "languageserver": {
     "golang": {
