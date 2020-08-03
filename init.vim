@@ -243,7 +243,7 @@ augroup QuickfixConfigure
   autocmd FileType qf setlocal nowrap
 
   " QuickFix を自動で開く
-  autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** if len(getqflist()) != 0 | copen | endif
+  autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** nested if len(getqflist()) != 0 | copen | endif
 augroup END
 
 
@@ -413,18 +413,10 @@ call plug#begin('~/.vim/plugged')
 Plug 'vim-scripts/sudo.vim'
 
 " completion
-" Plug 'prabirshrestha/async.vim'
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'prabirshrestha/asyncomplete-lsp.vim'
-" Plug 'prabirshrestha/asyncomplete-file.vim'
-" Plug 'prabirshrestha/asyncomplete-buffer.vim'
-" Plug 'prabirshrestha/vim-lsp'
-" Plug 'mattn/vim-lsp-settings'
 Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-tslint-plugin', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
@@ -443,7 +435,7 @@ Plug 'https://github.com/tyru/caw.vim.git'
 Plug 'tpope/vim-commentary'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
-Plug 'jceb/vim-editqf'
+Plug 'itchyny/vim-qfedit'
 Plug 'rhysd/clever-f.vim'
 Plug 'haya14busa/vim-asterisk'
 Plug 'haya14busa/is.vim'
@@ -536,37 +528,6 @@ Plug 'wadackel/nvim-syntax-info'
 Plug '~/develop/github.com/wadackel/vim-dogrun'
 
 call plug#end()
-
-
-" " vim-lsp x asyncomplete
-" let g:lsp_signs_enabled = 1
-" let g:lsp_text_edit_enabled = 1
-" let g:lsp_highlight_references_enabled = 1
-" let g:lsp_diagnostics_echo_cursor = 1
-" let g:lsp_fold_enabled = 0
-" let g:lsp_semantic_enabled = 1
-" let g:asyncomplete_popup_delay = 80
-" " let g:lsp_log_file = expand('~/vim-lsp.log')
-"
-" function! s:on_lsp_buffer_enabled() abort
-"   setlocal omnifunc=lsp#complete
-"   setlocal signcolumn=yes
-"
-"   inoremap <expr> <CR> pumvisible() ? "\<C-y>\<CR>" : "\<CR>"
-"
-"   nmap <silent> <buffer> <C-]> <Plug>(lsp-definition)
-"   nmap <silent> <buffer> <Leader>a <Plug>(lsp-code-action)
-"   nmap <silent> <buffer> <C-^> <Plug>(lsp-references)
-"   nmap <silent> <buffer> <Leader>i <Plug>(lsp-hover)
-"   nmap <silent> <buffer> <f2> <Plug>(lsp-rename)
-"   nmap <silent> <buffer> [g <Plug>(lsp-previous-diagnostic)
-"   nmap <silent> <buffer> ]g <Plug>(lsp-next-diagnostic)
-" endfunction
-"
-" augroup lsp_install
-"   au!
-"   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
-" augroup END
 
 
 " coc.nvim
@@ -687,22 +648,31 @@ let g:lightline = {
  \             ['branch', 'readonly', 'filename']],
  \   'right': [['lineinfo'],
  \             ['percent'],
- \             ['fileformat', 'fileencoding', 'filetype', 'cocstatus']],
+ \             ['cocstatus', 'cocwarning', 'cocerror'],
+ \             ['fileformat', 'fileencoding', 'filetype']],
  \ },
  \ 'component': {
  \   'lineinfo': '%3l:%-2v ¶',
  \ },
+ \ 'component_expand': {
+ \   'cocwarning': 'LightlineCocWarning',
+ \   'cocerror': 'LightlineCocError',
+ \ },
+ \ 'component_type': {
+ \   'cocwarning': 'warning',
+ \   'cocerror': 'error',
+ \ },
  \ 'component_function': {
- \   'filename': 'LightLineFilename',
- \   'branch': 'LightLineFugitive',
- \   'readonly': 'LightLineReadonly',
- \   'cocstatus': 'coc#status',
+ \   'filename': 'LightlineFilename',
+ \   'branch': 'LightlineFugitive',
+ \   'readonly': 'LightlineReadonly',
+ \   'cocstatus': 'LightlineCocStatus',
  \ },
  \ 'separator': { 'left': '', 'right': ''},
  \ 'subseparator': { 'left': '❯', 'right': '❮'}
  \ }
 
-function! LightLineFilename()
+function! LightlineFilename() abort
   let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
   let modified = &modified ? ' ∙' : ''
   return filename . modified
@@ -713,7 +683,7 @@ function! LightlineModified(n) abort
   return gettabwinvar(a:n, winnr, '&modified') ? '∙' : gettabwinvar(a:n, winnr, '&modifiable') ? '' : '-'
 endfunction
 
-function! LightLineReadonly()
+function! LightlineReadonly() abort
   if &filetype == "help"
     return ""
   elseif &readonly
@@ -723,10 +693,29 @@ function! LightLineReadonly()
   endif
 endfunction
 
-function! LightLineFugitive()
+function! LightlineFugitive() abort
   let branch = fugitive#head()
   return branch !=# '' ? ' '.branch : ''
 endfunction
+
+function! LightlineCocWarning() abort
+  let info = get(b:, 'coc_diagnostic_info', {})
+  return get(info, 'warning', 0) != 0 ? '∙ ' . info['warning'] : ''
+endfunction
+
+function! LightlineCocError() abort
+  let info = get(b:, 'coc_diagnostic_info', {})
+  return get(info, 'error', 0) != 0 ? '∙ ' . info['error'] : ''
+endfunction
+
+function! LightlineCocStatus() abort
+  return get(g:, 'coc_status', '')
+endfunction
+
+augroup UpdateLightline
+  autocmd!
+  autocmd User CocDiagnosticChange call lightline#update()
+augroup END
 
 let g:lightline.tabline = {
      \ 'active': [ 'tabnum', 'filename', 'modified' ],
