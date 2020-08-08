@@ -509,6 +509,9 @@ Plug 'dart-lang/dart-vim-plugin'
 " varnish
 Plug 'fgsch/vim-varnish'
 
+" GraphQL
+Plug 'jparise/vim-graphql'
+
 " statusline
 Plug 'itchyny/lightline.vim'
 
