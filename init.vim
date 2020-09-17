@@ -445,12 +445,12 @@ Plug 'easymotion/vim-easymotion'
 Plug 'thinca/vim-quickrun'
 
 " filer
-Plug 'ryanoasis/vim-devicons'
+Plug 'lambdalisue/nerdfont.vim'
 Plug 'lambdalisue/fern.vim'
-Plug 'lambdalisue/fern-renderer-devicons.vim'
+Plug 'lambdalisue/fern-renderer-nerdfont.vim'
 Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
-Plug 'junegunn/fzf', {'do': './install --all'}
-Plug 'junegunn/fzf.vim'
+" Plug 'junegunn/fzf', {'do': './install --all'}
+" Plug 'junegunn/fzf.vim'
 
 " formatter
 Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown', 'html'] }
@@ -768,7 +768,7 @@ let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 " fern.vim
 let g:fern#default_hidden = 1
 let g:fern#disable_default_mappings = 1
-let g:fern#renderer = "devicons"
+let g:fern#renderer = "nerdfont"
 
 nnoremap <silent> <C-j> :Fern . -width=40 -drawer -reveal=% -toggle<CR>
 
@@ -913,6 +913,18 @@ nnoremap <silent> <Leader>cl :Clap command_history<CR>
 nnoremap <silent> <Leader>gb :Clap git_branches<CR>
 
 
+" Memo List
+let g:memolist_path = '~/Dropbox/memolist'
+let g:memolist_memo_suffix = "md"
+let g:memolist_template_dir_path = "~/dotfiles/templates/memolist"
+let g:memolist_delimiter_yaml_start = '---'
+let g:memolist_delimiter_yaml_end  = '---'
+
+nnoremap <silent> <Leader>mc :MemoNew<CR>
+nnoremap <silent> <Leader>mp :<C-u>execute 'Clap files +no-cache ++finder=fd --hidden --type f ' . get(g:, 'memolist_path')<CR>
+nnoremap <silent> <Leader>mg :MemoGrep<CR>
+
+
 " easymotion
 let g:EasyMotion_do_mapping = 0
 let g:EasyMotion_smartcase = 0
@@ -941,27 +953,6 @@ nnoremap \g :GitGutterToggle<CR>
 " Agit
 nnoremap <silent> <Leader>gl :Agit<CR>
 nnoremap <silent> <Leader>gf :AgitFile<CR>
-
-
-" Memo List
-let g:memolist_path = '~/Dropbox/memolist'
-let g:memolist_memo_suffix = "md"
-let g:memolist_template_dir_path = "~/dotfiles/templates/memolist"
-let g:memolist_delimiter_yaml_start = '---'
-let g:memolist_delimiter_yaml_end  = '---'
-
-nnoremap <Leader>mc :MemoNew<CR>
-nnoremap <Leader>ml :MemoList<CR>
-nnoremap <Leader>mg :MemoGrep<CR>
-
-if executable('fzf') && executable('rg')
-  command! FZFMemoList call fzf#run(fzf#wrap('rg', {
-        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-        \ 'dir': g:memolist_path,
-        \ }, <bang>0))
-
-  nnoremap <Leader>mp :FZFMemoList<CR>
-endif
 
 
 " caw
@@ -1127,12 +1118,14 @@ function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
   CocEnable
+  GitGutterEnable
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
   CocDisable
+  GitGutterDisable
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
