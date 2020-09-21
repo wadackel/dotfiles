@@ -130,7 +130,7 @@ zle -N history-beginning-search-forward-end history-search-end
 
 bindkey '^p' history-beginning-search-backward-end
 bindkey '^n' history-beginning-search-forward-end
-bindkey "^r" history-incremental-search-backward
+bindkey '^r' history-incremental-search-backward
 
 zstyle ':completion:*' keep-prefix
 zstyle ':completion:*' recent-dirs-insert both

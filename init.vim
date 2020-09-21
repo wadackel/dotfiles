@@ -798,10 +798,10 @@ function! s:init_fern() abort
   nmap <silent><buffer><nowait> i <Plug>(fern-action-reveal)
   nmap <silent><buffer><nowait> <C-c> <Plug>(fern-action-cancel)
   nmap <silent><buffer><nowait> <F5> <Plug>(fern-action-reload)
-  nmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
-  nmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark-toggle)j
-  vmap <silent><buffer><nowait> - <Plug>(fern-action-mark-toggle)
-  vmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark-toggle)
+  nmap <silent><buffer><nowait> - <Plug>(fern-action-mark:toggle)
+  nmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark:toggle)j
+  vmap <silent><buffer><nowait> - <Plug>(fern-action-mark:toggle)
+  vmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark:toggle)
   nmap <silent><buffer><nowait> x <Plug>(fern-action-open:system)
   nmap <silent><buffer><nowait> X <Plug>(fern-action-terminal)
   nmap <silent><buffer><nowait> N <Plug>(fern-action-new-file)
