@@ -388,7 +388,7 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   ENHANCD_FILTER="fzf:non-existing-filter"
 
   # fzf
-  export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi'
+  export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙"'
 fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

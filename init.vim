@@ -448,9 +448,9 @@ Plug 'thinca/vim-quickrun'
 Plug 'lambdalisue/nerdfont.vim'
 Plug 'lambdalisue/fern.vim'
 Plug 'lambdalisue/fern-renderer-nerdfont.vim'
-Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
-" Plug 'junegunn/fzf', {'do': './install --all'}
-" Plug 'junegunn/fzf.vim'
+" Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
+Plug 'junegunn/fzf', {'do': './install --all'}
+Plug 'junegunn/fzf.vim'
 
 " formatter
 Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown', 'html'] }
@@ -841,88 +841,140 @@ augroup fern_as_netrw
 augroup END
 
 
-" vim-clap
-" git branches
-let s:clap_git_branches = {}
+" " vim-clap
+" " git branches
+" let s:clap_git_branches = {}
+"
+" function! s:clap_git_branches.source() abort
+"   if !executable('git')
+"     call clap#helper#echo_error('git executable not found')
+"     return []
+"   endif
+"
+"   let branches = systemlist('git branch')
+"   if v:shell_error
+"     call clap#helper#echo_error('Error occurs on calling `git branch`, maybe you are not in a git repository.')
+"     return []
+"   else
+"     return map(branches, 'split(v:val)[-1]')
+"   endif
+" endfunction
+"
+" function! s:clap_git_branches.sink(line) abort
+"   call system('git switch ' . a:line)
+"   if v:shell_error
+"     call clap#helper#echo_error('Error occurs on calling `git switch %`, maybe you have any changed files or staged files.')
+"   else
+"     call clap#helper#echo_info('switched to "' . a:line . '"')
+"   endif
+" endfunction
+"
+" let s:clap_git_branches.enable_rooter = v:true
+" let g:clap#provider#git_branches# = s:clap_git_branches
+"
+" " configure
+" let g:clap_theme = 'dogrun'
+"
+" let g:clap_layout = { 'relative': 'editor' }
+"
+" let g:clap_current_selection_sign = {
+"    \ 'text': '»',
+"    \ 'texthl': 'WarningMsg',
+"    \ 'linehl': 'ClapCurrentSelection',
+"    \ }
+"
+" let g:clap_selected_sign = {
+"    \ 'text': '❯',
+"    \ 'texthl': 'WarningMsg',
+"    \ 'linehl': 'ClapSelected',
+"    \ }
+"
+" let g:clap_search_box_border_symbols = {
+"    \ 'arrow': ["\ue0b2", "\ue0b0"],
+"    \ 'curve': ["\ue0b6", "\ue0b4"],
+"    \ 'nil': ['', ''],
+"    \ }
+"
+" let g:clap_prompt_format = '%spinner% %provider_id%❯ '
+" let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+"
+" let g:clap_insert_mode_only = v:true
+" let g:clap_builtin_fuzzy_filter_threshold = 1000
+" let g:clap_on_move_delay = 16
+" let g:clap_popup_input_delay = 16
+" let g:clap_provider_grep_delay = 16
+" let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --no-ignore-dot"
+"
+" nnoremap <silent> <C-p> :Clap files +no-cache ++finder=fd --hidden -E '.git/' --type f<CR>
+" nnoremap <silent> <Leader>gg :Clap grep<CR>
+" nnoremap <silent> <Leader>bb :Clap buffers<CR>
+" nnoremap <silent> <Leader>ch :Clap history<CR>
+" nnoremap <silent> <Leader>cl :Clap command_history<CR>
+" nnoremap <silent> <Leader>gb :Clap git_branches<CR>
 
-function! s:clap_git_branches.source() abort
-  if !executable('git')
-    call clap#helper#echo_error('git executable not found')
-    return []
+" fzf
+if executable('fzf')
+  let g:fzf_history_dir = '~/.local/share/fzf-history'
+  let g:fzf_buffers_jump = 1
+  let g:fzf_preview_window = 'right:60%'
+  let g:fzf_layout = { 'window': { 'width': 0.9, 'height': 0.7, 'highlight': 'Comment' } }
+
+  let g:fzf_action = {
+        \ 'ctrl-t': 'tab split',
+        \ 'ctrl-x': 'split',
+        \ 'ctrl-v': 'vsplit' }
+
+  augroup fzf-transparent-windows
+    autocmd!
+    autocmd FileType fzf set winblend=6
+  augroup END
+
+  if executable('rg')
+    function! RgFzf(query, fullscreen)
+      let command_fmt = 'rg --column --line-number --no-heading --color=always --smart-case -- %s || true'
+      let initial_command = printf(command_fmt, shellescape(a:query))
+      let reload_command = printf(command_fmt, '{q}')
+      let spec = {'options': ['--phony', '--query', a:query, '--bind', 'change:reload:'.reload_command, '--prompt=grep ❯ ']}
+      call fzf#vim#grep(initial_command, 1, fzf#vim#with_preview(spec), a:fullscreen)
+    endfunction
+    command! -nargs=* -bang Rg call RgFzf(<q-args>, <bang>0)
+
+    command! RgFzfFiles call fzf#run(fzf#wrap('rg', {
+        \ 'options': ['--reverse', '--prompt=files ❯ '],
+        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+        \ }, <bang>0))
+
+    nnoremap <silent> <C-p> :RgFzfFiles<CR>
+  elseif
+    nnoremap <silent> <C-p> :Files<CR>
   endif
 
-  let branches = systemlist('git branch')
-  if v:shell_error
-    call clap#helper#echo_error('Error occurs on calling `git branch`, maybe you are not in a git repository.')
-    return []
-  else
-    return map(branches, 'split(v:val)[-1]')
-  endif
-endfunction
-
-function! s:clap_git_branches.sink(line) abort
-  call system('git switch ' . a:line)
-  if v:shell_error
-    call clap#helper#echo_error('Error occurs on calling `git switch %`, maybe you have any changed files or staged files.')
-  else
-    call clap#helper#echo_info('switched to "' . a:line . '"')
-  endif
-endfunction
-
-let s:clap_git_branches.enable_rooter = v:true
-let g:clap#provider#git_branches# = s:clap_git_branches
-
-" configure
-let g:clap_theme = 'dogrun'
-
-let g:clap_layout = { 'relative': 'editor' }
-
-let g:clap_current_selection_sign = {
-    \ 'text': '»',
-    \ 'texthl': 'WarningMsg',
-    \ 'linehl': 'ClapCurrentSelection',
-    \ }
-
-let g:clap_selected_sign = {
-    \ 'text': '❯',
-    \ 'texthl': 'WarningMsg',
-    \ 'linehl': 'ClapSelected',
-    \ }
-
-let g:clap_search_box_border_symbols = {
-    \ 'arrow': ["\ue0b2", "\ue0b0"],
-    \ 'curve': ["\ue0b6", "\ue0b4"],
-    \ 'nil': ['', ''],
-    \ }
-
-let g:clap_prompt_format = '%spinner% %provider_id%❯ '
-let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-
-let g:clap_insert_mode_only = v:true
-let g:clap_builtin_fuzzy_filter_threshold = 1000
-let g:clap_on_move_delay = 16
-let g:clap_popup_input_delay = 16
-let g:clap_provider_grep_delay = 16
-let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --no-ignore-dot"
-
-nnoremap <silent> <C-p> :Clap files +no-cache ++finder=fd --hidden -E '.git/' --type f<CR>
-nnoremap <silent> <Leader>gg :Clap grep<CR>
-nnoremap <silent> <Leader>bb :Clap buffers<CR>
-nnoremap <silent> <Leader>ch :Clap history<CR>
-nnoremap <silent> <Leader>cl :Clap command_history<CR>
-nnoremap <silent> <Leader>gb :Clap git_branches<CR>
+  nnoremap <silent> <Leader>bb :Buffers<CR>
+  nnoremap <silent> <Leader>bc :BCommits<CR>
+  nnoremap <silent> <Leader>ch :History<CR>
+  nnoremap <silent> <Leader>cl :History:<CR>
+endif
 
 
 " Memo List
 let g:memolist_path = '~/Dropbox/memolist'
 let g:memolist_memo_suffix = "md"
-let g:memolist_template_dir_path = "~/dotfiles/templates/memolist"
+let g:memolist_template_dir_path = '~/dotfiles/templates/memolist'
 let g:memolist_delimiter_yaml_start = '---'
 let g:memolist_delimiter_yaml_end  = '---'
 
 nnoremap <silent> <Leader>mc :MemoNew<CR>
-nnoremap <silent> <Leader>mp :<C-u>execute 'Clap files +no-cache ++finder=fd --hidden --type f ' . get(g:, 'memolist_path')<CR>
 nnoremap <silent> <Leader>mg :MemoGrep<CR>
+" nnoremap <silent> <Leader>mp :<C-u>execute 'Clap files +no-cache ++finder=fd --hidden --type f ' . get(g:, 'memolist_path')<CR>
+
+if executable('fzf') && executable('rg')
+  command! FZFMemoList call fzf#run(fzf#wrap('rg', {
+        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+        \ 'dir': g:memolist_path,
+        \ }, <bang>0))
+
+  nnoremap <Leader>mp :FZFMemoList<CR>
+endif
 
 
 " easymotion
