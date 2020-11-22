@@ -418,6 +418,7 @@ Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-python', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
@@ -587,8 +588,8 @@ nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
 " latest coc list
 nnoremap <silent> <space>p :<C-u>CocListResume<CR>
 
-nnoremap <silent><expr><up> coc#util#has_float() ? coc#util#float_scroll(0) : "\<up>"
-nnoremap <silent><expr><down> coc#util#has_float() ? coc#util#float_scroll(1) : "\<down>"
+nnoremap <silent><expr><up> coc#float#has_float() ? coc#float#scroll(0, 1) : "\<up>"
+nnoremap <silent><expr><down> coc#float#has_float() ? coc#float#scroll(1, 1) : "\<down>"
 
 
 " 画面分割用のキーマップ
@@ -949,6 +950,7 @@ if executable('fzf')
     nnoremap <silent> <C-p> :Files<CR>
   endif
 
+  nnoremap <silent> <Leader>bl :BLines<CR>
   nnoremap <silent> <Leader>bb :Buffers<CR>
   nnoremap <silent> <Leader>bc :BCommits<CR>
   nnoremap <silent> <Leader>ch :History<CR>
@@ -965,7 +967,6 @@ let g:memolist_delimiter_yaml_end  = '---'
 
 nnoremap <silent> <Leader>mc :MemoNew<CR>
 nnoremap <silent> <Leader>mg :MemoGrep<CR>
-" nnoremap <silent> <Leader>mp :<C-u>execute 'Clap files +no-cache ++finder=fd --hidden --type f ' . get(g:, 'memolist_path')<CR>
 
 if executable('fzf') && executable('rg')
   command! FZFMemoList call fzf#run(fzf#wrap('rg', {

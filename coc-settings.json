@@ -1,5 +1,6 @@
 {
   "coc.preferences.useQuickfixForLocations": true,
+  "coc.preferences.floatActions": false,
   "coc.preferences.snippets.enable": false,
   "suggest.minTriggerInputLength": 1,
   "suggest.noselect": true,
@@ -11,7 +12,6 @@
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
   "tsserver.maxTsServerMemory": 6000,
-  "tslint.autoFixOnSave": true,
   "languageserver": {
     "golang": {
       "command": "gopls",

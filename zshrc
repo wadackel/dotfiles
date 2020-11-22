@@ -26,13 +26,16 @@ setopt auto_cd
 # ====================================================
 # Path
 # ====================================================
-export PATH="/usr/local/bin:$PATH"
-export PATH="/usr/local/sbin:$PATH"
+export PYENV_ROOT="${HOME}/.pyenv"
 export GOPATH=${HOME}/go
-export PATH=${PATH}:${GOPATH}/bin
-export PATH="$HOME/.yarn/bin:$PATH"
-export PATH="$HOME/.cargo/bin:$PATH"
-export PATH="$HOME/flutter/bin:$PATH"
+
+export PATH="/usr/local/bin:${PATH}"
+export PATH="/usr/local/sbin:${PATH}"
+export PATH="${PATH}:${GOPATH}/bin"
+export PATH="${PYENV_ROOT}/bin:${PATH}"
+export PATH="${HOME}/.yarn/bin:${PATH}"
+export PATH="${HOME}/.cargo/bin:${PATH}"
+export PATH="${HOME}/flutter/bin:${PATH}"
 
 # depot_tools
 if [[ -e "$HOME/chromium/tools/depot_tools" ]]; then
