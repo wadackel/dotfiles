@@ -63,9 +63,13 @@ set autoindent
 set smartindent
 set expandtab
 set wrap
-set clipboard=unnamed
+if has('mac')
+  set clipboard=unnamed
+elseif has('unix')
+  set clipboard=unnamedplus
+endif
 set laststatus=2
-if ! isdirectory($HOME.'/.vim/swap')
+if !isdirectory($HOME.'/.vim/swap')
   call mkdir($HOME.'/.vim/swap', 'p')
 endif
 set directory=~/.vim/swap
@@ -524,12 +528,12 @@ Plug 'Shougo/context_filetype.vim'
 
 " colorschema
 Plug 'rakr/vim-one'
-" Plug 'wadackel/vim-dogrun'
+Plug 'wadackel/vim-dogrun'
 Plug 'rhysd/vim-color-spring-night'
 Plug 'wadackel/nvim-syntax-info'
 
 " development
-Plug '~/develop/github.com/wadackel/vim-dogrun'
+" Plug '~/develop/github.com/wadackel/vim-dogrun'
 
 call plug#end()
 
