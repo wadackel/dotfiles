@@ -29,6 +29,11 @@ setopt auto_cd
 export PYENV_ROOT="${HOME}/.pyenv"
 export GOPATH=${HOME}/go
 
+# for M1 device
+if [ -d "/opt/homebrew" ]; then
+  export PATH="/opt/homebrew/bin:${PATH}"
+fi
+
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${GOPATH}/bin"
@@ -37,9 +42,13 @@ export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
 
+if [ -d "${HOME}/nvim-osx64" ]; then
+  export PATH="${HOME}/nvim-osx64/bin:${PATH}"
+fi
+
 # depot_tools
-if [[ -e "$HOME/chromium/tools/depot_tools" ]]; then
-  export PATH="$PATH:/$HOME/chromium/tools/depot_tools"
+if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then
+  export PATH="${PATH}:/${HOME}/chromium/tools/depot_tools"
 fi
 
 # nodenev
