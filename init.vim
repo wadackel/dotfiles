@@ -436,7 +436,7 @@ Plug 'machakann/vim-sandwich'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
-Plug 'https://github.com/tyru/caw.vim.git'
+Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-commentary'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
@@ -525,15 +525,16 @@ Plug 'w0rp/ale'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " colorschema
-Plug 'rakr/vim-one'
-Plug 'wadackel/vim-dogrun'
-Plug 'rhysd/vim-color-spring-night'
 Plug 'wadackel/nvim-syntax-info'
 
-" development
-" Plug '~/develop/github.com/wadackel/vim-dogrun'
+if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
+  Plug '~/develop/github.com/wadackel/vim-dogrun'
+else
+  Plug 'wadackel/vim-dogrun'
+endif
 
 call plug#end()
 
@@ -1012,9 +1013,9 @@ nnoremap <silent> <Leader>gl :Agit<CR>
 nnoremap <silent> <Leader>gf :AgitFile<CR>
 
 
-" caw
-nmap <C-K> <Plug>(caw:hatpos:toggle)
-vmap <C-K> <Plug>(caw:hatpos:toggle)
+" commentary
+nmap <silent> <C-K> <Plug>CommentaryLine
+vmap <silent> <C-K> <Plug>Commentary
 
 
 " Emmet
@@ -1187,6 +1188,17 @@ endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
 command! DisableBufWritePost call <SID>disableBufWritePost()
+
+
+" nvim-treesitter
+lua <<EOF
+require'nvim-treesitter.configs'.setup {
+  ensure_installed = "maintained",
+  highlight = { enable = true },
+  incremental_selection = { enable = true },
+  textobjects = { enable = true },
+}
+EOF
 
 
 " =============================================================
