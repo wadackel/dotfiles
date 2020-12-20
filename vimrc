@@ -348,7 +348,8 @@ endif
 " =============================================================
 call plug#begin('~/.vim/plugged')
 Plug 'liuchengxu/vim-clap'
-Plug '~/develop/github.com/wadackel/vim-dogrun'
+Plug 'wadackel/vim-dogrun'
+" Plug '~/develop/github.com/wadackel/vim-dogrun'
 call plug#end()
 
 

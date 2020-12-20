@@ -174,10 +174,6 @@ alias cp='cp -p'
 alias df='df -h'
 alias rmrf='rm -rf'
 
-# other
-alias d="docker"
-alias dc="docker-compose"
-
 # global
 alias -g G="| grep"
 alias -g X="| xargs"

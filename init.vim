@@ -529,6 +529,7 @@ Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " colorschema
 Plug 'wadackel/nvim-syntax-info'
+Plug 'rhysd/vim-color-spring-night'
 
 if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
   Plug '~/develop/github.com/wadackel/vim-dogrun'
