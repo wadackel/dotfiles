@@ -428,6 +428,12 @@ Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
 Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
+" Plug 'prabirshrestha/asyncomplete.vim'
+" Plug 'prabirshrestha/asyncomplete-lsp.vim'
+" Plug 'prabirshrestha/asyncomplete-buffer.vim'
+" Plug 'prabirshrestha/asyncomplete-file.vim'
+" Plug 'prabirshrestha/vim-lsp'
+" Plug 'mattn/vim-lsp-settings'
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -538,6 +544,64 @@ else
 endif
 
 call plug#end()
+
+
+" " asyncomplete
+" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
+"  \ 'name': 'buffer',
+"  \ 'allowlist': ['*'],
+"  \ 'completor': function('asyncomplete#sources#buffer#completor'),
+"  \ 'config': {
+"  \    'max_buffer_size': 5000000,
+"  \  },
+"  \ }))
+"
+" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
+"  \ 'name': 'file',
+"  \ 'allowlist': ['*'],
+"  \ 'priority': 10,
+"  \ 'completor': function('asyncomplete#sources#file#completor'),
+"  \ }))
+"
+"
+" " vim-lsp
+" let g:lsp_highlights_enabled = 0
+" let g:lsp_textprop_enabled = 0
+" let g:lsp_show_workspace_edits = 1
+" let g:lsp_documentation_debounce = 16
+" let g:lsp_fold_enabled = 0
+" let g:lsp_text_edit_enabled = 0
+" let g:lsp_diagnostics_float_cursor = 1
+" let g:lsp_diagnostics_float_delay = 16
+" let g:lsp_semantic_enabled = 1
+" let g:lsp_signs_error = {'text': '⦿'}
+" let g:lsp_signs_warning = {'text': '⦿'}
+" let g:lsp_signs_hint = {'text': '⦿'}
+"
+" " let g:lsp_log_verbose = 1
+" " let g:lsp_log_file = expand('~/vim-lsp.log')
+"
+" function! s:on_lsp_buffer_enabled() abort
+"   setlocal omnifunc=lsp#complete
+"   setlocal signcolumn=yes
+"
+"   if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
+"
+"   nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
+"   nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
+"   nmap <buffer> <C-]> <Plug>(lsp-definition)
+"   nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
+"   nmap <buffer> <C-^> <Plug>(lsp-references)
+"   nmap <buffer> K <Plug>(lsp-type-definition)
+"   nmap <buffer> <F2> <plug>(lsp-rename)
+"   nmap <buffer> <Leader>i <Plug>(lsp-hover)
+"   nmap <buffer> <Leader>a <Plug>(lsp-code-action)
+" endfunction
+"
+" augroup lsp_install
+"   au!
+"   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
+" augroup END
 
 
 " coc.nvim
