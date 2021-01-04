@@ -503,7 +503,7 @@ Plug 'cakebaker/scss-syntax.vim', {'for': 'scss'}
 " markdown
 Plug 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
 Plug 'tukiyo/previm', {'for': ['markdown', 'md']}
-Plug 'iamcco/markdown-preview.nvim', {'do': { -> mkdp#util#install() }}
+Plug 'iamcco/markdown-preview.nvim', {'do': 'cd app && yarn install', 'for': ['markdown', 'md']}
 Plug 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
 Plug 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
 Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
