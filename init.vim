@@ -86,6 +86,7 @@ set matchpairs& matchpairs+=<:>
 set lazyredraw
 set nrformats=
 set guicursor=n-v-ve-o-r-c-cr-sm:block,i-ci:block-blinkwait300-blinkon200-blinkoff150
+set mouse=a
 
 " 起動時のメッセージ非表示
 set shortmess& shortmess+=I
