@@ -9,6 +9,8 @@
     "g h": "vim:move-to-top-of-screen",
     "g m": "vim:move-to-middle-of-screen",
     "g l": "vim:move-to-bottom-of-screen",
+    "M": "vim:move-to-first-character-of-line",
+    "L": "vim:move-to-last-character-of-line",
   },
   ".CodeMirror.vim-mode.insert-mode textarea": {
     "ctrl-[": "vim:exit-insert-mode",
