@@ -164,7 +164,7 @@ nnoremap # #zz
 nnoremap g* g*zz
 nnoremap g# g#zz
 
-" commandモードはEmacs風に
+" command モードは Emacs 風に
 cmap <C-f> <Right>
 cmap <C-b> <Left>
 cmap <C-a> <Home>
@@ -178,11 +178,17 @@ nnoremap ]q :cnext<CR>
 nnoremap [Q :<C-u>cfirst<CR>
 nnoremap ]Q :<C-u>clast<CR>
 
-" locationlistの移動
+" locationlist の移動
 nnoremap [w :lprevious<CR>
 nnoremap ]w :lnext<CR>
 nnoremap [W :<C-u>lfirst<CR>
 nnoremap ]W :<C-u>llast<CR>
+
+" argument list の移動
+nnoremap [a :previous<CR>
+nnoremap ]a :next<CR>
+nnoremap [A :<C-u>first<CR>
+nnoremap ]A :<C-u>last<CR>
 
 " ; と :
 noremap ; :
