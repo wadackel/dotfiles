@@ -86,7 +86,6 @@ set matchpairs& matchpairs+=<:>
 set lazyredraw
 set nrformats=
 set guicursor=n-v-ve-o-r-c-cr-sm:block,i-ci:block-blinkwait300-blinkon200-blinkoff150
-set mouse=a
 
 " 起動時のメッセージ非表示
 set shortmess& shortmess+=I
@@ -429,11 +428,11 @@ Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-python', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
+Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
 Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
 " Plug 'prabirshrestha/asyncomplete.vim'
 " Plug 'prabirshrestha/asyncomplete-lsp.vim'
