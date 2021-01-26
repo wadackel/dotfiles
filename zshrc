@@ -37,14 +37,11 @@ fi
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${GOPATH}/bin"
+export PATH="${PATH}:${HOME}/.poetry/bin"
 export PATH="${PYENV_ROOT}/bin:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
-
-if [ -d "${HOME}/nvim-osx64" ]; then
-  export PATH="${HOME}/nvim-osx64/bin:${PATH}"
-fi
 
 # depot_tools
 if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then
@@ -60,6 +57,11 @@ fi
 if [[ -x `which pyenv` ]]; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
+fi
+
+# poetry
+if [[ -x `which poetry` ]]; then
+  poetry completions zsh > $(brew --prefix)/share/zsh/site-functions/_poetry
 fi
 
 # Rust
@@ -408,3 +410,5 @@ eval "$(starship init zsh)"
 # if (which zprof > /dev/null 2>&1) ;then
 #   zprof
 # fi
+
+export PATH="$HOME/.poetry/bin:$PATH"
