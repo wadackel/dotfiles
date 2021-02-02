@@ -423,23 +423,23 @@ call plug#begin('~/.vim/plugged')
 Plug 'vim-scripts/sudo.vim'
 
 " completion
-Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
-Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
-Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'prabirshrestha/asyncomplete-lsp.vim'
-" Plug 'prabirshrestha/asyncomplete-buffer.vim'
-" Plug 'prabirshrestha/asyncomplete-file.vim'
-" Plug 'prabirshrestha/vim-lsp'
-" Plug 'mattn/vim-lsp-settings'
+" Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
+" Plug 'neoclide/coc.nvim', {'branch': 'release'}
+" Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
+" Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
+" Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
+Plug 'prabirshrestha/asyncomplete.vim'
+Plug 'prabirshrestha/asyncomplete-lsp.vim'
+Plug 'prabirshrestha/asyncomplete-buffer.vim'
+Plug 'prabirshrestha/asyncomplete-file.vim'
+Plug 'prabirshrestha/vim-lsp'
+Plug 'mattn/vim-lsp-settings'
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -488,7 +488,6 @@ Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
 " javascript
 Plug 'pangloss/vim-javascript', {'for': 'javascript'}
 Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript.tsx']}
-Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
 
 " typescript
 Plug 'HerringtonDarkholme/yats.vim'
@@ -537,7 +536,7 @@ Plug 'w0rp/ale'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
-Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+" Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " colorschema
 Plug 'wadackel/nvim-syntax-info'
@@ -552,120 +551,126 @@ endif
 call plug#end()
 
 
-" " asyncomplete
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-"  \ 'name': 'buffer',
-"  \ 'allowlist': ['*'],
-"  \ 'completor': function('asyncomplete#sources#buffer#completor'),
-"  \ 'config': {
-"  \    'max_buffer_size': 5000000,
-"  \  },
-"  \ }))
-"
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-"  \ 'name': 'file',
-"  \ 'allowlist': ['*'],
-"  \ 'priority': 10,
-"  \ 'completor': function('asyncomplete#sources#file#completor'),
-"  \ }))
-"
-"
-" " vim-lsp
-" let g:lsp_highlights_enabled = 0
-" let g:lsp_textprop_enabled = 0
-" let g:lsp_show_workspace_edits = 1
-" let g:lsp_documentation_debounce = 16
-" let g:lsp_fold_enabled = 0
-" let g:lsp_text_edit_enabled = 0
-" let g:lsp_diagnostics_float_cursor = 1
-" let g:lsp_diagnostics_float_delay = 16
-" let g:lsp_semantic_enabled = 1
-" let g:lsp_signs_error = {'text': '⦿'}
-" let g:lsp_signs_warning = {'text': '⦿'}
-" let g:lsp_signs_hint = {'text': '⦿'}
-"
-" " let g:lsp_log_verbose = 1
-" " let g:lsp_log_file = expand('~/vim-lsp.log')
-"
-" function! s:on_lsp_buffer_enabled() abort
-"   setlocal omnifunc=lsp#complete
-"   setlocal signcolumn=yes
-"
-"   if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
-"
-"   nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
-"   nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
-"   nmap <buffer> <C-]> <Plug>(lsp-definition)
-"   nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
-"   nmap <buffer> <C-^> <Plug>(lsp-references)
-"   nmap <buffer> K <Plug>(lsp-type-definition)
-"   nmap <buffer> <F2> <plug>(lsp-rename)
-"   nmap <buffer> <Leader>i <Plug>(lsp-hover)
-"   nmap <buffer> <Leader>a <Plug>(lsp-code-action)
-" endfunction
-"
-" augroup lsp_install
-"   au!
-"   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
-" augroup END
+ " asyncomplete
+ au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
+  \ 'name': 'buffer',
+  \ 'allowlist': ['*'],
+  \ 'completor': function('asyncomplete#sources#buffer#completor'),
+  \ 'config': {
+  \    'max_buffer_size': 5000000,
+  \  },
+  \ }))
+
+ au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
+  \ 'name': 'file',
+  \ 'allowlist': ['*'],
+  \ 'priority': 10,
+  \ 'completor': function('asyncomplete#sources#file#completor'),
+  \ }))
 
 
-" coc.nvim
+" vim-lsp
+let g:lsp_highlights_enabled = 0
+let g:lsp_textprop_enabled = 0
+let g:lsp_show_workspace_edits = 1
+let g:lsp_fold_enabled = 0
+let g:lsp_diagnostics_float_cursor = 1
+let g:lsp_diagnostics_float_delay = 200
+let g:lsp_semantic_enabled = 1
+let g:lsp_diagnostics_signs_error = {'text': '⦿'}
+let g:lsp_diagnostics_signs_warning = {'text': '⦿'}
+let g:lsp_diagnostics_signs_hint = {'text': '⦿'}
+let g:lsp_diagnostics_virtual_text_prefix = " "
+let g:lsp_diagnostics_highlights_insert_mode_enabled = 0
+let g:lsp_diagnostics_signs_insert_mode_enabled = 0
+let g:lsp_diagnostics_virtual_text_insert_mode_enabled = 0
 
-" Use `[g` and `]g` to navigate diagnostics
-nmap <silent> [g <Plug>(coc-diagnostic-prev)
-nmap <silent> ]g <Plug>(coc-diagnostic-next)
+" let g:lsp_log_verbose = 1
+" let g:lsp_log_file = expand('~/vim-lsp.log')
 
-" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
-" Coc only does snippet and additional edit on confirm.
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+function! s:on_lsp_buffer_enabled() abort
+  setlocal omnifunc=lsp#complete
+  setlocal signcolumn=yes
 
-" Remap keys for gotos
-autocmd! FileType rust,go,c,javascript,typescript,typescript.tsx nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
-nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
-nmap <silent> K <Plug>(coc-type-definition)
-nmap <silent> <C-^> <Plug>(coc-references)
-nmap <silent> <Leader>a <Plug>(coc-codeaction)
-nmap <silent> <Leader>r <Plug>(coc-refactor)
+  if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
 
-" Remap for rename current word
-nmap <F2> <Plug>(coc-rename)
-
-" Show documentation in preview window
-function! s:show_documentation()
-  if (index(['vim','help'], &filetype) >= 0)
-    execute 'h '.expand('<cword>')
-  else
-    call CocAction('doHover')
-  endif
+  nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
+  nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
+  nmap <buffer> <C-]> <Plug>(lsp-definition)
+  nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
+  nmap <buffer> <C-^> <Plug>(lsp-references)
+  nmap <buffer> K <Plug>(lsp-type-definition)
+  nmap <buffer> <F2> <plug>(lsp-rename)
+  nmap <buffer> <Leader>i <Plug>(lsp-hover)
+  nmap <buffer> <Leader>a <Plug>(lsp-code-action)
 endfunction
 
-nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
+augroup lsp_enabled
+  autocmd!
+  autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
+  " autocmd User lsp_setup echom "setup"
+  " autocmd User lsp_server_init echom "server_init"
+  " autocmd User lsp_progress_updated echom "progress"
+  " autocmd User lsp_buffer_enabled echom "enabled"
+augroup END
 
-" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
-" Coc only does snippet and additional edit on confirm.
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
-" Highlight symbol under cursor on CursorHold
-autocmd CursorHold * silent call CocActionAsync('highlight')
+" " coc.nvim
 
-" diagnostics
-nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
+" " Use `[g` and `]g` to navigate diagnostics
+" nmap <silent> [g <Plug>(coc-diagnostic-prev)
+" nmap <silent> ]g <Plug>(coc-diagnostic-next)
 
-" commands
-nnoremap <silent> <space>c :<C-u>CocList commands<CR>
+" " Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
+" " Coc only does snippet and additional edit on confirm.
+" inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
-" outline
-nnoremap <silent> <space>o :<C-u>CocList outline<CR>
+" " Remap keys for gotos
+" autocmd! FileType rust,go,c,javascript,typescript,typescript.tsx nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
+" nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
+" nmap <silent> K <Plug>(coc-type-definition)
+" nmap <silent> <C-^> <Plug>(coc-references)
+" nmap <silent> <Leader>a <Plug>(coc-codeaction)
+" nmap <silent> <Leader>r <Plug>(coc-refactor)
 
-" yank
-nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
+" " Remap for rename current word
+" nmap <F2> <Plug>(coc-rename)
 
-" latest coc list
-nnoremap <silent> <space>p :<C-u>CocListResume<CR>
+" " Show documentation in preview window
+" function! s:show_documentation()
+"   if (index(['vim','help'], &filetype) >= 0)
+"     execute 'h '.expand('<cword>')
+"   else
+"     call CocAction('doHover')
+"   endif
+" endfunction
 
-nnoremap <silent><expr><up> coc#float#has_float() ? coc#float#scroll(0, 1) : "\<up>"
-nnoremap <silent><expr><down> coc#float#has_float() ? coc#float#scroll(1, 1) : "\<down>"
+" nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
+
+" " Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
+" " Coc only does snippet and additional edit on confirm.
+" inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+
+" " Highlight symbol under cursor on CursorHold
+" autocmd CursorHold * silent call CocActionAsync('highlight')
+
+" " diagnostics
+" nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
+
+" " commands
+" nnoremap <silent> <space>c :<C-u>CocList commands<CR>
+
+" " outline
+" nnoremap <silent> <space>o :<C-u>CocList outline<CR>
+
+" " yank
+" nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
+
+" " latest coc list
+" nnoremap <silent> <space>p :<C-u>CocListResume<CR>
+
+" nnoremap <silent><expr><up> coc#float#has_float() ? coc#float#scroll(0, 1) : "\<up>"
+" nnoremap <silent><expr><down> coc#float#has_float() ? coc#float#scroll(1, 1) : "\<down>"
 
 
 " 画面分割用のキーマップ
@@ -728,25 +733,24 @@ let g:lightline = {
  \             ['branch', 'readonly', 'filename']],
  \   'right': [['lineinfo'],
  \             ['percent'],
- \             ['cocstatus', 'cocwarning', 'cocerror'],
+ \             ['lspwarning', 'lsperror'],
  \             ['fileformat', 'fileencoding', 'filetype']],
  \ },
  \ 'component': {
  \   'lineinfo': '%3l:%-2v ¶',
  \ },
  \ 'component_expand': {
- \   'cocwarning': 'LightlineCocWarning',
- \   'cocerror': 'LightlineCocError',
+ \   'lspwarning': 'LspWarning',
+ \   'lsperror': 'LspError',
  \ },
  \ 'component_type': {
- \   'cocwarning': 'warning',
- \   'cocerror': 'error',
+ \   'lspwarning': 'warning',
+ \   'lsperror': 'error',
  \ },
  \ 'component_function': {
  \   'filename': 'LightlineFilename',
  \   'branch': 'LightlineFugitive',
  \   'readonly': 'LightlineReadonly',
- \   'cocstatus': 'LightlineCocStatus',
  \ },
  \ 'separator': { 'left': '', 'right': ''},
  \ 'subseparator': { 'left': '❯', 'right': '❮'}
@@ -778,24 +782,39 @@ function! LightlineFugitive() abort
   return branch !=# '' ? ' '.branch : ''
 endfunction
 
-function! LightlineCocWarning() abort
-  let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'warning', 0) != 0 ? '∙ ' . info['warning'] : ''
+function! LspWarning() abort
+  let counts = lsp#get_buffer_diagnostics_counts()
+  return counts.warning == 0 ? '' : '∙ ' . counts.warning
 endfunction
 
-function! LightlineCocError() abort
-  let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'error', 0) != 0 ? '∙ ' . info['error'] : ''
-endfunction
-
-function! LightlineCocStatus() abort
-  return get(g:, 'coc_status', '')
+function! LspError() abort
+  let counts = lsp#get_buffer_diagnostics_counts()
+  return counts.error == 0 ? '' : '∙ ' . counts.error
 endfunction
 
 augroup UpdateLightline
   autocmd!
-  autocmd User CocDiagnosticChange call lightline#update()
+  autocmd User lsp_diagnostics_updated call lightline#update()
 augroup END
+
+" function! LightlineCocWarning() abort
+"   let info = get(b:, 'coc_diagnostic_info', {})
+"   return get(info, 'warning', 0) != 0 ? '∙ ' . info['warning'] : ''
+" endfunction
+
+" function! LightlineCocError() abort
+"   let info = get(b:, 'coc_diagnostic_info', {})
+"   return get(info, 'error', 0) != 0 ? '∙ ' . info['error'] : ''
+" endfunction
+
+" function! LightlineCocStatus() abort
+"   return get(g:, 'coc_status', '')
+" endfunction
+
+" augroup UpdateLightline
+"   autocmd!
+"   autocmd User CocDiagnosticChange call lightline#update()
+" augroup END
 
 let g:lightline.tabline = {
      \ 'active': [ 'tabnum', 'filename', 'modified' ],
@@ -1022,7 +1041,7 @@ if executable('fzf')
         \ }, <bang>0))
 
     nnoremap <silent> <C-p> :RgFzfFiles<CR>
-  elseif
+  else
     nnoremap <silent> <C-p> :Files<CR>
   endif
 
@@ -1246,14 +1265,14 @@ nnoremap \lt :ALEToggle<CR>
 function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
-  CocEnable
+  " CocEnable
   GitGutterEnable
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
-  CocDisable
+  " CocDisable
   GitGutterDisable
 endfunction
 
@@ -1261,15 +1280,16 @@ command! EnableBufWritePost call <SID>enableBufWritePost()
 command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
-" nvim-treesitter
-lua <<EOF
-require'nvim-treesitter.configs'.setup {
-  ensure_installed = "maintained",
-  highlight = { enable = true },
-  incremental_selection = { enable = true },
-  textobjects = { enable = true },
-}
-EOF
+" " nvim-treesitter
+" lua <<EOF
+" require'nvim-treesitter.configs'.setup {
+"   ensure_installed = "maintained",
+"   highlight = { enable = true },
+"   indent = { enable = true },
+"   incremental_selection = { enable = false },
+"   textobjects = { enable = false },
+" }
+" EOF
 
 
 " =============================================================
