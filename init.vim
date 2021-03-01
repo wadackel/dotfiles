@@ -449,7 +449,6 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
 Plug 'tpope/vim-commentary'
-Plug 'tpope/vim-commentary'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
 Plug 'itchyny/vim-qfedit'
@@ -523,6 +522,9 @@ Plug 'octol/vim-cpp-enhanced-highlight'
 " Flutter
 Plug 'dart-lang/dart-vim-plugin'
 
+" Java
+Plug 'tfnico/vim-gradle'
+
 " varnish
 Plug 'fgsch/vim-varnish'
 
@@ -537,7 +539,7 @@ Plug 'w0rp/ale'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
-Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+" Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " colorschema
 Plug 'wadackel/nvim-syntax-info'
@@ -1261,15 +1263,15 @@ command! EnableBufWritePost call <SID>enableBufWritePost()
 command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
-" nvim-treesitter
-lua <<EOF
-require'nvim-treesitter.configs'.setup {
-  ensure_installed = "maintained",
-  highlight = { enable = true },
-  incremental_selection = { enable = true },
-  textobjects = { enable = true },
-}
-EOF
+" " nvim-treesitter
+" lua <<EOF
+" require'nvim-treesitter.configs'.setup {
+"   ensure_installed = "maintained",
+"   highlight = { enable = true },
+"   incremental_selection = { enable = true },
+"   textobjects = { enable = true },
+" }
+" EOF
 
 
 " =============================================================
