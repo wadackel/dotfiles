@@ -304,15 +304,13 @@ bindkey "^gp" fshow_preview
 ## http://qiita.com/b4b4r07/items/01359e8a3066d1c37edc
 function is_exists() { type "$1" >/dev/null 2>&1; return $?; }
 function is_osx() { [[ $OSTYPE == darwin* ]]; }
-function is_screen_running() { [ ! -z "$STY" ]; }
-function is_tmux_runnning() { [ ! -z "$TMUX" ]; }
-function is_screen_or_tmux_running() { is_screen_running || is_tmux_runnning; }
-function shell_has_started_interactively() { [ ! -z "$PS1" ]; }
+function is_tmux_running() { [ ! -z "$TMUX" ]; }
 function is_ssh_running() { [ ! -z "$SSH_CONECTION" ]; }
+function shell_has_started_interactively() { [ ! -z "$PS1" ]; }
 
 function tmux_automatically_attach_session()
 {
-  if is_screen_or_tmux_running; then
+  if is_tmux_running; then
     ! is_exists 'tmux' && return 1
   else
     if shell_has_started_interactively && ! is_ssh_running; then
@@ -321,23 +319,20 @@ function tmux_automatically_attach_session()
         return 1
       fi
 
-      if tmux has-session >/dev/null 2>&1 && tmux list-sessions | grep -qE '.*]$'; then
-        # detached session exists
+      if tmux has-session >/dev/null 2>&1; then
         tmux list-sessions
-        echo -n "Tmux: attach? (y/N/num) "
+        echo -n "tmux: attach? (y/N/num) "
         read
         if [[ "$REPLY" =~ ^[Nn]$ ]]; then
           return 0
         elif [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
           tmux attach-session
           if [ $? -eq 0 ]; then
-            echo "$(tmux -V) attached session"
             return 0
           fi
         elif [[ "$REPLY" =~ ^[0-9]+$ ]]; then
           tmux attach -t "$REPLY"
           if [ $? -eq 0 ]; then
-            echo "$(tmux -V) attached session"
             return 0
           fi
         fi
