@@ -1,26 +1,38 @@
 [user]
   name = wadackel
   email = wadackel@gmail.com
+
+[color]
+  ui = auto
+
 [push]
   default = simple
+
 [core]
   editor = nvim
   attributesfile = ~/.gitattributes
   excludesfile = ~/.gitignore_global
   precomposeUnicode = true
   ignorecase = false
-[color]
-  ui = auto
+
 [merge]
   tool = nvimdiff
-[diff]
-  tool = nvimdiff
-[difftool "nvimdiff"]
-  cmd = "nvim -R -d -c \"wincmd l\" -d \"$LOCAL\" \"$REMOTE\""
-[mergetool "nvimdiff"]
-  cmd = "nvim -d -c \"4wincmd w | wincmd J\" \"$LOCAL\" \"$BASE\" \"$REMOTE\"  \"$MERGED\""
+
+[pull]
+  ff = only
+
 [fetch]
   prune = true
+
+[diff]
+  tool = nvimdiff
+
+[difftool "nvimdiff"]
+  cmd = "nvim -R -d -c \"wincmd l\" -d \"$LOCAL\" \"$REMOTE\""
+
+[mergetool "nvimdiff"]
+  cmd = "nvim -d -c \"4wincmd w | wincmd J\" \"$LOCAL\" \"$BASE\" \"$REMOTE\"  \"$MERGED\""
+
 [alias]
   aliases = !git config --get-regexp alias
   me = !git config --get-regexp user
