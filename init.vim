@@ -393,9 +393,9 @@ endif
 " Filetypes
 " =============================================================
 augroup fileTypeDetect
-  autocmd BufRead,BufNew,BufNewFile *.ts set filetype=typescript
-  autocmd BufRead,BufNew,BufNewFile *.tsx set filetype=typescript.tsx
-  autocmd BufRead,BufNew,BufNewFile *.mdx set filetype=markdown
+  autocmd BufRead,BufNew,BufNewFile *.ts setlocal filetype=typescript
+  autocmd BufRead,BufNew,BufNewFile *.tsx setlocal filetype=typescript.tsx
+  autocmd BufRead,BufNew,BufNewFile *.mdx setlocal filetype=markdown
   autocmd BufRead,BufNew,BufNewFile *.ejs setlocal ft=html
 
   autocmd BufRead,BufNew,BufNewFile gitconfig setlocal ft=gitconfig
@@ -404,12 +404,6 @@ augroup fileTypeDetect
   autocmd BufRead,BufNew,BufNewFile .prettierrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .babelrc setlocal ft=json
   autocmd BufRead,BufNew,BufNewFile .textlintrc setlocal ft=json
-augroup END
-
-augroup fileTypeIndent
-  autocmd!
-  autocmd BufNewFile,BufRead *.php setlocal tabstop=4 softtabstop=4 shiftwidth=4
-  autocmd BufNewFile,BufRead *.blade.php setlocal tabstop=2 softtabstop=2 shiftwidth=2
 augroup END
 
 
@@ -442,6 +436,7 @@ Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
 " Plug 'mattn/vim-lsp-settings'
 
 " editing
+Plug 'sheerun/vim-polyglot'
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
 Plug 'machakann/vim-sandwich'
@@ -519,7 +514,7 @@ Plug 'cespare/vim-toml',  {'for' : 'toml'}
 " C++
 Plug 'octol/vim-cpp-enhanced-highlight'
 
-" Flutter
+" Dart
 Plug 'dart-lang/dart-vim-plugin'
 
 " Java
@@ -613,6 +608,9 @@ call plug#end()
 
 
 " coc.nvim
+if exists('&tagfunc')
+  set tagfunc=CocTagFunc
+endif
 
 " Use `[g` and `]g` to navigate diagnostics
 nmap <silent> [g <Plug>(coc-diagnostic-prev)
@@ -623,7 +621,21 @@ nmap <silent> ]g <Plug>(coc-diagnostic-next)
 inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Remap keys for gotos
-autocmd! FileType rust,go,c,javascript,typescript,typescript.tsx nmap <silent> <buffer> <C-]> <Plug>(coc-definition)
+function! s:goto_tag(tagkind) abort
+  let tagname = expand('<cWORD>')
+  let winnr = winnr()
+  let pos = getcurpos()
+  let pos[0] = bufnr()
+
+  if CocAction('jump' . a:tagkind)
+    call settagstack(winnr, {
+      \ 'curidx': gettagstack()['curidx'],
+      \ 'items': [{'tagname': tagname, 'from': pos}]
+      \ }, 't')
+  endif
+endfunction
+
+nnoremap <silent> <C-]> :call <SID>goto_tag("Definition")<CR>
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
