@@ -14,6 +14,7 @@ ln -sf ~/dotfiles/init.vim ~/.config/nvim/init.vim
 ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
 ln -sf ~/dotfiles/zshrc ~/.zshrc
 ln -sf ~/dotfiles/hyper.js ~/.hyper.js
+ln -sf ~/dotfiles/init.lua ~/.hammerspoon/init.lua
 
 if [[ -d "${HOME}/Library/Application Support/inkdrop" ]]; then
   ln -sf ~/dotfiles/inkdrop-vim-keymap.cson ~/Library/Application\ Support/inkdrop/keymap.cson
