@@ -32,6 +32,7 @@ export GOPATH=${HOME}/go
 # for M1 device
 if [ -d "/opt/homebrew" ]; then
   export PATH="/opt/homebrew/bin:${PATH}"
+  export PATH="/opt/homebrew/sbin:${PATH}"
 fi
 
 export PATH="/usr/local/bin:${PATH}"
@@ -42,6 +43,11 @@ export PATH="${PYENV_ROOT}/bin:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
+
+# QEMU (M1 device)
+if [ -d "/opt/QEMU" ]; then
+  export PATH="/opt/QEMU/bin:${PATH}"
+fi
 
 # depot_tools
 if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then
