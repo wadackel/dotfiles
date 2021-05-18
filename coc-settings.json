@@ -16,6 +16,7 @@
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
   "tsserver.maxTsServerMemory": 6000,
+  "flutter.trace.server": "verbose",
   "languageserver": {
     "golang": {
       "command": "gopls",
@@ -47,5 +48,6 @@
       }
     }
   },
-  "css.validate": false
+  "css.validate": false,
+  "coc.preferences.extensionUpdateCheck": "daily"
 }

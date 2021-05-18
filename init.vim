@@ -407,6 +407,10 @@ augroup fileTypeDetect
 augroup END
 
 
+" vim-polyglot
+let g:polyglot_disabled = ['csv']
+
+
 " =============================================================
 " Plugins
 " =============================================================
@@ -428,6 +432,7 @@ Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
 Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
 Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
+Plug 'fannheyward/coc-deno', {'do': 'yarn --frozen-lockfile'}
 " Plug 'prabirshrestha/asyncomplete.vim'
 " Plug 'prabirshrestha/asyncomplete-lsp.vim'
 " Plug 'prabirshrestha/asyncomplete-buffer.vim'
@@ -516,6 +521,9 @@ Plug 'octol/vim-cpp-enhanced-highlight'
 
 " Dart
 Plug 'dart-lang/dart-vim-plugin'
+
+" Flutter
+Plug 'thosakwe/vim-flutter'
 
 " Java
 Plug 'tfnico/vim-gradle'
@@ -662,6 +670,9 @@ inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 " Highlight symbol under cursor on CursorHold
 autocmd CursorHold * silent call CocActionAsync('highlight')
+
+" list
+nnoremap <silent> <space>l :<C-u>CocList<CR>
 
 " diagnostics
 nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
@@ -1079,8 +1090,13 @@ map <Leader>s <Plug>(easymotion-s2)
 
 
 " fugitive
-nnoremap <silent> <Leader>gs :Gstatus<CR>
-nnoremap <silent> <Leader>gd :Gdiff<CR>
+nnoremap <silent> <Leader>gs :Git<CR>
+nnoremap <silent> <Leader>gd :Gdiffsplit<CR>
+
+augroup fugitive_setup
+  autocmd!
+  autocmd FileType fugitive nnoremap <silent> <buffer> q <C-w>c
+augroup END
 
 
 " GitGutter

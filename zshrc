@@ -43,6 +43,8 @@ export PATH="${PYENV_ROOT}/bin:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
+export PATH="${HOME}/fvm/default/bin:${PATH}"
+export PATH="${PATH}:${HOME}/.pub-cache/bin"
 
 # QEMU (M1 device)
 if [ -d "/opt/QEMU" ]; then
