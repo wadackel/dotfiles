@@ -288,6 +288,17 @@ function dev() {
   fi
 }
 
+# emulator (Android) の選択起動
+alias emulator='~/Library/Android/sdk/emulator/emulator'
+
+function avdr() {
+  local selected
+  selected=$(emulator -list-avds | fzf)
+  if [[ -n $selected ]]; then
+    emulator @"$selected" > /dev/null &
+  fi
+}
+
 # commit のブラウズ
 alias glNoGraph='git log --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr% C(auto)%an" "$@"'
 _gitLogLineToHash="echo {} | grep -o '[a-f0-9]\{7\}' | head -1"

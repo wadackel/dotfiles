@@ -20,8 +20,8 @@ $status\
 $character"""
 
 [character]
-style_success = "bold fg:79"
-style_failure = "bold fg:170"
+success_symbol = "[❯](bold fg:79)"
+error_symbol = "[❯](bold fg:170)"
 
 [battery]
 disabled = true
