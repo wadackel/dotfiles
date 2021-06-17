@@ -26,7 +26,6 @@ setopt auto_cd
 # ====================================================
 # Path
 # ====================================================
-export PYENV_ROOT="${HOME}/.pyenv"
 export GOPATH=${HOME}/go
 
 # for M1 device
@@ -39,7 +38,6 @@ export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${GOPATH}/bin"
 export PATH="${PATH}:${HOME}/.poetry/bin"
-export PATH="${PYENV_ROOT}/bin:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
@@ -64,7 +62,6 @@ fi
 # pyenv
 if [[ -x `which pyenv` ]]; then
   eval "$(pyenv init -)"
-  eval "$(pyenv virtualenv-init -)"
 fi
 
 # poetry
@@ -424,5 +421,3 @@ eval "$(starship init zsh)"
 # if (which zprof > /dev/null 2>&1) ;then
 #   zprof
 # fi
-
-export PATH="$HOME/.poetry/bin:$PATH"
