@@ -779,13 +779,13 @@ let g:lightline = {
 
 function! LightlineFilename() abort
   let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
-  let modified = &modified ? ' ●' : ''
+  let modified = &modified ? ' ∙' : ''
   return filename . modified
 endfunction
 
 function! LightlineModified(n) abort
   let winnr = tabpagewinnr(a:n)
-  return gettabwinvar(a:n, winnr, '&modified') ? '●' : gettabwinvar(a:n, winnr, '&modifiable') ? '' : '-'
+  return gettabwinvar(a:n, winnr, '&modified') ? '∙' : gettabwinvar(a:n, winnr, '&modifiable') ? '' : '-'
 endfunction
 
 function! LightlineReadonly() abort
@@ -805,12 +805,12 @@ endfunction
 
 function! LightlineCocWarning() abort
   let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'warning', 0) != 0 ? '● ' . info['warning'] : ''
+  return get(info, 'warning', 0) != 0 ? '∙ ' . info['warning'] : ''
 endfunction
 
 function! LightlineCocError() abort
   let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'error', 0) != 0 ? '● ' . info['error'] : ''
+  return get(info, 'error', 0) != 0 ? '∙ ' . info['error'] : ''
 endfunction
 
 function! LightlineCocStatus() abort
@@ -1100,10 +1100,10 @@ augroup END
 
 
 " GitGutter
-let g:gitgutter_sign_added = '●'
-let g:gitgutter_sign_modified = '●'
-let g:gitgutter_sign_removed = '●'
-let g:gitgutter_sign_modified_removed = '●'
+let g:gitgutter_sign_added = '∙'
+let g:gitgutter_sign_modified = '∙'
+let g:gitgutter_sign_removed = '∙'
+let g:gitgutter_sign_modified_removed = '∙'
 
 nnoremap \g :GitGutterToggle<CR>
 

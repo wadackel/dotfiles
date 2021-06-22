@@ -16,6 +16,7 @@
   "tsserver.log": "verbose",
   "tsserver.maxTsServerMemory": 6000,
   "flutter.trace.server": "verbose",
+  "python.venvPath": ".venv",
   "languageserver": {
     "golang": {
       "command": "gopls",
