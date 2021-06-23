@@ -56,12 +56,12 @@ fi
 
 # nodenev
 if [[ -x `which nodenv` ]]; then
-  eval "$(nodenv init -)"
+  eval "$(nodenv init - --no-rehash)"
 fi
 
 # pyenv
 if [[ -x `which pyenv` ]]; then
-  eval "$(pyenv init -)"
+  eval "$(pyenv init - --no-rehash)"
 fi
 
 # poetry
@@ -192,9 +192,6 @@ alias tma="tmux a -t"
 alias tmd="tmux d -t"
 alias tmr="tmux kill-session -t"
 
-# golang
-alias gp="cd $GOPATH/src/github.com/tsuyoshiwada/"
-
 # <Tab> で候補選択
 zstyle ':completion:*:default' menu select=1
 
@@ -218,6 +215,10 @@ function mkcd() {
 
 # gitignore.io
 function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
+
+
+# fzf
+export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙"'
 
 
 # git 操作
@@ -376,29 +377,12 @@ tmux_automatically_attach_session
 if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   source ~/.zplug/init.zsh
 
-  # fzf
-  zplug "junegunn/fzf-bin", as:command, from:gh-r, rename-to:fzf
-  zplug "junegunn/fzf", as:command, use:bin/fzf-tmux
-
   # others
   zplug "zsh-users/zsh-completions"
   zplug "b4b4r07/enhancd", use:init.sh
 
   zplug "zsh-users/zsh-autosuggestions", \
     hook-load:"ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'"
-
-  zplug "stedolan/jq", \
-      from:gh-r, \
-      as:command, \
-      rename-to:jq
-
-  # # Install
-  # if ! zplug check --verbose; then
-  #   printf 'Install? [y/N]: '
-  #   if read -q; then
-  #     echo; zplug install
-  #   fi
-  # fi
 
   zplug load
 
@@ -407,17 +391,12 @@ if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
   ENHANCD_DISABLE_DOT=1
   ENHANCD_DISABLE_HYPHEN=1
   ENHANCD_FILTER="fzf:non-existing-filter"
-
-  # fzf
-  export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙"'
 fi
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # starship (theme)
 eval "$(starship init zsh)"
 
 # profile
-# if (which zprof > /dev/null 2>&1) ;then
-#   zprof
-# fi
+if (which zprof > /dev/null 2>&1) ;then
+  zprof
+fi
