@@ -445,6 +445,7 @@ Plug 'sheerun/vim-polyglot'
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
 Plug 'machakann/vim-sandwich'
+Plug 'tommcdo/vim-exchange'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
@@ -1181,21 +1182,16 @@ augroup dart_settings
   autocmd FileType dart nnoremap <silent> <buffer> <Leader>p :DartFmt<CR>
 augroup END
 
-" vim-go
-let g:go_fmt_command = "goimports"
-let g:go_highlight_functions = 1
-let g:go_highlight_methods = 1
-let g:go_highlight_structs = 1
-let g:go_highlight_operators = 1
-let g:go_term_enabled = 1
-let g:go_highlight_build_constraints = 1
 
-augroup GolangSettings
+" Go
+let g:goimports_simplify_cmd = 'gofumpt'
+let g:goimports = 1
+let g:goimports_simplify = 1
+
+augroup go_settings
   autocmd!
   autocmd FileType go :highlight goErr cterm=bold ctermfg=214
   autocmd FileType go :match goErr /\<err\>/
-  autocmd FileType go nnoremap <silent> <buffer> <C-^> :GoReferrers<CR>
-  autocmd FileType go nnoremap <silent> <buffer> <Leader>i :GoInfo<CR>
 augroup END
 
 

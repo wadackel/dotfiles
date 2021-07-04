@@ -26,7 +26,8 @@ setopt auto_cd
 # ====================================================
 # Path
 # ====================================================
-export GOPATH=${HOME}/go
+
+export GOENV_ROOT="${HOME}/.goenv"
 
 # for M1 device
 if [ -d "/opt/homebrew" ]; then
@@ -36,13 +37,13 @@ fi
 
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
-export PATH="${PATH}:${GOPATH}/bin"
 export PATH="${PATH}:${HOME}/.poetry/bin"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
 export PATH="${HOME}/fvm/default/bin:${PATH}"
 export PATH="${PATH}:${HOME}/.pub-cache/bin"
+export PATH="${GOENV_ROOT}/bin:${PATH}"
 
 # QEMU (M1 device)
 if [ -d "/opt/QEMU" ]; then
@@ -57,6 +58,13 @@ fi
 # nodenev
 if [[ -x `which nodenv` ]]; then
   eval "$(nodenv init - --no-rehash)"
+fi
+
+# goenv
+if [[ -x `which goenv` ]]; then
+  eval "$(goenv init - --no-rehash)"
+  export PATH="${GOROOT}/bin:${PATH}"
+  export PATH="${PATH}:${GOPATH}/bin"
 fi
 
 # pyenv
