@@ -1185,13 +1185,14 @@ augroup END
 
 " Go
 let g:goimports_simplify_cmd = 'gofumpt'
-let g:goimports = 1
+let g:goimports = 0
 let g:goimports_simplify = 1
 
 augroup go_settings
   autocmd!
   autocmd FileType go :highlight goErr cterm=bold ctermfg=214
   autocmd FileType go :match goErr /\<err\>/
+  autocmd FileType go nnoremap <silent> <buffer> <Leader>p :GoImportRun<CR>
 augroup END
 
 
