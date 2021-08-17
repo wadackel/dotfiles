@@ -35,6 +35,11 @@ if [ -d "/opt/homebrew" ]; then
   export PATH="/opt/homebrew/sbin:${PATH}"
 fi
 
+# LLVM9 (M1 device)
+if [ -d "/opt/llvm9" ]; then
+  export PATH="/opt/llvm9/bin:${PATH}"
+fi
+
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${HOME}/.poetry/bin"

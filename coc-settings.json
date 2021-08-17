@@ -26,6 +26,11 @@
       "filetypes": ["rust"],
       "rootPatterns": ["Cargo.toml"]
     },
+    "golang": {
+      "command": "gopls",
+      "rootPatterns": ["go.mod"],
+      "filetypes": ["go"]
+    },
     "ccls": {
       "command": "ccls",
       "filetypes": ["c", "cpp", "objc", "objcpp"],

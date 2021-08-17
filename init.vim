@@ -424,11 +424,11 @@ Plug 'vim-scripts/sudo.vim'
 Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-rls', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'fannheyward/coc-rust-analyzer', {'do': 'yarn --frozen-lockfile'}
 Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
 Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
 Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
