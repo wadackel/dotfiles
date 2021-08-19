@@ -384,7 +384,7 @@ command! -nargs=? AutoUpdateColorscheme call <SID>auto_update_colorscheme(<f-arg
 
 " ripgrep
 if executable('rg')
-  set grepprg=rg\ --vimgrep\ --no-heading
+  set grepprg=rg\ --vimgrep\ --no-heading\ --hidden
   set grepformat=%f:%l:%c:%m,%f:%l:%m
 endif
 
@@ -543,7 +543,7 @@ Plug 'w0rp/ale'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
-" Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " colorschema
 Plug 'wadackel/nvim-syntax-info'
@@ -1245,6 +1245,7 @@ let g:ale_completion_enabled = 0
 let g:ale_disable_lsp = 1
 
 let g:ale_linters = {
+      \ 'go': ['staticcheck'],
       \ 'markdown': ['textlint'],
       \ }
 
@@ -1255,19 +1256,18 @@ let g:ale_linter_aliases = {
       \ }
 
 let g:ale_fixers = {
-      \  '*': ['remove_trailing_lines', 'trim_whitespace'],
-      \  'markdown': ['prettier'],
-      \  'html': [],
-      \  'javascript': ['prettier', 'eslint'],
-      \  'typescript': ['prettier', 'tslint', 'eslint'],
-      \  'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
-      \  'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
-      \}
+      \ '*': ['remove_trailing_lines', 'trim_whitespace'],
+      \ 'markdown': ['prettier'],
+      \ 'html': [],
+      \ 'javascript': ['prettier', 'eslint'],
+      \ 'typescript': ['prettier', 'tslint', 'eslint'],
+      \ 'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \ }
 
 let g:ale_javascript_eslint_options = '--no-ignore'
 let g:ale_typescript_tslint_use_global = 0
 let g:ale_typescript_tslint_config_path = ''
-let g:ale_go_gometalinter_options = '--fast --enable=goimports --enable=gosimple --enable=unused --enable=staticcheck'
 
 nnoremap \ll :ALELint<CR>
 nnoremap \lf :ALEFix<CR>
@@ -1293,15 +1293,13 @@ command! EnableBufWritePost call <SID>enableBufWritePost()
 command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
-" " nvim-treesitter
-" lua <<EOF
-" require'nvim-treesitter.configs'.setup {
-"   ensure_installed = "maintained",
-"   highlight = { enable = true },
-"   incremental_selection = { enable = true },
-"   textobjects = { enable = true },
-" }
-" EOF
+" nvim-treesitter
+lua <<EOF
+require'nvim-treesitter.configs'.setup {
+  ensure_installed = "maintained",
+  highlight = { enable = true },
+}
+EOF
 
 
 " =============================================================

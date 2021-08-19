@@ -1,4 +1,5 @@
 {
+  "coc.preferences.semanticTokensHighlights": false,
   "coc.preferences.useQuickfixForLocations": true,
   "coc.preferences.floatActions": true,
   "suggest.minTriggerInputLength": 1,
