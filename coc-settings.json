@@ -1,4 +1,5 @@
 {
+  "coc.preferences.colorSupport": false,
   "coc.preferences.semanticTokensHighlights": false,
   "coc.preferences.useQuickfixForLocations": true,
   "coc.preferences.floatActions": true,

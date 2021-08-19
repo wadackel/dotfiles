@@ -469,9 +469,6 @@ Plug 'lambdalisue/fern-renderer-nerdfont.vim'
 Plug 'junegunn/fzf', {'do': './install --all'}
 Plug 'junegunn/fzf.vim'
 
-" formatter
-Plug 'prettier/vim-prettier', { 'for': ['javascript', 'typescript', 'typescript.tsx', 'css', 'less', 'scss', 'json', 'graphql', 'markdown', 'html'] }
-
 " sign
 Plug 'airblade/vim-gitgutter'
 Plug 'cohama/agit.vim'
@@ -629,6 +626,9 @@ nmap <silent> ]g <Plug>(coc-diagnostic-next)
 " Coc only does snippet and additional edit on confirm.
 inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
+" Use <c-@> to trigger completion.
+inoremap <silent><expr> <c-@> coc#refresh()
+
 " Remap keys for gotos
 function! s:goto_tag(tagkind) abort
   let tagname = expand('<cWORD>')
@@ -669,8 +669,8 @@ nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
 " Coc only does snippet and additional edit on confirm.
 inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
-" Highlight symbol under cursor on CursorHold
-autocmd CursorHold * silent call CocActionAsync('highlight')
+" " Highlight symbol under cursor on CursorHold
+" autocmd CursorHold * silent call CocActionAsync('highlight')
 
 " list
 nnoremap <silent> <space>l :<C-u>CocList<CR>
@@ -1251,7 +1251,6 @@ let g:ale_linters = {
 
 let g:ale_linter_aliases = {
       \ 'typescript': ['typescript'],
-      \ 'typescript.tsx': ['typescript', 'css'],
       \ 'typescriptreact': ['typescript', 'css'],
       \ }
 
@@ -1259,9 +1258,17 @@ let g:ale_fixers = {
       \ '*': ['remove_trailing_lines', 'trim_whitespace'],
       \ 'markdown': ['prettier'],
       \ 'html': [],
+      \ 'css': ['prettier'],
+      \ 'less': ['prettier'],
+      \ 'scss': ['prettier'],
+      \ 'json': ['prettier'],
+      \ 'graphql': ['prettier'],
+      \ 'vue': ['prettier'],
+      \ 'svelte': ['prettier'],
+      \ 'yaml': ['prettier'],
       \ 'javascript': ['prettier', 'eslint'],
+      \ 'javascriptreact': ['prettier', 'eslint', 'stylelint'],
       \ 'typescript': ['prettier', 'tslint', 'eslint'],
-      \ 'typescript.tsx': ['prettier', 'tslint', 'eslint', 'stylelint'],
       \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
       \ }
 
@@ -1269,9 +1276,10 @@ let g:ale_javascript_eslint_options = '--no-ignore'
 let g:ale_typescript_tslint_use_global = 0
 let g:ale_typescript_tslint_config_path = ''
 
-nnoremap \ll :ALELint<CR>
-nnoremap \lf :ALEFix<CR>
-nnoremap \lt :ALEToggle<CR>
+nnoremap <silent> \ll :ALELint<CR>
+nnoremap <silent> \lt :ALEToggle<CR>
+nnoremap <silent> \lf :ALEFix<CR>
+nnoremap <silent> <Leader>p :ALEFix<CR>
 
 
 " ファイル置換時に BufWritePost 処理をトグル
@@ -1297,7 +1305,12 @@ command! DisableBufWritePost call <SID>disableBufWritePost()
 lua <<EOF
 require'nvim-treesitter.configs'.setup {
   ensure_installed = "maintained",
-  highlight = { enable = true },
+  highlight = {
+    enable = true
+  },
+  indent = {
+    enable = true
+  }
 }
 EOF
 
