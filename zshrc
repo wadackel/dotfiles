@@ -87,6 +87,17 @@ if [[ -x `which rustc` ]]; then
   export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
 fi
 
+# terraform
+if [[ -x `which terraform` ]]; then
+  autoload -U +X bashcompinit && bashcompinit
+
+  if [[ -e "/usr/local/bin/terraform" ]]; then
+    complete -o nospace -C /usr/local/bin/terraform terraform
+  elif [[ -e "/opt/homebrew/bin/terraform" ]]; then
+    complete -o nospace -C /opt/homebrew/bin/terraform terraform
+  fi
+fi
+
 
 # ====================================================
 # Google Cloud SDK
