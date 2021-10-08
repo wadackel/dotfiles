@@ -916,6 +916,8 @@ function! s:init_fern() abort
   nmap <silent><buffer><nowait> P <Plug>(fern-action-clipboard-paste)
   nmap <silent><buffer><nowait> dd <Plug>(fern-action-remove)
   nmap <silent><buffer><nowait> r <Plug>(fern-action-rename)
+  nmap <silent><buffer><nowait> y <Plug>(fern-action-yank:label)
+  nmap <silent><buffer><nowait> Y <Plug>(fern-action-yank:path)
 
   nnoremap <silent><buffer><nowait> q :<C-u>quit<CR>
 endfunction
