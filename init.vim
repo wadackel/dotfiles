@@ -877,23 +877,23 @@ nnoremap <silent> <C-j> :Fern . -width=40 -drawer -reveal=% -toggle<CR>
 
 function! s:init_fern() abort
   nmap <buffer> <expr>
-        \ <Plug>(fern-my-expand-or-enter)
+        \ <Plug>(fern-expand-or-enter)
         \ fern#smart#drawer(
-        \   "\<Plug>(fern-open-or-expand)",
-        \   "\<Plug>(fern-open-or-enter)",
+        \   "\<Plug>(fern-action-open-or-expand)",
+        \   "\<Plug>(fern-action-open-or-enter)",
         \ )
 
   nmap <buffer> <expr>
-        \ <Plug>(fern-my-collapse-or-leave)
+        \ <Plug>(fern-collapse-or-leave)
         \ fern#smart#drawer(
         \   "\<Plug>(fern-action-collapse)",
         \   "\<Plug>(fern-action-leave)",
         \ )
 
-  nmap <silent><buffer><nowait> <CR> <Plug>(fern-open-or-enter)
-  nmap <silent><buffer><nowait> o <Plug>(fern-my-expand-or-enter)
-  nmap <silent><buffer><nowait> l <Plug>(fern-my-expand-or-enter)
-  nmap <silent><buffer><nowait> h <Plug>(fern-my-collapse-or-leave)
+  nmap <silent><buffer><nowait> <CR> <Plug>(fern-action-open-or-enter)
+  nmap <silent><buffer><nowait> o <Plug>(fern-expand-or-enter)
+  nmap <silent><buffer><nowait> l <Plug>(fern-expand-or-enter)
+  nmap <silent><buffer><nowait> h <Plug>(fern-collapse-or-leave)
   nmap <silent><buffer><nowait> <C-h> <Plug>(fern-action-leave)
   nmap <silent><buffer><nowait> e <Plug>(fern-action-open)
   nmap <silent><buffer><nowait> E <Plug>(fern-action-open:side)
