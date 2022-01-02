@@ -483,12 +483,12 @@ Plug 'tyru/open-browser.vim'
 Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
 
 " javascript
-Plug 'pangloss/vim-javascript', {'for': 'javascript'}
-Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript.tsx']}
-Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
+" Plug 'pangloss/vim-javascript', {'for': 'javascript'}
+" Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript.tsx']}
+" Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
 
 " typescript
-Plug 'HerringtonDarkholme/yats.vim'
+" Plug 'HerringtonDarkholme/yats.vim'
 
 " golang
 Plug 'mattn/vim-goimports', {'for': 'go'}
