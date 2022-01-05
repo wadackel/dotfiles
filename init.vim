@@ -453,6 +453,7 @@ Plug 'tpope/vim-commentary'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
 Plug 'itchyny/vim-qfedit'
+Plug 'skanehira/qfopen.vim'
 Plug 'rhysd/clever-f.vim'
 Plug 'haya14busa/vim-asterisk'
 Plug 'haya14busa/is.vim'
@@ -553,6 +554,19 @@ else
 endif
 
 call plug#end()
+
+
+" qfopen
+augroup qfopen_bufenter
+  function! s:qfopen_keymap() abort
+    nmap <buffer> <C-v> <Plug>(qfopen-open-vsplit)
+    nmap <buffer> <C-x> <Plug>(qfopen-open-split)
+    nmap <buffer> <C-t> <Plug>(qfopen-open-tab)
+  endfunction
+
+  au!
+  au FileType qf call s:qfopen_keymap()
+augroup END
 
 
 " " asyncomplete
