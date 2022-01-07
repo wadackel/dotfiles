@@ -425,6 +425,7 @@ Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
+Plug 'neoclide/coc-eslint', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
@@ -438,7 +439,6 @@ Plug 'fannheyward/coc-deno', {'do': 'yarn --frozen-lockfile'}
 " Plug 'prabirshrestha/asyncomplete-buffer.vim'
 " Plug 'prabirshrestha/asyncomplete-file.vim'
 " Plug 'prabirshrestha/vim-lsp'
-" Plug 'mattn/vim-lsp-settings'
 
 " editing
 Plug 'sheerun/vim-polyglot'
@@ -482,14 +482,6 @@ Plug 'tyru/open-browser.vim'
 
 " memo
 Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
-
-" javascript
-" Plug 'pangloss/vim-javascript', {'for': 'javascript'}
-" Plug 'chemzqm/vim-jsx-improve', {'for': ['javascript', 'typescript', 'typescript.tsx']}
-" Plug 'heavenshell/vim-syntax-flowtype', {'for': ['javascript']}
-
-" typescript
-" Plug 'HerringtonDarkholme/yats.vim'
 
 " golang
 Plug 'mattn/vim-goimports', {'for': 'go'}
@@ -571,38 +563,54 @@ augroup END
 
 " " asyncomplete
 " au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-"  \ 'name': 'buffer',
-"  \ 'allowlist': ['*'],
-"  \ 'completor': function('asyncomplete#sources#buffer#completor'),
-"  \ 'config': {
-"  \    'max_buffer_size': 5000000,
-"  \  },
-"  \ }))
+"       \ 'name': 'buffer',
+"       \ 'allowlist': ['*'],
+"       \ 'completor': function('asyncomplete#sources#buffer#completor'),
+"       \ 'config': {
+"         \    'max_buffer_size': 5000000,
+"         \  },
+"         \ }))
 "
 " au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-"  \ 'name': 'file',
-"  \ 'allowlist': ['*'],
-"  \ 'priority': 10,
-"  \ 'completor': function('asyncomplete#sources#file#completor'),
-"  \ }))
+"       \ 'name': 'file',
+"       \ 'allowlist': ['*'],
+"       \ 'priority': 10,
+"       \ 'completor': function('asyncomplete#sources#file#completor'),
+"       \ }))
 "
 "
 " " vim-lsp
-" let g:lsp_highlights_enabled = 0
-" let g:lsp_textprop_enabled = 0
-" let g:lsp_show_workspace_edits = 1
-" let g:lsp_documentation_debounce = 16
+" let g:lsp_use_lua = has('nvim-0.4.0') || (has('lua') && has('patch-8.2.0775'))
+" let g:lsp_preview_float = 1
 " let g:lsp_fold_enabled = 0
-" let g:lsp_text_edit_enabled = 0
 " let g:lsp_diagnostics_float_cursor = 1
-" let g:lsp_diagnostics_float_delay = 16
+" let g:lsp_diagnostics_signs_error = { 'text': '⦿' } " LspError
+" let g:lsp_diagnostics_signs_warning = { 'text': '⦿' } " LspHint
+" let g:lsp_diagnostics_signs_information = { 'text': '⦿' } " LspInformation
+" let g:lsp_document_code_action_signs_hint = { 'text': '⦿' } " LspHint
+" let g:lsp_document_highlight_enabled = 0
+" let g:lsp_diagnostics_virtual_text_prefix = ''
+" let g:lsp_diagnostics_virtual_text_enabled = 0
+" let g:lsp_preview_max_width = -1
+" let g:lsp_preview_max_height = -1
 " let g:lsp_semantic_enabled = 1
-" let g:lsp_signs_error = {'text': '⦿'}
-" let g:lsp_signs_warning = {'text': '⦿'}
-" let g:lsp_signs_hint = {'text': '⦿'}
 "
 " " let g:lsp_log_verbose = 1
 " " let g:lsp_log_file = expand('~/vim-lsp.log')
+"
+" function! s:setup_lsp() abort
+"   if executable('typescript-language-server')
+"     " npm i -g typescript-language-server
+"     call lsp#register_server({
+"           \ 'name': 'typescript-language-server',
+"           \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
+"           \ 'root_uri':{ server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
+"           \ 'allowlist': ['typescript', 'typescript.tsx'],
+"           \ })
+"   endif
+" endfunction
+"
+" autocmd User lsp_setup call s:setup_lsp()
 "
 " function! s:on_lsp_buffer_enabled() abort
 "   setlocal omnifunc=lsp#complete
@@ -1263,6 +1271,7 @@ let g:ale_disable_lsp = 1
 let g:ale_linters = {
       \ 'go': ['staticcheck'],
       \ 'markdown': ['textlint'],
+      \ 'json': ['jq', 'jsonlint', 'cspell'],
       \ }
 
 let g:ale_linter_aliases = {
