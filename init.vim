@@ -562,6 +562,10 @@ augroup END
 
 
 " " asyncomplete
+" inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
+" inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
+" inoremap <expr> <cr>    pumvisible() ? asyncomplete#close_popup() : "\<cr>"
+
 " au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
 "       \ 'name': 'buffer',
 "       \ 'allowlist': ['*'],
@@ -615,9 +619,9 @@ augroup END
 " function! s:on_lsp_buffer_enabled() abort
 "   setlocal omnifunc=lsp#complete
 "   setlocal signcolumn=yes
-"
+
 "   if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
-"
+
 "   nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
 "   nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
 "   nmap <buffer> <C-]> <Plug>(lsp-definition)
@@ -628,7 +632,7 @@ augroup END
 "   nmap <buffer> <Leader>i <Plug>(lsp-hover)
 "   nmap <buffer> <Leader>a <Plug>(lsp-code-action)
 " endfunction
-"
+
 " augroup lsp_install
 "   au!
 "   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
