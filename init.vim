@@ -458,6 +458,8 @@ Plug 'rhysd/clever-f.vim'
 Plug 'haya14busa/vim-asterisk'
 Plug 'haya14busa/is.vim'
 Plug 'easymotion/vim-easymotion'
+Plug 'haya14busa/incsearch.vim'
+Plug 'haya14busa/incsearch-fuzzy.vim'
 
 " debug
 Plug 'thinca/vim-quickrun'
@@ -1116,6 +1118,21 @@ map <Leader> <Plug>(easymotion-prefix)
 nmap <Leader>f <Plug>(easymotion-overwin-f)
 xmap <Leader>f <Plug>(easymotion-s)
 map <Leader>s <Plug>(easymotion-s2)
+
+
+" incsearch
+function! s:config_fuzzyall(...) abort
+  return extend(copy({
+  \   'converters': [
+  \     incsearch#config#fuzzy#converter(),
+  \     incsearch#config#fuzzyspell#converter()
+  \   ],
+  \ }), get(a:, 1, {}))
+endfunction
+
+noremap <silent><expr> z/ incsearch#go(<SID>config_fuzzyall())
+noremap <silent><expr> z? incsearch#go(<SID>config_fuzzyall({'command': '?'}))
+noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
 
 
 " fugitive
