@@ -393,8 +393,6 @@ endif
 " Filetypes
 " =============================================================
 augroup fileTypeDetect
-  autocmd BufRead,BufNew,BufNewFile *.ts setlocal filetype=typescript
-  autocmd BufRead,BufNew,BufNewFile *.tsx setlocal filetype=typescript.tsx
   autocmd BufRead,BufNew,BufNewFile *.mdx setlocal filetype=markdown
   autocmd BufRead,BufNew,BufNewFile *.ejs setlocal ft=html
 
@@ -449,7 +447,7 @@ Plug 'tommcdo/vim-exchange'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
-Plug 'tpope/vim-commentary'
+Plug 'tyru/caw.vim'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
 Plug 'itchyny/vim-qfedit'
@@ -657,22 +655,6 @@ inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 " Use <c-@> to trigger completion.
 inoremap <silent><expr> <c-@> coc#refresh()
 
-" Remap keys for gotos
-function! s:goto_tag(tagkind) abort
-  let tagname = expand('<cWORD>')
-  let winnr = winnr()
-  let pos = getcurpos()
-  let pos[0] = bufnr()
-
-  if CocAction('jump' . a:tagkind)
-    call settagstack(winnr, {
-      \ 'curidx': gettagstack()['curidx'],
-      \ 'items': [{'tagname': tagname, 'from': pos}]
-      \ }, 't')
-  endif
-endfunction
-
-nnoremap <silent> <C-]> :call <SID>goto_tag("Definition")<CR>
 nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
 nmap <silent> K <Plug>(coc-type-definition)
 nmap <silent> <C-^> <Plug>(coc-references)
@@ -1159,11 +1141,6 @@ nnoremap <silent> <Leader>gl :Agit<CR>
 nnoremap <silent> <Leader>gf :AgitFile<CR>
 
 
-" commentary
-nmap <silent> <C-K> <Plug>CommentaryLine
-vmap <silent> <C-K> <Plug>Commentary
-
-
 " Emmet
 let g:user_emmet_mode = 'iv'
 let g:user_emmet_leader_key = '<C-e>'
@@ -1217,8 +1194,10 @@ let g:mkdp_preview_options = {
 
 
 " caw (comment out)
-autocmd FileType typescript let b:caw_oneline_comment = '//'
-autocmd FileType typescript let b:caw_wrap_oneline_comment = ['/*', '*/']
+let g:caw_no_default_keymappings = 1
+
+nmap <C-k> <Plug>(caw:hatpos:toggle)
+vmap <C-k> <Plug>(caw:hatpos:toggle)
 
 
 " Dart
