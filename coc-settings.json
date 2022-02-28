@@ -1,6 +1,4 @@
 {
-  "coc.preferences.colorSupport": false,
-  "coc.preferences.semanticTokensHighlights": false,
   "coc.preferences.useQuickfixForLocations": true,
   "coc.preferences.floatActions": true,
   "suggest.minTriggerInputLength": 1,
@@ -16,7 +14,7 @@
   "diagnostic.hintSign": "◉",
   "tsserver.trace.server": "verbose",
   "tsserver.log": "verbose",
-  "tsserver.maxTsServerMemory": 6000,
+  "tsserver.maxTsServerMemory": 6144,
   "flutter.trace.server": "verbose",
   "python.venvPath": ".venv",
   "go.goplsOptions": {

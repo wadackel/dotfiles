@@ -198,6 +198,7 @@ noremap @: @;
 " Toggle系オプション
 nnoremap <silent> \w :<C-u>setl wrap! wrap?<CR>
 nnoremap <silent> \s :call <SID>toggle_syntax()<CR>
+nnoremap <silent> \m :call <SID>toggle_mouse()<CR>
 nnoremap <silent> \h :<C-u>setl hlsearch!<CR>
 
 function! s:toggle_syntax() abort
@@ -209,6 +210,16 @@ function! s:toggle_syntax() abort
     syntax on
     redraw
     echo 'syntax on'
+  endif
+endfunction
+
+function! s:toggle_mouse() abort
+  if &mouse == 'a'
+    set mouse=
+    echo 'mouse off'
+  else
+    set mouse=a
+    echo 'mouse on'
   endif
 endfunction
 
@@ -419,24 +430,12 @@ call plug#begin('~/.vim/plugged')
 Plug 'vim-scripts/sudo.vim'
 
 " completion
-Plug 'neoclide/coc-css', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-html', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-json', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-tsserver', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-eslint', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-yaml', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc-yank', {'do': 'yarn --frozen-lockfile'}
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'fannheyward/coc-rust-analyzer', {'do': 'yarn --frozen-lockfile'}
-Plug 'iamcco/coc-flutter', {'do': 'yarn --frozen-lockfile'}
-Plug 'fannheyward/coc-pyright', {'do': 'yarn --frozen-lockfile'}
-Plug 'josa42/coc-go', {'do': 'yarn --frozen-lockfile'}
-Plug 'fannheyward/coc-deno', {'do': 'yarn --frozen-lockfile'}
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'prabirshrestha/asyncomplete-lsp.vim'
-" Plug 'prabirshrestha/asyncomplete-buffer.vim'
-" Plug 'prabirshrestha/asyncomplete-file.vim'
-" Plug 'prabirshrestha/vim-lsp'
+Plug 'prabirshrestha/asyncomplete.vim'
+Plug 'prabirshrestha/asyncomplete-lsp.vim'
+Plug 'prabirshrestha/asyncomplete-buffer.vim'
+Plug 'prabirshrestha/asyncomplete-file.vim'
+Plug 'prabirshrestha/vim-lsp'
+Plug 'mattn/vim-lsp-settings'
 
 " editing
 Plug 'sheerun/vim-polyglot'
@@ -561,147 +560,88 @@ augroup qfopen_bufenter
 augroup END
 
 
-" " asyncomplete
-" inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
-" inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
-" inoremap <expr> <cr>    pumvisible() ? asyncomplete#close_popup() : "\<cr>"
+" asyncomplete
+inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
+inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
+inoremap <expr> <cr>    pumvisible() ? asyncomplete#close_popup() : "\<cr>"
 
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-"       \ 'name': 'buffer',
-"       \ 'allowlist': ['*'],
-"       \ 'completor': function('asyncomplete#sources#buffer#completor'),
-"       \ 'config': {
-"         \    'max_buffer_size': 5000000,
-"         \  },
-"         \ }))
-"
-" au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-"       \ 'name': 'file',
-"       \ 'allowlist': ['*'],
-"       \ 'priority': 10,
-"       \ 'completor': function('asyncomplete#sources#file#completor'),
-"       \ }))
-"
-"
-" " vim-lsp
-" let g:lsp_use_lua = has('nvim-0.4.0') || (has('lua') && has('patch-8.2.0775'))
-" let g:lsp_preview_float = 1
-" let g:lsp_fold_enabled = 0
-" let g:lsp_diagnostics_float_cursor = 1
-" let g:lsp_diagnostics_signs_error = { 'text': '⦿' } " LspError
-" let g:lsp_diagnostics_signs_warning = { 'text': '⦿' } " LspHint
-" let g:lsp_diagnostics_signs_information = { 'text': '⦿' } " LspInformation
-" let g:lsp_document_code_action_signs_hint = { 'text': '⦿' } " LspHint
-" let g:lsp_document_highlight_enabled = 0
-" let g:lsp_diagnostics_virtual_text_prefix = ''
-" let g:lsp_diagnostics_virtual_text_enabled = 0
-" let g:lsp_preview_max_width = -1
-" let g:lsp_preview_max_height = -1
-" let g:lsp_semantic_enabled = 1
-"
-" " let g:lsp_log_verbose = 1
-" " let g:lsp_log_file = expand('~/vim-lsp.log')
-"
-" function! s:setup_lsp() abort
-"   if executable('typescript-language-server')
-"     " npm i -g typescript-language-server
-"     call lsp#register_server({
-"           \ 'name': 'typescript-language-server',
-"           \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
-"           \ 'root_uri':{ server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
-"           \ 'allowlist': ['typescript', 'typescript.tsx'],
-"           \ })
-"   endif
-" endfunction
-"
-" autocmd User lsp_setup call s:setup_lsp()
-"
-" function! s:on_lsp_buffer_enabled() abort
-"   setlocal omnifunc=lsp#complete
-"   setlocal signcolumn=yes
+au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
+      \ 'name': 'buffer',
+      \ 'allowlist': ['*'],
+      \ 'completor': function('asyncomplete#sources#buffer#completor'),
+      \ 'config': {
+        \    'max_buffer_size': 5000000,
+        \  },
+        \ }))
 
-"   if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
-
-"   nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
-"   nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
-"   nmap <buffer> <C-]> <Plug>(lsp-definition)
-"   nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
-"   nmap <buffer> <C-^> <Plug>(lsp-references)
-"   nmap <buffer> K <Plug>(lsp-type-definition)
-"   nmap <buffer> <F2> <plug>(lsp-rename)
-"   nmap <buffer> <Leader>i <Plug>(lsp-hover)
-"   nmap <buffer> <Leader>a <Plug>(lsp-code-action)
-" endfunction
-
-" augroup lsp_install
-"   au!
-"   autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
-" augroup END
+au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
+      \ 'name': 'file',
+      \ 'allowlist': ['*'],
+      \ 'priority': 10,
+      \ 'completor': function('asyncomplete#sources#file#completor'),
+      \ }))
 
 
-" coc.nvim
-if exists('&tagfunc')
-  set tagfunc=CocTagFunc
-endif
+" vim-lsp
+" let g:lsp_log_verbose = 1
+" let g:lsp_log_file = expand('~/vim-lsp.log')
+let g:lsp_use_lua = has('nvim-0.4.0') || (has('lua') && has('patch-8.2.0775'))
+let g:lsp_preview_float = 1
+let g:lsp_fold_enabled = 0
+let g:lsp_diagnostics_float_cursor = 1
+let g:lsp_diagnostics_signs_error = { 'text': '⦿' }
+let g:lsp_diagnostics_signs_warning = { 'text': '⦿' }
+let g:lsp_diagnostics_signs_information = { 'text': '⦿' }
+let g:lsp_diagnostics_signs_hint = { 'text': '⦿' }
+let g:lsp_document_code_action_signs_hint = { 'text': '∙' }
+let g:lsp_document_highlight_enabled = 0
+let g:lsp_diagnostics_highlights_insert_mode_enabled = 0
+let g:lsp_diagnostics_virtual_text_prefix = '» '
+let g:lsp_preview_max_width = -1
+let g:lsp_preview_max_height = -1
+let g:lsp_semantic_enabled = 0
+let g:lsp_work_done_progress_enabled = 1
 
-" Use `[g` and `]g` to navigate diagnostics
-nmap <silent> [g <Plug>(coc-diagnostic-prev)
-nmap <silent> ]g <Plug>(coc-diagnostic-next)
+let g:lsp_settings_filetype_typescript = ['typescript-language-server', 'eslint-language-server']
+let g:lsp_settings_filetype_typescriptreact = g:lsp_settings_filetype_typescript
 
-" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
-" Coc only does snippet and additional edit on confirm.
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
-" Use <c-@> to trigger completion.
-inoremap <silent><expr> <c-@> coc#refresh()
-
-nnoremap <silent> <C-w><C-]> :<C-u>execute "split \| call CocActionAsync('jumpDefinition')"<CR>
-nmap <silent> K <Plug>(coc-type-definition)
-nmap <silent> <C-^> <Plug>(coc-references)
-nmap <silent> <Leader>a <Plug>(coc-codeaction)
-nmap <silent> <Leader>r <Plug>(coc-refactor)
-
-" Remap for rename current word
-nmap <F2> <Plug>(coc-rename)
-
-" Show documentation in preview window
-function! s:show_documentation()
-  if (index(['vim','help'], &filetype) >= 0)
-    execute 'h '.expand('<cword>')
-  else
-    call CocAction('doHover')
+function! s:setup_lsp() abort
+  if executable('typescript-language-server')
+    " npm i -g typescript-language-server
+    call lsp#register_server({
+          \ 'name': 'typescript-language-server',
+          \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
+          \ 'root_uri':{ server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
+          \ 'allowlist': ['typescript', 'typescriptreact'],
+          \ })
   endif
 endfunction
 
-nnoremap <silent> <Leader>i :call <SID>show_documentation()<CR>
+autocmd User lsp_setup call s:setup_lsp()
 
-" Use <CR> to confirm completion, `<C-g>u` means break undo chain at current position.
-" Coc only does snippet and additional edit on confirm.
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+function! s:on_lsp_buffer_enabled() abort
+  setlocal omnifunc=lsp#complete
+  setlocal signcolumn=yes
 
-" " Highlight symbol under cursor on CursorHold
-" autocmd CursorHold * silent call CocActionAsync('highlight')
+  if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
 
-" list
-nnoremap <silent> <space>l :<C-u>CocList<CR>
+  nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
+  nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
+  nmap <buffer> <C-]> <Plug>(lsp-definition)
+  nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
+  nmap <buffer> <C-^> <Plug>(lsp-references)
+  nmap <buffer> K <Plug>(lsp-type-definition)
+  nmap <buffer> <F2> <plug>(lsp-rename)
+  nmap <buffer> <Leader>i <Plug>(lsp-hover)
+  nmap <buffer> <Leader>a <Plug>(lsp-code-action)
+endfunction
 
-" diagnostics
-nnoremap <silent> <space>d :<C-u>CocList diagnostics<CR>
-
-" commands
-nnoremap <silent> <space>c :<C-u>CocList commands<CR>
-
-" outline
-nnoremap <silent> <space>o :<C-u>CocList outline<CR>
-
-" yank
-nnoremap <silent> <space>y :<C-u>CocList -A --normal yank<CR>
-
-" latest coc list
-nnoremap <silent> <space>p :<C-u>CocListResume<CR>
-
-nnoremap <silent><expr><up> coc#float#has_float() ? coc#float#scroll(0, 1) : "\<up>"
-nnoremap <silent><expr><down> coc#float#has_float() ? coc#float#scroll(1, 1) : "\<down>"
+augroup lsp_install
+  au!
+  autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
+  autocmd User lsp_float_opened call nvim_win_set_option(lsp#ui#vim#output#getpreviewwinid(), 'signcolumn', 'no')
+augroup END
 
 
 " 画面分割用のキーマップ
@@ -764,25 +704,25 @@ let g:lightline = {
  \             ['branch', 'readonly', 'filename']],
  \   'right': [['lineinfo'],
  \             ['percent'],
- \             ['cocstatus', 'cocwarning', 'cocerror'],
+ \             ['lspstatus', 'lspwarning', 'lsperror'],
  \             ['fileformat', 'fileencoding', 'filetype']],
  \ },
  \ 'component': {
  \   'lineinfo': '%3l:%-2v ¶',
  \ },
  \ 'component_expand': {
- \   'cocwarning': 'LightlineCocWarning',
- \   'cocerror': 'LightlineCocError',
+ \   'lspwarning': 'LightlineLspWarning',
+ \   'lsperror': 'LightlineLspError',
  \ },
  \ 'component_type': {
- \   'cocwarning': 'warning',
- \   'cocerror': 'error',
+ \   'lspwarning': 'warning',
+ \   'lsperror': 'error',
  \ },
  \ 'component_function': {
  \   'filename': 'LightlineFilename',
  \   'branch': 'LightlineFugitive',
  \   'readonly': 'LightlineReadonly',
- \   'cocstatus': 'LightlineCocStatus',
+ \   'lspstatus': 'LightlineLspStatus',
  \ },
  \ 'separator': { 'left': '', 'right': ''},
  \ 'subseparator': { 'left': '❯', 'right': '❮'}
@@ -814,23 +754,37 @@ function! LightlineFugitive() abort
   return branch !=# '' ? ' '.branch : ''
 endfunction
 
-function! LightlineCocWarning() abort
-  let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'warning', 0) != 0 ? '∙ ' . info['warning'] : ''
+function! LightlineLspWarning() abort
+  let l:counts = lsp#get_buffer_diagnostics_counts()
+  return l:counts.warning == 0 ? '' : printf('∙ %d', l:counts.warning)
 endfunction
 
-function! LightlineCocError() abort
-  let info = get(b:, 'coc_diagnostic_info', {})
-  return get(info, 'error', 0) != 0 ? '∙ ' . info['error'] : ''
+function! LightlineLspError() abort
+  let l:counts = lsp#get_buffer_diagnostics_counts()
+  return l:counts.error == 0 ? '' : printf('∙ %d', l:counts.error)
 endfunction
 
-function! LightlineCocStatus() abort
-  return get(g:, 'coc_status', '')
+function! LightlineLspStatus() abort
+  let l:progress = lsp#get_progress()
+  if empty(l:progress)
+    return ''
+  endif
+
+  let l:progress = l:progress[len(l:progress) - 1]
+
+  let l:percent = ''
+  if has_key(l:progress, 'percentage') && l:progress['percentage'] >= 0
+    let l:percent = printf(' %d%', l:progress['percentage'])
+  endif
+  let l:title = l:progress['title']
+  let l:message = l:progress['message'] . l:percent
+  return printf('%s %s', l:title, l:message)
 endfunction
 
-augroup UpdateLightline
+augroup lightline_lsp
   autocmd!
-  autocmd User CocDiagnosticChange call lightline#update()
+  autocmd User lsp_diagnostics_updated call lightline#update()
+  autocmd User lsp_progress_updated call lightline#update()
 augroup END
 
 let g:lightline.tabline = {
@@ -1060,7 +1014,7 @@ if executable('fzf')
         \ }, <bang>0))
 
     nnoremap <silent> <C-p> :RgFzfFiles<CR>
-  elseif
+  else
     nnoremap <silent> <C-p> :Files<CR>
   endif
 
@@ -1311,15 +1265,15 @@ nnoremap <silent> <Leader>p :ALEFix<CR>
 function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
-  CocEnable
   GitGutterEnable
+  call lsp#enable()
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
-  CocDisable
   GitGutterDisable
+  call lsp#disable()
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
