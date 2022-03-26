@@ -463,6 +463,7 @@ Plug 'thinca/vim-quickrun'
 
 " filer
 Plug 'lambdalisue/nerdfont.vim'
+Plug 'lambdalisue/glyph-palette.vim'
 Plug 'lambdalisue/fern.vim'
 Plug 'lambdalisue/fern-renderer-nerdfont.vim'
 " Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
@@ -475,6 +476,7 @@ Plug 'cohama/agit.vim'
 
 " git
 Plug 'tpope/vim-fugitive'
+Plug 'lambdalisue/gina.vim'
 Plug 'rhysd/conflict-marker.vim'
 Plug 'APZelos/blamer.nvim'
 Plug 'tyru/open-browser.vim'
@@ -566,20 +568,20 @@ inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
 inoremap <expr> <cr>    pumvisible() ? asyncomplete#close_popup() : "\<cr>"
 
 au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-      \ 'name': 'buffer',
-      \ 'allowlist': ['*'],
-      \ 'completor': function('asyncomplete#sources#buffer#completor'),
-      \ 'config': {
-        \    'max_buffer_size': 5000000,
-        \  },
-        \ }))
+  \ 'name': 'buffer',
+  \ 'allowlist': ['*'],
+  \ 'completor': function('asyncomplete#sources#buffer#completor'),
+  \ 'config': {
+  \    'max_buffer_size': 5000000,
+  \ },
+  \ }))
 
 au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-      \ 'name': 'file',
-      \ 'allowlist': ['*'],
-      \ 'priority': 10,
-      \ 'completor': function('asyncomplete#sources#file#completor'),
-      \ }))
+  \ 'name': 'file',
+  \ 'allowlist': ['*'],
+  \ 'priority': 10,
+  \ 'completor': function('asyncomplete#sources#file#completor'),
+  \ }))
 
 
 " vim-lsp
@@ -602,20 +604,17 @@ let g:lsp_preview_max_height = -1
 let g:lsp_semantic_enabled = 0
 let g:lsp_work_done_progress_enabled = 1
 
-let g:lsp_settings_filetype_typescript = ['typescript-language-server', 'eslint-language-server']
-let g:lsp_settings_filetype_typescriptreact = g:lsp_settings_filetype_typescript
-
 
 function! s:setup_lsp() abort
-  if executable('typescript-language-server')
-    " npm i -g typescript-language-server
-    call lsp#register_server({
-          \ 'name': 'typescript-language-server',
-          \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
-          \ 'root_uri':{ server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
-          \ 'allowlist': ['typescript', 'typescriptreact'],
-          \ })
-  endif
+"   if executable('typescript-language-server')
+"     " npm i -g typescript-language-server
+"     call lsp#register_server({
+"        \ 'name': 'typescript-language-server',
+"        \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
+"        \ 'root_uri': { server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
+"        \ 'allowlist': ['typescript', 'typescriptreact'],
+"        \ })
+"   endif
 endfunction
 
 autocmd User lsp_setup call s:setup_lsp()
@@ -720,7 +719,7 @@ let g:lightline = {
  \ },
  \ 'component_function': {
  \   'filename': 'LightlineFilename',
- \   'branch': 'LightlineFugitive',
+ \   'branch': 'LightlineGinaBranch',
  \   'readonly': 'LightlineReadonly',
  \   'lspstatus': 'LightlineLspStatus',
  \ },
@@ -749,8 +748,8 @@ function! LightlineReadonly() abort
   endif
 endfunction
 
-function! LightlineFugitive() abort
-  let branch = fugitive#head()
+function! LightlineGinaBranch() abort
+  let branch = gina#component#repo#branch()
   return branch !=# '' ? ' '.branch : ''
 endfunction
 
@@ -888,6 +887,7 @@ endfunction
 
 augroup fern_custom
   autocmd!
+  autocmd FileType fern call glyph_palette#apply()
   autocmd FileType fern call s:init_fern()
 augroup END
 
@@ -1071,14 +1071,96 @@ noremap <silent><expr> z? incsearch#go(<SID>config_fuzzyall({'command': '?'}))
 noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
 
 
-" fugitive
-nnoremap <silent> <Leader>gs :Git<CR>
-nnoremap <silent> <Leader>gd :Gdiffsplit<CR>
+" gina.vim
+nnoremap <silent> <Leader>gs :Gina status<CR>
+nnoremap <silent> <Leader>gl :Gina log<CR>
+nnoremap <silent> <Leader>gb :Gina branch<CR>
+nnoremap <silent> <Leader>gm :Gina blame<CR>
 
-augroup fugitive_setup
-  autocmd!
-  autocmd FileType fugitive nnoremap <silent> <buffer> q <C-w>c
-augroup END
+call gina#custom#command#option('log', '--opener', 'new')
+call gina#custom#command#option('status', '--opener', 'new')
+call gina#custom#command#option('branch', '--opener', 'new')
+
+" status
+call gina#custom#mapping#nmap(
+  \ 'status', '<C-t>',
+  \ '<Plug>(gina-edit-tab)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', '-',
+  \ '<Plug>(gina-index-toggle)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', '<',
+  \ '<Plug>(gina-index-stage)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', '>',
+  \ '<Plug>(gina-index-unstage)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', 'X',
+  \ '<Plug>(gina-index-discard)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', 'cc',
+  \ ':<C-u>Gina commit<CR>',
+  \ {'noremap': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'status', 'ca',
+  \ ':<C-u>Gina commit --amend<CR>',
+  \ {'noremap': 1, 'silent': 1},
+  \)
+
+" branch
+call gina#custom#mapping#nmap(
+  \ 'branch', '<Space>',
+  \ '<Plug>(gina-builtin-mark)',
+  \ {'noremap': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'branch', 'n',
+  \ '<Plug>(gina-branch-new)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'branch', 'm',
+  \ '<Plug>(gina-branch-move)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'branch', 'M',
+  \ '<Plug>(gina-branch-move-force)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'branch', 'D',
+  \ '<Plug>(gina-branch-delete-force)',
+  \ {'silent': 1},
+  \)
+
+" global
+call gina#custom#mapping#nmap(
+  \ '/.*', 'q',
+  \ ':<C-u>bw!<CR>',
+  \ {'noremap': 1, 'silent': 1},
+  \)
 
 
 " GitGutter
