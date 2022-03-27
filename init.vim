@@ -1094,13 +1094,31 @@ call gina#custom#mapping#nmap(
   \ {'nowait': 1, 'silent': 1},
   \)
 
+call gina#custom#mapping#vmap(
+  \ 'status', '-',
+  \ '<Plug>(gina-index-toggle)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
 call gina#custom#mapping#nmap(
   \ 'status', '<',
   \ '<Plug>(gina-index-stage)',
   \ {'nowait': 1, 'silent': 1},
   \)
 
+call gina#custom#mapping#vmap(
+  \ 'status', '<',
+  \ '<Plug>(gina-index-stage)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
 call gina#custom#mapping#nmap(
+  \ 'status', '>',
+  \ '<Plug>(gina-index-unstage)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#vmap(
   \ 'status', '>',
   \ '<Plug>(gina-index-unstage)',
   \ {'nowait': 1, 'silent': 1},
