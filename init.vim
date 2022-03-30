@@ -1073,21 +1073,23 @@ noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
 
 " gina.vim
 nnoremap <silent> <Leader>gs :Gina status<CR>
-nnoremap <silent> <Leader>gl :Gina log<CR>
+nnoremap <silent> <Leader>gd :Gina diff<CR>
+nnoremap <silent> <Leader>gl :Gina log --graph<CR>
 nnoremap <silent> <Leader>gb :Gina branch<CR>
 nnoremap <silent> <Leader>gm :Gina blame<CR>
 
-call gina#custom#command#option('log', '--opener', 'new')
 call gina#custom#command#option('status', '--opener', 'new')
+call gina#custom#command#option('diff', '--opener', 'tabnew')
 call gina#custom#command#option('branch', '--opener', 'new')
+call gina#custom#command#option('log', '--opener', 'tabnew')
+call gina#custom#command#option('blame', '--opener', 'tabnew')
+
+call gina#custom#command#option('status', '--group', 'split-viewer')
+call gina#custom#command#option('commit', '--group', 'split-viewer')
+call gina#custom#command#option('branch', '--group', 'split-viewer')
+call gina#custom#command#option('log', '--group', 'log-viewer')
 
 " status
-call gina#custom#mapping#nmap(
-  \ 'status', '<C-t>',
-  \ '<Plug>(gina-edit-tab)',
-  \ {'silent': 1},
-  \)
-
 call gina#custom#mapping#nmap(
   \ 'status', '-',
   \ '<Plug>(gina-index-toggle)',
@@ -1173,12 +1175,58 @@ call gina#custom#mapping#nmap(
   \ {'silent': 1},
   \)
 
+" log
+call gina#custom#mapping#nmap(
+  \ 'log', 'y',
+  \ '<Plug>(gina-yank-rev)',
+  \ {'nowait': 1, 'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'log', 'cf',
+  \ ':call <SID>ginaFixupCommit()<CR>',
+  \ {'noremap': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'log', 'dd',
+  \ '<Plug>(gina-diff-tab)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'log', 'o',
+  \ '<Plug>(gina-browse)',
+  \ {'silent': 1},
+  \)
+
+call gina#custom#mapping#nmap(
+  \ 'log', 'O',
+  \ '<Plug>(gina-browse-exact)',
+  \ {'silent': 1},
+  \)
+
 " global
 call gina#custom#mapping#nmap(
   \ '/.*', 'q',
   \ ':<C-u>bw!<CR>',
   \ {'noremap': 1, 'silent': 1},
   \)
+
+call gina#custom#mapping#nmap(
+  \ '/.*', '<C-t>',
+  \ '<Plug>(gina-edit-tab)',
+  \ {'silent': 1},
+  \)
+
+function! s:ginaFixupCommit() abort
+  let l:previous = getreg("*")
+  call gina#action#call("yank:rev")
+  let l:rev = getreg("*")
+  call setreg("*", l:previous)
+
+  execute "Gina commit --fixup=" . l:rev
+endfunction
 
 
 " GitGutter
@@ -1190,9 +1238,9 @@ let g:gitgutter_sign_modified_removed = '∙'
 nnoremap \g :GitGutterToggle<CR>
 
 
-" Agit
-nnoremap <silent> <Leader>gl :Agit<CR>
-nnoremap <silent> <Leader>gf :AgitFile<CR>
+" " Agit
+" nnoremap <silent> <Leader>gl :Agit<CR>
+" nnoremap <silent> <Leader>gf :AgitFile<CR>
 
 
 " Emmet
