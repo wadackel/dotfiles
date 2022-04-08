@@ -429,13 +429,20 @@ call plug#begin('~/.vim/plugged')
 " vim-scripts
 Plug 'vim-scripts/sudo.vim'
 
+" lua
+Plug 'nvim-lua/plenary.nvim'
+
 " completion
-Plug 'prabirshrestha/asyncomplete.vim'
-Plug 'prabirshrestha/asyncomplete-lsp.vim'
-Plug 'prabirshrestha/asyncomplete-buffer.vim'
-Plug 'prabirshrestha/asyncomplete-file.vim'
-Plug 'prabirshrestha/vim-lsp'
-Plug 'mattn/vim-lsp-settings'
+Plug 'neovim/nvim-lspconfig'
+Plug 'williamboman/nvim-lsp-installer'
+Plug 'hrsh7th/cmp-nvim-lsp'
+Plug 'hrsh7th/cmp-buffer'
+Plug 'hrsh7th/cmp-path'
+Plug 'hrsh7th/cmp-cmdline'
+Plug 'hrsh7th/nvim-cmp'
+Plug 'hrsh7th/cmp-vsnip'
+Plug 'hrsh7th/vim-vsnip'
+Plug 'onsails/lspkind-nvim'
 
 " editing
 Plug 'sheerun/vim-polyglot'
@@ -472,11 +479,9 @@ Plug 'junegunn/fzf.vim'
 
 " sign
 Plug 'airblade/vim-gitgutter'
-Plug 'cohama/agit.vim'
 
 " git
 Plug 'tpope/vim-fugitive'
-Plug 'lambdalisue/gina.vim'
 Plug 'rhysd/conflict-marker.vim'
 Plug 'APZelos/blamer.nvim'
 Plug 'tyru/open-browser.vim'
@@ -484,11 +489,14 @@ Plug 'tyru/open-browser.vim'
 " memo
 Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
 
-" golang
+" Go
 Plug 'mattn/vim-goimports', {'for': 'go'}
 
 " Rust
 Plug 'rust-lang/rust.vim'
+
+" TypeScript
+Plug 'jose-elias-alvarez/nvim-lsp-ts-utils'
 
 " HTML
 Plug 'othree/html5.vim', {'for': 'html'}
@@ -497,7 +505,7 @@ Plug 'othree/html5.vim', {'for': 'html'}
 Plug 'hail2u/vim-css3-syntax', {'for': 'css'}
 Plug 'cakebaker/scss-syntax.vim', {'for': 'scss'}
 
-" markdown
+" Markdown
 Plug 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
 Plug 'tukiyo/previm', {'for': ['markdown', 'md']}
 Plug 'iamcco/markdown-preview.nvim', {'do': 'cd app && yarn install', 'for': ['markdown', 'md']}
@@ -528,6 +536,7 @@ Plug 'jparise/vim-graphql'
 
 " statusline
 Plug 'itchyny/lightline.vim'
+Plug 'spywhere/lightline-lsp'
 
 " syntax checking
 Plug 'w0rp/ale'
@@ -562,85 +571,189 @@ augroup qfopen_bufenter
 augroup END
 
 
-" asyncomplete
-inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : "\<Tab>"
-inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
-inoremap <expr> <cr>    pumvisible() ? asyncomplete#close_popup() : "\<cr>"
+" lsp
+lua << EOF
+  local signs = {
+    { name = "DiagnosticSignError", text = "⦿" },
+    { name = "DiagnosticSignWarn", text = "⦿" },
+    { name = "DiagnosticSignHint", text = "⦿" },
+    { name = "DiagnosticSignInfo", text = "⦿" },
+  }
 
-au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#buffer#get_source_options({
-  \ 'name': 'buffer',
-  \ 'allowlist': ['*'],
-  \ 'completor': function('asyncomplete#sources#buffer#completor'),
-  \ 'config': {
-  \    'max_buffer_size': 5000000,
-  \ },
-  \ }))
+  for _, sign in ipairs(signs) do
+    vim.fn.sign_define(sign.name, { texthl = sign.name, text = sign.text, numhl = "" })
+  end
 
-au User asyncomplete_setup call asyncomplete#register_source(asyncomplete#sources#file#get_source_options({
-  \ 'name': 'file',
-  \ 'allowlist': ['*'],
-  \ 'priority': 10,
-  \ 'completor': function('asyncomplete#sources#file#completor'),
-  \ }))
+  vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
+    border = "rounded",
+  })
 
+  vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(
+    vim.lsp.diagnostic.on_publish_diagnostics, {
+      virtual_text = {
+        prefix = "»",
+        spacing = 0,
+      },
+      signs = {
+        active = signs,
+      },
+      float = {
+        focus = false,
+        style = "minimal",
+        border = "rounded",
+        source = "always",
+      },
+    }
+  )
 
-" vim-lsp
-" let g:lsp_log_verbose = 1
-" let g:lsp_log_file = expand('~/vim-lsp.log')
-let g:lsp_use_lua = has('nvim-0.4.0') || (has('lua') && has('patch-8.2.0775'))
-let g:lsp_preview_float = 1
-let g:lsp_fold_enabled = 0
-let g:lsp_diagnostics_float_cursor = 1
-let g:lsp_diagnostics_signs_error = { 'text': '⦿' }
-let g:lsp_diagnostics_signs_warning = { 'text': '⦿' }
-let g:lsp_diagnostics_signs_information = { 'text': '⦿' }
-let g:lsp_diagnostics_signs_hint = { 'text': '⦿' }
-let g:lsp_document_code_action_signs_hint = { 'text': '∙' }
-let g:lsp_document_highlight_enabled = 0
-let g:lsp_diagnostics_highlights_insert_mode_enabled = 0
-let g:lsp_diagnostics_virtual_text_prefix = '» '
-let g:lsp_preview_max_width = -1
-let g:lsp_preview_max_height = -1
-let g:lsp_semantic_enabled = 0
-let g:lsp_work_done_progress_enabled = 1
+  -- Setup nvim-cmp.
+  local cmp = require'cmp'
 
+  cmp.setup({
+    snippet = {
+      expand = function(args)
+        vim.fn["vsnip#anonymous"](args.body)
+      end,
+    },
+    mapping = {
+      ['<C-b>'] = cmp.mapping(cmp.mapping.scroll_docs(-4), { 'i', 'c' }),
+      ['<C-f>'] = cmp.mapping(cmp.mapping.scroll_docs(4), { 'i', 'c' }),
+      ['<C-Space>'] = cmp.mapping(cmp.mapping.complete(), { 'i', 'c' }),
+      ['<C-e>'] = cmp.mapping({
+        i = cmp.mapping.abort(),
+        c = cmp.mapping.close(),
+      }),
+      ['<CR>'] = cmp.mapping.confirm({ select = true }),
+    },
+    sources = cmp.config.sources({
+      { name = 'nvim_lsp' },
+      { name = 'vsnip' },
+    }, {
+      { name = 'buffer' },
+    })
+  })
 
-function! s:setup_lsp() abort
-"   if executable('typescript-language-server')
-"     " npm i -g typescript-language-server
-"     call lsp#register_server({
-"        \ 'name': 'typescript-language-server',
-"        \ 'cmd': { server_info -> ['typescript-language-server', '--stdio'] },
-"        \ 'root_uri': { server_info -> lsp#utils#path_to_uri(lsp#utils#find_nearest_parent_file_directory(lsp#utils#get_buffer_path(), 'tsconfig.json')) },
-"        \ 'allowlist': ['typescript', 'typescriptreact'],
-"        \ })
-"   endif
-endfunction
+  -- Set configuration for specific filetype.
+  cmp.setup.filetype('gitcommit', {
+    sources = cmp.config.sources({
+      { name = 'cmp_git' }, -- You can specify the `cmp_git` source if you were installed it.
+    }, {
+      { name = 'buffer' },
+    })
+  })
 
-autocmd User lsp_setup call s:setup_lsp()
+  -- Use cmdline & path source for ':' (if you enabled `native_menu`, this won't work anymore).
+  cmp.setup.cmdline(':', {
+    sources = cmp.config.sources({
+      { name = 'path' }
+    }, {
+      { name = 'cmdline' }
+    })
+  })
 
-function! s:on_lsp_buffer_enabled() abort
-  setlocal omnifunc=lsp#complete
-  setlocal signcolumn=yes
+  -- Icons
+  local lspkind = require('lspkind')
+  cmp.setup {
+    formatting = {
+      format = lspkind.cmp_format({
+        mode = 'symbol',
+        maxwidth = 50,
+        -- before = function (entry, vim_item)
+        --   ...
+        --   return vim_item
+        -- end
+      })
+    }
+  }
 
-  if exists('+tagfunc') | setlocal tagfunc=lsp#tagfunc | endif
+  -- Mappings.
+  local lspconfig = require('lspconfig')
 
-  nmap <buffer> [g <Plug>(lsp-previous-diagnostic)
-  nmap <buffer> ]g <Plug>(lsp-next-diagnostic)
-  nmap <buffer> <C-]> <Plug>(lsp-definition)
-  nnoremap <buffer> <C-w><C-]> :<C-u>leftabove LspDefinition<CR>
-  nmap <buffer> <C-^> <Plug>(lsp-references)
-  nmap <buffer> K <Plug>(lsp-type-definition)
-  nmap <buffer> <F2> <plug>(lsp-rename)
-  nmap <buffer> <Leader>i <Plug>(lsp-hover)
-  nmap <buffer> <Leader>a <Plug>(lsp-code-action)
-endfunction
+  local opts = { noremap=true, silent=true }
+  vim.api.nvim_set_keymap('n', '<space>e', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
+  vim.api.nvim_set_keymap('n', '[g', '<cmd>lua vim.diagnostic.goto_prev()<CR>', opts)
+  vim.api.nvim_set_keymap('n', ']g', '<cmd>lua vim.diagnostic.goto_next()<CR>', opts)
+  vim.api.nvim_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
 
-augroup lsp_install
-  au!
-  autocmd User lsp_buffer_enabled call s:on_lsp_buffer_enabled()
-  autocmd User lsp_float_opened call nvim_win_set_option(lsp#ui#vim#output#getpreviewwinid(), 'signcolumn', 'no')
-augroup END
+  local create_attacher = function(server)
+    local on_attach = function(client, bufnr)
+      local function set_opt(...)
+        vim.api.nvim_buf_set_option(bufnr, ...)
+      end
+
+      local function set_keymap(...)
+        vim.api.nvim_buf_set_keymap(bufnr, ...)
+      end
+
+      -- Enable completion triggered by <C-x><C-o>
+      set_opt('omnifunc', 'v:lua.vim.lsp.omnifunc')
+
+      -- Mappings.
+      set_keymap('n', '<C-]>', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
+      set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
+      set_keymap('n', '<Leader>i', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
+      set_keymap('n', '<C-^>', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
+      set_keymap('n', '<Leader>r', '<cmd>lua vim.lsp.buf.rename()<CR>', opts)
+      set_keymap('n', '<Leader>a', '<cmd>lua vim.lsp.buf.code_action()<CR>', opts)
+      set_keymap('n', '<space>wa', '<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>', opts)
+      set_keymap('n', '<space>wr', '<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>', opts)
+      set_keymap('n', '<space>wl', '<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>', opts)
+
+      if server.name == 'tsserver' then
+        local ts_utils = require('nvim-lsp-ts-utils')
+
+        ts_utils.setup({
+          debug = false,
+          disable_commands = false,
+          enable_import_on_completion = false,
+
+          -- import all
+          import_all_timeout = 5000, -- ms
+          import_all_priorities = {
+            same_file = 1, -- add to existing import statement
+            local_files = 2, -- git files or files with relative path markers
+            buffer_content = 3, -- loaded buffer content
+            buffers = 4, -- loaded buffer names
+          },
+          import_all_scan_buffers = 100,
+          import_all_select_source = false,
+          always_organize_imports = true,
+
+          -- filter diagnostics
+          filter_out_diagnostics_by_severity = {},
+          filter_out_diagnostics_by_code = {},
+
+          -- update imports on file move
+          update_imports_on_move = false,
+          require_confirmation_on_move = false,
+          watch_dir = nil,
+
+          -- required to fix code action ranges and filter diagnostics
+          ts_utils.setup_client(client)
+        })
+
+        set_keymap('n', '<space>o', ':TSLspOrganize<CR>', opts)
+      end
+    end
+
+    return on_attach
+  end
+
+  -- Setup servers
+  local installer = require('nvim-lsp-installer')
+
+  installer.on_server_ready(function(server)
+    local capabilities = vim.lsp.protocol.make_client_capabilities()
+    capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+
+    local opts = {
+      on_attach = create_attacher(server),
+      capabilities = capabilities,
+    }
+
+    server:setup(opts)
+  end)
+EOF
 
 
 " 画面分割用のキーマップ
@@ -697,35 +810,43 @@ let g:matchup_matchparen_offscreen = {}
 
 " lightline configure
 let g:lightline = {
- \ 'colorscheme': 'dogrun',
- \ 'active': {
- \   'left': [['mode', 'paste'],
- \             ['branch', 'readonly', 'filename']],
- \   'right': [['lineinfo'],
- \             ['percent'],
- \             ['lspstatus', 'lspwarning', 'lsperror'],
- \             ['fileformat', 'fileencoding', 'filetype']],
- \ },
- \ 'component': {
- \   'lineinfo': '%3l:%-2v ¶',
- \ },
- \ 'component_expand': {
- \   'lspwarning': 'LightlineLspWarning',
- \   'lsperror': 'LightlineLspError',
- \ },
- \ 'component_type': {
- \   'lspwarning': 'warning',
- \   'lsperror': 'error',
- \ },
- \ 'component_function': {
- \   'filename': 'LightlineFilename',
- \   'branch': 'LightlineGinaBranch',
- \   'readonly': 'LightlineReadonly',
- \   'lspstatus': 'LightlineLspStatus',
- \ },
- \ 'separator': { 'left': '', 'right': ''},
- \ 'subseparator': { 'left': '❯', 'right': '❮'}
- \ }
+  \ 'colorscheme': 'dogrun',
+  \ 'active': {
+  \   'left': [['mode', 'paste'],
+  \             ['branch', 'readonly', 'filename']],
+  \   'right': [['lineinfo'],
+  \             ['percent'],
+  \             ['lsp_status', 'lsp_warnings', 'lsp_errors'],
+  \             ['fileformat', 'fileencoding', 'filetype']],
+  \ },
+  \ 'component': {
+  \   'lineinfo': '%3l:%-2v ¶',
+  \ },
+  \ 'component_expand': {
+  \   'lsp_hints': 'lightline#lsp#hints',
+  \   'lsp_infos': 'lightline#lsp#infos',
+  \   'lsp_warnings': 'lightline#lsp#warnings',
+  \   'lsp_errors': 'lightline#lsp#errors',
+  \   'lsp_ok': 'lightline#lsp#ok',
+  \ },
+  \ 'component_type': {
+  \   'lsp_hints': 'right',
+  \   'lsp_infos': 'right',
+  \   'lsp_warnings': 'warning',
+  \   'lsp_errors': 'error',
+  \   'lsp_ok': 'right',
+  \ },
+  \ 'component_function': {
+  \   'filename': 'LightlineFilename',
+  \   'branch': 'LightlineFugitiveBranch',
+  \   'readonly': 'LightlineReadonly',
+  \ },
+  \ 'separator': { 'left': '', 'right': ''},
+  \ 'subseparator': { 'left': '❯', 'right': '❮'}
+  \ }
+
+let g:lightline#lsp#indicator_warnings = '∙ '
+let g:lightline#lsp#indicator_errors = '∙ '
 
 function! LightlineFilename() abort
   let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
@@ -748,43 +869,10 @@ function! LightlineReadonly() abort
   endif
 endfunction
 
-function! LightlineGinaBranch() abort
-  let branch = gina#component#repo#branch()
+function! LightlineFugitiveBranch() abort
+  let branch = fugitive#head()
   return branch !=# '' ? ' '.branch : ''
 endfunction
-
-function! LightlineLspWarning() abort
-  let l:counts = lsp#get_buffer_diagnostics_counts()
-  return l:counts.warning == 0 ? '' : printf('∙ %d', l:counts.warning)
-endfunction
-
-function! LightlineLspError() abort
-  let l:counts = lsp#get_buffer_diagnostics_counts()
-  return l:counts.error == 0 ? '' : printf('∙ %d', l:counts.error)
-endfunction
-
-function! LightlineLspStatus() abort
-  let l:progress = lsp#get_progress()
-  if empty(l:progress)
-    return ''
-  endif
-
-  let l:progress = l:progress[len(l:progress) - 1]
-
-  let l:percent = ''
-  if has_key(l:progress, 'percentage') && l:progress['percentage'] >= 0
-    let l:percent = printf(' %d%', l:progress['percentage'])
-  endif
-  let l:title = l:progress['title']
-  let l:message = l:progress['message'] . l:percent
-  return printf('%s %s', l:title, l:message)
-endfunction
-
-augroup lightline_lsp
-  autocmd!
-  autocmd User lsp_diagnostics_updated call lightline#update()
-  autocmd User lsp_progress_updated call lightline#update()
-augroup END
 
 let g:lightline.tabline = {
      \ 'active': [ 'tabnum', 'filename', 'modified' ],
@@ -1071,162 +1159,14 @@ noremap <silent><expr> z? incsearch#go(<SID>config_fuzzyall({'command': '?'}))
 noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
 
 
-" gina.vim
-nnoremap <silent> <Leader>gs :Gina status<CR>
-nnoremap <silent> <Leader>gd :Gina diff<CR>
-nnoremap <silent> <Leader>gl :Gina log --graph<CR>
-nnoremap <silent> <Leader>gb :Gina branch<CR>
-nnoremap <silent> <Leader>gm :Gina blame<CR>
+" fugitive
+nnoremap <silent> <Leader>gs :Git<CR>
+nnoremap <silent> <Leader>gd :Gdiffsplit<CR>
 
-call gina#custom#command#option('status', '--opener', 'new')
-call gina#custom#command#option('diff', '--opener', 'tabnew')
-call gina#custom#command#option('branch', '--opener', 'new')
-call gina#custom#command#option('log', '--opener', 'tabnew')
-call gina#custom#command#option('blame', '--opener', 'tabnew')
-
-call gina#custom#command#option('status', '--group', 'split-viewer')
-call gina#custom#command#option('commit', '--group', 'split-viewer')
-call gina#custom#command#option('branch', '--group', 'split-viewer')
-call gina#custom#command#option('log', '--group', 'log-viewer')
-
-" status
-call gina#custom#mapping#nmap(
-  \ 'status', '-',
-  \ '<Plug>(gina-index-toggle)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#vmap(
-  \ 'status', '-',
-  \ '<Plug>(gina-index-toggle)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'status', '<',
-  \ '<Plug>(gina-index-stage)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#vmap(
-  \ 'status', '<',
-  \ '<Plug>(gina-index-stage)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'status', '>',
-  \ '<Plug>(gina-index-unstage)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#vmap(
-  \ 'status', '>',
-  \ '<Plug>(gina-index-unstage)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'status', 'X',
-  \ '<Plug>(gina-index-discard)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'status', 'cc',
-  \ ':<C-u>Gina commit<CR>',
-  \ {'noremap': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'status', 'ca',
-  \ ':<C-u>Gina commit --amend<CR>',
-  \ {'noremap': 1, 'silent': 1},
-  \)
-
-" branch
-call gina#custom#mapping#nmap(
-  \ 'branch', '<Space>',
-  \ '<Plug>(gina-builtin-mark)',
-  \ {'noremap': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'branch', 'n',
-  \ '<Plug>(gina-branch-new)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'branch', 'm',
-  \ '<Plug>(gina-branch-move)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'branch', 'M',
-  \ '<Plug>(gina-branch-move-force)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'branch', 'D',
-  \ '<Plug>(gina-branch-delete-force)',
-  \ {'silent': 1},
-  \)
-
-" log
-call gina#custom#mapping#nmap(
-  \ 'log', 'y',
-  \ '<Plug>(gina-yank-rev)',
-  \ {'nowait': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'log', 'cf',
-  \ ':call <SID>ginaFixupCommit()<CR>',
-  \ {'noremap': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'log', 'dd',
-  \ '<Plug>(gina-diff-tab)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'log', 'o',
-  \ '<Plug>(gina-browse)',
-  \ {'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ 'log', 'O',
-  \ '<Plug>(gina-browse-exact)',
-  \ {'silent': 1},
-  \)
-
-" global
-call gina#custom#mapping#nmap(
-  \ '/.*', 'q',
-  \ ':<C-u>bw!<CR>',
-  \ {'noremap': 1, 'silent': 1},
-  \)
-
-call gina#custom#mapping#nmap(
-  \ '/.*', '<C-t>',
-  \ '<Plug>(gina-edit-tab)',
-  \ {'silent': 1},
-  \)
-
-function! s:ginaFixupCommit() abort
-  let l:previous = getreg("*")
-  call gina#action#call("yank:rev")
-  let l:rev = getreg("*")
-  call setreg("*", l:previous)
-
-  execute "Gina commit --fixup=" . l:rev
-endfunction
+augroup fugitive_setup
+  autocmd!
+  autocmd FileType fugitive nnoremap <silent> <buffer> q <C-w>c
+augroup END
 
 
 " GitGutter
@@ -1236,11 +1176,6 @@ let g:gitgutter_sign_removed = '∙'
 let g:gitgutter_sign_modified_removed = '∙'
 
 nnoremap \g :GitGutterToggle<CR>
-
-
-" " Agit
-" nnoremap <silent> <Leader>gl :Agit<CR>
-" nnoremap <silent> <Leader>gf :AgitFile<CR>
 
 
 " Emmet
@@ -1414,14 +1349,12 @@ function! s:enableBufWritePost()
   let g:ale_fix_on_save = 1
   ALEEnable
   GitGutterEnable
-  call lsp#enable()
 endfunction
 
 function! s:disableBufWritePost()
   let g:ale_fix_on_save = 0
   ALEDisable
   GitGutterDisable
-  call lsp#disable()
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
