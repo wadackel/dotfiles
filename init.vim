@@ -42,7 +42,7 @@ let mapleader = ","
 set encoding=utf-8
 set fileencoding=utf-8
 set fileencodings=utf-8,cp932,ico-2022-jp,sjis,euc-jp,latin1
-set completeopt=menuone,preview
+set completeopt=menu,menuone,noselect
 set autoread
 set t_ut=
 set termguicolors
@@ -416,8 +416,8 @@ augroup fileTypeDetect
 augroup END
 
 
-" vim-polyglot
-let g:polyglot_disabled = ['csv']
+" " vim-polyglot
+" let g:polyglot_disabled = ['csv']
 
 
 " =============================================================
@@ -435,20 +435,29 @@ Plug 'nvim-lua/plenary.nvim'
 " completion
 Plug 'neovim/nvim-lspconfig'
 Plug 'williamboman/nvim-lsp-installer'
+Plug 'hrsh7th/nvim-cmp'
 Plug 'hrsh7th/cmp-nvim-lsp'
+Plug 'hrsh7th/cmp-nvim-lsp-signature-help'
 Plug 'hrsh7th/cmp-buffer'
 Plug 'hrsh7th/cmp-path'
 Plug 'hrsh7th/cmp-cmdline'
-Plug 'hrsh7th/nvim-cmp'
 Plug 'hrsh7th/cmp-vsnip'
 Plug 'hrsh7th/vim-vsnip'
 Plug 'onsails/lspkind-nvim'
 
+" syntax checking
+Plug 'w0rp/ale'
+
+" syntax extention
+Plug 'Shougo/context_filetype.vim'
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+
 " editing
-Plug 'sheerun/vim-polyglot'
+" Plug 'sheerun/vim-polyglot'
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
 Plug 'machakann/vim-sandwich'
+Plug 'David-Kunz/treesitter-unit'
 Plug 'tommcdo/vim-exchange'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
@@ -497,6 +506,7 @@ Plug 'rust-lang/rust.vim'
 
 " TypeScript
 Plug 'jose-elias-alvarez/nvim-lsp-ts-utils'
+Plug 'HerringtonDarkholme/yats.vim'
 
 " HTML
 Plug 'othree/html5.vim', {'for': 'html'}
@@ -537,13 +547,7 @@ Plug 'jparise/vim-graphql'
 " statusline
 Plug 'itchyny/lightline.vim'
 Plug 'spywhere/lightline-lsp'
-
-" syntax checking
-Plug 'w0rp/ale'
-
-" syntax extention
-Plug 'Shougo/context_filetype.vim'
-Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+Plug 'j-hui/fidget.nvim'
 
 " colorschema
 Plug 'wadackel/nvim-syntax-info'
@@ -610,12 +614,16 @@ lua << EOF
   local cmp = require'cmp'
 
   cmp.setup({
+    window = {
+      completion = cmp.config.window.bordered(),
+      documentation = cmp.config.window.bordered(),
+    },
     snippet = {
       expand = function(args)
         vim.fn["vsnip#anonymous"](args.body)
       end,
     },
-    mapping = {
+    mapping = cmp.mapping.preset.insert({
       ['<C-b>'] = cmp.mapping(cmp.mapping.scroll_docs(-4), { 'i', 'c' }),
       ['<C-f>'] = cmp.mapping(cmp.mapping.scroll_docs(4), { 'i', 'c' }),
       ['<C-Space>'] = cmp.mapping(cmp.mapping.complete(), { 'i', 'c' }),
@@ -624,13 +632,15 @@ lua << EOF
         c = cmp.mapping.close(),
       }),
       ['<CR>'] = cmp.mapping.confirm({ select = true }),
-    },
+    }),
     sources = cmp.config.sources({
       { name = 'nvim_lsp' },
+      { name = 'nvim_lsp_signature_help' },
+      { name = 'path' },
       { name = 'vsnip' },
     }, {
       { name = 'buffer' },
-    })
+    }),
   })
 
   -- Set configuration for specific filetype.
@@ -644,6 +654,7 @@ lua << EOF
 
   -- Use cmdline & path source for ':' (if you enabled `native_menu`, this won't work anymore).
   cmp.setup.cmdline(':', {
+    mapping = cmp.mapping.preset.cmdline(),
     sources = cmp.config.sources({
       { name = 'path' }
     }, {
@@ -656,12 +667,8 @@ lua << EOF
   cmp.setup {
     formatting = {
       format = lspkind.cmp_format({
-        mode = 'symbol',
+        mode = 'symbol_text',
         maxwidth = 50,
-        -- before = function (entry, vim_item)
-        --   ...
-        --   return vim_item
-        -- end
       })
     }
   }
@@ -753,6 +760,13 @@ lua << EOF
 
     server:setup(opts)
   end)
+
+  -- Setup fidget
+  require'fidget'.setup {
+    text = {
+      spinner = 'dots',
+    },
+  }
 EOF
 
 
@@ -764,6 +778,13 @@ call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
 call submode#map('bufmove', 'n', '', '>', '<C-w>>')
 call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
+
+
+" treesitter unit
+xnoremap iu :lua require"treesitter-unit".select()<CR>
+xnoremap au :lua require"treesitter-unit".select(true)<CR>
+onoremap iu :<c-u>lua require"treesitter-unit".select()<CR>
+onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
 
 
 " vim-sandwich
@@ -1362,13 +1383,12 @@ command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
 " nvim-treesitter
-lua <<EOF
-require'nvim-treesitter.configs'.setup {
-  ensure_installed = "maintained",
-  highlight = {
-    enable = true
-  },
-}
+lua << EOF
+  require'nvim-treesitter.configs'.setup {
+    highlight = {
+      enable = true,
+    },
+  }
 EOF
 
 
