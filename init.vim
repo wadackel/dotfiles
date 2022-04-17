@@ -431,6 +431,7 @@ Plug 'vim-scripts/sudo.vim'
 
 " lua
 Plug 'nvim-lua/plenary.nvim'
+Plug 'kyazdani42/nvim-web-devicons'
 
 " completion
 Plug 'neovim/nvim-lspconfig'
@@ -482,9 +483,9 @@ Plug 'lambdalisue/nerdfont.vim'
 Plug 'lambdalisue/glyph-palette.vim'
 Plug 'lambdalisue/fern.vim'
 Plug 'lambdalisue/fern-renderer-nerdfont.vim'
+Plug 'nvim-telescope/telescope.nvim'
+Plug 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 " Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
-Plug 'junegunn/fzf', {'do': './install --all'}
-Plug 'junegunn/fzf.vim'
 
 " sign
 Plug 'airblade/vim-gitgutter'
@@ -1019,6 +1020,84 @@ augroup fern_as_netrw
 augroup END
 
 
+" telescope
+nnoremap <silent> <C-p> :Telescope find_files<CR>
+nnoremap <silent> <Leader>gg :Telescope live_grep<CR>
+nnoremap <silent> <Leader>bb :Telescope buffers<CR>
+nnoremap <silent> <Leader>cc :Telescope commands<CR>
+nnoremap <silent> <Leader>cl :Telescope command_history<CR>
+nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
+
+lua << EOF
+  local action_layout = require('telescope.actions.layout')
+
+  require'telescope'.setup{
+    defaults = {
+      -- winblend = 3,
+      results_title = '',
+      prompt_title = '',
+      path_display = { 'smart' },
+      layout_config = {
+        width = 0.95,
+      },
+      preview = {
+        hide_on_startup = false,
+      },
+      mappings = {
+        i = {
+          ['<C-u>'] = false,
+          ['<C-w>'] = false,
+          ['<C-d>'] = { '<Del>', type = 'command' },
+          ['<C-h>'] = { '<BS>', type = 'command' },
+          ['<C-a>'] = { '<Home>', type = 'command' },
+          ['<C-e>'] = { '<End>', type = 'command', opts = { nowait = true } },
+          ['<C-f>'] = { '<Right>', type = 'command' },
+          ['<C-b>'] = { '<Left>', type = 'command' },
+          ['<C-j>'] = 'move_selection_next',
+          ['<C-k>'] = 'move_selection_previous',
+          ['<C-p>'] = 'cycle_history_prev',
+          ['<C-n>'] = 'cycle_history_next',
+          ['<C-\\>'] = action_layout.toggle_preview,
+        },
+        n = {
+          ['<C-\\>'] = action_layout.toggle_preview,
+        },
+      },
+      vimgrep_arguments = {
+        'rg',
+        '--color=never',
+        '--no-heading',
+        '--with-filename',
+        '--line-number',
+        '--column',
+        '--smart-case',
+        '--trim',
+      },
+    },
+    pickers = {
+      find_files = {
+        find_command = {
+          'fd',
+          '--type',
+          'f',
+          '--strip-cwd-prefix',
+        },
+      },
+    },
+    extensions = {
+      fzf = {
+        fuzzy = true,
+        override_generic_sorter = true,
+        override_file_sorter = true,
+        case_mode = 'smart_case',
+      },
+    },
+  }
+
+  require('telescope').load_extension('fzf')
+EOF
+
+
 " " vim-clap
 " " git branches
 " let s:clap_git_branches = {}
@@ -1089,50 +1168,6 @@ augroup END
 " nnoremap <silent> <Leader>ch :Clap history<CR>
 " nnoremap <silent> <Leader>cl :Clap command_history<CR>
 " nnoremap <silent> <Leader>gb :Clap git_branches<CR>
-
-" fzf
-if executable('fzf')
-  let g:fzf_history_dir = '~/.local/share/fzf-history'
-  let g:fzf_buffers_jump = 1
-  let g:fzf_preview_window = 'right:60%'
-  let g:fzf_layout = { 'window': { 'width': 0.9, 'height': 0.7, 'highlight': 'Comment' } }
-
-  let g:fzf_action = {
-        \ 'ctrl-t': 'tab split',
-        \ 'ctrl-x': 'split',
-        \ 'ctrl-v': 'vsplit' }
-
-  augroup fzf-transparent-windows
-    autocmd!
-    autocmd FileType fzf set winblend=6
-  augroup END
-
-  if executable('rg')
-    function! RgFzf(query, fullscreen)
-      let command_fmt = 'rg --column --line-number --no-heading --color=always --smart-case -- %s || true'
-      let initial_command = printf(command_fmt, shellescape(a:query))
-      let reload_command = printf(command_fmt, '{q}')
-      let spec = {'options': ['--phony', '--query', a:query, '--bind', 'change:reload:'.reload_command, '--prompt=grep ❯ ']}
-      call fzf#vim#grep(initial_command, 1, fzf#vim#with_preview(spec), a:fullscreen)
-    endfunction
-    command! -nargs=* -bang Rg call RgFzf(<q-args>, <bang>0)
-
-    command! RgFzfFiles call fzf#run(fzf#wrap('rg', {
-        \ 'options': ['--reverse', '--prompt=files ❯ '],
-        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-        \ }, <bang>0))
-
-    nnoremap <silent> <C-p> :RgFzfFiles<CR>
-  else
-    nnoremap <silent> <C-p> :Files<CR>
-  endif
-
-  nnoremap <silent> <Leader>bl :BLines<CR>
-  nnoremap <silent> <Leader>bb :Buffers<CR>
-  nnoremap <silent> <Leader>bc :BCommits<CR>
-  nnoremap <silent> <Leader>ch :History<CR>
-  nnoremap <silent> <Leader>cl :History:<CR>
-endif
 
 
 " Memo List
