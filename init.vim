@@ -1031,6 +1031,16 @@ nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
 lua << EOF
   local action_layout = require('telescope.actions.layout')
 
+  function wrap_dropdown_opts(opts)
+    opts = opts or {}
+    opts.theme = 'dropdown'
+    opts.layout_config = {
+      width = 0.8,
+      height = 0.65,
+    }
+    return opts
+  end
+
   require'telescope'.setup{
     defaults = {
       -- winblend = 3,
@@ -1038,7 +1048,8 @@ lua << EOF
       prompt_title = '',
       path_display = { 'smart' },
       layout_config = {
-        width = 0.95,
+        width = 0.8,
+        height = 0.6,
       },
       preview = {
         hide_on_startup = false,
@@ -1075,14 +1086,18 @@ lua << EOF
       },
     },
     pickers = {
-      find_files = {
+      find_files = wrap_dropdown_opts({
         find_command = {
           'fd',
           '--type',
           'f',
           '--strip-cwd-prefix',
         },
-      },
+      }),
+      live_grep = wrap_dropdown_opts({}),
+      buffers = wrap_dropdown_opts({}),
+      commands = wrap_dropdown_opts({}),
+      command_history = wrap_dropdown_opts({}),
     },
     extensions = {
       fzf = {
