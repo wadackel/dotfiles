@@ -491,6 +491,7 @@ Plug 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Plug 'airblade/vim-gitgutter'
 
 " git
+Plug 'sindrets/diffview.nvim'
 Plug 'tpope/vim-fugitive'
 Plug 'rhysd/conflict-marker.vim'
 Plug 'APZelos/blamer.nvim'
@@ -1027,6 +1028,7 @@ nnoremap <silent> <Leader>bb :Telescope buffers<CR>
 nnoremap <silent> <Leader>cc :Telescope commands<CR>
 nnoremap <silent> <Leader>cl :Telescope command_history<CR>
 nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
+nnoremap <silent> <Leader>gl :Telescope git_commits<CR>
 
 lua << EOF
   local action_layout = require('telescope.actions.layout')
@@ -1113,78 +1115,6 @@ lua << EOF
 EOF
 
 
-" " vim-clap
-" " git branches
-" let s:clap_git_branches = {}
-"
-" function! s:clap_git_branches.source() abort
-"   if !executable('git')
-"     call clap#helper#echo_error('git executable not found')
-"     return []
-"   endif
-"
-"   let branches = systemlist('git branch')
-"   if v:shell_error
-"     call clap#helper#echo_error('Error occurs on calling `git branch`, maybe you are not in a git repository.')
-"     return []
-"   else
-"     return map(branches, 'split(v:val)[-1]')
-"   endif
-" endfunction
-"
-" function! s:clap_git_branches.sink(line) abort
-"   call system('git switch ' . a:line)
-"   if v:shell_error
-"     call clap#helper#echo_error('Error occurs on calling `git switch %`, maybe you have any changed files or staged files.')
-"   else
-"     call clap#helper#echo_info('switched to "' . a:line . '"')
-"   endif
-" endfunction
-"
-" let s:clap_git_branches.enable_rooter = v:true
-" let g:clap#provider#git_branches# = s:clap_git_branches
-"
-" " configure
-" let g:clap_theme = 'dogrun'
-"
-" let g:clap_layout = { 'relative': 'editor' }
-"
-" let g:clap_current_selection_sign = {
-"    \ 'text': '»',
-"    \ 'texthl': 'WarningMsg',
-"    \ 'linehl': 'ClapCurrentSelection',
-"    \ }
-"
-" let g:clap_selected_sign = {
-"    \ 'text': '❯',
-"    \ 'texthl': 'WarningMsg',
-"    \ 'linehl': 'ClapSelected',
-"    \ }
-"
-" let g:clap_search_box_border_symbols = {
-"    \ 'arrow': ["\ue0b2", "\ue0b0"],
-"    \ 'curve': ["\ue0b6", "\ue0b4"],
-"    \ 'nil': ['', ''],
-"    \ }
-"
-" let g:clap_prompt_format = '%spinner% %provider_id%❯ '
-" let g:clap_spinner_frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-"
-" let g:clap_insert_mode_only = v:true
-" let g:clap_builtin_fuzzy_filter_threshold = 1000
-" let g:clap_on_move_delay = 16
-" let g:clap_popup_input_delay = 16
-" let g:clap_provider_grep_delay = 16
-" let g:clap_provider_grep_opts = "-H --no-heading --vimgrep --smart-case --no-ignore-dot"
-"
-" nnoremap <silent> <C-p> :Clap files +no-cache ++finder=fd --hidden -E '.git/' --type f<CR>
-" nnoremap <silent> <Leader>gg :Clap grep<CR>
-" nnoremap <silent> <Leader>bb :Clap buffers<CR>
-" nnoremap <silent> <Leader>ch :Clap history<CR>
-" nnoremap <silent> <Leader>cl :Clap command_history<CR>
-" nnoremap <silent> <Leader>gb :Clap git_branches<CR>
-
-
 " Memo List
 let g:memolist_path = '~/Dropbox/memolist'
 let g:memolist_memo_suffix = "md"
@@ -1228,6 +1158,116 @@ endfunction
 noremap <silent><expr> z/ incsearch#go(<SID>config_fuzzyall())
 noremap <silent><expr> z? incsearch#go(<SID>config_fuzzyall({'command': '?'}))
 noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
+
+
+" Diffview.nvim
+lua << EOF
+  local cb = require'diffview.config'.diffview_callback
+
+  require'diffview'.setup {
+    diff_binaries = false,    -- Show diffs for binaries
+    enhanced_diff_hl = false, -- See ':h diffview-config-enhanced_diff_hl'
+    use_icons = true,         -- Requires nvim-web-devicons
+    icons = {                 -- Only applies when use_icons is true.
+      folder_closed = '',
+      folder_open = '',
+    },
+    signs = {
+      fold_closed = '',
+      fold_open = '',
+    },
+    file_panel = {
+      position = 'left',                  -- One of 'left', 'right', 'top', 'bottom'
+      width = 35,                         -- Only applies when position is 'left' or 'right'
+      height = 10,                        -- Only applies when position is 'top' or 'bottom'
+      listing_style = 'tree',             -- One of 'list' or 'tree'
+      tree_options = {                    -- Only applies when listing_style is 'tree'
+        flatten_dirs = true,              -- Flatten dirs that only contain one single dir
+        folder_statuses = 'only_folded',  -- One of 'never', 'only_folded' or 'always'.
+      },
+    },
+    file_history_panel = {
+      position = 'bottom',
+      width = 35,
+      height = 16,
+      log_options = {
+        max_count = 256,      -- Limit the number of commits
+        follow = false,       -- Follow renames (only for single file)
+        all = false,          -- Include all refs under 'refs/' including HEAD
+        merges = false,       -- List only merge commits
+        no_merges = false,    -- List no merge commits
+        reverse = false,      -- List commits in reverse order
+      },
+    },
+    default_args = {    -- Default args prepended to the arg-list for the listed commands
+      DiffviewOpen = {},
+      DiffviewFileHistory = {},
+    },
+    hooks = {},         -- See ':h diffview-config-hooks'
+    key_bindings = {
+      disable_defaults = false,                   -- Disable the default key bindings
+      -- The `view` bindings are active in the diff buffers, only when the current
+      -- tabpage is a Diffview.
+      view = {
+        ['<tab>']      = cb('select_next_entry'),  -- Open the diff for the next file
+        ['<s-tab>']    = cb('select_prev_entry'),  -- Open the diff for the previous file
+        ['gf']         = cb('goto_file'),          -- Open the file in a new split in previous tabpage
+        ['<C-w><C-f>'] = cb('goto_file_split'),    -- Open the file in a new split
+        ['<C-w>gf']    = cb('goto_file_tab'),      -- Open the file in a new tabpage
+        ['<leader>e']  = cb('focus_files'),        -- Bring focus to the files panel
+        ['<leader>b']  = cb('toggle_files'),       -- Toggle the files panel.
+      },
+      file_panel = {
+        ['j']             = cb('next_entry'),           -- Bring the cursor to the next file entry
+        ['<down>']        = cb('next_entry'),
+        ['k']             = cb('prev_entry'),           -- Bring the cursor to the previous file entry.
+        ['<up>']          = cb('prev_entry'),
+        ['<cr>']          = cb('select_entry'),         -- Open the diff for the selected entry.
+        ['o']             = cb('select_entry'),
+        ['<2-LeftMouse>'] = cb('select_entry'),
+        ['-']             = cb('toggle_stage_entry'),   -- Stage / unstage the selected entry.
+        ['S']             = cb('stage_all'),            -- Stage all entries.
+        ['U']             = cb('unstage_all'),          -- Unstage all entries.
+        ['X']             = cb('restore_entry'),        -- Restore entry to the state on the left side.
+        ['R']             = cb('refresh_files'),        -- Update stats and entries in the file list.
+        ['<tab>']         = cb('select_next_entry'),
+        ['<s-tab>']       = cb('select_prev_entry'),
+        ['gf']            = cb('goto_file'),
+        ['<C-w><C-f>']    = cb('goto_file_split'),
+        ['<C-w>gf']       = cb('goto_file_tab'),
+        ['i']             = cb('listing_style'),        -- Toggle between 'list' and 'tree' views
+        ['f']             = cb('toggle_flatten_dirs'),  -- Flatten empty subdirectories in tree listing style.
+        ['<leader>e']     = cb('focus_files'),
+        ['<leader>b']     = cb('toggle_files'),
+      },
+      file_history_panel = {
+        ['g!']            = cb('options'),            -- Open the option panel
+        ['<C-A-d>']       = cb('open_in_diffview'),   -- Open the entry under the cursor in a diffview
+        ['y']             = cb('copy_hash'),          -- Copy the commit hash of the entry under the cursor
+        ['zR']            = cb('open_all_folds'),
+        ['zM']            = cb('close_all_folds'),
+        ['j']             = cb('next_entry'),
+        ['<down>']        = cb('next_entry'),
+        ['k']             = cb('prev_entry'),
+        ['<up>']          = cb('prev_entry'),
+        ['<cr>']          = cb('select_entry'),
+        ['o']             = cb('select_entry'),
+        ['<2-LeftMouse>'] = cb('select_entry'),
+        ['<tab>']         = cb('select_next_entry'),
+        ['<s-tab>']       = cb('select_prev_entry'),
+        ['gf']            = cb('goto_file'),
+        ['<C-w><C-f>']    = cb('goto_file_split'),
+        ['<C-w>gf']       = cb('goto_file_tab'),
+        ['<leader>e']     = cb('focus_files'),
+        ['<leader>b']     = cb('toggle_files'),
+      },
+      option_panel = {
+        ['<tab>'] = cb('select'),
+        ['q']     = cb('close'),
+      },
+    },
+  }
+EOF
 
 
 " fugitive
