@@ -380,6 +380,7 @@ tnoremap <silent> <Leader>tv <C-\><C-n>:execute 'vsplit \| terminal'<CR>
 
 " to normal mode
 tnoremap <silent> <C-[> <C-\><C-n>
+tnoremap <silent> <Esc> <C-\><C-n>
 
 " close terminal
 tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
@@ -485,7 +486,7 @@ Plug 'lambdalisue/fern.vim'
 Plug 'lambdalisue/fern-renderer-nerdfont.vim'
 Plug 'nvim-telescope/telescope.nvim'
 Plug 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
-" Plug 'liuchengxu/vim-clap', { 'do': ':Clap install-binary' }
+Plug 'nvim-telescope/telescope-github.nvim'
 
 " sign
 Plug 'airblade/vim-gitgutter'
@@ -1029,6 +1030,7 @@ nnoremap <silent> <Leader>cc :Telescope commands<CR>
 nnoremap <silent> <Leader>cl :Telescope command_history<CR>
 nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
 nnoremap <silent> <Leader>gl :Telescope git_commits<CR>
+nnoremap <silent> <Leader>gp :Telescope gh pull_request<CR>
 
 lua << EOF
   local action_layout = require('telescope.actions.layout')
@@ -1038,7 +1040,7 @@ lua << EOF
     opts.theme = 'dropdown'
     opts.layout_config = {
       width = 0.8,
-      height = 0.65,
+      height = 0.6,
     }
     return opts
   end
@@ -1046,9 +1048,12 @@ lua << EOF
   require'telescope'.setup{
     defaults = {
       -- winblend = 3,
-      results_title = '',
-      prompt_title = '',
-      path_display = { 'smart' },
+      -- results_title = '',
+      -- prompt_title = '',
+      prompt_prefix = '❯ ',
+      selection_caret = ' ',
+      multi_icon = ' ',
+      path_display = { 'truncate' },
       layout_config = {
         width = 0.8,
         height = 0.6,
@@ -1070,9 +1075,13 @@ lua << EOF
           ['<C-k>'] = 'move_selection_previous',
           ['<C-p>'] = 'cycle_history_prev',
           ['<C-n>'] = 'cycle_history_next',
+          ['<Up>'] = 'preview_scrolling_up',
+          ['<Down>'] = 'preview_scrolling_down',
           ['<C-\\>'] = action_layout.toggle_preview,
         },
         n = {
+          ['<C-k>'] = 'preview_scrolling_up',
+          ['<C-j>'] = 'preview_scrolling_down',
           ['<C-\\>'] = action_layout.toggle_preview,
         },
       },
@@ -1094,10 +1103,16 @@ lua << EOF
           '--type',
           'f',
           '--strip-cwd-prefix',
+          '--hidden',
+          '-E',
+          '.git',
         },
       }),
       live_grep = wrap_dropdown_opts({}),
-      buffers = wrap_dropdown_opts({}),
+      buffers = wrap_dropdown_opts({
+        sort_lastused = true,
+        ignore_current_buffer = true,
+      }),
       commands = wrap_dropdown_opts({}),
       command_history = wrap_dropdown_opts({}),
     },
@@ -1112,6 +1127,7 @@ lua << EOF
   }
 
   require('telescope').load_extension('fzf')
+  require('telescope').load_extension('gh')
 EOF
 
 
