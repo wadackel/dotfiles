@@ -432,6 +432,7 @@ Plug 'vim-scripts/sudo.vim'
 
 " lua
 Plug 'nvim-lua/plenary.nvim'
+Plug 'lewis6991/impatient.nvim'
 Plug 'kyazdani42/nvim-web-devicons'
 
 " completion
@@ -563,6 +564,10 @@ else
 endif
 
 call plug#end()
+
+
+" impatient.nvim
+lua require('impatient')
 
 
 " qfopen
