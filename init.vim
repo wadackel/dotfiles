@@ -623,8 +623,8 @@ lua << EOF
 
   cmp.setup({
     window = {
-      completion = cmp.config.window.bordered(),
-      documentation = cmp.config.window.bordered(),
+      completion = cmp.config.window.bordered({ winhighlight = 'Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None' }),
+      documentation = cmp.config.window.bordered({ winhighlight = 'Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None' }),
     },
     snippet = {
       expand = function(args)
@@ -1036,8 +1036,10 @@ nnoremap <silent> <Leader>cl :Telescope command_history<CR>
 nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
 nnoremap <silent> <Leader>gl :Telescope git_commits<CR>
 nnoremap <silent> <Leader>gp :Telescope gh pull_request<CR>
+nnoremap <silent> <Leader>hl :Telescope highlights<CR>
 
 lua << EOF
+  local action = require('telescope.actions')
   local action_layout = require('telescope.actions.layout')
 
   function wrap_dropdown_opts(opts)
@@ -1052,9 +1054,6 @@ lua << EOF
 
   require'telescope'.setup{
     defaults = {
-      -- winblend = 3,
-      -- results_title = '',
-      -- prompt_title = '',
       prompt_prefix = '❯ ',
       selection_caret = ' ',
       multi_icon = ' ',
@@ -1080,6 +1079,7 @@ lua << EOF
           ['<C-k>'] = 'move_selection_previous',
           ['<C-p>'] = 'cycle_history_prev',
           ['<C-n>'] = 'cycle_history_next',
+          ['<C-q>'] = action.smart_send_to_qflist + action.open_qflist,
           ['<Up>'] = 'preview_scrolling_up',
           ['<Down>'] = 'preview_scrolling_down',
           ['<C-\\>'] = action_layout.toggle_preview,
