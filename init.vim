@@ -554,8 +554,13 @@ Plug 'spywhere/lightline-lsp'
 Plug 'j-hui/fidget.nvim'
 
 " colorschema
-Plug 'wadackel/nvim-syntax-info'
 Plug 'rhysd/vim-color-spring-night'
+
+if isdirectory($HOME.'/develop/github.com/wadackel/nvim-syntax-info')
+  Plug '~/develop/github.com/wadackel/nvim-syntax-info'
+else
+  Plug 'wadackel/nvim-syntax-info'
+endif
 
 if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
   Plug '~/develop/github.com/wadackel/vim-dogrun'
@@ -1040,7 +1045,14 @@ nnoremap <silent> <Leader>hl :Telescope highlights<CR>
 
 lua << EOF
   local action = require('telescope.actions')
+  local action_state = require('telescope.actions.state')
   local action_layout = require('telescope.actions.layout')
+
+  function action_yank(prompt_bufnr)
+    local selection = action_state.get_selected_entry()
+    vim.fn.setreg('*', selection.value)
+    print('Yanked!')
+  end
 
   function wrap_dropdown_opts(opts)
     opts = opts or {}
@@ -1080,6 +1092,7 @@ lua << EOF
           ['<C-p>'] = 'cycle_history_prev',
           ['<C-n>'] = 'cycle_history_next',
           ['<C-q>'] = action.smart_send_to_qflist + action.open_qflist,
+          ['<C-y>'] = action_yank,
           ['<Up>'] = 'preview_scrolling_up',
           ['<Down>'] = 'preview_scrolling_down',
           ['<C-\\>'] = action_layout.toggle_preview,
@@ -1120,6 +1133,14 @@ lua << EOF
       }),
       commands = wrap_dropdown_opts({}),
       command_history = wrap_dropdown_opts({}),
+      git_branches = {
+        mappings = {
+          i = {
+            ['<C-y>'] = action_yank,
+            ['<C-m>'] = 'git_merge_branch',
+          },
+        },
+      },
     },
     extensions = {
       fzf = {
@@ -1146,14 +1167,14 @@ let g:memolist_delimiter_yaml_end  = '---'
 nnoremap <silent> <Leader>mc :MemoNew<CR>
 nnoremap <silent> <Leader>mg :MemoGrep<CR>
 
-if executable('fzf') && executable('rg')
-  command! FZFMemoList call fzf#run(fzf#wrap('rg', {
-        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-        \ 'dir': g:memolist_path,
-        \ }, <bang>0))
-
-  nnoremap <Leader>mp :FZFMemoList<CR>
-endif
+" if executable('fzf') && executable('rg')
+"   command! FZFMemoList call fzf#run(fzf#wrap('rg', {
+"        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
+"        \ 'dir': g:memolist_path,
+"        \ }, <bang>0))
+"
+"   nnoremap <Leader>mp :FZFMemoList<CR>
+" endif
 
 
 " easymotion
