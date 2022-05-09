@@ -1128,7 +1128,9 @@ lua << EOF
       }),
       live_grep = wrap_dropdown_opts({}),
       buffers = wrap_dropdown_opts({
+        only_cwd = true,
         sort_lastused = true,
+        sort_mru = true,
         ignore_current_buffer = true,
       }),
       commands = wrap_dropdown_opts({}),
