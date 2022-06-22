@@ -204,10 +204,12 @@ nnoremap <silent> \h :<C-u>setl hlsearch!<CR>
 function! s:toggle_syntax() abort
   if exists('g:syntax_on')
     syntax off
+    TSDisable highlight
     redraw
     echo 'syntax off'
   else
     syntax on
+    TSEnable highlight
     redraw
     echo 'syntax on'
   endif
@@ -444,9 +446,11 @@ Plug 'hrsh7th/cmp-nvim-lsp-signature-help'
 Plug 'hrsh7th/cmp-buffer'
 Plug 'hrsh7th/cmp-path'
 Plug 'hrsh7th/cmp-cmdline'
+Plug 'hrsh7th/cmp-copilot'
 Plug 'hrsh7th/cmp-vsnip'
 Plug 'hrsh7th/vim-vsnip'
 Plug 'onsails/lspkind-nvim'
+Plug 'github/copilot.vim'
 
 " syntax checking
 Plug 'w0rp/ale'
@@ -588,6 +592,10 @@ augroup qfopen_bufenter
 augroup END
 
 
+" copilot
+let g:copilot_node_command = "~/.nodenv/versions/16.15.0/bin/node"
+
+
 " lsp
 lua << EOF
   local signs = {
@@ -650,6 +658,7 @@ lua << EOF
       { name = 'nvim_lsp' },
       { name = 'nvim_lsp_signature_help' },
       { name = 'path' },
+      { name = 'copilot' },
       { name = 'vsnip' },
     }, {
       { name = 'buffer' },
