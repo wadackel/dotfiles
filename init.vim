@@ -1326,9 +1326,18 @@ EOF
 nnoremap <silent> <Leader>gs :Git<CR>
 nnoremap <silent> <Leader>gd :Gdiffsplit<CR>
 
+function! s:OpenFugitiveOpenPullRequest() abort
+  let l:line = getline('.')
+  let l:pos = stridx(l:line, ' ')
+  let l:hash = l:line[0:l:pos]
+  echo system('git openpr ' . l:hash)
+endfunction
+
 augroup fugitive_setup
   autocmd!
   autocmd FileType fugitive nnoremap <silent> <buffer> q <C-w>c
+  autocmd FileType fugitiveblame nmap <silent> <buffer> q gq
+  autocmd FileType fugitiveblame nnoremap <silent> <buffer> gp :call <SID>OpenFugitiveOpenPullRequest()<CR>
 augroup END
 
 
