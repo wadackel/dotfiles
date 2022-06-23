@@ -446,11 +446,9 @@ Plug 'hrsh7th/cmp-nvim-lsp-signature-help'
 Plug 'hrsh7th/cmp-buffer'
 Plug 'hrsh7th/cmp-path'
 Plug 'hrsh7th/cmp-cmdline'
-Plug 'hrsh7th/cmp-copilot'
 Plug 'hrsh7th/cmp-vsnip'
 Plug 'hrsh7th/vim-vsnip'
 Plug 'onsails/lspkind-nvim'
-Plug 'github/copilot.vim'
 
 " syntax checking
 Plug 'w0rp/ale'
@@ -590,10 +588,6 @@ augroup qfopen_bufenter
   au!
   au FileType qf call s:qfopen_keymap()
 augroup END
-
-
-" copilot
-let g:copilot_node_command = "~/.nodenv/versions/16.15.0/bin/node"
 
 
 " lsp
