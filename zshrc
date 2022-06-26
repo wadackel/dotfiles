@@ -420,6 +420,9 @@ fi
 # starship (theme)
 eval "$(starship init zsh)"
 
+# fzf
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
 # profile
 if (which zprof > /dev/null 2>&1) ;then
   zprof
