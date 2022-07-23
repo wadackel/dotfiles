@@ -419,10 +419,6 @@ augroup fileTypeDetect
 augroup END
 
 
-" " vim-polyglot
-" let g:polyglot_disabled = ['csv']
-
-
 " =============================================================
 " Plugins
 " =============================================================
@@ -458,7 +454,6 @@ Plug 'Shougo/context_filetype.vim'
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 
 " editing
-" Plug 'sheerun/vim-polyglot'
 Plug 'mattn/emmet-vim'
 Plug 'andymass/vim-matchup'
 Plug 'machakann/vim-sandwich'
@@ -646,7 +641,7 @@ lua << EOF
         i = cmp.mapping.abort(),
         c = cmp.mapping.close(),
       }),
-      ['<CR>'] = cmp.mapping.confirm({ select = true }),
+      ['<C-y>'] = cmp.mapping.confirm({ select = true }),
     }),
     sources = cmp.config.sources({
       { name = 'nvim_lsp' },
