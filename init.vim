@@ -1506,6 +1506,7 @@ let g:ale_fixers = {
       \ }
 
 let g:ale_javascript_eslint_options = '--no-ignore'
+let g:ale_javascript_eslint_suppress_eslintignore = 1
 let g:ale_typescript_tslint_use_global = 0
 let g:ale_typescript_tslint_config_path = ''
 

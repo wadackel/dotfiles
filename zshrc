@@ -47,6 +47,7 @@ export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
 export PATH="${HOME}/fvm/default/bin:${PATH}"
+export PATH="${HOME}/.rbenv/bin:${PATH}"
 export PATH="${PATH}:${HOME}/.pub-cache/bin"
 export PATH="${GOENV_ROOT}/bin:${PATH}"
 
@@ -70,6 +71,12 @@ if [[ -x `which goenv` ]]; then
   eval "$(goenv init - --no-rehash)"
   export PATH="${GOROOT}/bin:${PATH}"
   export PATH="${PATH}:${GOPATH}/bin"
+fi
+
+# rbenv
+if [[ -x `which rbenv` ]]; then
+  eval "$(rbenv init - --no-rehash)"
+  export RUBY_CONFIGURE_OPTS="--with-openssl-dir=/opt/homebrew/opt/openssl@1.1"
 fi
 
 # pyenv

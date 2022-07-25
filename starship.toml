@@ -16,6 +16,8 @@ format = """\
   $character\
   """
 
+command_timeout = 800
+
 [character]
 success_symbol = "[❯](bold fg:79)"
 error_symbol = "[❯](bold fg:170)"
