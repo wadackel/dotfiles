@@ -447,7 +447,7 @@ Plug 'hrsh7th/vim-vsnip'
 Plug 'onsails/lspkind-nvim'
 
 " syntax checking
-Plug 'w0rp/ale'
+Plug 'dense-analysis/ale'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
