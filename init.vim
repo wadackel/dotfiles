@@ -707,6 +707,7 @@ lua << EOF
 
       -- Mappings.
       set_keymap('n', '<C-]>', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
+      set_keymap('n', '<C-w><C-]>', '<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>', opts)
       set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
       set_keymap('n', '<Leader>i', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
       set_keymap('n', '<C-^>', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
@@ -1502,6 +1503,7 @@ let g:ale_fixers = {
 
 let g:ale_javascript_eslint_options = '--no-ignore'
 let g:ale_javascript_eslint_suppress_eslintignore = 1
+let g:ale_javascript_eslint_suppress_missing_config = 1
 let g:ale_typescript_tslint_use_global = 0
 let g:ale_typescript_tslint_config_path = ''
 
