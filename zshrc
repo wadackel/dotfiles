@@ -29,6 +29,9 @@ setopt auto_cd
 
 export GOENV_ROOT="${HOME}/.goenv"
 
+# pnpm
+export PNPM_HOME="${HOME}/Library/pnpm"
+
 # for M1 device
 if [ -d "/opt/homebrew" ]; then
   export PATH="/opt/homebrew/bin:${PATH}"
@@ -43,6 +46,7 @@ fi
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${HOME}/.poetry/bin"
+export PATH="${PNPM_HOME}:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/flutter/bin:${PATH}"
