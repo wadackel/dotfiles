@@ -434,8 +434,9 @@ Plug 'lewis6991/impatient.nvim'
 Plug 'kyazdani42/nvim-web-devicons'
 
 " completion
+Plug 'williamboman/mason.nvim'
+Plug 'williamboman/mason-lspconfig.nvim'
 Plug 'neovim/nvim-lspconfig'
-Plug 'williamboman/nvim-lsp-installer'
 Plug 'hrsh7th/nvim-cmp'
 Plug 'hrsh7th/cmp-nvim-lsp'
 Plug 'hrsh7th/cmp-nvim-lsp-signature-help'
@@ -758,19 +759,21 @@ lua << EOF
   end
 
   -- Setup servers
-  local installer = require('nvim-lsp-installer')
+  require('mason').setup()
+  require('mason-lspconfig').setup_handlers{
+    function(name)
+      local server = lspconfig[name]
+      local capabilities = vim.lsp.protocol.make_client_capabilities()
+      capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
 
-  installer.on_server_ready(function(server)
-    local capabilities = vim.lsp.protocol.make_client_capabilities()
-    capabilities = require('cmp_nvim_lsp').update_capabilities(capabilities)
+      local opts = {
+        on_attach = create_attacher(server),
+        capabilities = capabilities,
+      }
 
-    local opts = {
-      on_attach = create_attacher(server),
-      capabilities = capabilities,
-    }
-
-    server:setup(opts)
-  end)
+      server.setup(opts)
+    end,
+  }
 
   -- Setup fidget
   require'fidget'.setup {
