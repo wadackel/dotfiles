@@ -398,7 +398,7 @@ command! -nargs=? AutoUpdateColorscheme call <SID>auto_update_colorscheme(<f-arg
 
 " ripgrep
 if executable('rg')
-  set grepprg=rg\ --vimgrep\ --no-heading\ --hidden
+  set grepprg=rg\ --vimgrep\ --no-heading\ --hidden\ -g\ !.git
   set grepformat=%f:%l:%c:%m,%f:%l:%m
 endif
 
@@ -1127,7 +1127,15 @@ lua << EOF
           '.git',
         },
       }),
-      live_grep = wrap_dropdown_opts({}),
+      live_grep = wrap_dropdown_opts({
+        additional_args = function()
+          return {
+            '--hidden',
+            '-g',
+            '!.git',
+          }
+        end,
+      }),
       buffers = wrap_dropdown_opts({
         only_cwd = true,
         sort_lastused = true,
@@ -1502,6 +1510,7 @@ let g:ale_fixers = {
       \ 'javascriptreact': ['prettier', 'eslint', 'stylelint'],
       \ 'typescript': ['prettier', 'tslint', 'eslint'],
       \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \ 'terraform': ['terraform'],
       \ }
 
 let g:ale_javascript_eslint_options = '--no-ignore'

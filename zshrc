@@ -434,6 +434,11 @@ eval "$(starship init zsh)"
 # fzf
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+# pnpm
+if [ -f ~/.config/tabtab/zsh/__tabtab.zsh ]; then
+  source ~/.config/tabtab/zsh/__tabtab.zsh
+fi
+
 # profile
 if (which zprof > /dev/null 2>&1) ;then
   zprof
