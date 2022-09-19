@@ -547,8 +547,7 @@ Plug 'fgsch/vim-varnish'
 Plug 'jparise/vim-graphql'
 
 " statusline
-Plug 'itchyny/lightline.vim'
-Plug 'spywhere/lightline-lsp'
+Plug 'nvim-lualine/lualine.nvim'
 Plug 'j-hui/fidget.nvim'
 
 " colorschema
@@ -843,84 +842,172 @@ endfunction
 let g:matchup_matchparen_offscreen = {}
 
 
-" lightline configure
-let g:lightline = {
-  \ 'colorscheme': 'dogrun',
-  \ 'active': {
-  \   'left': [['mode', 'paste'],
-  \             ['branch', 'readonly', 'filename']],
-  \   'right': [['lineinfo'],
-  \             ['percent'],
-  \             ['lsp_status', 'lsp_warnings', 'lsp_errors'],
-  \             ['fileformat', 'fileencoding', 'filetype']],
-  \ },
-  \ 'component': {
-  \   'lineinfo': '%3l:%-2v ¶',
-  \ },
-  \ 'component_expand': {
-  \   'lsp_hints': 'lightline#lsp#hints',
-  \   'lsp_infos': 'lightline#lsp#infos',
-  \   'lsp_warnings': 'lightline#lsp#warnings',
-  \   'lsp_errors': 'lightline#lsp#errors',
-  \   'lsp_ok': 'lightline#lsp#ok',
-  \ },
-  \ 'component_type': {
-  \   'lsp_hints': 'right',
-  \   'lsp_infos': 'right',
-  \   'lsp_warnings': 'warning',
-  \   'lsp_errors': 'error',
-  \   'lsp_ok': 'right',
-  \ },
-  \ 'component_function': {
-  \   'filename': 'LightlineFilename',
-  \   'branch': 'LightlineFugitiveBranch',
-  \   'readonly': 'LightlineReadonly',
-  \ },
-  \ 'separator': { 'left': '', 'right': ''},
-  \ 'subseparator': { 'left': '❯', 'right': '❮'}
-  \ }
+" lualine
+lua << END
+local colors = {
+  purple = '#929be5',
+  teal   = '#73c1a9',
+  pink   = '#b871b8',
+  red    = '#dc6f7a',
 
-let g:lightline#lsp#indicator_warnings = '∙ '
-let g:lightline#lsp#indicator_errors = '∙ '
+  bg     = '#282a3a',
+  fg     = '#4b4e6d',
 
-function! LightlineFilename() abort
-  let filename = expand('%:t') !=# '' ? expand('%:t') : '[No Name]'
-  let modified = &modified ? ' ∙' : ''
-  return filename . modified
-endfunction
+  inactive = {
+    bg = '#282a3a',
+    fg = '#4b4e6d',
+  },
+}
 
-function! LightlineModified(n) abort
-  let winnr = tabpagewinnr(a:n)
-  return gettabwinvar(a:n, winnr, '&modified') ? '∙' : gettabwinvar(a:n, winnr, '&modifiable') ? '' : '-'
-endfunction
+local bubbles_theme = {
+  normal = {
+    a = { fg = colors.bg, bg = colors.purple },
+    b = { fg = colors.purple, bg = colors.bg },
+    c = { fg = colors.fg, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  insert = {
+    a = { fg = colors.bg, bg = colors.teal },
+    b = { fg = colors.teal, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  visual = {
+    a = { fg = colors.bg, bg = colors.pink },
+    b = { fg = colors.pink, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  replace = {
+    a = { fg = colors.bg, bg = colors.red },
+    b = { fg = colors.red, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  command = {
+    a = { fg = colors.bg, bg = colors.teal },
+    b = { fg = colors.teal, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  terminal = {
+    a = { fg = colors.bg, bg = colors.teal },
+    b = { fg = colors.teal, bg = colors.bg },
+    x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+  inactive = {
+    a = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    b = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+    c = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+  },
+}
 
-function! LightlineReadonly() abort
-  if &filetype == "help"
-    return ""
-  elseif &readonly
-    return "\u2b64"
-  else
-    return ""
-  endif
-endfunction
-
-function! LightlineFugitiveBranch() abort
-  let branch = FugitiveHead()
-  return branch !=# '' ? ' '.branch : ''
-endfunction
-
-let g:lightline.tabline = {
-     \ 'active': [ 'tabnum', 'filename', 'modified' ],
-     \ 'inactive': [ 'tabnum', 'filename', 'modified' ]
-     \ }
-
-let g:lightline.tabline_subseparator = { 'left': '', 'right': '' }
-
-let g:lightline.tab_component_function = {
-     \ 'filename': 'lightline#tab#filename',
-     \ 'modified': 'LightlineModified',
-     \ 'readonly': 'lightline#tab#readonly',
-     \ 'tabnum': 'lightline#tab#tabnum' }
+require('lualine').setup {
+  options = {
+    theme = bubbles_theme,
+    component_separators = ' ',
+    section_separators = { left = '', right = '' },
+    globalstatus = true,
+    always_divide_middle = false,
+  },
+  sections = {
+    lualine_a = {
+      {
+        'mode',
+        separator = { left = '', right = '' },
+      },
+    },
+    lualine_b = {
+      {
+        'branch',
+        padding = { left = 1 },
+      },
+      {
+        'filename',
+        show_modified_status = true,
+        symbols = {
+          modified = '∙',
+          readonly = '',
+          unnamed = '[No Name]',
+          newfile = '∙',
+        },
+      },
+      {
+        'diagnostics',
+        sources = { 'nvim_diagnostic' },
+        sections = {
+          'error',
+          'warn',
+          'info',
+        },
+        symbols = {
+          error = ' ',
+          warn = ' ',
+          info = 'כֿ ',
+        },
+      },
+    },
+    lualine_c = {},
+    lualine_x = {},
+    lualine_y = {
+      {
+        'filetype',
+        padding = 0,
+        colored = false,
+      },
+      'encoding',
+      {
+        'fileformat',
+        padding = { right = 2 },
+      },
+    },
+    lualine_z = {
+      {
+        'location',
+        padding = 1,
+        icon = { '¶', align = 'right' },
+        separator = { left= '', right = '' },
+      },
+    },
+  },
+  inactive_sections = {
+    lualine_a = {
+      'filename',
+    },
+    lualine_b = {},
+    lualine_c = {},
+    lualine_x = {},
+    lualine_y = {},
+    lualine_z = { 'location' },
+  },
+  tabline = {
+    lualine_a = {},
+    lualine_b = {},
+    lualine_c = {
+      {
+        'tabs',
+        mode = 2,
+        max_length = vim.o.columns,
+        separator = { right = '' },
+        tabs_color = {
+          active = 'lualine_a_normal',
+          inactive = 'lualine_a_inactive',
+        },
+      },
+    },
+    lualine_x = {},
+    lualine_y = {},
+    lualine_z = {},
+  },
+  extensions = {
+    'fern',
+    'fugitive',
+    'quickfix',
+  },
+}
+END
 
 
 " QuickRun
