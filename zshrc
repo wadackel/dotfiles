@@ -38,6 +38,11 @@ if [ -d "/opt/homebrew" ]; then
   export PATH="/opt/homebrew/sbin:${PATH}"
 fi
 
+# homebrew
+if [[ -x `which brew` ]]; then
+  . $(brew --prefix asdf)/libexec/asdf.sh
+fi
+
 # LLVM9 (M1 device)
 if [ -d "/opt/llvm9" ]; then
   export PATH="/opt/llvm9/bin:${PATH}"
@@ -63,29 +68,6 @@ fi
 # depot_tools
 if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then
   export PATH="${PATH}:/${HOME}/chromium/tools/depot_tools"
-fi
-
-# nodenev
-if [[ -x `which nodenv` ]]; then
-  eval "$(nodenv init - --no-rehash)"
-fi
-
-# goenv
-if [[ -x `which goenv` ]]; then
-  eval "$(goenv init - --no-rehash)"
-  export PATH="${GOROOT}/bin:${PATH}"
-  export PATH="${PATH}:${GOPATH}/bin"
-fi
-
-# rbenv
-if [[ -x `which rbenv` ]]; then
-  eval "$(rbenv init - --no-rehash)"
-  export RUBY_CONFIGURE_OPTS="--with-openssl-dir=/opt/homebrew/opt/openssl@1.1"
-fi
-
-# pyenv
-if [[ -x `which pyenv` ]]; then
-  eval "$(pyenv init - --no-rehash)"
 fi
 
 # poetry
