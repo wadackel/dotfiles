@@ -20,9 +20,7 @@ if [[ ! -x `which brew` ]]; then
     brew upgrade --all
     brew doctor
     brew -v
-
-    # install packages
-    brew install $(cat ~/dotfiles/scripts/brew-pkg-list)
+    brew bundle
 
     # git-lfs
     git lfs install
@@ -32,43 +30,11 @@ if [[ ! -x `which brew` ]]; then
   fi
 fi
 
-# tmux
-if [[ ! -x `which tmux` ]]; then
-  if ask "tmux install?"; then
-    mkdir tmux
-    cd tmux
-
-    # /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-    # brew update
-    # brew upgrade --all
-    # brew doctor
-    # brew -v
-    #
-    # # install packages
-    # brew install $(cat ~/dotfiles/scripts/brew-pkg-list)
-    #
-    # # git-lfs
-    # git lfs install
-    #
-    # # fpath
-    # fpath=(/usr/local/share/zsh/functions/ ${fpath}) | zsh
-  fi
-fi
-
 # zplug
 if [[ ! -f "${HOME}/.zplug/init.zsh" ]]; then
   if ask "zplug install?"; then
     curl -sL --proto-redir -all,https https://raw.githubusercontent.com/zplug/installer/master/installer.zsh | zsh
   fi
-fi
-
-# fonts
-if ask "fonts install?"; then
-  git clone https://github.com/powerline/fonts.git --depth=1
-  cd fonts
-  ./install.sh
-  cd ..
-  rm -rf fonts
 fi
 
 # symlinks

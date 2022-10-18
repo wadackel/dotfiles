@@ -6,9 +6,17 @@ setup:
 symlinks:
 	@./scripts/symlinks
 
-.PHONY: vim-update
-vim-update:
-	@brew upgrade vim
+.PHONY: brew-bundle-install
+brew-bundle-install:
+	@brew bundle
+
+.PHONY: brew-bundle-dump
+brew-bundle-dump:
+	@brew bundle dump -f
+
+.PHONY: brew-bundle-clean
+brew-bundle-clean:
+	@brew bundle cleanup
 
 .PHONY: colors
 colors:

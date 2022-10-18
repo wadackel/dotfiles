@@ -453,6 +453,7 @@ Plug 'dense-analysis/ale'
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+Plug 'nvim-treesitter/playground'
 
 " editing
 Plug 'mattn/emmet-vim'
@@ -1552,6 +1553,10 @@ augroup END
 nmap <silent> <Space>si <Plug>(syntax-info-toggle)
 
 
+" nvim-treesitter/playground
+nnoremap <silent> <Space>h :TSHighlightCapturesUnderCursor<CR>
+
+
 " table-mode
 " corner character
 let g:table_mode_corner = '|'
@@ -1657,6 +1662,27 @@ lua << EOF
   require'nvim-treesitter.configs'.setup {
     highlight = {
       enable = true,
+    },
+    indent = {
+      enable = true,
+    },
+    playground = {
+      enable = true,
+      disable = {},
+      updatetime = 25, -- Debounced time for highlighting nodes in the playground from source code
+      persist_queries = false, -- Whether the query persists across vim sessions
+      keybindings = {
+        toggle_query_editor = 'o',
+        toggle_hl_groups = 'i',
+        toggle_injected_languages = 't',
+        toggle_anonymous_nodes = 'a',
+        toggle_language_display = 'I',
+        focus_language = 'f',
+        unfocus_language = 'F',
+        update = 'R',
+        goto_node = '<cr>',
+        show_help = '?',
+      },
     },
   }
 EOF
