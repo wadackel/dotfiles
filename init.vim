@@ -102,6 +102,9 @@ set novisualbell
 set list
 set listchars=tab:>.,trail:_,extends:>,precedes:<,nbsp:%
 
+" マウス無効化
+set mouse=
+
 
 " `system()` の末尾空白を削除して結果を返す
 function! TrimedSystem(...)
