@@ -468,6 +468,7 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'h1mesuke/vim-alignta'
 Plug 'kana/vim-submode'
 Plug 'numToStr/Comment.nvim'
+Plug 'JoosepAlviste/nvim-ts-context-commentstring'
 Plug 'deton/jasegment.vim'
 Plug 'thinca/vim-qfreplace'
 Plug 'itchyny/vim-qfedit'
@@ -1505,20 +1506,17 @@ let g:mkdp_preview_options = {
 
 " Comment
 lua << EOF
-  require('Comment').setup({
-    toggler = {
-      line = '<C-k>',
-      block = '<C-m>',
-    },
-    opleader = {
-      line = '<C-k>',
-      block = '<C-m>',
-    },
+  require('Comment').setup {
     mappings = {
+      basic = false,
       extra = false,
     },
-  })
+    pre_hook = require('ts_context_commentstring.integrations.comment_nvim').create_pre_hook(),
+  }
 EOF
+
+nnoremap <silent> <C-k> <Plug>(comment_toggle_linewise_current)
+vnoremap <silent> <C-k> <Plug>(comment_toggle_linewise_visual)
 
 
 " Dart
@@ -1668,6 +1666,10 @@ lua << EOF
     },
     indent = {
       enable = true,
+    },
+    context_commentstring = {
+      enable = true,
+      enable_autocmd = false,
     },
     playground = {
       enable = true,
