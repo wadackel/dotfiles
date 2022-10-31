@@ -513,7 +513,6 @@ Plug 'rust-lang/rust.vim'
 
 " TypeScript
 Plug 'jose-elias-alvarez/nvim-lsp-ts-utils'
-Plug 'HerringtonDarkholme/yats.vim'
 
 " HTML
 Plug 'othree/html5.vim', {'for': 'html'}
