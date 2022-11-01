@@ -721,7 +721,6 @@ lua << EOF
 
           if server.name == 'tsserver' then
             local ts_utils = require('nvim-lsp-ts-utils')
-
             ts_utils.setup({
               debug = false,
               disable_commands = false,
@@ -757,6 +756,13 @@ lua << EOF
         end
       }
 
+      if server.name == 'tsserver' then
+        opts.init_options = {
+          maxTsServerMemory = 8192,
+        }
+        opts.root_dir = lspconfig.util.root_pattern('package.json')
+      end
+
       if server.name == 'denols' then
         opts.root_dir = lspconfig.util.root_pattern('deno.json')
         opts.init_options = {
@@ -772,10 +778,6 @@ lua << EOF
             },
           },
         }
-      end
-
-      if server.name == 'tsserver' then
-        opts.root_dir = lspconfig.util.root_pattern('package.json')
       end
 
       server.setup(opts)
@@ -1443,10 +1445,24 @@ augroup END
 
 
 " GitGutter
-let g:gitgutter_sign_added = '∙'
-let g:gitgutter_sign_modified = '∙'
-let g:gitgutter_sign_removed = '∙'
-let g:gitgutter_sign_modified_removed = '∙'
+set signcolumn=yes
+
+let g:gitgutter_sign_added = '│'
+let g:gitgutter_sign_modified = '│'
+let g:gitgutter_sign_removed = '│'
+let g:gitgutter_sign_modified_removed = '│'
+" let g:gitgutter_sign_added = '░'
+" let g:gitgutter_sign_modified = '░'
+" let g:gitgutter_sign_removed = '░'
+" let g:gitgutter_sign_modified_removed = '░'
+" let g:gitgutter_sign_added = '▒'
+" let g:gitgutter_sign_modified = '▒'
+" let g:gitgutter_sign_removed = '▒'
+" let g:gitgutter_sign_modified_removed = '▒'
+" let g:gitgutter_sign_added = '▓'
+" let g:gitgutter_sign_modified = '▓'
+" let g:gitgutter_sign_removed = '▓'
+" let g:gitgutter_sign_modified_removed = '▓'
 
 nnoremap \g :GitGutterToggle<CR>
 
