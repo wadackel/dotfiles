@@ -430,7 +430,7 @@ augroup END
 " Plugins
 " =============================================================
 
-call plug#begin('~/.vim/plugged')
+call plug#begin('~/.nvim/plugged')
 
 " vim-scripts
 Plug 'vim-scripts/sudo.vim'

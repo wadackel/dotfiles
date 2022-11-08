@@ -348,8 +348,12 @@ endif
 " =============================================================
 call plug#begin('~/.vim/plugged')
 Plug 'liuchengxu/vim-clap'
-Plug 'wadackel/vim-dogrun'
-" Plug '~/develop/github.com/wadackel/vim-dogrun'
+
+if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
+  Plug '~/develop/github.com/wadackel/vim-dogrun'
+else
+  Plug 'wadackel/vim-dogrun'
+endif
 call plug#end()
 
 
