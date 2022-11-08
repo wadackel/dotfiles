@@ -59,6 +59,7 @@ set title
 set ruler
 set tabstop=2
 set shiftwidth=2
+set signcolumn=yes
 set autoindent
 set smartindent
 set expandtab
@@ -267,6 +268,9 @@ augroup QuickfixConfigure
 
   " QuickFix は折り返しを無効化する
   autocmd FileType qf setlocal nowrap
+
+  " signcolumn を無効化
+  autocmd FileType qf setlocal signcolumn=no
 
   " QuickFix を自動で開く
   autocmd QuickfixCmdPost make,grep,grepadd,vimgrep,vim,**grep** nested if len(getqflist()) != 0 | copen | endif
@@ -592,10 +596,10 @@ augroup END
 " lsp
 lua << EOF
   local signs = {
-    { name = "DiagnosticSignError", text = "⦿" },
-    { name = "DiagnosticSignWarn", text = "⦿" },
-    { name = "DiagnosticSignHint", text = "⦿" },
-    { name = "DiagnosticSignInfo", text = "⦿" },
+    { name = "DiagnosticSignError", text = "•" },
+    { name = "DiagnosticSignWarn", text = "•" },
+    { name = "DiagnosticSignHint", text = "•" },
+    { name = "DiagnosticSignInfo", text = "•" },
   }
 
   for _, sign in ipairs(signs) do
@@ -609,7 +613,7 @@ lua << EOF
   vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(
     vim.lsp.diagnostic.on_publish_diagnostics, {
       virtual_text = {
-        prefix = "»",
+        prefix = "",
         spacing = 0,
       },
       signs = {
@@ -946,7 +950,10 @@ require('lualine').setup {
       },
       {
         'diagnostics',
-        sources = { 'nvim_diagnostic' },
+        sources = {
+          'nvim_diagnostic',
+          'ale',
+        },
         sections = {
           'error',
           'warn',
@@ -954,7 +961,7 @@ require('lualine').setup {
         },
         symbols = {
           error = ' ',
-          warn = ' ',
+          warn = ' ',
           info = 'כֿ ',
         },
       },
@@ -1445,24 +1452,10 @@ augroup END
 
 
 " GitGutter
-set signcolumn=yes
-
 let g:gitgutter_sign_added = '│'
 let g:gitgutter_sign_modified = '│'
 let g:gitgutter_sign_removed = '│'
 let g:gitgutter_sign_modified_removed = '│'
-" let g:gitgutter_sign_added = '░'
-" let g:gitgutter_sign_modified = '░'
-" let g:gitgutter_sign_removed = '░'
-" let g:gitgutter_sign_modified_removed = '░'
-" let g:gitgutter_sign_added = '▒'
-" let g:gitgutter_sign_modified = '▒'
-" let g:gitgutter_sign_removed = '▒'
-" let g:gitgutter_sign_modified_removed = '▒'
-" let g:gitgutter_sign_added = '▓'
-" let g:gitgutter_sign_modified = '▓'
-" let g:gitgutter_sign_removed = '▓'
-" let g:gitgutter_sign_modified_removed = '▓'
 
 nnoremap \g :GitGutterToggle<CR>
 
@@ -1593,15 +1586,17 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 " ALE
 " global options
-let g:ale_open_list = 1
+let g:ale_open_list = 0
 let g:ale_set_loclist = 1
 let g:ale_set_quickfix = 0
 let g:ale_list_window_size = 5
 let g:ale_keep_list_window_open = 0
 let g:ale_sign_column_always = 1
+let g:ale_virtualtext_cursor = 1
+let g:ale_virtualtext_prefix = ' '
 
-let g:ale_sign_warning = '⦿'
-let g:ale_sign_error = '⦿'
+let g:ale_sign_warning = '•'
+let g:ale_sign_error = '•'
 
 let g:ale_lint_on_save = 0
 let g:ale_lint_on_text_changed = 'normal'
@@ -1654,6 +1649,10 @@ nnoremap <silent> \ll :ALELint<CR>
 nnoremap <silent> \lt :ALEToggle<CR>
 nnoremap <silent> \lf :ALEFix<CR>
 nnoremap <silent> <Leader>p :ALEFix<CR>
+nnoremap <silent> [e :ALEPrevious<CR>
+nnoremap <silent> ]e :ALENext<CR>
+nnoremap <silent> [W :ALEFirst<CR>
+nnoremap <silent> ]W :ALELast<CR>
 
 
 " ファイル置換時に BufWritePost 処理をトグル
