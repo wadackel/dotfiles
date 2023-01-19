@@ -847,8 +847,15 @@ lua << EOF
         },
         i = {
           ["<C-c>"] = "Close",
+          ["<C-b>"] = "<Left>",
+          ["<C-f>"] = "<Right>",
+          ["<C-a>"] = "<Home>",
+          ["<C-e>"] = "<End>",
+          ["<C-d>"] = "<Del>",
           ["<CR>"] = "Confirm",
+          ["<C-p>"] = "HistoryPrev",
           ["<Up>"] = "HistoryPrev",
+          ["<C-n>"] = "HistoryNext",
           ["<Down>"] = "HistoryNext",
         },
       },
@@ -867,7 +874,7 @@ lua << EOF
       enabled = true,
 
       -- Priority list of preferred vim.select implementations
-      backend = { "telescope", "builtin", "nui" },
+      backend = { "telescope", "builtin" },
 
       -- Trim trailing `:` from prompt
       trim_prompt = true,
@@ -876,43 +883,6 @@ lua << EOF
       -- These are passed into the telescope picker directly. Can be used like:
       -- telescope = require('telescope.themes').get_ivy({...})
       telescope = nil,
-
-      -- Options for fzf selector
-      fzf = {
-        window = {
-          width = 0.5,
-          height = 0.4,
-        },
-      },
-
-      -- Options for fzf_lua selector
-      fzf_lua = {
-        winopts = {
-          width = 0.5,
-          height = 0.4,
-        },
-      },
-
-      -- Options for nui Menu
-      nui = {
-        position = "50%",
-        size = nil,
-        relative = "editor",
-        border = {
-          style = "rounded",
-        },
-        buf_options = {
-          swapfile = false,
-          filetype = "DressingSelect",
-        },
-        win_options = {
-          winblend = 10,
-        },
-        max_width = 80,
-        max_height = 40,
-        min_width = 40,
-        min_height = 10,
-      },
 
       -- Options for built-in selector
       builtin = {
@@ -1791,10 +1761,6 @@ augroup astro_settings
 augroup END
 
 
-" nvim-syntax-info
-nmap <silent> <Space>si <Plug>(syntax-info-toggle)
-
-
 " nvim-treesitter/playground
 nnoremap <silent> <Space>h :TSHighlightCapturesUnderCursor<CR>
 
@@ -1938,6 +1904,10 @@ lua << EOF
     },
   }
 EOF
+
+
+" nvim-treesitter/playground
+nnoremap <Space>si :TSHighlightCapturesUnderCursor<CR>
 
 
 " =============================================================
