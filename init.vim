@@ -358,6 +358,12 @@ nnoremap sv :<C-u>vs<CR>
 nnoremap sq :<C-u>q<CR>
 nnoremap sQ :<C-u>bd<CR>
 
+" quickfix/locationlist の open/close
+nnoremap <space>co :copen<CR>
+nnoremap <space>cc :cclose<CR>
+nnoremap <space>lo :lopen<CR>
+nnoremap <space>lc :lclose<CR>
+
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
 
