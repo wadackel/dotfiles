@@ -1390,6 +1390,7 @@ lua << EOF
       commands = wrap_dropdown_opts({}),
       command_history = wrap_dropdown_opts({}),
       git_branches = {
+        show_remote_tracking_branches = false,
         mappings = {
           i = {
             ['<C-y>'] = action_yank,
