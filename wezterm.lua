@@ -89,5 +89,11 @@ return {
         window:set_config_overrides(config)
       end),
     },
+    -- fix wezterm can't send `<C-Q>` key.
+    {
+      key = 'q',
+      mods = 'CTRL',
+      action = wezterm.action.SendString '\x11',
+    },
   },
 }
