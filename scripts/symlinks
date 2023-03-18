@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 mkdir -p ~/.config/nvim
 mkdir -p ~/.config/tmux
+mkdir -p ~/.config/wezterm
 
 ln -sf ~/dotfiles/Brewfile ~/.Brewfile
 ln -sf ~/dotfiles/agignore ~/.agignore
@@ -15,6 +16,7 @@ ln -sf ~/dotfiles/hyper.js ~/.hyper.js
 ln -sf ~/dotfiles/init.vim ~/.config/nvim/init.vim
 ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
 ln -sf ~/dotfiles/tmux.conf ~/.config/tmux/tmux.conf
+ln -sf ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua
 ln -sf ~/dotfiles/vimrc ~/.vimrc
 ln -sf ~/dotfiles/zshrc ~/.zshrc
 

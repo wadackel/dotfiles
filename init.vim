@@ -1923,3 +1923,5 @@ nnoremap <Space>si :TSHighlightCapturesUnderCursor<CR>
 
 syntax on
 colorscheme dogrun
+
+hi Normal guibg=NONE
