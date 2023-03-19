@@ -11,7 +11,6 @@ ln -sf ~/dotfiles/coc-settings.json ~/.config/nvim/coc-settings.json
 ln -sf ~/dotfiles/gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/gitconfig ~/.gitconfig
 ln -sf ~/dotfiles/gitignore_global ~/.gitignore_global
-ln -sf ~/dotfiles/hammerspoon.lua ~/.hammerspoon/init.lua
 ln -sf ~/dotfiles/hyper.js ~/.hyper.js
 ln -sf ~/dotfiles/init.vim ~/.config/nvim/init.vim
 ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
@@ -19,7 +18,3 @@ ln -sf ~/dotfiles/tmux.conf ~/.config/tmux/tmux.conf
 ln -sf ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua
 ln -sf ~/dotfiles/vimrc ~/.vimrc
 ln -sf ~/dotfiles/zshrc ~/.zshrc
-
-if [[ -d "${HOME}/Library/Application Support/inkdrop" ]]; then
-  ln -sf ~/dotfiles/inkdrop-vim-keymap.cson ~/Library/Application\ Support/inkdrop/keymap.cson
-fi
