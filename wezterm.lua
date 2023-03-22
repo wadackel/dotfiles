@@ -12,6 +12,9 @@ wezterm.on('window-config-reloaded', function(window, pane)
 end)
 
 return {
+  -- disable ligatures: https://wezfurlong.org/wezterm/config/font-shaping.html#advanced-font-shaping-options
+  harfbuzz_features = {'calt=0', 'clig=0', 'liga=0'},
+
   font = wezterm.font('CaskaydiaCove Nerd Font Mono', {
     weight = 'Regular',
     stretch = 'Normal',
