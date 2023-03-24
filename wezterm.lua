@@ -78,6 +78,21 @@ return {
       action = wezterm.action.ToggleFullScreen,
     },
     {
+      key = '-',
+      mods = 'SUPER',
+      action = wezterm.action.DecreaseFontSize,
+    },
+    {
+      key = '+',
+      mods = 'SUPER',
+      action = wezterm.action.IncreaseFontSize,
+    },
+    {
+      key = '0',
+      mods = 'SUPER',
+      action = wezterm.action.ResetFontSize,
+    },
+    {
       key = 'u',
       mods = 'SUPER',
       action = wezterm.action_callback(function(window, pane)
