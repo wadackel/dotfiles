@@ -800,6 +800,9 @@ lua << EOF
     text = {
       spinner = 'dots',
     },
+    window = {
+      blend = 0,
+    },
   }
 EOF
 
@@ -1925,3 +1928,4 @@ syntax on
 colorscheme dogrun
 
 hi Normal guibg=NONE
+hi FidgetTask guibg=NONE
