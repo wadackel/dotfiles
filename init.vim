@@ -476,7 +476,7 @@ Plug 'machakann/vim-sandwich'
 Plug 'David-Kunz/treesitter-unit'
 Plug 'tommcdo/vim-exchange'
 Plug 'editorconfig/editorconfig-vim'
-Plug 'h1mesuke/vim-alignta'
+Plug 'junegunn/vim-easy-align'
 Plug 'kana/vim-submode'
 Plug 'numToStr/Comment.nvim'
 Plug 'JoosepAlviste/nvim-ts-context-commentstring'
@@ -956,6 +956,11 @@ xnoremap iu :lua require"treesitter-unit".select()<CR>
 xnoremap au :lua require"treesitter-unit".select(true)<CR>
 onoremap iu :<c-u>lua require"treesitter-unit".select()<CR>
 onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
+
+
+" vim-easy-align
+nmap ga <Plug>(EasyAlign)
+xmap ga <Plug>(EasyAlign)
 
 
 " vim-sandwich
