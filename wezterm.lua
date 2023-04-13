@@ -84,7 +84,7 @@ return {
     },
     {
       key = '+',
-      mods = 'SUPER',
+      mods = 'SUPER|SHIFT',
       action = wezterm.action.IncreaseFontSize,
     },
     {
