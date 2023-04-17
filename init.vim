@@ -543,9 +543,6 @@ Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 " toml
 Plug 'cespare/vim-toml',  {'for' : 'toml'}
 
-" C++
-Plug 'octol/vim-cpp-enhanced-highlight'
-
 " Dart
 Plug 'dart-lang/dart-vim-plugin'
 
@@ -565,15 +562,7 @@ Plug 'jparise/vim-graphql'
 Plug 'nvim-lualine/lualine.nvim'
 Plug 'j-hui/fidget.nvim'
 
-" colorschema
-Plug 'rhysd/vim-color-spring-night'
-
-if isdirectory($HOME.'/develop/github.com/wadackel/nvim-syntax-info')
-  Plug '~/develop/github.com/wadackel/nvim-syntax-info'
-else
-  Plug 'wadackel/nvim-syntax-info'
-endif
-
+" colorscheme
 if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
   Plug '~/develop/github.com/wadackel/vim-dogrun'
 else
@@ -1891,6 +1880,7 @@ lua << EOF
   require'nvim-treesitter.configs'.setup {
     highlight = {
       enable = true,
+      additional_vim_regex_highlighting = false,
     },
     indent = {
       enable = true,
