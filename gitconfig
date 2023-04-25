@@ -80,6 +80,7 @@
   nerge = merge --no-ff
   fixup = commit --fixup
   autosquash = rebase -i --autosquash
+  web = "!gh repo view --web"
   showpr = "!f() { git log --merges --oneline --reverse --ancestry-path $1...origin | grep 'Merge pull request #' | head -n 1; };f"
   openpr = "!f() { gh pr view --web `git log --merges --oneline --reverse --ancestry-path $1...origin | grep 'Merge pull request #' | head -n 1 | cut -f5 -d' ' | sed -e 's%#%%'`; }; f"
   cleanpr = "!git for-each-ref refs/heads/pr/* --format='%(refname)' | while read ref ; do branch=${ref#refs/heads/} ; git branch -D $branch ; done"
