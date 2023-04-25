@@ -66,11 +66,32 @@ return {
   initial_cols = 190,
   initial_rows = 60,
 
+  disable_default_key_bindings = true,
   keys = {
+    {
+      key = 'q',
+      mods = 'SUPER',
+      action = wezterm.action.QuitApplication,
+    },
+    {
+      key = 'w',
+      mods = 'SUPER',
+      action = wezterm.action.CloseCurrentPane { confirm = true },
+    },
+    {
+      key = 'n',
+      mods = 'SUPER',
+      action = wezterm.action.SpawnWindow,
+    },
     {
       key = 'r',
       mods = 'SUPER',
       action = wezterm.action.ReloadConfiguration,
+    },
+    {
+      key = 'v',
+      mods = 'SUPER',
+      action = wezterm.action.PasteFrom 'Clipboard',
     },
     {
       key = 'Enter',
@@ -83,7 +104,7 @@ return {
       action = wezterm.action.DecreaseFontSize,
     },
     {
-      key = '+',
+      key = '=',
       mods = 'SUPER|SHIFT',
       action = wezterm.action.IncreaseFontSize,
     },
@@ -112,6 +133,30 @@ return {
       key = 'q',
       mods = 'CTRL',
       action = wezterm.action.SendString '\x11',
+    },
+  },
+
+  disable_default_mouse_bindings = true,
+  mouse_bindings = {
+    -- Bind 'Up' event of SUPER-Click to open hyperlinks
+    {
+      event = { Down = { streak = 1, button = 'Left' } },
+      mods = 'SUPER',
+      action = wezterm.action.OpenLinkAtMouseCursor,
+    },
+    -- Disable the 'Down' event of SUPER-Click to avoid weird program behaviors
+    {
+      event = { Up = { streak = 1, button = 'Left' } },
+      mods = 'SUPER',
+      action = wezterm.action.Nop,
+    },
+  },
+
+  hyperlink_rules = {
+    -- Localhost links
+    {
+      regex = "\\b\\w+://[\\w.-]+\\S*\\b",
+      format = "$0",
     },
   },
 }

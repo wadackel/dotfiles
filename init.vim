@@ -523,7 +523,7 @@ Plug 'mattn/vim-goimports', {'for': 'go'}
 Plug 'rust-lang/rust.vim'
 
 " TypeScript
-Plug 'jose-elias-alvarez/nvim-lsp-ts-utils'
+Plug 'jose-elias-alvarez/typescript.nvim'
 
 " HTML
 Plug 'othree/html5.vim', {'for': 'html'}
@@ -687,101 +687,121 @@ lua << EOF
   vim.api.nvim_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
 
   -- Setup servers
+  local capabilities = require('cmp_nvim_lsp').default_capabilities()
+
+  local function on_attach(client, bufnr)
+    local function set_opt(...)
+      vim.api.nvim_buf_set_option(bufnr, ...)
+    end
+
+    local function set_keymap(...)
+      vim.api.nvim_buf_set_keymap(bufnr, ...)
+    end
+
+    -- Disable LSP Semantic tokens
+    client.server_capabilities.semanticTokensProvider = nil
+
+    -- Enable completion triggered by <C-x><C-o>
+    set_opt('omnifunc', 'v:lua.vim.lsp.omnifunc')
+
+    -- Mappings
+    set_keymap('n', '<C-]>', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
+    set_keymap('n', '<C-w><C-]>', '<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>', opts)
+    set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
+    set_keymap('n', '<Leader>i', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
+    set_keymap('n', '<C-^>', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
+    set_keymap('n', '<Leader>r', '<cmd>lua vim.lsp.buf.rename()<CR>', opts)
+    set_keymap('n', '<Leader>a', '<cmd>lua vim.lsp.buf.code_action()<CR>', opts)
+    set_keymap('n', '<space>wa', '<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>', opts)
+    set_keymap('n', '<space>wr', '<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>', opts)
+    set_keymap('n', '<space>wl', '<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>', opts)
+  end
+
   require('mason').setup()
-  require('mason-lspconfig').setup_handlers{
-    function(name)
-      local server = lspconfig[name]
-      local capabilities = require('cmp_nvim_lsp').default_capabilities()
+  require('mason-lspconfig').setup {
+    ensure_installed = {
+      'astro',
+      'denols',
+      'pyright',
+      'rust_analyzer',
+      'terraformls',
+      'tsserver',
+      'lua_ls',
+      'vimls',
+    },
 
-      local opts = {
-        capabilities = capabilities,
-        on_attach = function(client, bufnr)
-          local function set_opt(...)
-            vim.api.nvim_buf_set_option(bufnr, ...)
-          end
+    handlers = {
+      function (name)
+        local node_root_dir = lspconfig.util.root_pattern('package.json')
+        local is_node_repo = node_root_dir(vim.api.nvim_buf_get_name(0)) ~= nil
 
-          local function set_keymap(...)
-            vim.api.nvim_buf_set_keymap(bufnr, ...)
-          end
-
-          -- Enable completion triggered by <C-x><C-o>
-          set_opt('omnifunc', 'v:lua.vim.lsp.omnifunc')
-
-          -- Mappings.
-          set_keymap('n', '<C-]>', '<cmd>lua vim.lsp.buf.definition()<CR>', opts)
-          set_keymap('n', '<C-w><C-]>', '<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>', opts)
-          set_keymap('n', 'K', '<cmd>lua vim.lsp.buf.type_definition()<CR>', opts)
-          set_keymap('n', '<Leader>i', '<cmd>lua vim.lsp.buf.hover()<CR>', opts)
-          set_keymap('n', '<C-^>', '<cmd>lua vim.lsp.buf.references()<CR>', opts)
-          set_keymap('n', '<Leader>r', '<cmd>lua vim.lsp.buf.rename()<CR>', opts)
-          set_keymap('n', '<Leader>a', '<cmd>lua vim.lsp.buf.code_action()<CR>', opts)
-          set_keymap('n', '<space>wa', '<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>', opts)
-          set_keymap('n', '<space>wr', '<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>', opts)
-          set_keymap('n', '<space>wl', '<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>', opts)
-
-          if server.name == 'tsserver' then
-            local ts_utils = require('nvim-lsp-ts-utils')
-            ts_utils.setup({
-              debug = false,
-              disable_commands = false,
-              enable_import_on_completion = false,
-
-              -- import all
-              import_all_timeout = 5000, -- ms
-              import_all_priorities = {
-                same_file = 1, -- add to existing import statement
-                local_files = 2, -- git files or files with relative path markers
-                buffer_content = 3, -- loaded buffer content
-                buffers = 4, -- loaded buffer names
-              },
-              import_all_scan_buffers = 100,
-              import_all_select_source = false,
-              always_organize_imports = true,
-
-              -- filter diagnostics
-              filter_out_diagnostics_by_severity = {},
-              filter_out_diagnostics_by_code = {},
-
-              -- update imports on file move
-              update_imports_on_move = false,
-              require_confirmation_on_move = false,
-              watch_dir = nil,
-
-              -- required to fix code action ranges and filter diagnostics
-              ts_utils.setup_client(client)
-            })
-
-            set_keymap('n', '<space>o', ':TSLspOrganize<CR>', opts)
-          end
-        end
-      }
-
-      if server.name == 'tsserver' then
-        opts.init_options = {
-          maxTsServerMemory = 8192,
+        local opts = {
+          capabilities = capabilities,
+          on_attach = on_attach,
         }
-        opts.root_dir = lspconfig.util.root_pattern('package.json')
-      end
 
-      if server.name == 'denols' then
-        opts.root_dir = lspconfig.util.root_pattern('deno.json')
-        opts.init_options = {
-          lint = true,
-          unstable = true,
-          suggest = {
-            imports = {
-              hosts = {
-                ['https://deno.land'] = true,
-                ['https://cdn.nest.land'] = true,
-                ['https://crux.land'] = true,
+        -- Delegate to 'typescript' module
+        if name == 'tsserver' then
+          if not is_node_repo then
+            return
+          end
+          require('typescript').setup {
+            debug = false,
+            disable_commands = false,
+            go_to_source_definition = {
+              fallback = true,
+            },
+            server = {
+              on_attach = function(client, bufnr)
+                on_attach(client, bufnr)
+                vim.api.nvim_buf_set_keymap(bufnr, 'n', '<space>o', ':TypescriptOrganizeImportsFixed<CR>', { noremap=true, silent=true })
+              end,
+              root_dir = node_root_dir,
+              init_options = {
+                maxTsServerMemory = 8192,
+              },
+              -- https://github.com/jose-elias-alvarez/typescript.nvim/issues/24#issuecomment-1428801350
+              commands = {
+                TypescriptOrganizeImportsFixed = {
+                  function ()
+                    local params = {
+                      command = '_typescript.organizeImports',
+                      arguments = {vim.api.nvim_buf_get_name(0)},
+                      title = ''
+                    }
+                    vim.lsp.buf.execute_command(params)
+                  end,
+                  description = 'Organize Imports',
+                },
               },
             },
-          },
-        }
-      end
+          }
+          return
+        end
 
-      server.setup(opts)
-    end,
+        if name == 'denols' then
+          if is_node_repo then
+            return
+          end
+          opts.root_dir = lspconfig.util.root_pattern('deno.json', 'deno.jsonc', 'import_map.json')
+          opts.init_options = {
+            lint = true,
+            unstable = true,
+            suggest = {
+              imports = {
+                hosts = {
+                  ['https://deno.land'] = true,
+                  ['https://cdn.nest.land'] = true,
+                  ['https://crux.land'] = true,
+                },
+              },
+            },
+          }
+        end
+
+        lspconfig[name].setup(opts)
+      end,
+    },
   }
 
   -- Setup fidget
