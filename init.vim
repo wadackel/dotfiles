@@ -733,7 +733,7 @@ lua << EOF
     handlers = {
       function (name)
         local node_root_dir = lspconfig.util.root_pattern('package.json')
-        local is_node_repo = node_root_dir(vim.api.nvim_buf_get_name(0)) ~= nil
+        local is_node_repo = node_root_dir(vim.fn.getcwd()) ~= nil
 
         local opts = {
           capabilities = capabilities,
@@ -1857,8 +1857,8 @@ let g:ale_fixers = {
       \ 'yaml': ['prettier'],
       \ 'javascript': ['prettier', 'eslint'],
       \ 'javascriptreact': ['prettier', 'eslint', 'stylelint'],
-      \ 'typescript': ['prettier', 'tslint', 'eslint'],
-      \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint'],
+      \ 'typescript': ['prettier', 'tslint', 'eslint', 'deno'],
+      \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint', 'deno'],
       \ 'terraform': ['terraform'],
       \ }
 
