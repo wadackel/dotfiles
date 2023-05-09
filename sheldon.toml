@@ -1,0 +1,7 @@
+shell = "zsh"
+
+[plugins.zsh_completions]
+github = "zsh-users/zsh-completions"
+
+[plugins.zsh_autosuggestions]
+github = "zsh-users/zsh-autosuggestions"

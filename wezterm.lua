@@ -7,7 +7,7 @@ wezterm.on('gui-startup', function()
   w:toggle_fullscreen()
 end)
 
-wezterm.on('window-config-reloaded', function(window, pane)
+wezterm.on('window-config-reloaded', function(window)
   window:toast_notification('wezterm', 'Configuration reloaded!', nil, 4000)
 end)
 
@@ -104,7 +104,7 @@ return {
       action = wezterm.action.DecreaseFontSize,
     },
     {
-      key = '=',
+      key = '+',
       mods = 'SUPER|SHIFT',
       action = wezterm.action.IncreaseFontSize,
     },
@@ -116,7 +116,7 @@ return {
     {
       key = 'u',
       mods = 'SUPER',
-      action = wezterm.action_callback(function(window, pane)
+      action = wezterm.action_callback(function(window)
         local config = window:get_config_overrides() or {}
         if not config.text_background_opacity then
           config.window_background_opacity = 0.9

@@ -27,8 +27,6 @@ setopt auto_cd
 # Path
 # ====================================================
 
-export GOENV_ROOT="${HOME}/.goenv"
-
 # pnpm
 export PNPM_HOME="${HOME}/Library/pnpm"
 
@@ -36,11 +34,14 @@ export PNPM_HOME="${HOME}/Library/pnpm"
 if [ -d "/opt/homebrew" ]; then
   export PATH="/opt/homebrew/bin:${PATH}"
   export PATH="/opt/homebrew/sbin:${PATH}"
-fi
 
-# homebrew
-if [[ -x `which brew` ]]; then
-  . $(brew --prefix asdf)/libexec/asdf.sh
+  # homebrew
+  if [[ -x `which brew` ]]; then
+    # asdf
+    if [[ -d "/opt/homebrew/opt/asdf" ]]; then
+      . /opt/homebrew/opt/asdf/libexec/asdf.sh
+    fi
+  fi
 fi
 
 # LLVM9 (M1 device)
@@ -68,11 +69,6 @@ fi
 # depot_tools
 if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then
   export PATH="${PATH}:/${HOME}/chromium/tools/depot_tools"
-fi
-
-# poetry
-if [[ -x `which poetry` ]]; then
-  poetry completions zsh > $(brew --prefix)/share/zsh/site-functions/_poetry
 fi
 
 # Rust
@@ -234,10 +230,6 @@ function mkcd() {
 function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 
-# fzf
-export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙"'
-
-
 # git 操作
 
 # <CR> で `git status` 呼び出し (git repository 内だけ)
@@ -385,41 +377,36 @@ function tmux_automatically_attach_session()
 }
 tmux_automatically_attach_session
 
+# fzf
+export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙" --color=fg:#8085a6,bg:#222433,hl:#bdc3e6 --color=fg+:#8085a6,bg+:#363e7f,hl+:#bdc3e6 --color=info:#929be5,prompt:#545c8c,pointer:#ff79c6 --color=marker:#b871b8,spinner:#73c1a9,header:#545c8c,border:#545c8c,gutter:-1'
 
-# ====================================================
-# Plugins
-# ====================================================
-
-# zplug
-if [[ -f "${HOME}/.zplug/init.zsh" ]]; then
-  source ~/.zplug/init.zsh
-
-  # others
-  zplug "zsh-users/zsh-completions"
-  zplug "b4b4r07/enhancd", use:init.sh
-
-  zplug "zsh-users/zsh-autosuggestions", \
-    hook-load:"ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'"
-
-  zplug load
-
-  # enhancd
-  ENHANCD_HOOK_AFTER_CD=ls
-  ENHANCD_DISABLE_DOT=1
-  ENHANCD_DISABLE_HYPHEN=1
-  ENHANCD_FILTER="fzf:non-existing-filter"
+if [[ -f ~/.fzf.zsh ]]; then
+  source ~/.fzf.zsh
 fi
 
-# starship (theme)
-eval "$(starship init zsh)"
-
-# fzf
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+# zoxide
+if [[ -x `which zoxide` ]]; then
+  eval "$(zoxide init zsh)"
+fi
 
 # pnpm
 if [ -f ~/.config/tabtab/zsh/__tabtab.zsh ]; then
   source ~/.config/tabtab/zsh/__tabtab.zsh
 fi
+
+# starship (theme)
+eval "$(starship init zsh)"
+
+
+# ====================================================
+# Plugins
+# ====================================================
+if [[ -x `which sheldon` ]]; then
+  eval "$(sheldon source)"
+fi
+
+# autosuggestions
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 
 # profile
 if (which zprof > /dev/null 2>&1) ;then
