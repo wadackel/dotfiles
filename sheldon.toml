@@ -5,3 +5,6 @@ github = "zsh-users/zsh-completions"
 
 [plugins.zsh_autosuggestions]
 github = "zsh-users/zsh-autosuggestions"
+
+[plugins.zsh_fzf_history_search]
+github = "joshskidmore/zsh-fzf-history-search"

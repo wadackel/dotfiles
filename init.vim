@@ -1857,11 +1857,12 @@ let g:ale_fixers = {
       \ 'yaml': ['prettier'],
       \ 'javascript': ['prettier', 'eslint'],
       \ 'javascriptreact': ['prettier', 'eslint', 'stylelint'],
-      \ 'typescript': ['prettier', 'tslint', 'eslint', 'deno'],
-      \ 'typescriptreact': ['prettier', 'tslint', 'eslint', 'stylelint', 'deno'],
+      \ 'typescript': ['deno', 'prettier', 'tslint', 'eslint'],
+      \ 'typescriptreact': ['deno', 'prettier', 'tslint', 'eslint', 'stylelint'],
       \ 'terraform': ['terraform'],
       \ }
 
+let g:ale_javascript_prettier_use_global = 0
 let g:ale_javascript_eslint_options = '--no-ignore'
 let g:ale_javascript_eslint_suppress_eslintignore = 1
 let g:ale_javascript_eslint_suppress_missing_config = 1
