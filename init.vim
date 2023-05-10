@@ -460,9 +460,7 @@ Plug 'hrsh7th/cmp-vsnip'
 Plug 'hrsh7th/vim-vsnip'
 Plug 'onsails/lspkind-nvim'
 Plug 'stevearc/dressing.nvim'
-
-" syntax checking
-Plug 'dense-analysis/ale'
+Plug 'jose-elias-alvarez/null-ls.nvim'
 
 " syntax extention
 Plug 'Shougo/context_filetype.vim'
@@ -512,12 +510,6 @@ Plug 'tpope/vim-fugitive'
 Plug 'rhysd/conflict-marker.vim'
 Plug 'APZelos/blamer.nvim'
 Plug 'tyru/open-browser.vim'
-
-" memo
-Plug 'glidenote/memolist.vim', {'on': ['MemoNew', 'MemoList']}
-
-" Go
-Plug 'mattn/vim-goimports', {'for': 'go'}
 
 " Rust
 Plug 'rust-lang/rust.vim'
@@ -810,6 +802,7 @@ lua << EOF
       spinner = 'dots',
     },
     window = {
+      relative = 'editor',
       blend = 0,
     },
   }
@@ -947,6 +940,116 @@ lua << EOF
       get_config = nil,
     },
   })
+EOF
+
+
+" null-ls
+lua << EOF
+local null_ls = require('null-ls')
+local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+local prefer_local_node_modules = 'node_modules/.bin'
+
+null_ls.setup {
+  diagnostics_format = '#{m} (#{s}: #{c})',
+
+  diagnostic_config = {
+    virtual_text = {
+      prefix = '',
+    },
+  },
+
+  on_attach = function(client, bufnr)
+    if client.supports_method('textDocument/formatting') then
+      vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+      vim.api.nvim_create_autocmd('BufWritePre', {
+        group = augroup,
+        buffer = bufnr,
+        callback = function()
+          vim.lsp.buf_request(
+            bufnr,
+            "textDocument/formatting",
+            vim.lsp.util.make_formatting_params({}),
+            function(err, res, ctx)
+              if err then
+                local err_msg = type(err) == "string" and err or err.message
+                vim.notify("formatting: " .. err_msg, vim.log.levels.WARN)
+                return
+              end
+
+              if not vim.api.nvim_buf_is_loaded(bufnr) or vim.api.nvim_buf_get_option(bufnr, "modified") then
+                return
+              end
+
+              if res then
+                local client = vim.lsp.get_client_by_id(ctx.client_id)
+                vim.lsp.util.apply_text_edits(res, bufnr, client and client.offset_encoding or "utf-16")
+                vim.api.nvim_buf_call(bufnr, function()
+                vim.cmd("silent noautocmd update")
+                end)
+              end
+            end
+          )
+        end,
+      })
+    end
+  end,
+
+  sources = {
+    null_ls.builtins.diagnostics.eslint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+    null_ls.builtins.formatting.eslint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+
+    null_ls.builtins.formatting.deno_fmt.with {
+      condition = function(utils)
+        return utils.root_has_file {
+          'deno.json',
+          'deno.jsonc',
+          'import_map.json',
+        }
+      end,
+    },
+
+    null_ls.builtins.formatting.prettier.with {
+      prefer_local = prefer_local_node_modules,
+      condition = function(utils)
+        return utils.root_has_file {
+          'package.json',
+        }
+      end,
+    },
+
+    null_ls.builtins.diagnostics.stylelint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+    null_ls.builtins.formatting.stylelint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+
+    null_ls.builtins.diagnostics.textlint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+    null_ls.builtins.formatting.textlint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+
+    null_ls.builtins.diagnostics.commitlint.with {
+      prefer_local = prefer_local_node_modules,
+    },
+
+    null_ls.builtins.diagnostics.actionlint,
+    null_ls.builtins.formatting.dart_format,
+    null_ls.builtins.formatting.gofmt,
+    null_ls.builtins.formatting.goimports,
+    null_ls.builtins.formatting.rustfmt,
+    null_ls.builtins.formatting.terraform_fmt,
+    null_ls.builtins.completion.spell,
+  },
+}
+
+vim.keymap.set('n', '<Leader>p', function() vim.lsp.buf.format { async = true } end)
 EOF
 
 
@@ -1110,7 +1213,6 @@ require('lualine').setup {
         'diagnostics',
         sources = {
           'nvim_diagnostic',
-          'ale',
         },
         sections = {
           'error',
@@ -1431,26 +1533,6 @@ lua << EOF
 EOF
 
 
-" Memo List
-let g:memolist_path = '~/Dropbox/memolist'
-let g:memolist_memo_suffix = "md"
-let g:memolist_template_dir_path = '~/dotfiles/templates/memolist'
-let g:memolist_delimiter_yaml_start = '---'
-let g:memolist_delimiter_yaml_end  = '---'
-
-nnoremap <silent> <Leader>mc :MemoNew<CR>
-nnoremap <silent> <Leader>mg :MemoGrep<CR>
-
-" if executable('fzf') && executable('rg')
-"   command! FZFMemoList call fzf#run(fzf#wrap('rg', {
-"        \ 'source': 'rg --files --color=never --hidden --iglob "!.git" --glob ""',
-"        \ 'dir': g:memolist_path,
-"        \ }, <bang>0))
-"
-"   nnoremap <Leader>mp :FZFMemoList<CR>
-" endif
-
-
 " easymotion
 let g:EasyMotion_do_mapping = 0
 let g:EasyMotion_smartcase = 0
@@ -1762,15 +1844,10 @@ augroup END
 
 
 " Go
-let g:goimports_simplify_cmd = 'gofumpt'
-let g:goimports = 0
-let g:goimports_simplify = 1
-
 augroup go_settings
   autocmd!
   autocmd FileType go :highlight goErr cterm=bold ctermfg=214
   autocmd FileType go :match goErr /\<err\>/
-  autocmd FileType go nnoremap <silent> <buffer> <Leader>p :GoImportRun<CR>
 augroup END
 
 
@@ -1807,88 +1884,14 @@ let g:table_mode_echo_cell_map = '<Leader><C-+>6'
 let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 
 
-" ALE
-" global options
-let g:ale_open_list = 0
-let g:ale_set_loclist = 1
-let g:ale_set_quickfix = 0
-let g:ale_list_window_size = 5
-let g:ale_keep_list_window_open = 0
-let g:ale_sign_column_always = 1
-let g:ale_virtualtext_cursor = 1
-let g:ale_virtualtext_prefix = ' '
-
-let g:ale_sign_warning = '•'
-let g:ale_sign_error = '•'
-
-let g:ale_lint_on_save = 0
-let g:ale_lint_on_text_changed = 'normal'
-let g:ale_lint_on_filetype_changed = 1
-let g:ale_lint_on_enter = 1
-
-let g:ale_fix_on_save = 1
-
-let g:ale_completion_enabled = 0
-let g:ale_disable_lsp = 1
-
-let g:ale_linters = {
-      \ 'go': ['staticcheck'],
-      \ 'markdown': ['textlint'],
-      \ 'json': ['jq', 'jsonlint', 'cspell'],
-      \ }
-
-let g:ale_linter_aliases = {
-      \ 'typescript': ['typescript'],
-      \ 'typescriptreact': ['typescript', 'css'],
-      \ }
-
-let g:ale_fixers = {
-      \ '*': ['remove_trailing_lines', 'trim_whitespace'],
-      \ 'markdown': ['prettier'],
-      \ 'html': [],
-      \ 'css': ['prettier'],
-      \ 'less': ['prettier'],
-      \ 'scss': ['prettier'],
-      \ 'json': ['prettier'],
-      \ 'graphql': ['prettier'],
-      \ 'vue': ['prettier'],
-      \ 'svelte': ['prettier'],
-      \ 'astro': ['prettier'],
-      \ 'yaml': ['prettier'],
-      \ 'javascript': ['prettier', 'eslint'],
-      \ 'javascriptreact': ['prettier', 'eslint', 'stylelint'],
-      \ 'typescript': ['deno', 'prettier', 'tslint', 'eslint'],
-      \ 'typescriptreact': ['deno', 'prettier', 'tslint', 'eslint', 'stylelint'],
-      \ 'terraform': ['terraform'],
-      \ }
-
-let g:ale_javascript_prettier_use_global = 0
-let g:ale_javascript_eslint_options = '--no-ignore'
-let g:ale_javascript_eslint_suppress_eslintignore = 1
-let g:ale_javascript_eslint_suppress_missing_config = 1
-let g:ale_typescript_tslint_use_global = 0
-let g:ale_typescript_tslint_config_path = ''
-
-nnoremap <silent> \ll :ALELint<CR>
-nnoremap <silent> \lt :ALEToggle<CR>
-nnoremap <silent> \lf :ALEFix<CR>
-nnoremap <silent> <Leader>p :ALEFix<CR>
-nnoremap <silent> [e :ALEPrevious<CR>
-nnoremap <silent> ]e :ALENext<CR>
-nnoremap <silent> [W :ALEFirst<CR>
-nnoremap <silent> ]W :ALELast<CR>
-
-
 " ファイル置換時に BufWritePost 処理をトグル
 function! s:enableBufWritePost()
-  let g:ale_fix_on_save = 1
-  ALEEnable
+  LspStart
   GitGutterEnable
 endfunction
 
 function! s:disableBufWritePost()
-  let g:ale_fix_on_save = 0
-  ALEDisable
+  LspStop
   GitGutterDisable
 endfunction
 
