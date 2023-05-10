@@ -127,7 +127,6 @@ brew "zsh-completions"
 brew "cjbassi/ytop/ytop"
 brew "cloudflare/cloudflare/cloudflared"
 brew "dart-lang/dart/dart"
-brew "hashicorp/tap/terraform", link: false
 brew "itchyny/tap/mmv"
 brew "suzuki-shunsuke/asciinema-trim/asciinema-trim"
 cask "chromium"
