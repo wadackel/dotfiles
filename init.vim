@@ -805,6 +805,9 @@ lua << EOF
       relative = 'editor',
       blend = 0,
     },
+    sources = {
+      ['null-ls'] = { ignore = true },
+    },
   }
 EOF
 
@@ -947,7 +950,6 @@ EOF
 lua << EOF
 local null_ls = require('null-ls')
 local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-local prefer_local_node_modules = 'node_modules/.bin'
 
 null_ls.setup {
   diagnostics_format = '#{m} (#{s}: #{c})',
@@ -957,6 +959,8 @@ null_ls.setup {
       prefix = '',
     },
   },
+
+  border = 'rounded',
 
   on_attach = function(client, bufnr)
     if client.supports_method('textDocument/formatting') then
@@ -996,10 +1000,10 @@ null_ls.setup {
 
   sources = {
     null_ls.builtins.diagnostics.eslint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
     null_ls.builtins.formatting.eslint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
 
     null_ls.builtins.formatting.deno_fmt.with {
@@ -1013,7 +1017,7 @@ null_ls.setup {
     },
 
     null_ls.builtins.formatting.prettier.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
       condition = function(utils)
         return utils.root_has_file {
           'package.json',
@@ -1022,21 +1026,21 @@ null_ls.setup {
     },
 
     null_ls.builtins.diagnostics.stylelint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
     null_ls.builtins.formatting.stylelint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
 
     null_ls.builtins.diagnostics.textlint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
     null_ls.builtins.formatting.textlint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
 
     null_ls.builtins.diagnostics.commitlint.with {
-      prefer_local = prefer_local_node_modules,
+      only_local = true,
     },
 
     null_ls.builtins.diagnostics.actionlint,
@@ -1266,12 +1270,21 @@ require('lualine').setup {
       {
         'tabs',
         mode = 2,
-        max_length = vim.o.columns,
+        max_length = function()
+          return vim.o.columns
+        end,
         separator = { right = '' },
         tabs_color = {
           active = 'lualine_a_normal',
           inactive = 'lualine_a_inactive',
         },
+        fmt = function(name, context)
+          local buflist = vim.fn.tabpagebuflist(context.tabnr)
+          local winnr = vim.fn.tabpagewinnr(context.tabnr)
+          local bufnr = buflist[winnr]
+          local mod = vim.fn.getbufvar(bufnr, '&mod')
+          return name .. (mod == 1 and ' ∙' or '')
+        end
       },
     },
     lualine_x = {},
@@ -1948,3 +1961,5 @@ colorscheme dogrun
 
 hi Normal guibg=NONE
 hi FidgetTask guibg=NONE
+hi NormalFloat guibg=NONE
+hi NullLsInfoBorder guibg=NONE
