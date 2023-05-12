@@ -232,11 +232,6 @@ endfunction
 " スーパーユーザとして保存
 cnoremap w!! w !sudo tee > /dev/null %
 
-" 括弧の補完
-inoremap {<Enter> {}<Left><CR><ESC><S-o>
-inoremap [<Enter> []<Left><CR><ESC><S-o>
-inoremap (<Enter> ()<Left><CR><ESC><S-o>
-
 " 選択範囲内をExpressionレジスタで評価->置換
 vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
@@ -359,10 +354,10 @@ nnoremap sq :<C-u>q<CR>
 nnoremap sQ :<C-u>bd<CR>
 
 " quickfix/locationlist の open/close
-nnoremap <space>co :copen<CR>
-nnoremap <space>cc :cclose<CR>
-nnoremap <space>lo :lopen<CR>
-nnoremap <space>lc :lclose<CR>
+nnoremap <Space>co :copen<CR>
+nnoremap <Space>cc :cclose<CR>
+nnoremap <Space>lo :lopen<CR>
+nnoremap <Space>lc :lclose<CR>
 
 " 現在のタブページ以外全て閉じる
 nnoremap <C-w>O :<C-u>tabo<CR>
@@ -470,6 +465,7 @@ Jetpack 'Shougo/context_filetype.vim'
 Jetpack 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 Jetpack 'nvim-treesitter/playground'
 Jetpack 'yioneko/nvim-yati'
+Jetpack 'windwp/nvim-autopairs'
 
 " editing
 Jetpack 'mattn/emmet-vim'
@@ -676,10 +672,10 @@ lua << EOF
   local lspconfig = require('lspconfig')
 
   local opts = { noremap=true, silent=true }
-  vim.api.nvim_set_keymap('n', '<space>e', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
+  vim.api.nvim_set_keymap('n', '<Leader>ee', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
   vim.api.nvim_set_keymap('n', '[g', '<cmd>lua vim.diagnostic.goto_prev()<CR>', opts)
   vim.api.nvim_set_keymap('n', ']g', '<cmd>lua vim.diagnostic.goto_next()<CR>', opts)
-  vim.api.nvim_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
+  vim.api.nvim_set_keymap('n', '<Space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
 
   -- Setup servers
   local capabilities = require('cmp_nvim_lsp').default_capabilities()
@@ -1124,6 +1120,15 @@ endfunction
 let g:matchup_matchparen_offscreen = {}
 
 
+" windwp/nvim-autopairs
+lua << EOF
+require('nvim-autopairs').setup {
+  map_c_h = true,
+  map_c_w = true,
+}
+EOF
+
+
 " lualine
 lua << END
 local colors = {
@@ -1423,6 +1428,7 @@ nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
 nnoremap <silent> <Leader>gl :Telescope git_commits<CR>
 nnoremap <silent> <Leader>gp :Telescope gh pull_request<CR>
 nnoremap <silent> <Leader>hl :Telescope highlights<CR>
+nnoremap <silent> <Leader>el :Telescope diagnostics<CR>
 
 lua << EOF
   local telescope = require('telescope')
@@ -1524,7 +1530,18 @@ lua << EOF
         ignore_current_buffer = true,
       }),
       commands = wrap_dropdown_opts({}),
-      command_history = wrap_dropdown_opts({}),
+      command_history = wrap_dropdown_opts({
+        attach_mappings =  function(_, map)
+          map({ 'i' }, '<C-e>', function()
+            local key = vim.api.nvim_replace_termcodes('<End>', true, true, true)
+            vim.api.nvim_feedkeys(key, 'm', true)
+          end, { nowait = true })
+
+          map({ 'i' }, '<C-i>', action.edit_command_line)
+
+          return true
+        end,
+      }),
       git_branches = {
         show_remote_tracking_branches = false,
         mappings = {
