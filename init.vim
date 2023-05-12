@@ -436,132 +436,135 @@ augroup END
 " Plugins
 " =============================================================
 
-call plug#begin('~/.nvim/plugged')
+packadd vim-jetpack
+call jetpack#begin('~/.nvim/plugged')
+" bootstrap
+Jetpack 'tani/vim-jetpack', {'opt': 1}
 
 " vim-scripts
-Plug 'vim-scripts/sudo.vim'
+Jetpack 'vim-scripts/sudo.vim'
 
 " lua
-Plug 'nvim-lua/plenary.nvim'
-Plug 'lewis6991/impatient.nvim'
-Plug 'kyazdani42/nvim-web-devicons'
+Jetpack 'nvim-lua/plenary.nvim'
+Jetpack 'lewis6991/impatient.nvim'
+Jetpack 'kyazdani42/nvim-web-devicons'
 
 " completion
-Plug 'williamboman/mason.nvim'
-Plug 'williamboman/mason-lspconfig.nvim'
-Plug 'neovim/nvim-lspconfig'
-Plug 'hrsh7th/nvim-cmp'
-Plug 'hrsh7th/cmp-nvim-lsp'
-Plug 'hrsh7th/cmp-nvim-lsp-signature-help'
-Plug 'hrsh7th/cmp-buffer'
-Plug 'hrsh7th/cmp-path'
-Plug 'hrsh7th/cmp-cmdline'
-Plug 'hrsh7th/cmp-vsnip'
-Plug 'hrsh7th/vim-vsnip'
-Plug 'onsails/lspkind-nvim'
-Plug 'stevearc/dressing.nvim'
-Plug 'jose-elias-alvarez/null-ls.nvim'
+Jetpack 'williamboman/mason.nvim'
+Jetpack 'williamboman/mason-lspconfig.nvim'
+Jetpack 'neovim/nvim-lspconfig'
+Jetpack 'hrsh7th/nvim-cmp'
+Jetpack 'hrsh7th/cmp-nvim-lsp'
+Jetpack 'hrsh7th/cmp-nvim-lsp-signature-help'
+Jetpack 'hrsh7th/cmp-buffer'
+Jetpack 'hrsh7th/cmp-path'
+Jetpack 'hrsh7th/cmp-cmdline'
+Jetpack 'hrsh7th/cmp-vsnip'
+Jetpack 'hrsh7th/vim-vsnip'
+Jetpack 'onsails/lspkind-nvim'
+Jetpack 'stevearc/dressing.nvim'
+Jetpack 'jose-elias-alvarez/null-ls.nvim'
 
 " syntax extention
-Plug 'Shougo/context_filetype.vim'
-Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
-Plug 'nvim-treesitter/playground'
+Jetpack 'Shougo/context_filetype.vim'
+Jetpack 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+Jetpack 'nvim-treesitter/playground'
+Jetpack 'yioneko/nvim-yati'
 
 " editing
-Plug 'mattn/emmet-vim'
-Plug 'andymass/vim-matchup'
-Plug 'machakann/vim-sandwich'
-Plug 'David-Kunz/treesitter-unit'
-Plug 'tommcdo/vim-exchange'
-Plug 'editorconfig/editorconfig-vim'
-Plug 'junegunn/vim-easy-align'
-Plug 'kana/vim-submode'
-Plug 'numToStr/Comment.nvim'
-Plug 'JoosepAlviste/nvim-ts-context-commentstring'
-Plug 'deton/jasegment.vim'
-Plug 'thinca/vim-qfreplace'
-Plug 'itchyny/vim-qfedit'
-Plug 'skanehira/qfopen.vim'
-Plug 'rhysd/clever-f.vim'
-Plug 'haya14busa/vim-asterisk'
-Plug 'haya14busa/is.vim'
-Plug 'easymotion/vim-easymotion'
-Plug 'haya14busa/incsearch.vim'
-Plug 'haya14busa/incsearch-fuzzy.vim'
+Jetpack 'mattn/emmet-vim'
+Jetpack 'andymass/vim-matchup'
+Jetpack 'machakann/vim-sandwich'
+Jetpack 'David-Kunz/treesitter-unit'
+Jetpack 'tommcdo/vim-exchange'
+Jetpack 'editorconfig/editorconfig-vim'
+Jetpack 'junegunn/vim-easy-align'
+Jetpack 'kana/vim-submode'
+Jetpack 'numToStr/Comment.nvim'
+Jetpack 'JoosepAlviste/nvim-ts-context-commentstring'
+Jetpack 'deton/jasegment.vim'
+Jetpack 'thinca/vim-qfreplace'
+Jetpack 'itchyny/vim-qfedit'
+Jetpack 'skanehira/qfopen.vim'
+Jetpack 'rhysd/clever-f.vim'
+Jetpack 'haya14busa/vim-asterisk'
+Jetpack 'haya14busa/is.vim'
+Jetpack 'easymotion/vim-easymotion'
+Jetpack 'haya14busa/incsearch.vim'
+Jetpack 'haya14busa/incsearch-fuzzy.vim'
 
 " debug
-Plug 'thinca/vim-quickrun'
+Jetpack 'thinca/vim-quickrun'
 
 " filer
-Plug 'lambdalisue/nerdfont.vim'
-Plug 'lambdalisue/glyph-palette.vim'
-Plug 'lambdalisue/fern.vim'
-Plug 'lambdalisue/fern-renderer-nerdfont.vim'
-Plug 'nvim-telescope/telescope.nvim'
-Plug 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
-Plug 'nvim-telescope/telescope-github.nvim'
+Jetpack 'lambdalisue/nerdfont.vim'
+Jetpack 'lambdalisue/glyph-palette.vim'
+Jetpack 'lambdalisue/fern.vim'
+Jetpack 'lambdalisue/fern-renderer-nerdfont.vim'
+Jetpack 'nvim-telescope/telescope.nvim'
+Jetpack 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
+Jetpack 'nvim-telescope/telescope-github.nvim'
 
 " sign
-Plug 'lewis6991/gitsigns.nvim'
+Jetpack 'lewis6991/gitsigns.nvim'
 
 " git
-Plug 'sindrets/diffview.nvim'
-Plug 'tpope/vim-fugitive'
-Plug 'rhysd/conflict-marker.vim'
-Plug 'APZelos/blamer.nvim'
-Plug 'tyru/open-browser.vim'
+Jetpack 'sindrets/diffview.nvim'
+Jetpack 'tpope/vim-fugitive'
+Jetpack 'rhysd/conflict-marker.vim'
+Jetpack 'APZelos/blamer.nvim'
+Jetpack 'tyru/open-browser.vim'
 
 " Rust
-Plug 'rust-lang/rust.vim'
+Jetpack 'rust-lang/rust.vim'
 
 " TypeScript
-Plug 'jose-elias-alvarez/typescript.nvim'
+Jetpack 'jose-elias-alvarez/typescript.nvim'
 
 " HTML
-Plug 'othree/html5.vim', {'for': 'html'}
+Jetpack 'othree/html5.vim', {'for': 'html'}
 
 " Stylesheet (CSS / Sass)
-Plug 'hail2u/vim-css3-syntax', {'for': 'css'}
-Plug 'cakebaker/scss-syntax.vim', {'for': 'scss'}
+Jetpack 'hail2u/vim-css3-syntax', {'for': 'css'}
+Jetpack 'cakebaker/scss-syntax.vim', {'for': 'scss'}
 
 " Markdown
-Plug 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
-Plug 'tukiyo/previm', {'for': ['markdown', 'md']}
-Plug 'iamcco/markdown-preview.nvim', {'do': 'cd app && yarn install', 'for': ['markdown', 'md']}
-Plug 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
-Plug 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
-Plug 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
+Jetpack 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
+Jetpack 'tukiyo/previm', {'for': ['markdown', 'md']}
+Jetpack 'iamcco/markdown-preview.nvim', {'do': 'cd app && yarn install', 'for': ['markdown', 'md']}
+Jetpack 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
+Jetpack 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
+Jetpack 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 
 " toml
-Plug 'cespare/vim-toml',  {'for' : 'toml'}
+Jetpack 'cespare/vim-toml',  {'for' : 'toml'}
 
 " Dart
-Plug 'dart-lang/dart-vim-plugin'
+Jetpack 'dart-lang/dart-vim-plugin'
 
 " Flutter
-Plug 'thosakwe/vim-flutter'
+Jetpack 'thosakwe/vim-flutter'
 
 " Java
-Plug 'tfnico/vim-gradle'
+Jetpack 'tfnico/vim-gradle'
 
 " varnish
-Plug 'fgsch/vim-varnish'
+Jetpack 'fgsch/vim-varnish'
 
 " GraphQL
-Plug 'jparise/vim-graphql'
+Jetpack 'jparise/vim-graphql'
 
 " statusline
-Plug 'nvim-lualine/lualine.nvim'
-Plug 'j-hui/fidget.nvim'
+Jetpack 'nvim-lualine/lualine.nvim'
+Jetpack 'j-hui/fidget.nvim'
 
 " colorscheme
 if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
-  Plug '~/develop/github.com/wadackel/vim-dogrun'
+  Jetpack '~/develop/github.com/wadackel/vim-dogrun'
 else
-  Plug 'wadackel/vim-dogrun'
+  Jetpack 'wadackel/vim-dogrun'
 endif
-
-call plug#end()
+call jetpack#end()
 
 
 " impatient.nvim
@@ -1422,6 +1425,7 @@ nnoremap <silent> <Leader>gp :Telescope gh pull_request<CR>
 nnoremap <silent> <Leader>hl :Telescope highlights<CR>
 
 lua << EOF
+  local telescope = require('telescope')
   local action = require('telescope.actions')
   local action_state = require('telescope.actions.state')
   local action_layout = require('telescope.actions.layout')
@@ -1442,7 +1446,7 @@ lua << EOF
     return opts
   end
 
-  require'telescope'.setup{
+  telescope.setup {
     defaults = {
       prompt_prefix = '❯ ',
       selection_caret = ' ',
@@ -1541,8 +1545,8 @@ lua << EOF
     },
   }
 
-  require('telescope').load_extension('fzf')
-  require('telescope').load_extension('gh')
+  telescope.load_extension('fzf')
+  telescope.load_extension('gh')
 EOF
 
 
