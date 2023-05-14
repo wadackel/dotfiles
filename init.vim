@@ -202,6 +202,7 @@ noremap @: @;
 " Toggle系オプション
 nnoremap <silent> \w :<C-u>setl wrap! wrap?<CR>
 nnoremap <silent> \s :call <SID>toggle_syntax()<CR>
+nnoremap <silent> \n :call <SID>toggle_number()<CR>
 nnoremap <silent> \m :call <SID>toggle_mouse()<CR>
 nnoremap <silent> \h :<C-u>setl hlsearch!<CR>
 
@@ -216,6 +217,16 @@ function! s:toggle_syntax() abort
     TSEnable highlight
     redraw
     echo 'syntax on'
+  endif
+endfunction
+
+function! s:toggle_number() abort
+  if &number == 1
+    set nonumber
+    echo 'number off'
+  else
+    set number
+    echo 'number on'
   endif
 endfunction
 
