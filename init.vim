@@ -441,8 +441,8 @@ Jetpack 'vim-scripts/sudo.vim'
 
 " lua
 Jetpack 'nvim-lua/plenary.nvim'
+Jetpack 'nvim-tree/nvim-web-devicons'
 Jetpack 'lewis6991/impatient.nvim'
-Jetpack 'kyazdani42/nvim-web-devicons'
 
 " completion
 Jetpack 'williamboman/mason.nvim'
@@ -493,13 +493,14 @@ Jetpack 'haya14busa/incsearch-fuzzy.vim'
 Jetpack 'thinca/vim-quickrun'
 
 " filer
-Jetpack 'lambdalisue/nerdfont.vim'
-Jetpack 'lambdalisue/glyph-palette.vim'
-Jetpack 'lambdalisue/fern.vim'
-Jetpack 'lambdalisue/fern-renderer-nerdfont.vim'
+Jetpack 'nvim-tree/nvim-tree.lua'
 Jetpack 'nvim-telescope/telescope.nvim'
 Jetpack 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Jetpack 'nvim-telescope/telescope-github.nvim'
+
+" statusline
+Jetpack 'nvim-lualine/lualine.nvim'
+Jetpack 'j-hui/fidget.nvim'
 
 " sign
 Jetpack 'lewis6991/gitsigns.nvim'
@@ -549,10 +550,6 @@ Jetpack 'fgsch/vim-varnish'
 
 " GraphQL
 Jetpack 'jparise/vim-graphql'
-
-" statusline
-Jetpack 'nvim-lualine/lualine.nvim'
-Jetpack 'j-hui/fidget.nvim'
 
 " colorscheme
 if isdirectory($HOME.'/develop/github.com/wadackel/vim-dogrun')
@@ -616,7 +613,7 @@ lua << EOF
   )
 
   -- Setup nvim-cmp.
-  local cmp = require'cmp'
+  local cmp = require('cmp')
 
   cmp.setup({
     window = {
@@ -643,7 +640,6 @@ lua << EOF
       { name = 'nvim_lsp_signature_help' },
       { name = 'path' },
       { name = 'vsnip' },
-    }, {
       { name = 'buffer' },
     }),
   })
@@ -1300,7 +1296,7 @@ require('lualine').setup {
     lualine_z = {},
   },
   extensions = {
-    'fern',
+    'nvim-tree',
     'fugitive',
     'quickfix',
   },
@@ -1339,83 +1335,182 @@ map gz# <Plug>(asterisk-gz#)<Plug>(is-nohl-1)
 let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 
 
-" fern.vim
-let g:fern#default_hidden = 1
-let g:fern#disable_default_mappings = 1
-let g:fern#renderer = "nerdfont"
+" nvim-tree.lua
+let g:loaded_netrw = 1
+let g:loaded_netrwPlugin = 1
 
-nnoremap <silent> <C-j> :Fern . -width=40 -drawer -reveal=% -toggle<CR>
+nnoremap <silent> <C-j> :NvimTreeFindFileToggle<CR>
 
-function! s:init_fern() abort
-  nmap <buffer> <expr>
-        \ <Plug>(fern-expand-or-enter)
-        \ fern#smart#drawer(
-        \   "\<Plug>(fern-action-open-or-expand)",
-        \   "\<Plug>(fern-action-open-or-enter)",
-        \ )
+lua << EOF
+require('nvim-tree').setup {
+  sort_by = 'case_sensitive',
+  view = {
+    width = 40,
+    centralize_selection = true,
+  },
+  ui = {
+    confirm = {
+      remove = false,
+    },
+  },
+  renderer = {
+    highlight_git = true,
+    highlight_opened_files = 'all',
+    highlight_modified = 'all',
+    highlight_git = true,
+    indent_markers = {
+      enable = true,
+    },
+    icons = {
+      git_placement = 'signcolumn',
+      symlink_arrow = "  ",
+      glyphs = {
+        symlink = "",
+        bookmark = "󰄲",
+        modified = "∙",
+        git = {
+          unstaged = '∙',
+          staged = '∙',
+          unmerged = '',
+          renamed = '➜',
+          untracked = '∙',
+          deleted = '',
+          ignored = '◌',
+        },
+      },
+    },
+  },
+  actions = {
+    file_popup = {
+      open_win_config = {
+        col = 1,
+        row = 1,
+        relative = 'cursor',
+        border = 'rounded',
+        style = 'minimal',
+      },
+    },
+  },
+  diagnostics = {
+    enable = true,
+  },
+  filters = {
+    -- dotfiles = false,
+  },
+  on_attach = function(bufnr)
+    local api = require('nvim-tree.api')
 
-  nmap <buffer> <expr>
-        \ <Plug>(fern-collapse-or-leave)
-        \ fern#smart#drawer(
-        \   "\<Plug>(fern-action-collapse)",
-        \   "\<Plug>(fern-action-leave)",
-        \ )
+    local function opts(desc)
+      return { desc = 'nvim-tree: ' .. desc, buffer = bufnr, noremap = true, silent = true, nowait = true }
+    end
 
-  nmap <silent><buffer><nowait> <CR> <Plug>(fern-action-open-or-enter)
-  nmap <silent><buffer><nowait> o <Plug>(fern-expand-or-enter)
-  nmap <silent><buffer><nowait> l <Plug>(fern-expand-or-enter)
-  nmap <silent><buffer><nowait> h <Plug>(fern-collapse-or-leave)
-  nmap <silent><buffer><nowait> <C-h> <Plug>(fern-action-leave)
-  nmap <silent><buffer><nowait> e <Plug>(fern-action-open)
-  nmap <silent><buffer><nowait> E <Plug>(fern-action-open:side)
-  nmap <silent><buffer><nowait> t <Plug>(fern-action-open:tabedit)
-  nmap <silent><buffer><nowait> i <Plug>(fern-action-reveal)
-  nmap <silent><buffer><nowait> <C-c> <Plug>(fern-action-cancel)
-  nmap <silent><buffer><nowait> <F5> <Plug>(fern-action-reload)
-  nmap <silent><buffer><nowait> - <Plug>(fern-action-mark:toggle)
-  nmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark:toggle)j
-  vmap <silent><buffer><nowait> - <Plug>(fern-action-mark:toggle)
-  vmap <silent><buffer><nowait> <Space> <Plug>(fern-action-mark:toggle)
-  nmap <silent><buffer><nowait> x <Plug>(fern-action-open:system)
-  nmap <silent><buffer><nowait> X <Plug>(fern-action-terminal)
-  nmap <silent><buffer><nowait> N <Plug>(fern-action-new-file)
-  nmap <silent><buffer><nowait> K <Plug>(fern-action-new-dir)
-  nmap <silent><buffer><nowait> c <Plug>(fern-action-copy)
-  nmap <silent><buffer><nowait> m <Plug>(fern-action-move)
-  nmap <silent><buffer><nowait> C <Plug>(fern-action-clipboard-copy)
-  nmap <silent><buffer><nowait> M <Plug>(fern-action-clipboard-move)
-  nmap <silent><buffer><nowait> P <Plug>(fern-action-clipboard-paste)
-  nmap <silent><buffer><nowait> dd <Plug>(fern-action-remove)
-  nmap <silent><buffer><nowait> r <Plug>(fern-action-rename)
-  nmap <silent><buffer><nowait> y <Plug>(fern-action-yank:label)
-  nmap <silent><buffer><nowait> Y <Plug>(fern-action-yank:path)
+    -- open as vsplit on current node
+    local function vsplit_preview()
+      local node = api.tree.get_node_under_cursor()
 
-  nnoremap <silent><buffer><nowait> q :<C-u>quit<CR>
-endfunction
+      if node.nodes ~= nil then
+        -- expand or collapse folder
+        api.node.open.edit()
+      else
+        -- open file as vsplit
+        api.node.open.vertical()
+        -- FIXME use preview
+      end
 
-augroup fern_custom
-  autocmd!
-  autocmd FileType fern call glyph_palette#apply()
-  autocmd FileType fern call s:init_fern()
-augroup END
+      -- Finally refocus on tree if it was lost
+      api.tree.focus()
+    end
 
-" netrw hijack
-let g:loaded_netrw             = 1
-let g:loaded_netrwPlugin       = 1
-let g:loaded_netrwSettings     = 1
-let g:loaded_netrwFileHandlers = 1
+    -- root to global
+    local function change_root_to_global_cwd()
+        local global_cwd = vim.fn.getcwd(-1, -1)
+        api.tree.change_root(global_cwd)
+    end
 
-function! s:hijack_directory() abort
-  if !isdirectory(expand('%'))
-    return
-  endif
-  Fern %
-endfunction
+    -- mark operation
+    local mark_move_j = function()
+      api.marks.toggle()
+      vim.cmd('norm j')
+    end
 
-augroup fern_as_netrw
-  autocmd!
-  autocmd BufEnter * ++nested call s:hijack_directory()
-augroup END
+    -- marked files operation
+    local mark_remove = function()
+      local marks = api.marks.list()
+      if #marks == 0 then
+        table.insert(marks, api.tree.get_node_under_cursor())
+      end
+      vim.ui.input({ prompt = string.format("Delete %s files? [y/n] ", #marks) }, function(input)
+        if input == "y" then
+          for _, node in ipairs(marks) do
+            api.fs.remove(node)
+          end
+          api.marks.clear()
+          api.tree.reload()
+        end
+      end)
+    end
+
+    local mark_copy = function()
+      local marks = api.marks.list()
+      if #marks == 0 then
+        table.insert(marks, api.tree.get_node_under_cursor())
+      end
+      for _, node in pairs(marks) do
+        api.fs.copy.node(node)
+      end
+      api.marks.clear()
+      api.tree.reload()
+    end
+
+    local mark_cut = function()
+      local marks = api.marks.list()
+      if #marks == 0 then
+        table.insert(marks, api.tree.get_node_under_cursor())
+      end
+      for _, node in pairs(marks) do
+        api.fs.cut(node)
+      end
+      api.marks.clear()
+      api.tree.reload()
+    end
+
+    vim.keymap.set('n', 'q', api.tree.close, opts('Close'))
+    vim.keymap.set('n', '.', api.tree.toggle_gitignore_filter, opts('Toggle Gitignore'))
+    vim.keymap.set('n', 'h', api.node.navigate.parent_close, opts('Parent'))
+    vim.keymap.set('n', 'l', api.node.open.edit, opts('Edit Or Open'))
+    vim.keymap.set('n', 'o', api.node.open.edit, opts('Edit Or Open'))
+    vim.keymap.set('n', '<CR>', api.tree.change_root_to_node, opts('CD'))
+    vim.keymap.set('n', 't', api.node.open.tab, opts('Open: New Tab'))
+    vim.keymap.set('n', 'O', api.node.open.vertical, opts('Open: Vertical Split'))
+    vim.keymap.set('n', '<Tab>', vsplit_preview, opts('Preview: Vertical Split'))
+    vim.keymap.set('n', '<C-h>', api.tree.change_root_to_parent, opts('Change Root To Parent'))
+    vim.keymap.set('n', '<C-c>', change_root_to_global_cwd, opts('Change Root To Global CWD'))
+    vim.keymap.set('n', 'E', api.tree.expand_all, opts('Expand All'))
+    vim.keymap.set('n', 'W', api.tree.collapse_all, opts('Collapse All'))
+    vim.keymap.set('n', '-', api.tree.change_root_to_parent, opts('Up'))
+    vim.keymap.set('n', ')', api.node.navigate.sibling.next, opts('Next Sibling'))
+    vim.keymap.set('n', '(', api.node.navigate.sibling.prev, opts('Previous Sibling'))
+    vim.keymap.set('n', ']c', api.node.navigate.git.next, opts('Next Git'))
+    vim.keymap.set('n', '[c', api.node.navigate.git.prev, opts('Previous Git'))
+    vim.keymap.set('n', 'N', api.fs.create, opts('Create New File'))
+    vim.keymap.set('n', 'c', mark_copy, opts('Copy File'))
+    vim.keymap.set('n', 'C', mark_cut, opts('Cut File'))
+    vim.keymap.set('n', 'p', api.fs.paste, opts('Copy File'))
+    vim.keymap.set('n', 'd', mark_remove, opts('Delete File'))
+    vim.keymap.set('n', 'm', api.marks.bulk.move, opts('Move Marked'))
+    vim.keymap.set('n', 'r', api.fs.rename_node, opts('Rename File'))
+    vim.keymap.set('n', 'x', api.node.run.system, opts('Run System'))
+    vim.keymap.set('n', 'y', api.fs.copy.filename, opts('Copy Name'))
+    vim.keymap.set('n', 'Y', api.fs.copy.relative_path, opts('Copy Relative Path'))
+    vim.keymap.set('n', '<Space>', mark_move_j, opts('Toggle Mark'))
+    vim.keymap.set('n', '<C-[>', api.marks.clear, opts('Clear Marks'))
+    vim.keymap.set('n', 'i', api.node.show_info_popup, opts('Show Info Node'))
+    vim.keymap.set('n', 'f', api.live_filter.start, opts('Filter'))
+    vim.keymap.set('n', 'F', api.live_filter.start, opts('Clean Filter'))
+    vim.keymap.set('n', '?', api.tree.toggle_help, opts('Help'))
+  end,
+}
+EOF
 
 
 " telescope
@@ -1456,7 +1551,7 @@ lua << EOF
     defaults = {
       prompt_prefix = '❯ ',
       selection_caret = ' ',
-      multi_icon = ' ',
+      multi_icon = '󰄲 ',
       path_display = { 'truncate' },
       layout_config = {
         width = 0.8,
@@ -1981,6 +2076,3 @@ syntax on
 colorscheme dogrun
 
 hi Normal guibg=NONE
-hi FidgetTask guibg=NONE
-hi NormalFloat guibg=NONE
-hi NullLsInfoBorder guibg=NONE
