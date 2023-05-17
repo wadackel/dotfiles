@@ -811,9 +811,9 @@ lua << EOF
       relative = 'editor',
       blend = 0,
     },
-    sources = {
-      ['null-ls'] = { ignore = true },
-    },
+    -- sources = {
+    --   ['null-ls'] = { ignore = true },
+    -- },
   }
 EOF
 
@@ -957,7 +957,13 @@ lua << EOF
 local null_ls = require('null-ls')
 local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
+local filter = function(client)
+  return client.name == 'null-ls'
+end
+
 null_ls.setup {
+  debug = false,
+
   diagnostics_format = '#{m} (#{s}: #{c})',
 
   diagnostic_config = {
@@ -971,7 +977,7 @@ null_ls.setup {
   on_attach = function(client, bufnr)
     if client.supports_method('textDocument/formatting') then
       vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-      vim.api.nvim_create_autocmd('BufWritePre', {
+      vim.api.nvim_create_autocmd('BufWritePost', {
         group = augroup,
         buffer = bufnr,
         callback = function()
@@ -992,6 +998,9 @@ null_ls.setup {
 
               if res then
                 local client = vim.lsp.get_client_by_id(ctx.client_id)
+                if not filter(client) then
+                  return
+                end
                 vim.lsp.util.apply_text_edits(res, bufnr, client and client.offset_encoding or "utf-16")
                 vim.api.nvim_buf_call(bufnr, function()
                 vim.cmd("silent noautocmd update")
@@ -1023,7 +1032,7 @@ null_ls.setup {
     },
 
     null_ls.builtins.formatting.prettier.with {
-      only_local = true,
+      only_local = 'node_modules/.bin',
       condition = function(utils)
         return utils.root_has_file {
           'package.json',
@@ -1059,7 +1068,7 @@ null_ls.setup {
   },
 }
 
-vim.keymap.set('n', '<Leader>p', function() vim.lsp.buf.format { async = true } end)
+vim.keymap.set('n', '<Leader>p', function() vim.lsp.buf.format { async = true, filter = filter } end)
 EOF
 
 
@@ -1532,6 +1541,7 @@ nnoremap <silent> <Leader>cc :Telescope commands<CR>
 nnoremap <silent> <Leader>cl :Telescope command_history<CR>
 nnoremap <silent> <Leader>gb :Telescope git_branches<CR>
 nnoremap <silent> <Leader>gl :Telescope git_commits<CR>
+nnoremap <silent> <Leader>gc :Telescope git_bcommits<CR>
 nnoremap <silent> <Leader>gp :Telescope gh pull_request<CR>
 nnoremap <silent> <Leader>hl :Telescope highlights<CR>
 nnoremap <silent> <Leader>el :Telescope diagnostics<CR>
@@ -1648,6 +1658,20 @@ lua << EOF
           return true
         end,
       }),
+      git_commits = {
+        mappings = {
+          i = {
+            ['<C-y>'] = action_yank,
+          },
+        },
+      },
+      git_bcommits = {
+        mappings = {
+          i = {
+            ['<C-y>'] = action_yank,
+          },
+        },
+      },
       git_branches = {
         show_remote_tracking_branches = false,
         mappings = {
@@ -1829,6 +1853,7 @@ endfunction
 augroup fugitive_setup
   autocmd!
   autocmd FileType fugitive nnoremap <silent> <buffer> q <C-w>c
+  autocmd FileType fugitive nmap <silent> <buffer> s <C-w>
   autocmd FileType fugitiveblame nmap <silent> <buffer> q gq
   autocmd FileType fugitiveblame nnoremap <silent> <buffer> gp :call <SID>OpenFugitiveOpenPullRequest()<CR>
 augroup END
