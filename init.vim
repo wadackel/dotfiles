@@ -955,7 +955,9 @@ EOF
 " null-ls
 lua << EOF
 local null_ls = require('null-ls')
+
 local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+local local_node_modules = 'node_modules/.bin'
 
 local filter = function(client)
   return client.name == 'null-ls'
@@ -1015,10 +1017,10 @@ null_ls.setup {
 
   sources = {
     null_ls.builtins.diagnostics.eslint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
     null_ls.builtins.formatting.eslint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
 
     null_ls.builtins.formatting.deno_fmt.with {
@@ -1032,7 +1034,7 @@ null_ls.setup {
     },
 
     null_ls.builtins.formatting.prettier.with {
-      only_local = 'node_modules/.bin',
+      only_local = local_node_modules,
       condition = function(utils)
         return utils.root_has_file {
           'package.json',
@@ -1041,21 +1043,21 @@ null_ls.setup {
     },
 
     null_ls.builtins.diagnostics.stylelint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
     null_ls.builtins.formatting.stylelint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
 
     null_ls.builtins.diagnostics.textlint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
     null_ls.builtins.formatting.textlint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
 
     null_ls.builtins.diagnostics.commitlint.with {
-      only_local = true,
+      only_local = local_node_modules,
     },
 
     null_ls.builtins.diagnostics.actionlint,
@@ -1064,7 +1066,6 @@ null_ls.setup {
     null_ls.builtins.formatting.goimports,
     null_ls.builtins.formatting.rustfmt,
     null_ls.builtins.formatting.terraform_fmt,
-    null_ls.builtins.completion.spell,
   },
 }
 
@@ -2067,6 +2068,110 @@ command! DisableBufWritePost call <SID>disableBufWritePost()
 " nvim-treesitter
 lua << EOF
   require'nvim-treesitter.configs'.setup {
+    ensure_installed = {
+      'astro',
+      'awk',
+      'bash',
+      'c',
+      'c_sharp',
+      'clojure',
+      'cmake',
+      'comment',
+      'commonlisp',
+      'cpp',
+      'css',
+      'cue',
+      'dart',
+      'devicetree',
+      'diff',
+      'dockerfile',
+      'dot',
+      'ebnf',
+      'elm',
+      'embedded_template',
+      'erlang',
+      'fish',
+      'git_config',
+      'git_rebase',
+      'gitattributes',
+      'gitcommit',
+      'gitignore',
+      'glsl',
+      'go',
+      'godot_resource',
+      'gomod',
+      'gosum',
+      'gowork',
+      'graphql',
+      'hack',
+      'haskell',
+      'hjson',
+      'hlsl',
+      'html',
+      'htmldjango',
+      'http',
+      'ini',
+      'java',
+      'javascript',
+      'jq',
+      'jsdoc',
+      'json',
+      'json5',
+      'jsonc',
+      'jsonnet',
+      'kotlin',
+      'latex',
+      'llvm',
+      'lua',
+      'luadoc',
+      'luap',
+      'luau',
+      'make',
+      'markdown',
+      'markdown_inline',
+      'matlab',
+      'mermaid',
+      'ninja',
+      'nix',
+      'ocaml',
+      'ocaml_interface',
+      'ocamllex',
+      'org',
+      'pascal',
+      'passwd',
+      'perl',
+      'php',
+      'phpdoc',
+      'prisma',
+      'proto',
+      'prql',
+      'pug',
+      'python',
+      'ql',
+      'query',
+      'regex',
+      'rust',
+      'scala',
+      'scheme',
+      'scss',
+      'sql',
+      'svelte',
+      'swift',
+      'terraform',
+      'todotxt',
+      'toml',
+      'tsx',
+      'twig',
+      'typescript',
+      'ungrammar',
+      'verilog',
+      'vhs',
+      'vim',
+      'vimdoc',
+      'vue',
+      'yaml',
+      'zig',
+    },
     highlight = {
       enable = true,
       additional_vim_regex_highlighting = false,
