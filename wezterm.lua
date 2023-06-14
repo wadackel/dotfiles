@@ -66,6 +66,7 @@ return {
   initial_cols = 190,
   initial_rows = 60,
 
+  macos_forward_to_ime_modifier_mask = 'ALT|CTRL|SHIFT',
   disable_default_key_bindings = true,
   keys = {
     {
