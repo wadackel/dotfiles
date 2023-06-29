@@ -511,7 +511,7 @@ Jetpack 'nvim-telescope/telescope-github.nvim'
 
 " statusline
 Jetpack 'nvim-lualine/lualine.nvim'
-Jetpack 'j-hui/fidget.nvim'
+Jetpack 'j-hui/fidget.nvim', { 'tag': 'legacy' }
 
 " sign
 Jetpack 'lewis6991/gitsigns.nvim'
@@ -1319,7 +1319,6 @@ require('lualine').setup {
   extensions = {
     'nvim-tree',
     'fugitive',
-    'quickfix',
   },
 }
 END
