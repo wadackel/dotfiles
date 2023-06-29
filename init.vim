@@ -1365,6 +1365,7 @@ nnoremap <silent> <C-j> :NvimTreeFindFileToggle<CR>
 lua << EOF
 require('nvim-tree').setup {
   sort_by = 'case_sensitive',
+  respect_buf_cwd = true,
   view = {
     width = 40,
     centralize_selection = true,
@@ -1384,7 +1385,7 @@ require('nvim-tree').setup {
     },
     icons = {
       git_placement = 'signcolumn',
-      symlink_arrow = "  ",
+      symlink_arrow = " ➜ ",
       glyphs = {
         symlink = "",
         bookmark = "󰄲",
@@ -1409,6 +1410,11 @@ require('nvim-tree').setup {
         relative = 'cursor',
         border = 'rounded',
         style = 'minimal',
+      },
+    },
+    open_file = {
+      window_picker = {
+        enable = false,
       },
     },
   },
