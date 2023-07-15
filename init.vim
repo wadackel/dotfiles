@@ -1682,6 +1682,7 @@ lua << EOF
         show_remote_tracking_branches = false,
         mappings = {
           i = {
+            ['<CR>'] = 'git_checkout',
             ['<C-y>'] = action_yank,
             ['<C-m>'] = 'git_merge_branch',
           },
