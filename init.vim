@@ -469,7 +469,7 @@ Jetpack 'hrsh7th/cmp-vsnip'
 Jetpack 'hrsh7th/vim-vsnip'
 Jetpack 'onsails/lspkind-nvim'
 Jetpack 'stevearc/dressing.nvim'
-Jetpack 'jose-elias-alvarez/null-ls.nvim'
+Jetpack 'dense-analysis/ale'
 
 " syntax extention
 Jetpack 'Shougo/context_filetype.vim'
@@ -811,9 +811,6 @@ lua << EOF
       relative = 'editor',
       blend = 0,
     },
-    -- sources = {
-    --   ['null-ls'] = { ignore = true },
-    -- },
   }
 EOF
 
@@ -952,125 +949,72 @@ lua << EOF
 EOF
 
 
-" null-ls
+" ALE
 lua << EOF
-local null_ls = require('null-ls')
-
-local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-local local_node_modules = 'node_modules/.bin'
-
-local filter = function(client)
-  return client.name == 'null-ls'
-end
-
-null_ls.setup {
-  debug = false,
-
-  diagnostics_format = '#{m} (#{s}: #{c})',
-
-  diagnostic_config = {
-    virtual_text = {
-      prefix = '',
-    },
-  },
-
-  border = 'rounded',
-
-  on_attach = function(client, bufnr)
-    if client.supports_method('textDocument/formatting') then
-      vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-      vim.api.nvim_create_autocmd('BufWritePost', {
-        group = augroup,
-        buffer = bufnr,
-        callback = function()
-          vim.lsp.buf_request(
-            bufnr,
-            "textDocument/formatting",
-            vim.lsp.util.make_formatting_params({}),
-            function(err, res, ctx)
-              if err then
-                local err_msg = type(err) == "string" and err or err.message
-                vim.notify("formatting: " .. err_msg, vim.log.levels.WARN)
-                return
-              end
-
-              if not vim.api.nvim_buf_is_loaded(bufnr) or vim.api.nvim_buf_get_option(bufnr, "modified") then
-                return
-              end
-
-              if res then
-                local client = vim.lsp.get_client_by_id(ctx.client_id)
-                if not filter(client) then
-                  return
-                end
-                vim.lsp.util.apply_text_edits(res, bufnr, client and client.offset_encoding or "utf-16")
-                vim.api.nvim_buf_call(bufnr, function()
-                vim.cmd("silent noautocmd update")
-                end)
-              end
-            end
-          )
-        end,
-      })
-    end
-  end,
-
-  sources = {
-    null_ls.builtins.diagnostics.eslint.with {
-      only_local = local_node_modules,
-    },
-    null_ls.builtins.formatting.eslint.with {
-      only_local = local_node_modules,
-    },
-
-    null_ls.builtins.formatting.deno_fmt.with {
-      condition = function(utils)
-        return utils.root_has_file {
-          'deno.json',
-          'deno.jsonc',
-          'import_map.json',
-        }
-      end,
-    },
-
-    null_ls.builtins.formatting.prettier.with {
-      only_local = local_node_modules,
-      condition = function(utils)
-        return utils.root_has_file {
-          'package.json',
-        }
-      end,
-    },
-
-    null_ls.builtins.diagnostics.stylelint.with {
-      only_local = local_node_modules,
-    },
-    null_ls.builtins.formatting.stylelint.with {
-      only_local = local_node_modules,
-    },
-
-    null_ls.builtins.diagnostics.textlint.with {
-      only_local = local_node_modules,
-    },
-    null_ls.builtins.formatting.textlint.with {
-      only_local = local_node_modules,
-    },
-
-    null_ls.builtins.diagnostics.commitlint.with {
-      only_local = local_node_modules,
-    },
-
-    null_ls.builtins.diagnostics.actionlint,
-    null_ls.builtins.formatting.dart_format,
-    null_ls.builtins.formatting.gofmt,
-    null_ls.builtins.formatting.goimports,
-    null_ls.builtins.formatting.rustfmt,
-    null_ls.builtins.formatting.terraform_fmt,
+vim.diagnostic.config {
+  virtual_text = {
+    spacing = 0,
+    prefix = '',
+    format = function(diagnostic)
+      local prefix = ''
+      if diagnostic.severity == vim.diagnostic.severity.ERROR then
+        prefix = ''
+      elseif diagnostic.severity == vim.diagnostic.severity.WARN then
+        prefix = ''
+      elseif diagnostic.severity == vim.diagnostic.severity.INFO then
+        prefix = 'כֿ'
+      elseif diagnostic.severity == vim.diagnostic.severity.HINT then
+        prefix = 'כֿ'
+      end
+      return string.format(
+        '%s (%s) %s',
+        prefix,
+        diagnostic.source,
+        diagnostic.message
+      )
+    end,
   },
 }
-
-vim.keymap.set('n', '<Leader>p', function() vim.lsp.buf.format { async = true, filter = filter } end)
 EOF
+
+let g:ale_use_neovim_diagnostics_api = 1
+let g:ale_disable_lsp = 1
+let g:ale_fix_on_save = 1
+
+let g:ale_sign_priority = 99
+let g:ale_sign_error = ''
+let g:ale_sign_warning = ''
+let g:ale_sign_info = 'כֿ'
+
+let g:ale_echo_msg_error_str = ''
+let g:ale_echo_msg_warning_str = ''
+let g:ale_echo_msg_info_str = 'כֿ'
+let g:ale_echo_msg_format = '%severity% (%linter%) %s [%code%]'
+
+let g:ale_javascript_eslint_suppress_eslintignore = 1
+
+let g:ale_linter_aliases = {
+  \ 'javascriptreact': ['javascript'],
+  \ 'typescriptreact': ['typescript'],
+  \ }
+
+let g:ale_linters = {
+  \ 'javascript': ['eslint'],
+  \ 'typescript': ['eslint'],
+  \ 'markdown': ['textlint'],
+  \ 'css': ['stylelint'],
+  \ 'yaml': ['actionlint'],
+  \ }
+
+let g:ale_fixers = {
+  \ 'javascript': ['prettier', 'eslint'],
+  \ 'typescript': ['prettier', 'eslint'],
+  \ 'json': ['prettier'],
+  \ 'css': ['prettier'],
+  \ 'yaml': ['prettier'],
+  \ }
+
+nnoremap <Leader>p <Plug>(ale_fix)
 
 
 " 画面分割用のキーマップ
@@ -2059,11 +2003,13 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 " ファイル置換時に BufWritePost 処理をトグル
 function! s:enableBufWritePost()
   LspStart
+  ALEEnable
   GitGutterEnable
 endfunction
 
 function! s:disableBufWritePost()
   LspStop
+  ALEDisable
   GitGutterDisable
 endfunction
 
