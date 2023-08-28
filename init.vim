@@ -470,6 +470,7 @@ Jetpack 'hrsh7th/vim-vsnip'
 Jetpack 'onsails/lspkind-nvim'
 Jetpack 'stevearc/dressing.nvim'
 Jetpack 'dense-analysis/ale'
+Jetpack 'github/copilot.vim'
 
 " syntax extention
 Jetpack 'Shougo/context_filetype.vim'
@@ -1002,6 +1003,7 @@ let g:ale_linters = {
   \ 'markdown': ['textlint'],
   \ 'css': ['stylelint'],
   \ 'yaml': ['actionlint'],
+  \ 'rust': ['analyzer'],
   \ }
 
 let g:ale_fixers = {
@@ -1010,6 +1012,7 @@ let g:ale_fixers = {
   \ 'json': ['prettier'],
   \ 'css': ['prettier'],
   \ 'yaml': ['prettier'],
+  \ 'rust': ['rustfmt'],
   \ }
 
 nnoremap <Leader>p <Plug>(ale_fix)
