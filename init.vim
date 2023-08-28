@@ -1009,6 +1009,8 @@ let g:ale_linters = {
 let g:ale_fixers = {
   \ 'javascript': ['prettier', 'eslint'],
   \ 'typescript': ['prettier', 'eslint'],
+  \ 'javascriptreact': ['prettier', 'eslint'],
+  \ 'typescriptreact': ['prettier', 'eslint'],
   \ 'json': ['prettier'],
   \ 'css': ['prettier'],
   \ 'yaml': ['prettier'],
@@ -2005,13 +2007,13 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 function! s:enableBufWritePost()
   LspStart
   ALEEnable
-  GitGutterEnable
+  Gitsigns attach
 endfunction
 
 function! s:disableBufWritePost()
   LspStop
   ALEDisable
-  GitGutterDisable
+  Gitsigns detach_all
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
