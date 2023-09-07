@@ -1018,6 +1018,7 @@ let g:ale_fixers = {
   \ }
 
 nnoremap <Leader>p <Plug>(ale_fix)
+nnoremap \lt <Plug>(ale_toggle_buffer)
 
 
 " 画面分割用のキーマップ
