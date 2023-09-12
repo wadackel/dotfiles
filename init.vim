@@ -392,12 +392,12 @@ augroup terminal-config
   autocmd TermOpen * setlocal signcolumn=no
 augroup END
 
-" open terminal
-nnoremap <silent> <Leader>tt :<C-u>terminal<CR>
-nnoremap <silent> <Leader>ts :<C-u>execute 'split \| terminal'<CR>
-nnoremap <silent> <Leader>tv :<C-u>execute 'vsplit \| terminal'<CR>
-tnoremap <silent> <Leader>ts <C-\><C-n>:execute 'split \| terminal'<CR>
-tnoremap <silent> <Leader>tv <C-\><C-n>:execute 'vsplit \| terminal'<CR>
+" " open terminal
+" nnoremap <silent> <Leader>tt :<C-u>terminal<CR>
+" nnoremap <silent> <Leader>ts :<C-u>execute 'split \| terminal'<CR>
+" nnoremap <silent> <Leader>tv :<C-u>execute 'vsplit \| terminal'<CR>
+" tnoremap <silent> <Leader>ts <C-\><C-n>:execute 'split \| terminal'<CR>
+" tnoremap <silent> <Leader>tv <C-\><C-n>:execute 'vsplit \| terminal'<CR>
 
 " to normal mode
 tnoremap <silent> <C-[> <C-\><C-n>
@@ -500,6 +500,9 @@ Jetpack 'haya14busa/is.vim'
 Jetpack 'easymotion/vim-easymotion'
 Jetpack 'haya14busa/incsearch.vim'
 Jetpack 'haya14busa/incsearch-fuzzy.vim'
+
+" terminal
+Jetpack 'akinsho/toggleterm.nvim'
 
 " debug
 Jetpack 'thinca/vim-quickrun'
@@ -1029,6 +1032,40 @@ call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
 call submode#map('bufmove', 'n', '', '>', '<C-w>>')
 call submode#map('bufmove', 'n', '', '<', '<C-w><')
 call submode#map('bufmove', 'n', '', '+', '<C-w>+')
+
+
+" toggleterm
+lua << EOF
+require('toggleterm').setup {
+  size = function(term)
+    if term.direction == 'horizontal' then
+      return vim.o.lines * 0.5
+    elseif term.direction == 'vertical' then
+      return vim.o.columns * 0.5
+    end
+  end,
+  shade_terminals = false,
+  float_opts = {
+    border = 'rounded',
+  },
+  highlights = {
+    FloatBorder = {
+      link = 'FloatBorder',
+    },
+  },
+  on_open = function(term)
+    vim.cmd('startinsert!')
+  end,
+}
+EOF
+
+autocmd TermEnter term://*toggleterm#* tnoremap <silent><c-t> <Cmd>exe v:count1 . "ToggleTerm"<CR>
+
+nnoremap <silent><Leader>tt <Cmd>exe v:count1 'ToggleTerm direction=float'<CR>
+nnoremap <silent><Leader>ts <Cmd>exe v:count1 'ToggleTerm direction=horizontal'<CR>
+nnoremap <silent><Leader>tv <Cmd>exe v:count1 'ToggleTerm direction=vertical'<CR>
+
+nnoremap <silent> <Leader>tl :TermSelect<CR>
 
 
 " treesitter unit
