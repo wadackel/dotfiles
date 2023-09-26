@@ -1000,9 +1000,29 @@ let g:ale_linter_aliases = {
   \ 'typescriptreact': ['typescript'],
   \ }
 
+" let g:ale_linters = {
+"   \ 'javascript': ['eslint'],
+"   \ 'typescript': ['eslint'],
+"   \ 'markdown': ['textlint'],
+"   \ 'css': ['stylelint'],
+"   \ 'yaml': ['actionlint'],
+"   \ 'rust': ['analyzer'],
+"   \ }
+"
+" let g:ale_fixers = {
+"   \ 'javascript': ['prettier', 'eslint'],
+"   \ 'typescript': ['prettier', 'eslint'],
+"   \ 'javascriptreact': ['prettier', 'eslint'],
+"   \ 'typescriptreact': ['prettier', 'eslint'],
+"   \ 'json': ['prettier'],
+"   \ 'css': ['prettier'],
+"   \ 'yaml': ['prettier'],
+"   \ 'rust': ['rustfmt'],
+"   \ }
+
 let g:ale_linters = {
   \ 'javascript': ['eslint'],
-  \ 'typescript': ['eslint'],
+  \ 'typescript': [],
   \ 'markdown': ['textlint'],
   \ 'css': ['stylelint'],
   \ 'yaml': ['actionlint'],
@@ -1011,14 +1031,75 @@ let g:ale_linters = {
 
 let g:ale_fixers = {
   \ 'javascript': ['prettier', 'eslint'],
-  \ 'typescript': ['prettier', 'eslint'],
+  \ 'typescript': [],
   \ 'javascriptreact': ['prettier', 'eslint'],
-  \ 'typescriptreact': ['prettier', 'eslint'],
+  \ 'typescriptreact': [],
   \ 'json': ['prettier'],
   \ 'css': ['prettier'],
   \ 'yaml': ['prettier'],
   \ 'rust': ['rustfmt'],
   \ }
+
+let s:node_files = [
+  \   'package.json',
+  \ ]
+
+let s:deno_files = [
+  \   'deno.jsonc',
+  \   'deno.json',
+  \   'import_map.json',
+  \ ]
+
+augroup ale_typescript_setup
+  function! s:is_node(buffer)
+    for l:file in s:node_files
+      let l:found = ale#path#FindNearestFile(a:buffer, l:file)
+      if !empty(l:found)
+        return v:true
+      endif
+    endfor
+
+    return v:false
+  endfunction
+
+  function! s:is_deno(buffer)
+    for l:file in s:deno_files
+      let l:found = ale#path#FindNearestFile(a:buffer, l:file)
+      if !empty(l:found)
+        return v:true
+      endif
+    endfor
+
+    return v:false
+  endfunction
+
+  function! s:ale_typescript() abort
+    let l:buffer = bufnr('%')
+
+    if s:is_node(buffer)
+      let b:ale_linters = {
+        \ 'typescript': ['eslint'],
+        \ 'typescriptreact': ['eslint'],
+        \ }
+      let b:ale_fixers = {
+        \ 'typescript': ['prettier', 'eslint'],
+        \ 'typescriptreact': ['prettier', 'eslint'],
+        \ }
+    elseif s:is_deno(buffer)
+      let b:ale_linters = {
+        \ 'typescript': ['deno'],
+        \ 'typescriptreact': ['deno'],
+        \ }
+      let b:ale_fixers = {
+        \ 'typescript': ['deno'],
+        \ 'typescriptreact': ['deno'],
+        \ }
+    endif
+  endfunction
+
+  autocmd!
+  autocmd FileType typescript,typescriptreact call s:ale_typescript()
+augroup END
 
 nnoremap <Leader>p <Plug>(ale_fix)
 nnoremap \lt <Plug>(ale_toggle_buffer)
@@ -1039,7 +1120,7 @@ lua << EOF
 require('toggleterm').setup {
   size = function(term)
     if term.direction == 'horizontal' then
-      return vim.o.lines * 0.5
+      return vim.o.lines * 0.4
     elseif term.direction == 'vertical' then
       return vim.o.columns * 0.5
     end
