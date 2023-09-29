@@ -1566,16 +1566,33 @@ require('nvim-tree').setup {
       api.tree.reload()
     end
 
+    local mark_rename = function()
+      local marks = api.marks.list()
+      if #marks == 0 then
+        table.insert(marks, api.tree.get_node_under_cursor())
+      end
+      if #marks == 1 then
+        api.fs.rename_node(marks[1])
+      else
+        -- TODO
+        vim.notify('Rename only works on one file at a time')
+      end
+      api.marks.clear()
+      api.marks.reload()
+    end
+
     vim.keymap.set('n', 'q', api.tree.close, opts('Close'))
     vim.keymap.set('n', '.', api.tree.toggle_gitignore_filter, opts('Toggle Gitignore'))
     vim.keymap.set('n', 'h', api.node.navigate.parent_close, opts('Parent'))
     vim.keymap.set('n', 'l', api.node.open.edit, opts('Edit Or Open'))
     vim.keymap.set('n', 'o', api.node.open.edit, opts('Edit Or Open'))
-    vim.keymap.set('n', '<CR>', api.tree.change_root_to_node, opts('CD'))
+    vim.keymap.set('n', '<CR>', api.node.open.edit, opts('Edit Or Open'))
+    vim.keymap.set('n', '<C-]>', api.tree.change_root_to_node, opts('CD'))
+    vim.keymap.set('n', '<C-t>', api.tree.change_root_to_parent, opts('Change Root To Parent'))
+    vim.keymap.set('n', '<C-h>', api.tree.change_root_to_parent, opts('Change Root To Parent'))
     vim.keymap.set('n', 't', api.node.open.tab, opts('Open: New Tab'))
     vim.keymap.set('n', 'O', api.node.open.vertical, opts('Open: Vertical Split'))
     vim.keymap.set('n', '<Tab>', vsplit_preview, opts('Preview: Vertical Split'))
-    vim.keymap.set('n', '<C-h>', api.tree.change_root_to_parent, opts('Change Root To Parent'))
     vim.keymap.set('n', '<C-c>', change_root_to_global_cwd, opts('Change Root To Global CWD'))
     vim.keymap.set('n', 'E', api.tree.expand_all, opts('Expand All'))
     vim.keymap.set('n', 'W', api.tree.collapse_all, opts('Collapse All'))
@@ -1590,7 +1607,7 @@ require('nvim-tree').setup {
     vim.keymap.set('n', 'p', api.fs.paste, opts('Copy File'))
     vim.keymap.set('n', 'd', mark_remove, opts('Delete File'))
     vim.keymap.set('n', 'm', api.marks.bulk.move, opts('Move Marked'))
-    vim.keymap.set('n', 'r', api.fs.rename_node, opts('Rename File'))
+    vim.keymap.set('n', 'r', mark_rename, opts('Rename File'))
     vim.keymap.set('n', 'x', api.node.run.system, opts('Run System'))
     vim.keymap.set('n', 'y', api.fs.copy.filename, opts('Copy Name'))
     vim.keymap.set('n', 'Y', api.fs.copy.relative_path, opts('Copy Relative Path'))
