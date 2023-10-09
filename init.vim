@@ -979,6 +979,28 @@ vim.diagnostic.config {
 }
 EOF
 
+let g:ale_dprint_use_global = 0
+
+let s:dprint_executables = [
+  \ 'node_modules/.bin/dprint',
+  \ 'dprint',
+  \ ]
+
+function! FormatDprint(buffer) abort
+  let l:executable = ale#path#FindExecutable(a:buffer, 'dprint', s:dprint_executables)
+  if !executable(l:executable)
+    return 0
+  endif
+
+  let l:options = ' --stdin %s'
+
+  return {
+  \ 'command': ale#Escape(l:executable) . ' fmt ' . l:options,
+  \ }
+endfunction
+
+execute ale#fix#registry#Add('mydprint', 'FormatDprint', ['javascript', 'typescript', 'json', 'toml', 'dockerfile', 'sql'], 'dprint')
+
 let g:ale_use_neovim_diagnostics_api = 1
 let g:ale_disable_lsp = 1
 let g:ale_fix_on_save = 1
@@ -996,29 +1018,9 @@ let g:ale_echo_msg_format = '%severity% (%linter%) %s [%code%]'
 let g:ale_javascript_eslint_suppress_eslintignore = 1
 
 let g:ale_linter_aliases = {
-  \ 'javascriptreact': ['javascript'],
-  \ 'typescriptreact': ['typescript'],
+  \ 'javascriptreact': ['javascript', 'css'],
+  \ 'typescriptreact': ['typescript', 'css'],
   \ }
-
-" let g:ale_linters = {
-"   \ 'javascript': ['eslint'],
-"   \ 'typescript': ['eslint'],
-"   \ 'markdown': ['textlint'],
-"   \ 'css': ['stylelint'],
-"   \ 'yaml': ['actionlint'],
-"   \ 'rust': ['analyzer'],
-"   \ }
-"
-" let g:ale_fixers = {
-"   \ 'javascript': ['prettier', 'eslint'],
-"   \ 'typescript': ['prettier', 'eslint'],
-"   \ 'javascriptreact': ['prettier', 'eslint'],
-"   \ 'typescriptreact': ['prettier', 'eslint'],
-"   \ 'json': ['prettier'],
-"   \ 'css': ['prettier'],
-"   \ 'yaml': ['prettier'],
-"   \ 'rust': ['rustfmt'],
-"   \ }
 
 let g:ale_linters = {
   \ 'javascript': ['eslint'],
@@ -1031,12 +1033,14 @@ let g:ale_linters = {
 
 let g:ale_fixers = {
   \ 'javascript': ['prettier', 'eslint'],
-  \ 'typescript': [],
   \ 'javascriptreact': ['prettier', 'eslint'],
+  \ 'typescript': [],
   \ 'typescriptreact': [],
-  \ 'json': ['prettier'],
+  \ 'markdown': ['prettier', 'mydprint'],
+  \ 'json': ['prettier', 'mydprint'],
   \ 'css': ['prettier'],
   \ 'yaml': ['prettier'],
+  \ 'toml': ['mydprint'],
   \ 'rust': ['rustfmt'],
   \ }
 
@@ -1077,13 +1081,15 @@ augroup ale_typescript_setup
     let l:buffer = bufnr('%')
 
     if s:is_node(buffer)
+      let l:linter = ['eslint', 'stylelint']
+      let l:fixer = ['prettier', 'mydprint', 'eslint']
       let b:ale_linters = {
-        \ 'typescript': ['eslint'],
-        \ 'typescriptreact': ['eslint'],
+        \ 'typescript': linter,
+        \ 'typescriptreact': linter,
         \ }
       let b:ale_fixers = {
-        \ 'typescript': ['prettier', 'eslint'],
-        \ 'typescriptreact': ['prettier', 'eslint'],
+        \ 'typescript': fixer,
+        \ 'typescriptreact': fixer,
         \ }
     elseif s:is_deno(buffer)
       let b:ale_linters = {
@@ -1578,7 +1584,7 @@ require('nvim-tree').setup {
         vim.notify('Rename only works on one file at a time')
       end
       api.marks.clear()
-      api.marks.reload()
+      api.tree.reload()
     end
 
     vim.keymap.set('n', 'q', api.tree.close, opts('Close'))
@@ -2267,8 +2273,11 @@ lua << EOF
       enable = true,
       additional_vim_regex_highlighting = false,
     },
-    indent = {
+    yati = {
       enable = true,
+    },
+    indent = {
+      enable = false, -- disable builtin indent module (use yati's indent)
     },
     context_commentstring = {
       enable = true,
