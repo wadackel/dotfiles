@@ -980,6 +980,7 @@ vim.diagnostic.config {
 EOF
 
 let g:ale_dprint_use_global = 0
+let g:ale_dprint_executable = "dprint"
 
 let s:dprint_executables = [
   \ 'node_modules/.bin/dprint',
