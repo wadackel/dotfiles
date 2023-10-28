@@ -1299,10 +1299,21 @@ require('lualine').setup {
     lualine_b = {
       {
         'branch',
-        padding = { left = 1 },
+        padding = { left = 2 },
+      },
+      {
+        'filetype',
+        icon_only = true,
+        padding = {
+          left = 1,
+          right = 0,
+        },
+        colored = false,
       },
       {
         'filename',
+        padding = 0,
+        path = 1,
         show_modified_status = true,
         symbols = {
           modified = '∙',
@@ -1376,6 +1387,7 @@ require('lualine').setup {
           active = 'lualine_a_normal',
           inactive = 'lualine_a_inactive',
         },
+        show_modified_status = false,
         fmt = function(name, context)
           local buflist = vim.fn.tabpagebuflist(context.tabnr)
           local winnr = vim.fn.tabpagewinnr(context.tabnr)
