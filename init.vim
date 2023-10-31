@@ -1141,9 +1141,10 @@ require('toggleterm').setup {
       link = 'FloatBorder',
     },
   },
-  on_open = function(term)
-    vim.cmd('startinsert!')
-  end,
+  start_in_insert = false,
+  -- on_open = function(term)
+  --   vim.cmd('startinsert!')
+  -- end,
 }
 EOF
 
