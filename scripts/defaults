@@ -1,0 +1,93 @@
+#!/usr/bin/env zsh
+
+# NOTE: このスクリプトを実行する際は、実行アプリケーションに対して Full Disk Access を許可する
+
+osascript -e 'tell application "System Preferences" to quit'
+
+# Ask for the administrator password upfront
+sudo -v
+
+# Keep-alive: update existing `sudo` time stamp until `make defaults` has finished
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+# 一般
+## ダークモード
+defaults write NSGlobalDomain AppleInterfaceStyle -string "Dark"
+## Multicolor
+defaults write -g AppleAquaColorVariant -int 1
+# ファイルに保存ダイアログは常に展開
+defaults write -g NSNavPanelExpandedStateForSaveMode -bool true
+
+# 言語
+defaults write NSGlobalDomain AppleLanguages -array "en-JP" "ja-JP"
+
+# Finder
+## ファイル拡張子を表示
+defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+## パスバーを表示
+defaults write com.apple.finder ShowPathbar -bool true
+## ステータスバーを表示
+defaults write com.apple.finder ShowStatusBar -bool true
+
+# Dock
+## Dock サイズ
+defaults write com.apple.dock tilesize -int 28
+## Dock の拡大機能をオフにする
+defaults write com.apple.dock magnification -bool false
+## Dock のエフェクト
+defaults write com.apple.dock mineffect -string "scale"
+## ホットコーナー
+defaults write com.apple.dock wvous-br-corner -int 3
+defaults write com.apple.dock wvous-br-modifier -int 0
+defaults write com.apple.dock wvous-tl-corner -int 4
+defaults write com.apple.dock wvous-tl-modifier -int 0
+defaults write com.apple.dock wvous-tr-corner -int 0
+defaults write com.apple.dock wvous-tr-corner -int 2
+defaults write com.apple.dock wvous-tr-modifier -int 0
+## ウィンドウタイトルバーのダブルクリックで最小化
+defaults write -g AppleActionOnDoubleClick -string "Minimize"
+## Dock を自動的に隠す
+defaults write com.apple.dock autohide -bool true
+# アプリケーションアイコンにしまう
+defaults write com.apple.dock minimize-to-application -bool true
+## Dock 変更を適用する
+killall Dock
+
+# キーボード
+## Fnキーを標準のファンクションキーとして使用
+defaults write NSGlobalDomain com.apple.keyboard.fnState -bool true
+## キーリピート
+defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain InitialKeyRepeat -int 15
+
+# トラックパッド
+## 早さ
+defaults write com.apple.trackpad.scaling -float 1.5
+## タップでクリック
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
+defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+## コーナーの副クリックは無効化
+defaults write com.apple.AppleMultitouchTrackpad TrackpadCornerSecondaryClick -int 0
+## 副クリック
+defaults write com.apple.AppleMultitouchTrackpad TrackpadRightClick -int 1
+## 2本指のエッジスワイプで通知センター
+defaults write com.apple.AppleMultitouchTrackpad TrackpadTwoFingerFromRightEdgeSwipeGesture -int 3
+## 3本指の操作を無効化
+defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture -int 0
+defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerHorizSwipeGesture -int 0
+defaults -currentHost write NSGlobalDomain com.apple.trackpad.threeFingerHorizSwipeGesture -int 0
+## 3本指ドラッグを有効化
+defaults write com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag -bool true
+## 4本指縦スワイプでミッションコントロール
+defaults write com.apple.AppleMultitouchTrackpad TrackpadFourFingerVertSwipeGesture -int 2
+## 4本指横スワイプでデスクトップ切り替え
+defaults write com.apple.AppleMultitouchTrackpad TrackpadFourFingerHorizSwipeGesture -int 2
+## 4本指ピンチで LaunchPad / Desktop
+defaults write com.apple.AppleMultitouchTrackpad TrackpadFourFingerPinchGesture -int 2
+
+# アクセシビリティ
+## Ctrl スクロールジェスチャーでズーム
+defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true
+defaults write com.apple.universalaccess closeViewScrollWheelModifiersInt -int 262144
+defaults write com.apple.universalaccess HIDScrollZoomModifierMask -int 262144

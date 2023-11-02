@@ -6,6 +6,10 @@ setup:
 symlinks:
 	@./scripts/symlinks
 
+.PHONY: defaults
+defaults:
+	@./scripts/defaults
+
 .PHONY: brew-bundle-install
 brew-bundle-install:
 	@brew bundle

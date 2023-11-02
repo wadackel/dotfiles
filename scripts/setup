@@ -39,3 +39,6 @@ fi
 
 # symlinks
 ~/dotfiles/scripts/symlinks
+
+# defaults
+~/dotfiles/scripts/defaults
