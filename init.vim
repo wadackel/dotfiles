@@ -495,11 +495,9 @@ Jetpack 'thinca/vim-qfreplace'
 Jetpack 'itchyny/vim-qfedit'
 Jetpack 'skanehira/qfopen.vim'
 Jetpack 'rhysd/clever-f.vim'
+Jetpack 'folke/flash.nvim'
 Jetpack 'haya14busa/vim-asterisk'
 Jetpack 'haya14busa/is.vim'
-Jetpack 'easymotion/vim-easymotion'
-Jetpack 'haya14busa/incsearch.vim'
-Jetpack 'haya14busa/incsearch-fuzzy.vim'
 
 " terminal
 Jetpack 'akinsho/toggleterm.nvim'
@@ -1164,6 +1162,50 @@ onoremap iu :<c-u>lua require"treesitter-unit".select()<CR>
 onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
 
 
+" flash.nvim
+lua << EOF
+local Flash = require('flash')
+
+Flash.setup({
+  modes = {
+    search = {
+      highlight = { backdrop = true },
+    },
+    char = {
+      enabled = false,
+    },
+  },
+  prompt = {
+    prefix = {
+      { ' ', 'FlashPromptIcon' },
+    },
+  },
+})
+
+local function set_keymap(modes, lhs, rhs)
+  for _, mode in pairs(modes) do
+    vim.keymap.set(mode, lhs, rhs, { noremap = true, silent = true })
+  end
+end
+
+set_keymap({ 'n', 'v' }, '<Leader>f', function()
+  Flash.jump()
+end)
+
+set_keymap({ 'n', 'v' }, 'z/', function()
+  Flash.jump({
+    search = { mode = 'fuzzy', incremental = true },
+  })
+end)
+
+set_keymap({ 'n', 'v' }, 'z?', function()
+  Flash.jump({
+    search = { mode = 'fuzzy', incremental = true, forward = false },
+  })
+end)
+EOF
+
+
 " vim-easy-align
 nmap ga <Plug>(EasyAlign)
 xmap ga <Plug>(EasyAlign)
@@ -1415,13 +1457,6 @@ let g:quickrun_no_default_key_mappings = 1
 
 nnoremap <silent><Leader>q :<C-u>QuickRun<CR>
 vnoremap <silent><Leader>q :QuickRun<CR>
-
-
-" Clever-f
-let g:clever_f_smart_case = 1
-let g:clever_f_across_no_line = 1
-let g:clever_f_fix_key_direction = 1
-let g:clever_f_repeat_last_char_inputs = []
 
 
 " vim-asterisk
@@ -1805,31 +1840,6 @@ lua << EOF
   telescope.load_extension('fzf')
   telescope.load_extension('gh')
 EOF
-
-
-" easymotion
-let g:EasyMotion_do_mapping = 0
-let g:EasyMotion_smartcase = 0
-
-map <Leader> <Plug>(easymotion-prefix)
-nmap <Leader>f <Plug>(easymotion-overwin-f)
-xmap <Leader>f <Plug>(easymotion-s)
-map <Leader>s <Plug>(easymotion-s2)
-
-
-" incsearch
-function! s:config_fuzzyall(...) abort
-  return extend(copy({
-  \   'converters': [
-  \     incsearch#config#fuzzy#converter(),
-  \     incsearch#config#fuzzyspell#converter()
-  \   ],
-  \ }), get(a:, 1, {}))
-endfunction
-
-noremap <silent><expr> z/ incsearch#go(<SID>config_fuzzyall())
-noremap <silent><expr> z? incsearch#go(<SID>config_fuzzyall({'command': '?'}))
-noremap <silent><expr> zg? incsearch#go(<SID>config_fuzzyall({'is_stay': 1}))
 
 
 " Diffview.nvim
