@@ -1162,6 +1162,10 @@ onoremap iu :<c-u>lua require"treesitter-unit".select()<CR>
 onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
 
 
+" clever-f
+let g:clever_f_fix_key_direction = 1
+
+
 " flash.nvim
 lua << EOF
 local Flash = require('flash')
@@ -1189,7 +1193,9 @@ local function set_keymap(modes, lhs, rhs)
 end
 
 set_keymap({ 'n', 'v' }, '<Leader>f', function()
-  Flash.jump()
+  Flash.jump({
+    search = { multi_window = false }
+  })
 end)
 
 set_keymap({ 'n', 'v' }, 'z/', function()
@@ -1447,6 +1453,7 @@ require('lualine').setup {
   extensions = {
     'nvim-tree',
     'fugitive',
+    'toggleterm',
   },
 }
 END
