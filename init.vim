@@ -2193,6 +2193,16 @@ command! EnableBufWritePost call <SID>enableBufWritePost()
 command! DisableBufWritePost call <SID>disableBufWritePost()
 
 
+" nvim-ts-context-commentstring
+lua << EOF
+  vim.g.skip_ts_context_commentstring_module = true
+
+  require('ts_context_commentstring').setup {
+    -- enable_autocmd = false,
+  }
+EOF
+
+
 " nvim-treesitter
 lua << EOF
   require'nvim-treesitter.configs'.setup {
@@ -2309,10 +2319,6 @@ lua << EOF
     },
     indent = {
       enable = false, -- disable builtin indent module (use yati's indent)
-    },
-    context_commentstring = {
-      enable = true,
-      enable_autocmd = false,
     },
     playground = {
       enable = true,

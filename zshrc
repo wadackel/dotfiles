@@ -77,6 +77,10 @@ if [[ -x `which rustc` ]]; then
   export RUST_SRC_PATH="$(rustc --print sysroot)/lib/rustlib/src/rust/src"
 fi
 
+# wasmtime
+export WASMTIME_HOME="$HOME/.wasmtime"
+export PATH="$WASMTIME_HOME/bin:$PATH"
+
 # terraform
 if [[ -x `which terraform` ]]; then
   autoload -U +X bashcompinit && bashcompinit
