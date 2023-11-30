@@ -392,13 +392,6 @@ augroup terminal-config
   autocmd TermOpen * setlocal signcolumn=no
 augroup END
 
-" " open terminal
-" nnoremap <silent> <Leader>tt :<C-u>terminal<CR>
-" nnoremap <silent> <Leader>ts :<C-u>execute 'split \| terminal'<CR>
-" nnoremap <silent> <Leader>tv :<C-u>execute 'vsplit \| terminal'<CR>
-" tnoremap <silent> <Leader>ts <C-\><C-n>:execute 'split \| terminal'<CR>
-" tnoremap <silent> <Leader>tv <C-\><C-n>:execute 'vsplit \| terminal'<CR>
-
 " to normal mode
 tnoremap <silent> <C-[> <C-\><C-n>
 tnoremap <silent> <Esc> <C-\><C-n>
@@ -1140,9 +1133,6 @@ require('toggleterm').setup {
     },
   },
   start_in_insert = false,
-  -- on_open = function(term)
-  --   vim.cmd('startinsert!')
-  -- end,
 }
 EOF
 
@@ -1173,6 +1163,7 @@ local Flash = require('flash')
 Flash.setup({
   modes = {
     search = {
+      enabled = false,
       highlight = { backdrop = true },
     },
     char = {
