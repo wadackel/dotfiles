@@ -7,7 +7,6 @@ format = """\
   $git_branch\
   $git_commit\
   $git_state\
-  $git_status\
   $cmd_duration\
   $custom\
   $line_break\
