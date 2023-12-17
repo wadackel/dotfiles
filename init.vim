@@ -998,6 +998,7 @@ lua << EOF
       css = prettier_formatter,
       json = prettier_formatter,
       markdown = prettier_formatter,
+      rust = { 'rustfmt' },
     },
   })
 
