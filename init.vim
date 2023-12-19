@@ -523,6 +523,7 @@ Jetpack 'tyru/open-browser.vim'
 
 " Rust
 Jetpack 'rust-lang/rust.vim'
+Jetpack 'simrat39/rust-tools.nvim'
 
 " TypeScript
 Jetpack 'jose-elias-alvarez/typescript.nvim'
@@ -711,8 +712,9 @@ lua << EOF
 
   require('mason').setup()
 
-  require('mason-lspconfig').setup {
+  require('mason-tool-installer').setup {
     ensure_installed = {
+      -- LSP
       'astro',
       'denols',
       'pyright',
@@ -721,8 +723,22 @@ lua << EOF
       'tsserver',
       'lua_ls',
       'vimls',
-    },
 
+      -- Linter
+      'actionlint',
+      'eslint_d',
+      'stylelint',
+      'textlint',
+      'stylua',
+      -- 'biome',
+
+      -- Formatter
+      'prettierd',
+      -- 'dprint',
+    },
+  }
+
+  require('mason-lspconfig').setup {
     handlers = {
       function (name)
         local node_root_dir = lspconfig.util.root_pattern('package.json')
@@ -792,22 +808,12 @@ lua << EOF
           }
         end
 
+        if name == 'rust_analyzer' then
+          require('rust-tools').setup({})
+        end
+
         lspconfig[name].setup(opts)
       end,
-    },
-  }
-
-  -- Setup mason tools
-  require('mason-tool-installer').setup {
-    ensure_installed = {
-      'actionlint',
-      'eslint_d',
-      'prettierd',
-      -- 'biome',
-      -- 'dprint',
-      'stylelint',
-      'textlint',
-      'stylua',
     },
   }
 
@@ -1007,7 +1013,7 @@ lua << EOF
     callback = function(args)
       conform.format({
         bufnr = args.buf,
-        async = true,
+        -- async = true,
       })
     end,
   })
