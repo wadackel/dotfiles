@@ -989,7 +989,7 @@ EOF
 lua << EOF
   local prettier_formatter = { 'prettierd', 'prettier' }
   local js_formatter = {
-    { 'eslint_d', 'eslint' },
+    { 'eslint_d' },
     prettier_formatter,
   }
 
