@@ -1246,6 +1246,7 @@ onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
 
 " clever-f
 let g:clever_f_fix_key_direction = 1
+let g:clever_f_use_migemo = 1
 
 
 " flash.nvim
