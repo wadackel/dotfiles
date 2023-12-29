@@ -1631,6 +1631,9 @@ require('nvim-tree').setup {
   diagnostics = {
     enable = true,
   },
+  git = {
+    enable = false,
+  },
   filters = {
     -- dotfiles = false,
   },
