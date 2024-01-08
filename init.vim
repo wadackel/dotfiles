@@ -523,7 +523,7 @@ Jetpack 'tyru/open-browser.vim'
 
 " Rust
 Jetpack 'rust-lang/rust.vim'
-Jetpack 'simrat39/rust-tools.nvim'
+Jetpack 'mrcjkb/rustaceanvim'
 
 " TypeScript
 Jetpack 'jose-elias-alvarez/typescript.nvim'
@@ -809,11 +809,27 @@ lua << EOF
         end
 
         if name == 'rust_analyzer' then
-          require('rust-tools').setup({})
+          -- Use rustaceanvim
+          return
         end
 
         lspconfig[name].setup(opts)
       end,
+    },
+  }
+
+
+  -- rustaceanvim
+  vim.g.rustaceanvim = {
+    server = {
+      on_attach = on_attach,
+      settings = {
+        ['rust-analyzer'] = {
+          check = {
+            command = 'clippy',
+          },
+        },
+      },
     },
   }
 
@@ -996,6 +1012,7 @@ lua << EOF
   local conform = require('conform')
 
   conform.setup({
+    notify_on_error = false,
     formatters_by_ft = {
       javascript = js_formatter,
       javascriptreact = js_formatter,
