@@ -983,8 +983,25 @@ EOF
 lua << EOF
   local lint = require('lint')
 
+  local eslint_d = lint.linters.eslint_d
+  lint.linters.eslint_d = {
+    cmd = eslint_d.cmd,
+    args = eslint_d.args,
+    stdin = eslint_d.stdin,
+    stream = eslint_d.stream,
+    ignore_exitcode = eslint_d.ignore_exitcode,
+    parser = function(output, bufnr)
+      -- Suppress "No ESLint found" error
+      local result = eslint_d.parser(output, bufnr)
+      if #result == 1 and string.match(result[1].message, 'No ESLint found') then
+        return {}
+      end
+      return result
+    end,
+  }
+
   lint.linters_by_ft = {
-    -- TODO Support Deno
+    -- TODO: Support Deno
     javascript = { 'eslint_d' },
     typescript = { 'eslint_d' },
     javascriptreact = { 'eslint_d' },
@@ -993,7 +1010,7 @@ lua << EOF
     yaml = { 'actionlint' },
   }
 
-  vim.api.nvim_create_autocmd({ 'BufWritePost', 'InsertLeave', 'TextChanged' }, {
+  vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufWritePost', 'InsertLeave', 'TextChanged' }, {
     callback = function()
       lint.try_lint()
     end,
