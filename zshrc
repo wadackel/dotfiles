@@ -44,10 +44,10 @@ if [ -d "/opt/homebrew" ]; then
   fi
 fi
 
-# LLVM9 (M1 device)
-if [ -d "/opt/llvm9" ]; then
-  export PATH="/opt/llvm9/bin:${PATH}"
-fi
+# # LLVM9 (M1 device)
+# if [ -d "/opt/llvm9" ]; then
+#   export PATH="/opt/llvm9/bin:${PATH}"
+# fi
 
 export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
@@ -62,10 +62,10 @@ export PATH="${HOME}/.rbenv/bin:${PATH}"
 export PATH="${PATH}:${HOME}/.pub-cache/bin"
 export PATH="${GOENV_ROOT}/bin:${PATH}"
 
-# QEMU (M1 device)
-if [ -d "/opt/QEMU" ]; then
-  export PATH="/opt/QEMU/bin:${PATH}"
-fi
+# # QEMU (M1 device)
+# if [ -d "/opt/QEMU" ]; then
+#   export PATH="/opt/QEMU/bin:${PATH}"
+# fi
 
 # depot_tools
 if [[ -e "${HOME}/chromium/tools/depot_tools" ]]; then

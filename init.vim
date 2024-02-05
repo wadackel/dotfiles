@@ -531,13 +531,15 @@ Jetpack 'jose-elias-alvarez/typescript.nvim'
 " HTML
 Jetpack 'othree/html5.vim', {'for': 'html'}
 
+" WebAssembly
+Jetpack 'rhysd/vim-wasm'
+
 " Markdown
 Jetpack 'plasticboy/vim-markdown', {'for': ['markdown', 'md']}
-Jetpack 'tukiyo/previm', {'for': ['markdown', 'md']}
+Jetpack 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 Jetpack 'iamcco/markdown-preview.nvim', {'do': 'cd app && yarn install', 'for': ['markdown', 'md']}
 Jetpack 'dhruvasagar/vim-table-mode', {'for': ['markdown', 'md']}
 Jetpack 'rhysd/vim-gfm-syntax', {'for': ['markdown', 'md']}
-Jetpack 'mzlogin/vim-markdown-toc', {'for': ['markdown', 'md']}
 
 " toml
 Jetpack 'cespare/vim-toml',  {'for' : 'toml'}

@@ -46,7 +46,7 @@
   nevermind = !git reset --hard HEAD && git clean -d -f
   uncommit = reset --mixed HEAD~
   save = commit -m
-  wip = !"git commit -m \"wip: $(date +'%F %T')\""
+  wip = !"git add -A; git rm $(git ls-files --deleted) 2> /dev/null; git commit --no-verify --no-gpg-sign --message \"--wip-- $(date +'%F %T')\""
   resave = commit --amend
   amend = commit --amend
   invert = revert
