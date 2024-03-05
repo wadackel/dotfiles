@@ -724,6 +724,7 @@ lua << EOF
       'tsserver',
       'lua_ls',
       'vimls',
+      'gopls',
 
       -- Linter
       'actionlint',
@@ -735,6 +736,8 @@ lua << EOF
 
       -- Formatter
       'prettierd',
+      'gofumpt',
+      'goimports',
       -- 'dprint',
     },
   }
@@ -1043,6 +1046,7 @@ lua << EOF
       json = prettier_formatter,
       markdown = prettier_formatter,
       rust = { 'rustfmt' },
+      go = { 'gofumpt', 'goimports' },
     },
   })
 
