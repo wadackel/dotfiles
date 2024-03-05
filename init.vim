@@ -463,7 +463,6 @@ Jetpack 'hrsh7th/cmp-vsnip'
 Jetpack 'hrsh7th/vim-vsnip'
 Jetpack 'onsails/lspkind-nvim'
 Jetpack 'stevearc/dressing.nvim'
-" Jetpack 'dense-analysis/ale'
 Jetpack 'mfussenegger/nvim-lint'
 Jetpack 'stevearc/conform.nvim'
 Jetpack 'github/copilot.vim'
@@ -1037,7 +1036,10 @@ lua << EOF
       javascriptreact = js_formatter,
       typescript = js_formatter,
       typescriptreact = js_formatter,
-      css = prettier_formatter,
+      css = {
+        { 'stylelint' },
+        prettier_formatter,
+      },
       json = prettier_formatter,
       markdown = prettier_formatter,
       rust = { 'rustfmt' },
@@ -1063,172 +1065,6 @@ lua << EOF
     { noremap = true, silent = true }
   )
 EOF
-
-
-" " ALE
-" lua << EOF
-" vim.diagnostic.config {
-"   virtual_text = {
-"     spacing = 0,
-"     prefix = '',
-"     format = function(diagnostic)
-"       local prefix = ''
-"       if diagnostic.severity == vim.diagnostic.severity.ERROR then
-"         prefix = ''
-"       elseif diagnostic.severity == vim.diagnostic.severity.WARN then
-"         prefix = ''
-"       elseif diagnostic.severity == vim.diagnostic.severity.INFO then
-"         prefix = 'כֿ'
-"       elseif diagnostic.severity == vim.diagnostic.severity.HINT then
-"         prefix = 'כֿ'
-"       end
-"       return string.format(
-"         '%s (%s) %s',
-"         prefix,
-"         diagnostic.source,
-"         diagnostic.message
-"       )
-"     end,
-"   },
-" }
-" EOF
-"
-" let g:ale_dprint_use_global = 0
-" let g:ale_dprint_executable = "dprint"
-"
-" let s:dprint_executables = [
-"   \ 'node_modules/.bin/dprint',
-"   \ 'dprint',
-"   \ ]
-"
-" function! FormatDprint(buffer) abort
-"   let l:executable = ale#path#FindExecutable(a:buffer, 'dprint', s:dprint_executables)
-"   if !executable(l:executable)
-"     return 0
-"   endif
-"
-"   let l:options = ' --stdin %s'
-"
-"   return {
-"   \ 'command': ale#Escape(l:executable) . ' fmt ' . l:options,
-"   \ }
-" endfunction
-"
-" execute ale#fix#registry#Add('mydprint', 'FormatDprint', ['javascript', 'typescript', 'json', 'toml', 'dockerfile', 'sql'], 'dprint')
-"
-" let g:ale_use_neovim_diagnostics_api = 1
-" let g:ale_disable_lsp = 1
-" let g:ale_fix_on_save = 1
-"
-" let g:ale_sign_priority = 99
-" let g:ale_sign_error = ''
-" let g:ale_sign_warning = ''
-" let g:ale_sign_info = 'כֿ'
-"
-" let g:ale_echo_msg_error_str = ''
-" let g:ale_echo_msg_warning_str = ''
-" let g:ale_echo_msg_info_str = 'כֿ'
-" let g:ale_echo_msg_format = '%severity% (%linter%) %s [%code%]'
-"
-" let g:ale_javascript_eslint_suppress_eslintignore = 1
-"
-" let g:ale_linter_aliases = {
-"   \ 'javascriptreact': ['javascript', 'css'],
-"   \ 'typescriptreact': ['typescript', 'css'],
-"   \ }
-"
-" if executable('eslint_d')
-"   let g:ale_javascript_eslint_use_global = 1
-"   let g:ale_javascript_eslint_executable = 'eslint_d'
-" endif
-"
-" let g:ale_linters = {
-"   \ 'javascript': ['eslint'],
-"   \ 'typescript': [],
-"   \ 'markdown': ['textlint'],
-"   \ 'css': ['stylelint'],
-"   \ 'yaml': ['actionlint'],
-"   \ 'rust': ['analyzer'],
-"   \ }
-"
-" let g:ale_fixers = {
-"   \ 'javascript': ['prettier', 'eslint'],
-"   \ 'javascriptreact': ['prettier', 'eslint'],
-"   \ 'typescript': [],
-"   \ 'typescriptreact': [],
-"   \ 'markdown': ['prettier', 'mydprint'],
-"   \ 'json': ['prettier', 'mydprint'],
-"   \ 'css': ['prettier'],
-"   \ 'yaml': ['prettier'],
-"   \ 'toml': ['mydprint'],
-"   \ 'rust': ['rustfmt'],
-"   \ }
-"
-" let s:node_files = [
-"   \   'package.json',
-"   \ ]
-"
-" let s:deno_files = [
-"   \   'deno.jsonc',
-"   \   'deno.json',
-"   \   'import_map.json',
-"   \ ]
-"
-" augroup ale_typescript_setup
-"   function! s:is_node(buffer)
-"     for l:file in s:node_files
-"       let l:found = ale#path#FindNearestFile(a:buffer, l:file)
-"       if !empty(l:found)
-"         return v:true
-"       endif
-"     endfor
-"
-"     return v:false
-"   endfunction
-"
-"   function! s:is_deno(buffer)
-"     for l:file in s:deno_files
-"       let l:found = ale#path#FindNearestFile(a:buffer, l:file)
-"       if !empty(l:found)
-"         return v:true
-"       endif
-"     endfor
-"
-"     return v:false
-"   endfunction
-"
-"   function! s:ale_typescript() abort
-"     let l:buffer = bufnr('%')
-"
-"     if s:is_node(buffer)
-"       let l:linter = ['eslint', 'stylelint']
-"       let l:fixer = ['prettier', 'mydprint', 'eslint']
-"       let b:ale_linters = {
-"         \ 'typescript': linter,
-"         \ 'typescriptreact': linter,
-"         \ }
-"       let b:ale_fixers = {
-"         \ 'typescript': fixer,
-"         \ 'typescriptreact': fixer,
-"         \ }
-"     elseif s:is_deno(buffer)
-"       let b:ale_linters = {
-"         \ 'typescript': ['deno'],
-"         \ 'typescriptreact': ['deno'],
-"         \ }
-"       let b:ale_fixers = {
-"         \ 'typescript': ['deno'],
-"         \ 'typescriptreact': ['deno'],
-"         \ }
-"     endif
-"   endfunction
-"
-"   autocmd!
-"   autocmd FileType typescript,typescriptreact call s:ale_typescript()
-" augroup END
-"
-" nnoremap <Leader>p <Plug>(ale_fix)
-" nnoremap \lt <Plug>(ale_toggle_buffer)
 
 
 " 画面分割用のキーマップ
@@ -2303,15 +2139,11 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 function! s:enableBufWritePost()
   LspStart
   Gitsigns attach
-  " ALEEnable
-  " let g:ale_fix_on_save = 1
 endfunction
 
 function! s:disableBufWritePost()
   LspStop
   Gitsigns detach_all
-  " ALEDisable
-  " let g:ale_fix_on_save = 0
 endfunction
 
 command! EnableBufWritePost call <SID>enableBufWritePost()
