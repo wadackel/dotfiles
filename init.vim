@@ -1053,11 +1053,26 @@ lua << EOF
   vim.api.nvim_create_autocmd('BufWritePre', {
     pattern = '*',
     callback = function(args)
+      if vim.g.disable_autoformat then
+        return
+      end
       conform.format({
         bufnr = args.buf,
-        -- async = true,
       })
     end,
+  })
+
+  vim.api.nvim_create_user_command("FormatDisable", function(args)
+    vim.g.disable_autoformat = true
+  end, {
+    desc = "Disable autoformat-on-save",
+    bang = true,
+  })
+
+  vim.api.nvim_create_user_command("FormatEnable", function()
+    vim.g.disable_autoformat = false
+  end, {
+    desc = "Re-enable autoformat-on-save",
   })
 
   vim.keymap.set(
@@ -2142,11 +2157,13 @@ let g:table_mode_tableize_d_map = '<Leader><C-+>7'
 " ファイル置換時に BufWritePost 処理をトグル
 function! s:enableBufWritePost()
   LspStart
+  FormatEnable
   Gitsigns attach
 endfunction
 
 function! s:disableBufWritePost()
   LspStop
+  FormatDisable
   Gitsigns detach_all
 endfunction
 
