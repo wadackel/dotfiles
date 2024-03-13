@@ -1045,6 +1045,7 @@ lua << EOF
       },
       json = prettier_formatter,
       markdown = prettier_formatter,
+      html = prettier_formatter,
       rust = { 'rustfmt' },
       go = { 'gofumpt', 'goimports' },
     },
