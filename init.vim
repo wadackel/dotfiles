@@ -1615,8 +1615,22 @@ require('nvim-tree').setup {
       if #marks == 1 then
         api.fs.rename_node(marks[1])
       else
-        -- TODO
-        vim.notify('Rename only works on one file at a time')
+        local args = ''
+        for _, node in pairs(marks) do
+          args = args .. ' ' .. node.absolute_path
+        end
+        local Terminal  = require('toggleterm.terminal').Terminal
+        local term = Terminal:new({
+          cmd = 'mmv' .. args,
+          direction = 'horizontal',
+          count = 9,
+          start_in_insert = false,
+          close_on_exit = true,
+          on_open = function(term)
+            vim.cmd('startinsert!')
+          end,
+        })
+        term:toggle()
       end
       api.marks.clear()
       api.tree.reload()
