@@ -479,7 +479,7 @@ Jetpack 'mattn/emmet-vim'
 Jetpack 'andymass/vim-matchup'
 Jetpack 'machakann/vim-sandwich'
 Jetpack 'David-Kunz/treesitter-unit'
-Jetpack 'tommcdo/vim-exchange'
+Jetpack 'gbprod/substitute.nvim'
 Jetpack 'editorconfig/editorconfig-vim'
 Jetpack 'junegunn/vim-easy-align'
 Jetpack 'kana/vim-submode'
@@ -1188,6 +1188,16 @@ end)
 EOF
 
 
+" substitute.nvir
+lua << EOF
+require('substitute').setup({})
+
+vim.keymap.set('n', 'cx', require('substitute').operator, { noremap = true })
+vim.keymap.set('n', 'cxx', require('substitute').line, { noremap = true })
+vim.keymap.set('x', 'cx', require('substitute').visual, { noremap = true })
+EOF
+
+
 " vim-easy-align
 nmap ga <Plug>(EasyAlign)
 xmap ga <Plug>(EasyAlign)
@@ -1639,7 +1649,9 @@ require('nvim-tree').setup {
     vim.keymap.set('n', 'q', api.tree.close, opts('Close'))
     vim.keymap.set('n', '.', api.tree.toggle_gitignore_filter, opts('Toggle Gitignore'))
     vim.keymap.set('n', 'h', api.node.navigate.parent_close, opts('Parent'))
+    vim.keymap.set('n', 'H', api.tree.change_root_to_parent, opts('Change Root To Parent'))
     vim.keymap.set('n', 'l', api.node.open.edit, opts('Edit Or Open'))
+    vim.keymap.set('n', 'L', api.tree.change_root_to_node, opts('Change Root To Current Node'))
     vim.keymap.set('n', 'o', api.node.open.edit, opts('Edit Or Open'))
     vim.keymap.set('n', '<CR>', api.node.open.edit, opts('Edit Or Open'))
     vim.keymap.set('n', '<C-]>', api.tree.change_root_to_node, opts('CD'))
@@ -2018,9 +2030,6 @@ require('gitsigns').setup {
     relative = 'cursor',
     row = 0,
     col = 1
-  },
-  yadm = {
-    enable = false
   },
   on_attach = function(bufnr)
     local gs = package.loaded.gitsigns
