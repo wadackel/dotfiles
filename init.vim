@@ -248,7 +248,8 @@ vnoremap Q "0ygvc<C-r>=<C-r>0<CR><ESC>
 
 " 指定データをクリップボードにつながるレジスタへ保存
 function! s:clip(data)
-  let root = finddir('.git/..', expand('%:p:h') . ';') . '/'
+  " let root = finddir('.git/..', expand('%:p:h') . ';') . '/'
+  let root = getcwd() . '/'
   let data = substitute(a:data, '^' . root, '', '')
   let @* = data
   echo '[clipped] ' . data
