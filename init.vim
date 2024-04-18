@@ -1025,16 +1025,41 @@ EOF
 
 " conform.nvim
 lua << EOF
-  local prettier_formatter = { 'prettierd', 'prettier' }
+  local prettier_formatter = { 'prettierd' }
   local js_formatter = {
     { 'eslint_d' },
     prettier_formatter,
   }
 
   local conform = require('conform')
+  local Job = require('plenary.job')
+
+  local eslint_d = conform.get_formatter_info('eslint_d')
 
   conform.setup({
-    notify_on_error = false,
+    -- notify_on_error = false,
+    formatters = {
+      eslint_d = {
+        condition = function(ctx)
+          -- Suppress "No ESLint found" error
+          local bufnr = vim.api.nvim_get_current_buf()
+          local filename = vim.api.nvim_buf_get_name(bufnr)
+          local result = Job:new({
+            command = eslint_d.command,
+            args = {
+              '--print-config',
+              filename,
+            },
+            cwd = eslint_d.cwd,
+          }):sync()
+          if result[1] ~= nil and string.match(result[1], 'No ESLint found') then
+            return false
+          end
+          return true
+        end,
+        inherit = true,
+      },
+    },
     formatters_by_ft = {
       javascript = js_formatter,
       javascriptreact = js_formatter,
@@ -1081,7 +1106,9 @@ lua << EOF
     'n',
     '<Leader>p',
     function()
-      conform.format({ async = true })
+      conform.format({
+        async = true,
+      })
     end,
     { noremap = true, silent = true }
   )
