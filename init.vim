@@ -360,8 +360,11 @@ nnoremap sP :<C-u>bp<CR>
 nnoremap st :<C-u>tabnew<CR>
 nnoremap ss :<C-u>sp<CR>
 nnoremap sv :<C-u>vs<CR>
-" nnoremap sq :<C-u>q<CR> " using bufresize.nvim
 nnoremap sQ :<C-u>bd<CR>
+" using bufresize.nvim
+" nnoremap so <C-w>_<C-w><Bar>
+" nnoremap sO <C-w>=
+" nnoremap sq :<C-u>q<CR> " using bufresize.nvim
 
 " quickfix/locationlist の open/close
 nnoremap <Space>co :copen<CR>
@@ -1127,8 +1130,8 @@ bufresize.setup {
       { 'n', 's>', '20<C-w>>', opts },
       { 'n', 's+', '5<C-w>+', opts },
       { 'n', 's-', '5<C-w>-', opts },
-      { 'n', 'so', '5<C-w>_', opts },
-      { 'n', 'sO', '5<C-w>=', opts },
+      { 'n', 'so', '<C-w>_<C-w><Bar>', opts },
+      { 'n', 'sO', '<C-w>=', opts },
     },
     trigger_events = { 'BufWinEnter', 'WinEnter' },
   },
@@ -1160,7 +1163,6 @@ require('toggleterm').setup {
 }
 
 ToggleTerm = function(direction)
-    -- local command = 'exe v:count1 "ToggleTerm direction=' .. direction .. '"'
     local command = 'exe v:count1 "ToggleTerm'
     if direction == 'float' then
       command = command .. ' direction=float'
