@@ -355,14 +355,12 @@ nnoremap sn gt
 nnoremap sp gT
 nnoremap s= <C-w>=
 nnoremap sw <C-w>w
-nnoremap so <C-w>_<C-w><Bar>
-nnoremap sO <C-w>=
 nnoremap sN :<C-u>bn<CR>
 nnoremap sP :<C-u>bp<CR>
 nnoremap st :<C-u>tabnew<CR>
 nnoremap ss :<C-u>sp<CR>
 nnoremap sv :<C-u>vs<CR>
-nnoremap sq :<C-u>q<CR>
+" nnoremap sq :<C-u>q<CR> " using bufresize.nvim
 nnoremap sQ :<C-u>bd<CR>
 
 " quickfix/locationlist の open/close
@@ -397,8 +395,6 @@ augroup END
 tnoremap <silent> <C-[> <C-\><C-n>
 tnoremap <silent> <Esc> <C-\><C-n>
 
-" close terminal
-tnoremap <silent> <C-q> <C-\><C-n>:q<CR>
 
 function! s:auto_update_colorscheme(...) abort
     setlocal autoread noswapfile
@@ -503,9 +499,13 @@ Jetpack 'thinca/vim-quickrun'
 
 " filer
 Jetpack 'nvim-tree/nvim-tree.lua'
+Jetpack 'antosha417/nvim-lsp-file-operations'
 Jetpack 'nvim-telescope/telescope.nvim'
 Jetpack 'nvim-telescope/telescope-fzf-native.nvim', { 'do': 'make' }
 Jetpack 'nvim-telescope/telescope-github.nvim'
+
+" layout
+Jetpack 'kwkarlwang/bufresize.nvim'
 
 " statusline
 Jetpack 'nvim-lualine/lualine.nvim'
@@ -1115,18 +1115,30 @@ lua << EOF
 EOF
 
 
-" 画面分割用のキーマップ
-call submode#enter_with('bufmove', 'n', '', 's>', '<C-w>>')
-call submode#enter_with('bufmove', 'n', '', 's<', '<C-w><')
-call submode#enter_with('bufmove', 'n', '', 's+', '<C-w>+')
-call submode#enter_with('bufmove', 'n', '', 's-', '<C-w>-')
-call submode#map('bufmove', 'n', '', '>', '<C-w>>')
-call submode#map('bufmove', 'n', '', '<', '<C-w><')
-call submode#map('bufmove', 'n', '', '+', '<C-w>+')
-
-
-" toggleterm
+" toggleterm x bufresize.nvim
 lua << EOF
+local bufresize = require('bufresize')
+local opts = { noremap = true, silent = true }
+
+bufresize.setup {
+  register = {
+    keys = {
+      { 'n', 's<', '20<C-w><', opts },
+      { 'n', 's>', '20<C-w>>', opts },
+      { 'n', 's+', '5<C-w>+', opts },
+      { 'n', 's-', '5<C-w>-', opts },
+      { 'n', 'so', '5<C-w>_', opts },
+      { 'n', 'sO', '5<C-w>=', opts },
+    },
+    trigger_events = { 'BufWinEnter', 'WinEnter' },
+  },
+  resize = {
+    keys = {},
+    trigger_events = { 'VimResized' },
+    increment = 5,
+  },
+}
+
 require('toggleterm').setup {
   size = function(term)
     if term.direction == 'horizontal' then
@@ -1146,13 +1158,55 @@ require('toggleterm').setup {
   },
   start_in_insert = false,
 }
+
+ToggleTerm = function(direction)
+    -- local command = 'exe v:count1 "ToggleTerm direction=' .. direction .. '"'
+    local command = 'exe v:count1 "ToggleTerm'
+    if direction == 'float' then
+      command = command .. ' direction=float'
+    elseif direction == 'horizontal' then
+      command = command .. ' direction=horizontal'
+    elseif direction == 'vertical' then
+      command = command .. ' direction=vertical'
+    end
+    command = command .. '"'
+    if vim.bo.filetype == 'toggleterm' then
+        bufresize.block_register()
+        vim.api.nvim_command(command)
+        bufresize.resize_close()
+    else
+        bufresize.block_register()
+        vim.api.nvim_command(command)
+        bufresize.resize_open()
+    end
+end
+
+local keymap = vim.api.nvim_set_keymap
+
+keymap('n', '<Leader>tt', ':lua ToggleTerm("float")<CR>', opts)
+keymap('n', '<Leader>ts', [[:lua ToggleTerm("horizontal")<CR>]], opts)
+keymap('n', '<Leader>tv', [[:lua ToggleTerm("vertical")<CR>]], opts)
+keymap(
+  't',
+  '<C-q>',
+  '<C-\\><C-n>'
+    .. ':lua require("bufresize").block_register()<CR>'
+    .. '<C-w>c'
+    .. ':lua require("bufresize").resize_close()<CR>',
+  opts
+)
+
+-- close normal buffer
+keymap(
+  'n',
+  'sq',
+  '<C-\\><C-n>'
+    .. ':lua require("bufresize").block_register()<CR>'
+    .. ':<C-u>q<CR>'
+    .. ':lua require("bufresize").resize_close()<CR>',
+  opts
+)
 EOF
-
-autocmd TermEnter term://*toggleterm#* tnoremap <silent><c-t> <Cmd>exe v:count1 . "ToggleTerm"<CR>
-
-nnoremap <silent><Leader>tt <Cmd>exe v:count1 'ToggleTerm direction=float'<CR>
-nnoremap <silent><Leader>ts <Cmd>exe v:count1 'ToggleTerm direction=horizontal'<CR>
-nnoremap <silent><Leader>tv <Cmd>exe v:count1 'ToggleTerm direction=vertical'<CR>
 
 nnoremap <silent> <Leader>tl :TermSelect<CR>
 
@@ -1160,8 +1214,8 @@ nnoremap <silent> <Leader>tl :TermSelect<CR>
 " treesitter unit
 xnoremap iu :lua require"treesitter-unit".select()<CR>
 xnoremap au :lua require"treesitter-unit".select(true)<CR>
-onoremap iu :<c-u>lua require"treesitter-unit".select()<CR>
-onoremap au :<c-u>lua require"treesitter-unit".select(true)<CR>
+onoremap iu :<C-u>lua require"treesitter-unit".select()<CR>
+onoremap au :<C-u>lua require"treesitter-unit".select(true)<CR>
 
 
 " clever-f
@@ -1216,13 +1270,14 @@ end)
 EOF
 
 
-" substitute.nvir
+" substitute.nvim
 lua << EOF
 require('substitute').setup({})
 
-vim.keymap.set('n', 'cx', require('substitute').operator, { noremap = true })
-vim.keymap.set('n', 'cxx', require('substitute').line, { noremap = true })
-vim.keymap.set('x', 'cx', require('substitute').visual, { noremap = true })
+vim.keymap.set('n', 'r', require('substitute').operator, { noremap = true })
+vim.keymap.set('n', 'rp', require('substitute').line, { noremap = true })
+vim.keymap.set('n', 'rr', 'r', { noremap = true })
+vim.keymap.set('x', 'r', require('substitute').visual, { noremap = true })
 EOF
 
 
@@ -1717,6 +1772,23 @@ require('nvim-tree').setup {
 EOF
 
 
+" lsp-file-operations
+lua << EOF
+require('lsp-file-operations').setup {
+  debug = false,
+  operations = {
+    willRenameFiles = true,
+    didRenameFiles = true,
+    willCreateFiles = true,
+    didCreateFiles = true,
+    willDeleteFiles = true,
+    didDeleteFiles = true,
+  },
+  timeout_ms = 10000,
+}
+EOF
+
+
 " telescope
 nnoremap <silent> <C-p> :Telescope find_files<CR>
 nnoremap <silent> <Leader>gg :Telescope live_grep<CR>
@@ -2023,12 +2095,12 @@ augroup END
 lua << EOF
 require('gitsigns').setup {
   signs = {
-    add          = { hl = 'GitSignsAdd'   , text = '│', numhl='GitSignsAddNr'   , linehl='GitSignsAddLn'    },
-    change       = { hl = 'GitSignsChange', text = '│', numhl='GitSignsChangeNr', linehl='GitSignsChangeLn' },
-    delete       = { hl = 'GitSignsDelete', text = '│', numhl='GitSignsDeleteNr', linehl='GitSignsDeleteLn' },
-    topdelete    = { hl = 'GitSignsDelete', text = '│', numhl='GitSignsDeleteNr', linehl='GitSignsDeleteLn' },
-    changedelete = { hl = 'GitSignsChange', text = '│', numhl='GitSignsChangeNr', linehl='GitSignsChangeLn' },
-    untracked    = { hl = 'GitSignsAdd'   , text = '│', numhl='GitSignsAddNr'   , linehl='GitSignsAddLn'    },
+    add          = { text = '│' },
+    change       = { text = '│' },
+    delete       = { text = '│' },
+    topdelete    = { text = '│' },
+    changedelete = { text = '│' },
+    untracked    = { text = '│' },
   },
   signcolumn = true,  -- Toggle with `:Gitsigns toggle_signs`
   numhl      = false, -- Toggle with `:Gitsigns toggle_numhl`
@@ -2050,7 +2122,7 @@ require('gitsigns').setup {
   sign_priority = 6,
   update_debounce = 100,
   status_formatter = nil, -- Use default
-  max_file_length = 40000, -- Disable if file is longer than this (in lines)
+  max_file_length = 10000,
   preview_config = {
     -- Options passed to nvim_open_win
     border = 'single',
