@@ -471,6 +471,7 @@ Jetpack 'github/copilot.vim'
 Jetpack 'Shougo/context_filetype.vim'
 Jetpack 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 Jetpack 'nvim-treesitter/playground'
+Jetpack 'Wansmer/treesj'
 Jetpack 'yioneko/nvim-yati'
 Jetpack 'windwp/nvim-autopairs'
 
@@ -485,6 +486,7 @@ Jetpack 'junegunn/vim-easy-align'
 Jetpack 'kana/vim-submode'
 Jetpack 'numToStr/Comment.nvim'
 Jetpack 'JoosepAlviste/nvim-ts-context-commentstring'
+Jetpack 'kazhala/close-buffers.nvim'
 Jetpack 'deton/jasegment.vim'
 Jetpack 'thinca/vim-qfreplace'
 Jetpack 'itchyny/vim-qfedit'
@@ -1211,6 +1213,24 @@ keymap(
 EOF
 
 nnoremap <silent> <Leader>tl :TermSelect<CR>
+
+
+" treesj
+lua << EOF
+local tsj = require('treesj')
+
+tsj.setup({
+  use_default_keymaps = false,
+  check_syntax_error = true,
+  max_join_length = 120,
+  cursor_behavior = 'hold',
+  notify = true,
+  dot_repeat = true,
+  on_error = nil,
+})
+EOF
+
+nnoremap <Leader>m :lua require"treesj".toggle()<CR>
 
 
 " treesitter unit
@@ -2230,6 +2250,18 @@ EOF
 
 nnoremap <silent> <C-k> <Plug>(comment_toggle_linewise_current)
 vnoremap <silent> <C-k> <Plug>(comment_toggle_linewise_visual)
+
+
+" close-buffers.nvim
+lua << EOF
+require('close_buffers').setup({
+  filetype_ignore = {},
+  file_glob_ignore = {},
+  file_regex_ignore = {},
+  preserve_window_layout = { 'this', 'nameless' },
+  next_buffer_cmd = nil,
+})
+EOF
 
 
 " Dart
