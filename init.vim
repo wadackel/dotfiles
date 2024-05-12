@@ -1164,6 +1164,18 @@ require('toggleterm').setup {
   start_in_insert = false,
 }
 
+local function find_toggleterm_buffer()
+  local windows = vim.api.nvim_tabpage_list_wins(0)
+  for _, win in ipairs(windows) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    local filetype = vim.api.nvim_buf_get_option(buf, 'filetype')
+    if filetype == 'toggleterm' then
+      return buf
+    end
+  end
+  return nil
+end
+
 ToggleTerm = function(direction)
     local command = 'exe v:count1 "ToggleTerm'
     if direction == 'float' then
@@ -1174,14 +1186,14 @@ ToggleTerm = function(direction)
       command = command .. ' direction=vertical'
     end
     command = command .. '"'
-    if vim.bo.filetype == 'toggleterm' then
-        bufresize.block_register()
-        vim.api.nvim_command(command)
-        bufresize.resize_close()
+
+    bufresize.block_register()
+    if find_toggleterm_buffer() ~= nil then
+      vim.api.nvim_command(command)
+      bufresize.resize_close()
     else
-        bufresize.block_register()
-        vim.api.nvim_command(command)
-        bufresize.resize_open()
+      vim.api.nvim_command(command)
+      bufresize.resize_open()
     end
 end
 
@@ -1578,7 +1590,7 @@ let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 let g:loaded_netrw = 1
 let g:loaded_netrwPlugin = 1
 
-nnoremap <silent> <C-j> :NvimTreeFindFileToggle<CR>
+" nnoremap <silent> <C-j> :NvimTreeFindFileToggle<CR>
 
 lua << EOF
 require('nvim-tree').setup {
@@ -1791,6 +1803,24 @@ require('nvim-tree').setup {
     vim.keymap.set('n', '?', api.tree.toggle_help, opts('Help'))
   end,
 }
+
+NvimTreeToggle = function()
+  local api = require('nvim-tree.api')
+  local view = require('nvim-tree.view')
+  local bufresize = require('bufresize')
+
+  bufresize.block_register()
+
+  if view.is_visible() then
+    api.tree.close()
+    bufresize.resize_close()
+  else
+    api.tree.open({})
+    bufresize.resize_open()
+  end
+end
+
+vim.keymap.set('n', '<C-j>', ':lua NvimTreeToggle()<CR>', { noremap = true, silent = true })
 EOF
 
 
