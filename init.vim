@@ -1590,8 +1590,6 @@ let g:WebDevIconsUnicodeDecorateFolderNodes = 1
 let g:loaded_netrw = 1
 let g:loaded_netrwPlugin = 1
 
-" nnoremap <silent> <C-j> :NvimTreeFindFileToggle<CR>
-
 lua << EOF
 require('nvim-tree').setup {
   sort_by = 'case_sensitive',
@@ -1804,6 +1802,7 @@ require('nvim-tree').setup {
   end,
 }
 
+-- Keymaps
 NvimTreeToggle = function()
   local api = require('nvim-tree.api')
   local view = require('nvim-tree.view')
