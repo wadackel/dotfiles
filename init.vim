@@ -1141,6 +1141,7 @@ bufresize.setup {
       { 'n', 'sQ', ':bd<CR>', opts },
       { 'n', 'so', '<C-w>_<C-w><Bar>', opts },
       { 'n', 'sO', '<C-w>=', opts },
+      { 'n', '<C-w>o', '<C-w>o', opts },
     },
     trigger_events = { 'BufWinEnter', 'WinEnter' },
   },
