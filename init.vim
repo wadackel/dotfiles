@@ -1814,7 +1814,7 @@ NvimTreeToggle = function()
     api.tree.close()
     bufresize.resize_close()
   else
-    api.tree.open({})
+    api.tree.open({ update_root = true, find_file = true })
     bufresize.resize_open()
   end
 end
