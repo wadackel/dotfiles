@@ -1137,6 +1137,7 @@ bufresize.setup {
       { 'n', 'sH', '<C-w>H', opts },
       { 'n', 'ss', ':sp<CR>', opts },
       { 'n', 'sv', ':vs<CR>', opts },
+      { 'n', 'sq', ':q<CR>', opts },
       { 'n', 'sQ', ':bd<CR>', opts },
       { 'n', 'so', '<C-w>_<C-w><Bar>', opts },
       { 'n', 'sO', '<C-w>=', opts },
@@ -1214,17 +1215,6 @@ keymap(
   '<C-\\><C-n>'
     .. ':lua require("bufresize").block_register()<CR>'
     .. '<C-w>c'
-    .. ':lua require("bufresize").resize_close()<CR>',
-  opts
-)
-
--- close normal buffer
-keymap(
-  'n',
-  'sq',
-  '<C-\\><C-n>'
-    .. ':lua require("bufresize").block_register()<CR>'
-    .. ':<C-u>q<CR>'
     .. ':lua require("bufresize").resize_close()<CR>',
   opts
 )
