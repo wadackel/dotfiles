@@ -347,21 +347,20 @@ nnoremap sj <C-w>j
 nnoremap sk <C-w>k
 nnoremap sl <C-w>l
 nnoremap sh <C-w>h
-nnoremap sJ <C-w>J
-nnoremap sK <C-w>K
-nnoremap sL <C-w>L
-nnoremap sH <C-w>H
-nnoremap sn gt
-nnoremap sp gT
-nnoremap s= <C-w>=
-nnoremap sw <C-w>w
 nnoremap sN :<C-u>bn<CR>
 nnoremap sP :<C-u>bp<CR>
+nnoremap sn gt
+nnoremap sp gT
+nnoremap sw <C-w>w
 nnoremap st :<C-u>tabnew<CR>
-nnoremap ss :<C-u>sp<CR>
-nnoremap sv :<C-u>vs<CR>
-nnoremap sQ :<C-u>bd<CR>
 " using bufresize.nvim
+" nnoremap sJ <C-w>J
+" nnoremap sK <C-w>K
+" nnoremap sL <C-w>L
+" nnoremap sH <C-w>H
+" nnoremap ss :<C-u>sp<CR>
+" nnoremap sv :<C-u>vs<CR>
+" nnoremap sQ :<C-u>bd<CR>
 " nnoremap so <C-w>_<C-w><Bar>
 " nnoremap sO <C-w>=
 " nnoremap sq :<C-u>q<CR> " using bufresize.nvim
@@ -1132,6 +1131,13 @@ bufresize.setup {
       { 'n', 's>', '20<C-w>>', opts },
       { 'n', 's+', '5<C-w>+', opts },
       { 'n', 's-', '5<C-w>-', opts },
+      { 'n', 'sJ', '<C-w>J', opts },
+      { 'n', 'sK', '<C-w>K', opts },
+      { 'n', 'sL', '<C-w>L', opts },
+      { 'n', 'sH', '<C-w>H', opts },
+      { 'n', 'ss', ':sp<CR>', opts },
+      { 'n', 'sv', ':vs<CR>', opts },
+      { 'n', 'sQ', ':bd<CR>', opts },
       { 'n', 'so', '<C-w>_<C-w><Bar>', opts },
       { 'n', 'sO', '<C-w>=', opts },
     },
