@@ -418,3 +418,11 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 if (which zprof > /dev/null 2>&1) ;then
   zprof
 fi
+
+# pnpm
+export PNPM_HOME="/Users/tsuyoshi.wada/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end

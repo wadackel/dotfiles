@@ -1002,8 +1002,14 @@ lua << EOF
     parser = function(output, bufnr)
       -- Suppress "No ESLint found" error
       local result = eslint_d.parser(output, bufnr)
-      if #result == 1 and string.match(result[1].message, 'No ESLint found') then
-        return {}
+      if #result == 1 then
+        local msg = result[1].message
+        if string.match(msg, 'No ESLint found') then
+          return {}
+        end
+        if string.match(msg, 'Could not find config file') then
+          return {}
+        end
       end
       return result
     end,
@@ -1056,7 +1062,14 @@ lua << EOF
             },
             cwd = eslint_d.cwd,
           }):sync()
-          if result[1] ~= nil and string.match(result[1], 'No ESLint found') then
+          if result[1] ~= nil then
+            local msg = result[1]
+            if string.match(msg, 'No ESLint found') then
+              return false
+            end
+            if string.match(msg, 'Could not find config file') then
+              return false
+            end
             return false
           end
           return true
