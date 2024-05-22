@@ -1070,7 +1070,6 @@ lua << EOF
             if string.match(msg, 'Could not find config file') then
               return false
             end
-            return false
           end
           return true
         end,
