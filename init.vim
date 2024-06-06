@@ -1023,6 +1023,7 @@ lua << EOF
     typescriptreact = { 'eslint_d' },
     css = { 'stylelint' },
     yaml = { 'actionlint' },
+    terraform = { 'tflint' },
   }
 
   vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufWritePost', 'InsertLeave', 'TextChanged' }, {
@@ -1090,6 +1091,7 @@ lua << EOF
       html = prettier_formatter,
       rust = { 'rustfmt' },
       go = { 'gofumpt', 'goimports' },
+      terraform = { 'terraform_fmt' },
     },
   })
 
