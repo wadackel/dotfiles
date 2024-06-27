@@ -490,7 +490,7 @@ Jetpack 'deton/jasegment.vim'
 Jetpack 'thinca/vim-qfreplace'
 Jetpack 'itchyny/vim-qfedit'
 Jetpack 'skanehira/qfopen.vim'
-Jetpack 'rhysd/clever-f.vim'
+" Jetpack 'rhysd/clever-f.vim'
 Jetpack 'folke/flash.nvim'
 Jetpack 'haya14busa/vim-asterisk'
 Jetpack 'haya14busa/is.vim'
@@ -1264,8 +1264,9 @@ onoremap au :<C-u>lua require"treesitter-unit".select(true)<CR>
 
 
 " clever-f
-let g:clever_f_fix_key_direction = 1
-let g:clever_f_use_migemo = 1
+" let g:clever_f_not_overwrites_standard_mappings = 0
+" let g:clever_f_fix_key_direction = 1
+" let g:clever_f_use_migemo = 1
 
 
 " flash.nvim
@@ -1279,7 +1280,17 @@ Flash.setup({
       highlight = { backdrop = true },
     },
     char = {
-      enabled = false,
+      -- enabled = false,
+      enabled = true,
+      keys = { 'f', 'F', 't', 'T' },
+      highlight = { backdrop = false },
+      char_actions = function(motion)
+        -- clever-f style
+        return {
+          [motion:lower()] = 'next',
+          [motion:upper()] = 'prev',
+        }
+      end,
     },
   },
   prompt = {
