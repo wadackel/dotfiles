@@ -822,6 +822,16 @@ lua << EOF
           return
         end
 
+        if name == 'lua_ls' then
+          opts.settings = {
+            Lua = {
+              diagnostics = {
+                globals = { 'vim' },
+              },
+            },
+          }
+        end
+
         lspconfig[name].setup(opts)
       end,
     },
