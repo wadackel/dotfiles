@@ -444,6 +444,35 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
 -- Plugins
 -- =============================================================
 
+local function lsp_on_attach(client, bufnr)
+  local function set_opt(...)
+    vim.api.nvim_buf_set_option(bufnr, ...)
+  end
+
+  local function set_keymap(...)
+    vim.api.nvim_buf_set_keymap(bufnr, ...)
+  end
+
+  -- Disable LSP Semantic tokens
+  client.server_capabilities.semanticTokensProvider = nil
+
+  -- Enable completion triggered by <C-x><C-o>
+  set_opt("omnifunc", "v:lua.vim.lsp.omnifunc")
+
+  -- Mappings
+  local opts = { noremap = true, silent = true }
+  set_keymap("n", "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>", opts)
+  set_keymap("n", "<C-w><C-]>", "<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>", opts)
+  set_keymap("n", "K", "<cmd>lua vim.lsp.buf.type_definition()<CR>", opts)
+  set_keymap("n", "<Leader>i", "<cmd>lua vim.lsp.buf.hover()<CR>", opts)
+  set_keymap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>", opts)
+  set_keymap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>", opts)
+  set_keymap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>", opts)
+  set_keymap("n", "<space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>", opts)
+  set_keymap("n", "<space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>", opts)
+  set_keymap("n", "<space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>", opts)
+end
+
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -549,7 +578,7 @@ require("lazy").setup({
 
     {
       "neovim/nvim-lspconfig",
-      event = "VeryLazy",
+      -- event = "VeryLazy",
       dependencies = {
         { "williamboman/mason.nvim" },
         { "williamboman/mason-lspconfig.nvim" },
@@ -600,34 +629,6 @@ require("lazy").setup({
         -- Setup servers
         local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
-        local function on_attach(client, bufnr)
-          local function set_opt(...)
-            vim.api.nvim_buf_set_option(bufnr, ...)
-          end
-
-          local function set_keymap(...)
-            vim.api.nvim_buf_set_keymap(bufnr, ...)
-          end
-
-          -- Disable LSP Semantic tokens
-          client.server_capabilities.semanticTokensProvider = nil
-
-          -- Enable completion triggered by <C-x><C-o>
-          set_opt("omnifunc", "v:lua.vim.lsp.omnifunc")
-
-          -- Mappings
-          set_keymap("n", "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>", opts)
-          set_keymap("n", "<C-w><C-]>", "<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>", opts)
-          set_keymap("n", "K", "<cmd>lua vim.lsp.buf.type_definition()<CR>", opts)
-          set_keymap("n", "<Leader>i", "<cmd>lua vim.lsp.buf.hover()<CR>", opts)
-          set_keymap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>", opts)
-          set_keymap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>", opts)
-          set_keymap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>", opts)
-          set_keymap("n", "<space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>", opts)
-          set_keymap("n", "<space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>", opts)
-          set_keymap("n", "<space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>", opts)
-        end
-
         require("mason-lspconfig").setup({
           handlers = {
             function(name)
@@ -636,7 +637,7 @@ require("lazy").setup({
 
               local options = {
                 capabilities = capabilities,
-                on_attach = on_attach,
+                on_attach = lsp_on_attach,
               }
 
               -- Delegate to 'typescript' module
@@ -652,7 +653,7 @@ require("lazy").setup({
                   },
                   server = {
                     on_attach = function(client, bufnr)
-                      on_attach(client, bufnr)
+                      lsp_on_attach(client, bufnr)
                       vim.api.nvim_buf_set_keymap(
                         bufnr,
                         "n",
@@ -732,7 +733,7 @@ require("lazy").setup({
             },
           },
           server = {
-            on_attach = on_attach,
+            on_attach = lsp_on_attach,
             settings = {
               ["rust-analyzer"] = {
                 check = {
@@ -746,18 +747,53 @@ require("lazy").setup({
     },
 
     {
-      "hrsh7th/nvim-cmp",
-      event = "VeryLazy",
+      "akinsho/flutter-tools.nvim",
       dependencies = {
-        { "hrsh7th/cmp-nvim-lsp" },
-        { "hrsh7th/cmp-nvim-lsp-signature-help" },
-        { "hrsh7th/cmp-buffer" },
-        { "hrsh7th/cmp-path" },
-        { "hrsh7th/cmp-cmdline" },
-        { "hrsh7th/cmp-vsnip" },
-        { "hrsh7th/vim-vsnip" },
-        { "onsails/lspkind-nvim" },
+        "nvim-lua/plenary.nvim",
+        "stevearc/dressing.nvim",
+        "hrsh7th/cmp-nvim-lsp",
       },
+      ft = { "dart" },
+      config = function()
+        require("flutter-tools").setup({
+          flutter_path = nil,
+          flutter_lookup_cmd = "asdf where flutter",
+          fvm = false,
+          ui = {
+            border = "rounded",
+          },
+          decorations = {
+            statusline = {
+              app_version = false,
+              device = false,
+              project_config = false,
+            },
+          },
+          lsp = {
+            on_attach = function(client, bufnr)
+              lsp_on_attach(client, bufnr)
+            end,
+            capabilities = function()
+              require("cmp_nvim_lsp").default_capabilities()
+            end,
+          },
+        })
+      end,
+    },
+
+    {
+      "hrsh7th/nvim-cmp",
+      dependencies = {
+        "hrsh7th/cmp-nvim-lsp",
+        "hrsh7th/cmp-nvim-lsp-signature-help",
+        "hrsh7th/cmp-buffer",
+        "hrsh7th/cmp-path",
+        "hrsh7th/cmp-cmdline",
+        "hrsh7th/cmp-vsnip",
+        "hrsh7th/vim-vsnip",
+        "onsails/lspkind-nvim",
+      },
+      event = "VeryLazy",
       config = function()
         local cmp = require("cmp")
 
@@ -776,14 +812,12 @@ require("lazy").setup({
             end,
           },
           mapping = cmp.mapping.preset.insert({
-            ["<C-b>"] = cmp.mapping(cmp.mapping.scroll_docs(-4), { "i", "c" }),
-            ["<C-f>"] = cmp.mapping(cmp.mapping.scroll_docs(4), { "i", "c" }),
-            ["<C-Space>"] = cmp.mapping(cmp.mapping.complete(), { "i", "c" }),
-            ["<C-e>"] = cmp.mapping({
-              i = cmp.mapping.abort(),
-              c = cmp.mapping.close(),
-            }),
+            ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+            ["<C-f>"] = cmp.mapping.scroll_docs(4),
+            ["<C-Space>"] = cmp.mapping.complete(),
+            ["<C-e>"] = cmp.mapping.abort(),
             ["<C-y>"] = cmp.mapping.confirm({ select = true }),
+            ["<C-l>"] = cmp.mapping.confirm({ select = true }),
           }),
           sources = cmp.config.sources({
             { name = "nvim_lsp" },
@@ -2863,7 +2897,7 @@ require("lazy").setup({
       dependencies = {
         "nvim-treesitter/nvim-treesitter",
       },
-      config = function()
+      init = function()
         vim.g.matchup_matchparen_offscreen = {}
       end,
     },
@@ -2874,7 +2908,7 @@ require("lazy").setup({
       keys = {
         { "<C-e>,", "<plug>(emmet-expand-abbr)", mode = "i" },
       },
-      config = function()
+      init = function()
         vim.g.user_emmet_mode = "iv"
         vim.g.user_emmet_leader_key = "<C-e>"
         vim.g.use_emmet_complete_tag = 1
@@ -3083,7 +3117,7 @@ require("lazy").setup({
         { "z#", "<Plug>(asterisk-z#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
         { "gz#", "<Plug>(asterisk-gz#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
       },
-      config = function()
+      init = function()
         vim.g.asterisk_keeppos = 1
       end,
     },
@@ -3098,7 +3132,7 @@ require("lazy").setup({
         { "<Leader>q", ":<C-u>QuickRun<CR>", mode = "n", noremap = true, silent = true },
         { "<Leader>q", ":QuickRun<CR>", mode = "v", noremap = true, silent = true },
       },
-      config = function()
+      init = function()
         vim.g.quickrun_no_default_key_mappings = 1
       end,
     },
@@ -3109,7 +3143,7 @@ require("lazy").setup({
     {
       "rust-lang/rust.vim",
       event = "VeryLazy",
-      config = function()
+      init = function()
         vim.g.rustfmt_autosave = 0
       end,
     },
@@ -3128,7 +3162,7 @@ require("lazy").setup({
     {
       "plasticboy/vim-markdown",
       event = "VeryLazy",
-      config = function()
+      init = function()
         vim.g.vim_markdown_no_default_key_mappings = 1
         vim.g.vim_markdown_folding_disabled = 1
       end,
@@ -3143,7 +3177,7 @@ require("lazy").setup({
       "iamcco/markdown-preview.nvim",
       build = "cd app && yarn install",
       event = "VeryLazy",
-      config = function()
+      init = function()
         vim.g.mkdp_auto_close = 0
         vim.g.mkdp_page_title = "${name}"
         vim.g.mkdp_preview_options = {
