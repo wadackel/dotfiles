@@ -13,7 +13,6 @@ ln -sf ~/dotfiles/gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/gitconfig ~/.gitconfig
 ln -sf ~/dotfiles/gitignore_global ~/.gitignore_global
 ln -sf ~/dotfiles/hyper.js ~/.hyper.js
-# ln -sf ~/dotfiles/init.vim ~/.config/nvim/init.vim
 ln -sf ~/dotfiles/init.lua ~/.config/nvim/init.lua
 ln -sf ~/dotfiles/sheldon.toml ~/.config/sheldon/plugins.toml
 ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
