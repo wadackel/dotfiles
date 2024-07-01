@@ -752,6 +752,7 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
         "hrsh7th/cmp-nvim-lsp",
+        "nvim-telescope/telescope.nvim",
       },
       ft = { "dart" },
       config = function()
@@ -769,8 +770,23 @@ require("lazy").setup({
               project_config = false,
             },
           },
+          closing_tags = {
+            prefix = "∙ ",
+          },
+          dev_log = {
+            enabled = true,
+            notify_errors = false,
+            open_cmd = "tabedit",
+          },
           lsp = {
             on_attach = function(client, bufnr)
+              vim.api.nvim_buf_set_keymap(
+                bufnr,
+                "n",
+                "<Leader>cf",
+                "<cmd>lua require('telescope').extensions.flutter.commands()<CR>",
+                { noremap = true, silent = true }
+              )
               lsp_on_attach(client, bufnr)
             end,
             capabilities = function()
@@ -1050,6 +1066,7 @@ require("lazy").setup({
             rust = { "rustfmt" },
             go = { "gofumpt", "goimports" },
             terraform = { "terraform_fmt" },
+            dart = { "dart_format" },
             lua = { "stylua" },
           },
         })
@@ -1223,10 +1240,12 @@ require("lazy").setup({
             additional_vim_regex_highlighting = false,
           },
           yati = {
-            enable = true,
+            -- enable = true,
+            enable = false,
           },
           indent = {
-            enable = false, -- disable builtin indent module (use yati's indent)
+            -- enable = false, -- disable builtin indent module (use yati's indent)
+            enable = true, -- disable builtin indent module (use yati's indent)
           },
           playground = {
             enable = true,
@@ -1560,6 +1579,7 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
         "nvim-telescope/telescope-github.nvim",
+        "akinsho/flutter-tools.nvim",
       },
       keys = {
         { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
@@ -1723,6 +1743,7 @@ require("lazy").setup({
 
         telescope.load_extension("fzf")
         telescope.load_extension("gh")
+        telescope.load_extension("flutter")
       end,
     },
 
