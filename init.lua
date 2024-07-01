@@ -1304,15 +1304,11 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-tree/nvim-tree.lua",
-      event = "VeryLazy",
       dependencies = {
         "nvim-tree/nvim-web-devicons",
         "antosha417/nvim-lsp-file-operations",
         "akinsho/toggleterm.nvim",
         "kwkarlwang/bufresize.nvim",
-      },
-      keys = {
-        { "<C-j>", "<cmd>NvimTreeToggle<CR>", mode = "n", noremap = true, silent = true },
       },
       opts = {
         sort_by = "case_sensitive",
@@ -1532,7 +1528,7 @@ require("lazy").setup({
       config = function(_, opts)
         require("nvim-tree").setup(opts)
 
-        NvimTreeToggle = function()
+        vim.keymap.set("n", "<C-j>", function()
           local api = require("nvim-tree.api")
           local view = require("nvim-tree.view")
           local bufresize = require("bufresize")
@@ -1546,9 +1542,7 @@ require("lazy").setup({
             api.tree.open({ update_root = true, find_file = true })
             bufresize.resize_open()
           end
-        end
-
-        vim.keymap.set("n", "<C-j>", ":lua NvimTreeToggle()<CR>", { noremap = true, silent = true })
+        end, { noremap = true, silent = true })
       end,
     },
 
@@ -1811,7 +1805,6 @@ require("lazy").setup({
       dependencies = {
         "kwkarlwang/bufresize.nvim",
       },
-      event = "VeryLazy",
       config = function()
         local bufresize = require("bufresize")
 
@@ -2088,7 +2081,6 @@ require("lazy").setup({
     -- =============================================================
     {
       "tpope/vim-fugitive",
-      event = "VeryLazy",
       keys = {
         { "<Leader>gs", "<cmd>Git<CR>", mode = "n", noremap = true, silent = true },
         { "<Leader>gd", "<cmd>Gvdiffsplit<CR>", mode = "n", noremap = true, silent = true },
@@ -3071,21 +3063,13 @@ require("lazy").setup({
             },
             char = {
               enabled = true,
-              keys = { "f", "F", "t", "T" },
               highlight = { backdrop = false },
+              keys = { "f", "F", "t", "T" },
               char_actions = function(motion)
-                -- clever-f style
-                if motion == "f" or motion == "t" then
-                  return {
-                    ["f"] = "next",
-                    ["F"] = "prev",
-                  }
-                else
-                  return {
-                    ["f"] = "prev",
-                    ["F"] = "next",
-                  }
-                end
+                return {
+                  [motion:lower()] = "right",
+                  [motion:upper()] = "left",
+                }
               end,
             },
           },
@@ -3096,25 +3080,25 @@ require("lazy").setup({
           },
         })
 
-        local function set_keymap(modes, lhs, rhs)
+        local function keymap(modes, lhs, rhs)
           for _, mode in pairs(modes) do
             vim.keymap.set(mode, lhs, rhs, { noremap = true, silent = true })
           end
         end
 
-        set_keymap({ "n", "v" }, "<Leader>f", function()
+        keymap({ "n", "v" }, "<Leader>f", function()
           flash.jump({
             search = { multi_window = false },
           })
         end)
 
-        set_keymap({ "n", "v" }, "z/", function()
+        keymap({ "n", "v" }, "z/", function()
           flash.jump({
             search = { mode = "fuzzy", incremental = true },
           })
         end)
 
-        set_keymap({ "n", "v" }, "z?", function()
+        keymap({ "n", "v" }, "z?", function()
           flash.ump({
             search = { mode = "fuzzy", incremental = true, forward = false },
           })
@@ -3206,9 +3190,5 @@ require("lazy").setup({
         }
       end,
     },
-
-    -- =============================================================
-    -- TODO: Dart x Flutter
-    -- =============================================================
   },
 })
