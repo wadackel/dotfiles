@@ -3092,6 +3092,12 @@ require("lazy").setup({
           })
         end)
 
+        keymap({ "o" }, "r", function()
+          flash.remote({
+            search = { multi_window = false },
+          })
+        end)
+
         keymap({ "n", "v" }, "z/", function()
           flash.jump({
             search = { mode = "fuzzy", incremental = true },
@@ -3113,14 +3119,14 @@ require("lazy").setup({
         { "haya14busa/is.vim" },
       },
       keys = {
-        { "*", "<Plug>(asterisk-*)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "#", "<Plug>(asterisk-#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "g*", "<Plug>(asterisk-g*)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "g#", "<Plug>(asterisk-g#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "z*", "<Plug>(asterisk-z*)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "gz*", "<Plug>(asterisk-gz*)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "z#", "<Plug>(asterisk-z#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
-        { "gz#", "<Plug>(asterisk-gz#)<Plug>(is-nohl-1)", mode = "n", noremap = false },
+        { "*", "<Plug>(asterisk-*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "#", "<Plug>(asterisk-#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "g*", "<Plug>(asterisk-g*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "g#", "<Plug>(asterisk-g#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "z*", "<Plug>(asterisk-z*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "gz*", "<Plug>(asterisk-gz*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "z#", "<Plug>(asterisk-z#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "gz#", "<Plug>(asterisk-gz#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
       },
       init = function()
         vim.g.asterisk_keeppos = 1
