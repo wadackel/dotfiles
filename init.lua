@@ -535,11 +535,17 @@ require("lazy").setup({
       dev = true,
       init = function()
         vim.cmd("colorscheme dogrun")
-        vim.cmd("highlight Normal guibg=NONE")
+
+        local function patch_colors()
+          vim.cmd("highlight Normal guibg=NONE")
+        end
+
+        patch_colors()
 
         vim.api.nvim_create_user_command("ReloadDogrun", function()
           vim.cmd.colorscheme("default")
           vim.cmd.colorscheme("dogrun")
+          patch_colors()
         end, {})
       end,
     },
