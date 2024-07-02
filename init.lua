@@ -533,9 +533,14 @@ require("lazy").setup({
           and "~/develop/github.com/wadackel/vim-dogrun"
         or nil,
       dev = true,
-      config = function()
+      init = function()
         vim.cmd("colorscheme dogrun")
         vim.cmd("highlight Normal guibg=NONE")
+
+        vim.api.nvim_create_user_command("ReloadDogrun", function()
+          vim.cmd.colorscheme("default")
+          vim.cmd.colorscheme("dogrun")
+        end, {})
       end,
     },
 
