@@ -995,6 +995,23 @@ require("lazy").setup({
           end,
         }
 
+        local actionlint = lint.linters.actionlint
+        lint.linters.actionlint = {
+          cmd = actionlint.cmd,
+          args = actionlint.args,
+          stdin = actionlint.stdin,
+          ignore_exitcode = actionlint.ignore_exitcode,
+          parser = function(output, bufnr)
+            -- Only GHA files
+            local fpath = vim.api.nvim_buf_get_name(bufnr)
+            if fpath:match("^.*%.github/.+%.y[a]?ml$") == nil then
+              return {}
+            end
+
+            return actionlint.parser(output, bufnr)
+          end,
+        }
+
         lint.linters_by_ft = {
           -- TODO: Support Deno
           javascript = { "eslint_d" },
