@@ -668,7 +668,7 @@ require("lazy").setup({
                       vim.api.nvim_buf_set_keymap(
                         bufnr,
                         "n",
-                        "<space>o",
+                        "<Space>o",
                         ":TypescriptOrganizeImportsFixed<CR>",
                         { noremap = true, silent = true }
                       )
@@ -794,7 +794,7 @@ require("lazy").setup({
               vim.api.nvim_buf_set_keymap(
                 bufnr,
                 "n",
-                "<Leader>cf",
+                "<Space>ff",
                 "<cmd>lua require('telescope').extensions.flutter.commands()<CR>",
                 { noremap = true, silent = true }
               )
