@@ -31,7 +31,7 @@ return {
     selection_bg = "#363e7f",
     ansi = {
       "#111219",
-      "#c2616b",
+      "#e58585",
       "#7cbe8c",
       "#8e8a6f",
       "#4c89ac",
