@@ -1,10 +1,24 @@
 shell = "zsh"
 
+[templates]
+defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer -t 0.0001 source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
+
+[plugins.zsh-defer]
+github = "romkatv/zsh-defer"
+hooks.post = '''
+zsh-defer source $ZSHRC_DIR/lazy.zsh
+zsh-defer -t 0.001 autoload -Uz compinit
+zsh-defer -t 0.001 compinit
+'''
+
 [plugins.zsh_completions]
 github = "zsh-users/zsh-completions"
+apply = ["defer"]
 
 [plugins.zsh_autosuggestions]
 github = "zsh-users/zsh-autosuggestions"
+apply = ["defer"]
 
 [plugins.zsh_fzf_history_search]
 github = "joshskidmore/zsh-fzf-history-search"
+apply = ["defer"]
