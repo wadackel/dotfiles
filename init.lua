@@ -433,32 +433,27 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
 -- =============================================================
 
 local function lsp_on_attach(client, bufnr)
-  local function set_opt(...)
-    vim.api.nvim_buf_set_option(bufnr, ...)
-  end
-
-  local function set_keymap(...)
-    vim.api.nvim_buf_set_keymap(bufnr, ...)
+  local function kmap(mode, lhs, rhs)
+    vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, { noremap = true, silent = true })
   end
 
   -- Disable LSP Semantic tokens
   client.server_capabilities.semanticTokensProvider = nil
 
   -- Enable completion triggered by <C-x><C-o>
-  set_opt("omnifunc", "v:lua.vim.lsp.omnifunc")
+  vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
 
   -- Mappings
-  local opts = { noremap = true, silent = true }
-  set_keymap("n", "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>", opts)
-  set_keymap("n", "<C-w><C-]>", "<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>", opts)
-  set_keymap("n", "K", "<cmd>lua vim.lsp.buf.type_definition()<CR>", opts)
-  set_keymap("n", "<Leader>i", "<cmd>lua vim.lsp.buf.hover()<CR>", opts)
-  set_keymap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>", opts)
-  set_keymap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>", opts)
-  set_keymap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>", opts)
-  set_keymap("n", "<space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>", opts)
-  set_keymap("n", "<space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>", opts)
-  set_keymap("n", "<space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>", opts)
+  kmap("n", "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
+  kmap("n", "<C-w><C-]>", "<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>")
+  kmap("n", "K", "<cmd>lua vim.lsp.buf.type_definition()<CR>")
+  kmap("n", "<Leader>i", "<cmd>lua vim.lsp.buf.hover()<CR>")
+  kmap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
+  kmap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
+  kmap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
+  kmap("n", "<space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
+  kmap("n", "<space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
+  kmap("n", "<space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>")
 end
 
 -- Bootstrap lazy.nvim
@@ -474,12 +469,7 @@ require("lazy").setup({
   install = {
     colorscheme = {
       "habamax",
-      -- "dogrun",
     },
-  },
-
-  checker = {
-    -- enabled = true,
   },
 
   ui = {
@@ -1310,6 +1300,7 @@ require("lazy").setup({
 
     {
       "windwp/nvim-autopairs",
+      event = "VeryLazy",
       opts = {
         map_c_h = true,
         map_c_w = true,
@@ -1321,6 +1312,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-tree/nvim-tree.lua",
+      event = "VeryLazy",
       dependencies = {
         "nvim-tree/nvim-web-devicons",
         "antosha417/nvim-lsp-file-operations",
