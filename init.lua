@@ -444,10 +444,10 @@ local function lsp_on_attach(client, bufnr)
   vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
 
   -- Mappings
-  kmap("n", "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
-  kmap("n", "<C-w><C-]>", "<cmd>split<CR><cmd>lua vim.lsp.buf.definition()<CR>")
-  kmap("n", "K", "<cmd>lua vim.lsp.buf.type_definition()<CR>")
-  kmap("n", "<Leader>i", "<cmd>lua vim.lsp.buf.hover()<CR>")
+  kmap("n", "<C-]>", "<cmd>Lspsaga goto_definition<CR>")
+  kmap("n", "<C-w><C-]>", "<cmd>Lspsaga peek_type_definition<CR>")
+  kmap("n", "K", "<cmd>Lspsaga goto_type_definition<CR>")
+  kmap("n", "<Leader>i", "<cmd>Lspsaga hover_doc<CR>")
   kmap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
   kmap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
@@ -566,11 +566,37 @@ require("lazy").setup({
     },
 
     {
+      "nvimdev/lspsaga.nvim",
+      opts = {
+        ui = {
+          code_action = "",
+        },
+        lightbulb = {
+          enable = false,
+        },
+        symbol_in_winbar = {
+          enable = false,
+        },
+        definition = {
+          width = 0.8,
+          keys = {
+            edit = "<C-o>",
+            vsplit = "<C-v>",
+            split = "<C-s>",
+            tabe = "<C-t>",
+            quit = "q",
+          },
+        },
+      },
+    },
+
+    {
       "neovim/nvim-lspconfig",
       dependencies = {
         { "williamboman/mason.nvim" },
         { "williamboman/mason-lspconfig.nvim" },
         { "hrsh7th/cmp-nvim-lsp" },
+        { "nvimdev/lspsaga.nvim" },
         { "jose-elias-alvarez/typescript.nvim" },
         { "mrcjkb/rustaceanvim" },
       },
@@ -739,6 +765,7 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
         "hrsh7th/cmp-nvim-lsp",
+        "nvimdev/lspsaga.nvim",
         "nvim-telescope/telescope.nvim",
       },
       ft = { "dart" },
@@ -1131,7 +1158,6 @@ require("lazy").setup({
       "nvim-treesitter/nvim-treesitter",
       dependencies = {
         "nvim-treesitter/playground",
-        "yioneko/nvim-yati",
       },
       build = ":TSUpdate",
       config = function()
@@ -1246,13 +1272,8 @@ require("lazy").setup({
             enable = true,
             additional_vim_regex_highlighting = false,
           },
-          yati = {
-            -- enable = true,
-            enable = false,
-          },
           indent = {
-            -- enable = false, -- disable builtin indent module (use yati's indent)
-            enable = true, -- disable builtin indent module (use yati's indent)
+            enable = true,
           },
           playground = {
             enable = true,
@@ -1898,11 +1919,11 @@ require("lazy").setup({
     {
       "nvim-lualine/lualine.nvim",
       event = "VeryLazy",
-      dependencies = {
-        "nvim-tree/nvim-tree.lua",
-        "tpope/vim-fugitive",
-        "akinsho/toggleterm.nvim",
-      },
+      -- dependencies = {
+      --   "nvim-tree/nvim-tree.lua",
+      --   "tpope/vim-fugitive",
+      --   "akinsho/toggleterm.nvim",
+      -- },
       config = function()
         local colors = {
           purple = "#929be5",
@@ -3135,14 +3156,10 @@ require("lazy").setup({
         { "haya14busa/is.vim" },
       },
       keys = {
-        { "*", "<Plug>(asterisk-*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "#", "<Plug>(asterisk-#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "g*", "<Plug>(asterisk-g*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "g#", "<Plug>(asterisk-g#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "z*", "<Plug>(asterisk-z*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "gz*", "<Plug>(asterisk-gz*)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "z#", "<Plug>(asterisk-z#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
-        { "gz#", "<Plug>(asterisk-gz#)<Plug>(is-nohl-1)", mode = { "n", "v" }, noremap = false },
+        { "*", "<Plug>(asterisk-z*)", mode = { "n", "v" }, noremap = false },
+        { "#", "<Plug>(asterisk-z#)", mode = { "n", "v" }, noremap = false },
+        { "g*", "<Plug>(asterisk-gz*)", mode = { "n", "v" }, noremap = false },
+        { "g#", "<Plug>(asterisk-gz#)", mode = { "n", "v" }, noremap = false },
       },
       init = function()
         vim.g.asterisk_keeppos = 1
