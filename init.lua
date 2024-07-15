@@ -3037,12 +3037,20 @@ require("lazy").setup({
     {
       "gbprod/substitute.nvim",
       event = "VeryLazy",
-      config = function()
-        require("substitute").setup({})
-        vim.keymap.set("n", "r", require("substitute").operator, { noremap = true })
-        vim.keymap.set("n", "rp", require("substitute").line, { noremap = true })
-        vim.keymap.set("n", "rr", "r", { noremap = true })
-        vim.keymap.set("x", "r", require("substitute").visual, { noremap = true })
+      opts = {
+        highlight_substituted_text = {
+          enabled = false,
+        },
+      },
+      config = function(_, opts)
+        local substitute = require("substitute")
+
+        substitute.setup(opts)
+
+        keymap({ "n" }, "r", substitute.operator)
+        keymap({ "n" }, "rr", substitute.line)
+        keymap({ "x" }, "r", substitute.visual)
+        keymap({ "n", "x" }, "R", "r")
       end,
     },
 
