@@ -431,7 +431,6 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
 -- =============================================================
 -- Plugins
 -- =============================================================
-
 local function lsp_on_attach(client, bufnr)
   local function kmap(mode, lhs, rhs)
     vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, { noremap = true, silent = true })
@@ -466,6 +465,10 @@ vim.opt.rtp:prepend(lazypath)
 
 -- Setup lazy.nvim
 require("lazy").setup({
+  defaults = {
+    lazy = true,
+  },
+
   install = {
     colorscheme = {
       "habamax",
@@ -567,11 +570,15 @@ require("lazy").setup({
 
     {
       "nvimdev/lspsaga.nvim",
+      event = "VeryLazy",
       opts = {
         ui = {
           code_action = "",
         },
         lightbulb = {
+          enable = false,
+        },
+        beacon = {
           enable = false,
         },
         symbol_in_winbar = {
@@ -592,6 +599,7 @@ require("lazy").setup({
 
     {
       "neovim/nvim-lspconfig",
+      event = "VeryLazy",
       dependencies = {
         { "williamboman/mason.nvim" },
         { "williamboman/mason-lspconfig.nvim" },
@@ -761,6 +769,8 @@ require("lazy").setup({
 
     {
       "akinsho/flutter-tools.nvim",
+      event = "VeryLazy",
+      ft = { "dart" },
       dependencies = {
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
@@ -768,7 +778,6 @@ require("lazy").setup({
         "nvimdev/lspsaga.nvim",
         "nvim-telescope/telescope.nvim",
       },
-      ft = { "dart" },
       config = function()
         require("flutter-tools").setup({
           flutter_path = nil,
@@ -808,6 +817,11 @@ require("lazy").setup({
             end,
             settings = {
               showTodos = false,
+              analysisExcludedFolders = {
+                vim.fn.expand("$HOME/.pub-cache"),
+                vim.fn.expand("$HOME/.asdf/installs/flutter"),
+                vim.fn.expand("$HOME/.asdf/installs/dart"),
+              },
             },
           },
         })
@@ -816,6 +830,7 @@ require("lazy").setup({
 
     {
       "hrsh7th/nvim-cmp",
+      event = "VeryLazy",
       dependencies = {
         "hrsh7th/cmp-nvim-lsp",
         "hrsh7th/cmp-nvim-lsp-signature-help",
@@ -826,7 +841,6 @@ require("lazy").setup({
         "hrsh7th/vim-vsnip",
         "onsails/lspkind-nvim",
       },
-      event = "VeryLazy",
       config = function()
         local cmp = require("cmp")
 
@@ -1156,6 +1170,7 @@ require("lazy").setup({
 
     {
       "nvim-treesitter/nvim-treesitter",
+      event = "VeryLazy",
       dependencies = {
         "nvim-treesitter/playground",
       },
@@ -1778,10 +1793,10 @@ require("lazy").setup({
     -- =============================================================
     {
       "kwkarlwang/bufresize.nvim",
+      event = "VeryLazy",
       dependencies = {
         { "kana/vim-submode" },
       },
-      lazy = true,
       config = function()
         require("bufresize").setup({
           register = {
@@ -1834,6 +1849,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "akinsho/toggleterm.nvim",
+      event = "VeryLazy",
       dependencies = {
         "kwkarlwang/bufresize.nvim",
       },
@@ -1919,11 +1935,6 @@ require("lazy").setup({
     {
       "nvim-lualine/lualine.nvim",
       event = "VeryLazy",
-      -- dependencies = {
-      --   "nvim-tree/nvim-tree.lua",
-      --   "tpope/vim-fugitive",
-      --   "akinsho/toggleterm.nvim",
-      -- },
       config = function()
         local colors = {
           purple = "#929be5",
