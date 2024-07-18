@@ -490,9 +490,12 @@ require("lazy").setup({
       reset = true,
       disabled_plugins = {
         "gzip",
+        "man",
         "matchit",
         "matchparen",
         "netrwPlugin",
+        "shada",
+        "spellfile",
         "tarPlugin",
         "tohtml",
         "tutor",
@@ -510,10 +513,9 @@ require("lazy").setup({
       -- "wadackel/vim-dogrun",
       -- dev = true,
       "wadackel/vim-dogrun",
-      dir = vim.fn.isdirectory(vim.fn.expand("$HOME") .. "/develop/github.com/wadackel/vim-dogrun") == 1
+      dir = vim.fn.isdirectory(vim.fn.expand("$HOME/develop/github.com/wadackel/vim-dogrun")) == 1
           and "~/develop/github.com/wadackel/vim-dogrun"
         or nil,
-      dev = true,
       init = function()
         vim.cmd("colorscheme dogrun")
 
@@ -565,12 +567,15 @@ require("lazy").setup({
           "goimports",
           "stylua",
         },
+        integrations = {
+          ["mason-null-ls"] = false,
+        },
       },
     },
 
     {
       "nvimdev/lspsaga.nvim",
-      event = "VeryLazy",
+      event = "LspAttach",
       opts = {
         ui = {
           code_action = "",
@@ -601,11 +606,13 @@ require("lazy").setup({
       "neovim/nvim-lspconfig",
       event = "VeryLazy",
       dependencies = {
-        { "williamboman/mason.nvim" },
+        -- { "williamboman/mason.nvim" },
         { "williamboman/mason-lspconfig.nvim" },
-        { "hrsh7th/cmp-nvim-lsp" },
-        { "nvimdev/lspsaga.nvim" },
-        { "jose-elias-alvarez/typescript.nvim" },
+        -- { "hrsh7th/cmp-nvim-lsp" },
+        {
+          "jose-elias-alvarez/typescript.nvim",
+          lazy = true,
+        },
         { "mrcjkb/rustaceanvim" },
       },
       config = function()
@@ -648,8 +655,6 @@ require("lazy").setup({
         keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
         -- Setup servers
-        local capabilities = require("cmp_nvim_lsp").default_capabilities()
-
         require("mason-lspconfig").setup({
           handlers = {
             function(name)
@@ -657,7 +662,7 @@ require("lazy").setup({
               local is_node_repo = node_root_dir(vim.fn.getcwd()) ~= nil
 
               local options = {
-                capabilities = capabilities,
+                capabilities = require("cmp_nvim_lsp").default_capabilities(),
                 on_attach = lsp_on_attach,
               }
 
@@ -769,14 +774,11 @@ require("lazy").setup({
 
     {
       "akinsho/flutter-tools.nvim",
-      event = "VeryLazy",
       ft = { "dart" },
       dependencies = {
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
         "hrsh7th/cmp-nvim-lsp",
-        "nvimdev/lspsaga.nvim",
-        "nvim-telescope/telescope.nvim",
       },
       config = function()
         require("flutter-tools").setup({
@@ -813,7 +815,7 @@ require("lazy").setup({
               lsp_on_attach(client, bufnr)
             end,
             capabilities = function()
-              require("cmp_nvim_lsp").default_capabilities()
+              return require("cmp_nvim_lsp").default_capabilities()
             end,
             settings = {
               showTodos = false,
@@ -899,7 +901,7 @@ require("lazy").setup({
 
     {
       "j-hui/fidget.nvim",
-      event = "VeryLazy",
+      event = "LspAttach",
       opts = {
         notification = {
           window = {
@@ -988,7 +990,12 @@ require("lazy").setup({
 
     {
       "mfussenegger/nvim-lint",
-      event = "VeryLazy",
+      event = {
+        "BufReadPost",
+        "BufWritePost",
+        "InsertLeave",
+        "TextChanged",
+      },
       config = function()
         local lint = require("lint")
 
@@ -1043,9 +1050,49 @@ require("lazy").setup({
           terraform = { "tflint" },
         }
 
+        local check_local = {
+          "eslint_d",
+          "stylelint",
+        }
+
+        local function contains(table, elements)
+          for _, value in ipairs(table) do
+            for _, element in ipairs(elements) do
+              if value == element then
+                return true
+              end
+            end
+          end
+          return false
+        end
+
+        local function find_nearest_dir(patterns)
+          local fpath = vim.api.nvim_buf_get_name(0)
+          local dir = vim.fn.fnamemodify(fpath, ":p:h")
+
+          while dir ~= "" do
+            for _, pattern in ipairs(patterns) do
+              local target = dir .. "/" .. pattern
+              if vim.fn.filereadable(target) == 1 then
+                return dir
+              end
+            end
+            dir = vim.fn.fnamemodify(dir, ":h")
+          end
+
+          return nil
+        end
+
         vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "InsertLeave", "TextChanged" }, {
           callback = function()
-            lint.try_lint()
+            local names = lint.linters_by_ft[vim.bo.filetype]
+            if names and contains(names, check_local) then
+              lint.try_lint(nil, {
+                cwd = find_nearest_dir({ "package.json" }),
+              })
+            else
+              lint.try_lint()
+            end
           end,
         })
       end,
@@ -1053,9 +1100,22 @@ require("lazy").setup({
 
     {
       "stevearc/conform.nvim",
-      event = "VeryLazy",
+      event = "BufWritePre",
       dependencies = {
         "nvim-lua/plenary.nvim",
+      },
+      keys = {
+        {
+          "<Leader>p",
+          function()
+            require("conform").format({
+              async = true,
+            })
+          end,
+          mode = "n",
+          noremap = true,
+          silent = true,
+        },
       },
       config = function()
         local prettier_formatter = { "prettierd" }
@@ -1144,11 +1204,11 @@ require("lazy").setup({
           desc = "Re-enable autoformat-on-save",
         })
 
-        vim.keymap.set("n", "<Leader>p", function()
-          conform.format({
-            async = true,
-          })
-        end, { noremap = true, silent = true })
+        -- vim.keymap.set("n", "<Leader>p", function()
+        --   conform.format({
+        --     async = true,
+        --   })
+        -- end, { noremap = true, silent = true })
       end,
     },
 
@@ -1161,19 +1221,8 @@ require("lazy").setup({
     -- Syntax Extention
     -- =============================================================
     {
-      "nvim-treesitter/playground",
-      event = "VeryLazy",
-      keys = {
-        { "<Space>si", "<cmd>TSHighlightCapturesUnderCursor<CR>", mode = "n", noremap = true, silent = true },
-      },
-    },
-
-    {
       "nvim-treesitter/nvim-treesitter",
       event = "VeryLazy",
-      dependencies = {
-        "nvim-treesitter/playground",
-      },
       build = ":TSUpdate",
       config = function()
         local configs = require("nvim-treesitter.configs")
@@ -1290,31 +1339,12 @@ require("lazy").setup({
           indent = {
             enable = true,
           },
-          playground = {
-            enable = true,
-            disable = {},
-            updatetime = 25, -- Debounced time for highlighting nodes in the playground from source code
-            persist_queries = false, -- Whether the query persists across vim sessions
-            keybindings = {
-              toggle_query_editor = "o",
-              toggle_hl_groups = "i",
-              toggle_injected_languages = "t",
-              toggle_anonymous_nodes = "a",
-              toggle_language_display = "I",
-              focus_language = "f",
-              unfocus_language = "F",
-              update = "R",
-              goto_node = "<cr>",
-              show_help = "?",
-            },
-          },
         })
       end,
     },
 
     {
       "Wansmer/treesj",
-      event = "VeryLazy",
       keys = {
         {
           "<Leader>m",
@@ -1336,7 +1366,7 @@ require("lazy").setup({
 
     {
       "windwp/nvim-autopairs",
-      event = "VeryLazy",
+      event = "InsertEnter",
       opts = {
         map_c_h = true,
         map_c_w = true,
@@ -1348,12 +1378,32 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-tree/nvim-tree.lua",
-      event = "VeryLazy",
       dependencies = {
         "nvim-tree/nvim-web-devicons",
         "antosha417/nvim-lsp-file-operations",
         "akinsho/toggleterm.nvim",
         "kwkarlwang/bufresize.nvim",
+      },
+      keys = {
+        {
+          "<C-j>",
+          function()
+            local api = require("nvim-tree.api")
+            local view = require("nvim-tree.view")
+            local bufresize = require("bufresize")
+
+            bufresize.block_register()
+
+            if view.is_visible() then
+              api.tree.close()
+              bufresize.resize_close()
+            else
+              api.tree.open({ update_root = true, find_file = true })
+              bufresize.resize_open()
+            end
+          end,
+          mode = "n",
+        },
       },
       opts = {
         sort_by = "case_sensitive",
@@ -1570,33 +1620,34 @@ require("lazy").setup({
           keymap({ "n" }, "?", api.tree.toggle_help, opts("Help"))
         end,
       },
-      config = function(_, opts)
-        require("nvim-tree").setup(opts)
-
-        keymap({ "n" }, "<C-j>", function()
-          local api = require("nvim-tree.api")
-          local view = require("nvim-tree.view")
-          local bufresize = require("bufresize")
-
-          bufresize.block_register()
-
-          if view.is_visible() then
-            api.tree.close()
-            bufresize.resize_close()
-          else
-            api.tree.open({ update_root = true, find_file = true })
-            bufresize.resize_open()
-          end
-        end)
-      end,
+      -- config = function(_, opts)
+      --   require("nvim-tree").setup(opts)
+      --
+      --   keymap({ "n" }, "<C-j>", function()
+      --     local api = require("nvim-tree.api")
+      --     local view = require("nvim-tree.view")
+      --     local bufresize = require("bufresize")
+      --
+      --     bufresize.block_register()
+      --
+      --     if view.is_visible() then
+      --       api.tree.close()
+      --       bufresize.resize_close()
+      --     else
+      --       api.tree.open({ update_root = true, find_file = true })
+      --       bufresize.resize_open()
+      --     end
+      --   end)
+      -- end,
     },
 
     {
       "antosha417/nvim-lsp-file-operations",
-      event = "VeryLazy",
+      -- event = "VeryLazy",
+      event = "LspAttach",
       dependencies = {
         "nvim-lua/plenary.nvim",
-        "nvim-tree/nvim-tree.lua",
+        -- "nvim-tree/nvim-tree.lua",
       },
       opts = {
         debug = false,
@@ -1619,7 +1670,6 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
         "nvim-telescope/telescope-github.nvim",
-        "akinsho/flutter-tools.nvim",
       },
       keys = {
         { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
@@ -1934,7 +1984,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-lualine/lualine.nvim",
-      event = "VeryLazy",
+      lazy = false,
       config = function()
         local colors = {
           purple = "#929be5",
@@ -2130,7 +2180,6 @@ require("lazy").setup({
     -- =============================================================
     {
       "tpope/vim-fugitive",
-      event = "VeryLazy",
       keys = {
         { "<Leader>gs", "<cmd>Git<CR>", mode = "n", noremap = true, silent = true },
         { "<Leader>gd", "<cmd>Gvdiffsplit<CR>", mode = "n", noremap = true, silent = true },
@@ -2257,7 +2306,6 @@ require("lazy").setup({
 
     {
       "sindrets/diffview.nvim",
-      event = "VeryLazy",
       keys = {
         { "<Leader>gD", "<cmd>DiffviewOpen<CR>", mode = "n", noremap = true },
         { "<Leader>gh", "<cmdfDiffviewFileHistory<CR>", mode = "n", noremap = true },
@@ -2947,7 +2995,6 @@ require("lazy").setup({
 
     {
       "junegunn/vim-easy-align",
-      event = "VeryLazy",
       keys = {
         { "ga", "<Plug>(EasyAlign)", mode = "n" },
         { "ga", "<Plug>(EasyAlign)", mode = "x" },
@@ -2956,7 +3003,6 @@ require("lazy").setup({
 
     {
       "andymass/vim-matchup",
-      lazy = true,
       dependencies = {
         "nvim-treesitter/nvim-treesitter",
       },
@@ -2967,7 +3013,6 @@ require("lazy").setup({
 
     {
       "mattn/emmet-vim",
-      event = "VeryLazy",
       keys = {
         { "<C-e>,", "<plug>(emmet-expand-abbr)", mode = "i" },
       },
@@ -3054,10 +3099,6 @@ require("lazy").setup({
 
     {
       "David-Kunz/treesitter-unit",
-      event = "VeryLazy",
-      dependencies = {
-        "nvim-treesitter/nvim-treesitter",
-      },
       keys = {
         { "iu", ':lua require"treesitter-unit".select()<CR>', mode = "x", noremap = true },
         { "au", ':lua require"treesitter-unit".select(true)<CR>', mode = "x", noremap = true },
@@ -3088,7 +3129,6 @@ require("lazy").setup({
 
     {
       "numToStr/Comment.nvim",
-      event = "VeryLazy",
       dependencies = {
         "JoosepAlviste/nvim-ts-context-commentstring",
       },
@@ -3162,7 +3202,6 @@ require("lazy").setup({
 
     {
       "haya14busa/vim-asterisk",
-      event = "VeryLazy",
       dependencies = {
         { "haya14busa/is.vim" },
       },
@@ -3197,7 +3236,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "rust-lang/rust.vim",
-      event = "VeryLazy",
+      ft = "rust",
       init = function()
         vim.g.rustfmt_autosave = 0
       end,
@@ -3225,7 +3264,7 @@ require("lazy").setup({
 
     {
       "rhysd/vim-gfm-syntax",
-      event = "VeryLazy",
+      ft = { "markdown" },
     },
 
     {
