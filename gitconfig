@@ -99,3 +99,6 @@
 
 [github]
   user = wadackel
+
+[includeIf "gitdir:~/develop/github.com/"]
+  path = ~/develop/github.com/.gitconfig

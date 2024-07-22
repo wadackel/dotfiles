@@ -40,6 +40,7 @@ if [ -d "/opt/homebrew" ]; then
     # asdf
     if [[ -d "/opt/homebrew/opt/asdf" ]]; then
       . /opt/homebrew/opt/asdf/libexec/asdf.sh
+      export ASDF_GOLANG_MOD_VERSION_ENABLED=true
     fi
   fi
 fi
