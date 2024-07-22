@@ -52,7 +52,7 @@ local function find_nearest_dir(patterns)
   local fpath = vim.api.nvim_buf_get_name(0)
   local dir = vim.fn.fnamemodify(fpath, ":p:h")
 
-  while dir ~= "" do
+  while dir ~= "/" do
     for _, pattern in ipairs(patterns) do
       local target = dir .. "/" .. pattern
       if vim.fn.filereadable(target) == 1 then
@@ -1174,10 +1174,9 @@ require("lazy").setup({
         },
       },
       config = function()
-        local prettier_formatter = { "prettierd" }
         local js_formatter = {
-          { "eslint_d" },
-          prettier_formatter,
+          "eslint_d",
+          "prettierd",
         }
 
         local conform = require("conform")
@@ -1221,12 +1220,12 @@ require("lazy").setup({
             typescript = js_formatter,
             typescriptreact = js_formatter,
             css = {
-              { "stylelint" },
-              prettier_formatter,
+              "stylelint",
+              "prettierd",
             },
-            json = prettier_formatter,
-            markdown = prettier_formatter,
-            html = prettier_formatter,
+            json = "prettierd",
+            markdown = "prettierd",
+            html = "prettierd",
             rust = { "rustfmt" },
             go = { "gofumpt", "goimports" },
             terraform = { "terraform_fmt" },
