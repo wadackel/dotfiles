@@ -488,6 +488,11 @@ local function lsp_on_attach(client, bufnr)
   vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
 
   -- Mappings
+  keymap({ "n" }, "<Leader>ee", "<cmd>lua vim.diagnostic.open_float()<CR>")
+  keymap({ "n" }, "[g", "<cmd>lua vim.diagnostic.goto_prev()<CR>")
+  keymap({ "n" }, "]g", "<cmd>lua vim.diagnostic.goto_next()<CR>")
+  keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
+
   kmap("n", "<C-]>", "<cmd>Lspsaga goto_definition<CR>")
   kmap("n", "<C-w><C-]>", "<cmd>Lspsaga peek_definition<CR>")
   kmap("n", "K", "<cmd>Lspsaga goto_type_definition<CR>")
@@ -495,9 +500,9 @@ local function lsp_on_attach(client, bufnr)
   kmap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
   kmap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
-  kmap("n", "<space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
-  kmap("n", "<space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
-  kmap("n", "<space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>")
+  kmap("n", "<Space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
+  kmap("n", "<Space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
+  kmap("n", "<Space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>")
 end
 
 -- Bootstrap lazy.nvim
@@ -596,7 +601,13 @@ require("lazy").setup({
 
     {
       "WhoIsSethDaniel/mason-tool-installer.nvim",
-      event = "VeryLazy",
+      cmd = {
+        "MasonToolsInstall",
+        "MasonToolsInstallSync",
+        "MasonToolsUpdate",
+        "MasonToolsUpdateSync",
+        "MasonToolsClean",
+      },
       dependencies = {
         { "williamboman/mason.nvim" },
       },
@@ -625,6 +636,7 @@ require("lazy").setup({
           "goimports",
           "stylua",
         },
+        run_on_start = false,
         integrations = {
           ["mason-null-ls"] = false,
         },
@@ -671,8 +683,6 @@ require("lazy").setup({
         { "mrcjkb/rustaceanvim" },
       },
       config = function()
-        require("mason").setup()
-
         local lspconfig = require("lspconfig")
 
         require("lspconfig.ui.windows").default_options.border = "rounded"
@@ -704,12 +714,6 @@ require("lazy").setup({
             active = signs,
           },
         })
-
-        -- Mappings
-        keymap({ "n" }, "<Leader>ee", "<cmd>lua vim.diagnostic.open_float()<CR>")
-        keymap({ "n" }, "[g", "<cmd>lua vim.diagnostic.goto_prev()<CR>")
-        keymap({ "n" }, "]g", "<cmd>lua vim.diagnostic.goto_next()<CR>")
-        keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
         -- Setup servers
         require("mason-lspconfig").setup({
@@ -902,7 +906,7 @@ require("lazy").setup({
 
     {
       "hrsh7th/nvim-cmp",
-      event = "VeryLazy",
+      event = "InsertEnter",
       dependencies = {
         "hrsh7th/cmp-nvim-lsp",
         "hrsh7th/cmp-nvim-lsp-signature-help",
@@ -1283,9 +1287,6 @@ require("lazy").setup({
           },
         },
       },
-      -- config = function()
-      --   require("dap").setup({})
-      -- end,
     },
 
     {
@@ -1306,7 +1307,6 @@ require("lazy").setup({
         configs.setup({
           ensure_installed = {
             "astro",
-            "awk",
             "bash",
             "c",
             "c_sharp",
@@ -1316,9 +1316,7 @@ require("lazy").setup({
             "commonlisp",
             "cpp",
             "css",
-            "cue",
             "dart",
-            "devicetree",
             "diff",
             "dockerfile",
             "dot",
@@ -1332,7 +1330,6 @@ require("lazy").setup({
             "gitattributes",
             "gitcommit",
             "gitignore",
-            "glsl",
             "go",
             "godot_resource",
             "gomod",
@@ -1344,7 +1341,6 @@ require("lazy").setup({
             "hjson",
             "hlsl",
             "html",
-            "htmldjango",
             "http",
             "ini",
             "java",
@@ -1354,7 +1350,6 @@ require("lazy").setup({
             "json",
             "json5",
             "jsonc",
-            "jsonnet",
             "kotlin",
             "latex",
             "llvm",
@@ -1365,25 +1360,18 @@ require("lazy").setup({
             "make",
             "markdown",
             "markdown_inline",
-            "matlab",
             "mermaid",
-            "ninja",
             "nix",
             "ocaml",
             "ocaml_interface",
             "ocamllex",
-            "org",
-            "pascal",
-            "passwd",
             "perl",
             "php",
             "phpdoc",
             "prisma",
             "proto",
-            "prql",
             "pug",
             "python",
-            "ql",
             "query",
             "regex",
             "rust",
@@ -1401,16 +1389,24 @@ require("lazy").setup({
             "typescript",
             "ungrammar",
             "verilog",
-            "vhs",
             "vim",
             "vimdoc",
             "vue",
             "yaml",
             "zig",
           },
+          sync_install = false,
+          auto_install = false,
           highlight = {
             enable = true,
             additional_vim_regex_highlighting = false,
+            disable = function(_, buf)
+              local max_filesize = 100 * 1024 -- 100 KB
+              local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
+              if ok and stats and stats.size > max_filesize then
+                return true
+              end
+            end,
           },
           indent = {
             enable = true,
@@ -1456,7 +1452,6 @@ require("lazy").setup({
       "nvim-tree/nvim-tree.lua",
       dependencies = {
         "nvim-tree/nvim-web-devicons",
-        "antosha417/nvim-lsp-file-operations",
         "kwkarlwang/bufresize.nvim",
       },
       keys = {
@@ -2247,7 +2242,7 @@ require("lazy").setup({
         { "<Leader>gs", "<cmd>Git<CR>", mode = "n", noremap = true, silent = true },
         { "<Leader>gd", "<cmd>Gvdiffsplit<CR>", mode = "n", noremap = true, silent = true },
       },
-      config = function()
+      init = function()
         local function OpenFugitiveOpenPullRequest()
           local line = vim.fn.getline(".")
           local pos = string.find(line, " ")

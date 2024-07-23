@@ -17,6 +17,8 @@
   excludesfile = ~/.gitignore_global
   precomposeUnicode = true
   ignorecase = false
+  untrackedcache = true
+  fsmonitor = true
 
 [merge]
   tool = nvimdiff
