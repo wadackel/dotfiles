@@ -530,10 +530,10 @@ require("lazy").setup({
     backdrop = 100,
   },
 
-  dev = {
-    path = "~/develop/github.com",
-    -- fallback = true,
-  },
+  -- dev = {
+  --   path = "~/develop/github.com",
+  --   -- fallback = true,
+  -- },
 
   change_detection = {
     enabled = false,
@@ -675,16 +675,7 @@ require("lazy").setup({
 
     {
       "neovim/nvim-lspconfig",
-      event = "VeryLazy",
-      dependencies = {
-        { "williamboman/mason-lspconfig.nvim" },
-        { "hrsh7th/cmp-nvim-lsp" },
-        { "jose-elias-alvarez/typescript.nvim" },
-        { "mrcjkb/rustaceanvim" },
-      },
-      config = function()
-        local lspconfig = require("lspconfig")
-
+      init = function()
         require("lspconfig.ui.windows").default_options.border = "rounded"
 
         -- Base
@@ -714,105 +705,119 @@ require("lazy").setup({
             active = signs,
           },
         })
+      end,
+    },
 
-        -- Setup servers
-        require("mason-lspconfig").setup({
-          handlers = {
-            function(name)
-              local node_root_dir = lspconfig.util.root_pattern("package.json")
-              local is_node_repo = node_root_dir(vim.fn.getcwd()) ~= nil
+    {
+      "williamboman/mason-lspconfig.nvim",
+      event = "VeryLazy",
+      dependencies = {
+        { "hrsh7th/cmp-nvim-lsp" },
+        { "jose-elias-alvarez/typescript.nvim" },
+      },
+      opts = {
+        handlers = {
+          function(name)
+            local lspconfig = require("lspconfig")
 
-              local options = {
-                capabilities = require("cmp_nvim_lsp").default_capabilities(),
-                on_attach = lsp_on_attach,
+            local node_root_dir = lspconfig.util.root_pattern("package.json")
+            local is_node_repo = node_root_dir(vim.fn.getcwd()) ~= nil
+
+            local options = {
+              capabilities = require("cmp_nvim_lsp").default_capabilities(),
+              on_attach = lsp_on_attach,
+            }
+
+            -- Delegate to 'typescript' module
+            if name == "tsserver" then
+              if not is_node_repo then
+                return
+              end
+              require("typescript").setup({
+                debug = false,
+                disable_commands = false,
+                go_to_source_definition = {
+                  fallback = true,
+                },
+                server = {
+                  on_attach = function(client, bufnr)
+                    lsp_on_attach(client, bufnr)
+                    vim.api.nvim_buf_set_keymap(
+                      bufnr,
+                      "n",
+                      "<Space>o",
+                      ":TypescriptOrganizeImportsFixed<CR>",
+                      { noremap = true, silent = true }
+                    )
+                  end,
+                  root_dir = node_root_dir,
+                  init_options = {
+                    maxTsServerMemory = 8192,
+                  },
+                  -- https://github.com/jose-elias-alvarez/typescript.nvim/issues/24#issuecomment-1428801350
+                  commands = {
+                    TypescriptOrganizeImportsFixed = {
+                      function()
+                        local params = {
+                          command = "_typescript.organizeImports",
+                          arguments = { vim.api.nvim_buf_get_name(0) },
+                          title = "",
+                        }
+                        vim.lsp.buf.execute_command(params)
+                      end,
+                      description = "Organize Imports",
+                    },
+                  },
+                },
+              })
+              return
+            end
+
+            if name == "denols" then
+              if is_node_repo then
+                return
+              end
+              options.root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc", "import_map.json")
+              options.init_options = {
+                lint = true,
+                unstable = true,
+                suggest = {
+                  imports = {
+                    hosts = {
+                      ["https://deno.land"] = true,
+                      ["https://cdn.nest.land"] = true,
+                      ["https://crux.land"] = true,
+                    },
+                  },
+                },
               }
+            end
 
-              -- Delegate to 'typescript' module
-              if name == "tsserver" then
-                if not is_node_repo then
-                  return
-                end
-                require("typescript").setup({
-                  debug = false,
-                  disable_commands = false,
-                  go_to_source_definition = {
-                    fallback = true,
+            if name == "rust_analyzer" then
+              -- Use rustaceanvim
+              return
+            end
+
+            if name == "lua_ls" then
+              options.settings = {
+                Lua = {
+                  diagnostics = {
+                    globals = { "vim" },
                   },
-                  server = {
-                    on_attach = function(client, bufnr)
-                      lsp_on_attach(client, bufnr)
-                      vim.api.nvim_buf_set_keymap(
-                        bufnr,
-                        "n",
-                        "<Space>o",
-                        ":TypescriptOrganizeImportsFixed<CR>",
-                        { noremap = true, silent = true }
-                      )
-                    end,
-                    root_dir = node_root_dir,
-                    init_options = {
-                      maxTsServerMemory = 8192,
-                    },
-                    -- https://github.com/jose-elias-alvarez/typescript.nvim/issues/24#issuecomment-1428801350
-                    commands = {
-                      TypescriptOrganizeImportsFixed = {
-                        function()
-                          local params = {
-                            command = "_typescript.organizeImports",
-                            arguments = { vim.api.nvim_buf_get_name(0) },
-                            title = "",
-                          }
-                          vim.lsp.buf.execute_command(params)
-                        end,
-                        description = "Organize Imports",
-                      },
-                    },
-                  },
-                })
-                return
-              end
+                },
+              }
+            end
 
-              if name == "denols" then
-                if is_node_repo then
-                  return
-                end
-                options.root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc", "import_map.json")
-                options.init_options = {
-                  lint = true,
-                  unstable = true,
-                  suggest = {
-                    imports = {
-                      hosts = {
-                        ["https://deno.land"] = true,
-                        ["https://cdn.nest.land"] = true,
-                        ["https://crux.land"] = true,
-                      },
-                    },
-                  },
-                }
-              end
+            lspconfig[name].setup(options)
+          end,
+        },
+      },
+    },
 
-              if name == "rust_analyzer" then
-                -- Use rustaceanvim
-                return
-              end
-
-              if name == "lua_ls" then
-                options.settings = {
-                  Lua = {
-                    diagnostics = {
-                      globals = { "vim" },
-                    },
-                  },
-                }
-              end
-
-              lspconfig[name].setup(options)
-            end,
-          },
-        })
-
-        -- rustaceanvim
+    {
+      "mrcjkb/rustaceanvim",
+      ft = "rust",
+      init = function()
         vim.g.rustaceanvim = {
           tools = {
             float_win_config = {
@@ -872,7 +877,7 @@ require("lazy").setup({
                 vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, { noremap = true, silent = true })
               end
 
-              kmap("n", "<Leader>ff", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+              kmap("n", "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
             end,
             settings = {
               showTodos = false,
@@ -912,7 +917,6 @@ require("lazy").setup({
         "hrsh7th/cmp-nvim-lsp-signature-help",
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
-        "hrsh7th/cmp-cmdline",
         "hrsh7th/cmp-vsnip",
         "hrsh7th/vim-vsnip",
         "onsails/lspkind-nvim",
@@ -977,9 +981,23 @@ require("lazy").setup({
     },
 
     {
+      "ray-x/lsp_signature.nvim",
+      event = "VeryLazy",
+      opts = {
+        hint_enable = false,
+      },
+    },
+
+    {
       "j-hui/fidget.nvim",
       event = "LspAttach",
       opts = {
+        progress = {
+          display = {
+            render_limit = 5,
+            done_ttl = 2,
+          },
+        },
         notification = {
           window = {
             winblend = 0,
@@ -995,7 +1013,7 @@ require("lazy").setup({
 
     {
       "stevearc/dressing.nvim",
-      event = "VeryLazy",
+      event = "LspAttach",
       opts = {
         input = {
           enabled = true,
@@ -1178,18 +1196,17 @@ require("lazy").setup({
         },
       },
       config = function()
+        local Job = require("plenary.job")
+        local conform = require("conform")
+
         local js_formatter = {
           "eslint_d",
           "prettierd",
         }
 
-        local conform = require("conform")
-        local Job = require("plenary.job")
-
         local eslint_d = conform.get_formatter_info("eslint_d")
 
         conform.setup({
-          -- notify_on_error = false,
           formatters = {
             eslint_d = {
               condition = function()
@@ -1291,7 +1308,7 @@ require("lazy").setup({
 
     {
       "github/copilot.vim",
-      event = "VeryLazy",
+      lazy = false,
     },
 
     -- =============================================================
@@ -2279,12 +2296,12 @@ require("lazy").setup({
 
     {
       "rhysd/conflict-marker.vim",
-      event = "VeryLazy",
+      event = "BufReadPost",
     },
 
     {
       "lewis6991/gitsigns.nvim",
-      event = "VeryLazy",
+      event = "BufReadPost",
       opts = {
         signs = {
           add = { text = "│" },
@@ -3070,7 +3087,7 @@ require("lazy").setup({
     {
       "mattn/emmet-vim",
       keys = {
-        { "<C-e>,", "<plug>(emmet-expand-abbr)", mode = "i" },
+        { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
       },
       init = function()
         vim.g.user_emmet_mode = "iv"
@@ -3156,25 +3173,24 @@ require("lazy").setup({
     {
       "David-Kunz/treesitter-unit",
       keys = {
-        { "iu", ':lua require"treesitter-unit".select()<CR>', mode = "x", noremap = true },
-        { "au", ':lua require"treesitter-unit".select(true)<CR>', mode = "x", noremap = true },
-        { "iu", ':<C-u>lua require"treesitter-unit".select()<CR>', mode = "o", noremap = true },
-        { "au", ':<C-u>lua require"treesitter-unit".select(true)<CR>', mode = "o", noremap = true },
+        { "iu", '<cmd>lua require"treesitter-unit".select()<CR>', mode = "x", noremap = true },
+        { "au", '<cmd>lua require"treesitter-unit".select(true)<CR>', mode = "x", noremap = true },
+        { "iu", '<cmd><C-u>lua require"treesitter-unit".select()<CR>', mode = "o", noremap = true },
+        { "au", '<cmd><C-u>lua require"treesitter-unit".select(true)<CR>', mode = "o", noremap = true },
       },
     },
 
     {
       "gbprod/substitute.nvim",
       event = "VeryLazy",
-      opts = {
-        highlight_substituted_text = {
-          enabled = false,
-        },
-      },
-      config = function(_, opts)
+      config = function()
         local substitute = require("substitute")
 
-        substitute.setup(opts)
+        substitute.setup({
+          highlight_substituted_text = {
+            enabled = false,
+          },
+        })
 
         keymap({ "n" }, "r", substitute.operator)
         keymap({ "n" }, "rr", substitute.line)
@@ -3217,43 +3233,12 @@ require("lazy").setup({
     },
 
     {
-      "folke/flash.nvim",
-      event = "VeryLazy",
-      config = function()
-        local flash = require("flash")
-
-        flash.setup({
-          modes = {
-            search = {
-              enabled = false,
-              highlight = { backdrop = true },
-            },
-            char = {
-              enabled = false,
-            },
-          },
-          label = {
-            reuse = "all",
-          },
-          prompt = {
-            prefix = {
-              { " ", "FlashPromptIcon" },
-            },
-          },
-        })
-
-        keymap({ "n", "v" }, "<Leader>f", function()
-          flash.jump({
-            search = { multi_window = false },
-          })
-        end)
-
-        keymap({ "o" }, "r", function()
-          flash.remote({
-            search = { multi_window = false },
-          })
-        end)
-      end,
+      "smoka7/hop.nvim",
+      keys = {
+        { "<Leader>f", "<cmd>HopChar1<CR>", mode = { "n", "v" }, noremap = true, silent = true },
+        { "<Leader>l", "<cmd>HopLine<CR>", mode = { "n", "v" }, noremap = true, silent = true },
+      },
+      config = true,
     },
 
     {
