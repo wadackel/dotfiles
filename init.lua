@@ -1,3 +1,5 @@
+vim.loader.enable()
+
 -- =============================================================
 -- Basic
 -- =============================================================
@@ -637,9 +639,6 @@ require("lazy").setup({
           "stylua",
         },
         run_on_start = false,
-        integrations = {
-          ["mason-null-ls"] = false,
-        },
       },
     },
 
@@ -1731,6 +1730,7 @@ require("lazy").setup({
 
     {
       "nvim-telescope/telescope.nvim",
+      event = "VeryLazy",
       dependencies = {
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
@@ -2124,7 +2124,7 @@ require("lazy").setup({
         require("lualine").setup({
           options = {
             theme = bubbles_theme,
-            component_separators = " ",
+            component_separators = "",
             section_separators = { left = "", right = "" },
             globalstatus = true,
             always_divide_middle = false,
@@ -2139,31 +2139,17 @@ require("lazy").setup({
             lualine_b = {
               {
                 "branch",
-                padding = { left = 2 },
-              },
-              {
-                "filetype",
-                icon_only = true,
                 padding = {
-                  left = 1,
+                  left = 2,
                   right = 0,
-                },
-                colored = false,
-              },
-              {
-                "filename",
-                padding = 0,
-                path = 1,
-                show_modified_status = true,
-                symbols = {
-                  modified = "∙",
-                  readonly = "",
-                  unnamed = "[No Name]",
-                  newfile = "∙",
                 },
               },
               {
                 "diagnostics",
+                padding = {
+                  right = 0,
+                  left = 2,
+                },
                 sources = {
                   "nvim_diagnostic",
                 },
@@ -2184,10 +2170,13 @@ require("lazy").setup({
             lualine_y = {
               {
                 "filetype",
-                padding = 0,
+                padding = { right = 2 },
                 colored = false,
               },
-              "encoding",
+              {
+                "encoding",
+                padding = { right = 2 },
+              },
               {
                 "fileformat",
                 padding = { right = 2 },

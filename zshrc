@@ -402,6 +402,8 @@ eval "$(starship init zsh)"
 
 # tools settings
 export ESLINT_D_LOCAL_ESLINT_ONLY=1
+export ESLINT_USE_FLAT_CONFIG=true
+
 export PRETTIERD_LOCAL_PRETTIER_ONLY=1
 
 
