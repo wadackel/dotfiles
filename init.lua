@@ -1,5 +1,3 @@
-vim.loader.enable()
-
 -- =============================================================
 -- Basic
 -- =============================================================
@@ -543,7 +541,6 @@ require("lazy").setup({
 
   performance = {
     rtp = {
-      reset = true,
       disabled_plugins = {
         "gzip",
         "man",
@@ -559,6 +556,11 @@ require("lazy").setup({
       },
     },
   },
+
+  -- profiling = {
+  --   loader = true,
+  --   require = true,
+  -- },
 
   spec = {
     -- =============================================================
@@ -843,7 +845,6 @@ require("lazy").setup({
       dependencies = {
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
-        "hrsh7th/cmp-nvim-lsp",
       },
       config = function()
         require("flutter-tools").setup({
@@ -910,14 +911,13 @@ require("lazy").setup({
 
     {
       "hrsh7th/nvim-cmp",
-      event = "InsertEnter",
+      event = { "InsertEnter", "CmdlineEnter" },
       dependencies = {
         "hrsh7th/cmp-nvim-lsp",
         "hrsh7th/cmp-nvim-lsp-signature-help",
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
-        "hrsh7th/cmp-vsnip",
-        "hrsh7th/vim-vsnip",
+        "hrsh7th/cmp-cmdline",
         "onsails/lspkind-nvim",
       },
       config = function()
@@ -935,11 +935,6 @@ require("lazy").setup({
           performance = {
             max_view_entries = 30,
           },
-          snippet = {
-            expand = function(args)
-              vim.fn["vsnip#anonymous"](args.body)
-            end,
-          },
           mapping = cmp.mapping.preset.insert({
             ["<C-b>"] = cmp.mapping.scroll_docs(-4),
             ["<C-f>"] = cmp.mapping.scroll_docs(4),
@@ -952,12 +947,27 @@ require("lazy").setup({
             { name = "nvim_lsp" },
             { name = "nvim_lsp_signature_help" },
             { name = "path" },
-            { name = "vsnip" },
             { name = "buffer" },
           }),
         })
 
-        -- Set configuration for specific filetype.
+        cmp.setup.cmdline({ "/", "?" }, {
+          mapping = cmp.mapping.preset.cmdline(),
+          sources = {
+            { name = "buffer" },
+          },
+        })
+
+        cmp.setup.cmdline(":", {
+          mapping = cmp.mapping.preset.cmdline(),
+          sources = cmp.config.sources({
+            { name = "path" },
+          }, {
+            { name = "cmdline" },
+          }),
+          matching = { disallow_symbol_nonprefix_matching = false },
+        })
+
         cmp.setup.filetype("gitcommit", {
           sources = cmp.config.sources({
             { name = "cmp_git" },
@@ -984,6 +994,7 @@ require("lazy").setup({
       event = "VeryLazy",
       opts = {
         hint_enable = false,
+        timer_interval = 60,
       },
     },
 
@@ -1734,7 +1745,6 @@ require("lazy").setup({
       dependencies = {
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
-        "nvim-telescope/telescope-github.nvim",
       },
       keys = {
         { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
@@ -1898,7 +1908,6 @@ require("lazy").setup({
         })
 
         telescope.load_extension("fzf")
-        telescope.load_extension("gh")
       end,
     },
 
@@ -2140,8 +2149,8 @@ require("lazy").setup({
               {
                 "branch",
                 padding = {
-                  left = 2,
                   right = 0,
+                  left = 2,
                 },
               },
               {
@@ -2247,6 +2256,11 @@ require("lazy").setup({
       keys = {
         { "<Leader>gs", "<cmd>Git<CR>", mode = "n", noremap = true, silent = true },
         { "<Leader>gd", "<cmd>Gvdiffsplit<CR>", mode = "n", noremap = true, silent = true },
+      },
+      cmd = {
+        "Git",
+        "Gread",
+        "Gblame",
       },
       init = function()
         local function OpenFugitiveOpenPullRequest()
