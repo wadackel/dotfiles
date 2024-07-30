@@ -1209,9 +1209,9 @@ require("lazy").setup({
               "stylelint",
               "prettierd",
             },
-            json = "prettierd",
-            markdown = "prettierd",
-            html = "prettierd",
+            json = { "prettierd" },
+            markdown = { "prettierd" },
+            html = { "prettierd" },
             rust = { "rustfmt" },
             go = { "gofumpt", "goimports" },
             terraform = { "terraform_fmt" },
@@ -3273,6 +3273,56 @@ require("lazy").setup({
           disable_sync_scroll = 1,
         }
       end,
+    },
+
+    {
+      "epwalsh/obsidian.nvim",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+      },
+      ft = "markdown",
+      keys = {
+        { "<Leader>ot", "<cmd>ObsidianToday<CR>", mode = "n", noremap = true, silent = true },
+        { "<Leader>oo", "<cmd>ObsidianQuickSwitch<CR>", mode = "n", noremap = true, silent = true },
+        { "<Leader>og", "<cmd>ObsidianSearch<CR>", mode = "n", noremap = true, silent = true },
+      },
+      opts = {
+        workspaces = {
+          {
+            name = "Main",
+            path = "~/Documents/Main",
+          },
+        },
+        mappings = {
+          ["<C-]>"] = {
+            action = function()
+              return require("obsidian").util.gf_passthrough()
+            end,
+            opts = { noremap = false, expr = true, buffer = true },
+          },
+          ["<CR>"] = {
+            action = function()
+              return require("obsidian").util.smart_action()
+            end,
+            opts = { buffer = true, expr = true },
+          },
+        },
+        ui = {
+          enable = false,
+        },
+        new_notes_location = "00_Inbox",
+        daily_notes = {
+          folder = "99_Tracking/Daily",
+          template = "Templates/Daily_Template.md",
+        },
+        templates = {
+          folder = "Templates",
+        },
+        open_app_foreground = true,
+        attachments = {
+          img_folder = "Extra",
+        },
+      },
     },
   },
 })
