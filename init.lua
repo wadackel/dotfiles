@@ -482,7 +482,7 @@ local function lsp_on_attach(client, bufnr)
   end
 
   -- Disable LSP Semantic tokens
-  client.server_capabilities.semanticTokensProvider = nil
+  client.server_capabilities.semanticTokensProvider = false
 
   -- Enable completion triggered by <C-x><C-o>
   vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
@@ -557,11 +557,6 @@ require("lazy").setup({
     },
   },
 
-  -- profiling = {
-  --   loader = true,
-  --   require = true,
-  -- },
-
   spec = {
     -- =============================================================
     -- Colorscheme
@@ -594,86 +589,6 @@ require("lazy").setup({
     -- =============================================================
     -- LSP x Completion
     -- =============================================================
-    {
-      "williamboman/mason.nvim",
-      opts = {
-        ui = {
-          border = "rounded",
-        },
-      },
-    },
-
-    {
-      "WhoIsSethDaniel/mason-tool-installer.nvim",
-      cmd = {
-        "MasonToolsInstall",
-        "MasonToolsInstallSync",
-        "MasonToolsUpdate",
-        "MasonToolsUpdateSync",
-        "MasonToolsClean",
-      },
-      dependencies = {
-        { "williamboman/mason.nvim" },
-      },
-      opts = {
-        ensure_installed = {
-          -- LSP
-          "astro",
-          "denols",
-          "pyright",
-          "rust_analyzer",
-          "terraformls",
-          "tsserver",
-          "lua_ls",
-          "vimls",
-          "gopls",
-
-          -- Linter
-          "actionlint",
-          "eslint_d",
-          "stylelint",
-          "textlint",
-
-          -- Formatter
-          "prettierd",
-          "gofumpt",
-          "goimports",
-          "stylua",
-        },
-        run_on_start = false,
-      },
-    },
-
-    {
-      "nvimdev/lspsaga.nvim",
-      event = "LspAttach",
-      opts = {
-        ui = {
-          code_action = "",
-        },
-        lightbulb = {
-          enable = false,
-        },
-        beacon = {
-          enable = false,
-        },
-        symbol_in_winbar = {
-          enable = false,
-        },
-        definition = {
-          width = 0.8,
-          keys = {
-            edit = "o",
-            vsplit = "vv",
-            split = "ss",
-            tabe = "<C-t>",
-            quit = "q",
-            close = "<C-c>",
-          },
-        },
-      },
-    },
-
     {
       "neovim/nvim-lspconfig",
       init = function()
@@ -710,114 +625,124 @@ require("lazy").setup({
     },
 
     {
-      "williamboman/mason-lspconfig.nvim",
-      event = "VeryLazy",
+      "williamboman/mason.nvim",
+      opts = {
+        ui = {
+          border = "rounded",
+        },
+      },
+    },
+
+    {
+      "WhoIsSethDaniel/mason-tool-installer.nvim",
+      cmd = {
+        "MasonToolsInstall",
+        "MasonToolsInstallSync",
+        "MasonToolsUpdate",
+        "MasonToolsUpdateSync",
+        "MasonToolsClean",
+      },
       dependencies = {
-        { "hrsh7th/cmp-nvim-lsp" },
-        { "jose-elias-alvarez/typescript.nvim" },
+        { "williamboman/mason.nvim" },
       },
       opts = {
-        handlers = {
+        ensure_installed = {
+          -- LSP
+          "astro",
+          "pyright",
+          "rust_analyzer",
+          "terraformls",
+          "tsserver",
+          "lua_ls",
+          "vimls",
+          "gopls",
+
+          -- Linter
+          "actionlint",
+          "eslint_d",
+          "stylelint",
+          "textlint",
+
+          -- Formatter
+          "prettierd",
+          "gofumpt",
+          "goimports",
+          "stylua",
+        },
+        run_on_start = false,
+      },
+    },
+
+    {
+      "williamboman/mason-lspconfig.nvim",
+      lazy = false,
+      dependencies = {
+        "neovim/nvim-lspconfig",
+        "williamboman/mason.nvim",
+        "WhoIsSethDaniel/mason-tool-installer.nvim",
+      },
+      config = function()
+        local lspconfig = require("lspconfig")
+
+        local options = {
+          capabilities = require("cmp_nvim_lsp").default_capabilities(),
+          on_attach = lsp_on_attach,
+        }
+
+        require("mason-lspconfig").setup()
+
+        require("mason-lspconfig").setup_handlers({
           function(name)
-            local lspconfig = require("lspconfig")
+            require("lspconfig")[name].setup(options)
+          end,
 
-            local node_root_dir = lspconfig.util.root_pattern("package.json")
-            local is_node_repo = node_root_dir(vim.fn.getcwd()) ~= nil
-
-            local options = {
-              capabilities = require("cmp_nvim_lsp").default_capabilities(),
-              on_attach = lsp_on_attach,
-            }
-
-            -- Delegate to 'typescript' module
-            if name == "tsserver" then
-              if not is_node_repo then
-                return
-              end
-              require("typescript").setup({
-                debug = false,
-                disable_commands = false,
-                go_to_source_definition = {
-                  fallback = true,
-                },
-                server = {
-                  on_attach = function(client, bufnr)
-                    lsp_on_attach(client, bufnr)
-                    vim.api.nvim_buf_set_keymap(
-                      bufnr,
-                      "n",
-                      "<Space>o",
-                      ":TypescriptOrganizeImportsFixed<CR>",
-                      { noremap = true, silent = true }
-                    )
-                  end,
-                  root_dir = node_root_dir,
-                  init_options = {
-                    maxTsServerMemory = 8192,
-                  },
-                  -- https://github.com/jose-elias-alvarez/typescript.nvim/issues/24#issuecomment-1428801350
-                  commands = {
-                    TypescriptOrganizeImportsFixed = {
-                      function()
-                        local params = {
-                          command = "_typescript.organizeImports",
-                          arguments = { vim.api.nvim_buf_get_name(0) },
-                          title = "",
-                        }
-                        vim.lsp.buf.execute_command(params)
-                      end,
-                      description = "Organize Imports",
-                    },
-                  },
-                },
-              })
-              return
-            end
-
-            if name == "denols" then
-              if is_node_repo then
-                return
-              end
-              options.root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc", "import_map.json")
-              options.init_options = {
-                lint = true,
-                unstable = true,
-                suggest = {
-                  imports = {
-                    hosts = {
-                      ["https://deno.land"] = true,
-                      ["https://cdn.nest.land"] = true,
-                      ["https://crux.land"] = true,
-                    },
-                  },
-                },
-              }
-            end
-
-            if name == "rust_analyzer" then
-              -- Use rustaceanvim
-              return
-            end
-
-            if name == "lua_ls" then
-              options.settings = {
+          ["lua_ls"] = function()
+            lspconfig.lua_ls.setup(merge_table(options, {
+              settings = {
                 Lua = {
                   diagnostics = {
                     globals = { "vim" },
                   },
                 },
-              }
-            end
-
-            lspconfig[name].setup(options)
+              },
+            }))
           end,
+
+          ["tsserver"] = function()
+            -- Use typescript-tools.nvim
+          end,
+
+          ["rust_analyzer"] = function()
+            -- Use rustaceanvim
+          end,
+        })
+      end,
+    },
+
+    {
+      "pmizio/typescript-tools.nvim",
+      ft = {
+        "typescript",
+        "typescriptreact",
+        "javascript",
+        "javascriptreact",
+      },
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "neovim/nvim-lspconfig",
+      },
+      opts = {
+        on_attach = lsp_on_attach,
+        settings = {
+          expose_as_code_action = "all",
+          tsserver_max_memory = 8192,
         },
       },
     },
 
     {
       "mrcjkb/rustaceanvim",
-      ft = "rust",
+      ft = { "rust" },
       init = function()
         vim.g.rustaceanvim = {
           tools = {
@@ -907,6 +832,36 @@ require("lazy").setup({
 
         require("telescope").load_extension("flutter")
       end,
+    },
+
+    {
+      "nvimdev/lspsaga.nvim",
+      event = "LspAttach",
+      opts = {
+        ui = {
+          code_action = "",
+        },
+        lightbulb = {
+          enable = false,
+        },
+        beacon = {
+          enable = false,
+        },
+        symbol_in_winbar = {
+          enable = false,
+        },
+        definition = {
+          width = 0.8,
+          keys = {
+            edit = "o",
+            vsplit = "vv",
+            split = "ss",
+            tabe = "<C-t>",
+            quit = "q",
+            close = "<C-c>",
+          },
+        },
+      },
     },
 
     {
@@ -1326,7 +1281,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-treesitter/nvim-treesitter",
-      event = "VeryLazy",
+      lazy = false,
       build = ":TSUpdate",
       config = function()
         local configs = require("nvim-treesitter.configs")
@@ -1562,9 +1517,6 @@ require("lazy").setup({
         git = {
           enable = false,
         },
-        filters = {
-          -- dotfiles = false,
-        },
         on_attach = function(bufnr)
           local api = require("nvim-tree.api")
 
@@ -1741,7 +1693,7 @@ require("lazy").setup({
 
     {
       "nvim-telescope/telescope.nvim",
-      event = "VeryLazy",
+      lazy = false,
       dependencies = {
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
