@@ -869,7 +869,6 @@ require("lazy").setup({
       event = { "InsertEnter", "CmdlineEnter" },
       dependencies = {
         "hrsh7th/cmp-nvim-lsp",
-        "hrsh7th/cmp-nvim-lsp-signature-help",
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
         "hrsh7th/cmp-cmdline",
@@ -900,7 +899,6 @@ require("lazy").setup({
           }),
           sources = cmp.config.sources({
             { name = "nvim_lsp" },
-            { name = "nvim_lsp_signature_help" },
             { name = "path" },
             { name = "buffer" },
           }),
@@ -2965,16 +2963,31 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Editing
+    -- Quickfix
     -- =============================================================
     {
-      "editorconfig/editorconfig-vim",
-      event = "VeryLazy",
-    },
-
-    {
-      "deton/jasegment.vim",
-      event = "VeryLazy",
+      "kevinhwang91/nvim-bqf",
+      ft = "qf",
+      opts = {
+        auto_resize_height = true,
+        preview = {
+          winblend = 0,
+          show_title = false,
+          should_preview_cb = function(bufnr, _)
+            local ret = true
+            local bufname = vim.api.nvim_buf_get_name(bufnr)
+            local fsize = vim.fn.getfsize(bufname)
+            if fsize > 100 * 1024 then
+              -- skip file size greater than 100k
+              ret = false
+            elseif bufname:match("^fugitive://") then
+              -- skip fugitive buffer
+              ret = false
+            end
+            return ret
+          end,
+        },
+      },
     },
 
     {
@@ -2987,24 +3000,17 @@ require("lazy").setup({
       ft = "qf",
     },
 
+    -- =============================================================
+    -- Editing
+    -- =============================================================
     {
-      "skanehira/qfopen.vim",
-      ft = "qf",
-      init = function()
-        vim.api.nvim_create_autocmd("FileType", {
-          group = vim.api.nvim_create_augroup("qfopen_bufenter", { clear = true }),
-          pattern = "qf",
-          callback = function()
-            local bufnr = vim.api.nvim_get_current_buf()
-            local function kmap(mode, key, rhs)
-              vim.api.nvim_buf_set_keymap(bufnr, mode, key, rhs, { noremap = true, silent = true })
-            end
-            kmap("n", "<C-v>", "<Plug>(qfopen-open-vsplit)")
-            kmap("n", "<C-x>", "<Plug>(qfopen-open-split)")
-            kmap("n", "<C-t>", "<Plug>(qfopen-open-tab)")
-          end,
-        })
-      end,
+      "editorconfig/editorconfig-vim",
+      event = "VeryLazy",
+    },
+
+    {
+      "deton/jasegment.vim",
+      event = "VeryLazy",
     },
 
     {
