@@ -2,6 +2,8 @@
 -- Basic
 -- =============================================================
 
+vim.loader.enable()
+
 local function merge_table(a, b)
   local result = {}
   for k, v in pairs(a) do
@@ -530,10 +532,9 @@ require("lazy").setup({
     backdrop = 100,
   },
 
-  -- dev = {
-  --   path = "~/develop/github.com",
-  --   -- fallback = true,
-  -- },
+  rocks = {
+    enabled = false,
+  },
 
   change_detection = {
     enabled = false,
@@ -557,18 +558,21 @@ require("lazy").setup({
     },
   },
 
+  profiling = {
+    loader = false,
+    require = true,
+  },
+
   spec = {
     -- =============================================================
     -- Colorscheme
     -- =============================================================
     {
-      -- TODO: dev mode is not working...
-      -- "wadackel/vim-dogrun",
-      -- dev = true,
       "wadackel/vim-dogrun",
       dir = vim.fn.isdirectory(vim.fn.expand("$HOME/develop/github.com/wadackel/vim-dogrun")) == 1
           and "~/develop/github.com/wadackel/vim-dogrun"
         or nil,
+      lazy = false,
       init = function()
         vim.cmd("colorscheme dogrun")
 
@@ -684,7 +688,7 @@ require("lazy").setup({
       config = function()
         local lspconfig = require("lspconfig")
 
-        local options = {
+        local opts = {
           capabilities = require("cmp_nvim_lsp").default_capabilities(),
           on_attach = lsp_on_attach,
         }
@@ -693,11 +697,10 @@ require("lazy").setup({
 
         require("mason-lspconfig").setup_handlers({
           function(name)
-            require("lspconfig")[name].setup(options)
+            require("lspconfig")[name].setup(opts)
           end,
-
           ["lua_ls"] = function()
-            lspconfig.lua_ls.setup(merge_table(options, {
+            lspconfig.lua_ls.setup(merge_table(opts, {
               settings = {
                 Lua = {
                   diagnostics = {
@@ -707,11 +710,9 @@ require("lazy").setup({
               },
             }))
           end,
-
           ["tsserver"] = function()
             -- Use typescript-tools.nvim
           end,
-
           ["rust_analyzer"] = function()
             -- Use rustaceanvim
           end,
@@ -2025,17 +2026,15 @@ require("lazy").setup({
           teal = "#73c1a9",
           pink = "#b871b8",
           red = "#dc6f7a",
-
           bg = "#282a3a",
           fg = "#4b4e6d",
-
           inactive = {
             bg = "#282a3a",
             fg = "#4b4e6d",
           },
         }
 
-        local bubbles_theme = {
+        local dogrun_theme = {
           normal = {
             a = { fg = colors.bg, bg = colors.purple },
             b = { fg = colors.purple, bg = colors.bg },
@@ -2082,7 +2081,7 @@ require("lazy").setup({
 
         require("lualine").setup({
           options = {
-            theme = bubbles_theme,
+            theme = dogrun_theme,
             component_separators = "",
             section_separators = { left = "", right = "" },
             globalstatus = true,
@@ -3003,11 +3002,6 @@ require("lazy").setup({
     -- =============================================================
     -- Editing
     -- =============================================================
-    {
-      "editorconfig/editorconfig-vim",
-      event = "VeryLazy",
-    },
-
     {
       "deton/jasegment.vim",
       event = "VeryLazy",
