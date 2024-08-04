@@ -20,7 +20,7 @@ return {
     stretch = "Normal",
     style = "Normal",
   }),
-  font_size = 17.0,
+  font_size = 16.0,
 
   -- port from: https://github.com/wadackel/vim-dogrun/blob/main/colors/dogrun.vim
   colors = {

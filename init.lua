@@ -253,6 +253,9 @@ keymap({ "n" }, "\\n", "", { callback = toggle_number })
 keymap({ "n" }, "\\m", "", { callback = toggle_mouse })
 keymap({ "n" }, "\\h", ":<C-u>setl hlsearch!<CR>")
 
+-- remap
+keymap({ "n" }, "<<", "<<", { noremap = true })
+
 -- 選択範囲内をExpressionレジスタで評価 -> 置換
 keymap({ "v" }, "Q", "y:g/^.*$//e")
 
@@ -653,7 +656,6 @@ require("lazy").setup({
         ensure_installed = {
           -- LSP
           "astro",
-          "pyright",
           "rust_analyzer",
           "terraformls",
           "tsserver",
@@ -683,7 +685,6 @@ require("lazy").setup({
       dependencies = {
         "neovim/nvim-lspconfig",
         "williamboman/mason.nvim",
-        "WhoIsSethDaniel/mason-tool-installer.nvim",
       },
       config = function()
         local lspconfig = require("lspconfig")
@@ -697,7 +698,7 @@ require("lazy").setup({
 
         require("mason-lspconfig").setup_handlers({
           function(name)
-            require("lspconfig")[name].setup(opts)
+            lspconfig[name].setup(opts)
           end,
           ["lua_ls"] = function()
             lspconfig.lua_ls.setup(merge_table(opts, {
@@ -710,12 +711,10 @@ require("lazy").setup({
               },
             }))
           end,
-          ["tsserver"] = function()
-            -- Use typescript-tools.nvim
-          end,
-          ["rust_analyzer"] = function()
-            -- Use rustaceanvim
-          end,
+          -- Use typescript-tools.nvim
+          ["tsserver"] = function() end,
+          -- Use rustaceanvim
+          ["rust_analyzer"] = function() end,
         })
       end,
     },
@@ -1392,6 +1391,9 @@ require("lazy").setup({
           indent = {
             enable = true,
           },
+          matchup = {
+            enable = true,
+          },
         })
       end,
     },
@@ -1419,11 +1421,18 @@ require("lazy").setup({
 
     {
       "windwp/nvim-autopairs",
-      event = "InsertEnter",
+      event = { "BufReadPre", "BufNewFile" },
       opts = {
+        check_ts = true,
         map_c_h = true,
         map_c_w = true,
       },
+    },
+
+    {
+      "windwp/nvim-ts-autotag",
+      event = { "BufReadPre", "BufNewFile" },
+      opts = {},
     },
 
     -- =============================================================
@@ -2968,7 +2977,6 @@ require("lazy").setup({
       "kevinhwang91/nvim-bqf",
       ft = "qf",
       opts = {
-        auto_resize_height = true,
         preview = {
           winblend = 0,
           show_title = false,
