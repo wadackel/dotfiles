@@ -805,12 +805,13 @@ require("lazy").setup({
               kmap("n", "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
             end,
             settings = {
-              showTodos = false,
               analysisExcludedFolders = {
                 vim.fn.expand("$HOME/.pub-cache"),
                 vim.fn.expand("$HOME/.asdf/installs/flutter"),
                 vim.fn.expand("$HOME/.asdf/installs/dart"),
               },
+              completeFunctionCalls = false,
+              showTodos = false,
             },
           },
           debugger = {
@@ -1290,7 +1291,6 @@ require("lazy").setup({
             "bash",
             "c",
             "c_sharp",
-            "clojure",
             "cmake",
             "comment",
             "commonlisp",
@@ -1316,7 +1316,6 @@ require("lazy").setup({
             "gosum",
             "gowork",
             "graphql",
-            "hack",
             "haskell",
             "hjson",
             "hlsl",
@@ -1365,7 +1364,6 @@ require("lazy").setup({
             "todotxt",
             "toml",
             "tsx",
-            "twig",
             "typescript",
             "ungrammar",
             "verilog",
