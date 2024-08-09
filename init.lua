@@ -74,8 +74,11 @@ vim.api.nvim_create_user_command("Debug", function(args)
   end)
 end, { nargs = "*" })
 
--- python (pyenv)
-vim.g.python3_host_prog = "~/.pyenv/versions/py3neovim/bin/python"
+-- providers
+vim.g.python3_host_prog = "/usr/local/bin/python3"
+vim.g.loaded_node_provider = 0
+vim.g.loaded_perl_provider = 0
+vim.g.loaded_ruby_provider = 0
 
 -- <Leader>を`,`に設定
 vim.g.mapleader = ","
@@ -598,6 +601,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "neovim/nvim-lspconfig",
+      event = "VeryLazy",
       init = function()
         require("lspconfig.ui.windows").default_options.border = "rounded"
 
@@ -681,7 +685,7 @@ require("lazy").setup({
 
     {
       "williamboman/mason-lspconfig.nvim",
-      lazy = false,
+      event = "VeryLazy",
       dependencies = {
         "neovim/nvim-lspconfig",
         "williamboman/mason.nvim",
@@ -1699,7 +1703,7 @@ require("lazy").setup({
 
     {
       "nvim-telescope/telescope.nvim",
-      lazy = false,
+      event = "VeryLazy",
       dependencies = {
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
@@ -2026,7 +2030,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-lualine/lualine.nvim",
-      lazy = false,
+      event = "VeryLazy",
       config = function()
         local colors = {
           purple = "#929be5",
