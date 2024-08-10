@@ -415,10 +415,8 @@ vim.api.nvim_create_user_command("AutoUpdateColorscheme", function(args)
 end, { nargs = "?" })
 
 -- ripgrep
-if vim.fn.executable("rg") == 1 then
-  vim.opt.grepprg = "rg --vimgrep --no-heading --hidden -g !.git"
-  vim.opt.grepformat = { "%f:%l:%c:%m", "%f:%l:%m" }
-end
+vim.opt.grepprg = "rg --vimgrep --no-heading --hidden -g !.git"
+vim.opt.grepformat = { "%f:%l:%c:%m", "%f:%l:%m" }
 
 -- ファイル置換時に BufWritePost 処理をトグル
 local function enableBufWritePost()
@@ -542,12 +540,21 @@ require("lazy").setup({
     enabled = false,
   },
 
+  checker = {
+    enabled = false,
+  },
+
   change_detection = {
     enabled = false,
   },
 
   performance = {
+    cache = {
+      enabled = true,
+    },
+    reset_packpath = true,
     rtp = {
+      reset = true,
       disabled_plugins = {
         "gzip",
         "man",
@@ -566,7 +573,7 @@ require("lazy").setup({
 
   profiling = {
     loader = false,
-    require = true,
+    require = false,
   },
 
   spec = {
