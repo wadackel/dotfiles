@@ -4,19 +4,8 @@
 
 vim.loader.enable()
 
-local function merge_table(a, b)
-  local result = {}
-  for k, v in pairs(a) do
-    result[k] = v
-  end
-  for k, v in pairs(b) do
-    result[k] = v
-  end
-  return result
-end
-
 local function keymap(modes, lhs, rhs, options)
-  local opts = merge_table({ noremap = true, silent = true }, options or {})
+  local opts = vim.tbl_extend("force", { noremap = true, silent = true }, options or {})
   for _, mode in pairs(modes) do
     vim.keymap.set(mode, lhs, rhs, opts)
   end
@@ -89,9 +78,8 @@ vim.opt.fileencoding = "utf-8"
 vim.opt.fileencodings = { "utf-8", "cp932", "iso-2022-jp", "sjis", "euc-jp", "latin1" }
 vim.opt.completeopt = { "menu", "menuone", "noselect" }
 vim.opt.autoread = true
--- vim.opt.t_ut = ""
 vim.opt.termguicolors = true
-vim.opt.hlsearch = false
+vim.opt.hlsearch = true
 vim.opt.incsearch = true
 vim.opt.formatoptions:append("mM")
 vim.opt.display:append("lastline")
@@ -488,7 +476,7 @@ local function lsp_on_attach(client, bufnr)
   end
 
   -- Disable LSP Semantic tokens
-  client.server_capabilities.semanticTokensProvider = false
+  client.server_capabilities.semanticTokensProvider = nil
 
   -- Enable completion triggered by <C-x><C-o>
   vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
@@ -582,9 +570,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "wadackel/vim-dogrun",
-      dir = vim.fn.isdirectory(vim.fn.expand("$HOME/develop/github.com/wadackel/vim-dogrun")) == 1
-          and "~/develop/github.com/wadackel/vim-dogrun"
-        or nil,
+      dir = "~/develop/github.com/wadackel/vim-dogrun",
       lazy = false,
       init = function()
         vim.cmd("colorscheme dogrun")
@@ -712,7 +698,7 @@ require("lazy").setup({
             lspconfig[name].setup(opts)
           end,
           ["lua_ls"] = function()
-            lspconfig.lua_ls.setup(merge_table(opts, {
+            lspconfig.lua_ls.setup(vim.tbl_deep_extend("force", opts, {
               settings = {
                 Lua = {
                   diagnostics = {
@@ -924,7 +910,13 @@ require("lazy").setup({
         })
 
         cmp.setup.cmdline(":", {
-          mapping = cmp.mapping.preset.cmdline(),
+          mapping = cmp.mapping.preset.cmdline({
+            ["<C-e>"] = {
+              c = function(fallback)
+                fallback()
+              end,
+            },
+          }),
           sources = cmp.config.sources({
             { name = "path" },
           }, {
@@ -2115,17 +2107,11 @@ require("lazy").setup({
             lualine_b = {
               {
                 "branch",
-                padding = {
-                  right = 0,
-                  left = 2,
-                },
+                padding = { left = 2 },
               },
               {
                 "diagnostics",
-                padding = {
-                  right = 0,
-                  left = 2,
-                },
+                padding = { left = 2 },
                 sources = {
                   "nvim_diagnostic",
                 },
@@ -2183,11 +2169,12 @@ require("lazy").setup({
             lualine_c = {
               {
                 "tabs",
-                mode = 2,
+                separator = { right = "" },
+                mode = 1,
+                path = 1,
                 max_length = function()
                   return vim.o.columns
                 end,
-                separator = { right = "" },
                 tabs_color = {
                   active = "lualine_a_normal",
                   inactive = "lualine_a_inactive",
@@ -3017,11 +3004,84 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Editing
+    -- Coding
     -- =============================================================
     {
       "deton/jasegment.vim",
       event = "VeryLazy",
+    },
+
+    {
+      "monaqa/dial.nvim",
+      keys = {
+        {
+          "<C-a>",
+          function()
+            require("dial.map").manipulate("increment", "normal")
+          end,
+          mode = "n",
+        },
+        {
+          "<C-x>",
+          function()
+            require("dial.map").manipulate("decrement", "normal")
+          end,
+          mode = "n",
+        },
+        {
+          "g<C-a>",
+          function()
+            require("dial.map").manipulate("increment", "gnormal")
+          end,
+          mode = "n",
+        },
+        {
+          "g<C-x>",
+          function()
+            require("dial.map").manipulate("decrement", "gnormal")
+          end,
+          mode = "n",
+        },
+        {
+          "<C-a>",
+          function()
+            require("dial.map").manipulate("increment", "visual")
+          end,
+          mode = "v",
+        },
+        {
+          "<C-x>",
+          function()
+            require("dial.map").manipulate("decrement", "visual")
+          end,
+          mode = "v",
+        },
+        {
+          "g<C-a>",
+          function()
+            require("dial.map").manipulate("increment", "gvisual")
+          end,
+          mode = "v",
+        },
+        {
+          "g<C-x>",
+          function()
+            require("dial.map").manipulate("decrement", "gvisual")
+          end,
+          mode = "v",
+        },
+      },
+      config = function()
+        local augend = require("dial.augend")
+        require("dial.config").augends:register_group({
+          default = {
+            augend.integer.alias.decimal,
+            augend.integer.alias.hex,
+            augend.date.alias["%Y/%m/%d"],
+            augend.constant.alias.bool,
+          },
+        })
+      end,
     },
 
     {
@@ -3218,15 +3278,77 @@ require("lazy").setup({
       dependencies = {
         { "haya14busa/is.vim" },
       },
-      keys = {
-        { "*", "<Plug>(asterisk-z*)", mode = { "n", "v" }, noremap = false },
-        { "#", "<Plug>(asterisk-z#)", mode = { "n", "v" }, noremap = false },
-        { "g*", "<Plug>(asterisk-gz*)", mode = { "n", "v" }, noremap = false },
-        { "g#", "<Plug>(asterisk-gz#)", mode = { "n", "v" }, noremap = false },
-      },
       init = function()
         vim.g.asterisk_keeppos = 1
       end,
+    },
+
+    {
+      "kevinhwang91/nvim-hlslens",
+      dependencies = {
+        "haya14busa/vim-asterisk",
+      },
+      keys = {
+        {
+          "n",
+          [[<Cmd>execute('normal! ' . v:count1 . 'n')<CR><Cmd>lua require('hlslens').start()<CR>]],
+          mode = "n",
+          noremap = true,
+          silent = true,
+        },
+        {
+          "N",
+          [[<Cmd>execute('normal! ' . v:count1 . 'N')<CR><Cmd>lua require('hlslens').start()<CR>]],
+          mode = "n",
+          noremap = true,
+          silent = true,
+        },
+        {
+          "*",
+          [[<Plug>(asterisk-z*)<Cmd>lua require('hlslens').start()<CR>]],
+          mode = { "n", "x" },
+          noremap = true,
+          silent = true,
+        },
+        {
+          "#",
+          [[<Plug>(asterisk-z#)<Cmd>lua require('hlslens').start()<CR>]],
+          mode = { "n", "x" },
+          noremap = true,
+          silent = true,
+        },
+        {
+          "g*",
+          [[<Plug>(asterisk-gz*)<Cmd>lua require('hlslens').start()<CR>]],
+          mode = { "n", "x" },
+          noremap = true,
+          silent = true,
+        },
+        {
+          "g#",
+          [[<Plug>(asterisk-gz#)<Cmd>lua require('hlslens').start()<CR>]],
+          mode = { "n", "x" },
+          noremap = true,
+          silent = true,
+        },
+      },
+      opts = {
+        calm_down = true,
+        override_lens = function(render, posList, nearest, idx, relIdx)
+          local sfw = vim.v.searchforward == 1
+          local indicator, text, chunks
+          local absRelIdx = math.abs(relIdx)
+          local lnum, col = unpack(posList[idx])
+          local cnt = #posList
+          text = ("[%d/%d]"):format(idx, cnt)
+          if nearest then
+            chunks = { { " " }, { text, "HlSearchLensNear" } }
+          else
+            chunks = { { " " }, { text, "HlSearchLens" } }
+          end
+          render.setVirt(0, lnum - 1, col - 1, chunks, nearest)
+        end,
+      },
     },
 
     -- =============================================================
