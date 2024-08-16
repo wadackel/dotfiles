@@ -441,31 +441,13 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
   pattern = "gitconfig",
   command = "setlocal ft=gitconfig",
 })
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
-  group = "fileTypeDetect",
-  pattern = ".eslintrc",
-  command = "setlocal ft=json",
-})
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
-  group = "fileTypeDetect",
-  pattern = ".stylelintrc",
-  command = "setlocal ft=json",
-})
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
-  group = "fileTypeDetect",
-  pattern = ".prettierrc",
-  command = "setlocal ft=json",
-})
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
-  group = "fileTypeDetect",
-  pattern = ".babelrc",
-  command = "setlocal ft=json",
-})
-vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
-  group = "fileTypeDetect",
-  pattern = ".textlintrc",
-  command = "setlocal ft=json",
-})
+for _, pattern in ipairs({ ".eslintrc", ".stylelintrc", ".prettierrc", ".textlintrc", "*.arb" }) do
+  vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile", "BufNewFile" }, {
+    group = "fileTypeDetect",
+    pattern = pattern,
+    command = "setlocal ft=json",
+  })
+end
 
 -- =============================================================
 -- Plugins
@@ -1706,11 +1688,17 @@ require("lazy").setup({
       dependencies = {
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
+        "nvim-telescope/telescope-live-grep-args.nvim",
       },
       keys = {
         { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
         { "z/", "<cmd>Telescope current_buffer_fuzzy_find<CR>", mode = "n", noremap = true },
-        { "<Leader>gg", "<cmd>Telescope live_grep<CR>", mode = "n", noremap = true },
+        {
+          "<Leader>gg",
+          ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>",
+          mode = "n",
+          noremap = true,
+        },
         { "<Leader>bb", "<cmd>Telescope buffers<CR>", mode = "n", noremap = true },
         { "<Leader>cc", "<cmd>Telescope commands<CR>", mode = "n", noremap = true },
         { "<Leader>cl", "<cmd>Telescope command_history<CR>", mode = "n", noremap = true },
@@ -1726,6 +1714,7 @@ require("lazy").setup({
         local action = require("telescope.actions")
         local action_state = require("telescope.actions.state")
         local action_layout = require("telescope.actions.layout")
+        local lga_actions = require("telescope-live-grep-args.actions")
 
         local function action_yank()
           local selection = action_state.get_selected_entry()
@@ -1865,10 +1854,26 @@ require("lazy").setup({
               override_file_sorter = true,
               case_mode = "smart_case",
             },
+            live_grep_args = wrap_dropdown_opts({
+              auto_quoting = true,
+              mappings = {
+                i = {
+                  ["<C-i>"] = lga_actions.quote_prompt(),
+                },
+              },
+              additional_args = function()
+                return {
+                  "--hidden",
+                  "-g",
+                  "!.git",
+                }
+              end,
+            }),
           },
         })
 
         telescope.load_extension("fzf")
+        telescope.load_extension("live_grep_args")
       end,
     },
 
@@ -3100,9 +3105,15 @@ require("lazy").setup({
     },
 
     {
+      "echasnovski/mini.ai",
+      event = "VeryLazy",
+      opts = {},
+    },
+
+    {
       "junegunn/vim-easy-align",
       keys = {
-        { "ga", "<Plug>(EasyAlign)", mode = { "n", "x" } },
+        { "ga", "<Plug>(LiveEasyAlign)", mode = { "n", "x" } },
       },
     },
 
@@ -3116,50 +3127,51 @@ require("lazy").setup({
       end,
     },
 
-    {
-      "mattn/emmet-vim",
-      keys = {
-        { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
-      },
-      init = function()
-        vim.g.user_emmet_mode = "iv"
-        vim.g.user_emmet_leader_key = "<C-e>"
-        vim.g.use_emmet_complete_tag = 1
-        vim.g.user_emmet_settings = {
-          lang = "en",
-          html = {
-            filters = "html",
-            snippets = {
-              ["html:5"] = table.concat({
-                "<!doctype html>",
-                '<html lang="en">',
-                "<head>",
-                '  <meta charset="${charset}">',
-                '  <meta http-equiv="X-UA-Compatible" content="IE=edge">',
-                '  <meta name="viewport" content="width=device-width,initial-scale=1.0">',
-                '  <meta name="format-detection" content="telephone=no,address=no,email=no">',
-                '  <meta name="description" content="">',
-                '  <link rel="shortcut icon" href="/favicon.ico">',
-                '  <link rel="stylesheet" href="/style.css">',
-                "  <title></title>",
-                "</head>",
-                "<body>",
-                "  ${child}|",
-                "</body>",
-                "</html>",
-              }, "\n"),
-            },
-          },
-          css = {
-            filters = "fc",
-          },
-          php = {
-            extends = "html",
-            filters = "html",
-          },
-        }
-      end,
-    },
+    -- {
+    --   "mattn/emmet-vim",
+    --   submodules = false,
+    --   keys = {
+    --     { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
+    --   },
+    --   init = function()
+    --     vim.g.user_emmet_mode = "iv"
+    --     vim.g.user_emmet_leader_key = "<C-e>"
+    --     vim.g.use_emmet_complete_tag = 1
+    --     vim.g.user_emmet_settings = {
+    --       lang = "en",
+    --       html = {
+    --         filters = "html",
+    --         snippets = {
+    --           ["html:5"] = table.concat({
+    --             "<!doctype html>",
+    --             '<html lang="en">',
+    --             "<head>",
+    --             '  <meta charset="${charset}">',
+    --             '  <meta http-equiv="X-UA-Compatible" content="IE=edge">',
+    --             '  <meta name="viewport" content="width=device-width,initial-scale=1.0">',
+    --             '  <meta name="format-detection" content="telephone=no,address=no,email=no">',
+    --             '  <meta name="description" content="">',
+    --             '  <link rel="shortcut icon" href="/favicon.ico">',
+    --             '  <link rel="stylesheet" href="/style.css">',
+    --             "  <title></title>",
+    --             "</head>",
+    --             "<body>",
+    --             "  ${child}|",
+    --             "</body>",
+    --             "</html>",
+    --           }, "\n"),
+    --         },
+    --       },
+    --       css = {
+    --         filters = "fc",
+    --       },
+    --       php = {
+    --         extends = "html",
+    --         filters = "html",
+    --       },
+    --     }
+    --   end,
+    -- },
 
     {
       "machakann/vim-sandwich",
@@ -3362,17 +3374,6 @@ require("lazy").setup({
       },
       init = function()
         vim.g.quickrun_no_default_key_mappings = 1
-      end,
-    },
-
-    -- =============================================================
-    -- Rust
-    -- =============================================================
-    {
-      "rust-lang/rust.vim",
-      ft = "rust",
-      init = function()
-        vim.g.rustfmt_autosave = 0
       end,
     },
 
