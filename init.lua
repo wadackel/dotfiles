@@ -56,13 +56,6 @@ local function find_nearest_dir(patterns)
   return nil
 end
 
--- debug
-vim.api.nvim_create_user_command("Debug", function(args)
-  pcall(function()
-    vim.cmd("echom " .. args.args .. " : " .. vim.inspect(args.fargs))
-  end)
-end, { nargs = "*" })
-
 -- providers
 vim.g.python3_host_prog = "/usr/local/bin/python3"
 vim.g.loaded_node_provider = 0
@@ -73,6 +66,7 @@ vim.g.loaded_ruby_provider = 0
 vim.g.mapleader = ","
 
 -- 各種基本設定
+vim.opt.backup = false
 vim.opt.encoding = "utf-8"
 vim.opt.fileencoding = "utf-8"
 vim.opt.fileencodings = { "utf-8", "cp932", "iso-2022-jp", "sjis", "euc-jp", "latin1" }
@@ -97,12 +91,8 @@ vim.opt.autoindent = true
 vim.opt.smartindent = true
 vim.opt.expandtab = true
 vim.opt.wrap = true
-vim.opt.laststatus = 2
-if vim.fn.has("mac") == 1 then
-  vim.opt.clipboard = "unnamed"
-elseif vim.fn.has("unix") == 1 then
-  vim.opt.clipboard = "unnamedplus"
-end
+vim.opt.laststatus = 3
+-- vim.opt.clipboard = "unnamedplus"
 vim.opt.wildmenu = true
 vim.opt.wildmode = { "longest", "full" }
 vim.opt.showmode = false
@@ -136,9 +126,8 @@ keymap({ "n", "v" }, "\\", ",", { silent = false })
 -- <C-c> の動作を <Esc> に合わせる
 keymap({ "i" }, "<C-c>", "<Esc>", { silent = false })
 
--- increment, decrement で選択状態を維持
-keymap({ "v" }, "<C-a>", "<C-a>gv", { silent = false })
-keymap({ "v" }, "<C-x>", "<C-x>gv", { silent = false })
+-- クリップボード連携は gy で行う
+keymap({ "n", "v" }, "gy", '"+y', { silent = true })
 
 -- j, k による移動を折り返されたテキストでも自然に振る舞うように変更
 keymap({ "n", "v" }, "j", "gj", { silent = false })
@@ -1258,6 +1247,9 @@ require("lazy").setup({
     {
       "github/copilot.vim",
       lazy = false,
+      config = function()
+        vim.g.copilot_node_command = "~/.asdf/shims/node"
+      end,
     },
 
     -- =============================================================
@@ -3346,13 +3338,10 @@ require("lazy").setup({
       },
       opts = {
         calm_down = true,
-        override_lens = function(render, posList, nearest, idx, relIdx)
-          local sfw = vim.v.searchforward == 1
-          local indicator, text, chunks
-          local absRelIdx = math.abs(relIdx)
+        override_lens = function(render, posList, nearest, idx)
           local lnum, col = unpack(posList[idx])
-          local cnt = #posList
-          text = ("[%d/%d]"):format(idx, cnt)
+          local text = ("[%d/%d]"):format(idx, #posList)
+          local chunks
           if nearest then
             chunks = { { " " }, { text, "HlSearchLensNear" } }
           else
