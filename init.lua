@@ -57,7 +57,8 @@ local function find_nearest_dir(patterns)
 end
 
 -- providers
-vim.g.python3_host_prog = "/usr/local/bin/python3"
+-- vim.g.python3_host_prog = "/usr/local/bin/python3"
+vim.g.loaded_python3_provider = 0
 vim.g.loaded_node_provider = 0
 vim.g.loaded_perl_provider = 0
 vim.g.loaded_ruby_provider = 0
@@ -92,7 +93,7 @@ vim.opt.smartindent = true
 vim.opt.expandtab = true
 vim.opt.wrap = true
 vim.opt.laststatus = 3
--- vim.opt.clipboard = "unnamedplus"
+vim.opt.clipboard = "unnamedplus"
 vim.opt.wildmenu = true
 vim.opt.wildmode = { "longest", "full" }
 vim.opt.showmode = false
@@ -126,8 +127,8 @@ keymap({ "n", "v" }, "\\", ",", { silent = false })
 -- <C-c> の動作を <Esc> に合わせる
 keymap({ "i" }, "<C-c>", "<Esc>", { silent = false })
 
--- クリップボード連携は gy で行う
-keymap({ "n", "v" }, "gy", '"+y', { silent = true })
+-- -- クリップボード連携は gy で行う
+-- keymap({ "n", "v" }, "gy", '"+y', { silent = true })
 
 -- j, k による移動を折り返されたテキストでも自然に振る舞うように変更
 keymap({ "n", "v" }, "j", "gj", { silent = false })
@@ -734,7 +735,7 @@ require("lazy").setup({
 
     {
       "akinsho/flutter-tools.nvim",
-      ft = { "dart" },
+      lazy = false,
       dependencies = {
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
@@ -766,11 +767,82 @@ require("lazy").setup({
             on_attach = function(client, bufnr)
               lsp_on_attach(client, bufnr)
 
-              local kmap = function(mode, lhs, rhs)
-                vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, { noremap = true, silent = true })
+              local kmap = function(modes, lhs, rhs)
+                keymap(modes, lhs, rhs, { buffer = bufnr })
               end
 
-              kmap("n", "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+              local devlog = "__FLUTTER_DEV_LOG__$"
+
+              local find_dev_log = function()
+                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+                  local bufname = vim.api.nvim_buf_get_name(buf)
+                  if string.match(bufname, devlog) then
+                    local win = nil
+                    for _, w in ipairs(vim.api.nvim_list_wins()) do
+                      if vim.api.nvim_win_get_buf(w) == buf then
+                        win = w
+                        break
+                      end
+                    end
+                    return buf, win
+                  end
+                end
+                return nil
+              end
+
+              kmap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+
+              kmap({ "n" }, "<Space>do", function()
+                local buf, win = find_dev_log()
+                if not buf then
+                  vim.notify("Flutter Dev Log not found", "warn")
+                  return
+                end
+
+                local current_win = vim.api.nvim_get_current_win()
+
+                -- Open dev log
+                if win then
+                  vim.api.nvim_set_current_win(win)
+                else
+                  vim.api.nvim_command("botright 15split")
+                  vim.api.nvim_set_current_buf(buf)
+                end
+
+                -- Move to the end of the buffer
+                local line_count = vim.api.nvim_buf_line_count(buf)
+                if line_count > 0 then
+                  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+                else
+                  vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                end
+
+                -- Restore the original window
+                if not win then
+                  vim.api.nvim_set_current_win(current_win)
+                end
+              end)
+
+              kmap({ "n" }, "<Space>dc", function()
+                local buf, win = find_dev_log()
+                if not win then
+                  vim.notify("Flutter Dev Log not found", "warn")
+                  return
+                end
+
+                -- Close dev log
+                vim.api.nvim_win_close(win, true)
+              end)
+
+              vim.api.nvim_create_autocmd("FileType", {
+                pattern = "log",
+                callback = function()
+                  local bufname = vim.api.nvim_buf_get_name(0)
+                  if string.match(bufname, devlog) then
+                    keymap({ "n" }, "q", "<C-w>c", { buffer = 0 })
+                  end
+                end,
+              })
             end,
             settings = {
               analysisExcludedFolders = {
@@ -2022,7 +2094,7 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Statusline
+    -- UI
     -- =============================================================
     {
       "nvim-lualine/lualine.nvim",
@@ -2196,6 +2268,24 @@ require("lazy").setup({
             "toggleterm",
           },
         })
+      end,
+    },
+
+    {
+      "rcarriga/nvim-notify",
+      event = "VeryLazy",
+      config = function()
+        local notify = require("notify")
+        notify.setup({
+          background_colour = "NotifyBackground",
+          render = "compact",
+          stages = "fade",
+          top_down = false,
+          max_width = function()
+            return vim.o.columns / 2
+          end,
+        })
+        vim.notify = notify
       end,
     },
 
@@ -3119,51 +3209,51 @@ require("lazy").setup({
       end,
     },
 
-    -- {
-    --   "mattn/emmet-vim",
-    --   submodules = false,
-    --   keys = {
-    --     { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
-    --   },
-    --   init = function()
-    --     vim.g.user_emmet_mode = "iv"
-    --     vim.g.user_emmet_leader_key = "<C-e>"
-    --     vim.g.use_emmet_complete_tag = 1
-    --     vim.g.user_emmet_settings = {
-    --       lang = "en",
-    --       html = {
-    --         filters = "html",
-    --         snippets = {
-    --           ["html:5"] = table.concat({
-    --             "<!doctype html>",
-    --             '<html lang="en">',
-    --             "<head>",
-    --             '  <meta charset="${charset}">',
-    --             '  <meta http-equiv="X-UA-Compatible" content="IE=edge">',
-    --             '  <meta name="viewport" content="width=device-width,initial-scale=1.0">',
-    --             '  <meta name="format-detection" content="telephone=no,address=no,email=no">',
-    --             '  <meta name="description" content="">',
-    --             '  <link rel="shortcut icon" href="/favicon.ico">',
-    --             '  <link rel="stylesheet" href="/style.css">',
-    --             "  <title></title>",
-    --             "</head>",
-    --             "<body>",
-    --             "  ${child}|",
-    --             "</body>",
-    --             "</html>",
-    --           }, "\n"),
-    --         },
-    --       },
-    --       css = {
-    --         filters = "fc",
-    --       },
-    --       php = {
-    --         extends = "html",
-    --         filters = "html",
-    --       },
-    --     }
-    --   end,
-    -- },
+    {
+      "mattn/emmet-vim",
+      submodules = false,
+      keys = {
+        { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
+      },
+      init = function()
+        vim.g.user_emmet_mode = "iv"
+        vim.g.user_emmet_leader_key = "<C-e>"
+        vim.g.use_emmet_complete_tag = 1
+        vim.g.user_emmet_settings = {
+          lang = "en",
+          html = {
+            filters = "html",
+            snippets = {
+              ["html:5"] = table.concat({
+                "<!doctype html>",
+                '<html lang="en">',
+                "<head>",
+                '  <meta charset="${charset}">',
+                '  <meta http-equiv="X-UA-Compatible" content="IE=edge">',
+                '  <meta name="viewport" content="width=device-width,initial-scale=1.0">',
+                '  <meta name="format-detection" content="telephone=no,address=no,email=no">',
+                '  <meta name="description" content="">',
+                '  <link rel="shortcut icon" href="/favicon.ico">',
+                '  <link rel="stylesheet" href="/style.css">',
+                "  <title></title>",
+                "</head>",
+                "<body>",
+                "  ${child}|",
+                "</body>",
+                "</html>",
+              }, "\n"),
+            },
+          },
+          css = {
+            filters = "fc",
+          },
+          php = {
+            extends = "html",
+            filters = "html",
+          },
+        }
+      end,
+    },
 
     {
       "machakann/vim-sandwich",
@@ -3448,6 +3538,7 @@ require("lazy").setup({
           folder = "Templates",
         },
         open_app_foreground = true,
+        disable_frontmatter = true,
         attachments = {
           img_folder = "Extra",
         },
