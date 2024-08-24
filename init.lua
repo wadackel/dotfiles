@@ -443,8 +443,8 @@ end
 -- Plugins
 -- =============================================================
 local function lsp_on_attach(client, bufnr)
-  local function kmap(mode, lhs, rhs)
-    vim.api.nvim_buf_set_keymap(bufnr, mode, lhs, rhs, { noremap = true, silent = true })
+  local function kmap(modes, lhs, rhs)
+    keymap(modes, lhs, rhs, { buffer = bufnr })
   end
 
   -- Disable LSP Semantic tokens
@@ -459,16 +459,16 @@ local function lsp_on_attach(client, bufnr)
   keymap({ "n" }, "]g", "<cmd>lua vim.diagnostic.goto_next()<CR>")
   keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
-  kmap("n", "<C-]>", "<cmd>Lspsaga goto_definition<CR>")
-  kmap("n", "<C-w><C-]>", "<cmd>Lspsaga peek_definition<CR>")
-  kmap("n", "K", "<cmd>Lspsaga goto_type_definition<CR>")
-  kmap("n", "<Leader>i", "<cmd>Lspsaga hover_doc<CR>")
-  kmap("n", "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
-  kmap("n", "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
-  kmap("n", "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
-  kmap("n", "<Space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
-  kmap("n", "<Space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
-  kmap("n", "<Space>wl", "<cmd>lua print(vim.inspect(vim.lsp.buf.list_workspace_folders()))<CR>")
+  kmap({ "n" }, "<C-]>", "<cmd>Lspsaga goto_definition<CR>")
+  kmap({ "n" }, "<C-w><C-]>", "<cmd>Lspsaga peek_definition<CR>")
+  kmap({ "n" }, "K", "<cmd>Lspsaga goto_type_definition<CR>")
+  kmap({ "n" }, "<Leader>i", "<cmd>Lspsaga hover_doc<CR>")
+  kmap({ "n" }, "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
+  kmap({ "n" }, "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
+  kmap({ "n" }, "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
+  kmap({ "n" }, "<Space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
+  kmap({ "n" }, "<Space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
+  kmap({ "n" }, "<Space>wl", "<cmd>lua vim.print(vim.lsp.buf.list_workspace_folders())<CR>")
 end
 
 -- Bootstrap lazy.nvim
@@ -566,7 +566,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "neovim/nvim-lspconfig",
-      event = "VeryLazy",
+      lazy = false,
       init = function()
         require("lspconfig.ui.windows").default_options.border = "rounded"
 
@@ -650,7 +650,7 @@ require("lazy").setup({
 
     {
       "williamboman/mason-lspconfig.nvim",
-      event = "VeryLazy",
+      lazy = false,
       dependencies = {
         "neovim/nvim-lspconfig",
         "williamboman/mason.nvim",
@@ -690,12 +690,7 @@ require("lazy").setup({
 
     {
       "pmizio/typescript-tools.nvim",
-      ft = {
-        "typescript",
-        "typescriptreact",
-        "javascript",
-        "javascriptreact",
-      },
+      lazy = false,
       dependencies = {
         "nvim-lua/plenary.nvim",
         "neovim/nvim-lspconfig",
@@ -711,7 +706,7 @@ require("lazy").setup({
 
     {
       "mrcjkb/rustaceanvim",
-      ft = { "rust" },
+      lazy = false,
       init = function()
         vim.g.rustaceanvim = {
           tools = {
@@ -767,10 +762,6 @@ require("lazy").setup({
             on_attach = function(client, bufnr)
               lsp_on_attach(client, bufnr)
 
-              local kmap = function(modes, lhs, rhs)
-                keymap(modes, lhs, rhs, { buffer = bufnr })
-              end
-
               local devlog = "__FLUTTER_DEV_LOG__$"
 
               local find_dev_log = function()
@@ -790,9 +781,9 @@ require("lazy").setup({
                 return nil
               end
 
-              kmap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
 
-              kmap({ "n" }, "<Space>do", function()
+              keymap({ "n" }, "<Space>do", function()
                 local buf, win = find_dev_log()
                 if not buf then
                   vim.notify("Flutter Dev Log not found", "warn")
@@ -823,7 +814,7 @@ require("lazy").setup({
                 end
               end)
 
-              kmap({ "n" }, "<Space>dc", function()
+              keymap({ "n" }, "<Space>dc", function()
                 local buf, win = find_dev_log()
                 if not win then
                   vim.notify("Flutter Dev Log not found", "warn")
@@ -931,9 +922,9 @@ require("lazy").setup({
             max_view_entries = 30,
           },
           mapping = cmp.mapping.preset.insert({
+            ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
             ["<C-b>"] = cmp.mapping.scroll_docs(-4),
             ["<C-f>"] = cmp.mapping.scroll_docs(4),
-            ["<C-Space>"] = cmp.mapping.complete(),
             ["<C-e>"] = cmp.mapping.abort(),
             ["<C-y>"] = cmp.mapping.confirm({ select = true }),
             ["<C-l>"] = cmp.mapping.confirm({ select = true }),
