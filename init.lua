@@ -940,6 +940,15 @@ require("lazy").setup({
             max_view_entries = 30,
           },
           mapping = cmp.mapping.preset.insert({
+            ["<C-z>"] = {
+              i = function()
+                if cmp.visible() then
+                  cmp.select_next_item()
+                else
+                  cmp.complete()
+                end
+              end,
+            },
             ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
             ["<C-b>"] = cmp.mapping.scroll_docs(-4),
             ["<C-f>"] = cmp.mapping.scroll_docs(4),
@@ -963,9 +972,31 @@ require("lazy").setup({
 
         cmp.setup.cmdline(":", {
           mapping = cmp.mapping.preset.cmdline({
+            ["<C-n>"] = {
+              c = function(fallback)
+                if cmp.visible() and cmp.get_selected_entry() then
+                  cmp.select_next_item()
+                else
+                  fallback()
+                end
+              end,
+            },
+            ["<C-p>"] = {
+              c = function(fallback)
+                if cmp.visible() and cmp.get_selected_entry() then
+                  cmp.select_prev_item()
+                else
+                  fallback()
+                end
+              end,
+            },
             ["<C-e>"] = {
               c = function(fallback)
-                fallback()
+                if cmp.visible() then
+                  cmp.abort()
+                else
+                  fallback()
+                end
               end,
             },
           }),
@@ -1760,6 +1791,7 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
         "nvim-telescope/telescope-live-grep-args.nvim",
+        "rcarriga/nvim-notify",
       },
       keys = {
         { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
@@ -1779,6 +1811,7 @@ require("lazy").setup({
         { "<Leader>gp", "<cmd>Telescope gh pull_request<CR>", mode = "n", noremap = true },
         { "<Leader>hl", "<cmd>Telescope highlights<CR>", mode = "n", noremap = true },
         { "<Leader>el", "<cmd>Telescope diagnostics<CR>", mode = "n", noremap = true },
+        { "<Leader>nh", "<cmd>Telescope notify<CR>", mode = "n", noremap = true },
       },
       config = function()
         local telescope = require("telescope")
@@ -1945,6 +1978,7 @@ require("lazy").setup({
 
         telescope.load_extension("fzf")
         telescope.load_extension("live_grep_args")
+        telescope.load_extension("notify")
       end,
     },
 
@@ -2285,7 +2319,7 @@ require("lazy").setup({
         local notify = require("notify")
         notify.setup({
           background_colour = "NotifyBackground",
-          render = "compact",
+          render = "wrapped-compact",
           stages = "fade",
           top_down = false,
           max_width = function()
