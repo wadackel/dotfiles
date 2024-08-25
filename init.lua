@@ -815,7 +815,7 @@ require("lazy").setup({
               end)
 
               keymap({ "n" }, "<Space>dc", function()
-                local buf, win = find_dev_log()
+                local _, win = find_dev_log()
                 if not win then
                   vim.notify("Flutter Dev Log not found", "warn")
                   return
@@ -904,19 +904,37 @@ require("lazy").setup({
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
         "hrsh7th/cmp-cmdline",
+        "hrsh7th/cmp-emoji",
         "onsails/lspkind-nvim",
       },
       config = function()
         local cmp = require("cmp")
+        local lspkind = require("lspkind")
 
         cmp.setup({
           window = {
             completion = cmp.config.window.bordered({
               winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
+              col_offset = -3,
+              side_padding = 0,
             }),
             documentation = cmp.config.window.bordered({
               winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
             }),
+          },
+          formatting = {
+            fields = { "kind", "abbr", "menu" },
+            format = function(entry, vim_item)
+              local kind = lspkind.cmp_format({
+                mode = "symbol_text",
+                maxwidth = 50,
+                ellipsis_char = "…",
+              })(entry, vim_item)
+              local list = vim.split(kind.kind, "%s", { trimempty = true })
+              kind.kind = " " .. (list[1] or "") .. " "
+              kind.menu = "  " .. (list[2] or "")
+              return kind
+            end,
           },
           performance = {
             max_view_entries = 30,
@@ -967,15 +985,12 @@ require("lazy").setup({
           }),
         })
 
-        -- Icons
-        local lspkind = require("lspkind")
-        cmp.setup({
-          formatting = {
-            format = lspkind.cmp_format({
-              mode = "symbol_text",
-              maxwidth = 50,
-            }),
-          },
+        cmp.setup.filetype("markdown", {
+          sources = cmp.config.sources({
+            { name = "emoji", option = { insert = false } },
+          }, {
+            { name = "buffer" },
+          }),
         })
       end,
     },
@@ -1247,6 +1262,7 @@ require("lazy").setup({
             },
             json = { "prettierd" },
             markdown = { "prettierd" },
+            yaml = { "prettierd" },
             html = { "prettierd" },
             rust = { "rustfmt" },
             go = { "gofumpt", "goimports" },
