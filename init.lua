@@ -459,7 +459,7 @@ local function lsp_on_attach(client, bufnr)
   keymap({ "n" }, "]g", "<cmd>lua vim.diagnostic.goto_next()<CR>")
   keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
-  kmap({ "n" }, "<C-]>", "<cmd>Lspsaga goto_definition<CR>")
+  kmap({ "n" }, "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
   kmap({ "n" }, "<C-w><C-]>", "<cmd>Lspsaga peek_definition<CR>")
   kmap({ "n" }, "K", "<cmd>Lspsaga goto_type_definition<CR>")
   kmap({ "n" }, "<Leader>i", "<cmd>Lspsaga hover_doc<CR>")
@@ -651,10 +651,6 @@ require("lazy").setup({
     {
       "williamboman/mason-lspconfig.nvim",
       lazy = false,
-      dependencies = {
-        "neovim/nvim-lspconfig",
-        "williamboman/mason.nvim",
-      },
       config = function()
         local lspconfig = require("lspconfig")
 
@@ -681,7 +677,7 @@ require("lazy").setup({
             }))
           end,
           -- Use typescript-tools.nvim
-          ["tsserver"] = function() end,
+          ["ts_ls"] = function() end,
           -- Use rustaceanvim
           ["rust_analyzer"] = function() end,
         })
@@ -904,6 +900,7 @@ require("lazy").setup({
         "hrsh7th/cmp-buffer",
         "hrsh7th/cmp-path",
         "hrsh7th/cmp-cmdline",
+        "petertriho/cmp-git",
         "hrsh7th/cmp-emoji",
         "onsails/lspkind-nvim",
       },
@@ -911,6 +908,69 @@ require("lazy").setup({
         local cmp = require("cmp")
         local lspkind = require("lspkind")
 
+        -- mappings
+        local mapping_insert = cmp.mapping.preset.insert({
+          ["<C-z>"] = {
+            i = function()
+              if cmp.visible() then
+                cmp.select_next_item()
+              else
+                cmp.complete()
+              end
+            end,
+          },
+          ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
+          ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+          ["<C-f>"] = cmp.mapping.scroll_docs(4),
+          ["<C-e>"] = cmp.mapping.abort(),
+          ["<C-y>"] = cmp.mapping.confirm({ select = true }),
+        })
+
+        local mapping_cmdline = cmp.mapping.preset.cmdline({
+          ["<C-z>"] = {
+            c = function()
+              if cmp.visible() then
+                cmp.select_next_item()
+              else
+                cmp.complete()
+              end
+            end,
+          },
+          ["<C-x><C-o>"] = { -- like omnifunc
+            c = function()
+              cmp.complete()
+            end,
+          },
+          ["<C-n>"] = {
+            c = function(fallback)
+              if cmp.visible() then
+                cmp.select_next_item()
+              else
+                fallback()
+              end
+            end,
+          },
+          ["<C-p>"] = {
+            c = function(fallback)
+              if cmp.visible() then
+                cmp.select_prev_item()
+              else
+                fallback()
+              end
+            end,
+          },
+          ["<C-e>"] = {
+            c = function(fallback)
+              if cmp.visible() then
+                cmp.abort()
+              else
+                fallback()
+              end
+            end,
+          },
+        })
+
+        -- base
         cmp.setup({
           window = {
             completion = cmp.config.window.bordered({
@@ -939,23 +999,7 @@ require("lazy").setup({
           performance = {
             max_view_entries = 30,
           },
-          mapping = cmp.mapping.preset.insert({
-            ["<C-z>"] = {
-              i = function()
-                if cmp.visible() then
-                  cmp.select_next_item()
-                else
-                  cmp.complete()
-                end
-              end,
-            },
-            ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
-            ["<C-b>"] = cmp.mapping.scroll_docs(-4),
-            ["<C-f>"] = cmp.mapping.scroll_docs(4),
-            ["<C-e>"] = cmp.mapping.abort(),
-            ["<C-y>"] = cmp.mapping.confirm({ select = true }),
-            ["<C-l>"] = cmp.mapping.confirm({ select = true }),
-          }),
+          mapping = mapping_insert,
           sources = cmp.config.sources({
             { name = "nvim_lsp" },
             { name = "path" },
@@ -963,43 +1007,12 @@ require("lazy").setup({
           }),
         })
 
-        cmp.setup.cmdline({ "/", "?" }, {
-          mapping = cmp.mapping.preset.cmdline(),
-          sources = {
-            { name = "buffer" },
-          },
-        })
-
+        -- cmdline
         cmp.setup.cmdline(":", {
-          mapping = cmp.mapping.preset.cmdline({
-            ["<C-n>"] = {
-              c = function(fallback)
-                if cmp.visible() and cmp.get_selected_entry() then
-                  cmp.select_next_item()
-                else
-                  fallback()
-                end
-              end,
-            },
-            ["<C-p>"] = {
-              c = function(fallback)
-                if cmp.visible() and cmp.get_selected_entry() then
-                  cmp.select_prev_item()
-                else
-                  fallback()
-                end
-              end,
-            },
-            ["<C-e>"] = {
-              c = function(fallback)
-                if cmp.visible() then
-                  cmp.abort()
-                else
-                  fallback()
-                end
-              end,
-            },
-          }),
+          mapping = mapping_cmdline,
+          completion = {
+            autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
+          },
           sources = cmp.config.sources({
             { name = "path" },
           }, {
@@ -1008,6 +1021,17 @@ require("lazy").setup({
           matching = { disallow_symbol_nonprefix_matching = false },
         })
 
+        cmp.setup.cmdline({ "/", "?" }, {
+          mapping = mapping_cmdline,
+          completion = {
+            autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
+          },
+          sources = {
+            { name = "buffer" },
+          },
+        })
+
+        -- filetypes
         cmp.setup.filetype("gitcommit", {
           sources = cmp.config.sources({
             { name = "cmp_git" },

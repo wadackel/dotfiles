@@ -13,6 +13,7 @@
 
 [core]
   editor = nvim
+  pager = delta
   attributesfile = ~/.gitattributes
   excludesfile = ~/.gitignore_global
   precomposeUnicode = true
@@ -20,8 +21,12 @@
   untrackedcache = true
   fsmonitor = true
 
+[interactive]
+    diffFilter = delta --color-only
+
 [merge]
   tool = nvimdiff
+  conflictstyle = diff3
 
 [pull]
   ff = only
@@ -31,6 +36,7 @@
 
 [diff]
   tool = nvimdiff
+  colorMoved = default
 
 [difftool "nvimdiff"]
   cmd = "nvim -R -d -c \"wincmd l\" -d \"$LOCAL\" \"$REMOTE\""
@@ -101,6 +107,30 @@
 
 [github]
   user = wadackel
+
+; NOTE: adopt theme (see `delta --diff-so-fancy --show-config`)
+[delta]
+  navigate = true
+  features = side-by-side line-numbers decorations
+  syntax-theme = "Nord"
+  plus-style = syntax "#1c394b"
+  plus-emph-style = bold "#c7cef3" "#1c394b"
+  plus-empty-line-marker-style = normal "#1c394b"
+  minus-style = syntax "#5e3e5e"
+  minus-emph-style = bold "#d2d9ff" "#5e3e5e"
+  minus-empty-line-marker-style = syntax "#5e3e5e"
+
+[delta "decorations"]
+  commit-decoration-style = bold yellow box ul
+  file-style = bold white ul
+  file-decoration-style = none
+  hunk-header-decoration-style = cyan box ul
+
+[delta "line-numbers"]
+  line-numbers-left-style = "#545c8c"
+  line-numbers-right-style = "#545c8c"
+  line-numbers-plus-style = "#7cbe8c"
+  line-numbers-minus-style = "#ff9494"
 
 [includeIf "gitdir:~/develop/github.com/"]
   path = ~/develop/github.com/.gitconfig
