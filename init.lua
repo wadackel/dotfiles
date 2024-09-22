@@ -260,9 +260,9 @@ vim.api.nvim_create_user_command("ClipDir", function()
   clip(vim.fn.expand("%:p:h"))
 end, {})
 
-keymap({ "n" }, "<Leader>cp", ":ClipPath<CR>")
-keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
-keymap({ "n" }, "<Leader>cd", ":ClipDir<CR>")
+-- keymap({ "n" }, "<Leader>cp", ":ClipPath<CR>")
+-- keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
+-- keymap({ "n" }, "<Leader>cd", ":ClipDir<CR>")
 
 -- QuickFix の設定
 vim.api.nvim_create_augroup("QuickfixConfigure", {})
@@ -1384,6 +1384,82 @@ require("lazy").setup({
       config = function()
         vim.g.copilot_node_command = "~/.asdf/shims/node"
       end,
+    },
+
+    {
+      "CopilotC-Nvim/CopilotChat.nvim",
+      branch = "canary",
+      build = "make tiktoken",
+      keys = {
+        -- Copilot とのチャットを開く
+        {
+          "<Leader>co",
+          ":CopilotChatOpen<CR>",
+          mode = "n",
+          noremap = true,
+        },
+        -- バッファの内容全体を使って Copilot とチャットする
+        {
+          "<Leader>cq",
+          function()
+            local input = vim.fn.input("Quick Chat: ")
+            if input ~= "" then
+              require("CopilotChat").ask(input, {
+                selection = require("CopilotChat.select").buffer,
+              })
+            end
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        -- Telescope で Copilot のアクション開く
+        {
+          "<Leader>cp",
+          function()
+            local actions = require("CopilotChat.actions")
+            require("CopilotChat.integrations.telescope").pick(actions.prompt_actions())
+          end,
+          mode = { "n", "v" },
+          noremap = true,
+        },
+      },
+      opts = {
+        debug = false,
+        prompts = {
+          Explain = {
+            prompt = "/COPILOT_EXPLAIN 現在選択されているコードの説明を書いてください。",
+          },
+          Review = {
+            prompt = "/COPILOT_REVIEW 選択されているコードのレビューをしてください。",
+          },
+          Fix = {
+            prompt = "/COPILOT_FIX このコードに問題があります。バグを修正したコードを示すように書き直してください。",
+          },
+          Optimize = {
+            prompt = "/COPILOT_REFACTOR 選択されているコードを最適化して、パフォーマンスと可読性を向上させてください。",
+          },
+          Docs = {
+            prompt = "/COPILOT_REFACTOR 選択されているコードにドキュメントコメントを追加してください。",
+          },
+          Tests = {
+            prompt = "/COPILOT_TESTS テストを書いてください。解説は日本語で行ってください。",
+          },
+          FixDiagnostic = {
+            prompt = "このコードに問題があります。バグを修正したコードを示すように書き直してください:",
+            selection = function(source)
+              return require("CopilotChat.select").diagnostics(source)
+            end,
+          },
+        },
+        window = {
+          layout = "float",
+          width = 0.8,
+          height = 0.7,
+          relative = "editor",
+          border = "rounded",
+          title = "Copilot Chat",
+        },
+      },
     },
 
     -- =============================================================
