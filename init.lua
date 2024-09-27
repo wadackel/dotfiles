@@ -752,65 +752,35 @@ require("lazy").setup({
           dev_log = {
             enabled = true,
             notify_errors = false,
-            open_cmd = "botright 15split",
+            open_cmd = "rightbelow vertical split",
           },
           lsp = {
             on_attach = function(client, bufnr)
               lsp_on_attach(client, bufnr)
 
-              local devlog = "__FLUTTER_DEV_LOG__$"
+              local dev_log = "__FLUTTER_DEV_LOG__$"
+
+              local get_win = function(buf)
+                for _, win in ipairs(vim.api.nvim_list_wins()) do
+                  if vim.api.nvim_win_get_buf(win) == buf then
+                    return win
+                  end
+                end
+                return nil
+              end
 
               local find_dev_log = function()
                 for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                   local bufname = vim.api.nvim_buf_get_name(buf)
-                  if string.match(bufname, devlog) then
-                    local win = nil
-                    for _, w in ipairs(vim.api.nvim_list_wins()) do
-                      if vim.api.nvim_win_get_buf(w) == buf then
-                        win = w
-                        break
-                      end
-                    end
+                  if string.match(bufname, dev_log) then
+                    local win = get_win(buf)
                     return buf, win
                   end
                 end
                 return nil
               end
 
-              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
-
-              keymap({ "n" }, "<Space>do", function()
-                local buf, win = find_dev_log()
-                if not buf then
-                  vim.notify("Flutter Dev Log not found", "warn")
-                  return
-                end
-
-                local current_win = vim.api.nvim_get_current_win()
-
-                -- Open dev log
-                if win then
-                  vim.api.nvim_set_current_win(win)
-                else
-                  vim.api.nvim_command("botright 15split")
-                  vim.api.nvim_set_current_buf(buf)
-                end
-
-                -- Move to the end of the buffer
-                local line_count = vim.api.nvim_buf_line_count(buf)
-                if line_count > 0 then
-                  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-                else
-                  vim.api.nvim_win_set_cursor(0, { 1, 0 })
-                end
-
-                -- Restore the original window
-                if not win then
-                  vim.api.nvim_set_current_win(current_win)
-                end
-              end)
-
-              keymap({ "n" }, "<Space>dc", function()
+              local close_dev_log = function()
                 local _, win = find_dev_log()
                 if not win then
                   vim.notify("Flutter Dev Log not found", "warn")
@@ -818,15 +788,46 @@ require("lazy").setup({
                 end
 
                 -- Close dev log
+                local log = require("flutter-tools.log")
+                log.win = nil
+                log.buf = nil
                 vim.api.nvim_win_close(win, true)
+              end
+
+              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+
+              keymap({ "n" }, "<Space>do", function()
+                local log = require("flutter-tools.log")
+                local buf, win = find_dev_log()
+
+                if not buf then
+                  vim.notify("Flutter Dev Log not found", "warn")
+                  return
+                end
+
+                if win then
+                  vim.api.nvim_set_current_win(win)
+                else
+                  vim.api.nvim_command("rightbelow vertical split")
+                  vim.api.nvim_set_current_buf(buf)
+                  win = vim.api.nvim_get_current_win()
+                  log.win = win
+                  log.buf = buf
+                  log.log("", {
+                    enabled = true,
+                    open_cmd = "rightbelow vertical split",
+                  })
+                end
               end)
+
+              keymap({ "n" }, "<Space>dc", close_dev_log)
 
               vim.api.nvim_create_autocmd("FileType", {
                 pattern = "log",
                 callback = function()
                   local bufname = vim.api.nvim_buf_get_name(0)
-                  if string.match(bufname, devlog) then
-                    keymap({ "n" }, "q", "<C-w>c", { buffer = 0 })
+                  if string.match(bufname, dev_log) then
+                    keymap({ "n" }, "q", close_dev_log, { buffer = 0 })
                   end
                 end,
               })
@@ -1629,6 +1630,8 @@ require("lazy").setup({
         "nvim-tree/nvim-web-devicons",
         "kwkarlwang/bufresize.nvim",
       },
+      -- See https://github.com/nvim-tree/nvim-tree.lua/issues/2928
+      version = "1.6.1",
       keys = {
         {
           "<C-j>",
