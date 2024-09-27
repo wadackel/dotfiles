@@ -811,12 +811,18 @@ require("lazy").setup({
                   vim.api.nvim_command("rightbelow vertical split")
                   vim.api.nvim_set_current_buf(buf)
                   win = vim.api.nvim_get_current_win()
+
+                  -- Reset module state
                   log.win = win
                   log.buf = buf
-                  log.log("", {
-                    enabled = true,
-                    open_cmd = "rightbelow vertical split",
-                  })
+
+                  -- Move to the end of the buffer
+                  local line_count = vim.api.nvim_buf_line_count(buf)
+                  if line_count > 0 then
+                    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+                  else
+                    vim.api.nvim_win_set_cursor(0, { 1, 0 })
+                  end
                 end
               end)
 
