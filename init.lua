@@ -732,6 +732,8 @@ require("lazy").setup({
         "stevearc/dressing.nvim",
       },
       config = function()
+        local dev_log_open_cmd = "rightbelow vertical split"
+
         require("flutter-tools").setup({
           flutter_path = nil,
           flutter_lookup_cmd = "asdf where flutter",
@@ -752,7 +754,7 @@ require("lazy").setup({
           dev_log = {
             enabled = true,
             notify_errors = false,
-            open_cmd = "rightbelow vertical split",
+            open_cmd = dev_log_open_cmd,
           },
           lsp = {
             on_attach = function(client, bufnr)
@@ -808,7 +810,7 @@ require("lazy").setup({
                 if win then
                   vim.api.nvim_set_current_win(win)
                 else
-                  vim.api.nvim_command("rightbelow vertical split")
+                  vim.api.nvim_command(dev_log_open_cmd)
                   vim.api.nvim_set_current_buf(buf)
                   win = vim.api.nvim_get_current_win()
 
