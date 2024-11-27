@@ -627,7 +627,7 @@ require("lazy").setup({
           "astro",
           "rust_analyzer",
           "terraformls",
-          "tsserver",
+          "ts_ls",
           "lua_ls",
           "vimls",
           "gopls",
@@ -637,6 +637,7 @@ require("lazy").setup({
           "eslint_d",
           "stylelint",
           "textlint",
+          "typos-lsp",
 
           -- Formatter
           "prettierd",
@@ -680,6 +681,30 @@ require("lazy").setup({
           ["ts_ls"] = function() end,
           -- Use rustaceanvim
           ["rust_analyzer"] = function() end,
+        })
+
+        -- See:
+        -- `xcrun --sdk iphonesimulator --show-sdk-path`
+        lspconfig.sourcekit.setup({
+          cmd = {
+            "sourcekit-lsp",
+            "-Xswiftc",
+            "-sdk",
+            "-Xswiftc",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator17.2.sdk",
+            "-Xswiftc",
+            "-target",
+            "-Xswiftc",
+            "x86_64-apple-ios17.2-simulator",
+          },
+          capabilities = {
+            workspace = {
+              didChangeWatchedFiles = {
+                dynamicRegistration = true,
+              },
+            },
+          },
+          on_attach = lsp_on_attach,
         })
       end,
     },
@@ -782,23 +807,7 @@ require("lazy").setup({
                 return nil
               end
 
-              local close_dev_log = function()
-                local _, win = find_dev_log()
-                if not win then
-                  vim.notify("Flutter Dev Log not found", "warn")
-                  return
-                end
-
-                -- Close dev log
-                local log = require("flutter-tools.log")
-                log.win = nil
-                log.buf = nil
-                vim.api.nvim_win_close(win, true)
-              end
-
-              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
-
-              keymap({ "n" }, "<Space>do", function()
+              local open_dev_log = function()
                 local log = require("flutter-tools.log")
                 local buf, win = find_dev_log()
 
@@ -814,10 +823,6 @@ require("lazy").setup({
                   vim.api.nvim_set_current_buf(buf)
                   win = vim.api.nvim_get_current_win()
 
-                  -- Reset module state
-                  log.win = win
-                  log.buf = buf
-
                   -- Move to the end of the buffer
                   local line_count = vim.api.nvim_buf_line_count(buf)
                   if line_count > 0 then
@@ -826,8 +831,23 @@ require("lazy").setup({
                     vim.api.nvim_win_set_cursor(0, { 1, 0 })
                   end
                 end
-              end)
 
+                -- Reset module state
+                log.win = win
+                log.buf = buf
+              end
+
+              local close_dev_log = function()
+                local _, win = find_dev_log()
+                if not win then
+                  vim.notify("Flutter Dev Log not found", "warn")
+                  return
+                end
+                vim.api.nvim_win_close(win, true)
+              end
+
+              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+              keymap({ "n" }, "<Space>do", open_dev_log)
               keymap({ "n" }, "<Space>dc", close_dev_log)
 
               vim.api.nvim_create_autocmd("FileType", {
