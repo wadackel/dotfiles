@@ -61,7 +61,6 @@ export PATH="${HOME}/flutter/bin:${PATH}"
 export PATH="${HOME}/fvm/default/bin:${PATH}"
 export PATH="${HOME}/.rbenv/bin:${PATH}"
 export PATH="${PATH}:${HOME}/.pub-cache/bin"
-export PATH="${GOENV_ROOT}/bin:${PATH}"
 
 # # QEMU (M1 device)
 # if [ -d "/opt/QEMU" ]; then
