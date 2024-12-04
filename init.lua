@@ -677,6 +677,13 @@ require("lazy").setup({
               },
             }))
           end,
+          ["typos_lsp"] = function()
+            lspconfig.typos_lsp.setup({
+              init_options = {
+                diagnosticSeverity = "Info",
+              },
+            })
+          end,
           -- Use typescript-tools.nvim
           ["ts_ls"] = function() end,
           -- Use rustaceanvim
@@ -1077,15 +1084,6 @@ require("lazy").setup({
           }),
         })
       end,
-    },
-
-    {
-      "ray-x/lsp_signature.nvim",
-      event = "VeryLazy",
-      opts = {
-        hint_enable = false,
-        timer_interval = 60,
-      },
     },
 
     {
@@ -1492,7 +1490,7 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Syntax Extention
+    -- Syntax Extension
     -- =============================================================
     {
       "nvim-treesitter/nvim-treesitter",
@@ -1717,6 +1715,14 @@ require("lazy").setup({
                 ignored = "◌",
               },
             },
+          },
+        },
+        filesystem_watchers = {
+          ignore_dirs = {
+            "/.ccls-cache",
+            "/build",
+            "/node_modules",
+            "/target",
           },
         },
         actions = {
