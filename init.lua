@@ -82,7 +82,7 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 vim.opt.wrapscan = true
 vim.opt.showmatch = true
-vim.opt.showmode = true
+vim.opt.showmode = false
 vim.opt.title = true
 vim.opt.ruler = true
 vim.opt.tabstop = 2
@@ -96,7 +96,6 @@ vim.opt.laststatus = 3
 vim.opt.clipboard = "unnamedplus"
 vim.opt.wildmenu = true
 vim.opt.wildmode = { "longest", "full" }
-vim.opt.showmode = false
 vim.opt.iminsert = 0
 vim.opt.imsearch = 0
 vim.opt.backspace = { "indent", "eol", "start" }
@@ -1415,7 +1414,6 @@ require("lazy").setup({
 
     {
       "CopilotC-Nvim/CopilotChat.nvim",
-      branch = "canary",
       build = "make tiktoken",
       keys = {
         -- Copilot とのチャットを開く
@@ -1656,8 +1654,6 @@ require("lazy").setup({
         "nvim-tree/nvim-web-devicons",
         "kwkarlwang/bufresize.nvim",
       },
-      -- See https://github.com/nvim-tree/nvim-tree.lua/issues/2928
-      version = "1.6.1",
       keys = {
         {
           "<C-j>",
@@ -1717,14 +1713,6 @@ require("lazy").setup({
             },
           },
         },
-        filesystem_watchers = {
-          ignore_dirs = {
-            "/.ccls-cache",
-            "/build",
-            "/node_modules",
-            "/target",
-          },
-        },
         actions = {
           file_popup = {
             open_win_config = {
@@ -1736,6 +1724,7 @@ require("lazy").setup({
             },
           },
           open_file = {
+            resize_window = false,
             window_picker = {
               enable = false,
             },
