@@ -2495,13 +2495,6 @@ require("lazy").setup({
         "Gblame",
       },
       init = function()
-        local function OpenFugitiveOpenPullRequest()
-          local line = vim.fn.getline(".")
-          local pos = string.find(line, " ")
-          local hash = string.sub(line, 1, pos - 1)
-          print(vim.fn.system("git openpr " .. hash))
-        end
-
         -- augroupを設定
         local augroup = vim.api.nvim_create_augroup("fugitive_setup", { clear = true })
 
@@ -2522,7 +2515,12 @@ require("lazy").setup({
             vim.api.nvim_buf_set_keymap(0, "n", "gp", "", {
               noremap = true,
               silent = true,
-              callback = OpenFugitiveOpenPullRequest,
+              callback = function()
+                local line = vim.fn.getline(".")
+                local pos = string.find(line, " ")
+                local hash = string.sub(line, 1, pos - 1)
+                print(vim.fn.system("git openpr " .. hash))
+              end,
             })
           end,
         })
@@ -3488,57 +3486,6 @@ require("lazy").setup({
         },
       },
     },
-
-    -- {
-    --   "machakann/vim-sandwich",
-    --   event = "VeryLazy",
-    --   config = function()
-    --     vim.g["sandwich#recipes"] = vim.fn.deepcopy(vim.g["sandwich#default_recipes"])
-    --
-    --     table.insert(vim.g["sandwich#recipes"], {
-    --       external = { "it", "at" },
-    --       noremap = 1,
-    --       filetype = { "html" },
-    --       input = { "t" },
-    --     })
-    --
-    --     table.insert(vim.g["sandwich#recipes"], {
-    --       buns = { "TagInput(1)", "TagInput(0)" },
-    --       expr = 1,
-    --       filetype = { "html" },
-    --       kind = { "add", "replace" },
-    --       action = { "add" },
-    --       input = { "t" },
-    --     })
-    --
-    --     local TagLast = ""
-    --
-    --     function TagInput(is_head)
-    --       if is_head == 1 then
-    --         TagLast = vim.fn.input("Tag Name: ")
-    --         if TagLast ~= "" then
-    --           return string.format("<%s>", TagLast)
-    --         else
-    --           error("OperatorSandwichCancel")
-    --         end
-    --       else
-    --         return string.format("</%s>", string.match(TagLast, "^\a[^[:blank:]>/]*"))
-    --       end
-    --     end
-    --
-    --     _G.TagInput = TagInput
-    --
-    --     table.insert(vim.g["sandwich#recipes"], {
-    --       buns = { "「", "」" },
-    --       -- expr = 1,
-    --       -- nesting = 1,
-    --       filetype = { "*" },
-    --       kind = { "add" },
-    --       action = { "add" },
-    --       input = { "j[" },
-    --     })
-    --   end,
-    -- },
 
     {
       "junegunn/vim-easy-align",
