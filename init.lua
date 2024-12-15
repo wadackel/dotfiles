@@ -259,10 +259,6 @@ vim.api.nvim_create_user_command("ClipDir", function()
   clip(vim.fn.expand("%:p:h"))
 end, {})
 
--- keymap({ "n" }, "<Leader>cp", ":ClipPath<CR>")
--- keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
--- keymap({ "n" }, "<Leader>cd", ":ClipDir<CR>")
-
 -- QuickFix の設定
 vim.api.nvim_create_augroup("QuickfixConfigure", {})
 vim.api.nvim_create_autocmd({ "FileType" }, {
@@ -374,6 +370,11 @@ vim.api.nvim_create_autocmd({ "TermOpen" }, {
 
 keymap({ "t" }, "<C-[>", "<C-\\><C-n>", { silent = false })
 keymap({ "t" }, "<Esc>", "<C-\\><C-n>", { silent = false })
+
+-- Neovim in Neovim を避ける
+if vim.fn.executable("nvr") == 1 then
+  vim.env.EDITOR = 'nvr -cc split -c "set bufhidden=delete" --remote-wait'
+end
 
 -- コマンドラインモード
 vim.api.nvim_create_user_command("AutoUpdateColorscheme", function(args)
@@ -626,10 +627,10 @@ require("lazy").setup({
           "astro",
           "rust_analyzer",
           "terraformls",
-          "ts_ls",
           "lua_ls",
           "vimls",
           "gopls",
+          -- "ts_ls",
 
           -- Linter
           "actionlint",
@@ -1419,8 +1420,8 @@ require("lazy").setup({
         -- Copilot とのチャットを開く
         {
           "<Leader>co",
-          ":CopilotChatOpen<CR>",
-          mode = "n",
+          ":CopilotChat<CR>",
+          mode = { "n", "v" },
           noremap = true,
         },
         -- バッファの内容全体を使って Copilot とチャットする
@@ -1632,11 +1633,15 @@ require("lazy").setup({
     {
       "windwp/nvim-autopairs",
       event = { "BufReadPre", "BufNewFile" },
-      opts = {
-        check_ts = true,
-        map_c_h = true,
-        map_c_w = true,
-      },
+      config = function()
+        local npairs = require("nvim-autopairs")
+
+        npairs.setup({
+          check_ts = true,
+          map_c_h = true,
+          map_c_w = true,
+        })
+      end,
     },
 
     {
@@ -1653,6 +1658,7 @@ require("lazy").setup({
       dependencies = {
         "nvim-tree/nvim-web-devicons",
         "kwkarlwang/bufresize.nvim",
+        "b0o/nvim-tree-preview.lua",
       },
       keys = {
         {
@@ -1747,23 +1753,6 @@ require("lazy").setup({
               silent = true,
               nowait = true,
             }
-          end
-
-          -- open as vsplit on current node
-          local function vsplit_preview()
-            local node = api.tree.get_node_under_cursor()
-
-            if node.nodes ~= nil then
-              -- expand or collapse folder
-              api.node.open.edit()
-            else
-              -- open file as vsplit
-              api.node.open.vertical()
-              -- FIXME use preview
-            end
-
-            -- Finally refocus on tree if it was lost
-            api.tree.focus()
           end
 
           -- root to global
@@ -1861,8 +1850,7 @@ require("lazy").setup({
           keymap({ "n" }, "<C-h>", api.tree.change_root_to_parent, opts("Change Root To Parent"))
           keymap({ "n" }, "t", api.node.open.tab, opts("Open: New Tab"))
           keymap({ "n" }, "O", api.node.open.vertical, opts("Open: Vertical Split"))
-          keymap({ "n" }, "<Tab>", vsplit_preview, opts("Preview: Vertical Split"))
-          keymap({ "n" }, "<C-c>", change_root_to_global_cwd, opts("Change Root To Global CWD"))
+          keymap({ "n" }, "~", change_root_to_global_cwd, opts("Change Root To Global CWD"))
           keymap({ "n" }, "E", api.tree.expand_all, opts("Expand All"))
           keymap({ "n" }, "W", api.tree.collapse_all, opts("Collapse All"))
           keymap({ "n" }, "-", api.tree.change_root_to_parent, opts("Up"))
@@ -1886,6 +1874,42 @@ require("lazy").setup({
           keymap({ "n" }, "f", api.live_filter.start, opts("Filter"))
           keymap({ "n" }, "F", api.live_filter.start, opts("Clean Filter"))
           keymap({ "n" }, "?", api.tree.toggle_help, opts("Help"))
+
+          -- Preview
+          local preview = require("nvim-tree-preview")
+
+          local feedkey = function(mode, key)
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, true, true), mode, true)
+          end
+
+          local preview_watch = function()
+            if preview.is_open() then
+              preview.unwatch()
+            else
+              preview.watch()
+            end
+          end
+
+          local preview_scroll_forward = function()
+            if preview.is_open() then
+              preview.scroll(10)
+            else
+              feedkey("n", "<C-f>")
+            end
+          end
+
+          local preview_scroll_backward = function()
+            if preview.is_open() then
+              preview.scroll(-10)
+            else
+              feedkey("n", "<C-b>")
+            end
+          end
+
+          keymap({ "n" }, "<Tab>", preview_watch, opts("Preview"))
+          keymap({ "n" }, "<C-c>", preview.unwatch, opts("Close Preview / Unwatch"))
+          keymap({ "n" }, "<C-f>", preview_scroll_forward, opts("Scroll Forward"))
+          keymap({ "n" }, "<C-b>", preview_scroll_backward, opts("Scroll Backward"))
         end,
       },
     },
@@ -2196,7 +2220,7 @@ require("lazy").setup({
           auto_scroll = false,
           start_in_insert = false,
           winbar = {
-            enabled = true,
+            enabled = false,
           },
         })
 
@@ -3356,8 +3380,165 @@ require("lazy").setup({
     {
       "echasnovski/mini.ai",
       event = "VeryLazy",
-      opts = {},
+      opts = {
+        custom_textobjects = {
+          ["j"] = function()
+            local ok, val = pcall(vim.fn.getchar)
+            if not ok then
+              return
+            end
+            local char = vim.fn.nr2char(val)
+
+            local dict = {
+              ["("] = { "（().-()）" },
+              ["{"] = { "｛().-()｝" },
+              ["["] = { "「().-()」" },
+              ["]"] = { "『().-()』" },
+              ["<"] = { "＜().-()＞" },
+              ['"'] = { "”().-()”" },
+            }
+
+            if char == "b" then
+              local ret = {}
+              for _, v in pairs(dict) do
+                table.insert(ret, v)
+              end
+              return { ret }
+            end
+
+            if dict[char] then
+              return dict[char]
+            end
+
+            error("%s is unsupported textobjects in Japanese")
+          end,
+        },
+      },
     },
+
+    {
+      "echasnovski/mini.surround",
+      event = "VeryLazy",
+      opts = {
+        mappings = {
+          highlight = "<Nop>",
+          update_n_lines = "<Nop>",
+        },
+        custom_surroundings = {
+          ["("] = { output = { left = "(", right = ")" } },
+          [")"] = { output = { left = "( ", right = " )" } },
+          ["["] = { output = { left = "[", right = "]" } },
+          ["]"] = { output = { left = "[ ", right = " ]" } },
+          ["{"] = { output = { left = "{", right = "}" } },
+          ["}"] = { output = { left = "{ ", right = " }" } },
+          ["j"] = {
+            input = function()
+              local ok, val = pcall(vim.fn.getchar)
+              if not ok then
+                return
+              end
+              local char = vim.fn.nr2char(val)
+
+              local dict = {
+                ["("] = { "（().-()）" },
+                ["{"] = { "｛().-()｝" },
+                ["["] = { "「().-()」" },
+                ["]"] = { "『().-()』" },
+                ["<"] = { "＜().-()＞" },
+                ['"'] = { "”().-()”" },
+              }
+
+              if char == "b" then
+                local ret = {}
+                for _, v in pairs(dict) do
+                  table.insert(ret, v)
+                end
+                return { ret }
+              end
+
+              if dict[char] then
+                return dict[char]
+              end
+
+              error("%s is unsupported surroundings in Japanese")
+            end,
+            output = function()
+              local ok, val = pcall(vim.fn.getchar)
+              if not ok then
+                return
+              end
+              local char = vim.fn.nr2char(val)
+
+              local dict = {
+                ["("] = { left = "（", right = "）" },
+                ["{"] = { left = "｛", right = "｝" },
+                ["["] = { left = "「", right = "」" },
+                ["]"] = { left = "『", right = "』" },
+                ["<"] = { left = "＜", right = "＞" },
+                ['"'] = { left = "”", right = "”" },
+              }
+
+              if not dict[char] then
+                error("%s is unsupported surroundings in Japanese")
+              end
+
+              return dict[char]
+            end,
+          },
+        },
+      },
+    },
+
+    -- {
+    --   "machakann/vim-sandwich",
+    --   event = "VeryLazy",
+    --   config = function()
+    --     vim.g["sandwich#recipes"] = vim.fn.deepcopy(vim.g["sandwich#default_recipes"])
+    --
+    --     table.insert(vim.g["sandwich#recipes"], {
+    --       external = { "it", "at" },
+    --       noremap = 1,
+    --       filetype = { "html" },
+    --       input = { "t" },
+    --     })
+    --
+    --     table.insert(vim.g["sandwich#recipes"], {
+    --       buns = { "TagInput(1)", "TagInput(0)" },
+    --       expr = 1,
+    --       filetype = { "html" },
+    --       kind = { "add", "replace" },
+    --       action = { "add" },
+    --       input = { "t" },
+    --     })
+    --
+    --     local TagLast = ""
+    --
+    --     function TagInput(is_head)
+    --       if is_head == 1 then
+    --         TagLast = vim.fn.input("Tag Name: ")
+    --         if TagLast ~= "" then
+    --           return string.format("<%s>", TagLast)
+    --         else
+    --           error("OperatorSandwichCancel")
+    --         end
+    --       else
+    --         return string.format("</%s>", string.match(TagLast, "^\a[^[:blank:]>/]*"))
+    --       end
+    --     end
+    --
+    --     _G.TagInput = TagInput
+    --
+    --     table.insert(vim.g["sandwich#recipes"], {
+    --       buns = { "「", "」" },
+    --       -- expr = 1,
+    --       -- nesting = 1,
+    --       filetype = { "*" },
+    --       kind = { "add" },
+    --       action = { "add" },
+    --       input = { "j[" },
+    --     })
+    --   end,
+    -- },
 
     {
       "junegunn/vim-easy-align",
@@ -3423,47 +3604,6 @@ require("lazy").setup({
     },
 
     {
-      "machakann/vim-sandwich",
-      event = "VeryLazy",
-      config = function()
-        vim.g["sandwich#recipes"] = vim.fn.deepcopy(vim.g["sandwich#default_recipes"])
-
-        table.insert(vim.g["sandwich#recipes"], {
-          external = { "it", "at" },
-          noremap = 1,
-          filetype = { "html" },
-          input = { "t" },
-        })
-
-        table.insert(vim.g["sandwich#recipes"], {
-          buns = { "TagInput(1)", "TagInput(0)" },
-          expr = 1,
-          filetype = { "html" },
-          kind = { "add", "replace" },
-          action = { "add" },
-          input = { "t" },
-        })
-
-        local TagLast = ""
-
-        function TagInput(is_head)
-          if is_head == 1 then
-            TagLast = vim.fn.input("Tag Name: ")
-            if TagLast ~= "" then
-              return string.format("<%s>", TagLast)
-            else
-              error("OperatorSandwichCancel")
-            end
-          else
-            return string.format("</%s>", string.match(TagLast, "^\a[^[:blank:]>/]*"))
-          end
-        end
-
-        _G.TagInput = TagInput
-      end,
-    },
-
-    {
       "David-Kunz/treesitter-unit",
       keys = {
         { "iu", '<cmd>lua require"treesitter-unit".select()<CR>', mode = "x", noremap = true },
@@ -3513,16 +3653,11 @@ require("lazy").setup({
     },
 
     {
-      "echasnovski/mini.jump",
+      "rhysd/clever-f.vim",
       event = "VeryLazy",
-      opts = {
-        mappings = {
-          repeat_jump = "<Nop>",
-        },
-        delay = {
-          highlight = 0,
-        },
-      },
+      config = function()
+        vim.g.clever_f_use_migemo = 1
+      end,
     },
 
     {
