@@ -630,7 +630,7 @@ require("lazy").setup({
           "lua_ls",
           "vimls",
           "gopls",
-          -- "ts_ls",
+          "ts_ls",
 
           -- Linter
           "actionlint",
