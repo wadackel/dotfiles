@@ -136,9 +136,6 @@ keymap({ "n", "v" }, "k", "gk", { silent = false })
 -- x でレジスタを使わずに切り取り
 keymap({ "n" }, "x", '"_x', { silent = true })
 
--- マーク使わないので無効化
-keymap({ "n" }, "m", "<Nop>", { silent = true })
-
 -- 行頭, 文末の移動
 keymap({ "n", "v" }, "M", "g^", { silent = false })
 keymap({ "n", "v" }, "H", "g0", { silent = false })
@@ -2285,6 +2282,41 @@ require("lazy").setup({
     },
 
     -- =============================================================
+    -- Session
+    -- =============================================================
+    {
+      "folke/persistence.nvim",
+      event = "VeryLazy",
+      keys = {
+        {
+          "<Leader>ql",
+          function()
+            require("persistence").select()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>qs",
+          function()
+            require("persistence").load()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>qd",
+          function()
+            require("persistence").stop()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+      },
+      opts = {},
+    },
+
+    -- =============================================================
     -- UI
     -- =============================================================
     {
@@ -2519,7 +2551,72 @@ require("lazy").setup({
                 local line = vim.fn.getline(".")
                 local pos = string.find(line, " ")
                 local hash = string.sub(line, 1, pos - 1)
-                print(vim.fn.system("git openpr " .. hash))
+                local number = 0
+
+                -- squash merge
+                local job1 = vim
+                  .system({
+                    "gh",
+                    "pr",
+                    "list",
+                    "--search",
+                    hash,
+                    "--state",
+                    "merged",
+                    "--json",
+                    "number,mergeCommit",
+                    "--jq",
+                    string.format('.[] | select(.mergeCommit.oid | startswith("%s")) | .number', hash),
+                  }, {
+                    text = true,
+                  })
+                  :wait()
+
+                if job1.code == 0 then
+                  local n = tonumber(job1.stdout)
+                  if n ~= nil then
+                    number = n
+                  end
+                end
+
+                -- merge commit
+                if number == 0 then
+                  local job2 = vim
+                    .system({
+                      "git",
+                      "log",
+                      "--merges",
+                      "--oneline",
+                      "--reverse",
+                      "--ancestry-path",
+                      string.format("%s...origin", hash),
+                    }, {
+                      text = true,
+                    })
+                    :wait()
+
+                  if job2.code == 0 then
+                    local ln = vim.split(job2.stdout, "\n")[1]
+                    local raw = string.match(ln, "Merge pull request #(%d+)")
+                    local n = tonumber(raw)
+                    if n ~= nil then
+                      number = n
+                    end
+                  end
+                end
+
+                -- open web
+                if number > 0 then
+                  vim
+                    .system({
+                      "gh",
+                      "pr",
+                      "view",
+                      "--web",
+                      number,
+                    })
+                    :wait()
+                end
               end,
             })
           end,
@@ -3429,6 +3526,8 @@ require("lazy").setup({
           ["]"] = { output = { left = "[ ", right = " ]" } },
           ["{"] = { output = { left = "{", right = "}" } },
           ["}"] = { output = { left = "{ ", right = " }" } },
+          ["<"] = { output = { left = "<", right = ">" } },
+          [">"] = { output = { left = "< ", right = " >" } },
           ["j"] = {
             input = function()
               local ok, val = pcall(vim.fn.getchar)
@@ -3688,6 +3787,25 @@ require("lazy").setup({
           end
           render.setVirt(0, lnum - 1, col - 1, chunks, nearest)
         end,
+      },
+    },
+
+    {
+      "otavioschwanck/arrow.nvim",
+      event = "VeryLazy",
+      opts = {
+        show_icons = true,
+        always_show_path = true,
+        leader_key = "m",
+        buffer_leader_key = "<Nop>",
+        mappings = {
+          toggle = "m",
+          open_horizontal = "s",
+          clear_all_items = "c",
+        },
+        window = {
+          border = "rounded",
+        },
       },
     },
 

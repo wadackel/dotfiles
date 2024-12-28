@@ -89,9 +89,6 @@
   fixup = commit --fixup
   autosquash = rebase -i --autosquash
   web = "!gh repo view --web"
-  showpr = "!f() { git log --merges --oneline --reverse --ancestry-path $1...origin | grep 'Merge pull request #' | head -n 1; };f"
-  openpr = "!f() { gh pr view --web `gh pr list --search \"$1\" --state merged --json number --jq \".[0].number\"`; }; f"
-  cleanpr = "!git for-each-ref refs/heads/pr/* --format='%(refname)' | while read ref ; do branch=${ref#refs/heads/} ; git branch -D $branch ; done"
 
   # example) git lines wadackel 2016-12-20 2016-12-21
   lines = "!f() { git log --numstat --pretty=\"%H\" --author=$1 --since=$2 --until=$3 --no-merges | awk 'NF==3 {plus+=$1; minus+=$2} END {printf(\"%d (+%d, -%d)\\n\", plus+minus, plus, minus)}';}; f"
