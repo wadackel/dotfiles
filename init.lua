@@ -439,13 +439,17 @@ end
 -- =============================================================
 -- Plugins
 -- =============================================================
-local function lsp_on_attach(client, bufnr)
+local function lsp_on_init(client)
+  if client.server_capabilities then
+    -- Disable LSP Semantic tokens
+    client.server_capabilities.semanticTokensProvider = false
+  end
+end
+
+local function lsp_on_attach(_, bufnr)
   local function kmap(modes, lhs, rhs)
     keymap(modes, lhs, rhs, { buffer = bufnr })
   end
-
-  -- Disable LSP Semantic tokens
-  client.server_capabilities.semanticTokensProvider = nil
 
   -- Enable completion triggered by <C-x><C-o>
   vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
@@ -654,6 +658,7 @@ require("lazy").setup({
 
         local opts = {
           capabilities = require("cmp_nvim_lsp").default_capabilities(),
+          on_init = lsp_on_init,
           on_attach = lsp_on_attach,
         }
 
@@ -708,6 +713,7 @@ require("lazy").setup({
               },
             },
           },
+          on_init = lsp_on_init,
           on_attach = lsp_on_attach,
         })
       end,
@@ -721,6 +727,7 @@ require("lazy").setup({
         "neovim/nvim-lspconfig",
       },
       opts = {
+        on_init = lsp_on_init,
         on_attach = lsp_on_attach,
         settings = {
           expose_as_code_action = "all",
@@ -740,6 +747,7 @@ require("lazy").setup({
             },
           },
           server = {
+            on_init = lsp_on_init,
             on_attach = lsp_on_attach,
             settings = {
               ["rust-analyzer"] = {
@@ -754,14 +762,24 @@ require("lazy").setup({
     },
 
     {
-      "akinsho/flutter-tools.nvim",
+      "nvim-flutter/flutter-tools.nvim",
       lazy = false,
+      commit = "818ad42b204cda5317baa399377ea30b35f6f8be",
       dependencies = {
         "nvim-lua/plenary.nvim",
         "stevearc/dressing.nvim",
       },
       config = function()
         local dev_log_open_cmd = "rightbelow vertical split"
+
+        -- -- @see https://github.com/nvim-flutter/flutter-tools.nvim/pull/417
+        -- pcall(vim.api.nvim_buf_del_var, 0, "flutter_tools_did_ftplugin")
+        -- vim.api.nvim_create_autocmd({ "BufEnter" }, {
+        --   pattern = "*.dart",
+        --   callback = function(e)
+        --     pcall(vim.api.nvim_buf_del_var, e.buf, "flutter_tools_did_ftplugin")
+        --   end,
+        -- })
 
         require("flutter-tools").setup({
           flutter_path = nil,
@@ -786,6 +804,7 @@ require("lazy").setup({
             open_cmd = dev_log_open_cmd,
           },
           lsp = {
+            on_init = lsp_on_init,
             on_attach = function(client, bufnr)
               lsp_on_attach(client, bufnr)
 
@@ -876,7 +895,6 @@ require("lazy").setup({
           },
           debugger = {
             enabled = true,
-            run_via_dap = true,
             exception_breakpoints = {},
             register_configurations = function(paths)
               local dap = require("dap")
@@ -1190,12 +1208,7 @@ require("lazy").setup({
         local lint = require("lint")
 
         local eslint_d = lint.linters.eslint_d
-        lint.linters.eslint_d = {
-          cmd = eslint_d.cmd,
-          args = eslint_d.args,
-          stdin = eslint_d.stdin,
-          stream = eslint_d.stream,
-          ignore_exitcode = eslint_d.ignore_exitcode,
+        lint.linters.eslint_d = vim.tbl_extend("force", eslint_d, {
           parser = function(output, bufnr)
             -- Suppress "No ESLint found" error
             local result = eslint_d.parser(output, bufnr)
@@ -1210,24 +1223,19 @@ require("lazy").setup({
             end
             return result
           end,
-        }
+        })
 
         local actionlint = lint.linters.actionlint
-        lint.linters.actionlint = {
-          cmd = actionlint.cmd,
-          args = actionlint.args,
-          stdin = actionlint.stdin,
-          ignore_exitcode = actionlint.ignore_exitcode,
+        lint.linters.actionlint = vim.tbl_extend("force", actionlint, {
           parser = function(output, bufnr)
             -- Only GHA files
             local fpath = vim.api.nvim_buf_get_name(bufnr)
             if fpath:match("^.*%.github/.+%.y[a]?ml$") == nil then
               return {}
             end
-
             return actionlint.parser(output, bufnr)
           end,
-        }
+        })
 
         lint.linters_by_ft = {
           -- TODO: Support Deno
@@ -1490,6 +1498,10 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-treesitter/nvim-treesitter",
+      dependencies = {
+        "nvim-treesitter/nvim-treesitter-textobjects",
+        "yioneko/nvim-yati",
+      },
       lazy = false,
       build = ":TSUpdate",
       config = function()
@@ -1599,8 +1611,23 @@ require("lazy").setup({
           indent = {
             enable = true,
           },
+          -- yati = {
+          --   enable = true,
+          --   default_lazy = true,
+          --   default_fallback = "auto",
+          -- },
           matchup = {
             enable = true,
+          },
+          textobjects = {
+            select = {
+              enable = true,
+              keymaps = {
+                ["af"] = "@function.outer",
+                ["if"] = "@function.inner",
+              },
+              include_surrounding_whitespace = true,
+            },
           },
         })
       end,
@@ -2524,6 +2551,7 @@ require("lazy").setup({
       cmd = {
         "Git",
         "Gread",
+        "Gdiff",
         "Gblame",
       },
       init = function()
@@ -3703,6 +3731,7 @@ require("lazy").setup({
       event = "VeryLazy",
       config = function()
         vim.g.clever_f_use_migemo = 1
+        vim.g.clever_f_fix_key_direction = 1
       end,
     },
 
@@ -3807,6 +3836,16 @@ require("lazy").setup({
           border = "rounded",
         },
       },
+    },
+
+    {
+      "thinca/vim-partedit",
+      cmd = {
+        "Partedit",
+      },
+      init = function()
+        vim.g["partedit#opener"] = "split"
+      end,
     },
 
     -- =============================================================
