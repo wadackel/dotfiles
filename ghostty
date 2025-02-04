@@ -1,0 +1,12 @@
+background = 222433
+foreground = 9ea3c0
+selection-foreground = 222433
+selection-background = 9ea3c0
+font-family = "CaskaydiaCove Nerd Font Mono"
+font-feature = -calt
+font-feature = -liga
+font-feature = -dlig
+font-size = 17
+macos-non-native-fullscreen = true
+fullscreen = true
+window-decoration = false

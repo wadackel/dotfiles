@@ -2,6 +2,7 @@
 mkdir -p ~/.config/nvim
 mkdir -p ~/.config/tmux
 mkdir -p ~/.config/wezterm
+mkdir -p ~/.config/ghostty
 mkdir -p ~/.config/sheldon
 
 ln -sf ~/dotfiles/Brewfile ~/.Brewfile
@@ -19,4 +20,5 @@ ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
 ln -sf ~/dotfiles/tmux.conf ~/.config/tmux/tmux.conf
 ln -sf ~/dotfiles/vimrc ~/.vimrc
 ln -sf ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua
+ln -sf ~/dotfiles/ghostty ~/.config/ghostty/config
 ln -sf ~/dotfiles/zshrc ~/.zshrc

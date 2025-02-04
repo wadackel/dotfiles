@@ -1609,13 +1609,19 @@ require("lazy").setup({
             end,
           },
           indent = {
-            enable = true,
+            enable = false,
           },
-          -- yati = {
-          --   enable = true,
-          --   default_lazy = true,
-          --   default_fallback = "auto",
-          -- },
+          yati = {
+            enable = true,
+            disable = {
+              "typescript",
+              "javascript",
+              "tsx",
+              "jsx",
+            },
+            default_lazy = true,
+            default_fallback = "auto",
+          },
           matchup = {
             enable = true,
           },
@@ -1897,6 +1903,7 @@ require("lazy").setup({
           keymap({ "n" }, "i", api.node.show_info_popup, opts("Show Info Node"))
           keymap({ "n" }, "f", api.live_filter.start, opts("Filter"))
           keymap({ "n" }, "F", api.live_filter.start, opts("Clean Filter"))
+          keymap({ "n" }, "<C-l>", api.tree.reload, opts("Reload Tree"))
           keymap({ "n" }, "?", api.tree.toggle_help, opts("Help"))
 
           -- Preview

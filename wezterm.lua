@@ -15,11 +15,12 @@ return {
   -- disable ligatures: https://wezfurlong.org/wezterm/config/font-shaping.html#advanced-font-shaping-options
   harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
 
-  font = wezterm.font("CaskaydiaCove Nerd Font Mono", {
-    weight = "Regular",
-    stretch = "Normal",
-    style = "Normal",
+  font = wezterm.font_with_fallback({
+    { family = "CaskaydiaCove Nerd Font Mono" },
+    { family = "CaskaydiaCove Nerd Font Mono", assume_emoji_presentation = true },
+    { family = "Noto Sans JP" },
   }),
+
   font_size = 16.0,
 
   -- port from: https://github.com/wadackel/vim-dogrun/blob/main/colors/dogrun.vim
