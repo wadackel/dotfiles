@@ -1299,7 +1299,6 @@ require("lazy").setup({
         },
       },
       config = function()
-        local Job = require("plenary.job")
         local conform = require("conform")
 
         local js_formatter = {
@@ -1307,37 +1306,8 @@ require("lazy").setup({
           "prettierd",
         }
 
-        local eslint_d = conform.get_formatter_info("eslint_d")
-
         conform.setup({
-          formatters = {
-            eslint_d = {
-              condition = function()
-                -- Suppress "No ESLint found" error
-                local bufnr = vim.api.nvim_get_current_buf()
-                local filename = vim.api.nvim_buf_get_name(bufnr)
-                local result = Job:new({
-                  command = eslint_d.command,
-                  args = {
-                    "--print-config",
-                    filename,
-                  },
-                  cwd = eslint_d.cwd,
-                }):sync()
-                if result[1] ~= nil then
-                  local msg = result[1]
-                  if string.match(msg, "No ESLint found") then
-                    return false
-                  end
-                  if string.match(msg, "Could not find config file") then
-                    return false
-                  end
-                end
-                return true
-              end,
-              inherit = true,
-            },
-          },
+          timeout_ms = 5000,
           formatters_by_ft = {
             javascript = js_formatter,
             javascriptreact = js_formatter,
@@ -1367,6 +1337,7 @@ require("lazy").setup({
             end
             conform.format({
               bufnr = args.buf,
+              timeout_ms = 5000,
             })
           end,
         })
