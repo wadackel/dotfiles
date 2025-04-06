@@ -327,57 +327,6 @@ zle -N fshow_preview
 bindkey "^gp" fshow_preview
 
 
-# tmux
-## http://qiita.com/b4b4r07/items/01359e8a3066d1c37edc
-function is_exists() { type "$1" >/dev/null 2>&1; return $?; }
-function is_osx() { [[ $OSTYPE == darwin* ]]; }
-function is_tmux_running() { [ ! -z "$TMUX" ]; }
-function is_ssh_running() { [ ! -z "$SSH_CONECTION" ]; }
-function shell_has_started_interactively() { [ ! -z "$PS1" ]; }
-
-function tmux_automatically_attach_session()
-{
-  if is_tmux_running; then
-    ! is_exists 'tmux' && return 1
-  else
-    if shell_has_started_interactively && ! is_ssh_running; then
-      if ! is_exists 'tmux'; then
-        echo 'Error: tmux command not found' 2>&1
-        return 1
-      fi
-
-      if tmux has-session >/dev/null 2>&1; then
-        tmux list-sessions
-        echo -n "tmux: attach? (y/N/num) "
-        read
-        if [[ "$REPLY" =~ ^[Nn]$ ]]; then
-          return 0
-        elif [[ "$REPLY" =~ ^[Yy]$ ]] || [[ "$REPLY" == '' ]]; then
-          tmux attach-session
-          if [ $? -eq 0 ]; then
-            return 0
-          fi
-        elif [[ "$REPLY" =~ ^[0-9]+$ ]]; then
-          tmux attach -t "$REPLY"
-          if [ $? -eq 0 ]; then
-            return 0
-          fi
-        fi
-      fi
-
-      if is_osx && is_exists 'reattach-to-user-namespace'; then
-        # on OS X force tmux's default command
-        # to spawn a shell in the user's namespace
-        tmux_config=$(cat $HOME/.tmux.conf <(echo 'set-option -g default-command "reattach-to-user-namespace -l $SHELL"'))
-        tmux -f <(echo "$tmux_config") new-session && echo "$(tmux -V) created new session supported OS X"
-      else
-        tmux new-session && echo "tmux created new session"
-      fi
-    fi
-  fi
-}
-tmux_automatically_attach_session
-
 # fzf
 export FZF_DEFAULT_OPTS='--reverse --exit-0 --select-1 --ansi --prompt "❯ " --pointer "»" --marker "∙" --color=fg:#8085a6,bg:#222433,hl:#bdc3e6 --color=fg+:#8085a6,bg+:#363e7f,hl+:#bdc3e6 --color=info:#929be5,prompt:#545c8c,pointer:#ff79c6 --color=marker:#b871b8,spinner:#73c1a9,header:#545c8c,border:#545c8c,gutter:-1'
 
@@ -397,7 +346,6 @@ fi
 
 # starship (theme)
 eval "$(starship init zsh)"
-
 
 # tools settings
 export ESLINT_D_LOCAL_ESLINT_ONLY=1

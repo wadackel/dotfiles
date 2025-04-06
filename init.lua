@@ -632,6 +632,7 @@ require("lazy").setup({
           "vimls",
           "gopls",
           "ts_ls",
+          "denols",
 
           -- Linter
           "actionlint",
@@ -686,6 +687,11 @@ require("lazy").setup({
               },
             })
           end,
+          ["denols"] = function()
+            lspconfig.denols.setup(vim.tbl_deep_extend("force", opts, {
+              root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
+            }))
+          end,
           -- Use typescript-tools.nvim
           ["ts_ls"] = function() end,
           -- Use rustaceanvim
@@ -726,14 +732,20 @@ require("lazy").setup({
         "nvim-lua/plenary.nvim",
         "neovim/nvim-lspconfig",
       },
-      opts = {
-        on_init = lsp_on_init,
-        on_attach = lsp_on_attach,
-        settings = {
-          expose_as_code_action = "all",
-          tsserver_max_memory = 8192,
-        },
-      },
+      config = function()
+        local lspconfig = require("lspconfig")
+
+        require("typescript-tools").setup({
+          on_init = lsp_on_init,
+          on_attach = lsp_on_attach,
+          single_file_support = false,
+          root_dir = lspconfig.util.root_pattern("package.json"),
+          settings = {
+            expose_as_code_action = "all",
+            tsserver_max_memory = 8192,
+          },
+        })
+      end,
     },
 
     {
@@ -1098,6 +1110,12 @@ require("lazy").setup({
             { name = "buffer" },
           }),
         })
+
+        cmp.setup.filetype("codecompanion", {
+          sources = cmp.config.sources({
+            { name = "codecompanion" },
+          }),
+        })
       end,
     },
 
@@ -1381,86 +1399,132 @@ require("lazy").setup({
       },
     },
 
+    -- =============================================================
+    -- AI Integration
+    -- =============================================================
     {
-      "github/copilot.vim",
+      "zbirenbaum/copilot.lua",
       lazy = false,
+      opts = {
+        copilot_node_command = vim.fn.expand("$HOME") .. "/.asdf/shims/node",
+        suggestion = {
+          auto_trigger = true,
+          keymap = {
+            accept = "<Tab>",
+          },
+        },
+      },
+    },
+
+    {
+      "ravitemer/mcphub.nvim",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+      },
+      cmd = "MCPHub",
+      build = "npm install -g mcp-hub@latest",
       config = function()
-        vim.g.copilot_node_command = "~/.asdf/shims/node"
+        require("mcphub").setup({
+          auto_approve = false,
+
+          extensions = {
+            avante = {
+              --
+            },
+          },
+
+          ui = {
+            window = {
+              width = 0.8,
+              height = 0.8,
+              relative = "editor",
+              zindex = 50,
+              border = "rounded",
+            },
+          },
+        })
       end,
     },
 
     {
-      "CopilotC-Nvim/CopilotChat.nvim",
-      build = "make tiktoken",
-      keys = {
-        -- Copilot とのチャットを開く
-        {
-          "<Leader>co",
-          ":CopilotChat<CR>",
-          mode = { "n", "v" },
-          noremap = true,
-        },
-        -- バッファの内容全体を使って Copilot とチャットする
-        {
-          "<Leader>cq",
-          function()
-            local input = vim.fn.input("Quick Chat: ")
-            if input ~= "" then
-              require("CopilotChat").ask(input, {
-                selection = require("CopilotChat.select").buffer,
-              })
-            end
-          end,
-          mode = "n",
-          noremap = true,
-        },
-        -- Telescope で Copilot のアクション開く
-        {
-          "<Leader>cp",
-          function()
-            local actions = require("CopilotChat.actions")
-            require("CopilotChat.integrations.telescope").pick(actions.prompt_actions())
-          end,
-          mode = { "n", "v" },
-          noremap = true,
-        },
+      "yetone/avante.nvim",
+      event = "VeryLazy",
+      version = false,
+      build = "make",
+      dependencies = {
+        "nvim-treesitter/nvim-treesitter",
+        "stevearc/dressing.nvim",
+        "nvim-lua/plenary.nvim",
+        "MunifTanjim/nui.nvim",
+        "zbirenbaum/copilot.lua",
       },
-      opts = {
-        debug = false,
-        prompts = {
-          Explain = {
-            prompt = "/COPILOT_EXPLAIN 現在選択されているコードの説明を書いてください。",
-          },
-          Review = {
-            prompt = "/COPILOT_REVIEW 選択されているコードのレビューをしてください。",
-          },
-          Fix = {
-            prompt = "/COPILOT_FIX このコードに問題があります。バグを修正したコードを示すように書き直してください。",
-          },
-          Optimize = {
-            prompt = "/COPILOT_REFACTOR 選択されているコードを最適化して、パフォーマンスと可読性を向上させてください。",
-          },
-          Docs = {
-            prompt = "/COPILOT_REFACTOR 選択されているコードにドキュメントコメントを追加してください。",
-          },
-          Tests = {
-            prompt = "/COPILOT_TESTS テストを書いてください。解説は日本語で行ってください。",
-          },
-          FixDiagnostic = {
-            prompt = "このコードに問題があります。バグを修正したコードを示すように書き直してください:",
-            selection = function(source)
-              return require("CopilotChat.select").diagnostics(source)
+      keys = function(_, keys)
+        local opts =
+          require("lazy.core.plugin").values(require("lazy.core.config").spec.plugins["avante.nvim"], "opts", false)
+
+        local mappings = {
+          {
+            opts.mappings.ask,
+            function()
+              require("avante.api").ask()
             end,
+            desc = "avante: ask",
+            mode = { "n", "v" },
           },
+          {
+            opts.mappings.refresh,
+            function()
+              require("avante.api").refresh()
+            end,
+            desc = "avante: refresh",
+            mode = "v",
+          },
+          {
+            opts.mappings.edit,
+            function()
+              require("avante.api").edit()
+            end,
+            desc = "avante: edit",
+            mode = { "n", "v" },
+          },
+        }
+        mappings = vim.tbl_filter(function(m)
+          return m[1] and #m[1] > 0
+        end, mappings)
+        return vim.list_extend(mappings, keys)
+      end,
+      opts = {
+        provider = "copilot",
+        copilot = {
+          model = "claude-3.7-sonnet",
+          max_tokens = 8192,
         },
-        window = {
-          layout = "float",
-          width = 0.8,
-          height = 0.7,
-          relative = "editor",
-          border = "rounded",
-          title = "Copilot Chat",
+        mappings = {
+          ask = "<leader>ua", -- ask
+          edit = "<leader>ue", -- edit
+          refresh = "<leader>ur", -- refresh
         },
+        disabled_tools = {
+          "list_files",
+          "search_files",
+          "read_file",
+          "create_file",
+          "rename_file",
+          "delete_file",
+          "create_dir",
+          "rename_dir",
+          "delete_dir",
+          "bash",
+        },
+        system_prompt = function()
+          local hub = require("mcphub").get_hub_instance()
+          return hub:get_active_servers_prompt()
+        end,
+        custom_tools = function()
+          return {
+            require("mcphub.extensions.avante").mcp_tool(),
+          }
+        end,
       },
     },
 
@@ -2425,7 +2489,11 @@ require("lazy").setup({
               },
             },
             lualine_c = {},
-            lualine_x = {},
+            lualine_x = {
+              {
+                require("mcphub.extensions.lualine"),
+              },
+            },
             lualine_y = {
               {
                 "filetype",
