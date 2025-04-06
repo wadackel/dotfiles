@@ -728,6 +728,8 @@ require("lazy").setup({
     {
       "pmizio/typescript-tools.nvim",
       lazy = false,
+      -- @see https://github.com/pmizio/typescript-tools.nvim/issues/343
+      version = "e0887c1e336edbb01243e9f1e60d74b0bc0a2bed",
       dependencies = {
         "nvim-lua/plenary.nvim",
         "neovim/nvim-lspconfig",
@@ -1425,7 +1427,7 @@ require("lazy").setup({
       build = "npm install -g mcp-hub@latest",
       config = function()
         require("mcphub").setup({
-          auto_approve = false,
+          auto_approve = true,
 
           extensions = {
             avante = {
@@ -1456,6 +1458,7 @@ require("lazy").setup({
         "stevearc/dressing.nvim",
         "nvim-lua/plenary.nvim",
         "MunifTanjim/nui.nvim",
+        "ravitemer/mcphub.nvim",
         "zbirenbaum/copilot.lua",
       },
       keys = function(_, keys)
@@ -1488,9 +1491,11 @@ require("lazy").setup({
             mode = { "n", "v" },
           },
         }
+
         mappings = vim.tbl_filter(function(m)
           return m[1] and #m[1] > 0
         end, mappings)
+
         return vim.list_extend(mappings, keys)
       end,
       opts = {
@@ -2489,11 +2494,7 @@ require("lazy").setup({
               },
             },
             lualine_c = {},
-            lualine_x = {
-              {
-                require("mcphub.extensions.lualine"),
-              },
-            },
+            lualine_x = {},
             lualine_y = {
               {
                 "filetype",
@@ -2526,7 +2527,9 @@ require("lazy").setup({
             lualine_c = {},
             lualine_x = {},
             lualine_y = {},
-            lualine_z = { "location" },
+            lualine_z = {
+              "location",
+            },
           },
           tabline = {
             lualine_a = {},
