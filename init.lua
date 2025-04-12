@@ -572,19 +572,16 @@ require("lazy").setup({
         require("lspconfig.ui.windows").default_options.border = "rounded"
 
         -- Base
-        local signs = {
-          { name = "DiagnosticSignError", text = "•" },
-          { name = "DiagnosticSignWarn", text = "•" },
-          { name = "DiagnosticSignHint", text = "•" },
-          { name = "DiagnosticSignInfo", text = "•" },
-        }
-
-        for _, sign in ipairs(signs) do
-          vim.fn.sign_define(sign.name, { texthl = sign.name, text = sign.text, numhl = "" })
-        end
-
         vim.diagnostic.config({
           float = { border = "rounded" },
+          signs = {
+            text = {
+              [vim.diagnostic.severity.ERROR] = "•",
+              [vim.diagnostic.severity.WARN] = "•",
+              [vim.diagnostic.severity.INFO] = "•",
+              [vim.diagnostic.severity.HINT] = "•",
+            },
+          },
         })
 
         vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "rounded" })
@@ -595,7 +592,12 @@ require("lazy").setup({
             spacing = 0,
           },
           signs = {
-            active = signs,
+            active = {
+              { name = "DiagnosticSignError", text = "•" },
+              { name = "DiagnosticSignWarn", text = "•" },
+              { name = "DiagnosticSignHint", text = "•" },
+              { name = "DiagnosticSignInfo", text = "•" },
+            },
           },
         })
       end,
@@ -658,7 +660,7 @@ require("lazy").setup({
         local lspconfig = require("lspconfig")
 
         local opts = {
-          capabilities = require("cmp_nvim_lsp").default_capabilities(),
+          require("blink.cmp").get_lsp_capabilities(),
           on_init = lsp_on_init,
           on_attach = lsp_on_attach,
         }
@@ -958,168 +960,268 @@ require("lazy").setup({
       },
     },
 
+    -- {
+    --   "hrsh7th/nvim-cmp",
+    --   event = { "InsertEnter", "CmdlineEnter" },
+    --   dependencies = {
+    --     "hrsh7th/cmp-nvim-lsp",
+    --     "hrsh7th/cmp-buffer",
+    --     "hrsh7th/cmp-path",
+    --     "hrsh7th/cmp-cmdline",
+    --     "petertriho/cmp-git",
+    --     "hrsh7th/cmp-emoji",
+    --     "onsails/lspkind-nvim",
+    --   },
+    --   config = function()
+    --     local cmp = require("cmp")
+    --     local lspkind = require("lspkind")
+    --
+    --     -- mappings
+    --     local mapping_insert = cmp.mapping.preset.insert({
+    --       ["<C-z>"] = {
+    --         i = function()
+    --           if cmp.visible() then
+    --             cmp.select_next_item()
+    --           else
+    --             cmp.complete()
+    --           end
+    --         end,
+    --       },
+    --       ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
+    --       ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+    --       ["<C-f>"] = cmp.mapping.scroll_docs(4),
+    --       ["<C-e>"] = cmp.mapping.abort(),
+    --       ["<C-y>"] = cmp.mapping.confirm({ select = true }),
+    --     })
+    --
+    --     local mapping_cmdline = cmp.mapping.preset.cmdline({
+    --       ["<C-z>"] = {
+    --         c = function()
+    --           if cmp.visible() then
+    --             cmp.select_next_item()
+    --           else
+    --             cmp.complete()
+    --           end
+    --         end,
+    --       },
+    --       ["<C-x><C-o>"] = { -- like omnifunc
+    --         c = function()
+    --           cmp.complete()
+    --         end,
+    --       },
+    --       ["<C-n>"] = {
+    --         c = function(fallback)
+    --           if cmp.visible() then
+    --             cmp.select_next_item()
+    --           else
+    --             fallback()
+    --           end
+    --         end,
+    --       },
+    --       ["<C-p>"] = {
+    --         c = function(fallback)
+    --           if cmp.visible() then
+    --             cmp.select_prev_item()
+    --           else
+    --             fallback()
+    --           end
+    --         end,
+    --       },
+    --       ["<C-e>"] = {
+    --         c = function(fallback)
+    --           if cmp.visible() then
+    --             cmp.abort()
+    --           else
+    --             fallback()
+    --           end
+    --         end,
+    --       },
+    --     })
+    --
+    --     -- base
+    --     cmp.setup({
+    --       window = {
+    --         completion = cmp.config.window.bordered({
+    --           winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
+    --           col_offset = -3,
+    --           side_padding = 0,
+    --         }),
+    --         documentation = cmp.config.window.bordered({
+    --           winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
+    --         }),
+    --       },
+    --       formatting = {
+    --         fields = { "kind", "abbr", "menu" },
+    --         format = function(entry, vim_item)
+    --           local kind = lspkind.cmp_format({
+    --             mode = "symbol_text",
+    --             maxwidth = 50,
+    --             ellipsis_char = "…",
+    --           })(entry, vim_item)
+    --           local list = vim.split(kind.kind, "%s", { trimempty = true })
+    --           kind.kind = " " .. (list[1] or "") .. " "
+    --           kind.menu = "  " .. (list[2] or "")
+    --           return kind
+    --         end,
+    --       },
+    --       performance = {
+    --         max_view_entries = 30,
+    --       },
+    --       mapping = mapping_insert,
+    --       sources = cmp.config.sources({
+    --         { name = "nvim_lsp" },
+    --         { name = "path" },
+    --         { name = "buffer" },
+    --       }),
+    --     })
+    --
+    --     -- cmdline
+    --     cmp.setup.cmdline(":", {
+    --       mapping = mapping_cmdline,
+    --       completion = {
+    --         autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
+    --       },
+    --       sources = cmp.config.sources({
+    --         { name = "path" },
+    --       }, {
+    --         { name = "cmdline" },
+    --       }),
+    --       matching = { disallow_symbol_nonprefix_matching = false },
+    --     })
+    --
+    --     cmp.setup.cmdline({ "/", "?" }, {
+    --       mapping = mapping_cmdline,
+    --       completion = {
+    --         autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
+    --       },
+    --       sources = {
+    --         { name = "buffer" },
+    --       },
+    --     })
+    --
+    --     -- filetypes
+    --     cmp.setup.filetype("gitcommit", {
+    --       sources = cmp.config.sources({
+    --         { name = "cmp_git" },
+    --       }, {
+    --         { name = "buffer" },
+    --       }),
+    --     })
+    --
+    --     cmp.setup.filetype("markdown", {
+    --       sources = cmp.config.sources({
+    --         { name = "emoji", option = { insert = false } },
+    --       }, {
+    --         { name = "buffer" },
+    --       }),
+    --     })
+    --
+    --     cmp.setup.filetype("codecompanion", {
+    --       sources = cmp.config.sources({
+    --         { name = "codecompanion" },
+    --       }),
+    --     })
+    --   end,
+    -- },
+
     {
-      "hrsh7th/nvim-cmp",
-      event = { "InsertEnter", "CmdlineEnter" },
+      "saghen/blink.cmp",
       dependencies = {
-        "hrsh7th/cmp-nvim-lsp",
-        "hrsh7th/cmp-buffer",
-        "hrsh7th/cmp-path",
-        "hrsh7th/cmp-cmdline",
-        "petertriho/cmp-git",
-        "hrsh7th/cmp-emoji",
+        {
+          "Kaiser-Yang/blink-cmp-git",
+          dependencies = {
+            "nvim-lua/plenary.nvim",
+          },
+        },
         "onsails/lspkind-nvim",
       },
-      config = function()
-        local cmp = require("cmp")
-        local lspkind = require("lspkind")
+      version = "1.*",
+      build = "cargo build --release",
+      opts = {
+        keymap = {
+          preset = "default",
+        },
 
-        -- mappings
-        local mapping_insert = cmp.mapping.preset.insert({
-          ["<C-z>"] = {
-            i = function()
-              if cmp.visible() then
-                cmp.select_next_item()
-              else
-                cmp.complete()
-              end
-            end,
-          },
-          ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
-          ["<C-b>"] = cmp.mapping.scroll_docs(-4),
-          ["<C-f>"] = cmp.mapping.scroll_docs(4),
-          ["<C-e>"] = cmp.mapping.abort(),
-          ["<C-y>"] = cmp.mapping.confirm({ select = true }),
-        })
+        appearance = {
+          nerd_font_variant = "mono",
+        },
 
-        local mapping_cmdline = cmp.mapping.preset.cmdline({
-          ["<C-z>"] = {
-            c = function()
-              if cmp.visible() then
-                cmp.select_next_item()
-              else
-                cmp.complete()
-              end
-            end,
+        sources = {
+          default = {
+            "lsp",
+            "path",
+            "buffer",
+            "git",
           },
-          ["<C-x><C-o>"] = { -- like omnifunc
-            c = function()
-              cmp.complete()
-            end,
+          providers = {
+            cmdline = {
+              enabled = function()
+                return vim.fn.getcmdtype() ~= ":" or not vim.fn.getcmdline():match("^[%%0-9,'<>%-]*!")
+              end,
+            },
+            git = {
+              module = "blink-cmp-git",
+              name = "Git",
+              opts = {},
+            },
           },
-          ["<C-n>"] = {
-            c = function(fallback)
-              if cmp.visible() then
-                cmp.select_next_item()
-              else
-                fallback()
-              end
-            end,
-          },
-          ["<C-p>"] = {
-            c = function(fallback)
-              if cmp.visible() then
-                cmp.select_prev_item()
-              else
-                fallback()
-              end
-            end,
-          },
-          ["<C-e>"] = {
-            c = function(fallback)
-              if cmp.visible() then
-                cmp.abort()
-              else
-                fallback()
-              end
-            end,
-          },
-        })
+        },
 
-        -- base
-        cmp.setup({
-          window = {
-            completion = cmp.config.window.bordered({
-              winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
-              col_offset = -3,
-              side_padding = 0,
-            }),
-            documentation = cmp.config.window.bordered({
-              winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
-            }),
+        completion = {
+          documentation = {
+            auto_show = true,
+            window = {
+              border = "rounded",
+            },
           },
-          formatting = {
-            fields = { "kind", "abbr", "menu" },
-            format = function(entry, vim_item)
-              local kind = lspkind.cmp_format({
-                mode = "symbol_text",
-                maxwidth = 50,
-                ellipsis_char = "…",
-              })(entry, vim_item)
-              local list = vim.split(kind.kind, "%s", { trimempty = true })
-              kind.kind = " " .. (list[1] or "") .. " "
-              kind.menu = "  " .. (list[2] or "")
-              return kind
-            end,
-          },
-          performance = {
-            max_view_entries = 30,
-          },
-          mapping = mapping_insert,
-          sources = cmp.config.sources({
-            { name = "nvim_lsp" },
-            { name = "path" },
-            { name = "buffer" },
-          }),
-        })
+          menu = {
+            border = "rounded",
+            draw = {
+              columns = {
+                { "kind_icon" },
+                { "label", "label_description", gap = 1 },
+                { "source_name" },
+              },
+              components = {
+                kind_icon = {
+                  text = function(ctx)
+                    local icon = ctx.kind_icon
+                    if vim.tbl_contains({ "Path" }, ctx.source_name) then
+                      local dev_icon, _ = require("nvim-web-devicons").get_icon(ctx.label)
+                      if dev_icon then
+                        icon = dev_icon
+                      end
+                    else
+                      icon = require("lspkind").symbolic(ctx.kind, {
+                        mode = "symbol",
+                      })
+                    end
 
-        -- cmdline
-        cmp.setup.cmdline(":", {
-          mapping = mapping_cmdline,
-          completion = {
-            autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
+                    return icon .. ctx.icon_gap
+                  end,
+                  highlight = function(ctx)
+                    local hl = ctx.kind_hl
+                    if vim.tbl_contains({ "Path" }, ctx.source_name) then
+                      local dev_icon, dev_hl = require("nvim-web-devicons").get_icon(ctx.label)
+                      if dev_icon then
+                        hl = dev_hl
+                      end
+                    end
+                    return hl
+                  end,
+                },
+              },
+            },
           },
-          sources = cmp.config.sources({
-            { name = "path" },
-          }, {
-            { name = "cmdline" },
-          }),
-          matching = { disallow_symbol_nonprefix_matching = false },
-        })
+        },
 
-        cmp.setup.cmdline({ "/", "?" }, {
-          mapping = mapping_cmdline,
-          completion = {
-            autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
-          },
-          sources = {
-            { name = "buffer" },
-          },
-        })
-
-        -- filetypes
-        cmp.setup.filetype("gitcommit", {
-          sources = cmp.config.sources({
-            { name = "cmp_git" },
-          }, {
-            { name = "buffer" },
-          }),
-        })
-
-        cmp.setup.filetype("markdown", {
-          sources = cmp.config.sources({
-            { name = "emoji", option = { insert = false } },
-          }, {
-            { name = "buffer" },
-          }),
-        })
-
-        cmp.setup.filetype("codecompanion", {
-          sources = cmp.config.sources({
-            { name = "codecompanion" },
-          }),
-        })
-      end,
+        fuzzy = {
+          implementation = "prefer_rust_with_warning",
+        },
+      },
+      opts_extend = {
+        "sources.default",
+      },
     },
 
     {
