@@ -17,6 +17,7 @@ ln -sf ~/dotfiles/hyper.js ~/.hyper.js
 ln -sf ~/dotfiles/init.lua ~/.config/nvim/init.lua
 ln -sf ~/dotfiles/sheldon.toml ~/.config/sheldon/plugins.toml
 ln -sf ~/dotfiles/starship.toml ~/.config/starship.toml
+ln -sf ~/dotfiles/typos.toml ~/.config/typos.toml
 ln -sf ~/dotfiles/tmux.conf ~/.config/tmux/tmux.conf
 ln -sf ~/dotfiles/vimrc ~/.vimrc
 ln -sf ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua

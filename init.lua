@@ -683,6 +683,7 @@ require("lazy").setup({
           ["typos_lsp"] = function()
             lspconfig.typos_lsp.setup({
               init_options = {
+                config = "~/.config/typos.toml",
                 diagnosticSeverity = "Info",
               },
             })
