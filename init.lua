@@ -1408,7 +1408,7 @@ require("lazy").setup({
       "zbirenbaum/copilot.lua",
       lazy = false,
       opts = {
-        copilot_node_command = vim.fn.expand("$HOME") .. "/.asdf/shims/node",
+        copilot_node_command = vim.fn.expand("$HOME") .. "/.local/share/mise/shims/node",
         suggestion = {
           auto_trigger = true,
           keymap = {
@@ -1428,13 +1428,14 @@ require("lazy").setup({
       config = function()
         require("mcphub").setup({
           auto_approve = true,
-
           extensions = {
-            avante = {
-              --
+            avante = {},
+            codecompanion = {
+              show_result_in_chat = true,
+              make_vars = true,
+              make_slash_commands = true,
             },
           },
-
           ui = {
             window = {
               width = 0.8,
@@ -1461,43 +1462,6 @@ require("lazy").setup({
         "ravitemer/mcphub.nvim",
         "zbirenbaum/copilot.lua",
       },
-      keys = function(_, keys)
-        local opts =
-          require("lazy.core.plugin").values(require("lazy.core.config").spec.plugins["avante.nvim"], "opts", false)
-
-        local mappings = {
-          {
-            opts.mappings.ask,
-            function()
-              require("avante.api").ask()
-            end,
-            desc = "avante: ask",
-            mode = { "n", "v" },
-          },
-          {
-            opts.mappings.refresh,
-            function()
-              require("avante.api").refresh()
-            end,
-            desc = "avante: refresh",
-            mode = "v",
-          },
-          {
-            opts.mappings.edit,
-            function()
-              require("avante.api").edit()
-            end,
-            desc = "avante: edit",
-            mode = { "n", "v" },
-          },
-        }
-
-        mappings = vim.tbl_filter(function(m)
-          return m[1] and #m[1] > 0
-        end, mappings)
-
-        return vim.list_extend(mappings, keys)
-      end,
       opts = {
         provider = "copilot",
         copilot = {
@@ -1505,9 +1469,71 @@ require("lazy").setup({
           max_tokens = 8192,
         },
         mappings = {
-          ask = "<leader>ua", -- ask
-          edit = "<leader>ue", -- edit
-          refresh = "<leader>ur", -- refresh
+          ask = "<Leader>ua",
+          edit = "<Leader>ue",
+          refresh = "<Leader>ur",
+          focus = "<Leader>uf",
+          stop = "<Leader>uS",
+          toggle = {
+            default = "<Leader>ut",
+            debug = "<Leader>ud",
+            hint = "<Leader>uh",
+            suggestion = "<Leader>us",
+            repomap = "<Leader>uR",
+          },
+          files = {
+            add_current = "<Leader>uc", -- Add current buffer to selected files
+            add_all_buffers = "<Leader>uB", -- Add all buffer files to selected files
+          },
+          select_model = "<Leader>u?", -- Select model command
+          select_history = "<Leader>uh", -- Select history command
+        },
+        behavior = {
+          enable_token_counting = false,
+          auto_apply_diff_after_generation = true,
+          use_cwd_as_project_root = false,
+        },
+        file_selector = {
+          provider = "telescope",
+          provider_opts = {
+            -- for telescope
+            sorting_strategy = "ascending",
+            layout_config = {
+              prompt_position = "top",
+            },
+            -- for avante
+            get_filepaths = function(params)
+              local cwd = params.cwd ---@type string
+              local selected_filepaths = params.selected_filepaths ---@type string[]
+              local cmd = string.format("fd --base-directory '%s' --hidden", vim.fn.fnameescape(cwd))
+              local output = vim.fn.system(cmd)
+              local filepaths = vim.split(output, "\n", { trimempty = true })
+              return vim
+                .iter(filepaths)
+                :filter(function(filepath)
+                  return not vim.tbl_contains(selected_filepaths, filepath)
+                end)
+                :totable()
+            end,
+          },
+        },
+        hints = {
+          enabled = true,
+        },
+        windows = {
+          width = 40,
+          input = {
+            prefix = "",
+            height = 20,
+          },
+          edit = {
+            border = "rounded",
+            start_insert = true,
+          },
+          ask = {
+            floating = false,
+            start_insert = false,
+          },
         },
         disabled_tools = {
           "list_files",
@@ -1531,6 +1557,170 @@ require("lazy").setup({
           }
         end,
       },
+    },
+
+    {
+      "olimorris/codecompanion.nvim",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "nvim-treesitter/nvim-treesitter",
+      },
+      keys = {
+        {
+          "<Leader>cm",
+          function()
+            require("codecompanion").toggle()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+      },
+      config = function()
+        require("codecompanion").setup({
+          opts = {
+            language = "Japanese",
+          },
+          adapters = {
+            copilot = function()
+              return require("codecompanion.adapters").extend("copilot", {
+                schema = {
+                  model = {
+                    default = "claude-3.7-sonnet",
+                  },
+                  max_tokens = {
+                    default = 128000,
+                  },
+                },
+              })
+            end,
+          },
+          strategies = {
+            chat = {
+              adapter = "copilot",
+              roles = {
+                llm = function(adapter)
+                  return "  CodeCompanion (" .. adapter.formatted_name .. ")"
+                end,
+                user = "  Me",
+              },
+              tools = {
+                ["mcp"] = {
+                  callback = function()
+                    return require("mcphub.extensions.codecompanion")
+                  end,
+                  description = "Call tools and resources from the MCP Servers",
+                },
+              },
+              keymaps = {
+                send = {
+                  modes = {
+                    n = { "<CR>" },
+                    i = "<Nop>",
+                  },
+                  index = 2,
+                  callback = "keymaps.send",
+                  description = "Send",
+                },
+                close = {
+                  modes = {
+                    n = "q",
+                    i = "<Nop>",
+                  },
+                  index = 4,
+                  callback = "keymaps.close",
+                  description = "Close Chat",
+                },
+                stop = {
+                  modes = {
+                    n = "<Nop>",
+                  },
+                  index = 5,
+                  callback = "keymaps.stop",
+                  description = "Stop Request",
+                },
+              },
+            },
+            inline = {
+              adapter = "copilot",
+            },
+          },
+          display = {
+            chat = {
+              show_header_separator = true,
+              show_settings = true,
+              window = {
+                position = "right",
+              },
+            },
+          },
+        })
+
+        -- progress indicator
+        -- https://codecompanion.olimorris.dev/usage/ui.html
+        local progress = require("fidget.progress")
+        local handles = {}
+
+        local store_progress_handle = function(id, handle)
+          handles[id] = handle
+        end
+
+        local pop_progress_handle = function(id)
+          local handle = handles[id]
+          handles[id] = nil
+          return handle
+        end
+
+        local llm_role_title = function(adapter)
+          local parts = {}
+          table.insert(parts, adapter.formatted_name)
+          if adapter.model and adapter.model ~= "" then
+            table.insert(parts, "(" .. adapter.model .. ")")
+          end
+          return table.concat(parts, " ")
+        end
+
+        local create_progress_handle = function(request)
+          return progress.handle.create({
+            title = " Requesting assistance (" .. request.data.strategy .. ")",
+            message = "In progress...",
+            lsp_client = {
+              name = llm_role_title(request.data.adapter),
+            },
+          })
+        end
+
+        local report_exit_status = function(handle, request)
+          if request.data.status == "success" then
+            handle.message = "Completed"
+          elseif request.data.status == "error" then
+            handle.message = " Error"
+          else
+            handle.message = "󰜺 Cancelled"
+          end
+        end
+
+        local group = vim.api.nvim_create_augroup("CodeCompanionFidgetHooks", {})
+        vim.api.nvim_create_autocmd({ "User" }, {
+          pattern = "CodeCompanionRequestStarted",
+          group = group,
+          callback = function(request)
+            local handle = create_progress_handle(request)
+            store_progress_handle(request.data.id, handle)
+          end,
+        })
+
+        vim.api.nvim_create_autocmd({ "User" }, {
+          pattern = "CodeCompanionRequestFinished",
+          group = group,
+          callback = function(request)
+            local handle = pop_progress_handle(request.data.id)
+            if handle then
+              report_exit_status(handle, request)
+              handle:finish()
+            end
+          end,
+        })
+      end,
     },
 
     -- =============================================================
