@@ -1133,6 +1133,7 @@ require("lazy").setup({
             "nvim-lua/plenary.nvim",
           },
         },
+        "Kaiser-Yang/blink-cmp-avante",
         "onsails/lspkind-nvim",
       },
       version = "1.*",
@@ -1140,6 +1141,7 @@ require("lazy").setup({
       opts = {
         keymap = {
           preset = "default",
+          ["<C-e>"] = {},
         },
 
         appearance = {
@@ -1151,7 +1153,8 @@ require("lazy").setup({
             "lsp",
             "path",
             "buffer",
-            "git",
+            -- "git",
+            "avante",
           },
           providers = {
             cmdline = {
@@ -1162,6 +1165,11 @@ require("lazy").setup({
             git = {
               module = "blink-cmp-git",
               name = "Git",
+              opts = {},
+            },
+            avante = {
+              module = "blink-cmp-avante",
+              name = "Avante",
               opts = {},
             },
           },
