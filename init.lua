@@ -237,15 +237,25 @@ keymap({ "n" }, "<<", "<<", { noremap = true })
 keymap({ "v" }, "Q", "y:g/^.*$//e")
 
 -- 指定データをクリップボードにつながるレジスタへ保存
-local function clip(data)
-  local root = find_nearest_dir({ ".git", "package.json", "pubspec.yaml" }) or vim.fn.getcwd()
+local function clip(data, use_cwd)
+  local root
+  local cwd = vim.fn.getcwd()
+  if use_cwd then
+    root = cwd
+  else
+    root = find_nearest_dir({ ".git", "package.json", "pubspec.yaml" }) or cwd
+  end
   local result = remove_prefix(data, root):gsub("^/", "")
   vim.fn.setreg("*", result)
   print("[clipped] " .. result)
 end
 
 vim.api.nvim_create_user_command("ClipPath", function()
-  clip(vim.fn.expand("%:p"))
+  clip(vim.fn.expand("%:p"), false)
+end, {})
+
+vim.api.nvim_create_user_command("ClipPathCwd", function()
+  clip(vim.fn.expand("%:p"), true)
 end, {})
 
 vim.api.nvim_create_user_command("ClipFile", function()
@@ -253,7 +263,11 @@ vim.api.nvim_create_user_command("ClipFile", function()
 end, {})
 
 vim.api.nvim_create_user_command("ClipDir", function()
-  clip(vim.fn.expand("%:p:h"))
+  clip(vim.fn.expand("%:p:h"), false)
+end, {})
+
+vim.api.nvim_create_user_command("ClipDirCwd", function()
+  clip(vim.fn.expand("%:p:h"), true)
 end, {})
 
 -- QuickFix の設定
@@ -1577,7 +1591,7 @@ require("lazy").setup({
         provider = "copilot",
         copilot = {
           model = "claude-3.7-sonnet",
-          max_tokens = 8192,
+          max_tokens = 128000,
         },
         mappings = {
           ask = "<Leader>ua",
@@ -1601,6 +1615,7 @@ require("lazy").setup({
         },
         behavior = {
           enable_token_counting = false,
+          enable_cursor_planning_mode = true,
           auto_apply_diff_after_generation = true,
           use_cwd_as_project_root = false,
         },
@@ -1710,9 +1725,9 @@ require("lazy").setup({
               adapter = "copilot",
               roles = {
                 llm = function(adapter)
-                  return "  CodeCompanion (" .. adapter.formatted_name .. ")"
+                  return " CodeCompanion (" .. adapter.formatted_name .. ")"
                 end,
-                user = "  Me",
+                user = " Me",
               },
               tools = {
                 ["mcp"] = {
@@ -2881,9 +2896,9 @@ require("lazy").setup({
           render = "wrapped-compact",
           stages = "fade",
           top_down = false,
-          max_width = function()
-            return vim.o.columns / 2
-          end,
+          -- max_width = function()
+          --   return vim.o.columns / 2
+          -- end,
         })
         vim.notify = notify
       end,
