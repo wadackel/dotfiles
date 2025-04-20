@@ -1156,6 +1156,7 @@ require("lazy").setup({
         keymap = {
           preset = "default",
           ["<C-e>"] = {},
+          ["<F5>"] = { "show", "show_documentation", "hide_documentation" },
         },
 
         appearance = {
@@ -1589,9 +1590,16 @@ require("lazy").setup({
       },
       opts = {
         provider = "copilot",
+        -- provider = "claude",
         copilot = {
           model = "claude-3.7-sonnet",
-          max_tokens = 128000,
+          max_tokens = 64000,
+        },
+        claude = {
+          endpoint = "https://api.anthropic.com",
+          model = "claude-3-7-sonnet-20250219",
+          temperature = 0,
+          max_tokens = 64000,
         },
         mappings = {
           ask = "<Leader>ua",
@@ -1613,10 +1621,12 @@ require("lazy").setup({
           select_model = "<Leader>u?", -- Select model command
           select_history = "<Leader>uh", -- Select history command
         },
-        behavior = {
+        behaviour = {
           enable_token_counting = false,
-          enable_cursor_planning_mode = true,
+          enable_cursor_planning_mode = false,
+          enable_claude_text_editor_tool_mode = true,
           auto_apply_diff_after_generation = true,
+          jump_result_buffer_on_finish = true,
           use_cwd_as_project_root = false,
         },
         file_selector = {
