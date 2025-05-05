@@ -1152,99 +1152,114 @@ require("lazy").setup({
       },
       version = "1.*",
       build = "cargo build --release",
-      opts = {
-        keymap = {
-          preset = "default",
-          ["<C-e>"] = {},
-          ["<F5>"] = { "show", "show_documentation", "hide_documentation" },
-        },
+      opts_extend = {
+        "sources.default",
+      },
+      config = function()
+        -- Workaround for `<C-x><C-o>` in insert mode
+        -- see: https://github.com/Saghen/blink.cmp/issues/453
+        keymap({ "i", "s" }, "<C-x><C-o>", function()
+          require("blink.cmp").show()
+          require("blink.cmp").show_documentation()
+          require("blink.cmp").hide_documentation()
+        end, { silent = false })
 
-        appearance = {
-          nerd_font_variant = "mono",
-        },
+        require("blink.cmp").setup({
+          keymap = {
+            preset = "default",
+            ["<C-e>"] = {},
+            ["<F5>"] = { "show", "show_documentation", "hide_documentation" },
+          },
 
-        sources = {
-          default = {
-            "lsp",
-            "path",
-            "buffer",
-            -- "git",
-            "avante",
+          appearance = {
+            nerd_font_variant = "mono",
           },
-          providers = {
-            cmdline = {
-              enabled = function()
-                return vim.fn.getcmdtype() ~= ":" or not vim.fn.getcmdline():match("^[%%0-9,'<>%-]*!")
-              end,
-            },
-            git = {
-              module = "blink-cmp-git",
-              name = "Git",
-              opts = {},
-            },
-            avante = {
-              module = "blink-cmp-avante",
-              name = "Avante",
-              opts = {},
-            },
-          },
-        },
 
-        completion = {
-          documentation = {
-            auto_show = true,
-            window = {
-              border = "rounded",
+          sources = {
+            default = {
+              "lsp",
+              "path",
+              "buffer",
+              -- "git",
+              "avante",
             },
-          },
-          menu = {
-            border = "rounded",
-            draw = {
-              columns = {
-                { "kind_icon" },
-                { "label", "label_description", gap = 1 },
-                { "source_name" },
+            providers = {
+              cmdline = {
+                enabled = function()
+                  return vim.fn.getcmdtype() ~= ":" or not vim.fn.getcmdline():match("^[%%0-9,'<>%-]*!")
+                end,
               },
-              components = {
-                kind_icon = {
-                  text = function(ctx)
-                    local icon = ctx.kind_icon
-                    if vim.tbl_contains({ "Path" }, ctx.source_name) then
-                      local dev_icon, _ = require("nvim-web-devicons").get_icon(ctx.label)
-                      if dev_icon then
-                        icon = dev_icon
-                      end
-                    else
-                      icon = require("lspkind").symbolic(ctx.kind, {
-                        mode = "symbol",
-                      })
-                    end
+              git = {
+                module = "blink-cmp-git",
+                name = "Git",
+                opts = {},
+              },
+              avante = {
+                module = "blink-cmp-avante",
+                name = "Avante",
+                opts = {},
+              },
+            },
+          },
 
-                    return icon .. ctx.icon_gap
-                  end,
-                  highlight = function(ctx)
-                    local hl = ctx.kind_hl
-                    if vim.tbl_contains({ "Path" }, ctx.source_name) then
-                      local dev_icon, dev_hl = require("nvim-web-devicons").get_icon(ctx.label)
-                      if dev_icon then
-                        hl = dev_hl
+          completion = {
+            trigger = {
+              show_on_insert_on_trigger_character = true,
+              show_on_trigger_character = true,
+              show_on_blocked_trigger_characters = {},
+            },
+            documentation = {
+              auto_show = true,
+              window = {
+                border = "rounded",
+              },
+            },
+            menu = {
+              border = "rounded",
+              draw = {
+                columns = {
+                  { "kind_icon" },
+                  { "label", "label_description", gap = 1 },
+                  { "source_name" },
+                },
+                components = {
+                  kind_icon = {
+                    text = function(ctx)
+                      local icon = ctx.kind_icon
+                      if vim.tbl_contains({ "Path" }, ctx.source_name) then
+                        local dev_icon, _ = require("nvim-web-devicons").get_icon(ctx.label)
+                        if dev_icon then
+                          icon = dev_icon
+                        end
+                      else
+                        icon = require("lspkind").symbolic(ctx.kind, {
+                          mode = "symbol",
+                        })
                       end
-                    end
-                    return hl
-                  end,
+
+                      return icon .. ctx.icon_gap
+                    end,
+                    highlight = function(ctx)
+                      local hl = ctx.kind_hl
+                      if vim.tbl_contains({ "Path" }, ctx.source_name) then
+                        local dev_icon, dev_hl = require("nvim-web-devicons").get_icon(ctx.label)
+                        if dev_icon then
+                          hl = dev_hl
+                        end
+                      end
+                      return hl
+                    end,
+                  },
                 },
               },
             },
           },
-        },
 
-        fuzzy = {
-          implementation = "prefer_rust_with_warning",
-        },
-      },
-      opts_extend = {
-        "sources.default",
-      },
+          fuzzy = {
+            implementation = "prefer_rust_with_warning",
+          },
+        })
+      end,
     },
 
     {
