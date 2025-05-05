@@ -814,7 +814,7 @@ require("lazy").setup({
 
         require("flutter-tools").setup({
           flutter_path = nil,
-          flutter_lookup_cmd = "asdf where flutter",
+          flutter_lookup_cmd = "mise where flutter",
           fvm = false,
           ui = {
             border = "rounded",
@@ -917,8 +917,8 @@ require("lazy").setup({
             settings = {
               analysisExcludedFolders = {
                 vim.fn.expand("$HOME/.pub-cache"),
-                vim.fn.expand("$HOME/.asdf/installs/flutter"),
-                vim.fn.expand("$HOME/.asdf/installs/dart"),
+                vim.fn.expand("$HOME/.local/share/mise/installs/flutter"),
+                vim.fn.expand("$HOME/.local/share/mise/installs/dart"),
               },
               completeFunctionCalls = false,
               showTodos = false,
