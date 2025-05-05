@@ -1624,9 +1624,7 @@ require("lazy").setup({
         behaviour = {
           enable_token_counting = false,
           enable_cursor_planning_mode = false,
-          enable_claude_text_editor_tool_mode = true,
           auto_apply_diff_after_generation = true,
-          jump_result_buffer_on_finish = true,
           use_cwd_as_project_root = false,
         },
         file_selector = {
