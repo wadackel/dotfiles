@@ -671,74 +671,80 @@ require("lazy").setup({
       "williamboman/mason-lspconfig.nvim",
       lazy = false,
       config = function()
-        local lspconfig = require("lspconfig")
-
-        local opts = {
-          require("blink.cmp").get_lsp_capabilities(),
+        vim.lsp.config("*", {
+          capabilities = require("blink.cmp").get_lsp_capabilities(),
           on_init = lsp_on_init,
           on_attach = lsp_on_attach,
-        }
+        })
 
-        require("mason-lspconfig").setup()
-
-        require("mason-lspconfig").setup_handlers({
-          function(name)
-            lspconfig[name].setup(opts)
-          end,
-          ["lua_ls"] = function()
-            lspconfig.lua_ls.setup(vim.tbl_deep_extend("force", opts, {
-              settings = {
-                Lua = {
-                  diagnostics = {
-                    globals = { "vim" },
-                  },
+        vim.lsp.config("lua_ls", {
+          settings = {
+            Lua = {
+              runtime = {
+                version = "LuaJIT",
+              },
+              diagnostics = {
+                globals = {
+                  "vim",
+                  "require",
                 },
               },
-            }))
-          end,
-          ["typos_lsp"] = function()
-            lspconfig.typos_lsp.setup({
-              init_options = {
-                config = "~/.config/typos.toml",
-                diagnosticSeverity = "Info",
-              },
-            })
-          end,
-          ["denols"] = function()
-            lspconfig.denols.setup(vim.tbl_deep_extend("force", opts, {
-              root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
-            }))
-          end,
-          -- Use typescript-tools.nvim
-          ["ts_ls"] = function() end,
-          -- Use rustaceanvim
-          ["rust_analyzer"] = function() end,
+            },
+          },
+        })
+
+        vim.lsp.config("typos_lsp", {
+          init_options = {
+            config = "~/.config/typos.toml",
+            diagnosticSeverity = "Info",
+          },
+        })
+
+        vim.lsp.config("denols", {
+          -- root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
+          workspace_required = true,
+          root_markers = {
+            "deno.json",
+            "deno.jsonc",
+            "deps.ts",
+          },
+        })
+
+        require("mason-lspconfig").setup({
+          automatic_enable = {
+            exclude = {
+              -- Use typescript-tools.nvim
+              "ts_ls",
+              -- Use rustaceanvim
+              "rust_analyzer",
+            },
+          },
         })
 
         -- See:
         -- `xcrun --sdk iphonesimulator --show-sdk-path`
-        lspconfig.sourcekit.setup({
-          cmd = {
-            "sourcekit-lsp",
-            "-Xswiftc",
-            "-sdk",
-            "-Xswiftc",
-            "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator17.2.sdk",
-            "-Xswiftc",
-            "-target",
-            "-Xswiftc",
-            "x86_64-apple-ios17.2-simulator",
-          },
-          capabilities = {
-            workspace = {
-              didChangeWatchedFiles = {
-                dynamicRegistration = true,
-              },
-            },
-          },
-          on_init = lsp_on_init,
-          on_attach = lsp_on_attach,
-        })
+        -- lspconfig.sourcekit.setup({
+        --   cmd = {
+        --     "sourcekit-lsp",
+        --     "-Xswiftc",
+        --     "-sdk",
+        --     "-Xswiftc",
+        --     "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator17.2.sdk",
+        --     "-Xswiftc",
+        --     "-target",
+        --     "-Xswiftc",
+        --     "x86_64-apple-ios17.2-simulator",
+        --   },
+        --   capabilities = {
+        --     workspace = {
+        --       didChangeWatchedFiles = {
+        --         dynamicRegistration = true,
+        --       },
+        --     },
+        --   },
+        --   on_init = lsp_on_init,
+        --   on_attach = lsp_on_attach,
+        -- })
       end,
     },
 
@@ -802,15 +808,6 @@ require("lazy").setup({
       },
       config = function()
         local dev_log_open_cmd = "rightbelow vertical split"
-
-        -- -- @see https://github.com/nvim-flutter/flutter-tools.nvim/pull/417
-        -- pcall(vim.api.nvim_buf_del_var, 0, "flutter_tools_did_ftplugin")
-        -- vim.api.nvim_create_autocmd({ "BufEnter" }, {
-        --   pattern = "*.dart",
-        --   callback = function(e)
-        --     pcall(vim.api.nvim_buf_del_var, e.buf, "flutter_tools_did_ftplugin")
-        --   end,
-        -- })
 
         require("flutter-tools").setup({
           flutter_path = nil,
