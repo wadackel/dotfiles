@@ -701,7 +701,6 @@ require("lazy").setup({
         })
 
         vim.lsp.config("denols", {
-          -- root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
           workspace_required = true,
           root_markers = {
             "deno.json",
@@ -2629,6 +2628,13 @@ require("lazy").setup({
           winbar = {
             enabled = false,
           },
+          on_open = function(term)
+            -- Disable LSP diagnostics in terminal
+            vim.diagnostic.enable(false, { bufnr = term.bufnr })
+            for _, c in ipairs(vim.lsp.get_clients({ bufnr = term.bufnr })) do
+              vim.lsp.buf_detach_client(term.bufnr, c.id)
+            end
+          end,
         })
 
         local function find_toggleterm_buffer()
