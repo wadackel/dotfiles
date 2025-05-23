@@ -659,6 +659,7 @@ require("lazy").setup({
 
           -- Formatter
           "prettierd",
+          "biome",
           "gofumpt",
           "goimports",
           "stylua",
@@ -969,170 +970,6 @@ require("lazy").setup({
         },
       },
     },
-
-    -- {
-    --   "hrsh7th/nvim-cmp",
-    --   event = { "InsertEnter", "CmdlineEnter" },
-    --   dependencies = {
-    --     "hrsh7th/cmp-nvim-lsp",
-    --     "hrsh7th/cmp-buffer",
-    --     "hrsh7th/cmp-path",
-    --     "hrsh7th/cmp-cmdline",
-    --     "petertriho/cmp-git",
-    --     "hrsh7th/cmp-emoji",
-    --     "onsails/lspkind-nvim",
-    --   },
-    --   config = function()
-    --     local cmp = require("cmp")
-    --     local lspkind = require("lspkind")
-    --
-    --     -- mappings
-    --     local mapping_insert = cmp.mapping.preset.insert({
-    --       ["<C-z>"] = {
-    --         i = function()
-    --           if cmp.visible() then
-    --             cmp.select_next_item()
-    --           else
-    --             cmp.complete()
-    --           end
-    --         end,
-    --       },
-    --       ["<C-x><C-o>"] = cmp.mapping.complete(), -- like omnifunc
-    --       ["<C-b>"] = cmp.mapping.scroll_docs(-4),
-    --       ["<C-f>"] = cmp.mapping.scroll_docs(4),
-    --       ["<C-e>"] = cmp.mapping.abort(),
-    --       ["<C-y>"] = cmp.mapping.confirm({ select = true }),
-    --     })
-    --
-    --     local mapping_cmdline = cmp.mapping.preset.cmdline({
-    --       ["<C-z>"] = {
-    --         c = function()
-    --           if cmp.visible() then
-    --             cmp.select_next_item()
-    --           else
-    --             cmp.complete()
-    --           end
-    --         end,
-    --       },
-    --       ["<C-x><C-o>"] = { -- like omnifunc
-    --         c = function()
-    --           cmp.complete()
-    --         end,
-    --       },
-    --       ["<C-n>"] = {
-    --         c = function(fallback)
-    --           if cmp.visible() then
-    --             cmp.select_next_item()
-    --           else
-    --             fallback()
-    --           end
-    --         end,
-    --       },
-    --       ["<C-p>"] = {
-    --         c = function(fallback)
-    --           if cmp.visible() then
-    --             cmp.select_prev_item()
-    --           else
-    --             fallback()
-    --           end
-    --         end,
-    --       },
-    --       ["<C-e>"] = {
-    --         c = function(fallback)
-    --           if cmp.visible() then
-    --             cmp.abort()
-    --           else
-    --             fallback()
-    --           end
-    --         end,
-    --       },
-    --     })
-    --
-    --     -- base
-    --     cmp.setup({
-    --       window = {
-    --         completion = cmp.config.window.bordered({
-    --           winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
-    --           col_offset = -3,
-    --           side_padding = 0,
-    --         }),
-    --         documentation = cmp.config.window.bordered({
-    --           winhighlight = "Normal:Normal,FloatBorder:Comment,CursorLine:Visual,Search:None",
-    --         }),
-    --       },
-    --       formatting = {
-    --         fields = { "kind", "abbr", "menu" },
-    --         format = function(entry, vim_item)
-    --           local kind = lspkind.cmp_format({
-    --             mode = "symbol_text",
-    --             maxwidth = 50,
-    --             ellipsis_char = "…",
-    --           })(entry, vim_item)
-    --           local list = vim.split(kind.kind, "%s", { trimempty = true })
-    --           kind.kind = " " .. (list[1] or "") .. " "
-    --           kind.menu = "  " .. (list[2] or "")
-    --           return kind
-    --         end,
-    --       },
-    --       performance = {
-    --         max_view_entries = 30,
-    --       },
-    --       mapping = mapping_insert,
-    --       sources = cmp.config.sources({
-    --         { name = "nvim_lsp" },
-    --         { name = "path" },
-    --         { name = "buffer" },
-    --       }),
-    --     })
-    --
-    --     -- cmdline
-    --     cmp.setup.cmdline(":", {
-    --       mapping = mapping_cmdline,
-    --       completion = {
-    --         autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
-    --       },
-    --       sources = cmp.config.sources({
-    --         { name = "path" },
-    --       }, {
-    --         { name = "cmdline" },
-    --       }),
-    --       matching = { disallow_symbol_nonprefix_matching = false },
-    --     })
-    --
-    --     cmp.setup.cmdline({ "/", "?" }, {
-    --       mapping = mapping_cmdline,
-    --       completion = {
-    --         autocomplete = {}, -- disable auto-completion, trigger only via manual keymap.
-    --       },
-    --       sources = {
-    --         { name = "buffer" },
-    --       },
-    --     })
-    --
-    --     -- filetypes
-    --     cmp.setup.filetype("gitcommit", {
-    --       sources = cmp.config.sources({
-    --         { name = "cmp_git" },
-    --       }, {
-    --         { name = "buffer" },
-    --       }),
-    --     })
-    --
-    --     cmp.setup.filetype("markdown", {
-    --       sources = cmp.config.sources({
-    --         { name = "emoji", option = { insert = false } },
-    --       }, {
-    --         { name = "buffer" },
-    --       }),
-    --     })
-    --
-    --     cmp.setup.filetype("codecompanion", {
-    --       sources = cmp.config.sources({
-    --         { name = "codecompanion" },
-    --       }),
-    --     })
-    --   end,
-    -- },
 
     {
       "saghen/blink.cmp",
@@ -1461,6 +1298,7 @@ require("lazy").setup({
         local js_formatter = {
           "eslint_d",
           "prettierd",
+          "biome",
         }
 
         conform.setup({
@@ -1563,6 +1401,8 @@ require("lazy").setup({
       cmd = "MCPHub",
       build = "npm install -g mcp-hub@latest",
       config = function()
+        vim.g.mcphub_auto_approve = true
+
         require("mcphub").setup({
           auto_approve = true,
           extensions = {
@@ -1712,15 +1552,33 @@ require("lazy").setup({
       },
       keys = {
         {
-          "<Leader>cm",
-          function()
-            require("codecompanion").toggle()
-          end,
+          "<Space>cc",
+          ":CodeCompanionChat Toggle<CR>",
           mode = "n",
+          noremap = true,
+        },
+        {
+          "<Space>cn",
+          ":CodeCompanionChat<CR>",
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Space>ca",
+          ":CodeCompanionActions<CR>",
+          mode = { "n", "v" },
+          noremap = true,
+        },
+        {
+          "<Space>cm",
+          ":CodeCompanion<CR>",
+          mode = { "v", "n" },
           noremap = true,
         },
       },
       config = function()
+        vim.g.codecompanion_auto_tool_mode = true
+
         require("codecompanion").setup({
           opts = {
             language = "Japanese",
@@ -1738,10 +1596,25 @@ require("lazy").setup({
                 },
               })
             end,
+            anthropic = function()
+              return require("codecompanion.adapters").extend("anthropic", {
+                env = {
+                  api_key = "NVIM_ANTHROPIC_API_KEY",
+                },
+                schema = {
+                  model = {
+                    default = "claude-sonnet-4-20250514",
+                  },
+                  max_tokens = {
+                    default = 64000,
+                  },
+                },
+              })
+            end,
           },
           strategies = {
             chat = {
-              adapter = "copilot",
+              adapter = "anthropic",
               roles = {
                 llm = function(adapter)
                   return " CodeCompanion (" .. adapter.formatted_name .. ")"
@@ -1749,6 +1622,10 @@ require("lazy").setup({
                 user = " Me",
               },
               tools = {
+                opts = {
+                  auto_submit_errors = true,
+                  auto_submit_success = true,
+                },
                 ["mcp"] = {
                   callback = function()
                     return require("mcphub.extensions.codecompanion")
@@ -1786,7 +1663,7 @@ require("lazy").setup({
               },
             },
             inline = {
-              adapter = "copilot",
+              adapter = "anthropic",
             },
           },
           display = {
@@ -1800,68 +1677,110 @@ require("lazy").setup({
           },
         })
 
-        -- progress indicator
+        -- inline spinner
         -- https://codecompanion.olimorris.dev/usage/ui.html
-        local progress = require("fidget.progress")
-        local handles = {}
+        local spinner = {
+          processing = false,
+          spinner_index = 1,
+          namespace_id = nil,
+          timer = nil,
+          spinner_symbols = {
+            "⠋",
+            "⠙",
+            "⠹",
+            "⠸",
+            "⠼",
+            "⠴",
+            "⠦",
+            "⠧",
+            "⠇",
+            "⠏",
+          },
+          filetype = "codecompanion",
+        }
 
-        local store_progress_handle = function(id, handle)
-          handles[id] = handle
-        end
-
-        local pop_progress_handle = function(id)
-          local handle = handles[id]
-          handles[id] = nil
-          return handle
-        end
-
-        local llm_role_title = function(adapter)
-          local parts = {}
-          table.insert(parts, adapter.formatted_name)
-          if adapter.model and adapter.model ~= "" then
-            table.insert(parts, "(" .. adapter.model .. ")")
+        local function get_buf(filetype)
+          for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf) and vim.bo[buf].filetype == filetype then
+              return buf
+            end
           end
-          return table.concat(parts, " ")
+          return nil
         end
 
-        local create_progress_handle = function(request)
-          return progress.handle.create({
-            title = " Requesting assistance (" .. request.data.strategy .. ")",
-            message = "In progress...",
-            lsp_client = {
-              name = llm_role_title(request.data.adapter),
-            },
+        local function stop_spinner()
+          spinner.processing = false
+
+          if spinner.timer then
+            spinner.timer:stop()
+            spinner.timer:close()
+            spinner.timer = nil
+          end
+
+          local buf = get_buf(spinner.filetype)
+          if buf == nil then
+            return
+          end
+
+          vim.api.nvim_buf_clear_namespace(buf, spinner.namespace_id, 0, -1)
+        end
+
+        local function update_spinner()
+          if not spinner.processing then
+            stop_spinner()
+            return
+          end
+
+          spinner.spinner_index = (spinner.spinner_index % #spinner.spinner_symbols) + 1
+
+          local buf = get_buf(spinner.filetype)
+          if buf == nil then
+            return
+          end
+
+          -- Clear previous virtual text
+          vim.api.nvim_buf_clear_namespace(buf, spinner.namespace_id, 0, -1)
+
+          local last_line = vim.api.nvim_buf_line_count(buf) - 1
+          vim.api.nvim_buf_set_extmark(buf, spinner.namespace_id, last_line, 0, {
+            virt_lines = { { { spinner.spinner_symbols[spinner.spinner_index] .. " Processing...", "Comment" } } },
+            virt_lines_above = true, -- false means below the line
           })
         end
 
-        local report_exit_status = function(handle, request)
-          if request.data.status == "success" then
-            handle.message = "Completed"
-          elseif request.data.status == "error" then
-            handle.message = " Error"
-          else
-            handle.message = "󰜺 Cancelled"
+        local function start_spinner()
+          spinner.processing = true
+          spinner.spinner_index = 0
+
+          if spinner.timer then
+            spinner.timer:stop()
+            spinner.timer:close()
+            spinner.timer = nil
           end
+
+          spinner.timer = vim.loop.new_timer()
+          spinner.timer:start(
+            0,
+            100,
+            vim.schedule_wrap(function()
+              update_spinner()
+            end)
+          )
         end
 
-        local group = vim.api.nvim_create_augroup("CodeCompanionFidgetHooks", {})
-        vim.api.nvim_create_autocmd({ "User" }, {
-          pattern = "CodeCompanionRequestStarted",
-          group = group,
-          callback = function(request)
-            local handle = create_progress_handle(request)
-            store_progress_handle(request.data.id, handle)
-          end,
-        })
+        spinner.namespace_id = vim.api.nvim_create_namespace("CodeCompanionSpinner")
+
+        vim.api.nvim_create_augroup("CodeCompanionHooks", { clear = true })
+        local group = vim.api.nvim_create_augroup("CodeCompanionHooks", {})
 
         vim.api.nvim_create_autocmd({ "User" }, {
-          pattern = "CodeCompanionRequestFinished",
+          pattern = "CodeCompanionRequest*",
           group = group,
           callback = function(request)
-            local handle = pop_progress_handle(request.data.id)
-            if handle then
-              report_exit_status(handle, request)
-              handle:finish()
+            if request.match == "CodeCompanionRequestStarted" then
+              start_spinner()
+            elseif request.match == "CodeCompanionRequestFinished" then
+              stop_spinner()
             end
           end,
         })
