@@ -1549,10 +1549,19 @@ require("lazy").setup({
       dependencies = {
         "nvim-lua/plenary.nvim",
         "nvim-treesitter/nvim-treesitter",
+        {
+          "echasnovski/mini.diff",
+          config = function()
+            local diff = require("mini.diff")
+            diff.setup({
+              source = diff.gen_source.none(),
+            })
+          end,
+        },
       },
       keys = {
         {
-          "<Space>cc",
+          "<Space>ct",
           ":CodeCompanionChat Toggle<CR>",
           mode = "n",
           noremap = true,
