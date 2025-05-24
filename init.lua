@@ -981,6 +981,7 @@ require("lazy").setup({
           },
         },
         "Kaiser-Yang/blink-cmp-avante",
+        "olimorris/codecompanion.nvim",
         "onsails/lspkind-nvim",
       },
       version = "1.*",
@@ -1013,8 +1014,8 @@ require("lazy").setup({
               "lsp",
               "path",
               "buffer",
-              -- "git",
-              "avante",
+              -- "avante",
+              "codecompanion",
             },
             providers = {
               cmdline = {
@@ -1405,14 +1406,6 @@ require("lazy").setup({
 
         require("mcphub").setup({
           auto_approve = true,
-          extensions = {
-            avante = {},
-            codecompanion = {
-              show_result_in_chat = true,
-              make_vars = true,
-              make_slash_commands = true,
-            },
-          },
           ui = {
             window = {
               width = 0.8,
@@ -1635,12 +1628,6 @@ require("lazy").setup({
                   auto_submit_errors = true,
                   auto_submit_success = true,
                 },
-                ["mcp"] = {
-                  callback = function()
-                    return require("mcphub.extensions.codecompanion")
-                  end,
-                  description = "Call tools and resources from the MCP Servers",
-                },
               },
               keymaps = {
                 send = {
@@ -1681,6 +1668,16 @@ require("lazy").setup({
               show_settings = true,
               window = {
                 position = "right",
+              },
+            },
+          },
+          extensions = {
+            mcphub = {
+              callback = "mcphub.extensions.codecompanion",
+              opts = {
+                show_result_in_chat = true,
+                make_vars = true,
+                make_slash_commands = true,
               },
             },
           },
