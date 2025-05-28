@@ -1627,7 +1627,13 @@ require("lazy").setup({
                     i = "<Nop>",
                   },
                   index = 2,
-                  callback = "keymaps.send",
+                  -- callback = "keymaps.send",
+                  -- @see https://github.com/olimorris/codecompanion.nvim/discussions/640#discussioncomment-12866279
+                  callback = function(chat)
+                    vim.cmd("stopinsert")
+                    chat:add_buf_message({ role = "llm", content = "" })
+                    chat:submit()
+                  end,
                   description = "Send",
                 },
                 close = {
