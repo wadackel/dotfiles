@@ -2263,6 +2263,124 @@ require("lazy").setup({
     },
 
     {
+      "folke/snacks.nvim",
+      priority = 1000,
+      lazy = false,
+      opts = {
+        bigfile = { enabled = true },
+        dashboard = { enabled = false },
+        explorer = { enabled = false },
+        indent = { enabled = false },
+        notifier = { enabled = false },
+        quickfile = { enabled = false },
+        scope = { enabled = false },
+        scroll = { enabled = false },
+        statuscolumn = { enabled = false },
+        words = { enabled = false },
+        input = { enabled = false },
+        picker = {
+          enabled = true,
+          layouts = {
+            default = {
+              layout = {
+                width = 0.9,
+                height = 0.7,
+              },
+            },
+            select = {
+              layout = {
+                width = 0.75,
+              },
+            },
+          },
+          sources = {
+            command_history = {
+              layout = {
+                preset = "select",
+              },
+            },
+          },
+          win = {
+            input = {
+              keys = (function()
+                local function code(keys)
+                  return vim.api.nvim_replace_termcodes(keys, true, true, true)
+                end
+                local function feed(keys)
+                  return function()
+                    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "i", false)
+                    return ""
+                  end
+                end
+                return {
+                  ["<C-a>"] = { feed("<Home>"), mode = "i", expr = true, nowait = true },
+                  ["<C-e>"] = { feed("<End>"), mode = "i", expr = true, nowait = true },
+                  ["<C-b>"] = { feed("<Left>"), mode = "i", expr = true, nowait = true },
+                  ["<C-f>"] = { feed("<Right>"), mode = "i", expr = true, nowait = true },
+                  ["<C-d>"] = { feed("<Del>"), mode = "i", expr = true, nowait = true },
+                  ["<C-u>"] = { code("<C-u>"), mode = "i", expr = true, nowait = true },
+                  ["<C-n>"] = { "history_forward", mode = { "i", "n" } },
+                  ["<C-p>"] = { "history_back", mode = { "i", "n" } },
+                }
+              end)(),
+            },
+          },
+        },
+      },
+      keys = {
+        -- picker
+        {
+          "<C-p>",
+          function()
+            Snacks.picker.files()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>gg",
+          function()
+            Snacks.picker.grep()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>bb",
+          function()
+            Snacks.picker.buffers()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>cc",
+          function()
+            Snacks.picker.commands()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>cl",
+          function()
+            Snacks.picker.command_history()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>gb",
+          function()
+            Snacks.picker.git_branches()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+      },
+    },
+
+    {
       "nvim-telescope/telescope.nvim",
       event = "VeryLazy",
       dependencies = {
@@ -2272,24 +2390,24 @@ require("lazy").setup({
         "rcarriga/nvim-notify",
       },
       keys = {
-        { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
-        { "z/", "<cmd>Telescope current_buffer_fuzzy_find<CR>", mode = "n", noremap = true },
-        {
-          "<Leader>gg",
-          ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>",
-          mode = "n",
-          noremap = true,
-        },
-        { "<Leader>bb", "<cmd>Telescope buffers<CR>", mode = "n", noremap = true },
-        { "<Leader>cc", "<cmd>Telescope commands<CR>", mode = "n", noremap = true },
-        { "<Leader>cl", "<cmd>Telescope command_history<CR>", mode = "n", noremap = true },
-        { "<Leader>gb", "<cmd>Telescope git_branches<CR>", mode = "n", noremap = true },
-        { "<Leader>gl", "<cmd>Telescope git_commits<CR>", mode = "n", noremap = true },
-        { "<Leader>gc", "<cmd>Telescope git_bcommits<CR>", mode = "n", noremap = true },
-        { "<Leader>gp", "<cmd>Telescope gh pull_request<CR>", mode = "n", noremap = true },
-        { "<Leader>hl", "<cmd>Telescope highlights<CR>", mode = "n", noremap = true },
-        { "<Leader>el", "<cmd>Telescope diagnostics<CR>", mode = "n", noremap = true },
-        { "<Leader>nh", "<cmd>Telescope notify<CR>", mode = "n", noremap = true },
+        -- { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
+        -- { "z/", "<cmd>Telescope current_buffer_fuzzy_find<CR>", mode = "n", noremap = true },
+        -- {
+        --   "<Leader>gg",
+        --   ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>",
+        --   mode = "n",
+        --   noremap = true,
+        -- },
+        -- { "<Leader>bb", "<cmd>Telescope buffers<CR>", mode = "n", noremap = true },
+        -- { "<Leader>cc", "<cmd>Telescope commands<CR>", mode = "n", noremap = true },
+        -- { "<Leader>cl", "<cmd>Telescope command_history<CR>", mode = "n", noremap = true },
+        -- { "<Leader>gb", "<cmd>Telescope git_branches<CR>", mode = "n", noremap = true },
+        -- { "<Leader>gl", "<cmd>Telescope git_commits<CR>", mode = "n", noremap = true },
+        -- { "<Leader>gc", "<cmd>Telescope git_bcommits<CR>", mode = "n", noremap = true },
+        -- { "<Leader>gp", "<cmd>Telescope gh pull_request<CR>", mode = "n", noremap = true },
+        -- { "<Leader>hl", "<cmd>Telescope highlights<CR>", mode = "n", noremap = true },
+        -- { "<Leader>el", "<cmd>Telescope diagnostics<CR>", mode = "n", noremap = true },
+        -- { "<Leader>nh", "<cmd>Telescope notify<CR>", mode = "n", noremap = true },
       },
       config = function()
         local telescope = require("telescope")
