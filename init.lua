@@ -270,6 +270,9 @@ vim.api.nvim_create_user_command("ClipDirCwd", function()
   clip(vim.fn.expand("%:p:h"), true)
 end, {})
 
+keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
+keymap({ "n" }, "<Leader>cp", ":ClipPathCwd<CR>")
+
 -- QuickFix の設定
 vim.api.nvim_create_augroup("QuickfixConfigure", {})
 vim.api.nvim_create_autocmd({ "FileType" }, {
@@ -2346,6 +2349,14 @@ require("lazy").setup({
           noremap = true,
         },
         {
+          "z/",
+          function()
+            Snacks.picker.grep_buffers()
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
           "<Leader>bb",
           function()
             Snacks.picker.buffers()
@@ -2372,7 +2383,23 @@ require("lazy").setup({
         {
           "<Leader>gb",
           function()
-            Snacks.picker.git_branches()
+            Snacks.picker.git_branches({
+              win = {
+                input = {
+                  keys = {
+                    ["<C-x>"] = { "git_branch_del", mode = { "n", "i" } },
+                  },
+                },
+              },
+            })
+          end,
+          mode = "n",
+          noremap = true,
+        },
+        {
+          "<Leader>gl",
+          function()
+            Snacks.picker.git_log_file()
           end,
           mode = "n",
           noremap = true,
