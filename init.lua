@@ -4351,15 +4351,15 @@ require("lazy").setup({
     },
 
     {
-      "iamcco/markdown-preview.nvim",
-      build = "cd app && yarn install",
-      ft = "markdown",
-      init = function()
-        vim.g.mkdp_auto_close = 0
-        vim.g.mkdp_page_title = "${name}"
-        vim.g.mkdp_preview_options = {
-          disable_sync_scroll = 1,
-        }
+      "toppair/peek.nvim",
+      event = { "VeryLazy" },
+      build = "deno task --quiet build:fast",
+      config = function()
+        require("peek").setup({
+          theme = "light",
+        })
+        vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
+        vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
       end,
     },
 
