@@ -1437,16 +1437,21 @@ require("lazy").setup({
       },
       opts = {
         provider = "copilot",
-        -- provider = "claude",
-        copilot = {
-          model = "claude-3.7-sonnet",
-          max_tokens = 64000,
-        },
-        claude = {
-          endpoint = "https://api.anthropic.com",
-          model = "claude-3-7-sonnet-20250219",
-          temperature = 0,
-          max_tokens = 64000,
+        providers = {
+          copilot = {
+            model = "claude-3.7-sonnet",
+            extra_request_body = {
+              max_tokens = 64000,
+            },
+          },
+          claude = {
+            endpoint = "https://api.anthropic.com",
+            model = "claude-3-7-sonnet-20250219",
+            extra_request_body = {
+              temperature = 0,
+              max_tokens = 64000,
+            },
+          },
         },
         mappings = {
           ask = "<Leader>ua",
