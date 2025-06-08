@@ -101,6 +101,11 @@ return {
       action = wezterm.action.ToggleFullScreen,
     },
     {
+      key = "Enter",
+      mods = "SHIFT",
+      action = wezterm.action.SendString("\n"),
+    },
+    {
       key = "-",
       mods = "SUPER",
       action = wezterm.action.DecreaseFontSize,
