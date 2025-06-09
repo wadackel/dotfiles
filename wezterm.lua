@@ -11,7 +11,23 @@ wezterm.on("window-config-reloaded", function(window)
   window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
 end)
 
+wezterm.on("bell", function(window)
+  window:toast_notification("Claude Code", "Task completed", nil, 4000)
+
+  if wezterm.target_triple:find("darwin") then
+    wezterm.background_child_process({
+      "afplay",
+      "-v",
+      "4",
+      "/System/Library/Sounds/Tink.aiff",
+    })
+  end
+end)
+
 return {
+  audible_bell = "SystemBeep",
+  notification_handling = "AlwaysShow",
+
   -- disable ligatures: https://wezfurlong.org/wezterm/config/font-shaping.html#advanced-font-shaping-options
   harfbuzz_features = { "calt=0", "clig=0", "liga=0" },
 
