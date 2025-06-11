@@ -2217,7 +2217,9 @@ require("lazy").setup({
         {
           "<C-p>",
           function()
-            Snacks.picker.files()
+            Snacks.picker.files({
+              hidden = true,
+            })
           end,
           mode = "n",
           noremap = true,
