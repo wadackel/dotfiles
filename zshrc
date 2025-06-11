@@ -244,6 +244,11 @@ function mkcd() {
 function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 
+# Ring the bell
+function bell() {
+  afplay -v 4 /System/Library/Sounds/Tink.aiff
+}
+
 # git 操作
 
 # <CR> で `git status` 呼び出し (git repository 内だけ)
