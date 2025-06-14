@@ -1299,11 +1299,44 @@ require("lazy").setup({
       config = function()
         local conform = require("conform")
 
-        local js_formatter = {
-          "eslint_d",
-          "prettierd",
-          "biome",
-        }
+        local has_config_file = function(bufnr, files)
+          local opts = {
+            upward = true,
+            path = vim.api.nvim_buf_get_name(bufnr),
+          }
+          return vim.fs.find(files, opts)[1] ~= nil
+        end
+
+        local js_formatter = function(bufnr)
+          local has_eslint = has_config_file(bufnr, {
+            "eslint.config.js",
+            "eslint.config.mjs",
+            "eslint.config.cjs",
+            ".eslintrc.js",
+            ".eslintrc.cjs",
+          })
+          local has_prettier = has_config_file(bufnr, {
+            ".prettierrc",
+            ".prettierrc.json",
+            ".prettierrc.js",
+            ".prettierrc.cjs",
+            "prettier.config.js",
+            "prettier.config.cjs",
+          })
+          local has_biome = has_config_file(bufnr, { "biome.json" })
+
+          local formatters = {}
+          if has_eslint then
+            table.insert(formatters, "eslint_d")
+          end
+          if has_prettier then
+            table.insert(formatters, "prettierd")
+          end
+          if has_biome then
+            table.insert(formatters, "biome")
+          end
+          return formatters
+        end
 
         conform.setup({
           timeout_ms = 5000,
