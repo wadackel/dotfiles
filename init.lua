@@ -1910,12 +1910,11 @@ require("lazy").setup({
           "<C-j>",
           function()
             local api = require("nvim-tree.api")
-            local view = require("nvim-tree.view")
             local bufresize = require("bufresize")
 
             bufresize.block_register()
 
-            if view.is_visible() then
+            if api.tree.is_visible() then
               api.tree.close()
               bufresize.resize_close()
             else
