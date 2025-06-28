@@ -456,6 +456,14 @@ end
 -- =============================================================
 -- Plugins
 -- =============================================================
+local has_config_file = function(bufnr, files)
+  local opts = {
+    upward = true,
+    path = vim.api.nvim_buf_get_name(bufnr),
+  }
+  return vim.fs.find(files, opts)[1] ~= nil
+end
+
 local function lsp_on_init(client)
   if client.server_capabilities then
     -- Disable LSP Semantic tokens
@@ -656,6 +664,7 @@ require("lazy").setup({
           -- Linter
           "actionlint",
           "eslint_d",
+          "oxlint",
           "stylelint",
           "textlint",
           "typos-lsp",
@@ -1223,6 +1232,20 @@ require("lazy").setup({
           end,
         })
 
+        local oxlint = lint.linters.oxlint
+        lint.linters.oxlint = vim.tbl_extend("force", oxlint, {
+          parser = function(output, bufnr, linter_cwd)
+            local has_oxlint = has_config_file(bufnr, {
+              ".oxlintrc.json",
+            })
+            vim.print(linter_cwd)
+            if has_oxlint then
+              return oxlint.parser(output, bufnr, linter_cwd)
+            end
+            return {}
+          end,
+        })
+
         local actionlint = lint.linters.actionlint
         lint.linters.actionlint = vim.tbl_extend("force", actionlint, {
           parser = function(output, bufnr)
@@ -1237,10 +1260,10 @@ require("lazy").setup({
 
         lint.linters_by_ft = {
           -- TODO: Support Deno
-          javascript = { "eslint_d" },
-          typescript = { "eslint_d" },
-          javascriptreact = { "eslint_d" },
-          typescriptreact = { "eslint_d" },
+          javascript = { "eslint_d", "oxlint" },
+          typescript = { "eslint_d", "oxlint" },
+          javascriptreact = { "eslint_d", "oxlint" },
+          typescriptreact = { "eslint_d", "oxlint" },
           css = { "stylelint" },
           yaml = { "actionlint" },
           terraform = { "tflint" },
@@ -1249,6 +1272,7 @@ require("lazy").setup({
         local check_local = {
           "eslint_d",
           "stylelint",
+          "oxlint",
         }
 
         local function contains(table, elements)
@@ -1298,14 +1322,6 @@ require("lazy").setup({
       },
       config = function()
         local conform = require("conform")
-
-        local has_config_file = function(bufnr, files)
-          local opts = {
-            upward = true,
-            path = vim.api.nvim_buf_get_name(bufnr),
-          }
-          return vim.fs.find(files, opts)[1] ~= nil
-        end
 
         local js_formatter = function(bufnr)
           local has_eslint = has_config_file(bufnr, {
