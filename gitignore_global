@@ -1,3 +1,5 @@
+.DS_Store
+.wadackel
 .rooignore
 **/.claude/settings.local.json
 CLAUDE.local.md

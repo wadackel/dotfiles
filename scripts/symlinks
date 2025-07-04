@@ -6,7 +6,6 @@ mkdir -p ~/.config/ghostty
 mkdir -p ~/.config/sheldon
 
 ln -sf ~/dotfiles/Brewfile ~/.Brewfile
-ln -sf ~/dotfiles/agignore ~/.agignore
 ln -sf ~/dotfiles/asdfrc ~/.asdfrc
 ln -sf ~/dotfiles/bashrc ~/.bashrc
 ln -sf ~/dotfiles/coc-settings.json ~/.config/nvim/coc-settings.json
