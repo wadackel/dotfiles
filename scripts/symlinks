@@ -4,11 +4,13 @@ mkdir -p ~/.config/tmux
 mkdir -p ~/.config/wezterm
 mkdir -p ~/.config/ghostty
 mkdir -p ~/.config/sheldon
+mkdir -p ~/.claude
 
 ln -sf ~/dotfiles/Brewfile ~/.Brewfile
 ln -sf ~/dotfiles/asdfrc ~/.asdfrc
 ln -sf ~/dotfiles/bashrc ~/.bashrc
 ln -sf ~/dotfiles/coc-settings.json ~/.config/nvim/coc-settings.json
+ln -sf ~/dotfiles/claude/settings.json ~/.claude/settings.json
 ln -sf ~/dotfiles/gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/gitconfig ~/.gitconfig
 ln -sf ~/dotfiles/gitignore_global ~/.gitignore_global
