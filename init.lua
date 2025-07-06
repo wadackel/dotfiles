@@ -1203,6 +1203,65 @@ require("lazy").setup({
       },
     },
 
+    -- {
+    --   "nvimtools/none-ls.nvim",
+    --   lazy = false,
+    --   dependencies = {
+    --     "williamboman/mason-lspconfig.nvim",
+    --     "neovim/nvim-lspconfig",
+    --   },
+    --   config = function()
+    --     local null_ls = require("null-ls")
+    --     local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
+    --     vim.print("test1")
+    --
+    --     null_ls.setup({
+    --       -- debug = false,
+    --       sources = {
+    --         -- Linter
+    --         -- null_ls.builtins.diagnostics.eslint_d,
+    --         -- null_ls.builtins.diagnostics.oxlint,
+    --         null_ls.builtins.diagnostics.actionlint,
+    --         null_ls.builtins.diagnostics.textlint,
+    --         -- null_ls.builtins.diagnostics.typos_lsp,
+    --
+    --         -- Formatter
+    --         null_ls.builtins.formatting.prettierd,
+    --         -- TODO: condition
+    --         -- null_ls.builtins.formatting.biome,
+    --         null_ls.builtins.formatting.gofumpt,
+    --         null_ls.builtins.formatting.goimports,
+    --         null_ls.builtins.formatting.stylua,
+    --       },
+    --       -- you can reuse a shared lspconfig on_attach callback here
+    --       on_attach = function(client, bufnr)
+    --         vim.print("test")
+    --         if client.supports_method("textDocument/formatting") then
+    --           vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
+    --           vim.api.nvim_create_autocmd("BufWritePre", {
+    --             group = augroup,
+    --             buffer = bufnr,
+    --             callback = function()
+    --               vim.lsp.buf.format({
+    --                 bufnr = bufnr,
+    --                 async = false,
+    --                 timeout_ms = 5000,
+    --               })
+    --             end,
+    --           })
+    --
+    --           keymap({ "n" }, "<Leader>p", function()
+    --             vim.lsp.buf.format({
+    --               async = true,
+    --               timeout_ms = 5000,
+    --             })
+    --           end)
+    --         end
+    --       end,
+    --     })
+    --   end,
+    -- },
+
     {
       "mfussenegger/nvim-lint",
       event = {
@@ -1446,30 +1505,30 @@ require("lazy").setup({
       },
     },
 
-    {
-      "ravitemer/mcphub.nvim",
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-      },
-      cmd = "MCPHub",
-      build = "npm install -g mcp-hub@latest",
-      config = function()
-        vim.g.mcphub_auto_approve = true
-
-        require("mcphub").setup({
-          auto_approve = true,
-          ui = {
-            window = {
-              width = 0.8,
-              height = 0.8,
-              relative = "editor",
-              zindex = 50,
-              border = "rounded",
-            },
-          },
-        })
-      end,
-    },
+    -- {
+    --   "ravitemer/mcphub.nvim",
+    --   dependencies = {
+    --     "nvim-lua/plenary.nvim",
+    --   },
+    --   cmd = "MCPHub",
+    --   build = "npm install -g mcp-hub@latest",
+    --   config = function()
+    --     vim.g.mcphub_auto_approve = true
+    --
+    --     require("mcphub").setup({
+    --       auto_approve = true,
+    --       ui = {
+    --         window = {
+    --           width = 0.8,
+    --           height = 0.8,
+    --           relative = "editor",
+    --           zindex = 50,
+    --           border = "rounded",
+    --         },
+    --       },
+    --     })
+    --   end,
+    -- },
 
     {
       "olimorris/codecompanion.nvim",
@@ -1603,14 +1662,14 @@ require("lazy").setup({
             },
           },
           extensions = {
-            mcphub = {
-              callback = "mcphub.extensions.codecompanion",
-              opts = {
-                show_result_in_chat = true,
-                make_vars = true,
-                make_slash_commands = true,
-              },
-            },
+            -- mcphub = {
+            --   callback = "mcphub.extensions.codecompanion",
+            --   opts = {
+            --     show_result_in_chat = true,
+            --     make_vars = true,
+            --     make_slash_commands = true,
+            --   },
+            -- },
           },
         })
 
@@ -2315,11 +2374,90 @@ require("lazy").setup({
         {
           "<Leader>gb",
           function()
+            -- Custom action for multiple branch deletion
+            local function git_branch_del_multiple(picker)
+              -- Get selected items (or current item if none selected)
+              local items = picker:selected({ fallback = true })
+
+              -- Collect branch names to delete
+              local branches = {}
+              local current_branch = vim.trim(vim.fn.system("git branch --show-current"))
+
+              for _, item in ipairs(items) do
+                if item and item.branch and item.branch ~= current_branch then
+                  table.insert(branches, item.branch)
+                end
+              end
+
+              -- Check if trying to delete current branch
+              if #branches == 0 then
+                if #items > 0 and items[1].branch == current_branch then
+                  Snacks.notify.error("Cannot delete the current branch", { title = "Snacks Picker" })
+                end
+                return
+              end
+
+              -- Confirm deletion
+              local msg = #branches == 1 and string.format("Delete branch %q?", branches[1])
+                or string.format("Delete %d branches? (%s)", #branches, table.concat(branches, ", "))
+
+              Snacks.picker.select({ "Yes", "No" }, { prompt = msg }, function(choice)
+                if choice ~= "Yes" then
+                  return
+                end
+
+                -- Delete branches
+                local deleted = {}
+                local failed = {}
+                local completed = 0
+
+                local function finish()
+                  -- Notify results
+                  if #deleted > 0 then
+                    local notify_msg = #deleted == 1 and string.format("Deleted branch: %s", deleted[1])
+                      or string.format("Deleted %d branches: %s", #deleted, table.concat(deleted, ", "))
+                    Snacks.notify(notify_msg, { title = "Snacks Picker" })
+                  end
+
+                  if #failed > 0 then
+                    Snacks.notify.error(
+                      string.format("Failed to delete: %s", table.concat(failed, ", ")),
+                      { title = "Snacks Picker" }
+                    )
+                  end
+
+                  -- Update picker (same as original git_branch_del)
+                  vim.cmd.checktime()
+                  picker.list:set_selected()
+                  picker.list:set_target()
+                  picker:find()
+                end
+
+                -- Delete each branch
+                for _, branch in ipairs(branches) do
+                  Snacks.picker.util.cmd({ "git", "branch", "-D", branch }, function(_, code)
+                    if code == 0 then
+                      table.insert(deleted, branch)
+                    else
+                      table.insert(failed, branch)
+                    end
+                    completed = completed + 1
+                    if completed == #branches then
+                      finish()
+                    end
+                  end, { cwd = picker:cwd() })
+                end
+              end)
+            end
+
             Snacks.picker.git_branches({
+              actions = {
+                git_branch_del_multiple = git_branch_del_multiple,
+              },
               win = {
                 input = {
                   keys = {
-                    ["<C-x>"] = { "git_branch_del", mode = { "n", "i" } },
+                    ["<C-x>"] = { "git_branch_del_multiple", mode = { "n", "i" } },
                   },
                 },
               },
