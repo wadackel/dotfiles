@@ -12,16 +12,16 @@ wezterm.on("window-config-reloaded", function(window)
 end)
 
 wezterm.on("bell", function(window)
-  window:toast_notification("Claude Code", "Task completed", nil, 4000)
-
-  if wezterm.target_triple:find("darwin") then
-    wezterm.background_child_process({
-      "afplay",
-      "-v",
-      "4",
-      "/System/Library/Sounds/Tink.aiff",
-    })
-  end
+  -- window:toast_notification("Claude Code", "Task completed", nil, 4000)
+  --
+  -- if wezterm.target_triple:find("darwin") then
+  --   wezterm.background_child_process({
+  --     "afplay",
+  --     "-v",
+  --     "4",
+  --     "/System/Library/Sounds/Tink.aiff",
+  --   })
+  -- end
 end)
 
 return {

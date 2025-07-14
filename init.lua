@@ -776,7 +776,12 @@ require("lazy").setup({
           on_init = lsp_on_init,
           on_attach = lsp_on_attach,
           single_file_support = false,
-          root_dir = lspconfig.util.root_pattern("package.json"),
+          root_dir = function(fname)
+            if lspconfig.util.root_pattern("deno.json", "deno.jsonc")(fname) then
+              return nil
+            end
+            return lspconfig.util.root_pattern("package.json")(fname)
+          end,
           settings = {
             expose_as_code_action = "all",
             tsserver_max_memory = 8192,

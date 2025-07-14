@@ -1,10 +1,10 @@
 {
-  "model": "opus",
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000"
   },
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(7z:*)",
@@ -295,6 +295,5 @@
       }
     ]
   },
-  "includeCoAuthoredBy": false,
   "preferredNotifChannel": "notifications_disabled"
 }
