@@ -3469,6 +3469,12 @@ require("lazy").setup({
                 actions.conflict_choose_all("none"),
                 { desc = "Delete the conflict region for the whole file" },
               },
+              {
+                "n",
+                "gq",
+                "<cmd>DiffviewClose<cr>",
+                { desc = "Close diffview" },
+              },
             },
             diff1 = {
               { "n", "g?", actions.help({ "view", "diff1" }), { desc = "Open the help panel" } },
