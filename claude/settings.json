@@ -195,7 +195,8 @@
       "LS(**)",
       "Read(**)",
       "WebFetch(domain:*)",
-      "WebSearch(*)"
+      "WebSearch(*)",
+      "mcp__playwright"
     ],
     "deny": [
       "Bash(> /dev/*)",
