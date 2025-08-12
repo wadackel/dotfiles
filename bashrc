@@ -1,3 +1,4 @@
+export PATH=/usr/bin:${PATH}
 export PATH=/usr/local/bin:${PATH}
 
 alias ll='ls -lG'
