@@ -1,2 +1,3 @@
 [default.extend-identifiers]
 roBa = "roBa"
+formant = "formant"
