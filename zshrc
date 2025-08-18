@@ -97,6 +97,11 @@ if [[ -x `which terraform` ]]; then
   fi
 fi
 
+# wtp
+if [[ -x `which wtp` ]]; then
+  eval "$(wtp completion zsh)"
+fi
+
 
 # ====================================================
 # 1Password
