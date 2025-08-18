@@ -1,6 +1,7 @@
 .DS_Store
 .wadackel
 .rooignore
+.serena
 .wtp.yml
 **/.claude/settings.local.json
 CLAUDE.local.md
