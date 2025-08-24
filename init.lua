@@ -1298,11 +1298,11 @@ require("lazy").setup({
 
         local oxlint = lint.linters.oxlint
         lint.linters.oxlint = vim.tbl_extend("force", oxlint, {
+          args = { "--type-aware", "--format", "github" },
           parser = function(output, bufnr, linter_cwd)
             local has_oxlint = has_config_file(bufnr, {
               ".oxlintrc.json",
             })
-            vim.print(linter_cwd)
             if has_oxlint then
               return oxlint.parser(output, bufnr, linter_cwd)
             end
