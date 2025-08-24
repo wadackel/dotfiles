@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
@@ -32,6 +31,7 @@
       "Bash(clippy:*)",
       "Bash(cloc:*)",
       "Bash(cmake:*)",
+      "Bash(corepack:*)",
       "Bash(coverage:*)",
       "Bash(cp:*)",
       "Bash(criterion:*)",
