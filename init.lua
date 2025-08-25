@@ -3085,6 +3085,7 @@ require("lazy").setup({
         "Git",
         "Gread",
         "Gdiff",
+        "Gvdiffsplit",
         "Gblame",
       },
       init = function()
