@@ -258,6 +258,12 @@ vim.api.nvim_create_user_command("ClipPathCwd", function()
   clip(vim.fn.expand("%:p"), true)
 end, {})
 
+vim.api.nvim_create_user_command("ClipPathAbs", function()
+  local result = vim.fn.expand("%:p")
+  vim.fn.setreg("*", result)
+  print("[clipped] " .. result)
+end, {})
+
 vim.api.nvim_create_user_command("ClipFile", function()
   clip(vim.fn.expand("%:t"))
 end, {})
@@ -272,6 +278,21 @@ end, {})
 
 keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
 keymap({ "n" }, "<Leader>cp", ":ClipPathCwd<CR>")
+
+-- Easy register
+vim.api.nvim_create_autocmd("TextYankPost", {
+  group = vim.api.nvim_create_augroup("easy-regname", {}),
+  callback = function()
+    local e = vim.v.event
+    if e.regname == "_" then
+      return
+    end
+    if e.regname ~= "" then
+      return
+    end
+    vim.fn.setreg(e.operator, e.regcontents, e.regtype)
+  end,
+})
 
 -- QuickFix の設定
 vim.api.nvim_create_augroup("QuickfixConfigure", {})
@@ -664,6 +685,7 @@ require("lazy").setup({
           -- Linter
           "actionlint",
           "eslint_d",
+          "eslint",
           "oxlint",
           "stylelint",
           "textlint",
@@ -1281,8 +1303,17 @@ require("lazy").setup({
         local eslint_d = lint.linters.eslint_d
         lint.linters.eslint_d = vim.tbl_extend("force", eslint_d, {
           parser = function(output, bufnr)
+            -- Filter out ESLintIgnoreWarning lines
+            local filtered_output = {}
+            for line in output:gmatch("[^\r\n]+") do
+              if not line:match("ESLintIgnoreWarning:") then
+                table.insert(filtered_output, line)
+              end
+            end
+            local clean_output = table.concat(filtered_output, "\n")
+
             -- Suppress "No ESLint found" error
-            local result = eslint_d.parser(output, bufnr)
+            local result = eslint_d.parser(clean_output, bufnr)
             if #result == 1 then
               local msg = result[1].message
               if string.match(msg, "No ESLint found") then
@@ -1324,10 +1355,14 @@ require("lazy").setup({
 
         lint.linters_by_ft = {
           -- TODO: Support Deno
-          javascript = { "eslint_d", "oxlint" },
-          typescript = { "eslint_d", "oxlint" },
-          javascriptreact = { "eslint_d", "oxlint" },
-          typescriptreact = { "eslint_d", "oxlint" },
+          javascript = { "oxlint" },
+          typescript = { "oxlint" },
+          javascriptreact = { "oxlint" },
+          typescriptreact = { "oxlint" },
+          -- javascript = { "eslint_d", "oxlint" },
+          -- typescript = { "eslint_d", "oxlint" },
+          -- javascriptreact = { "eslint_d", "oxlint" },
+          -- typescriptreact = { "eslint_d", "oxlint" },
           css = { "stylelint" },
           yaml = { "actionlint" },
           terraform = { "tflint" },
@@ -1403,11 +1438,13 @@ require("lazy").setup({
             "prettier.config.js",
             "prettier.config.cjs",
           })
-          local has_biome = has_config_file(bufnr, { "biome.json" })
+          local has_biome = has_config_file(bufnr, {
+            "biome.json",
+          })
 
           local formatters = {}
           if has_eslint then
-            table.insert(formatters, "eslint_d")
+            -- table.insert(formatters, "eslint_d")
           end
           if has_prettier then
             table.insert(formatters, "prettierd")
@@ -1419,7 +1456,9 @@ require("lazy").setup({
         end
 
         conform.setup({
+          log_level = vim.log.levels.DEBUG,
           timeout_ms = 5000,
+          formatters = {},
           formatters_by_ft = {
             javascript = js_formatter,
             javascriptreact = js_formatter,
