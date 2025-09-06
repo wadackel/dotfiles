@@ -785,8 +785,6 @@ require("lazy").setup({
     {
       "pmizio/typescript-tools.nvim",
       lazy = false,
-      -- @see https://github.com/pmizio/typescript-tools.nvim/issues/343
-      version = "e0887c1e336edbb01243e9f1e60d74b0bc0a2bed",
       dependencies = {
         "nvim-lua/plenary.nvim",
         "neovim/nvim-lspconfig",
@@ -2022,67 +2020,133 @@ require("lazy").setup({
       "folke/snacks.nvim",
       priority = 1000,
       lazy = false,
-      opts = {
-        bigfile = { enabled = true },
-        dashboard = { enabled = false },
-        explorer = { enabled = false },
-        indent = { enabled = false },
-        notifier = { enabled = false },
-        quickfile = { enabled = false },
-        scope = { enabled = false },
-        scroll = { enabled = false },
-        statuscolumn = { enabled = false },
-        words = { enabled = false },
-        input = { enabled = false },
-        picker = {
-          enabled = true,
-          layouts = {
-            default = {
-              layout = {
-                width = 0.9,
-                height = 0.7,
+      opts = function()
+        local function extract_cmd(item)
+          local function extract(it)
+            if not it then
+              return nil
+            end
+            if type(it) == "string" then
+              return it
+            end
+            local fields = { "cmd", "text", "value", "command", "cmdline", "name" }
+            for _, key in ipairs(fields) do
+              local v = it[key]
+              if type(v) == "string" and v ~= "" then
+                return v
+              end
+            end
+            return nil
+          end
+          return extract(item)
+            or extract(item and item.item)
+            or extract(item and item.value)
+            or extract(item and item.text)
+        end
+
+        local function confirm_execute(picker, item)
+          item = item or picker:selected({ fallback = true })
+          if not item then
+            return
+          end
+          local cmd = extract_cmd(item)
+          if type(cmd) ~= "string" or cmd == "" then
+            return
+          end
+          cmd = cmd:gsub("^:%s*", "")
+          picker:norm(function()
+            picker:close()
+            vim.schedule(function()
+              pcall(vim.fn.histadd, "cmd", cmd)
+              pcall(vim.cmd, cmd)
+            end)
+          end)
+        end
+
+        return {
+          bigfile = { enabled = true },
+          dashboard = { enabled = false },
+          explorer = { enabled = false },
+          indent = { enabled = false },
+          notifier = { enabled = false },
+          quickfile = { enabled = false },
+          scope = { enabled = false },
+          scroll = { enabled = false },
+          statuscolumn = { enabled = false },
+          words = { enabled = false },
+          input = { enabled = false },
+          picker = {
+            enabled = true,
+            layouts = {
+              default = {
+                layout = {
+                  width = 0.9,
+                  height = 0.7,
+                },
+              },
+              select = {
+                layout = {
+                  width = 0.75,
+                },
               },
             },
-            select = {
-              layout = {
-                width = 0.75,
+            sources = {
+              command_history = {
+                layout = {
+                  preset = "select",
+                },
+                -- Enter の既定 confirm を上書きして即実行にする（ソース単位）
+                confirm = confirm_execute,
+                win = {
+                  list = {
+                    keys = {
+                      ["<CR>"] = { "confirm", mode = { "n", "i" } },
+                      ["<C-m>"] = { "confirm", mode = { "n", "i" } },
+                    },
+                  },
+                },
+              },
+              commands = {
+                -- Enter の既定 confirm を上書きして即実行にする（ソース単位）
+                confirm = confirm_execute,
+                win = {
+                  list = {
+                    keys = {
+                      ["<CR>"] = { "confirm", mode = { "n", "i" } },
+                      ["<C-m>"] = { "confirm", mode = { "n", "i" } },
+                    },
+                  },
+                },
               },
             },
-          },
-          sources = {
-            command_history = {
-              layout = {
-                preset = "select",
-              },
-            },
-          },
-          win = {
-            input = {
-              keys = (function()
-                local function code(keys)
-                  return vim.api.nvim_replace_termcodes(keys, true, true, true)
-                end
-                local function feed(keys)
-                  return function()
-                    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "i", false)
-                    return ""
+            win = {
+              input = {
+                keys = (function()
+                  local function code(keys)
+                    return vim.api.nvim_replace_termcodes(keys, true, true, true)
                   end
-                end
-                return {
-                  ["<C-a>"] = { feed("<Home>"), mode = "i", expr = true, nowait = true },
-                  ["<C-e>"] = { feed("<End>"), mode = "i", expr = true, nowait = true },
-                  ["<C-b>"] = { feed("<Left>"), mode = "i", expr = true, nowait = true },
-                  ["<C-f>"] = { feed("<Right>"), mode = "i", expr = true, nowait = true },
-                  ["<C-d>"] = { feed("<Del>"), mode = "i", expr = true, nowait = true },
-                  ["<C-u>"] = { code("<C-u>"), mode = "i", expr = true, nowait = true },
-                  ["<C-n>"] = { "history_forward", mode = { "i", "n" } },
-                  ["<C-p>"] = { "history_back", mode = { "i", "n" } },
-                }
-              end)(),
+                  local function feed(keys)
+                    return function()
+                      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "i", false)
+                      return ""
+                    end
+                  end
+                  return {
+                    ["<C-a>"] = { feed("<Home>"), mode = "i", expr = true, nowait = true },
+                    ["<C-e>"] = { feed("<End>"), mode = "i", expr = true, nowait = true },
+                    ["<C-b>"] = { feed("<Left>"), mode = "i", expr = true, nowait = true },
+                    ["<C-f>"] = { feed("<Right>"), mode = "i", expr = true, nowait = true },
+                    ["<C-d>"] = { feed("<Del>"), mode = "i", expr = true, nowait = true },
+                    ["<C-u>"] = { code("<C-u>"), mode = "i", expr = true, nowait = true },
+                    ["<C-n>"] = { "history_forward", mode = { "i", "n" } },
+                    ["<C-p>"] = { "history_back", mode = { "i", "n" } },
+                  }
+                end)(),
+              },
             },
           },
-        },
-      },
+        }
+      end,
       keys = {
         -- picker
         {
