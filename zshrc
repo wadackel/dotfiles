@@ -59,6 +59,7 @@ export PATH="/usr/local/bin:${PATH}"
 export PATH="/usr/local/sbin:${PATH}"
 export PATH="${PATH}:${HOME}/.poetry/bin"
 export PATH="${PNPM_HOME}:${PATH}"
+export PATH="${HOME}/.local/bin:${PATH}"
 export PATH="${HOME}/.yarn/bin:${PATH}"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 export PATH="${HOME}/Library/Android/sdk/platform-tools:${PATH}"
@@ -251,7 +252,7 @@ function gitignore() { curl -L -s https://www.gitignore.io/api/$@ ;}
 
 # Ring the bell
 function bell() {
-  afplay -v 4 /System/Library/Sounds/Tink.aiff
+  afplay -v 4 /System/Library/Sounds/Hero.aiff
 }
 
 # git 操作

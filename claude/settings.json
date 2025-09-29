@@ -1,12 +1,12 @@
 {
   "env": {
-    "CLAUDE_CODE_AUTO_CONNECT_IDE": false,
-    "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": true,
-    "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": true,
-    "CLAUDE_CODE_ENABLE_TELEMETRY": false,
-    "DISABLE_ERROR_REPORTING": true,
-    "DISABLE_TELEMETRY": true,
-    "DISABLE_MICROCOMPACT": true,
+    "CLAUDE_CODE_AUTO_CONNECT_IDE": "false",
+    "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "true",
+    "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "true",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "false",
+    "DISABLE_ERROR_REPORTING": "true",
+    "DISABLE_TELEMETRY": "true",
+    "DISABLE_MICROCOMPACT": "true",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000"
   },
@@ -209,7 +209,6 @@
       "Bash(yq:*)",
       "Bash(z:*)",
       "Bash(zoxide:*)",
-      "Edit(!.git/**)",
       "Edit(./**)",
       "Glob(**)",
       "Grep(**)",
@@ -305,6 +304,7 @@
       "Write(~/.ssh/id_*)"
     ]
   },
+  "model": "opusplan",
   "hooks": {
     "Stop": [
       {
@@ -328,6 +328,5 @@
         ]
       }
     ]
-  },
-  "model": "opusplan"
+  }
 }
