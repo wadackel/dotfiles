@@ -237,7 +237,7 @@ keymap({ "n" }, "<<", "<<", { noremap = true })
 keymap({ "v" }, "Q", "y:g/^.*$//e")
 
 -- 指定データをクリップボードにつながるレジスタへ保存
-local function clip(data, use_cwd)
+local function clip(data, use_cwd, line_start, line_end)
   local root
   local cwd = vim.fn.getcwd()
   if use_cwd then
@@ -246,6 +246,15 @@ local function clip(data, use_cwd)
     root = find_nearest_dir({ ".git", "package.json", "pubspec.yaml" }) or cwd
   end
   local result = remove_prefix(data, root):gsub("^/", "")
+
+  if line_start then
+    if line_end and line_start ~= line_end then
+      result = result .. ":" .. line_start .. "-" .. line_end
+    else
+      result = result .. ":" .. line_start
+    end
+  end
+
   vim.fn.setreg("*", result)
   print("[clipped] " .. result)
 end
@@ -254,9 +263,14 @@ vim.api.nvim_create_user_command("ClipPath", function()
   clip(vim.fn.expand("%:p"), false)
 end, {})
 
-vim.api.nvim_create_user_command("ClipPathCwd", function()
-  clip(vim.fn.expand("%:p"), true)
-end, {})
+vim.api.nvim_create_user_command("ClipPathCwd", function(opts)
+  local line_start, line_end = nil, nil
+  if opts.range > 0 then
+    line_start = opts.line1
+    line_end = opts.line2
+  end
+  clip(vim.fn.expand("%:p"), true, line_start, line_end)
+end, { range = true })
 
 vim.api.nvim_create_user_command("ClipPathAbs", function()
   local result = vim.fn.expand("%:p")
@@ -277,7 +291,7 @@ vim.api.nvim_create_user_command("ClipDirCwd", function()
 end, {})
 
 keymap({ "n" }, "<Leader>cf", ":ClipFile<CR>")
-keymap({ "n" }, "<Leader>cp", ":ClipPathCwd<CR>")
+keymap({ "n", "v" }, "<Leader>cp", ":ClipPathCwd<CR>")
 
 -- Easy register
 vim.api.nvim_create_autocmd("TextYankPost", {

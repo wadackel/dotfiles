@@ -271,7 +271,6 @@
       "Edit(//etc/passwd)",
       "Edit(//etc/shadow)",
       "Edit(//etc/sudoers)",
-      "Edit(//lib/**)",
       "Edit(//lib64/**)",
       "Edit(//opt/**)",
       "Edit(//proc/**)",
@@ -304,7 +303,6 @@
       "Write(~/.ssh/id_*)"
     ]
   },
-  "model": "opusplan",
   "hooks": {
     "Stop": [
       {
