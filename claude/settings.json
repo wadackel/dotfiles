@@ -155,6 +155,7 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Bash(rbenv:*)",
+      "Bash(readlink:*)",
       "Bash(remix:*)",
       "Bash(rg:*)",
       "Bash(rm:*)",
@@ -181,6 +182,7 @@
       "Bash(task:*)",
       "Bash(tee:*)",
       "Bash(terraform plan:*)",
+      "Bash(test:*)",
       "Bash(tig:*)",
       "Bash(time:*)",
       "Bash(timeout:*)",
@@ -326,5 +328,6 @@
         ]
       }
     ]
-  }
+  },
+  "alwaysThinkingEnabled": false
 }
