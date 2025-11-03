@@ -118,6 +118,10 @@ vim.opt.listchars = {
   nbsp = "%",
 }
 vim.opt.mouse = ""
+vim.opt.fillchars = {
+  diff = "╱",
+  eob = " ",
+}
 
 -- 基本キーマップ
 -- leader を \ に退避
@@ -3112,14 +3116,15 @@ require("lazy").setup({
       "sindrets/diffview.nvim",
       keys = {
         { "<Leader>gD", "<cmd>DiffviewOpen<CR>", mode = "n", noremap = true },
-        { "<Leader>gh", "<cmdfDiffviewFileHistory<CR>", mode = "n", noremap = true },
+        { "<Leader>gh", "<cmd>DiffviewFileHistory<CR>", mode = "n", noremap = true },
       },
       config = function()
         local actions = require("diffview.actions")
 
         require("diffview").setup({
           diff_binaries = false, -- Show diffs for binaries
-          enhanced_diff_hl = false, -- See ':h diffview-config-enhanced_diff_hl'
+          -- enhanced_diff_hl = false, -- See ':h diffview-config-enhanced_diff_hl'
+          enhanced_diff_hl = true, -- See ':h diffview-config-enhanced_diff_hl'
           git_cmd = { "git" }, -- The git executable followed by default args.
           hg_cmd = { "hg" }, -- The hg executable followed by default args.
           use_icons = true, -- Requires nvim-web-devicons
@@ -3156,8 +3161,8 @@ require("lazy").setup({
               folder_statuses = "only_folded",
             },
             win_config = {
-              position = "top",
-              width = 35,
+              position = "left",
+              width = 40,
               height = 10,
               win_opts = {},
             },
