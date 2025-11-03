@@ -11,6 +11,7 @@ ln -sf ~/dotfiles/asdfrc ~/.asdfrc
 ln -sf ~/dotfiles/bashrc ~/.bashrc
 ln -sf ~/dotfiles/coc-settings.json ~/.config/nvim/coc-settings.json
 ln -sf ~/dotfiles/claude/settings.json ~/.claude/settings.json
+ln -sf ~/dotfiles/claude/agents ~/.claude/agents
 ln -sf ~/dotfiles/gitattributes ~/.gitattributes
 ln -sf ~/dotfiles/gitconfig ~/.gitconfig
 ln -sf ~/dotfiles/gitignore_global ~/.gitignore_global
