@@ -37,7 +37,7 @@ return {
     { family = "Noto Sans JP" },
   }),
 
-  font_size = 16.0,
+  font_size = 15.0,
 
   -- port from: https://github.com/wadackel/vim-dogrun/blob/main/colors/dogrun.vim
   colors = {

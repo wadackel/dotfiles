@@ -233,7 +233,8 @@
       "WebFetch(domain:tailwindcss.com)",
       "WebSearch",
       "mcp__playwright",
-      "mcp__serena"
+      "mcp__serena",
+      "mcp__codex"
     ],
     "deny": [
       "Bash(> /dev/*)",
