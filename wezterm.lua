@@ -11,19 +11,6 @@ wezterm.on("window-config-reloaded", function(window)
   window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
 end)
 
-wezterm.on("bell", function(window)
-  -- window:toast_notification("Claude Code", "Task completed", nil, 4000)
-  --
-  -- if wezterm.target_triple:find("darwin") then
-  --   wezterm.background_child_process({
-  --     "afplay",
-  --     "-v",
-  --     "4",
-  --     "/System/Library/Sounds/Tink.aiff",
-  --   })
-  -- end
-end)
-
 return {
   audible_bell = "SystemBeep",
   notification_handling = "AlwaysShow",
@@ -39,34 +26,7 @@ return {
 
   font_size = 15.0,
 
-  -- port from: https://github.com/wadackel/vim-dogrun/blob/main/colors/dogrun.vim
-  colors = {
-    foreground = "#9ea3c0",
-    background = "#222433",
-    cursor_fg = "#222433",
-    cursor_bg = "#9ea3c0",
-    selection_bg = "#363e7f",
-    ansi = {
-      "#111219",
-      "#e58585",
-      "#7cbe8c",
-      "#8e8a6f",
-      "#4c89ac",
-      "#6c75cb",
-      "#73c1a9",
-      "#9ea3c0",
-    },
-    brights = {
-      "#545c8c",
-      "#b871b8",
-      "#7cbe8c",
-      "#a8a384",
-      "#589ec6",
-      "#929be5",
-      "#59b6b6",
-      "#9ea3c0",
-    },
-  },
+  color_scheme = "dogrun",
 
   enable_tab_bar = false,
   enable_scroll_bar = false,
