@@ -2600,6 +2600,12 @@ require("lazy").setup({
           shade_terminals = false,
           float_opts = {
             border = "rounded",
+            width = function()
+              return math.ceil(vim.o.columns * 0.95)
+            end,
+            height = function()
+              return math.ceil(vim.o.lines * 0.85)
+            end,
           },
           highlights = {
             FloatBorder = {
@@ -4276,6 +4282,7 @@ require("lazy").setup({
       config = function()
         require("peek").setup({
           theme = "light",
+          app = "browser",
         })
         vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
         vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
