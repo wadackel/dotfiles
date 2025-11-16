@@ -2,6 +2,7 @@
 .wadackel
 .rooignore
 .serena
+.ofsht.toml
 .wtp.yml
 **/.claude/settings.local.json
 **/.claude/commands/wadackel-*

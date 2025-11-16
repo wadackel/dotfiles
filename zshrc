@@ -103,6 +103,12 @@ if [[ -x `which wtp` ]]; then
   eval "$(wtp completion zsh)"
 fi
 
+# ofsht
+if [[ -x `which ofsht` ]]; then
+  eval "$(ofsht shell-init zsh)"
+  eval "$(ofsht completions zsh)"
+fi
+
 
 # ====================================================
 # 1Password
