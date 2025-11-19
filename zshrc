@@ -106,7 +106,7 @@ fi
 # ofsht
 if [[ -x `which ofsht` ]]; then
   eval "$(ofsht shell-init zsh)"
-  eval "$(ofsht completions zsh)"
+  source <(COMPLETE=zsh ofsht)
 fi
 
 
