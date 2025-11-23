@@ -2,6 +2,7 @@
 .wadackel
 .rooignore
 .serena
+/.worktrees
 .ofsht.toml
 .wtp.yml
 **/.claude/settings.local.json
