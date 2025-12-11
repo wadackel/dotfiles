@@ -10,7 +10,6 @@
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000"
   },
-  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(7z:*)",
@@ -337,7 +336,8 @@
   },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true,
-    "example-skills@anthropic-agent-skills": true
+    "example-skills@anthropic-agent-skills": true,
+    "frontend-design@claude-code-plugins": true
   },
-  "alwaysThinkingEnabled": false
+  "alwaysThinkingEnabled": true
 }
