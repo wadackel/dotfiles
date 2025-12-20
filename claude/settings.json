@@ -16,6 +16,7 @@
       "Bash(ag:*)",
       "Bash(alias:*)",
       "Bash(asdf:*)",
+      "Bash(ast-grep:*)",
       "Bash(astro:*)",
       "Bash(ava:*)",
       "Bash(awk:*)",
@@ -339,5 +340,5 @@
     "example-skills@anthropic-agent-skills": true,
     "frontend-design@claude-code-plugins": true
   },
-  "alwaysThinkingEnabled": false
+  "alwaysThinkingEnabled": true
 }
