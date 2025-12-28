@@ -544,6 +544,12 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- Lualine tabline 背景透過用のパッチ関数
+_G.patch_lualine_tabline_colors = function()
+  -- タブ間の隙間（TabLineFill）を透過
+  vim.api.nvim_set_hl(0, "TabLineFill", { bg = "none" })
+end
+
 -- Setup lazy.nvim
 require("lazy").setup({
   defaults = {
@@ -622,6 +628,9 @@ require("lazy").setup({
           vim.cmd.colorscheme("default")
           vim.cmd.colorscheme("dogrun")
           patch_colors()
+
+          -- Lualine tabline の透過も再適用
+          _G.patch_lualine_tabline_colors()
         end, {})
       end,
     },
@@ -3030,9 +3039,10 @@ require("lazy").setup({
                 max_length = function()
                   return vim.o.columns
                 end,
+                color = { bg = "none" },
                 tabs_color = {
                   active = "lualine_a_normal",
-                  inactive = "lualine_a_inactive",
+                  inactive = { bg = "none" },
                 },
                 show_modified_status = false,
                 fmt = function(name, context)
@@ -3054,6 +3064,9 @@ require("lazy").setup({
             "toggleterm",
           },
         })
+
+        -- tabline の背景を透過
+        _G.patch_lualine_tabline_colors()
       end,
     },
 

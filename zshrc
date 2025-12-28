@@ -400,3 +400,52 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 if (which zprof > /dev/null 2>&1) ;then
   zprof
 fi
+
+
+# ====================================================
+# Zellij
+# ====================================================
+
+# Zellij タブ名自動更新
+_update_zellij_tab() {
+    [[ -z $ZELLIJ ]] && return
+
+    local dir="$PWD"
+    local display_dir
+
+    # ホームディレクトリの場合
+    if [[ "$dir" == "$HOME" ]]; then
+        display_dir="~"
+    # ホームディレクトリ配下の場合
+    elif [[ "$dir" == "$HOME"/* ]]; then
+        local rel_dir="${dir#$HOME/}"
+        # スラッシュの数で階層を判定
+        local slash_count="${rel_dir//[^\/]}"
+        if [[ ${#slash_count} -ge 2 ]]; then
+            # 後半2階層を取得
+            local last="${rel_dir##*/}"
+            local parent="${rel_dir%/*}"
+            parent="${parent##*/}"
+            display_dir="~/${parent}/${last}"
+        else
+            display_dir="~/${rel_dir}"
+        fi
+    # ルート直下の場合
+    else
+        local abs_path="${dir#/}"
+        local slash_count="${abs_path//[^\/]}"
+        if [[ ${#slash_count} -ge 2 ]]; then
+            local last="${abs_path##*/}"
+            local parent="${abs_path%/*}"
+            parent="${parent##*/}"
+            display_dir="${parent}/${last}"
+        else
+            display_dir="$dir"
+        fi
+    fi
+
+    zellij action rename-tab "$display_dir" 2>/dev/null
+}
+
+# precmd_functions 配列に追加（既存の precmd を上書きしない）
+precmd_functions+=(_update_zellij_tab)
