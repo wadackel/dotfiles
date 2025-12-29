@@ -1,0 +1,224 @@
+keybinds clear-defaults=true {
+    // Locked mode (default): Only Ctrl+s to enter tmux mode
+    locked {
+        bind "Ctrl s" { SwitchToMode "tmux"; }
+    }
+
+    // Normal mode: Unlock with Ctrl+g
+    normal {
+        bind "Ctrl s" { SwitchToMode "tmux"; }
+        bind "Ctrl g" { SwitchToMode "locked"; }
+    }
+
+    // Tmux mode: keybindings matching actual tmux config (~/.tmux.conf)
+    tmux {
+        // Send prefix to nested session
+        bind "Ctrl s" { Write 19; SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+
+        // Pane navigation (vim-style) - matching tmux config
+        bind "h" { MoveFocus "left"; SwitchToMode "locked"; }
+        bind "j" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "k" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "l" { MoveFocus "right"; SwitchToMode "locked"; }
+
+        // Pane navigation with Ctrl (continuous movement) - matching tmux config
+        bind "Ctrl h" { MoveFocus "left"; SwitchToMode "locked"; }
+        bind "Ctrl j" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "Ctrl k" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "Ctrl l" { MoveFocus "right"; SwitchToMode "locked"; }
+
+        // Pane navigation (arrow keys)
+        bind "left" { MoveFocus "left"; SwitchToMode "locked"; }
+        bind "down" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "up" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "right" { MoveFocus "right"; SwitchToMode "locked"; }
+
+        // Pane split - matching tmux config (v=vertical, s=horizontal)
+        bind "v" { NewPane "right"; SwitchToMode "locked"; }
+        bind "s" { NewPane "down"; SwitchToMode "locked"; }
+
+        // Pane operations - matching tmux config
+        bind "Ctrl x" { CloseFocus; SwitchToMode "locked"; }
+        bind "o" { ToggleFocusFullscreen; SwitchToMode "locked"; }
+
+        // Floating pane operations
+        bind "w" { ToggleFloatingPanes; SwitchToMode "locked"; }
+        bind "Ctrl e" { TogglePaneEmbedOrFloating; SwitchToMode "locked"; }
+
+        // Tab operations - matching tmux config
+        bind "c" { NewTab; SwitchToMode "locked"; }
+        bind "t" { NewTab; SwitchToMode "locked"; }
+        bind "n" { GoToNextTab; SwitchToMode "locked"; }
+        bind "p" { GoToPreviousTab; SwitchToMode "locked"; }
+        bind "Ctrl n" { GoToNextTab; SwitchToMode "locked"; }
+        bind "Ctrl p" { GoToPreviousTab; SwitchToMode "locked"; }
+        bind "," { SwitchToMode "renametab"; TabNameInput 0; }
+
+        // Tab navigation by number - matching tmux config
+        bind "1" { GoToTab 1; SwitchToMode "locked"; }
+        bind "2" { GoToTab 2; SwitchToMode "locked"; }
+        bind "3" { GoToTab 3; SwitchToMode "locked"; }
+        bind "4" { GoToTab 4; SwitchToMode "locked"; }
+        bind "5" { GoToTab 5; SwitchToMode "locked"; }
+        bind "6" { GoToTab 6; SwitchToMode "locked"; }
+        bind "7" { GoToTab 7; SwitchToMode "locked"; }
+        bind "8" { GoToTab 8; SwitchToMode "locked"; }
+        bind "9" { GoToTab 9; SwitchToMode "locked"; }
+
+        // Session operations
+        bind "d" { Detach; }
+        bind "e" {
+            LaunchOrFocusPlugin "session-manager" {
+                floating true
+                move_to_focused_tab true
+            }
+            SwitchToMode "locked"
+        }
+
+        // Return to locked mode
+        bind "Ctrl c" { SwitchToMode "locked"; }
+
+        // Scroll mode - matching tmux config (i=copy-mode, [=traditional)
+        bind "i" { SwitchToMode "scroll"; }
+        bind "[" { SwitchToMode "scroll"; }
+    }
+
+    // Scroll mode: vim-style scrolling
+    scroll {
+        bind "i" { EditScrollback; SwitchToMode "locked"; }
+        bind "s" { SwitchToMode "entersearch"; SearchInput 0; }
+        bind "Ctrl c" { ScrollToBottom; SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+
+        // Vim-style navigation
+        bind "j" { ScrollDown; }
+        bind "Ctrl e" { ScrollDown; }
+        bind "k" { ScrollUp; }
+        bind "Ctrl y" { ScrollUp; }
+        bind "Ctrl f" { PageScrollDown; }
+        bind "Ctrl b" { PageScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+        bind "Ctrl d" { HalfPageScrollDown; }
+        bind "Ctrl u" { HalfPageScrollUp; }
+
+        // Arrow keys
+        bind "down" { ScrollDown; }
+        bind "up" { ScrollUp; }
+        bind "left" { PageScrollUp; }
+        bind "right" { PageScrollDown; }
+        bind "PageDown" { PageScrollDown; }
+        bind "PageUp" { PageScrollUp; }
+    }
+
+    // Search mode
+    search {
+        bind "n" { Search "down"; }
+        bind "p" { Search "up"; }
+        bind "c" { SearchToggleOption "CaseSensitivity"; }
+        bind "o" { SearchToggleOption "WholeWord"; }
+        bind "w" { SearchToggleOption "Wrap"; }
+        bind "Ctrl c" { ScrollToBottom; SwitchToMode "locked"; }
+        bind "esc" { SwitchToMode "locked"; }
+
+        // Vim-style navigation in search results
+        bind "j" { ScrollDown; }
+        bind "k" { ScrollUp; }
+        bind "h" { PageScrollUp; }
+        bind "l" { PageScrollDown; }
+        bind "Ctrl f" { PageScrollDown; }
+        bind "Ctrl b" { PageScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+
+        // Arrow keys
+        bind "down" { ScrollDown; }
+        bind "up" { ScrollUp; }
+        bind "left" { PageScrollUp; }
+        bind "right" { PageScrollDown; }
+        bind "PageDown" { PageScrollDown; }
+        bind "PageUp" { PageScrollUp; }
+    }
+
+    // Enter search mode
+    entersearch {
+        bind "Ctrl c" { SwitchToMode "scroll"; }
+        bind "esc" { SwitchToMode "scroll"; }
+        bind "enter" { SwitchToMode "search"; }
+    }
+
+    // Rename tab mode
+    renametab {
+        bind "Ctrl c" { SwitchToMode "locked"; }
+        bind "esc" { UndoRenameTab; SwitchToMode "locked"; }
+        bind "enter" { SwitchToMode "locked"; }
+    }
+
+    // Rename pane mode
+    renamepane {
+        bind "Ctrl c" { SwitchToMode "locked"; }
+        bind "esc" { UndoRenamePane; SwitchToMode "locked"; }
+        bind "enter" { SwitchToMode "locked"; }
+    }
+}
+
+// Plugin aliases - can be used to change the implementation of Zellij
+// changing these requires a restart to take effect
+plugins {
+    about location="zellij:about"
+    compact-bar location="zellij:compact-bar"
+    configuration location="zellij:configuration"
+    filepicker location="zellij:strider" {
+        cwd "/"
+    }
+    plugin-manager location="zellij:plugin-manager"
+    session-manager location="zellij:session-manager"
+    status-bar location="zellij:status-bar"
+    strider location="zellij:strider"
+    tab-bar location="zellij:tab-bar"
+    welcome-screen location="zellij:session-manager" {
+        welcome_screen true
+    }
+}
+
+// Plugins to load in the background when a new session starts
+// eg. "file:/path/to/my-plugin.wasm"
+// eg. "https://example.com/my-plugin.wasm"
+load_plugins {
+}
+web_client {
+    font "monospace"
+}
+
+// ============================================================================
+// Minimal UI Configuration
+// ============================================================================
+
+// Simplified UI without special fonts (no arrow glyphs)
+// simplified_ui true
+
+// Hide pane frames for cleaner look
+pane_frames false
+
+// Use zjstatus layout (custom status bar)
+default_layout "default"
+
+// Start in locked mode to avoid conflicts with vim and other apps
+default_mode "locked"
+
+// Disable mouse mode (keyboard-only operation)
+// mouse_mode false
+
+// Disable advanced mouse actions (hover effects, pane grouping)
+advanced_mouse_actions false
+
+// Hide startup tips
+show_startup_tips false
+
+// Hide release notes
+show_release_notes false
+
+// Choose the theme that is specified in the themes section.
+// Default: default
+theme "dogrun"
