@@ -1,0 +1,64 @@
+layout {
+  default_tab_template {
+    pane size=1 borderless=true {
+      plugin location="file:~/.config/zellij/plugins/zjstatus.wasm" {
+        // Layout: left=mode, center=tabs, right=datetime
+        format_left   "{mode}"
+        format_center "{tabs}"
+        format_right  "{datetime}"
+        format_space  ""
+
+        // Overlength control
+        format_hide_on_overlength "true"
+        format_precedence         "lrc"
+
+        border_enabled  "false"
+
+        // Mode display (icon only, no background)
+        mode_normal  "#[fg=#9ea3c0,bold] 󰌌 "
+        mode_locked  "#[fg=#545c8c,bold] 󰌾 "
+        mode_tmux    "#[fg=#73c1a9,bold] 󰆍 "
+        mode_scroll  "#[fg=#ac8b83,bold] 󰍉 "
+
+        // Tab display (name only, no background)
+        // Active tab: purple tab name (bold)
+        tab_active   "#[fg=#929be5,bold]{name} "
+
+        // Inactive tab: gray tab name
+        tab_normal   "#[fg=#545c8c]{name} "
+
+        // Date and time settings
+        datetime_format "%Y/%m/%d %H:%M"
+        datetime_timezone "Asia/Tokyo"
+
+        // Datetime display (Powerline rounded separator + dark background + clock icon)
+        datetime "#[bg=#222433,fg=#929be5]#[bg=#929be5,fg=#2a2c3f] #[bg=#2a2c3f,fg=#545c8c] {format} "
+      }
+    }
+    children
+
+    // Default floating pane (size when floating within layout)
+    floating_panes {
+      pane {
+        x "5%"
+        y "5%"
+        width "90%"
+        height "90%"
+      }
+    }
+  }
+
+  // Override swap_floating_layout to enforce default size (avoid 0.43 default 50% width)
+  swap_floating_layout name="wide-floating" {
+    // Use 90% even for single pane
+    floating_panes max_panes=1 {
+      pane { x "5%"; y "5%"; width "90%"; height "90%"; }
+    }
+    // Arrange side by side for 2 panes
+    floating_panes max_panes=2 {
+      pane { x "5%";  y "5%";  width "45%"; height "90%"; }
+      pane { x "50%"; y "5%";  width "45%"; height "90%"; }
+    }
+    // Use default behavior for 3+ panes (extend when needed)
+  }
+}

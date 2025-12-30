@@ -3,3 +3,7 @@
 vim/bundle
 vim/swap
 /src
+.archived/
+
+# Nix build outputs
+/result
