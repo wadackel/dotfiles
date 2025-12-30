@@ -38,6 +38,21 @@
         })
       ];
 
+      # Profile definitions - Single source of truth for all configurations
+      profiles = {
+        private = {
+          username = "wadackel";
+          hostname = "wadackels-MacBook-Air";
+        };
+        work = {
+          username = "tsuyoshi.wada";
+          hostname = "tsuyoshiwadas-MacBook-Pro";
+        };
+      };
+
+      # Helper to derive homeDir from username (macOS convention)
+      mkHomeDir = username: "/Users/${username}";
+
       # Helper function to create home-manager configuration
       mkHome =
         { username, homeDir }:
@@ -100,31 +115,31 @@
       };
 
       # Home Manager configurations (standalone, optional)
-      homeConfigurations = {
-        wadackel = mkHome {
-          username = "wadackel";
-          homeDir = "/Users/wadackel";
-        };
-        "tsuyoshi.wada" = mkHome {
-          username = "tsuyoshi.wada";
-          homeDir = "/Users/tsuyoshi.wada";
-        };
-      };
+      # Generated from profiles map (keys = username)
+      homeConfigurations =
+        let
+          toHomeConfig = _name: profile: {
+            name = profile.username;
+            value = mkHome {
+              username = profile.username;
+              homeDir = mkHomeDir profile.username;
+            };
+          };
+        in
+        builtins.listToAttrs (
+          builtins.map (name: toHomeConfig name profiles.${name}) (builtins.attrNames profiles)
+        );
 
       # nix-darwin configurations (includes home-manager)
-      darwinConfigurations = {
-        private = mkDarwin {
-          hostname = "wadackels-MacBook-Air";
-          username = "wadackel";
-          homeDir = "/Users/wadackel";
-          profile = "private";
-        };
-        work = mkDarwin {
-          hostname = "tsuyoshiwadas-MacBook-Pro";
-          username = "tsuyoshi.wada";
-          homeDir = "/Users/tsuyoshi.wada";
-          profile = "work";
-        };
-      };
+      # Generated from profiles map
+      darwinConfigurations = builtins.mapAttrs (
+        name: profile:
+        mkDarwin {
+          hostname = profile.hostname;
+          username = profile.username;
+          homeDir = mkHomeDir profile.username;
+          profile = name;
+        }
+      ) profiles;
     };
 }
