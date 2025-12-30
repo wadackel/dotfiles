@@ -34,6 +34,12 @@ keybinds clear-defaults=true {
         bind "up" { MoveFocus "up"; SwitchToMode "locked"; }
         bind "right" { MoveFocus "right"; SwitchToMode "locked"; }
 
+        // Resize panes
+        bind "<" { Resize "left"; }
+        bind ">" { Resize "right"; }
+        bind "+" { Resize "up"; }
+        bind "-" { Resize "down"; }
+
         // Pane split - matching tmux config (v=vertical, s=horizontal)
         bind "v" { NewPane "right"; SwitchToMode "locked"; }
         bind "s" { NewPane "down"; SwitchToMode "locked"; }
@@ -80,7 +86,7 @@ keybinds clear-defaults=true {
         bind "Ctrl c" { SwitchToMode "locked"; }
 
         // Scroll mode - matching tmux config (i=copy-mode, [=traditional)
-        bind "i" { SwitchToMode "scroll"; }
+        bind "i" { EditScrollback; SwitchToMode "locked"; }
         bind "[" { SwitchToMode "scroll"; }
     }
 
@@ -90,6 +96,11 @@ keybinds clear-defaults=true {
         bind "s" { SwitchToMode "entersearch"; SearchInput 0; }
         bind "Ctrl c" { ScrollToBottom; SwitchToMode "locked"; }
         bind "esc" { SwitchToMode "locked"; }
+
+        bind "Ctrl h" { MoveFocus "left"; }
+        bind "Ctrl l" { MoveFocus "right"; }
+        bind "Ctrl j" { MoveFocus "down"; }
+        bind "Ctrl k" { MoveFocus "up"; }
 
         // Vim-style navigation
         bind "j" { ScrollDown; }

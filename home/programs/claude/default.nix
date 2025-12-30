@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  dotfiles,
   ...
 }:
 
@@ -18,10 +19,10 @@ in
 
   # Claude Code configuration
   home.file.".claude/agents" = {
-    source = ./agents;
+    source = dotfiles.linkHere ./. "agents";
     recursive = true;
   };
 
   # settings.json をシンボリックリンク形式で配置
-  home.file.".claude/settings.json".source = ./settings.json;
+  home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
 }

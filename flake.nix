@@ -33,6 +33,22 @@
     let
       system = "aarch64-darwin";
 
+      # Store root path for relative path calculation
+      storeRoot = self.outPath;
+
+      # Reconstruct inputs for passing to modules
+      inputs = {
+        inherit
+          self
+          nixpkgs
+          home-manager
+          nix-darwin
+          treefmt-nix
+          zjstatus
+          zellij-tab-name
+          ;
+      };
+
       # treefmt 設定の評価
       treefmtEval = treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
 
@@ -65,9 +81,15 @@
         home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${system};
           extraSpecialArgs = {
-            inherit username homeDir;
+            inherit
+              inputs
+              username
+              homeDir
+              storeRoot
+              ;
           };
           modules = [
+            ./lib/dotfiles-path.nix
             ./home/home.nix
             { nixpkgs.overlays = overlays; }
           ];
@@ -104,9 +126,19 @@
               };
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users.${username} = import ./home/home.nix;
+              home-manager.users.${username} = {
+                imports = [
+                  ./lib/dotfiles-path.nix
+                  ./home/home.nix
+                ];
+              };
               home-manager.extraSpecialArgs = {
-                inherit username homeDir;
+                inherit
+                  inputs
+                  username
+                  homeDir
+                  storeRoot
+                  ;
               };
             }
           ];
