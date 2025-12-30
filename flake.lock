@@ -127,6 +127,7 @@
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs",
         "treefmt-nix": "treefmt-nix",
+        "zellij-tab-name": "zellij-tab-name",
         "zjstatus": "zjstatus"
       }
     },
@@ -182,6 +183,18 @@
         "owner": "numtide",
         "repo": "treefmt-nix",
         "type": "github"
+      }
+    },
+    "zellij-tab-name": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-005S/dqo9oNdud8H8AdOOfEcjZ9cbFs30mkG5rl3ivQ=",
+        "type": "file",
+        "url": "https://github.com/Cynary/zellij-tab-name/releases/download/v0.4.1/zellij-tab-name.wasm"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://github.com/Cynary/zellij-tab-name/releases/download/v0.4.1/zellij-tab-name.wasm"
       }
     },
     "zjstatus": {

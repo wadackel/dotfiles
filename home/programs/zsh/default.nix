@@ -225,10 +225,9 @@
         # Zellij Tab Auto-naming
         # ====================================================
 
-        _update_zellij_tab() {
-          [[ -z $ZELLIJ ]] && return
-
-          local dir="$PWD"
+        # ディレクトリ名を表示用に変換する関数
+        _calculate_display_dir() {
+          local dir="$1"
           local display_dir
 
           # ホームディレクトリの場合
@@ -262,11 +261,90 @@
             fi
           fi
 
-          zellij action rename-tab "$display_dir" 2>/dev/null
+          echo "$display_dir"
         }
 
-        # precmd_functions 配列に追加（既存の precmd を上書きしない）
-        precmd_functions+=(_update_zellij_tab)
+        _update_zellij_tab_on_chpwd() {
+          # Zellij 環境でない場合は何もしない
+          [[ -z $ZELLIJ ]] && return
+
+          # pane_id が取得できない場合は何もしない
+          local pane_id="$ZELLIJ_PANE_ID"
+          [[ -z $pane_id ]] && return
+
+          # 現在のタブ名を取得
+          local current_name
+          current_name=$(zellij action dump-layout 2>/dev/null | awk '
+            /tab name=/ && /focus=true/ {
+              if (match($0, /name="([^"]*)"/, m)) {
+                print m[1]
+                exit
+              }
+            }
+          ')
+
+          # ⚠が付いている → Claude Code管理中 → 何もしない
+          if [[ "$current_name" == "⚠ "* ]]; then
+            return
+          fi
+
+          # 新しいディレクトリの表示名を算出
+          local new_expected
+          new_expected=$(_calculate_display_dir "$PWD")
+
+          # ユーザーリネームの判定
+          local should_update=false
+
+          # ケース1: デフォルトタブ名（Tab #1, Tab #2, など）→ 常に更新
+          if [[ "$current_name" =~ ^Tab\ \#[0-9]+$ ]]; then
+            should_update=true
+          # ケース2: OLDPWDが空（初回起動、セッション再起動）→ 更新
+          elif [[ -z "$OLDPWD" ]]; then
+            should_update=true
+          else
+            # ケース3: OLDPWDベースの判定
+            local old_expected
+            old_expected=$(_calculate_display_dir "$OLDPWD")
+
+            # 現在のタブ名が前回の期待値と一致 → 自動更新されていた → 更新
+            if [[ "$current_name" == "$old_expected" ]]; then
+              should_update=true
+            else
+              # 現在のタブ名が前回の期待値と不一致 → ユーザーリネーム → 保護
+              should_update=false
+            fi
+          fi
+
+          # 更新しない場合は終了
+          if [[ "$should_update" != "true" ]]; then
+            return
+          fi
+
+          # タブ名の構築
+          local tab_name="$new_expected"
+
+          # 特殊文字のエスケープ処理
+          local escaped_name="$tab_name"
+          escaped_name="''${escaped_name//\\/\\\\}"    # バックスラッシュをエスケープ
+          escaped_name="''${escaped_name//\"/\\\"}"    # ダブルクォートをエスケープ
+          escaped_name="''${escaped_name//\{/\{\{}"    # { を {{ にエスケープ
+          escaped_name="''${escaped_name//\}/\}\}}"    # } を }} にエスケープ
+
+          zellij pipe --name change-tab-name -- "{\"pane_id\": \"$pane_id\", \"name\": \"$escaped_name\", \"use_stable_ids\": true}" 2>/dev/null
+        }
+
+        # リセット用ヘルパー関数
+        zellij-tab-auto-reset() {
+          # 現在のディレクトリ名でタブ名を更新
+          _update_zellij_tab_on_chpwd
+          echo "タブ名をディレクトリ名にリセットしました"
+        }
+
+        # chpwd_functions 配列に追加（ディレクトリ変更時のみ実行）
+        chpwd_functions+=(_update_zellij_tab_on_chpwd)
+
+        # セッション開始時に一度だけ実行（初期化）
+        _update_zellij_tab_on_chpwd
 
         # ====================================================
         # Development Utilities
