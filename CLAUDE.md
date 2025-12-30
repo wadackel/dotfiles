@@ -1,0 +1,241 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository Overview
+
+This is a **declarative macOS development environment** managed with Nix, nix-darwin, and home-manager. The repository uses a flake-based configuration supporting multiple machine profiles (private and work).
+
+**For setup instructions, basic commands, and directory structure, see [README.md](README.md).**
+
+## Working with this Repository
+
+### Claude's Responsibilities
+
+When working on tasks in this repository, Claude Code should:
+
+1. **Take ownership of the entire workflow**
+   - Plan and execute changes end-to-end
+   - Minimize the need for user verification and manual steps
+   - Design workflows that can be validated programmatically when possible
+
+2. **Apply configuration changes**
+   - After making changes to Nix files, Claude should apply the configuration using `darwin-rebuild`
+   - **CRITICAL**: Always verify the correct profile before applying:
+     - Use `.#private` for personal machine (wadackel)
+     - Use `.#work` for work machine (tsuyoshi.wada)
+   - Check the current user/hostname with `whoami` and `hostname` if uncertain
+   - Example: `sudo darwin-rebuild switch --flake .#private`
+
+3. **Verify changes programmatically**
+   - Use `nix flake check` before applying
+   - After applying, verify the configuration took effect when possible
+   - Report any errors or warnings encountered during application
+
+### Workflow Example
+
+When asked to add a new program or modify configuration:
+
+1. Make the necessary changes to Nix files
+2. Run `nix flake check` to verify syntax
+3. Determine the correct profile (check hostname/username if needed)
+4. Apply with `sudo darwin-rebuild switch --flake .#<profile>`
+5. Report the results to the user
+
+## Common Development Commands
+
+### Code Formatting
+
+```bash
+# Format all Nix files using treefmt (nixfmt)
+nix fmt
+
+# Check formatting (CI)
+nix flake check
+```
+
+### Testing Configuration Changes
+
+```bash
+# Verify syntax before applying
+nix flake check
+
+# Apply and test changes
+sudo darwin-rebuild switch --flake .#private
+```
+
+## Architecture
+
+### Profile System
+
+The repository supports two machine profiles defined in `flake.nix`:
+
+- **`private`**: Personal machine (wadackel/wadackels-MacBook-Air)
+- **`work`**: Work machine (tsuyoshi.wada/tsuyoshiwadas-MacBook-Pro)
+
+Profiles are the single source of truth for username, hostname, and can enable profile-specific behavior via the `profile` parameter.
+
+### Key Files
+
+- **`flake.nix`**: Main orchestration - defines profiles, creates both `homeConfigurations` (standalone) and `darwinConfigurations` (system+home)
+- **`darwin/configuration.nix`**: System-level settings (Nix config, Homebrew, macOS defaults, keyboard/trackpad/Dock settings)
+- **`home/home.nix`**: home-manager entry point, auto-imports all program modules
+- **`home/programs/default.nix`**: Auto-discovery pattern - dynamically imports all `programs/*/default.nix`
+
+### Program Module Pattern
+
+All program configurations follow a consistent structure:
+
+```
+home/programs/<program-name>/
+  ├── default.nix       # Nix module (enables program, sources configs)
+  └── <config-files>    # Co-located configuration files
+```
+
+The `programs/default.nix` auto-imports all subdirectories, enabling modular configuration. To add a new program:
+
+1. Create `home/programs/<name>/default.nix`
+2. Place config files alongside the module
+3. No manual imports needed - auto-discovery handles it
+
+### Helper Functions in flake.nix
+
+- **`mkHome`**: Creates standalone home-manager configuration
+- **`mkDarwin`**: Creates nix-darwin configuration with embedded home-manager
+- **`mkHomeDir`**: Derives home directory from username (`/Users/${username}`)
+
+Both configurations use the same overlays and extraSpecialArgs to ensure consistency.
+
+## Configuration Scope
+
+### What's Managed by Nix
+
+- **System settings**: All macOS defaults (keyboard, trackpad, Finder, Dock, etc.) in `darwin/configuration.nix`
+- **CLI tools**: Most development tools are in `home/programs/packages/default.nix` as Nix packages
+- **Shell configuration**: zsh, bash, fish with starship prompt
+- **Program configs**: git, neovim, tmux, zellij, fzf, and 20+ other tools
+
+### What's Still Using Homebrew
+
+Despite Nix, Homebrew is used for:
+
+- **Applications/Casks**: Arc, Chrome Canary, Claude Code, Raycast, WezTerm, 1Password CLI, etc.
+- **Fonts**: Nerd Fonts (Caskaydia Cove, Hack, JetBrains Mono, Monoid, Ubuntu Mono)
+- **Python versions**: 3.8, 3.9, 3.10, 3.11, 3.13, 3.14 (not yet stable in nixpkgs)
+- **Specialized tools**: z3, cask, numpy, pillow
+- **Custom taps**: wadackel/tap (ofsht, pinact)
+
+Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` section.
+
+## Making Changes
+
+### Adding a New Program
+
+1. Create directory: `mkdir -p home/programs/<program-name>`
+2. Create module: `home/programs/<program-name>/default.nix`
+3. Add configuration files in the same directory
+4. Apply: `sudo darwin-rebuild switch --flake .#private`
+
+Example module structure:
+
+```nix
+{ config, pkgs, ... }:
+{
+  programs.<program-name> = {
+    enable = true;
+    # ... program-specific options
+  };
+}
+```
+
+### Modifying macOS System Settings
+
+Edit `darwin/configuration.nix` under the `system.defaults.*` sections. Settings are organized by category:
+
+- `system.defaults.NSGlobalDomain.*`: Global macOS settings
+- `system.defaults.dock.*`: Dock behavior
+- `system.defaults.finder.*`: Finder settings
+- `system.defaults.trackpad.*`: Trackpad configuration
+- `system.defaults.screencapture.*`: Screenshot settings
+
+### Profile-Specific Configuration
+
+Use the `profile` parameter (available in darwin modules) for conditional configuration:
+
+```nix
+system.defaults.NSGlobalDomain.AppleShowScrollBars =
+  if profile == "work" then "Always" else "Automatic";
+```
+
+### Updating Dependencies
+
+```bash
+# Update all flake inputs (nixpkgs, home-manager, nix-darwin, etc.)
+nix flake update
+
+# Update specific input
+nix flake lock --update-input nixpkgs
+
+# Apply updated configuration
+sudo darwin-rebuild switch --flake .#private
+```
+
+For rollback commands and generation management, see [README.md](README.md#rollback).
+
+## Development Environment
+
+### Supported Languages and Tools
+
+This configuration includes comprehensive support for:
+
+- **Node.js**: pnpm, npm, yarn (via mise/asdf)
+- **Rust**: cargo, rustc, rustfmt
+- **Python**: Multiple versions via Homebrew, poetry
+- **Ruby**: rbenv
+- **Go**: go toolchain
+- **Dart/Flutter**: Flutter SDK
+- **Java/Android**: JDK, Android SDK tools
+- **WebAssembly**: wabt, wasmtime
+
+### Editor Configuration
+
+- **Neovim**: 137KB Lua config at `home/programs/neovim/config/init.lua`
+- **Vim**: Traditional vimrc configuration
+- **Git**: 156 lines of git config with 40+ aliases
+
+### Terminal Stack
+
+Multiple terminal options configured:
+
+- **Shells**: zsh (400 lines config), bash, fish
+- **Prompt**: starship with custom configuration
+- **Multiplexers**: tmux, zellij (with layouts and themes)
+- **Emulators**: WezTerm, ghostty
+
+## Troubleshooting
+
+### Configuration Not Applied
+
+If system settings don't update after `darwin-rebuild`:
+
+1. Check if the setting requires logout/reboot
+2. Some Dock/Finder settings use post-activation scripts for immediate effect (see `system.activationScripts`)
+3. Try: `killall Dock && killall Finder`
+
+### Homebrew Formula Not Found
+
+The `homebrew.global.brewfile` is disabled due to formula lookup issues during migration. Formulas are explicitly listed in `homebrew.brews`.
+
+### Rollback After Bad Change
+
+Nix keeps all previous generations - you can always rollback safely. See [README.md](README.md#rollback) for rollback commands.
+
+## Claude Code Integration
+
+This repository includes comprehensive Claude Code configuration:
+
+- **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
+- **Agents**: 23 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, debugging, DevOps, documentation, frontend, JavaScript/TypeScript, performance, Playwright, QA, React, refactoring, security, SRE, technical writing)
+- **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
+
+Changes to Claude Code settings require `darwin-rebuild` to update symlinks.

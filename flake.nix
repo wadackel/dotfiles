@@ -13,6 +13,10 @@
     };
     treefmt-nix.url = "github:numtide/treefmt-nix";
     zjstatus.url = "github:dj95/zjstatus";
+    zellij-tab-name = {
+      url = "https://github.com/Cynary/zellij-tab-name/releases/download/v0.4.1/zellij-tab-name.wasm";
+      flake = false;
+    };
   };
 
   outputs =
@@ -23,6 +27,7 @@
       nix-darwin,
       treefmt-nix,
       zjstatus,
+      zellij-tab-name,
       ...
     }:
     let
@@ -35,6 +40,7 @@
       overlays = [
         (final: prev: {
           zjstatus = zjstatus.packages.${system}.default;
+          zellij-tab-name = zellij-tab-name;
         })
       ];
 

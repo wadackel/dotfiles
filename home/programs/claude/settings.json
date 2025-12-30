@@ -1,14 +1,14 @@
 {
   "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "600000",
+    "BASH_MAX_TIMEOUT_MS": "1200000",
     "CLAUDE_CODE_AUTO_CONNECT_IDE": "false",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "false",
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "true",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "true",
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "false",
     "DISABLE_ERROR_REPORTING": "true",
-    "DISABLE_TELEMETRY": "true",
     "DISABLE_MICROCOMPACT": "true",
-    "BASH_DEFAULT_TIMEOUT_MS": "600000",
-    "BASH_MAX_TIMEOUT_MS": "1200000"
+    "DISABLE_TELEMETRY": "true"
   },
   "permissions": {
     "allow": [
@@ -43,6 +43,7 @@
       "Bash(cp:*)",
       "Bash(criterion:*)",
       "Bash(date:*)",
+      "Bash(defaults read:*)",
       "Bash(delta:*)",
       "Bash(deno:*)",
       "Bash(dig:*)",
@@ -141,6 +142,7 @@
       "Bash(nslookup:*)",
       "Bash(nuxt:*)",
       "Bash(nvm:*)",
+      "Bash(nvim:*)",
       "Bash(nx:*)",
       "Bash(oxlint:*)",
       "Bash(parcel:*)",
@@ -190,6 +192,7 @@
       "Bash(tig:*)",
       "Bash(time:*)",
       "Bash(timeout:*)",
+      "Bash(tmux:*)",
       "Bash(tokei:*)",
       "Bash(touch:*)",
       "Bash(tox:*)",
@@ -214,6 +217,8 @@
       "Bash(yarn:*)",
       "Bash(yq:*)",
       "Bash(z:*)",
+      "Bash(zellij-tab-notify:*)",
+      "Bash(zellij:*)",
       "Bash(zoxide:*)",
       "Edit(./**)",
       "Glob(**)",
@@ -312,24 +317,54 @@
     ]
   },
   "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/usr/bin/osascript -e 'display notification \"タスクが完了しました\" with title \"Claude Code\" subtitle \"処理終了\" sound name \"Hero\"'"
-          }
-        ]
-      }
-    ],
     "Notification": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
+            "command": "zellij-tab-notify start"
+          },
+          {
+            "type": "command",
             "command": "/usr/bin/osascript -e 'display notification \"Claude Codeが許可を求めています\" with title \"Claude Code\" subtitle \"確認待ち\" sound name \"Glass\"'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "zellij-tab-notify start"
+          },
+          {
+            "type": "command",
+            "command": "/usr/bin/osascript -e 'display notification \"作業が完了しました\" with title \"Claude Code\" subtitle \"確認してください\" sound name \"Hero\"'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "zellij-tab-notify stop"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "zellij-tab-notify stop"
           }
         ]
       }
