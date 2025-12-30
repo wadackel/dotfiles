@@ -4,7 +4,7 @@ macOS development environment configuration managed with Nix, nix-darwin, and ho
 
 ## Prerequisites
 
-- macOS (tested on macOS Sonoma 14.x)
+- macOS
 - [Nix package manager](https://nixos.org/download.html) installed with flakes enabled
   - Follow the [official installation guide](https://nixos.org/download.html)
   - Enable flakes: `mkdir -p ~/.config/nix && echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf`
@@ -44,13 +44,6 @@ macOS development environment configuration managed with Nix, nix-darwin, and ho
    ```bash
    sudo darwin-rebuild switch --flake .#private
    ```
-
-### Configuration Profiles
-
-- **private**: Personal MacBook Air configuration
-- **work**: Work MacBook Pro configuration
-
-Profile-specific settings (e.g., scrollbar visibility) are managed in `darwin/configuration.nix`.
 
 ## Program Modules
 
