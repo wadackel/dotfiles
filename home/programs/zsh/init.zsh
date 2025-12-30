@@ -13,6 +13,9 @@ setopt no_beep
 setopt nolistbeep
 setopt auto_cd
 
+# Zellij tab name shortening threshold
+ZELLIJ_TAB_NAME_MAX_LENGTH="${ZELLIJ_TAB_NAME_MAX_LENGTH:-20}"
+
 # History keybindings
 autoload -U history-search-end
 zle -N history-beginning-search-backward-end history-search-end
@@ -84,43 +87,81 @@ bindkey '^gb' fbr
 # Zellij Tab Auto-naming
 # ====================================================
 
-# ディレクトリ名を表示用に変換する関数
+# ディレクトリ名を表示用に変換する関数（lualine風の短縮表示）
+# - 20文字以下: そのまま表示
+# - 20文字超過: 中間ディレクトリを省略形に変換
+#   - ドット始まりは2文字（例: .config → ..）
+#   - それ以外は1文字（例: apple → a）
+#   - 最終ディレクトリ名は常にフル表示
 _calculate_display_dir() {
   local dir="$1"
-  local display_dir
+  local max_length="${ZELLIJ_TAB_NAME_MAX_LENGTH:-20}"
 
   # ホームディレクトリの場合
-  if [[ "$dir" == "$HOME" ]]; then
-    display_dir="~"
-  # ホームディレクトリ配下の場合
-  elif [[ "$dir" == "$HOME"/* ]]; then
-    local rel_dir="${dir#$HOME/}"
-    # スラッシュの数で階層を判定
-    local slash_count="${rel_dir//[^\/]}"
-    if [[ ${#slash_count} -ge 2 ]]; then
-      # 後半2階層を取得
-      local last="${rel_dir##*/}"
-      local parent="${rel_dir%/*}"
-      parent="${parent##*/}"
-      display_dir="~/$parent/$last"
-    else
-      display_dir="~/$rel_dir"
-    fi
-  # ルート直下の場合
+  [[ "$dir" == "$HOME" ]] && echo "~" && return
+
+  # プレフィックスと相対パスを決定
+  local prefix=""
+  local rel_dir=""
+
+  if [[ "$dir" == "$HOME"/* ]]; then
+    prefix="~"
+    rel_dir="${dir#$HOME/}"
   else
-    local abs_path="${dir#/}"
-    local slash_count="${abs_path//[^\/]}"
-    if [[ ${#slash_count} -ge 2 ]]; then
-      local last="${abs_path##*/}"
-      local parent="${abs_path%/*}"
-      parent="${parent##*/}"
-      display_dir="$parent/$last"
-    else
-      display_dir="$dir"
-    fi
+    # 絶対パス
+    prefix=""
+    rel_dir="${dir#/}"
   fi
 
-  echo "$display_dir"
+  # フルパスを構築
+  local full_path="${prefix:+$prefix/}$rel_dir"
+
+  # 閾値以下ならそのまま返す
+  [[ ${#full_path} -le $max_length ]] && echo "$full_path" && return
+
+  # パスを"/"で分割
+  local -a segments
+  segments=("${(@s:/:)rel_dir}")
+
+  # セグメントが1つだけなら短縮できない
+  [[ ${#segments[@]} -eq 1 ]] && echo "$full_path" && return
+
+  # 中間セグメントを短縮
+  local -a result=()
+  local segment
+  local i
+
+  for i in {1..${#segments[@]}}; do
+    segment="${segments[$i]}"
+
+    # 空セグメントをスキップ（防御的処理）
+    [[ -z "$segment" ]] && continue
+
+    # 最後のセグメントはフル表示
+    if [[ $i -eq ${#segments[@]} ]]; then
+      result+=("$segment")
+    # 中間セグメントは短縮
+    else
+      if [[ "$segment" == .* ]]; then
+        # ドット始まりは2文字
+        result+=("${segment:0:2}")
+      else
+        # 通常は1文字
+        result+=("${segment:0:1}")
+      fi
+    fi
+  done
+
+  # スラッシュで再結合
+  local IFS="/"
+  local shortened="${result[*]}"
+
+  # プレフィックスを付けて返す
+  if [[ -n "$prefix" ]]; then
+    echo "${prefix}/${shortened}"
+  else
+    echo "/${shortened}"
+  fi
 }
 
 _update_zellij_tab_on_chpwd() {
