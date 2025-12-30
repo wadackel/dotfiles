@@ -13,7 +13,7 @@ ZELLIJ_PANE_ID="${ZELLIJ_PANE_ID:-}"
 [[ -z "$ZELLIJ_PANE_ID" ]] && exit 0
 
 # タブ名に付与するプレフィックス
-PREFIX="◉ "
+PREFIX="● "
 
 # 現在フォーカスしているタブ名を取得する
 get_current_tab_name() {

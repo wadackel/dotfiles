@@ -17,8 +17,8 @@ layout {
         // Mode display (icon only, no background)
         mode_normal  "#[fg=#9ea3c0,bold] 󰌌 "
         mode_locked  "#[fg=#545c8c,bold] 󰌾 "
-        mode_tmux    "#[fg=#73c1a9,bold] 󰆍 "
-        mode_scroll  "#[fg=#ac8b83,bold] 󰍉 "
+        mode_tmux    "#[fg=#929be5,bold] 󰆍 "
+        mode_scroll  "#[fg=#73c1a9,bold] ↑ "
 
         // Tab display (name only, no background)
         // Active tab: purple tab name (bold)
