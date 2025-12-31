@@ -2895,6 +2895,7 @@ require("lazy").setup({
       config = function()
         local colors = {
           purple = "#929be5",
+          lightpurple = "#32354A",
           teal = "#73c1a9",
           pink = "#b871b8",
           red = "#dc6f7a",
@@ -2912,37 +2913,37 @@ require("lazy").setup({
             b = { fg = colors.purple, bg = colors.bg },
             c = { fg = colors.fg, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.purple, bg = colors.lightpurple },
           },
           insert = {
             a = { fg = colors.bg, bg = colors.teal },
             b = { fg = colors.teal, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.teal, bg = colors.lightpurple },
           },
           visual = {
             a = { fg = colors.bg, bg = colors.pink },
             b = { fg = colors.pink, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.pink, bg = colors.lightpurple },
           },
           replace = {
             a = { fg = colors.bg, bg = colors.red },
             b = { fg = colors.red, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.red, bg = colors.lightpurple },
           },
           command = {
             a = { fg = colors.bg, bg = colors.teal },
             b = { fg = colors.teal, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.teal, bg = colors.lightpurple },
           },
           terminal = {
             a = { fg = colors.bg, bg = colors.teal },
             b = { fg = colors.teal, bg = colors.bg },
             x = { fg = colors.inactive.fg, bg = colors.inactive.bg },
-            y = { fg = colors.inactive.fg, bg = colors.inactive.bg },
+            y = { fg = colors.teal, bg = colors.lightpurple },
           },
           inactive = {
             a = { fg = colors.inactive.fg, bg = colors.inactive.bg },
@@ -2955,8 +2956,10 @@ require("lazy").setup({
           options = {
             theme = dogrun_theme,
             component_separators = "",
-            section_separators = { left = "", right = "" },
-            -- section_separators = { left = "", right = "" },
+            section_separators = {
+              left = "",
+              right = "",
+            },
             globalstatus = true,
             always_divide_middle = false,
           },
@@ -2964,17 +2967,24 @@ require("lazy").setup({
             lualine_a = {
               {
                 "mode",
-                separator = { left = "", right = "" },
+                separator = {
+                  left = "█",
+                  right = "",
+                },
               },
             },
             lualine_b = {
               {
                 "branch",
-                padding = { left = 2 },
+                padding = {
+                  left = 2,
+                },
               },
               {
                 "diagnostics",
-                padding = { left = 2 },
+                padding = {
+                  left = 2,
+                },
                 sources = {
                   "nvim_diagnostic",
                 },
@@ -2986,47 +2996,55 @@ require("lazy").setup({
                 symbols = {
                   error = " ",
                   warn = " ",
-                  info = "כֿ ",
+                  info = "ℹ ",
                 },
               },
             },
             lualine_c = {},
-            lualine_x = {},
+            lualine_x = {
+              {
+                "location",
+                padding = 1,
+                icon = {
+                  "¶",
+                  align = "left",
+                },
+              },
+            },
             lualine_y = {
               {
                 "filetype",
-                padding = { right = 2 },
-                colored = false,
-              },
-              {
-                "encoding",
-                padding = { right = 2 },
-              },
-              {
-                "fileformat",
-                padding = { right = 2 },
+                padding = {
+                  right = 2,
+                  left = 1,
+                },
+                separator = {
+                  left = "",
+                },
+                colored = true,
               },
             },
             lualine_z = {
               {
-                "location",
-                padding = 1,
-                icon = { "¶", align = "right" },
-                separator = { left = "", right = "" },
+                "fileformat",
+                padding = {
+                  right = 1,
+                  left = 1,
+                },
+                separator = {
+                  left = "",
+                  right = "",
+                },
               },
             },
           },
           inactive_sections = {
-            lualine_a = {
-              "filename",
-            },
+            lualine_a = {},
             lualine_b = {},
             lualine_c = {},
             lualine_x = {},
             lualine_y = {},
-            lualine_z = {
-              "location",
-            },
+            lualine_z = {},
           },
           tabline = {
             lualine_a = {},
@@ -3045,10 +3063,7 @@ require("lazy").setup({
                 use_mode_colors = false,
                 tabs_color = {
                   active = "lualine_a_normal",
-                  inactive = {
-                    -- bg = "none",
-                    -- bg = dogrun_theme.normal.a.bg,
-                  },
+                  inactive = {},
                 },
                 show_modified_status = false,
                 fmt = function(name, context)
