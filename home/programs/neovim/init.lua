@@ -781,31 +781,6 @@ require("lazy").setup({
             },
           },
         })
-
-        -- See:
-        -- `xcrun --sdk iphonesimulator --show-sdk-path`
-        -- lspconfig.sourcekit.setup({
-        --   cmd = {
-        --     "sourcekit-lsp",
-        --     "-Xswiftc",
-        --     "-sdk",
-        --     "-Xswiftc",
-        --     "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator17.2.sdk",
-        --     "-Xswiftc",
-        --     "-target",
-        --     "-Xswiftc",
-        --     "x86_64-apple-ios17.2-simulator",
-        --   },
-        --   capabilities = {
-        --     workspace = {
-        --       didChangeWatchedFiles = {
-        --         dynamicRegistration = true,
-        --       },
-        --     },
-        --   },
-        --   on_init = lsp_on_init,
-        --   on_attach = lsp_on_attach,
-        -- })
       end,
     },
 
@@ -1574,7 +1549,7 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Syntax Extension
+    -- Syntax
     -- =============================================================
     {
       "nvim-treesitter/nvim-treesitter",
@@ -1763,267 +1738,6 @@ require("lazy").setup({
     -- =============================================================
     -- Filer
     -- =============================================================
-    -- {
-    --   "nvim-tree/nvim-tree.lua",
-    --   dependencies = {
-    --     "nvim-tree/nvim-web-devicons",
-    --     "kwkarlwang/bufresize.nvim",
-    --     "b0o/nvim-tree-preview.lua",
-    --   },
-    --   keys = {
-    --     -- {
-    --     --   "<C-j>",
-    --     --   function()
-    --     --     local api = require("nvim-tree.api")
-    --     --     local bufresize = require("bufresize")
-    --     --
-    --     --     bufresize.block_register()
-    --     --
-    --     --     if api.tree.is_visible() then
-    --     --       api.tree.close()
-    --     --       bufresize.resize_close()
-    --     --     else
-    --     --       api.tree.open({ update_root = true, find_file = true })
-    --     --       bufresize.resize_open()
-    --     --     end
-    --     --   end,
-    --     --   mode = "n",
-    --     -- },
-    --   },
-    --   opts = {
-    --     sort_by = "case_sensitive",
-    --     respect_buf_cwd = true,
-    --     view = {
-    --       width = 40,
-    --       centralize_selection = true,
-    --     },
-    --     ui = {
-    --       confirm = {
-    --         remove = false,
-    --       },
-    --     },
-    --     renderer = {
-    --       highlight_git = true,
-    --       highlight_opened_files = "all",
-    --       highlight_modified = "all",
-    --       indent_markers = {
-    --         enable = true,
-    --       },
-    --       icons = {
-    --         git_placement = "signcolumn",
-    --         symlink_arrow = " ➜ ",
-    --         glyphs = {
-    --           symlink = "",
-    --           bookmark = "󰄲",
-    --           modified = "∙",
-    --           git = {
-    --             unstaged = "∙",
-    --             staged = "∙",
-    --             unmerged = "",
-    --             renamed = "➜",
-    --             untracked = "∙",
-    --             deleted = "",
-    --             ignored = "◌",
-    --           },
-    --         },
-    --       },
-    --     },
-    --     actions = {
-    --       file_popup = {
-    --         open_win_config = {
-    --           col = 1,
-    --           row = 1,
-    --           relative = "cursor",
-    --           border = "rounded",
-    --           style = "minimal",
-    --         },
-    --       },
-    --       open_file = {
-    --         resize_window = false,
-    --         window_picker = {
-    --           enable = false,
-    --         },
-    --       },
-    --     },
-    --     diagnostics = {
-    --       enable = true,
-    --     },
-    --     git = {
-    --       enable = false,
-    --     },
-    --     on_attach = function(bufnr)
-    --       local api = require("nvim-tree.api")
-    --
-    --       local function opts(desc)
-    --         return {
-    --           desc = "nvim-tree: " .. desc,
-    --           buffer = bufnr,
-    --           noremap = true,
-    --           silent = true,
-    --           nowait = true,
-    --         }
-    --       end
-    --
-    --       -- root to global
-    --       local function change_root_to_global_cwd()
-    --         local global_cwd = vim.fn.getcwd(-1, -1)
-    --         api.tree.change_root(global_cwd)
-    --       end
-    --
-    --       -- mark operation
-    --       local mark_move_j = function()
-    --         api.marks.toggle()
-    --         vim.cmd("norm j")
-    --       end
-    --
-    --       -- marked files operation
-    --       local mark_remove = function()
-    --         local marks = api.marks.list()
-    --         if #marks == 0 then
-    --           table.insert(marks, api.tree.get_node_under_cursor())
-    --         end
-    --         vim.ui.input({ prompt = string.format("Delete %s files? [y/n] ", #marks) }, function(input)
-    --           if input == "y" then
-    --             for _, node in ipairs(marks) do
-    --               api.fs.remove(node)
-    --             end
-    --             api.marks.clear()
-    --             api.tree.reload()
-    --           end
-    --         end)
-    --       end
-    --
-    --       local mark_copy = function()
-    --         local marks = api.marks.list()
-    --         if #marks == 0 then
-    --           table.insert(marks, api.tree.get_node_under_cursor())
-    --         end
-    --         for _, node in pairs(marks) do
-    --           api.fs.copy.node(node)
-    --         end
-    --         api.marks.clear()
-    --         api.tree.reload()
-    --       end
-    --
-    --       local mark_cut = function()
-    --         local marks = api.marks.list()
-    --         if #marks == 0 then
-    --           table.insert(marks, api.tree.get_node_under_cursor())
-    --         end
-    --         for _, node in pairs(marks) do
-    --           api.fs.cut(node)
-    --         end
-    --         api.marks.clear()
-    --         api.tree.reload()
-    --       end
-    --
-    --       local mark_rename = function()
-    --         local marks = api.marks.list()
-    --         if #marks == 0 then
-    --           table.insert(marks, api.tree.get_node_under_cursor())
-    --         end
-    --         if #marks == 1 then
-    --           api.fs.rename_node(marks[1])
-    --         else
-    --           local args = ""
-    --           for _, node in pairs(marks) do
-    --             args = args .. " " .. node.absolute_path
-    --           end
-    --           local Terminal = require("toggleterm.terminal").Terminal
-    --           local term = Terminal:new({
-    --             cmd = "mmv" .. args,
-    --             direction = "horizontal",
-    --             count = 9,
-    --             start_in_insert = false,
-    --             close_on_exit = true,
-    --             on_open = function()
-    --               vim.cmd("startinsert!")
-    --             end,
-    --           })
-    --           term:toggle()
-    --         end
-    --         api.marks.clear()
-    --         api.tree.reload()
-    --       end
-    --
-    --       keymap({ "n" }, "q", api.tree.close, opts("Close"))
-    --       keymap({ "n" }, ".", api.tree.toggle_gitignore_filter, opts("Toggle Gitignore"))
-    --       keymap({ "n" }, "h", api.node.navigate.parent_close, opts("Parent"))
-    --       keymap({ "n" }, "H", api.tree.change_root_to_parent, opts("Change Root To Parent"))
-    --       keymap({ "n" }, "l", api.node.open.edit, opts("Edit Or Open"))
-    --       keymap({ "n" }, "L", api.tree.change_root_to_node, opts("Change Root To Current Node"))
-    --       keymap({ "n" }, "o", api.node.open.edit, opts("Edit Or Open"))
-    --       keymap({ "n" }, "<CR>", api.node.open.edit, opts("Edit Or Open"))
-    --       keymap({ "n" }, "<C-]>", api.tree.change_root_to_node, opts("CD"))
-    --       keymap({ "n" }, "<C-t>", api.tree.change_root_to_parent, opts("Change Root To Parent"))
-    --       keymap({ "n" }, "<C-h>", api.tree.change_root_to_parent, opts("Change Root To Parent"))
-    --       keymap({ "n" }, "t", api.node.open.tab, opts("Open: New Tab"))
-    --       keymap({ "n" }, "O", api.node.open.vertical, opts("Open: Vertical Split"))
-    --       keymap({ "n" }, "~", change_root_to_global_cwd, opts("Change Root To Global CWD"))
-    --       keymap({ "n" }, "E", api.tree.expand_all, opts("Expand All"))
-    --       keymap({ "n" }, "W", api.tree.collapse_all, opts("Collapse All"))
-    --       keymap({ "n" }, "-", api.tree.change_root_to_parent, opts("Up"))
-    --       keymap({ "n" }, ")", api.node.navigate.sibling.next, opts("Next Sibling"))
-    --       keymap({ "n" }, "(", api.node.navigate.sibling.prev, opts("Previous Sibling"))
-    --       keymap({ "n" }, "]c", api.node.navigate.git.next, opts("Next Git"))
-    --       keymap({ "n" }, "[c", api.node.navigate.git.prev, opts("Previous Git"))
-    --       keymap({ "n" }, "N", api.fs.create, opts("Create New File"))
-    --       keymap({ "n" }, "c", mark_copy, opts("Copy File"))
-    --       keymap({ "n" }, "C", mark_cut, opts("Cut File"))
-    --       keymap({ "n" }, "p", api.fs.paste, opts("Copy File"))
-    --       keymap({ "n" }, "d", mark_remove, opts("Delete File"))
-    --       keymap({ "n" }, "m", api.marks.bulk.move, opts("Move Marked"))
-    --       keymap({ "n" }, "r", mark_rename, opts("Rename File"))
-    --       keymap({ "n" }, "x", api.node.run.system, opts("Run System"))
-    --       keymap({ "n" }, "y", api.fs.copy.filename, opts("Copy Name"))
-    --       keymap({ "n" }, "Y", api.fs.copy.relative_path, opts("Copy Relative Path"))
-    --       keymap({ "n" }, "<Space>", mark_move_j, opts("Toggle Mark"))
-    --       keymap({ "n" }, "<C-[>", api.marks.clear, opts("Clear Marks"))
-    --       keymap({ "n" }, "i", api.node.show_info_popup, opts("Show Info Node"))
-    --       keymap({ "n" }, "f", api.live_filter.start, opts("Filter"))
-    --       keymap({ "n" }, "F", api.live_filter.start, opts("Clean Filter"))
-    --       keymap({ "n" }, "<C-l>", api.tree.reload, opts("Reload Tree"))
-    --       keymap({ "n" }, "?", api.tree.toggle_help, opts("Help"))
-    --
-    --       -- Preview
-    --       local preview = require("nvim-tree-preview")
-    --
-    --       local feedkey = function(mode, key)
-    --         vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(key, true, true, true), mode, true)
-    --       end
-    --
-    --       local preview_watch = function()
-    --         if preview.is_open() then
-    --           preview.unwatch()
-    --         else
-    --           preview.watch()
-    --         end
-    --       end
-    --
-    --       local preview_scroll_forward = function()
-    --         if preview.is_open() then
-    --           preview.scroll(10)
-    --         else
-    --           feedkey("n", "<C-f>")
-    --         end
-    --       end
-    --
-    --       local preview_scroll_backward = function()
-    --         if preview.is_open() then
-    --           preview.scroll(-10)
-    --         else
-    --           feedkey("n", "<C-b>")
-    --         end
-    --       end
-    --
-    --       keymap({ "n" }, "<Tab>", preview_watch, opts("Preview"))
-    --       keymap({ "n" }, "<C-c>", preview.unwatch, opts("Close Preview / Unwatch"))
-    --       keymap({ "n" }, "<C-f>", preview_scroll_forward, opts("Scroll Forward"))
-    --       keymap({ "n" }, "<C-b>", preview_scroll_backward, opts("Scroll Backward"))
-    --     end,
-    --   },
-    -- },
-
     {
       "A7Lavinraj/fyler.nvim",
       dependencies = {
@@ -2496,26 +2210,6 @@ require("lazy").setup({
         { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
         "nvim-telescope/telescope-live-grep-args.nvim",
         "rcarriga/nvim-notify",
-      },
-      keys = {
-        -- { "<C-p>", "<cmd>Telescope find_files<CR>", mode = "n", noremap = true },
-        -- { "z/", "<cmd>Telescope current_buffer_fuzzy_find<CR>", mode = "n", noremap = true },
-        -- {
-        --   "<Leader>gg",
-        --   ":lua require('telescope').extensions.live_grep_args.live_grep_args()<CR>",
-        --   mode = "n",
-        --   noremap = true,
-        -- },
-        -- { "<Leader>bb", "<cmd>Telescope buffers<CR>", mode = "n", noremap = true },
-        -- { "<Leader>cc", "<cmd>Telescope commands<CR>", mode = "n", noremap = true },
-        -- { "<Leader>cl", "<cmd>Telescope command_history<CR>", mode = "n", noremap = true },
-        -- { "<Leader>gb", "<cmd>Telescope git_branches<CR>", mode = "n", noremap = true },
-        -- { "<Leader>gl", "<cmd>Telescope git_commits<CR>", mode = "n", noremap = true },
-        -- { "<Leader>gc", "<cmd>Telescope git_bcommits<CR>", mode = "n", noremap = true },
-        -- { "<Leader>gp", "<cmd>Telescope gh pull_request<CR>", mode = "n", noremap = true },
-        -- { "<Leader>hl", "<cmd>Telescope highlights<CR>", mode = "n", noremap = true },
-        -- { "<Leader>el", "<cmd>Telescope diagnostics<CR>", mode = "n", noremap = true },
-        -- { "<Leader>nh", "<cmd>Telescope notify<CR>", mode = "n", noremap = true },
       },
       config = function()
         local telescope = require("telescope")
@@ -3319,7 +3013,6 @@ require("lazy").setup({
 
         require("diffview").setup({
           diff_binaries = false, -- Show diffs for binaries
-          -- enhanced_diff_hl = false, -- See ':h diffview-config-enhanced_diff_hl'
           enhanced_diff_hl = true, -- See ':h diffview-config-enhanced_diff_hl'
           git_cmd = { "git" }, -- The git executable followed by default args.
           hg_cmd = { "hg" }, -- The hg executable followed by default args.
@@ -4397,25 +4090,6 @@ require("lazy").setup({
       },
     },
 
-    -- {
-    --   "otavioschwanck/arrow.nvim",
-    --   event = "VeryLazy",
-    --   opts = {
-    --     show_icons = true,
-    --     always_show_path = true,
-    --     leader_key = "m",
-    --     buffer_leader_key = "<Nop>",
-    --     mappings = {
-    --       toggle = "m",
-    --       open_horizontal = "s",
-    --       clear_all_items = "c",
-    --     },
-    --     window = {
-    --       border = "rounded",
-    --     },
-    --   },
-    -- },
-
     {
       "thinca/vim-partedit",
       cmd = {
@@ -4423,20 +4097,6 @@ require("lazy").setup({
       },
       init = function()
         vim.g["partedit#opener"] = "split"
-      end,
-    },
-
-    -- =============================================================
-    -- Debug
-    -- =============================================================
-    {
-      "thinca/vim-quickrun",
-      keys = {
-        { "<Leader>q", ":<C-u>QuickRun<CR>", mode = "n", noremap = true, silent = true },
-        { "<Leader>q", ":QuickRun<CR>", mode = "v", noremap = true, silent = true },
-      },
-      init = function()
-        vim.g.quickrun_no_default_key_mappings = 1
       end,
     },
 
@@ -4477,57 +4137,6 @@ require("lazy").setup({
         vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
         vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
       end,
-    },
-
-    {
-      "epwalsh/obsidian.nvim",
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-      },
-      ft = "markdown",
-      keys = {
-        { "<Leader>ot", "<cmd>ObsidianToday<CR>", mode = "n", noremap = true, silent = true },
-        { "<Leader>oo", "<cmd>ObsidianQuickSwitch<CR>", mode = "n", noremap = true, silent = true },
-        { "<Leader>og", "<cmd>ObsidianSearch<CR>", mode = "n", noremap = true, silent = true },
-      },
-      opts = {
-        workspaces = {
-          {
-            name = "Main",
-            path = "~/Documents/Main",
-          },
-        },
-        mappings = {
-          ["<C-]>"] = {
-            action = function()
-              return require("obsidian").util.gf_passthrough()
-            end,
-            opts = { noremap = false, expr = true, buffer = true },
-          },
-          ["<CR>"] = {
-            action = function()
-              return require("obsidian").util.smart_action()
-            end,
-            opts = { buffer = true, expr = true },
-          },
-        },
-        ui = {
-          enable = false,
-        },
-        new_notes_location = "00_Inbox",
-        daily_notes = {
-          folder = "99_Tracking/Daily",
-          template = "Templates/Daily_Template.md",
-        },
-        templates = {
-          folder = "Templates",
-        },
-        open_app_foreground = true,
-        disable_frontmatter = true,
-        attachments = {
-          img_folder = "Extra",
-        },
-      },
     },
   },
 })
