@@ -10,8 +10,10 @@ keybinds clear-defaults=true {
         bind "Ctrl g" { SwitchToMode "locked"; }
     }
 
-    // Tmux mode: keybindings matching actual tmux config (~/.tmux.conf)
+    // Tmux mode
     tmux {
+        bind "Ctrl g" { SwitchToMode "normal"; }
+
         // Send prefix to nested session
         bind "Ctrl s" { Write 19; SwitchToMode "locked"; }
         bind "esc" { SwitchToMode "locked"; }
@@ -59,6 +61,8 @@ keybinds clear-defaults=true {
         bind "p" { GoToPreviousTab; SwitchToMode "locked"; }
         bind "Ctrl n" { GoToNextTab; SwitchToMode "locked"; }
         bind "Ctrl p" { GoToPreviousTab; SwitchToMode "locked"; }
+        bind "H" { MoveTab "left"; SwitchToMode "locked"; }
+        bind "L" { MoveTab "right"; SwitchToMode "locked"; }
         bind "," { SwitchToMode "renametab"; TabNameInput 0; }
 
         // Tab navigation by number - matching tmux config
@@ -88,12 +92,15 @@ keybinds clear-defaults=true {
         // Scroll mode - matching tmux config (i=copy-mode, [=traditional)
         bind "i" { EditScrollback; SwitchToMode "locked"; }
         bind "[" { SwitchToMode "scroll"; }
+
+        // Search mode
+        bind "/" { SwitchToMode "entersearch"; SearchInput 0; }
     }
 
     // Scroll mode: vim-style scrolling
     scroll {
         bind "i" { EditScrollback; SwitchToMode "locked"; }
-        bind "s" { SwitchToMode "entersearch"; SearchInput 0; }
+        bind "/" { SwitchToMode "entersearch"; SearchInput 0; }
         bind "Ctrl c" { ScrollToBottom; SwitchToMode "locked"; }
         bind "esc" { SwitchToMode "locked"; }
 

@@ -235,6 +235,86 @@ chpwd_functions+=(_update_zellij_tab_on_chpwd)
 _update_zellij_tab_on_chpwd
 
 # ====================================================
+# Zellij Session Management
+# ====================================================
+
+# fzf-based session selector to attach to a zellij session
+zja() {
+  # Check if already inside a zellij session
+  if [[ -n $ZELLIJ ]]; then
+    echo "Already inside a zellij session. Use 'Ctrl-s e' for session-manager plugin."
+    return 1
+  fi
+
+  # Get list of active sessions
+  local sessions
+  sessions=$(zellij list-sessions 2>/dev/null)
+
+  # Check if any sessions exist
+  if [[ -z $sessions ]]; then
+    echo "No zellij sessions found"
+    return 1
+  fi
+
+  # Strip ANSI codes and present in fzf
+  local selected
+  selected=$(echo "$sessions" | sed -E 's/\x1b\[[0-9;]*m//g' | \
+    fzf --height 40% --reverse --border \
+        --header 'Select session to attach (ESC to cancel)' | \
+    awk '{print $1}')
+
+  # User cancelled selection
+  if [[ -z $selected ]]; then
+    return 0
+  fi
+
+  # Attach to selected session
+  zellij attach "$selected"
+}
+
+# fzf-based session selector to delete a zellij session
+zjd() {
+  # Get list of active sessions
+  local sessions
+  sessions=$(zellij list-sessions 2>/dev/null)
+
+  # Check if any sessions exist
+  if [[ -z $sessions ]]; then
+    echo "No zellij sessions found"
+    return 1
+  fi
+
+  # Store current session name for force-delete detection
+  local current_session=""
+  if [[ -n $ZELLIJ ]]; then
+    current_session=$(echo "$sessions" | sed -E 's/\x1b\[[0-9;]*m//g' | \
+      grep "(current)" | awk '{print $1}')
+  fi
+
+  # Strip ANSI codes and present in fzf (multi-select enabled)
+  local selected
+  selected=$(echo "$sessions" | sed -E 's/\x1b\[[0-9;]*m//g' | \
+    fzf --height 40% --reverse --border --multi \
+        --header 'Select session(s) to delete (TAB to select multiple, ESC to cancel)' | \
+    awk '{print $1}')
+
+  # User cancelled selection
+  if [[ -z $selected ]]; then
+    return 0
+  fi
+
+  # Delete each selected session
+  echo "$selected" | while IFS= read -r session; do
+    if [[ "$session" == "$current_session" ]]; then
+      echo "Deleting current session: $session"
+    else
+      echo "Deleting session: $session"
+    fi
+    zellij delete-session --force "$session"
+  done
+}
+
+# ====================================================
 # Development Utilities
 # ====================================================
 

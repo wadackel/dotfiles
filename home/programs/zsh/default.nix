@@ -56,6 +56,9 @@
       df = "df -h";
       rmrf = "rm -rf";
 
+      # zellij
+      zj = "zellij";
+
       # tmux
       tm = "tmux";
       tmls = "tmux ls";
