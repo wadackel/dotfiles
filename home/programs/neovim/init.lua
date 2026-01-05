@@ -1440,6 +1440,9 @@ require("lazy").setup({
           local has_biome = has_config_file(bufnr, {
             "biome.json",
           })
+          local has_oxfmt = has_config_file(bufnr, {
+            ".oxfmtrc.json",
+          })
 
           local formatters = {}
           if has_eslint then
@@ -1450,6 +1453,9 @@ require("lazy").setup({
           end
           if has_biome then
             table.insert(formatters, "biome")
+          end
+          if has_oxfmt then
+            table.insert(formatters, "oxfmt")
           end
           return formatters
         end
@@ -1538,7 +1544,7 @@ require("lazy").setup({
       "zbirenbaum/copilot.lua",
       lazy = false,
       opts = {
-        copilot_node_command = vim.fn.expand("$HOME") .. "/.local/share/mise/shims/node",
+        -- copilot_node_command = vim.fn.expand("$HOME") .. "/.local/share/mise/shims/node",
         suggestion = {
           auto_trigger = true,
           keymap = {

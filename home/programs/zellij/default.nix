@@ -9,14 +9,19 @@ let
   # ホームディレクトリを取得
   homeDir = config.home.homeDirectory;
 
-  # config.kdl の内容を読み込んで、file:~ を絶対パスに置換
-  configKdlContent = builtins.readFile ./config.kdl;
-  # file:~/.config を絶対パスに置換
-  configKdlWithAbsolutePath =
+  # file:~/.config/zellij/plugins/ を絶対パスに置換する共通関数
+  replacePluginPath =
+    content:
     builtins.replaceStrings
-      [ "file:~/.config/zellij/plugins/zellij-tab-name.wasm" ]
-      [ "file:${homeDir}/.config/zellij/plugins/zellij-tab-name.wasm" ]
-      configKdlContent;
+      [ "file:~/.config/zellij/plugins/" ]
+      [ "file:${homeDir}/.config/zellij/plugins/" ]
+      content;
+
+  # config.kdl の内容を読み込んでパス置換
+  configKdlWithAbsolutePath = replacePluginPath (builtins.readFile ./config.kdl);
+
+  # layouts/default.kdl の内容を読み込んでパス置換
+  layoutsDefaultKdlWithAbsolutePath = replacePluginPath (builtins.readFile ./layouts/default.kdl);
 in
 {
   # zellij 本体のインストールと zsh 統合
@@ -31,8 +36,8 @@ in
     # メイン設定（動的生成）
     "zellij/config.kdl".text = configKdlWithAbsolutePath;
 
-    # レイアウト
-    "zellij/layouts/default.kdl".source = ./layouts/default.kdl;
+    # レイアウト（動的パス置換適用）
+    "zellij/layouts/default.kdl".text = layoutsDefaultKdlWithAbsolutePath;
 
     # テーマ
     "zellij/themes/dogrun.kdl".source = ./themes/dogrun.kdl;

@@ -63,11 +63,6 @@
       "pinact"
 
       # Python Ecosystem
-      "python@3.8"
-      "python@3.9"
-      "python@3.10"
-      "python@3.11"
-      "python@3.13"
       "python@3.14"
       "python-packaging"
       "mpdecimal"
@@ -92,6 +87,7 @@
       "keycastr"
       "raycast"
       "wezterm"
+      "xcodes-app"
 
       # Fonts (Nerd Fonts)
       "font-caskaydia-cove-nerd-font"
