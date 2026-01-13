@@ -27,7 +27,7 @@ in
   # zellij 本体のインストールと zsh 統合
   programs.zellij = {
     enable = true;
-    enableZshIntegration = true;
+    enableZshIntegration = false;
     package = pkgs.zellij;
   };
 

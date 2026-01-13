@@ -323,10 +323,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "zellij-tab-notify start"
-          },
-          {
-            "type": "command",
             "command": "/usr/bin/osascript -e 'display notification \"Claude Codeが許可を求めています\" with title \"Claude Code\" subtitle \"確認待ち\" sound name \"Glass\"'"
           }
         ]
@@ -338,10 +334,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "zellij-tab-notify start"
-          },
-          {
-            "type": "command",
             "command": "/usr/bin/osascript -e 'display notification \"作業が完了しました\" with title \"Claude Code\" subtitle \"確認してください\" sound name \"Hero\"'"
           }
         ]
@@ -350,23 +342,13 @@
     "UserPromptSubmit": [
       {
         "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "zellij-tab-notify stop"
-          }
-        ]
+        "hooks": []
       }
     ],
     "SessionEnd": [
       {
         "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "zellij-tab-notify stop"
-          }
-        ]
+        "hooks": []
       }
     ]
   },
@@ -375,7 +357,8 @@
     "example-skills@anthropic-agent-skills": true,
     "typescript-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true
+    "playwright@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true
 }

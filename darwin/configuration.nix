@@ -176,7 +176,7 @@
       # Finder詳細設定
       QuitMenuItem = true; # Finderの「終了」メニューを有効化
       FXDefaultSearchScope = "SCcf"; # 検索デフォルトスコープを「現在のフォルダ」に
-      FXPreferredViewStyle = "Nlsv"; # デフォルトビューをリスト表示に
+      FXPreferredViewStyle = "clmv"; # デフォルトビューをカラム表示に
       _FXSortFoldersFirst = true; # 名前順ソート時にフォルダを先頭に
       _FXSortFoldersFirstOnDesktop = true; # デスクトップでもフォルダを先頭に
       NewWindowTarget = "Home"; # 新規ウィンドウでホームフォルダを開く
