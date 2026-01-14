@@ -152,13 +152,42 @@
       NSAutomaticWindowAnimationsEnabled = true; # ウィンドウ開閉アニメーション
       NSScrollAnimationEnabled = true; # スムーズスクロール
       NSWindowResizeTime = 0.2; # ウィンドウリサイズ速度
+
+      # トラックパッド速度・スクロール設定
+      "com.apple.trackpad.scaling" = 1.5; # トラックパッド速度（0-3の範囲）
+      "com.apple.swipescrolldirection" = true; # ナチュラルスクロール
+      "com.apple.trackpad.forceClick" = true; # Force Click
     };
 
     # トラックパッド設定
     trackpad = {
+      # 基本機能
       Clicking = true; # タップでクリック
       TrackpadRightClick = true; # 2本指クリック（副ボタン）
       TrackpadThreeFingerDrag = true; # 3本指ドラッグ
+
+      # スクロールとジェスチャー
+      TrackpadMomentumScroll = true; # 慣性スクロール
+
+      # 2本指ジェスチャー
+      TrackpadPinch = true; # ピンチでズーム
+      TrackpadRotate = true; # 2本指回転
+      TrackpadTwoFingerDoubleTapGesture = true; # スマートズーム
+      TrackpadTwoFingerFromRightEdgeSwipeGesture = 3; # 通知センター
+
+      # 3本指ジェスチャー
+      TrackpadThreeFingerTapGesture = 2; # 「調べる」機能
+      TrackpadThreeFingerHorizSwipeGesture = 2; # フルスクリーン間のスワイプ
+      TrackpadThreeFingerVertSwipeGesture = 2; # Mission Control/App Exposé
+
+      # 4本指ジェスチャー
+      TrackpadFourFingerHorizSwipeGesture = 2; # デスクトップ間の切り替え
+      TrackpadFourFingerVertSwipeGesture = 2; # Mission Control/デスクトップ表示
+      TrackpadFourFingerPinchGesture = 2; # Launchpad
+
+      # 触覚フィードバック
+      FirstClickThreshold = 1; # 通常クリックの圧：中
+      SecondClickThreshold = 1; # Force Touch の圧：中
     };
 
     # Finder 設定
@@ -204,6 +233,12 @@
 
       # Spaces設定
       mru-spaces = false; # 最近使った順ではなく固定順でSpacesを並べる
+
+      # ジェスチャー設定
+      showAppExposeGestureEnabled = true; # App Exposé ジェスチャー
+      showMissionControlGestureEnabled = true; # Mission Control ジェスチャー
+      showDesktopGestureEnabled = true; # デスクトップ表示ジェスチャー
+      showLaunchpadGestureEnabled = true; # Launchpad ジェスチャー
     };
 
     # スクリーンショット設定
