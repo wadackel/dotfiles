@@ -16,6 +16,7 @@
         usage = "latest";
         uv = "latest";
         yamllint = "latest";
+        "npm:agent-browser" = "latest";
       };
       settings = {
         idiomatic_version_file_enable_tools = [ "node" ];

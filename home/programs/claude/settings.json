@@ -14,6 +14,7 @@
     "allow": [
       "Bash(7z:*)",
       "Bash(ag:*)",
+      "Bash(agent-browser:*)",
       "Bash(alias:*)",
       "Bash(asdf:*)",
       "Bash(ast-grep:*)",
@@ -141,8 +142,8 @@
       "Bash(npm:*)",
       "Bash(nslookup:*)",
       "Bash(nuxt:*)",
-      "Bash(nvm:*)",
       "Bash(nvim:*)",
+      "Bash(nvm:*)",
       "Bash(nx:*)",
       "Bash(oxlint:*)",
       "Bash(parcel:*)",
@@ -358,7 +359,8 @@
     "typescript-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
     "playwright@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "ast-grep@ast-grep-marketplace": true
   },
   "alwaysThinkingEnabled": true
 }

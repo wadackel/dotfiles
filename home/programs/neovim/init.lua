@@ -545,7 +545,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 -- Lualine tabline 背景透過用のパッチ関数
-_G.patch_lualine_tabline_colors = function()
+local function patch_lualine_tabline_colors()
   -- タブ間の隙間（TabLineFill）を透過
   vim.api.nvim_set_hl(0, "TabLineFill", { bg = "none" })
 end
@@ -620,6 +620,9 @@ require("lazy").setup({
 
         local function patch_colors()
           vim.cmd("highlight Normal guibg=NONE")
+
+          -- Lualine tabline の透過も再適用
+          patch_lualine_tabline_colors()
         end
 
         patch_colors()
@@ -628,9 +631,6 @@ require("lazy").setup({
           vim.cmd.colorscheme("default")
           vim.cmd.colorscheme("dogrun")
           patch_colors()
-
-          -- Lualine tabline の透過も再適用
-          _G.patch_lualine_tabline_colors()
         end, {})
       end,
     },
@@ -2591,7 +2591,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-lualine/lualine.nvim",
-      event = "VeryLazy",
+      lazy = false,
       config = function()
         local colors = {
           purple = "#929be5",
@@ -2785,9 +2785,6 @@ require("lazy").setup({
             "toggleterm",
           },
         })
-
-        -- tabline の背景を透過
-        _G.patch_lualine_tabline_colors()
       end,
     },
 
@@ -3418,8 +3415,8 @@ require("lazy").setup({
               {
                 "n",
                 "<Leader>e",
-                actions.focus_files,
-                { desc = "Bring focus to the file panel" },
+                actions.focus_entry,
+                { desc = "Bring the cursor to the right diff split" },
               },
               {
                 "n",

@@ -23,6 +23,11 @@ in
     recursive = true;
   };
 
+  home.file.".claude/skills" = {
+    source = dotfiles.linkHere ./. "skills";
+    recursive = true;
+  };
+
   # settings.json をシンボリックリンク形式で配置
   home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
 }
