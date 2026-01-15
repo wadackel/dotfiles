@@ -544,12 +544,6 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Lualine tabline 背景透過用のパッチ関数
-local function patch_lualine_tabline_colors()
-  -- タブ間の隙間（TabLineFill）を透過
-  vim.api.nvim_set_hl(0, "TabLineFill", { bg = "none" })
-end
-
 -- Setup lazy.nvim
 require("lazy").setup({
   defaults = {
@@ -620,9 +614,7 @@ require("lazy").setup({
 
         local function patch_colors()
           vim.cmd("highlight Normal guibg=NONE")
-
-          -- Lualine tabline の透過も再適用
-          patch_lualine_tabline_colors()
+          vim.cmd("highlight TabLineFill guibg=NONE")
         end
 
         patch_colors()
@@ -1422,13 +1414,6 @@ require("lazy").setup({
         local conform = require("conform")
 
         local js_formatter = function(bufnr)
-          local has_eslint = has_config_file(bufnr, {
-            "eslint.config.js",
-            "eslint.config.mjs",
-            "eslint.config.cjs",
-            ".eslintrc.js",
-            ".eslintrc.cjs",
-          })
           local has_prettier = has_config_file(bufnr, {
             ".prettierrc",
             ".prettierrc.json",
@@ -1445,9 +1430,6 @@ require("lazy").setup({
           })
 
           local formatters = {}
-          if has_eslint then
-            -- table.insert(formatters, "eslint_d")
-          end
           if has_prettier then
             table.insert(formatters, "prettierd")
           end
@@ -2591,7 +2573,7 @@ require("lazy").setup({
     -- =============================================================
     {
       "nvim-lualine/lualine.nvim",
-      lazy = false,
+      event = "VeryLazy",
       config = function()
         local colors = {
           purple = "#929be5",
@@ -2599,10 +2581,10 @@ require("lazy").setup({
           teal = "#73c1a9",
           pink = "#b871b8",
           red = "#dc6f7a",
-          bg = "#282a3a",
+          bg = "#222433",
           fg = "#4b4e6d",
           inactive = {
-            bg = "#282a3a",
+            bg = "#222433",
             fg = "#4b4e6d",
           },
         }
