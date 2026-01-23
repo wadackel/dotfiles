@@ -88,6 +88,7 @@
       "raycast"
       "wezterm"
       "xcodes-app"
+      "imageoptim"
 
       # Fonts (Nerd Fonts)
       "font-caskaydia-cove-nerd-font"

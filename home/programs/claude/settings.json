@@ -229,6 +229,7 @@
       "Grep(**)",
       "LS(**)",
       "Read(**)",
+      "Search",
       "Skill",
       "WebFetch(domain:*.github.com)",
       "WebFetch(domain:developer.chrome.com)",
