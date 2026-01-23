@@ -3873,7 +3873,31 @@ require("lazy").setup({
     {
       "junegunn/vim-easy-align",
       keys = {
-        { "ga", "<Plug>(LiveEasyAlign)", mode = { "n", "x" } },
+        -- { "ga", "<Plug>(LiveEasyAlign)", mode = { "n", "x" } },
+      },
+    },
+
+    {
+      "nvim-mini/mini.align",
+      lazy = false,
+      opts = {
+        mappings = {
+          start = "<Nop>",
+          start_with_preview = "ga",
+        },
+        options = {
+          split_pattern = "",
+          justify_side = "left",
+          merge_delimiter = "",
+        },
+        steps = {
+          pre_split = {},
+          split = nil,
+          pre_justify = {},
+          justify = nil,
+          pre_merge = {},
+          merge = nil,
+        },
       },
     },
 
