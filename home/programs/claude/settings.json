@@ -1,4 +1,5 @@
 {
+  "language": "japanese",
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -10,8 +11,11 @@
     "DISABLE_MICROCOMPACT": "true",
     "DISABLE_TELEMETRY": "true"
   },
+  "alwaysThinkingEnabled": true,
   "permissions": {
+    "defaultMode": "plan",
     "allow": [
+      "Bash(/dev/null)",
       "Bash(7z:*)",
       "Bash(ag:*)",
       "Bash(agent-browser:*)",
@@ -242,13 +246,19 @@
       "WebFetch(domain:gist.github.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:hono.dev)",
+      "WebFetch(domain:lefthook.dev)",
       "WebFetch(domain:localhost)",
       "WebFetch(domain:npmjs.com)",
       "WebFetch(domain:oxc.rs)",
       "WebFetch(domain:prettier.io)",
       "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:registry.npmjs.org)",
       "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:storybook.js.org)",
       "WebFetch(domain:tailwindcss.com)",
+      "WebFetch(domain:typicode.github.io)",
+      "WebFetch(domain:vite.dev)",
+      "WebFetch(domain:vitest.dev)",
       "WebFetch(domain:www.npmjs.com)",
       "WebSearch",
       "mcp__codex",
@@ -327,6 +337,17 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/settings-smart-checker.sh --check"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "",
@@ -345,6 +366,15 @@
           {
             "type": "command",
             "command": "/usr/bin/osascript -e 'display notification \"作業が完了しました\" with title \"Claude Code\" subtitle \"確認してください\" sound name \"Hero\"'"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/skills/continuous-learning/evaluate-session.sh"
           }
         ]
       }
@@ -370,6 +400,5 @@
     "playwright@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
     "ast-grep@ast-grep-marketplace": true
-  },
-  "alwaysThinkingEnabled": true
+  }
 }

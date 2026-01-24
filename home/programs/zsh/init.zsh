@@ -400,14 +400,6 @@ if [[ -x $(command -v terraform) ]]; then
   zsh-defer _init_terraform_completion
 fi
 
-# Google Cloud SDK paths and completion (遅延ロード)
-if [[ -f "${HOME}/google-cloud-sdk/path.zsh.inc" ]]; then
-  zsh-defer source "${HOME}/google-cloud-sdk/path.zsh.inc"
-  zsh-defer source "${HOME}/google-cloud-sdk/completion.zsh.inc"
-
-  # appserver alias (conditional on gcloud SDK)
-  alias appserver="${HOME}/google-cloud-sdk/bin/dev_appserver.py"
-fi
 
 # goapp PATH addition (Google App Engine for Go)
 if [[ -x $(command -v goapp) ]]; then

@@ -11,8 +11,11 @@
   # システム情報
   system.stateVersion = 5;
 
-  # Touch ID for sudo を有効化
-  security.pam.services.sudo_local.touchIdAuth = true;
+  # Touch ID for sudo を有効化（tmux内でも動作）
+  security.pam.services.sudo_local = {
+    touchIdAuth = true;
+    reattach = true; # tmux/screen内でTouch IDを有効化
+  };
 
   # プライマリユーザー設定（Dock など per-user 設定に必要）
   system.primaryUser = username;

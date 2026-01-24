@@ -68,6 +68,36 @@ sudo darwin-rebuild switch --flake .#private
 sudo darwin-rebuild switch --flake .#work
 ```
 
+## Updating Dependencies
+
+To update all packages to their latest versions:
+
+```bash
+cd ~/dotfiles
+
+# Update all flake inputs (nixpkgs, home-manager, nix-darwin, etc.)
+nix flake update
+
+# Verify syntax (optional but recommended)
+nix flake check
+
+# Apply updated configuration
+sudo darwin-rebuild switch --flake .#private
+```
+
+To update specific inputs only:
+
+```bash
+# Update only nixpkgs
+nix flake lock --update-input nixpkgs
+
+# Update only home-manager
+nix flake lock --update-input home-manager
+
+# Update only nix-darwin
+nix flake lock --update-input nix-darwin
+```
+
 ## Rollback
 
 If something goes wrong, rollback to the previous generation:

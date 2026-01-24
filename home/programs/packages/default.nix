@@ -8,6 +8,9 @@
 {
   # Shell-independent CLI tools
   home.packages = with pkgs; [
+    # Cloud Tools
+    google-cloud-sdk # Google Cloud SDK
+
     # JSON/YAML/XML Processing
     jq # JSON processor
     yq-go # YAML/JSON/XML processor (Go version)

@@ -74,6 +74,9 @@
 
       # zmv
       zmv = "noglob zmv -W";
+
+      # Google Cloud SDK
+      appserver = "${pkgs.google-cloud-sdk}/google-cloud-sdk/bin/dev_appserver.py";
     };
 
     # Plugins

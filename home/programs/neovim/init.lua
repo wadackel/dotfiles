@@ -1413,52 +1413,96 @@ require("lazy").setup({
       config = function()
         local conform = require("conform")
 
-        local js_formatter = function(bufnr)
-          local has_prettier = has_config_file(bufnr, {
-            ".prettierrc",
-            ".prettierrc.json",
-            ".prettierrc.js",
-            ".prettierrc.cjs",
-            "prettier.config.js",
-            "prettier.config.cjs",
-          })
-          local has_biome = has_config_file(bufnr, {
-            "biome.json",
-          })
-          local has_oxfmt = has_config_file(bufnr, {
-            ".oxfmtrc.json",
-          })
+        -- Formatter configuration file patterns
+        local PRETTIER_CONFIGS = {
+          ".prettierrc",
+          ".prettierrc.json",
+          ".prettierrc.js",
+          ".prettierrc.cjs",
+          "prettier.config.js",
+          "prettier.config.cjs",
+        }
 
-          local formatters = {}
-          if has_prettier then
-            table.insert(formatters, "prettierd")
+        local BIOME_CONFIGS = {
+          "biome.json",
+        }
+
+        local OXFMT_CONFIGS = {
+          ".oxfmtrc.json",
+        }
+
+        -- Factory function to create conditional formatter selector
+        local make_formatter_selector = function(options)
+          return function(bufnr)
+            local formatters = {}
+
+            -- Add base formatters (e.g., stylelint for CSS)
+            if options.base_formatters then
+              for _, formatter in ipairs(options.base_formatters) do
+                table.insert(formatters, formatter)
+              end
+            end
+
+            -- Check for prettier config
+            if options.enable_prettier and has_config_file(bufnr, PRETTIER_CONFIGS) then
+              table.insert(formatters, "prettierd")
+            end
+
+            -- Check for biome config (JavaScript/TypeScript only)
+            if options.enable_biome and has_config_file(bufnr, BIOME_CONFIGS) then
+              table.insert(formatters, "biome")
+            end
+
+            -- Check for oxfmt config
+            if options.enable_oxfmt and has_config_file(bufnr, OXFMT_CONFIGS) then
+              table.insert(formatters, "oxfmt")
+            end
+
+            return formatters
           end
-          if has_biome then
-            table.insert(formatters, "biome")
-          end
-          if has_oxfmt then
-            table.insert(formatters, "oxfmt")
-          end
-          return formatters
         end
+
+        -- JavaScript/TypeScript: prettier, biome, and oxfmt support
+        local js_formatter = make_formatter_selector({
+          enable_prettier = true,
+          enable_biome = true,
+          enable_oxfmt = true,
+        })
+
+        -- CSS: stylelint always runs first, then prettier/oxfmt conditionally
+        local css_formatter = make_formatter_selector({
+          base_formatters = { "stylelint" },
+          enable_prettier = true,
+          enable_oxfmt = true,
+        })
+
+        -- JSON, Markdown, YAML, HTML: prettier and oxfmt support
+        local prettier_formatter = make_formatter_selector({
+          enable_prettier = true,
+          enable_oxfmt = true,
+        })
 
         conform.setup({
           log_level = vim.log.levels.DEBUG,
           timeout_ms = 5000,
           formatters = {},
           formatters_by_ft = {
+            -- JavaScript/TypeScript family (prettier + biome + oxfmt)
             javascript = js_formatter,
             javascriptreact = js_formatter,
             typescript = js_formatter,
             typescriptreact = js_formatter,
-            css = {
-              "stylelint",
-              "prettierd",
-            },
-            json = { "prettierd" },
-            markdown = { "prettierd" },
-            yaml = { "prettierd" },
-            html = { "prettierd" },
+
+            -- CSS (stylelint + prettier + oxfmt)
+            css = css_formatter,
+
+            -- Other prettier-compatible languages (prettier + oxfmt)
+            json = prettier_formatter,
+            markdown = prettier_formatter,
+            yaml = prettier_formatter,
+            html = prettier_formatter,
+
+            -- Non-prettier languages (unchanged)
             rust = { "rustfmt" },
             go = { "gofumpt", "goimports" },
             terraform = { "terraform_fmt" },
