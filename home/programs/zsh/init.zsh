@@ -315,6 +315,122 @@ zjd() {
 }
 
 # ====================================================
+# tmux Session Management (fzf-based)
+# ====================================================
+
+# fzf-based session attach/switch
+tma() {
+  # セッション一覧取得
+  local sessions
+  sessions=$(tmux list-sessions -F "#{session_name}:#{session_windows}:#{?session_attached,attached,detached}:#{session_created}" 2>/dev/null)
+
+  # セッションが存在しない場合
+  if [[ -z $sessions ]]; then
+    echo "No tmux sessions found. Create one with 'tmux new -s <name>'"
+    return 1
+  fi
+
+  # tmux内かどうかを判定
+  local inside_tmux=false
+  local current_session=""
+  if [[ -n $TMUX ]]; then
+    inside_tmux=true
+    current_session=$(tmux display-message -p '#S')
+  fi
+
+  # fzf用にフォーマット
+  local formatted
+  formatted=$(echo "$sessions" | awk -F: '{
+    name = $1
+    windows = $2
+    status = $3
+    icon = (status == "attached") ? "󰆍" : "○"
+    printf "%s %-20s %s windows  %s\n", icon, name, windows, status
+  }')
+
+  # プレビューコマンド（ウィンドウとペイン一覧）
+  local preview_cmd='tmux list-windows -t {2} 2>/dev/null | cat; echo "---"; tmux list-panes -t {2} -a -F "Pane #{pane_index}: #{pane_current_command}" 2>/dev/null'
+
+  # fzfでセッション選択
+  local selected
+  selected=$(echo "$formatted" | \
+    fzf --height 40% --reverse --border \
+        --header "Select session to $([ "$inside_tmux" = true ] && echo "switch" || echo "attach") (ESC to cancel)" \
+        --preview "$preview_cmd" \
+        --preview-window=right:50% | \
+    awk '{print $2}')
+
+  # キャンセルされた場合
+  if [[ -z $selected ]]; then
+    return 0
+  fi
+
+  # 現在のセッションと同じ場合
+  if [[ "$inside_tmux" = true && "$selected" == "$current_session" ]]; then
+    echo "Already in session: $selected"
+    return 0
+  fi
+
+  # アタッチまたはスイッチ
+  if [[ $inside_tmux = true ]]; then
+    tmux switch-client -t "$selected"
+  else
+    tmux attach-session -t "$selected"
+  fi
+}
+
+# fzf-based session delete (multi-select)
+tmd() {
+  # セッション一覧取得
+  local sessions
+  sessions=$(tmux list-sessions -F "#{session_name}:#{session_windows}:#{?session_attached,attached,detached}" 2>/dev/null)
+
+  # セッションが存在しない場合
+  if [[ -z $sessions ]]; then
+    echo "No tmux sessions found"
+    return 1
+  fi
+
+  # 現在のセッションを判定（tmux内の場合）
+  local current_session=""
+  if [[ -n $TMUX ]]; then
+    current_session=$(tmux display-message -p '#S')
+  fi
+
+  # fzf用にフォーマット
+  local formatted
+  formatted=$(echo "$sessions" | awk -F: '{
+    name = $1
+    windows = $2
+    status = $3
+    icon = (status == "attached") ? "󰆍" : "○"
+    printf "%s %-20s %s windows  %s\n", icon, name, windows, status
+  }')
+
+  # fzfでセッション選択（マルチ選択対応）
+  local selected
+  selected=$(echo "$formatted" | \
+    fzf --height 40% --reverse --border --multi \
+        --header 'Select session(s) to delete (TAB for multiple, ESC to cancel)' | \
+    awk '{print $2}')
+
+  # キャンセルされた場合
+  if [[ -z $selected ]]; then
+    return 0
+  fi
+
+  # 選択されたセッションを削除
+  echo "$selected" | while IFS= read -r session; do
+    if [[ "$session" == "$current_session" ]]; then
+      echo "⚠ Skipping current session: $session (detach first or use 'tmux kill-session')"
+    else
+      echo "Deleting session: $session"
+      tmux kill-session -t "$session"
+    fi
+  done
+}
+
+# ====================================================
 # Development Utilities
 # ====================================================
 

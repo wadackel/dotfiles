@@ -123,6 +123,12 @@
     shell = pkgs.zsh; # デフォルトシェルを Nix の zsh に変更
   };
 
+  # === macOS キーボード設定 ===
+  system.keyboard = {
+    enableKeyMapping = true;
+    remapCapsLockToControl = true;
+  };
+
   # === macOS システム設定 ===
   system.defaults = {
     # キーボード・入力設定
@@ -143,6 +149,9 @@
       NSAutomaticQuoteSubstitutionEnabled = false; # 引用符の自動変換OFF
       NSAutomaticDashSubstitutionEnabled = false; # -- を — に変換しない
       NSAutomaticPeriodSubstitutionEnabled = false; # スペース2回で . 挿入しない
+
+      # Function Keys 設定
+      "com.apple.keyboard.fnState" = true; # F1-F12を標準機能キーとして使用
 
       # スワイプナビゲーション
       AppleEnableSwipeNavigateWithScrolls = true; # 2本指スワイプでブラウザの戻る/進む
@@ -294,6 +303,12 @@
       "com.apple.desktopservices" = {
         DSDontWriteNetworkStores = true; # ネットワークドライブ
         DSDontWriteUSBStores = true; # USBドライブ
+      };
+
+      # アクセシビリティ: スクロールズーム設定
+      "com.apple.universalaccess" = {
+        HIDScrollZoomModifierMask = 262144; # Control (^) キー
+        closeViewScrollWheelToggle = true; # スクロールでズーム有効化
       };
     };
   };

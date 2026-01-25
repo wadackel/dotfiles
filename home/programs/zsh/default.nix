@@ -59,12 +59,11 @@
       # zellij
       zj = "zellij";
 
-      # tmux
+      # tmux - basic aliases
       tm = "tmux";
       tmls = "tmux ls";
-      tma = "tmux a -t";
-      tmd = "tmux d -t";
       tmr = "tmux kill-session -t";
+      # Note: tma, tmd are functions defined in init.zsh
 
       # Git log helpers
       glNoGraph = "git log --color=always --format=\"%C(auto)%h%d %s %C(black)%C(bold)%cr% C(auto)%an\" \"$@\"";
