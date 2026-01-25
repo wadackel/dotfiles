@@ -51,15 +51,13 @@ proposal_json() {
   local new_rules_json="$1"
   local new_rules_count="$2"
   local project_path="$3"
-  local rules_hash="$4"
   jq -n \
     --arg status "proposal" \
     --argjson new_rules "${new_rules_json}" \
     --argjson new_rules_count "${new_rules_count}" \
     --arg project_path "${project_path}" \
     --arg user_settings_path "${USER_SETTINGS}" \
-    --arg rules_hash "${rules_hash}" \
-    '{status: $status, new_rules: $new_rules, new_rules_count: $new_rules_count, project_path: $project_path, user_settings_path: $user_settings_path, rules_hash: $rules_hash}'
+    '{status: $status, new_rules: $new_rules, new_rules_count: $new_rules_count, project_path: $project_path, user_settings_path: $user_settings_path}'
 }
 
 # ================================================================
@@ -152,12 +150,6 @@ canonicalize_rules_json() {
   printf '%s' "${rules_json}" | jq -c 'sort | unique'
 }
 
-# ルールJSONのハッシュ計算
-calculate_rules_hash() {
-  local rules_json="$1"
-  printf '%s' "${rules_json}" | shasum -a 256 | awk '{print $1}'
-}
-
 # ルールマージ実行
 merge_rules() {
   local new_rules_json="$1"
@@ -166,12 +158,12 @@ merge_rules() {
   # 一時ファイル作成
   local temp_file
   temp_file=$(mktemp)
-  trap 'rm -f "${temp_file}"' EXIT
 
   # 既存のルールと新規ルールをマージ（unique + sort）
   if ! jq --argjson new_rules "${new_rules_json}" \
     '.permissions.allow = ((.permissions.allow // []) + $new_rules | unique | sort)' \
     "${USER_SETTINGS}" > "${temp_file}"; then
+    rm -f "${temp_file}"
     error_json "merge_failed" "ルールのマージに失敗しました"
     exit 1
   fi
@@ -180,9 +172,13 @@ merge_rules() {
   if ! cat "${temp_file}" > "${USER_SETTINGS}"; then
     # 失敗時はバックアップから復元
     cp "${backup_path}" "${USER_SETTINGS}"
+    rm -f "${temp_file}"
     error_json "write_failed" "設定ファイルの更新に失敗しました（バックアップから復元済み）"
     exit 1
   fi
+
+  # クリーンアップ
+  rm -f "${temp_file}"
 }
 
 # ================================================================
@@ -228,19 +224,15 @@ proposal_mode() {
     exit 1
   }
 
-  local rules_hash
-  rules_hash=$(calculate_rules_hash "${canonical_rules_json}")
-
   local project_path
   project_path=$(pwd)
 
-  proposal_json "${canonical_rules_json}" "${new_rules_count}" "${project_path}" "${rules_hash}"
+  proposal_json "${canonical_rules_json}" "${new_rules_count}" "${project_path}"
 }
 
 # 適用モード
 apply_mode() {
   local rules_json="$1"
-  local expected_hash="${2:-}"
 
   check_user_settings
 
@@ -259,15 +251,6 @@ apply_mode() {
   if [[ "${rules_count}" -eq 0 ]]; then
     error_json "no_rules" "No rules to apply"
     exit 1
-  fi
-
-  if [[ -n "${expected_hash}" ]]; then
-    local actual_hash
-    actual_hash=$(calculate_rules_hash "${canonical_rules_json}")
-    if [[ "${actual_hash}" != "${expected_hash}" ]]; then
-      error_json "rules_hash_mismatch" "Approved rules do not match"
-      exit 1
-    fi
   fi
 
   # バックアップ作成
@@ -291,26 +274,13 @@ main() {
   case "${mode}" in
     --apply)
       local rules_json="${2:-}"
-      local expected_hash=""
 
       if [[ -z "${rules_json}" ]]; then
-        error_json "missing_rules" "Usage: $0 --apply '<rules_json>' --hash <hash>"
+        error_json "missing_rules" "Usage: $0 --apply '<rules_json>'"
         exit 1
       fi
 
-      if [[ "${3:-}" != "--hash" ]]; then
-        error_json "missing_hash" "Usage: $0 --apply '<rules_json>' --hash <hash>"
-        exit 1
-      fi
-
-      if [[ -z "${4:-}" ]]; then
-        error_json "missing_hash" "Usage: $0 --apply '<rules_json>' --hash <hash>"
-        exit 1
-      fi
-
-      expected_hash="${4}"
-
-      apply_mode "${rules_json}" "${expected_hash}"
+      apply_mode "${rules_json}"
       ;;
     *)
       proposal_mode
