@@ -15,12 +15,6 @@
 
   home.file.".claude/skills".source = dotfiles.linkHere ./. "skills";
 
-  # config ディレクトリのシンボリックリンク
-  home.file.".claude/config" = {
-    source = dotfiles.linkHere ./. "config";
-    recursive = true;
-  };
-
   # scripts ディレクトリのシンボリックリンク
   home.file.".claude/scripts" = {
     source = dotfiles.linkHere ./. "scripts";

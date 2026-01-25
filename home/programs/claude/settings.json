@@ -337,17 +337,6 @@
     ]
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/settings-smart-checker.sh --check"
-          }
-        ]
-      }
-    ],
     "Notification": [
       {
         "matcher": "",
