@@ -14,8 +14,5 @@
   home.file.".tmux.popup.conf".source = dotfiles.linkHere ./. "tmux.popup.conf";
 
   # Tmux popup session script
-  home.file.".local/bin/tmux-popup-session.sh" = {
-    source = dotfiles.linkHere ./. "popup-session.sh";
-    executable = true;
-  };
+  home.file.".local/bin/tmux-popup-session.sh".source = dotfiles.linkHere ./. "popup-session.sh";
 }
