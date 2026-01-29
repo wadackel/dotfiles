@@ -16,7 +16,7 @@
         usage = "latest";
         uv = "latest";
         yamllint = "latest";
-        "npm:agent-browser" = "latest";
+        "npm:@playwright/cli" = "latest";
       };
       settings = {
         idiomatic_version_file_enable_tools = [ "node" ];

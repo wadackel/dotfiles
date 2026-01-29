@@ -1,5 +1,4 @@
 {
-  "language": "japanese",
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -11,9 +10,7 @@
     "DISABLE_MICROCOMPACT": "true",
     "DISABLE_TELEMETRY": "true"
   },
-  "alwaysThinkingEnabled": true,
   "permissions": {
-    "defaultMode": "plan",
     "allow": [
       "Bash(/dev/null)",
       "Bash(7z:*)",
@@ -174,6 +171,7 @@
       "Bash(ping:*)",
       "Bash(pip:*)",
       "Bash(pipx:*)",
+      "Bash(playwright-cli:*)",
       "Bash(plutil:*)",
       "Bash(pnpm:*)",
       "Bash(poetry:*)",
@@ -406,8 +404,10 @@
     "example-skills@anthropic-agent-skills": true,
     "typescript-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "ast-grep@ast-grep-marketplace": true
-  }
+    "ast-grep@ast-grep-marketplace": true,
+    "playwright-cli@playwright-cli": true
+  },
+  "language": "japanese",
+  "alwaysThinkingEnabled": true
 }
