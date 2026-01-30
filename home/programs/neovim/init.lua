@@ -1797,6 +1797,7 @@ require("lazy").setup({
         },
         views = {
           finder = {
+            default_explorer = true,
             git_status = {
               enabled = true,
               symbols = {
