@@ -43,6 +43,9 @@
 
       # wasmtime
       WASMTIME_HOME = "${config.home.homeDirectory}/.wasmtime";
+
+      # playwright mcp
+      PLAYWRIGHT_MCP_USER_DATA_DIR = "${config.home.homeDirectory}/.playwright-mcp";
     };
 
     # Shell aliases

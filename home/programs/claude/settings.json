@@ -380,15 +380,6 @@
             "command": "/usr/bin/osascript -e 'display notification \"作業が完了しました\" with title \"Claude Code\" subtitle \"確認してください\" sound name \"Hero\"'"
           }
         ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/skills/continuous-learning/evaluate-session.sh"
-          }
-        ]
       }
     ],
     "UserPromptSubmit": [
@@ -410,8 +401,7 @@
     "typescript-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "ast-grep@ast-grep-marketplace": true,
-    "playwright-cli@playwright-cli": true
+    "ast-grep@ast-grep-marketplace": true
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true
