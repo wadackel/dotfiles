@@ -64,6 +64,7 @@
       # Custom Tap Tools
       "ofsht"
       "pinact"
+      "gemini-cli"
 
       # Python Ecosystem
       "python@3.14"
