@@ -44,15 +44,23 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
   - `WebFetch(domain:npmjs.com)` - Package registry
   - `WebFetch(domain:docs.python.org)` - Language docs
 
-**Standard tool wildcards**
+**Specific-purpose safe CLI tools**
 - Pattern: `Bash(<tool>:*)`
-- Rationale: Common CLI tools used across projects
+- Rationale: Tools limited to specific safe purposes (NOT universal shells/scripting tools)
 - Examples:
+  - `Bash(claude:*)` - Claude CLI operations
+  - `Bash(gemini:*)` - Gemini CLI operations
+  - `Bash(starship config:*)` - starship configuration
   - `Bash(rg:*)` - ripgrep search
   - `Bash(tmux:*)` - Terminal multiplexer
   - `Bash(git status:*)` - Git read operations
   - `Bash(nvim:*)` - Neovim editor
   - `Bash(zellij:*)` - Terminal workspace
+
+**IMPORTANT**: Do NOT include universal shells/scripting tools like:
+- `bash:*`, `sh:*`, `zsh:*` - Universal shells allowing arbitrary code execution
+- `expect:*` - Universal scripting tool
+- `python:*`, `perl:*`, `ruby:*` - Languages allowing arbitrary code via `-c` flag
 
 **Read-only inspection commands**
 - Pattern: Commands that only query system state
@@ -61,8 +69,8 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
   - `Bash(defaults read:*)` - macOS preferences reader
   - `Bash(plutil:*)` - Property list utility
   - `Bash(ioreg:*)` - I/O registry explorer
-  - `Bash(cat:*)` - File content display
-  - `Bash(ls:*)` - Directory listing
+
+**Note**: Commands like `cat:*` and `ls:*` can read arbitrary files, so consider project-specific sensitivity before adding globally. For most users, these are safe, but in sensitive environments, keep them project-local.
 
 **Package/dependency managers (read-only)**
 - Pattern: Query operations for package managers
@@ -82,6 +90,19 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
   - `Bash(gcloud version:*)` - Cloud SDK version
 
 ### EXCLUDE - Keep in project-local settings
+
+**Universal scripting/shell tools (DANGEROUS)**
+- Pattern: Tools allowing arbitrary code execution
+- Rationale: Universal shells and scripting languages can execute any code, making global permission extremely dangerous
+- Examples:
+  - `Bash(bash:*)` - Universal shell
+  - `Bash(sh:*)` - Universal shell
+  - `Bash(zsh:*)` - Universal shell
+  - `Bash(expect:*)` - Universal scripting tool
+  - `Bash(python:*)` - Can execute arbitrary code via `python -c`
+  - `Bash(perl:*)` - Can execute arbitrary code via `perl -e`
+  - `Bash(ruby:*)` - Can execute arbitrary code via `ruby -e`
+  - `Bash(node:*)` - Can execute arbitrary code via `node -e`
 
 **Absolute or relative paths**
 - Pattern: Any command with explicit filesystem paths
@@ -209,10 +230,11 @@ After successful application:
 
 **For Bash rules**:
 - Extract the command name (before first `:` or space)
-- Check if it's a standard tool (rg, git, tmux, etc.)
-- Look for path indicators (`/`, `~`, `./`)
-- Look for environment variable assignments (`VAR=value`)
-- Check for shell execution patterns (`source`, `exec`, `-c`)
+- **CRITICAL**: Immediately EXCLUDE if it's a universal shell/scripting tool (bash, sh, zsh, expect, python, perl, ruby, node)
+- Check if it's a specific-purpose safe tool (claude, gemini, starship, rg, git, tmux, etc.)
+- Look for path indicators (`/`, `~`, `./`) → EXCLUDE
+- Look for environment variable assignments (`VAR=value`) → EXCLUDE
+- Check for shell execution patterns (`source`, `exec`, `-c`) → EXCLUDE
 
 **Edge cases**:
 - `Bash(git update-index:*)` - Standard tool, specific subcommand → RECOMMEND
