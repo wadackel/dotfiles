@@ -23,8 +23,8 @@
       ".ofsht.toml"
       "**/.claude/settings.local.json"
       "**/.claude/commands/wadackel-*"
-      "/.playwright-mcp"
-      "/.playwright-cli"
+      ".playwright-mcp"
+      ".playwright-cli"
       "playwright-cli.json"
       "CLAUDE.local.md"
     ];

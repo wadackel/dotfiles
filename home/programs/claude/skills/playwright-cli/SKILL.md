@@ -1,6 +1,6 @@
 ---
 name: playwright-cli
-description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
+description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Maintains browser sessions to preserve authentication state. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
 allowed-tools: Bash(playwright-cli:*)
 ---
 
@@ -11,7 +11,13 @@ allowed-tools: Bash(playwright-cli:*)
 When opening the browser, launch it in headed mode unless there is a specific request from the user.
 
 ```bash
+# First, check if an existing session is available
+playwright-cli session-list
+
+# If no session exists, configure a new one
 playwright-cli config --headed
+
+# Open the browser (uses existing session if available)
 playwright-cli open https://playwright.dev
 playwright-cli click e15
 playwright-cli type "page.click"
@@ -20,10 +26,69 @@ playwright-cli press Enter
 
 ## Core workflow
 
-1. Configure: `playwright-cli config --headed`
-2. Navigate: `playwright-cli open https://example.com`
-3. Interact using refs from the snapshot
-4. Re-snapshot after significant changes
+1. Check for existing session: `playwright-cli session-list`
+2. Configure if needed: `playwright-cli config --headed`
+3. Navigate: `playwright-cli open https://example.com`
+4. Interact using refs from the snapshot
+5. Re-snapshot after significant changes
+
+## Session Management Best Practices
+
+**IMPORTANT: Preserve existing sessions to maintain authentication state.**
+
+### Before Starting Work
+
+Always check for existing sessions first:
+
+```bash
+playwright-cli session-list
+```
+
+### When to Create a New Session
+
+Only run `playwright-cli config` when:
+- No session exists (empty `session-list` output)
+- You need different browser settings (e.g., switching browsers or headed/headless mode)
+- You explicitly need to start fresh
+
+### Benefits of Session Reuse
+
+- **Authentication state preserved**: Stay logged in across commands
+- **Reduced overhead**: Skip browser initialization
+- **Natural workflow**: Continue where you left off
+
+### Example: Working with Authenticated Pages
+
+```bash
+# First time: Check and configure if needed
+playwright-cli session-list
+playwright-cli config --headed
+
+# Login to a site
+playwright-cli open https://example.com/login
+playwright-cli fill e1 "username"
+playwright-cli fill e2 "password"
+playwright-cli click e3
+
+# Later: Reuse the authenticated session
+# No need to run config again - just open the page
+playwright-cli open https://example.com/dashboard
+playwright-cli snapshot
+```
+
+### Managing Multiple Sessions
+
+Use named sessions for different contexts:
+
+```bash
+# Work session for authenticated testing
+playwright-cli --session=work config --headed
+playwright-cli --session=work open https://app.example.com
+
+# Test session for anonymous browsing
+playwright-cli --session=test config --headed --isolated
+playwright-cli --session=test open https://example.com
+```
 
 ## Commands
 
@@ -174,3 +239,37 @@ playwright-cli click e4
 playwright-cli fill e7 "test"
 playwright-cli tracing-stop
 ```
+
+## Important Notes
+
+### Working Directory Management
+
+**CRITICAL: Always execute playwright-cli from the current working directory.**
+
+- **DO NOT use `cd` commands**: playwright-cli is available in PATH and can be executed from anywhere
+- **Maintain current directory**: All playwright-cli commands should run in the user's current working directory
+- **Output file location**: Screenshots, PDFs, and other files are saved to the current directory
+
+**Example of CORRECT usage:**
+
+```bash
+# User is in /path/to/project
+playwright-cli session-list
+playwright-cli open https://example.com
+playwright-cli screenshot page.png
+# page.png is saved to /path/to/project/page.png
+```
+
+**Example of INCORRECT usage:**
+
+```bash
+# DO NOT DO THIS
+cd /some/other/directory  # ❌ Wrong - never change directory
+playwright-cli open https://example.com
+```
+
+### Why This Matters
+
+- **Predictable output location**: Users expect files in their current directory
+- **Workflow consistency**: Maintains context with other development tools
+- **No surprises**: Avoids files being saved to unexpected locations
