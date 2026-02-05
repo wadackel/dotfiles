@@ -10,6 +10,7 @@
   home.packages = with pkgs; [
     # Cloud Tools
     google-cloud-sdk # Google Cloud SDK
+    google-cloud-sql-proxy # Cloud SQL Auth Proxy
 
     # JSON/YAML/XML Processing
     jq # JSON processor
