@@ -1,32 +1,29 @@
 # Skill Validation Criteria
 
-This document defines the criteria for validating Claude Code skills through simulation testing.
+This document defines the criteria for validating Claude Code skills through team-based testing.
 
 ## Test Completion Assessment
 
-### How to determine if a test is complete
+### How the evaluator determines test results
 
-Rather than waiting for specific patterns, periodically observe the output and make a judgment:
+The evaluator receives verification reports from the verifier agent. Each report describes what happened when the test prompt was sent to the target skill.
 
-**Observation cycle**:
-1. Wait 30 seconds between checks
-2. Capture current output (last 100 lines)
-3. Read and interpret the state
-4. Decide: continue waiting, interact, or consider complete
+**Assessment process**:
+1. Read the verification report for the test
+2. Compare observations against the task's expected behavior
+3. Evaluate each validation dimension (see Core Validation Dimensions below)
+4. Determine overall result: PASS, FAIL, or PARTIAL
 
-**States and actions**:
+**When to request re-verification**:
+- Verification report lacks detail on a critical dimension
+- Observations are ambiguous or contradictory
+- Key workflow steps are mentioned but not clearly confirmed
+- Triggering was unclear (e.g., "something happened but not sure if it was the skill")
 
-| Observable State | What it means | Action |
-|-----------------|---------------|--------|
-| Active processing | Output changing, work in progress | Wait 30s, check again |
-| Confirmation dialog | Mid-workflow decision point | Respond appropriately, continue |
-| Error displayed | Something failed | Consider complete (with error) |
-| Returned to prompt | Task finished, ready for input | Consider complete (success) |
-| Stable + unclear | No change but state uncertain | Wait one more cycle, then judge |
-
-**Total timeout**: 5 minutes maximum per test
-
-**Key insight**: "Do you want to proceed?" is NOT completion - it's a workflow step that needs a response. The test is complete when the skill has either achieved its purpose or definitively failed.
+**Result definitions**:
+- **PASS**: Skill behaved as expected for this test scenario
+- **FAIL**: Skill did not behave as expected (wrong trigger, broken workflow, wrong output)
+- **PARTIAL**: Skill partially worked but with limitations (expected limitations are acceptable)
 
 ## Core Validation Dimensions
 
@@ -152,31 +149,31 @@ Example for a PDF skill:
 
 ## Validation Workflow
 
-### 1. Pre-Test Review
+### 1. Pre-Test Review (Conductor)
 
-- [ ] Review SKILL.md for clarity and completeness
+- [ ] Review target SKILL.md for clarity and completeness
 - [ ] Verify all referenced resources exist
 - [ ] Check description matches actual functionality
 - [ ] Ensure workflow documentation is accurate
 
-### 2. Test Execution
+### 2. Test Execution (Verifier)
 
-- [ ] Run positive test cases
-- [ ] Run negative test cases
-- [ ] Run edge case scenarios
-- [ ] Monitor resource access patterns
-- [ ] Capture all outputs
+- [ ] Execute positive test cases
+- [ ] Execute negative test cases
+- [ ] Execute edge case scenarios
+- [ ] Document all observations in verification reports
+- [ ] Send reports to evaluator
 
-### 3. Results Analysis
+### 3. Results Analysis (Evaluator)
 
+- [ ] Evaluate each verification report against criteria
+- [ ] Request re-verification where data is insufficient
 - [ ] Compare actual vs. expected behavior
-- [ ] Identify any unexpected triggers
-- [ ] Note any missing functionality
-- [ ] Document quality issues
+- [ ] Identify patterns across test results
 
-### 4. Improvement Recommendations
+### 4. Improvement Recommendations (Evaluator + Conductor)
 
-Based on test results, recommend:
+Based on test results, the evaluator provides per-test recommendations and the conductor compiles them:
 
 - **Description updates**: If triggering is inaccurate
 - **Workflow refinements**: If execution order is wrong
