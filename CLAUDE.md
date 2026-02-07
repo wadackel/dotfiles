@@ -98,6 +98,10 @@ The `programs/default.nix` auto-imports all subdirectories, enabling modular con
 2. Place config files alongside the module
 3. No manual imports needed - auto-discovery handles it
 
+### `dotfiles.linkHere` and `recursive`
+
+`lib/dotfiles-path.nix` の `linkHere` は out-of-store symlink を作成する。`home.file` の `recursive = true` と組み合わせると Nix store 経由の個別ファイルリンクとなり、新ファイル追加時に `darwin-rebuild` が必要。ディレクトリ全体をリンク (`recursive` なし) にすれば新ファイルが自動反映される。
+
 ### Helper Functions in flake.nix
 
 - **`mkHome`**: Creates standalone home-manager configuration
@@ -214,6 +218,10 @@ Multiple terminal options configured:
 
 ## Troubleshooting
 
+### launchd / macOS 通知からのコマンド実行
+
+`terminal-notifier -execute` など macOS 通知クリック時に実行されるスクリプトは launchd 環境で動作し、PATH が `/usr/bin:/bin:/usr/sbin:/sbin` に限定される。Nix 管理のコマンド (tmux, jq など) を使う場合はフルパスを渡す必要がある。
+
 ### Configuration Not Applied
 
 If system settings don't update after `darwin-rebuild`:
@@ -236,6 +244,12 @@ This repository includes comprehensive Claude Code configuration:
 
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
 - **Agents**: 23 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, debugging, DevOps, documentation, frontend, JavaScript/TypeScript, performance, Playwright, QA, React, refactoring, security, SRE, technical writing)
+- **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
+  - `claude-notify.sh`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.sh debug`
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
 
 Changes to Claude Code settings require `darwin-rebuild` to update symlinks.
+
+### Hook Data
+
+Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`) plus event-specific fields. Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
