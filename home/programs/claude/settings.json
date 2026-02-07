@@ -227,6 +227,7 @@
       "Bash(tar *)",
       "Bash(task *)",
       "Bash(tee *)",
+      "Bash(terminal-notifier *)",
       "Bash(terraform plan *)",
       "Bash(test *)",
       "Bash(tig *)",
@@ -381,7 +382,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/osascript -e 'display notification \"Claude Codeが許可を求めています\" with title \"Claude Code\" subtitle \"確認待ち\" sound name \"Glass\"'"
+            "command": "claude-notify.sh send 'Claude Code' 'Claude Codeが許可を求めています' 'Glass'"
           }
         ]
       }
@@ -392,7 +393,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/osascript -e 'display notification \"作業が完了しました\" with title \"Claude Code\" subtitle \"確認してください\" sound name \"Hero\"'"
+            "command": "claude-notify.sh send 'Claude Code' '作業が完了しました' 'Hero'"
           }
         ]
       }
