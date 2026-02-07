@@ -87,21 +87,27 @@ case "${1:-}" in
       log "WEZTERM_ACTIVATE_ERROR: exit=$? output=$output"
     fi
 
-    client=$(tmux list-clients -F "#{client_name}" 2>&1 | head -1)
-    log "TMUX_CLIENT: $client"
+    # 短い待機で WezTerm のアクティブ化を確実にする
+    sleep 0.1
 
-    if [ -n "$client" ]; then
-      tmux switch-client -c "$client" -t "$session" 2>&1 && \
-        log "SWITCH_CLIENT: success" || \
-        log "SWITCH_CLIENT_ERROR: exit=$?"
-    fi
+    # すべてのクライアントに対して、セッション:ウィンドウ.ペインに直接切り替え
+    target="${session}:${window}.${pane}"
+    log "TARGET: $target"
 
-    tmux select-window -t "${session}:${window}" 2>&1 && \
-      log "SELECT_WINDOW: success" || \
-      log "SELECT_WINDOW_ERROR: exit=$?"
-    tmux select-pane -t "${session}:${window}.${pane}" 2>&1 && \
-      log "SELECT_PANE: success" || \
-      log "SELECT_PANE_ERROR: exit=$?"
+    # クライアントリストを取得（パイプを避けるため変数に格納）
+    clients=$(tmux list-clients -F "#{client_name}" 2>&1)
+    log "CLIENTS: $clients"
+
+    for client in $clients; do
+      if [ -n "$client" ]; then
+        log "PROCESSING_CLIENT: $client"
+        if output=$(tmux switch-client -c "$client" -t "$target" 2>&1); then
+          log "SWITCH_TO_TARGET: success for $client"
+        else
+          log "SWITCH_TO_TARGET_ERROR: client=$client output=$output"
+        fi
+      fi
+    done
 
     log "--- activate end ---"
     ;;
