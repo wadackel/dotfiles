@@ -60,6 +60,7 @@
     # System Utilities
     gawk # GNU awk utility
     gnused # GNU implementation of the sed stream editor
+    terminal-notifier # Send macOS notifications from the command line
     watchman # File watching service
   ];
 
