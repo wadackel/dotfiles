@@ -382,7 +382,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "claude-notify.sh send 'Claude Code' 'Claude Codeが許可を求めています' 'Glass'"
+            "command": "claude-notify.sh send Glass"
           }
         ]
       }
@@ -393,7 +393,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "claude-notify.sh send 'Claude Code' '作業が完了しました' 'Hero'"
+            "command": "claude-notify.sh send Hero"
           }
         ]
       }
