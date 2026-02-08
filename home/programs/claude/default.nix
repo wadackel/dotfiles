@@ -18,7 +18,8 @@
   # scripts ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
   home.file.".claude/scripts".source = dotfiles.linkHere ./. "scripts";
 
-  # settings.json をシンボリックリンク形式で配置
+  # ファイルのシンボリックリンク
+  home.file.".claude/CLAUDE.md".source = dotfiles.linkHere ./. "CLAUDE.md";
   home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
 
   # ~/.claude/scripts をPATHに追加
