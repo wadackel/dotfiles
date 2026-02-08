@@ -4,6 +4,16 @@
 
 ブラウザを利用する操作には `playwright-cli` スキルを積極的に使用すること。
 
+**Plan mode での実測確認:**
+- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく実際に `playwright-cli` で動作確認を行うこと
+- 特に DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは、`eval` や `screenshot` で実測値を取得してから計画を立てる
+- 例: モバイルビューポートでの表示問題 → `resize` + `screenshot` + `eval` で現象確認 → 原因特定 → 計画作成
+
+**効率的な DOM 値取得:**
+- 要素のプロパティ（naturalWidth, offsetWidth, computedStyle 等）を取得する際は、ref 指定の `eval` を使用
+- 例: `playwright-cli eval "el => JSON.stringify({w:el.offsetWidth, h:el.offsetHeight})" e42`
+- `run-code` よりも簡潔で、エラーハンドリングも不要
+
 ### gemini-research スキル使用ガイドライン
 
 以下の状況では、ユーザーが明示的にスキル名を出さなくても、積極的に `gemini-research` スキルを使用すること：
@@ -164,6 +174,13 @@ GitHub の Issue や Pull Request など、ユーザーから提供された URL
     - 過度なワンライナーは避け、段階的な処理を心がける
 
 ## コーディング規則
+
+### CSS/レイアウトのベストプラクティス
+
+**flexbox と transform の相互作用:**
+- flex コンテナ内で `transform: scale()` を使う場合、`flex-shrink: 0`（Tailwind: `shrink-0`）を指定して flex による縮小を防ぐ
+- ブラウザデフォルトの `max-width: 100%` も transform との組み合わせで二重制約を引き起こすため、`max-w-none` も併用
+- 例: 画像を transform でスケーリングする場合 → `class="shrink-0 max-w-none max-h-none"`
 
 ### ファイル構成
 
