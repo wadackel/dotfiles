@@ -87,6 +87,7 @@
       "claude-code"
       "codex"
       "google-chrome@canary"
+      "karabiner-elements"
       "kap"
       "keycastr"
       "raycast"
