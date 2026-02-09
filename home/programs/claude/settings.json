@@ -376,6 +376,7 @@
       "Write(~/.ssh/id_*)"
     ]
   },
+  "model": "opusplan",
   "hooks": {
     "Notification": [
       {
@@ -422,7 +423,6 @@
     "document-skills@anthropic-agent-skills": true
   },
   "language": "japanese",
-  "teammateMode": "in-process",
   "alwaysThinkingEnabled": true,
-  "model": "opusplan"
+  "teammateMode": "in-process"
 }
