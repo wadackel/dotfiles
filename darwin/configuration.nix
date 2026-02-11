@@ -49,12 +49,11 @@
       lockfiles = false; # Don't write lockfiles to Nix store
     };
 
-    # Tap configuration (12 repositories after cleanup)
+    # Tap configuration (11 repositories after cleanup)
     taps = [
       "homebrew/bundle"
       "homebrew/cask-versions"
       "wadackel/tap"
-      "github/gh"
       "hashicorp/tap"
     ];
 
