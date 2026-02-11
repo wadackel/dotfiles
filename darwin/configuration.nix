@@ -49,10 +49,9 @@
       lockfiles = false; # Don't write lockfiles to Nix store
     };
 
-    # Tap configuration (13 repositories after cleanup)
+    # Tap configuration (12 repositories after cleanup)
     taps = [
       "homebrew/bundle"
-      "homebrew/cask-fonts"
       "homebrew/cask-versions"
       "wadackel/tap"
       "github/gh"
@@ -82,10 +81,13 @@
     casks = [
       # Applications
       "1password-cli"
+      "appcleaner"
       "arc"
       "chromium"
+      "claude"
       "claude-code"
       "codex"
+      "fuwari"
       "google-chrome@canary"
       "karabiner-elements"
       "kap"
@@ -94,15 +96,6 @@
       "wezterm"
       "xcodes-app"
       "imageoptim"
-
-      # Fonts (Nerd Fonts)
-      "font-caskaydia-cove-nerd-font"
-      "font-hack-nerd-font"
-      "font-jetbrains-mono-nerd-font"
-      "font-monoid-nerd-font"
-      "font-roboto-mono-nerd-font"
-      "font-sauce-code-pro-nerd-font"
-      "font-ubuntu-mono-nerd-font"
     ];
 
     # Cask installation arguments
