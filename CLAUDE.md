@@ -203,15 +203,15 @@ This configuration includes comprehensive support for:
 
 ### Editor Configuration
 
-- **Neovim**: 137KB Lua config at `home/programs/neovim/config/init.lua`
+- **Neovim**: Lua config at `home/programs/neovim/init.lua`
 - **Vim**: Traditional vimrc configuration
-- **Git**: 156 lines of git config with 40+ aliases
+- **Git**: git config with 40+ aliases
 
 ### Terminal Stack
 
 Multiple terminal options configured:
 
-- **Shells**: zsh (400 lines config), bash, fish
+- **Shells**: zsh, bash, fish
 - **Prompt**: starship with custom configuration
 - **Multiplexers**: tmux, zellij (with layouts and themes)
 - **Emulators**: WezTerm, ghostty
@@ -243,7 +243,7 @@ Nix keeps all previous generations - you can always rollback safely. See [README
 This repository includes comprehensive Claude Code configuration:
 
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
-- **Agents**: 23 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, debugging, DevOps, documentation, frontend, JavaScript/TypeScript, performance, Playwright, QA, React, refactoring, security, SRE, technical writing)
+- **Agents**: 20 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, cloud, code-review, debugging, DevOps, documentation, error-detective, frontend, JavaScript/TypeScript, performance, QA, React, refactoring, security-audit, security-engineering, SRE, technical writing)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
   - `claude-notify.sh`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.sh debug`
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`

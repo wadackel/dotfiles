@@ -1,6 +1,6 @@
 ---
 name: playwright-cli
-description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Maintains browser sessions to preserve authentication state. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
+description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
 allowed-tools: Bash(playwright-cli:*)
 ---
 
@@ -8,86 +8,19 @@ allowed-tools: Bash(playwright-cli:*)
 
 ## Quick start
 
-When opening the browser, launch it in headed mode unless there is a specific request from the user.
-
 ```bash
-# First, check if an existing session is available
-playwright-cli session-list
-
-# If no session exists, configure a new one
-playwright-cli config --headed
-
-# Open the browser (uses existing session if available)
-playwright-cli open https://playwright.dev
+# open new browser
+playwright-cli open
+# navigate to a page
+playwright-cli goto https://playwright.dev
+# interact with the page using refs from the snapshot
 playwright-cli click e15
 playwright-cli type "page.click"
 playwright-cli press Enter
-```
-
-## Core workflow
-
-1. Check for existing session: `playwright-cli session-list`
-2. Configure if needed: `playwright-cli config --headed`
-3. Navigate: `playwright-cli open https://example.com`
-4. Interact using refs from the snapshot
-5. Re-snapshot after significant changes
-
-## Session Management Best Practices
-
-**IMPORTANT: Preserve existing sessions to maintain authentication state.**
-
-### Before Starting Work
-
-Always check for existing sessions first:
-
-```bash
-playwright-cli session-list
-```
-
-### When to Create a New Session
-
-Only run `playwright-cli config` when:
-- No session exists (empty `session-list` output)
-- You need different browser settings (e.g., switching browsers or headed/headless mode)
-- You explicitly need to start fresh
-
-### Benefits of Session Reuse
-
-- **Authentication state preserved**: Stay logged in across commands
-- **Reduced overhead**: Skip browser initialization
-- **Natural workflow**: Continue where you left off
-
-### Example: Working with Authenticated Pages
-
-```bash
-# First time: Check and configure if needed
-playwright-cli session-list
-playwright-cli config --headed
-
-# Login to a site
-playwright-cli open https://example.com/login
-playwright-cli fill e1 "username"
-playwright-cli fill e2 "password"
-playwright-cli click e3
-
-# Later: Reuse the authenticated session
-# No need to run config again - just open the page
-playwright-cli open https://example.com/dashboard
-playwright-cli snapshot
-```
-
-### Managing Multiple Sessions
-
-Use named sessions for different contexts:
-
-```bash
-# Work session for authenticated testing
-playwright-cli --session=work config --headed
-playwright-cli --session=work open https://app.example.com
-
-# Test session for anonymous browsing
-playwright-cli --session=test config --headed --isolated
-playwright-cli --session=test open https://example.com
+# take a screenshot
+playwright-cli screenshot
+# close the browser
+playwright-cli close
 ```
 
 ## Commands
@@ -95,9 +28,10 @@ playwright-cli --session=test open https://example.com
 ### Core
 
 ```bash
-playwright-cli config --headed
+playwright-cli open
+# open and navigate right away
 playwright-cli open https://example.com/
-playwright-cli close
+playwright-cli goto https://playwright.dev
 playwright-cli type "search query"
 playwright-cli click e3
 playwright-cli dblclick e7
@@ -109,12 +43,14 @@ playwright-cli upload ./document.pdf
 playwright-cli check e12
 playwright-cli uncheck e12
 playwright-cli snapshot
+playwright-cli snapshot --filename=after-click.yaml
 playwright-cli eval "document.title"
 playwright-cli eval "el => el.textContent" e5
 playwright-cli dialog-accept
 playwright-cli dialog-accept "confirmation text"
 playwright-cli dialog-dismiss
 playwright-cli resize 1920 1080
+playwright-cli close
 ```
 
 ### Navigation
@@ -150,7 +86,8 @@ playwright-cli mousewheel 0 100
 ```bash
 playwright-cli screenshot
 playwright-cli screenshot e5
-playwright-cli pdf
+playwright-cli screenshot --filename=page.png
+playwright-cli pdf --filename=page.pdf
 ```
 
 ### Tabs
@@ -162,6 +99,47 @@ playwright-cli tab-new https://example.com/page
 playwright-cli tab-close
 playwright-cli tab-close 2
 playwright-cli tab-select 0
+```
+
+### Storage
+
+```bash
+playwright-cli state-save
+playwright-cli state-save auth.json
+playwright-cli state-load auth.json
+
+# Cookies
+playwright-cli cookie-list
+playwright-cli cookie-list --domain=example.com
+playwright-cli cookie-get session_id
+playwright-cli cookie-set session_id abc123
+playwright-cli cookie-set session_id abc123 --domain=example.com --httpOnly --secure
+playwright-cli cookie-delete session_id
+playwright-cli cookie-clear
+
+# LocalStorage
+playwright-cli localstorage-list
+playwright-cli localstorage-get theme
+playwright-cli localstorage-set theme dark
+playwright-cli localstorage-delete theme
+playwright-cli localstorage-clear
+
+# SessionStorage
+playwright-cli sessionstorage-list
+playwright-cli sessionstorage-get step
+playwright-cli sessionstorage-set step 3
+playwright-cli sessionstorage-delete step
+playwright-cli sessionstorage-clear
+```
+
+### Network
+
+```bash
+playwright-cli route "**/*.jpg" --status=404
+playwright-cli route "https://api.example.com/**" --body='{"mock": true}'
+playwright-cli route-list
+playwright-cli unroute "**/*.jpg"
+playwright-cli unroute
 ```
 
 ### DevTools
@@ -177,27 +155,53 @@ playwright-cli video-start
 playwright-cli video-stop video.webm
 ```
 
-### Configuration
+### Install
+
 ```bash
-# Configure the session
-playwright-cli config my-config.json
-# Configure named session
-playwright-cli --session=mysession config my-config.json
-# Start with configured session
-playwright-cli open --config=my-config.json
+playwright-cli install --skills
+playwright-cli install-browser
 ```
 
-### Sessions
+### Configuration
+```bash
+# Use specific browser when creating session
+playwright-cli open --browser=chrome
+playwright-cli open --browser=firefox
+playwright-cli open --browser=webkit
+playwright-cli open --browser=msedge
+# Connect to browser via extension
+playwright-cli open --extension
+
+# Use persistent profile (by default profile is in-memory)
+playwright-cli open --persistent
+# Use persistent profile with custom directory
+playwright-cli open --profile=/path/to/profile
+
+# Start with config file
+playwright-cli open --config=my-config.json
+
+# Close the browser
+playwright-cli close
+# Delete user data for the default session
+playwright-cli delete-data
+```
+
+### Browser Sessions
 
 ```bash
-playwright-cli --session=mysession open example.com
-playwright-cli --session=mysession click e6
-playwright-cli config --headed --isolated --browser=firefox
-playwright-cli session-list
-playwright-cli session-stop mysession
-playwright-cli session-stop-all
-playwright-cli session-delete
-playwright-cli session-delete mysession
+# create new browser session named "mysession" with persistent profile
+playwright-cli -s=mysession open example.com --persistent
+# same with manually specified profile directory (use when requested explicitly)
+playwright-cli -s=mysession open example.com --profile=/path/to/profile
+playwright-cli -s=mysession click e6
+playwright-cli -s=mysession close  # stop a named browser
+playwright-cli -s=mysession delete-data  # delete user data for persistent session
+
+playwright-cli list
+# Close all browsers
+playwright-cli close-all
+# Forcefully kill all browser processes
+playwright-cli kill-all
 ```
 
 ## Example: Form submission
@@ -210,6 +214,7 @@ playwright-cli fill e1 "user@example.com"
 playwright-cli fill e2 "password123"
 playwright-cli click e3
 playwright-cli snapshot
+playwright-cli close
 ```
 
 ## Example: Multi-tab workflow
@@ -220,6 +225,7 @@ playwright-cli tab-new https://example.com/other
 playwright-cli tab-list
 playwright-cli tab-select 0
 playwright-cli snapshot
+playwright-cli close
 ```
 
 ## Example: Debugging with DevTools
@@ -230,6 +236,7 @@ playwright-cli click e4
 playwright-cli fill e7 "test"
 playwright-cli console
 playwright-cli network
+playwright-cli close
 ```
 
 ```bash
@@ -238,38 +245,15 @@ playwright-cli tracing-start
 playwright-cli click e4
 playwright-cli fill e7 "test"
 playwright-cli tracing-stop
+playwright-cli close
 ```
 
-## Important Notes
+## Specific tasks
 
-### Working Directory Management
-
-**CRITICAL: Always execute playwright-cli from the current working directory.**
-
-- **DO NOT use `cd` commands**: playwright-cli is available in PATH and can be executed from anywhere
-- **Maintain current directory**: All playwright-cli commands should run in the user's current working directory
-- **Output file location**: Screenshots, PDFs, and other files are saved to the current directory
-
-**Example of CORRECT usage:**
-
-```bash
-# User is in /path/to/project
-playwright-cli session-list
-playwright-cli open https://example.com
-playwright-cli screenshot page.png
-# page.png is saved to /path/to/project/page.png
-```
-
-**Example of INCORRECT usage:**
-
-```bash
-# DO NOT DO THIS
-cd /some/other/directory  # ❌ Wrong - never change directory
-playwright-cli open https://example.com
-```
-
-### Why This Matters
-
-- **Predictable output location**: Users expect files in their current directory
-- **Workflow consistency**: Maintains context with other development tools
-- **No surprises**: Avoids files being saved to unexpected locations
+* **Request mocking** [references/request-mocking.md](references/request-mocking.md)
+* **Running Playwright code** [references/running-code.md](references/running-code.md)
+* **Browser session management** [references/session-management.md](references/session-management.md)
+* **Storage state (cookies, localStorage)** [references/storage-state.md](references/storage-state.md)
+* **Test generation** [references/test-generation.md](references/test-generation.md)
+* **Tracing** [references/tracing.md](references/tracing.md)
+* **Video recording** [references/video-recording.md](references/video-recording.md)
