@@ -117,6 +117,7 @@ Both configurations use the same overlays and extraSpecialArgs to ensure consist
 
 - **System settings**: All macOS defaults (keyboard, trackpad, Finder, Dock, etc.) in `darwin/configuration.nix`
 - **CLI tools**: Most development tools are in `home/programs/packages/default.nix` as Nix packages
+- **Fonts**: Nerd Fonts managed via home-manager (auto-synced to `~/Library/Fonts/HomeManager/`)
 - **Shell configuration**: zsh, bash, fish with starship prompt
 - **Program configs**: git, neovim, tmux, zellij, fzf, and 20+ other tools
 
@@ -125,7 +126,6 @@ Both configurations use the same overlays and extraSpecialArgs to ensure consist
 Despite Nix, Homebrew is used for:
 
 - **Applications/Casks**: Arc, Chrome Canary, Claude Code, Raycast, WezTerm, 1Password CLI, etc.
-- **Fonts**: Nerd Fonts (Caskaydia Cove, Hack, JetBrains Mono, Monoid, Ubuntu Mono)
 - **Python versions**: 3.8, 3.9, 3.10, 3.11, 3.13, 3.14 (not yet stable in nixpkgs)
 - **Specialized tools**: z3, cask, numpy, pillow
 - **Custom taps**: wadackel/tap (ofsht, pinact)
@@ -139,7 +139,8 @@ Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` sec
 1. Create directory: `mkdir -p home/programs/<program-name>`
 2. Create module: `home/programs/<program-name>/default.nix`
 3. Add configuration files in the same directory
-4. Apply: `sudo darwin-rebuild switch --flake .#private`
+4. Track new files in Git: `git add home/programs/<program-name>/` (Nix flake only recognizes tracked files)
+5. Apply: `sudo darwin-rebuild switch --flake .#private`
 
 Example module structure:
 
