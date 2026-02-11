@@ -89,13 +89,13 @@ To update specific inputs only:
 
 ```bash
 # Update only nixpkgs
-nix flake lock --update-input nixpkgs
+nix flake update nixpkgs
 
 # Update only home-manager
-nix flake lock --update-input home-manager
+nix flake update home-manager
 
 # Update only nix-darwin
-nix flake lock --update-input nix-darwin
+nix flake update nix-darwin
 ```
 
 ## Rollback
