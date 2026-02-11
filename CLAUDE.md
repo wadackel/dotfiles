@@ -26,6 +26,7 @@ When working on tasks in this repository, Claude Code should:
      - Use `.#work` for work machine (tsuyoshi.wada)
    - Check the current user/hostname with `whoami` and `hostname` if uncertain
    - Example: `sudo darwin-rebuild switch --flake .#private`
+   - **Important**: When editing symlinked config files (tmux.conf, zshrc, etc.) managed by home-manager, darwin-rebuild is NOT needed. Changes are immediately reflected since the file is symlinked, not copied. Only run darwin-rebuild when modifying Nix files themselves (*.nix).
 
 3. **Verify changes programmatically**
    - Use `nix flake check` before applying
