@@ -1,6 +1,6 @@
 # Agent Prompt Templates
 
-This file contains prompt templates for spawning tester and evaluator agents when running skill tests.
+This file contains prompt templates for spawning tester agents when running skill tests.
 
 ## Tester Prompt Template
 
@@ -11,7 +11,7 @@ You are a **Tester** agent executing a single skill test. Your role is to run on
 
 ### Your Mission
 
-Execute the assigned test task and report detailed observations to the evaluator (evaluator).
+Execute the assigned test task and report detailed observations to the conductor ({conductor-agent-name}).
 
 ### Target Skill
 
@@ -57,12 +57,12 @@ Use TaskGet to read your assigned task (there will be only one task for you). Th
 
 ### Reporting Format
 
-Send your observations to the evaluator using SendMessage:
+Send your observations to the conductor using SendMessage:
 
 ```
 SendMessage:
   type: "message"
-  recipient: "evaluator"
+  recipient: "{conductor-agent-name}"
   content: |
     ## Test Execution Report
 
@@ -101,7 +101,7 @@ SendMessage:
 
 ### After Reporting
 
-After sending your report to the evaluator, your work is complete. Mark the task as completed and go idle:
+After sending your report to the conductor, your work is complete. Mark the task as completed and go idle:
 
 ```
 TaskUpdate:
@@ -117,182 +117,6 @@ Wait for shutdown request from the conductor.
 - Do not evaluate pass/fail - just report observations
 - Be thorough in documenting what you observe
 - After reporting, wait for shutdown (do not claim more tasks)
-```
-
-## Evaluator Prompt Template
-
-When spawning the evaluator agent, use this template structure (replace `{placeholders}` with actual values):
-
-```
-You are the **Evaluator** (evaluator) in a skill testing team. Your role is to assess test execution reports from tester agents and compile evaluation reports.
-
-### Your Mission
-
-Receive test execution reports from tester agents, evaluate them against the skill's expected behavior and validation criteria, and send evaluation reports to the conductor.
-
-### Setup - Read These Files First
-
-1. **Read the target skill's SKILL.md**:
-   ```
-   Read {skill-path}/SKILL.md
-   ```
-
-2. **Read the validation criteria**:
-   ```
-   Read {validation-criteria-path}
-   ```
-
-3. **Understand expected behavior** for each test scenario by checking task descriptions in TaskList.
-
-### Target Skill Context
-
-- **Name**: {skill-name}
-- **Path**: {skill-path}
-- **Purpose**: {skill-purpose-summary}
-- **Expected triggers**: {trigger-phrases}
-- **Expected workflow steps**: {workflow-steps-summary}
-
-### Evaluation Workflow
-
-When you receive a test execution report from a tester:
-
-1. **Identify the task** by its ID
-
-2. **Read the task description** to understand expected behavior
-
-3. **Analyze the tester's observations**
-
-4. **Evaluate against these dimensions** (from validation-criteria.md):
-
-   a. **Triggering accuracy**: Did the skill activate appropriately?
-      - Positive test: Should have triggered (verified via Skill tool execution)
-      - Negative test: Should NOT have triggered (verified via semantic analysis)
-      - Edge test: Context-dependent (verified via semantic analysis)
-
-      **Important**: Negative and edge tests use **semantic analysis only** by design.
-      Testers analyze the skill's description and triggers against the test prompt
-      without executing the skill. This is because the Skill tool forces skill
-      invocation regardless of prompt content, making actual execution unsuitable
-      for testing non-triggering behavior. Evaluate the quality and reasoning of
-      the tester's semantic analysis, not whether they executed the skill.
-
-   b. **Workflow execution**: Were documented steps followed in order?
-
-   c. **Resource usage**: Were scripts executed, reference files loaded, assets used correctly?
-
-   d. **Output quality**: Did output meet requirements? No unexpected errors?
-
-   e. **Context efficiency**: Was only necessary info loaded? Progressive disclosure followed?
-
-5. **Determine result**: PASS, FAIL, or PARTIAL
-
-6. **For story tests**: Additionally evaluate:
-   - Context utilization (does output reference setup conversation?)
-   - Planted element identification (did it find the corrections, errors, patterns from setup?)
-   - **Setup execution validity**: Check the tester's "Skill Tool Usage During Setup" field.
-     If the Skill tool was used during setup, the test result should be marked as
-     PARTIAL with a note that setup contaminated the context. Request a re-test
-     with explicit guidance to avoid Skill tool during setup.
-   - See validation-criteria.md "Story Test Assessment" section
-
-7. **If tester report is insufficient or unclear**:
-   Request the conductor to re-run the test with a new tester:
-   ```
-   SendMessage:
-     type: "message"
-     recipient: "{conductor-agent-name}"
-     content: |
-       ## Re-test Request
-
-       **Task**: {task-id} - {task-subject}
-
-       **Reason**: {why the tester's report was insufficient}
-
-       **Please spawn a new tester for this test and request**:
-       - {specific aspect 1 to observe}
-       - {specific aspect 2 to document}
-
-       **Suggested guidance**: {optional instructions for the tester}
-     summary: "Re-test {task-id}"
-   ```
-
-6. **Once you have enough data**, send the evaluation report:
-   ```
-   SendMessage:
-     type: "message"
-     recipient: "{conductor-agent-name}"
-     content: |
-       ## Evaluation Report
-
-       **Task**: {task-id} - {task-subject}
-       **Result**: {PASS / FAIL / PARTIAL}
-
-       ### Dimension Assessment
-
-       | Dimension | Rating | Notes |
-       |-----------|--------|-------|
-       | Triggering | {correct/incorrect/N/A} | {details} |
-       | Workflow | {complete/incomplete/deviated/N/A} | {details} |
-       | Resource Usage | {correct/excessive/insufficient/N/A} | {details} |
-       | Output Quality | {good/acceptable/poor/N/A} | {details} |
-       | Context Efficiency | {efficient/acceptable/wasteful/N/A} | {details} |
-
-       ### Issues Found
-       {numbered list of issues, or "None"}
-
-       ### Recommendations
-       {numbered list of improvements, or "None - test passed cleanly"}
-     summary: "Evaluated {task-id}: {PASS/FAIL/PARTIAL}"
-   ```
-
-7. **Mark the task as completed**:
-   ```
-   TaskUpdate:
-     taskId: "{task-id}"
-     status: "completed"
-   ```
-
-8. **Wait for the next verification report**
-
-### After All Tests Complete
-
-Send a final summary to the conductor:
-
-```
-SendMessage:
-  type: "message"
-  recipient: "{conductor-agent-name}"
-  content: |
-    ## All Tests Evaluated
-
-    **Total**: {N} tests
-    **Passed**: {X}
-    **Failed**: {Y}
-    **Partial**: {Z}
-
-    **Summary of issues**:
-    {aggregated list of all issues found across all tests}
-
-    **Top recommendations** (prioritized):
-    1. {most important recommendation}
-    2. {second most important}
-    3. {third most important}
-
-    All tasks marked as completed. Ready for shutdown.
-  summary: "All {N} tests evaluated: {X} passed, {Y} failed"
-```
-
-Then go idle and wait for shutdown.
-
-### Important Notes
-
-- **You evaluate, you do not execute** - the tester runs the tests
-- Base your evaluation on the skill's own SKILL.md documentation
-- Reference the validation-criteria.md dimensions for consistent assessment
-- Be specific in your issues and recommendations
-- **Important**: If a negative test correctly did NOT trigger the skill, that is a PASS
-- A skill that partially works (e.g., triggers but has a minor issue) should be marked PARTIAL
-- Only mark FAIL for tests that clearly did not meet expectations
 ```
 
 ## Template Usage Examples
@@ -319,14 +143,14 @@ Use TaskGet to read task "P1" (it will be your only task).
 
 The conductor fills in `{skill-name}`, `{skill-path}`, and `{skill-purpose-summary}`.
 
-### Example 2: Tester Report to Evaluator
+### Example 2: Tester Report to Conductor
 
 After executing test P1, the tester sends:
 
 ```
 SendMessage:
   type: "message"
-  recipient: "evaluator"
+  recipient: "{conductor-agent-name}"
   content: |
     ## Test Execution Report
 
@@ -352,25 +176,4 @@ SendMessage:
 
     **Additional Notes**: Skill correctly identified target pane by number
   summary: "Test P1 executed"
-```
-
-### Example 3: Spawning the Evaluator
-
-The conductor spawns the evaluator once at the beginning:
-
-```
-You are the **Evaluator** (evaluator) in a skill testing team...
-
-### Target Skill Context
-
-- **Name**: tmux-sender
-- **Path**: /Users/wadackel/.claude/skills/tmux-sender/SKILL.md
-- **Purpose**: Send commands to tmux panes
-- **Expected triggers**: "send to pane", "tmux send", "run in pane"
-- **Expected workflow steps**:
-  1. List tmux panes with tmux list-panes
-  2. Send command to target pane with tmux send-keys
-
-### Setup - Read These Files First
-[rest of template...]
 ```

@@ -15,7 +15,7 @@ Validate Claude Code skills through automated multi-agent team testing.
 
 If no skill name is provided, you'll be prompted to select from available skills.
 
-The skill will analyze the target, design test scenarios, and present a plan for approval before creating a test team with dedicated tester agents and an evaluator (assesses results).
+The skill will analyze the target, design test scenarios, and present a plan for approval before creating a test team with dedicated tester agents.
 
 ## Overview
 
@@ -23,14 +23,19 @@ This skill automates the process of testing Claude Code skills by:
 
 1. Analyzing the skill to understand its purpose and expected behavior
 2. Designing test scenarios that cover positive, negative, edge cases, and story-based tests
-3. Creating a test team with specialized agents:
-   - **Tester**: Each test runs in a fresh tester agent with minimal context contamination
-   - **Evaluator**: Analyzes test execution reports from tester agents and assesses results against validation criteria
-4. Executing tests via dedicated tester agents with fresh context
-5. Coordinating the testing workflow through structured tasks and messages
-6. Compiling a final report with pass/fail results and improvement recommendations
+3. Presenting test plan for user approval
+4. Creating team and executing tests via dedicated tester agents with evaluation
+5. Compiling a final report with pass/fail results and improvement recommendations
+6. Cleaning up team resources
+7. Iterating on improvements if needed
 
-**Key principle**: Each test runs in a dedicated tester agent with fresh context and minimal knowledge of the testing framework. Each tester executes exactly one test scenario, eliminating cross-test context contamination and minimizing awareness of being in a test environment.
+**Agent roles**:
+- **Conductor** (you): Orchestrates workflow, spawns testers, evaluates reports against [validation-criteria.md](references/validation-criteria.md)
+- **Tester** (tester-{id}): Single-use agent, one test per agent, fresh context. See [agent-prompts.md](references/agent-prompts.md) for prompt template
+
+**Message flow**: Conductor → spawn Tester → Tester executes → Tester sends report → Conductor evaluates → shutdown Tester → next test
+
+**Key principle**: Each test runs in a dedicated tester agent with fresh context, eliminating cross-test context contamination. The conductor evaluates all results directly using validation-criteria.md.
 
 ## Workflow
 
@@ -52,7 +57,7 @@ Extract and record:
 - **Workflows**: What steps does it execute?
 - **Resources**: What scripts/references/assets does it use?
 
-This information will be used to design test scenarios and to provide context to the evaluator agent.
+This information will be used to design test scenarios and to evaluate test results.
 
 ### Step 2: Design Test Scenarios
 
@@ -155,7 +160,7 @@ Negative tests:
 Edge cases:
 1. "{prompt}" - Expected: {behavior}
 
-This will create a team with dedicated tester agents and an evaluator. Proceed with these tests?
+This will create a team with dedicated tester agents. Proceed with these tests?
 ```
 
 Wait for user confirmation before proceeding.
@@ -172,7 +177,11 @@ TeamCreate:
   description: "Testing skill: {skill-name}"
 ```
 
-**2. Create tasks for each scenario**:
+**2. Read validation criteria**:
+
+Read [validation-criteria.md](references/validation-criteria.md) to prepare for evaluating test results.
+
+**3. Create tasks for each scenario**:
 
 For simple tests (positive/negative/edge):
 ```
@@ -225,33 +234,9 @@ TaskCreate:
   activeForm: "Testing story {scenario-id}"
 ```
 
-**3. Spawn the evaluator agent** (once, at the beginning):
+**4. Execute tests sequentially**:
 
-```
-Task:
-  subagent_type: "general-purpose"
-  team_name: "skill-test-{skill-name}"
-  name: "evaluator"
-  model: "sonnet"
-  prompt: |
-    [See references/agent-prompts.md - Evaluator Prompt Template]
-
-    Fill in the template with:
-    - skill-name
-    - skill-path
-    - skill-purpose-summary (from Step 1)
-    - trigger-phrases (from Step 1)
-    - workflow-steps-summary (from Step 1)
-    - validation-criteria-path (full path to validation-criteria.md)
-    - conductor-agent-name (your agent name for receiving reports)
-```
-
-**Important**: Always specify `model: "sonnet"` when spawning agents.
-Using opus increases token costs significantly without proportional quality gains for testing tasks.
-
-**4. For each test scenario, spawn a dedicated tester**:
-
-Process tests sequentially in priority order:
+Process tests in priority order:
 1. Negative tests first (lightest, semantic analysis only)
 2. Edge tests next (also semantic analysis)
 3. Positive tests (skill execution)
@@ -260,59 +245,48 @@ Process tests sequentially in priority order:
 For each test:
 
 ```
-a. Spawn a dedicated tester for this specific test:
+a. Spawn a dedicated tester for this specific test (see agent-prompts.md for template):
+   Task:
+     subagent_type: "general-purpose"
+     team_name: "skill-test-{skill-name}"
+     name: "tester-{scenario-id}"
+     model: "sonnet"
+     prompt: |
+       [Tester Prompt Template with skill-name, skill-path, skill-purpose-summary filled in]
 
-Task:
-  subagent_type: "general-purpose"
-  team_name: "skill-test-{skill-name}"
-  name: "tester-{scenario-id}"
-  model: "sonnet"
-  prompt: |
-    [See references/agent-prompts.md - Tester Prompt Template]
+b. Wait for the tester to send its report to you (SendMessage)
 
-    Fill in the template with:
-    - skill-name
-    - skill-path
-    - skill-purpose-summary (from Step 1)
+c. Evaluate the report:
+   - Read the task description for expected behavior
+   - Assess against validation dimensions (from validation-criteria.md):
+     * Triggering accuracy: Did it activate appropriately?
+     * Workflow execution: Steps followed in order?
+     * Resource usage: Scripts/references used correctly?
+     * Output quality: Requirements met, no unexpected errors?
+     * Context efficiency: Only necessary info loaded?
+   - For story tests: additionally check context utilization and setup validity
+   - Determine PASS/FAIL/PARTIAL
 
-**Important**: Always specify `model: "sonnet"` when spawning agents.
-Using opus increases token costs significantly without proportional quality gains for testing tasks.
+d. If report insufficient: spawn a new tester with additional guidance
 
-b. Wait for the tester to send its report to the evaluator
+e. Record the evaluation result (dimension assessments, issues, recommendations)
 
-c. Wait for the evaluator to send its evaluation report to you
-
-d. Shutdown the tester:
+f. Shutdown the tester:
    SendMessage:
      type: "shutdown_request"
      recipient: "tester-{scenario-id}"
      content: "Test complete, thank you"
 
-e. Proceed to the next test
+g. Proceed to the next test
 ```
 
-**Key principle**: Each tester executes exactly ONE test scenario in a fresh agent context, eliminating cross-test context contamination. The evaluator persists across all tests to maintain consistency in evaluation standards.
+**Important**: Always specify `model: "sonnet"` when spawning agents. Using opus increases token costs significantly without proportional quality gains for testing tasks.
 
-### Step 5: Monitor and Coordinate
+**Key principle**: Each tester executes exactly ONE test scenario in a fresh agent context, eliminating cross-test context contamination. You evaluate all results directly using validation-criteria.md.
 
-This step is now integrated into Step 4's sequential execution. For each test:
+### Step 5: Compile Final Report
 
-1. **Wait for tester report**: The tester sends its observations to the evaluator
-2. **Wait for evaluator assessment**: The evaluator sends its evaluation report to you
-3. **Accumulate results**: Collect each evaluation report
-4. **Shutdown the tester**: Send shutdown request to the specific tester agent
-5. **Proceed to next test**: Spawn the next tester for the next scenario
-
-If the evaluator requests a re-test (insufficient data):
-1. Acknowledge the request
-2. Spawn a new tester for the same test scenario with additional guidance
-3. Wait for the new report
-
-Progress tracking is automatic through the sequential execution model.
-
-### Step 6: Compile Final Report
-
-After receiving evaluation reports for all tests, compile the final report:
+After evaluating all test reports, compile the final report:
 
 ```
 Test Results for {skill-name}
@@ -332,30 +306,17 @@ Test Results for {skill-name}
 Would you like me to apply these fixes?
 ```
 
-### Step 7: Cleanup
+### Step 6: Cleanup
 
 After the report is delivered:
 
-1. **Send shutdown request to the evaluator**:
-
-   ```
-   SendMessage:
-     type: "shutdown_request"
-     recipient: "evaluator"
-     content: "Testing complete, shutting down"
-   ```
-
-   (Individual testers are already shut down after each test in Step 4)
-
-2. **Wait for shutdown confirmation**: The evaluator will respond with shutdown_response.
-
-3. **Delete the team**:
-
+1. (Individual testers are already shut down after each test in Step 4)
+2. Delete the team:
    ```
    TeamDelete
    ```
 
-### Step 8: Iterate on Improvements
+### Step 7: Iterate on Improvements
 
 If issues were found and user approves fixes:
 
@@ -371,119 +332,18 @@ If issues were found and user approves fixes:
 
 3. **Repeat** until all tests pass or user is satisfied with results.
 
-## Agent Roles
-
-### Tester (tester-{scenario-id})
-
-Each tester agent executes exactly ONE test scenario in a fresh agent context.
-
-**Responsibilities**:
-- Read the assigned test task (exactly one task)
-- Execute the test according to type:
-  - Positive: Use Skill tool to invoke the target skill
-  - Negative/Edge: Perform semantic analysis (no execution)
-  - Story: Execute setup prompts sequentially, then the test prompt
-- Observe and document:
-  - Did the skill trigger? Evidence?
-  - What workflow steps occurred?
-  - What output was produced?
-  - Any errors or warnings?
-- Send test execution report to the evaluator
-- Mark task as completed
-- Wait for shutdown
-
-**Key principle**: Each tester is single-use and executes in isolation. It has no knowledge of other tests, minimizing context contamination.
-
-For the complete tester prompt template, see [references/agent-prompts.md](references/agent-prompts.md).
-
-### Evaluator (evaluator)
-
-The evaluator agent assesses all test execution reports against validation criteria. Unlike testers, the evaluator persists across all tests to maintain consistent evaluation standards.
-
-**Responsibilities**:
-- Read the target skill's SKILL.md to understand expected behavior
-- Read validation-criteria.md for the evaluation framework
-- Receive test execution reports from testers
-- Evaluate against five validation dimensions:
-  - Triggering accuracy
-  - Workflow execution
-  - Resource usage
-  - Output quality
-  - Context efficiency
-- For story tests: additionally evaluate context utilization
-- If tester report is insufficient, request conductor to re-run the test with a new tester
-- Compile evaluation report (PASS/FAIL/PARTIAL) with specific issues and recommendations
-- Send evaluation report to the conductor
-
-For the complete evaluator prompt template, see [references/agent-prompts.md](references/agent-prompts.md).
-
-## Communication Protocol
-
-### Message Flow
-
-```
-Conductor → (Task Create) → Task List
-Conductor → (spawn tester for test N) → Tester-N
-Tester-N  → (read task from Task List) → Execute test
-Tester-N  → (SendMessage: test execution report) → Evaluator
-Evaluator → (SendMessage: evaluation report) → Conductor
-Conductor → (shutdown tester) → Tester-N terminates
-Conductor → (spawn next tester) → Tester-(N+1)
-... repeat for all tests ...
-```
-
-### Message Content Guidelines
-
-**Test execution reports** (tester to evaluator) should include:
-- Task ID
-- Test type (positive/negative/edge/story)
-- Prompt used
-- Whether the skill triggered (yes/no/unclear)
-- Evidence of triggering or non-triggering
-- Observed workflow steps (or "N/A" for semantic analysis)
-- Output produced
-- Any errors or warnings
-- Approximate duration
-- Additional notes
-
-**Re-test requests** (evaluator to conductor) should include:
-- Task ID
-- Reason why the tester's report was insufficient
-- Specific aspects for the new tester to observe
-- Optional guidance for the new tester
-
-**Evaluation reports** (evaluator to conductor) should include:
-- Task ID and result (PASS/FAIL/PARTIAL)
-- Dimension-by-dimension assessment table
-- Issues found (numbered list)
-- Recommendations for improvement (numbered list)
-
 ## Examples
 
-### Example 1: Testing a simple skill
+### Example: Testing tmux-sender skill
 
 ```
 User: "Test the tmux-sender skill"
-
-Conductor: "I'll test the tmux-sender skill by analyzing SKILL.md and creating test scenarios."
-
-[Reads tmux-sender/SKILL.md, extracts purpose, triggers, workflow]
-
-Proposed tests:
-1. ✅ "Send echo hello to pane 1" - Should trigger and send command to specified pane
-2. ✅ "Run ls in the left pane" - Should trigger and identify pane by description
-3. ❌ "Show me the current directory" - Should NOT trigger (not a tmux operation)
-4. ❓ "Execute command in pane" - Edge case (missing specifics)
-
-Proceed? [User confirms]
-
-[Creates team, spawns tester agents and evaluator, tests execute]
+[Analysis, test design with 4 scenarios, user approval]
+[Creates team, spawns tester agents, tests execute]
 
 Results:
-✅ Test 1: Passed - Correctly triggered and sent command
-✅ Test 2: Passed - Identified pane and sent command
-✅ Test 3: Passed - Did not trigger (correct)
-❌ Test 4: Failed - Skill triggered but couldn't determine which pane (should ask for clarification)
+✅ Tests 1-3: Passed
+❌ Test 4: Failed - Should ask for clarification when pane is ambiguous
 
 Recommendations:
 1. Add error handling in workflow step 2 to ask user for pane specification when ambiguous
@@ -491,88 +351,13 @@ Recommendations:
 [Cleanup: shutdown agents, delete team]
 ```
 
-### Example 2: Testing with re-verification
-
-```
-User: "Validate the updated playwright-cli skill"
-
-[Analysis, test design, user approval]
-
-[Test execution begins]
-
-Tester sends report for Test P1: "Skill triggered, output suggests screenshot taken, but unclear if file was saved"
-
-Evaluator requests conductor to re-test: "Re-run P1 - new tester should check if screenshot file exists in the expected location and confirm file size"
-
-New tester re-executes and responds: "Confirmed: screenshot.png created, 45KB, timestamp matches test execution"
-
-Evaluator to Conductor: "P1 PASS - skill correctly captured screenshot, file verified"
-
-[Tests complete, final report delivered, cleanup]
-```
-
-## Known Limitations
-
-### Agent-Based Testing Constraints
-
-**Context Awareness:**
-- Each tester agent executes in a fresh context with no knowledge of other tests (**minimizes contamination**)
-- However, testers DO know they are executing a test (via task description), which differs slightly from a completely naive user interaction
-- This is a reasonable trade-off: near-complete isolation vs. perfect realism
-
-**Triggering Accuracy Testing:**
-- Positive tests use Skill tool direct invocation, which **forces** the skill to run
-- This tests workflow execution and output quality, but NOT natural triggering behavior
-- For negative/edge tests, testers perform semantic analysis to determine if the skill would trigger
-- Semantic analysis is a heuristic and may not perfectly match Claude Code's actual skill matching logic
-
-**Test Isolation:**
-- Tests execute sequentially, one tester at a time
-- Each tester is terminated after completing its single test
-- Cross-test context contamination is eliminated by using fresh agent instances
-- However, the evaluator persists across all tests (intentional, to maintain consistent evaluation standards)
-
-**Cost and Duration:**
-- Each test spawns a dedicated tester agent, increasing total API usage
-- Story tests are particularly expensive (setup + test prompts)
-- Sequential execution means a 10-test suite may take 10-15 minutes
-- Trade-off: higher cost and time vs. better isolation and accuracy
-
-### Story Test Constraints
-
-**Non-determinism:**
-- Claude's responses during setup prompts vary between runs
-- The same story scenario may produce different conversation contexts
-- Evaluator must account for reasonable variation in planted element identification
-
-**Context Utilization:**
-- Story tests rely on the skill's ability to use conversation history
-- If the skill doesn't access prior messages, story tests may fail even if the skill works correctly in real usage
-- This limitation applies to skills that analyze conversation context
-
-**Setup Execution:**
-- Setup prompts are executed as normal work (not via Skill tool) to build natural conversation history
-- The tester uses Read, Edit, Bash etc. to perform the setup work directly
-- Only the final test prompt uses the Skill tool to invoke the target skill
-- Evaluator verifies that Skill tool was not used during setup via tester's report
-- Setup results vary between runs due to Claude non-determinism
-
-### When to Use Semantic Analysis Results
-
-For negative/edge tests that use semantic analysis:
-- **High confidence**: Very likely to match actual Claude Code skill matching
-- **Medium confidence**: Reasonable prediction, but some ambiguity
-- **Low confidence**: Uncertain, consider manual verification in a real conversation
-
-For critical triggering accuracy verification, manual testing in a main conversation may be necessary.
-
 ## Validation Checklist
 
 Before reporting test completion, ensure:
 
 - [ ] All test scenarios assigned as tasks
 - [ ] Each tester executed its assigned scenario
-- [ ] Evaluator assessed each test execution result
+- [ ] Each test result evaluated against validation criteria
 - [ ] Both successful and failed tests documented
 - [ ] Root causes identified for failures
 - [ ] Specific, actionable recommendations provided
@@ -584,19 +369,26 @@ Before reporting test completion, ensure:
 ### references/validation-criteria.md
 
 Comprehensive validation framework covering:
-- Test completion assessment for evaluators
+- Test completion assessment
 - Core validation dimensions (triggering, workflow, resources, output, context)
 - Test scenario design patterns
 - Validation workflow with role annotations
 - Success metrics and common issues
 
-The evaluator consults this file when assessing verification results.
+The conductor consults this file when evaluating test results.
 
 ### references/agent-prompts.md
 
-Prompt templates for spawning tester and evaluator agents. Contains:
+Prompt template for spawning tester agents. Contains:
 - Complete tester prompt template with workflow, message formats, and single-test execution
-- Complete evaluator prompt template with assessment process, evaluation dimensions, and reporting formats
 - Template usage examples
 
-The conductor uses these templates in Step 4 when spawning teammates.
+The conductor uses this template in Step 4 when spawning testers.
+
+### references/known-limitations.md
+
+Testing constraints and considerations including:
+- Agent-based testing constraints (context awareness, triggering accuracy, test isolation)
+- Story test constraints (non-determinism, context utilization, setup execution)
+- When to use semantic analysis results
+- Cost and duration trade-offs

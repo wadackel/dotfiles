@@ -4,37 +4,37 @@ This document defines the criteria for validating Claude Code skills through tea
 
 ## Test Completion Assessment
 
-### How the evaluator determines test results
+### How test results are determined
 
-The evaluator receives captured terminal output from the conductor. Each output shows what happened when the test prompt was sent to Claude Code in a fresh tmux pane session.
+The conductor analyzes the tester's execution report for each test. Each report shows what happened when the test prompt was sent to Claude Code in a fresh agent session.
 
 **Assessment process**:
-1. Read the captured terminal output for the test
-2. Analyze the output to identify skill triggering, workflow execution, and results (see Terminal Output Analysis below)
+1. Read the tester's execution report for the test
+2. Analyze the report to identify skill triggering, workflow execution, and results (see Test Report Analysis below)
 3. Compare observations against the task's expected behavior
 4. Evaluate each validation dimension (see Core Validation Dimensions below)
 5. Determine overall result: PASS, FAIL, or PARTIAL
 
 **When to request re-execution**:
-- Terminal output lacks detail on a critical dimension
-- Output is truncated or unclear
-- Key workflow steps are not visible in the output
-- Triggering was unclear (no obvious skill-specific patterns in the output)
+- Tester's report lacks detail on a critical dimension
+- Report is truncated or unclear
+- Key workflow steps are not visible in the report
+- Triggering was unclear (no obvious skill-specific patterns in the report)
 
 **Result definitions**:
 - **PASS**: Skill behaved as expected for this test scenario
 - **FAIL**: Skill did not behave as expected (wrong trigger, broken workflow, wrong output)
 - **PARTIAL**: Skill partially worked but with limitations (expected limitations are acceptable)
 
-## Terminal Output Analysis
+## Test Report Analysis
 
-### Identifying Skill Triggering from Output
+### Identifying Skill Triggering from Reports
 
-When analyzing captured terminal output, look for these indicators to determine if a skill triggered:
+When analyzing tester execution reports, look for these indicators to determine if a skill triggered:
 
 **Indicators that a skill triggered:**
-- Skill name appears in output headers, loading messages, or section titles
-- Skill-specific workflow steps are visible in the output (matching documented steps in SKILL.md)
+- Skill name appears in the tester's observations (loading messages, section titles)
+- Skill-specific workflow steps are visible in the report (matching documented steps in SKILL.md)
 - References or resources from the skill's directory are mentioned or loaded
 - Output format matches the skill's documented output structure
 - Tool calls specific to the skill's workflow (e.g., specific Bash commands, file reads)
@@ -49,21 +49,25 @@ When analyzing captured terminal output, look for these indicators to determine 
 **Ambiguous cases:**
 - Claude Code performed the action but no obvious skill-specific markers
 - Output could be from either the skill or general Claude capabilities
-- In these cases, mark as "unclear" and request re-execution with more verbose output if possible
+- In these cases, mark as "unclear" and spawn a new tester with more specific observation instructions
 
-### Parsing Terminal Output
+### Parsing Tester Reports
 
-Terminal output from `tmux capture-pane` may contain:
-- ANSI escape codes for colors and formatting
-- Box-drawing characters for UI elements
-- Progress indicators and spinners
-- Multiple conversation turns (for story tests)
+Tester execution reports contain:
+- Test metadata (task ID, test type, prompt used)
+- Skill triggering status (yes/no/unclear) with evidence
+- Workflow steps executed
+- Output produced
+- Errors encountered
+- Duration and additional notes
+- For story tests: setup execution summary and Skill tool usage during setup
 
 When analyzing:
-1. Look past formatting artifacts to identify content
-2. Identify conversation turn boundaries (user prompts vs Claude responses)
-3. Extract the core workflow steps and outputs
-4. Note any error messages or warnings clearly
+1. Review the "Skill Triggered" field and supporting evidence
+2. Identify the workflow steps executed and compare against SKILL.md
+3. Examine the output quality and error messages
+4. For story tests, verify proper setup execution (no Skill tool during setup)
+5. Note any additional observations from the tester
 
 ## Core Validation Dimensions
 
@@ -183,12 +187,12 @@ A story test passes when:
 - No hallucinated elements that weren't in the setup conversation
 - The skill's analysis respects the temporal order of the conversation
 
-### Evaluating Story Test Output
+### Evaluating Story Test Reports
 
-When reviewing terminal output from a story test:
+When reviewing a tester's report from a story test:
 
-1. **Identify conversation structure**: Locate all user prompts (setup + test) and Claude responses
-2. **Check setup execution**: Verify that setup prompts were sent and Claude responded to each
+1. **Identify conversation structure**: Review the tester's setup execution summary to see all prompts (setup + test)
+2. **Check setup execution**: Verify that setup prompts were executed directly using tools (Read, Edit, Bash, etc.), not via the Skill tool
 3. **Analyze test response**: Does the skill's output show awareness of the entire conversation?
 4. **Count element identification**: How many planted elements (errors, corrections, patterns) did the skill identify?
 5. **Check for artifacts**: Did the test setup inadvertently reveal the testing context?
@@ -245,24 +249,23 @@ Example for a PDF skill:
 ### 2. Test Execution (Conductor spawning testers)
 
 - [ ] Create tasks for each test scenario
-- [ ] Spawn evaluator agent (persists across all tests)
 - [ ] For each test, spawn a dedicated tester agent
-- [ ] Tester executes the skill and reports to evaluator
-- [ ] Evaluator analyzes tester report and reports to conductor
+- [ ] Tester executes the skill and reports to conductor
+- [ ] Conductor analyzes tester report
 - [ ] Conductor shuts down the tester
 - [ ] Proceed to next test
 
-### 3. Results Analysis (Evaluator)
+### 3. Results Analysis (Conductor)
 
 - [ ] Receive test execution report from tester
 - [ ] Compare actual vs. expected behavior
-- [ ] Request re-test from conductor where report is insufficient
+- [ ] Spawn new tester where report is insufficient
 - [ ] Evaluate against validation criteria
 - [ ] Identify patterns across test results
 
-### 4. Improvement Recommendations (Evaluator + Conductor)
+### 4. Improvement Recommendations (Conductor)
 
-Based on test results, the evaluator provides per-test recommendations and the conductor compiles them:
+Based on test results, the conductor compiles recommendations:
 
 - **Description updates**: If triggering is inaccurate
 - **Workflow refinements**: If execution order is wrong
