@@ -14,5 +14,6 @@
     nerd-fonts.roboto-mono
     nerd-fonts.sauce-code-pro
     nerd-fonts.ubuntu-mono
+    noto-fonts-cjk-sans
   ];
 }
