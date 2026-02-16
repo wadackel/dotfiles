@@ -21,12 +21,13 @@
       ".serena"
       "/.worktrees"
       ".ofsht.toml"
+      "CLAUDE.local.md"
       "**/.claude/settings.local.json"
       "**/.claude/commands/wadackel-*"
+      "**/.claude/skills/wadackel-*"
       ".playwright-mcp"
       ".playwright-cli"
       "playwright-cli.json"
-      "CLAUDE.local.md"
     ];
 
     # includeIf設定
