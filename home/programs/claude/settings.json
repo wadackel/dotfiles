@@ -302,7 +302,9 @@
       "WebFetch(domain:vitest.dev)",
       "WebFetch(domain:www.npmjs.com)",
       "WebSearch",
+      "mcp__chrome-devtools",
       "mcp__codex",
+      "mcp__figma",
       "mcp__playwright",
       "mcp__serena"
     ],

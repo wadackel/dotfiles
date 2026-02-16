@@ -6,27 +6,22 @@
 
 ### Browser Automation
 
-ブラウザを利用する操作には `playwright-cli` スキルを積極的に使用すること。
+ブラウザを利用する操作には **chrome-devtools スキル**（Chrome DevTools MCP）を積極的に使用すること。
 
 **Plan mode での実測確認:**
-- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく実際に `playwright-cli` で動作確認を行うこと
-- 特に DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは、`eval` や `screenshot` で実測値を取得してから計画を立てる
-- 例: モバイルビューポートでの表示問題 → `resize` + `screenshot` + `eval` で現象確認 → 原因特定 → 計画作成
-
-**効率的な DOM 値取得:**
-- 要素のプロパティ（naturalWidth, offsetWidth, computedStyle 等）を取得する際は、ref 指定の `eval` を使用
-- 例: `playwright-cli eval "el => JSON.stringify({w:el.offsetWidth, h:el.offsetHeight})" e42`
-- `run-code` よりも簡潔で、エラーハンドリングも不要
+- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく chrome-devtools MCP で実測確認を行うこと
+- DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは実測値を取得してから計画を立てる
 
 ### gemini-research スキル使用ガイドライン
 
 ユーザーが明示的にスキル名を出さなくても、以下の状況では積極的に使用:
+- 大規模・未知のコードベースの構造分析やアーキテクチャ調査
 - ライブラリ・フレームワーク選定や比較
 - エラー調査・トラブルシューティング
 - ベストプラクティスや最新トレンドの調査
 - 初めて使う API・ライブラリの使い方調査
 
-gemini-research は**調査・分析のみ**担当。実装コードは Claude Code が書く。
+gemini-research は**調査・分析**担当（コード分析を含む）。実装コードは Claude Code が書く。
 
 ### codex-review スキル使用時の特別ルール
 
@@ -45,7 +40,7 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
   - スキル内で他のスキルやツールの詳細な使い方（コマンド例、フラグ、引数など）を記載しない
   - 代わりに「Use the **[skill-name] skill** for [purpose]」のような簡潔な委譲指示を使用
   - 詳細はそのツール/スキルのドキュメントに委ねる
-  - 例: qa-planner では playwright-cli のコマンド例を列挙せず、「Use the **playwright-cli skill** for browser automation」と記載
+  - 例: qa-planner では chrome-devtools MCP のコマンド例を列挙せず、「Use the **chrome-devtools skill** for browser automation」と記載
 
 ### 全般
 

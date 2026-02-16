@@ -21,7 +21,7 @@ return {
   font = wezterm.font_with_fallback({
     { family = "CaskaydiaCove Nerd Font Mono" },
     { family = "CaskaydiaCove Nerd Font Mono", assume_emoji_presentation = true },
-    { family = "Noto Sans JP" },
+    -- { family = "Noto Sans JP" },
   }),
 
   font_size = 14.0,

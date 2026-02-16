@@ -47,7 +47,6 @@
       # playwright mcp
       PLAYWRIGHT_MCP_ISOLATED = "false";
       PLAYWRIGHT_MCP_HEADLESS = "false";
-      PLAYWRIGHT_MCP_USER_DATA_DIR = "${config.home.homeDirectory}/.playwright-mcp";
     };
 
     # Shell aliases

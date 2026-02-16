@@ -1,6 +1,6 @@
 ---
 name: gemini-research
-description: Research assistant for library recommendations, error solutions, and best practices. Use when users ask "what's the best library for X?", "which framework should I use?", "how do I fix this error?", "what are current best practices for Y?", or need web-enhanced research for up-to-date information. Leverages Gemini CLI with Google Search integration. Gemini analyzes and researches but does NOT write code - Claude Code handles all implementation.
+description: Research and codebase analysis assistant. Use for large codebase analysis and exploration ("analyze this code", "investigate the architecture", "コードを調査して"), library recommendations, error solutions, and best practices. Also use when users ask "what's the best library for X?", "which framework should I use?", "how do I fix this error?", or need web-enhanced research. Leverages Gemini CLI with Google Search integration and --include-directories for codebase exploration. Gemini analyzes and researches but does NOT write implementation code - Claude Code handles all implementation.
 ---
 
 # Gemini Research
@@ -9,7 +9,7 @@ description: Research assistant for library recommendations, error solutions, an
 
 This skill enables Claude Code to delegate research and analysis tasks to Gemini CLI, leveraging Gemini's strengths in codebase exploration, web-enhanced investigation, and multimodal analysis. While Claude Code focuses on implementation, Gemini provides deep analysis and current information through Google Search integration.
 
-**Key principle**: Gemini is used for **research and analysis only** - it does NOT write code. Claude Code remains responsible for all implementation work.
+**Key principle**: Gemini is used for **research and analysis** (including codebase analysis) - it does NOT write implementation code. Claude Code remains responsible for all implementation work.
 
 ## When Claude Should Use This Skill
 
@@ -133,12 +133,12 @@ gemini -p "Analyze the testing strategy in this repository. What frameworks are 
 
 ## Important Guidelines
 
-### Gemini's Role: Research Only
+### Gemini's Role: Research and Analysis
 
-- **DO**: Use Gemini for analysis, investigation, and information gathering
-- **DO**: Leverage Gemini's web search for current best practices
+- **DO**: Use Gemini for codebase analysis, architecture exploration, and dependency investigation
+- **DO**: Use Gemini for web-enhanced research, best practices, and library evaluation
 - **DO**: Ask Gemini to explain, compare, and recommend approaches
-- **DON'T**: Ask Gemini to write production code
+- **DON'T**: Ask Gemini to write implementation code
 - **DON'T**: Have Gemini make file edits or changes
 
 **Claude Code always writes the actual implementation.**
