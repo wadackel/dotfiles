@@ -7,173 +7,108 @@ This file contains prompt templates for spawning tester agents when running skil
 When spawning a tester agent for a single test scenario, use this template structure (replace `{placeholders}` with actual values):
 
 ```
-You are a **Tester** agent executing a single skill test. Your role is to run one test scenario against a Claude Code skill and report what you observe.
-
-### Your Mission
-
-Execute the assigned test task and report detailed observations to the conductor ({conductor-agent-name}).
-
-### Target Skill
-
-- **Name**: {skill-name}
-- **Path**: {skill-path}
-- **Purpose**: {skill-purpose-summary}
+You are an assistant helping a user with their request. Process the
+following request naturally, using whatever tools and skills are
+available to you.
 
 ### Your Task
 
-Use TaskGet to read your assigned task (there will be only one task for you). The task contains:
-- Test prompt to use
-- Expected behavior
-- Test type (positive/negative/edge/story)
+Use TaskGet to read your assigned task. It contains a user request
+for you to handle.
 
-### Execution Instructions
+### Instructions
 
-**For positive tests**:
-1. Use the Skill tool to invoke the target skill: `Skill(skill: "{skill-name}", args: "{test-prompt}")`
-2. Observe what happens: workflow steps, output, errors, interactions
-3. Document everything you observe
+- Process the request as you normally would for any user
+- Use whatever tools, skills, or approaches seem appropriate
+- If the request is unclear, make reasonable assumptions
 
-**For negative tests**:
-1. Analyze the skill's description and triggers against the test prompt
-2. Determine whether Claude Code's skill matching would activate this skill
-3. Report your semantic analysis (do NOT execute the skill)
+### Reporting
 
-**For edge tests**:
-1. Same as negative tests - semantic analysis only
-2. Report confidence level: high/medium/low
+After completing the request, send a message to {conductor-agent-name}
+with the following structure:
 
-**For story tests**:
-1. Read all setup prompts from the task
-2. For each setup prompt:
-   - Execute the work described in the prompt directly using appropriate tools
-     (Read, Edit, Bash, etc.)
-   - **CRITICAL: Do NOT use the Skill tool for setup prompts** — using the Skill tool
-     during setup will trigger the target skill and contaminate the conversation context
-   - This builds natural conversation history for the skill to analyze
-3. After all setup prompts are completed, execute the test prompt using the
-   Skill tool: `Skill(skill: "{skill-name}", args: "{test-prompt}")`
-4. Report whether the skill's output shows awareness of the prior conversation
-   (setup work should be visible in conversation context)
+## Request Summary
+[What you understood the request to be]
 
-### Reporting Format
+## Actions Taken
+[Numbered list of every tool call you made, in order]
+1. ToolName(key arguments) → result summary
+2. ToolName(key arguments) → result summary
+(Include ALL tool calls: Bash, Read, Skill, etc.)
 
-Send your observations to the conductor using SendMessage:
+## Outcome
+[What the final result was]
 
-```
-SendMessage:
-  type: "message"
-  recipient: "{conductor-agent-name}"
-  content: |
-    ## Test Execution Report
+## Issues
+[Any problems, ambiguities, or errors encountered, or "None"]
 
-    **Task**: {task-id}
-    **Test Type**: {positive/negative/edge/story}
-    **Prompt**: "{exact prompt used}"
-
-    ### Observations
-
-    **Skill Triggered**: {yes/no/unclear}
-    **Evidence**: {what indicated triggering or non-triggering}
-
-    **Workflow Steps**:
-    1. {step description}
-    2. {step description}
-    (or "N/A - semantic analysis only" for negative/edge)
-
-    **Output**: {what the skill produced}
-
-    **Errors**: {any errors, or "None"}
-
-    **Duration**: {approximate time}
-
-    **Additional Notes**: {anything unusual or noteworthy}
-
-    **For story tests, additionally include:**
-
-    **Setup Execution Summary**:
-    - Setup prompt 1: "{prompt}" → Tools used: {Read, Edit, Bash, etc.}
-    - Setup prompt 2: "{prompt}" → Tools used: {Read, Edit, Bash, etc.}
-    (List each setup prompt and the tools used to execute it)
-
-    **Skill Tool Usage During Setup**: {none / list any Skill tool calls made during setup}
-  summary: "Test {task-id} executed"
+Then mark your task as completed and wait for shutdown.
 ```
 
-### After Reporting
+### Template Notes
 
-After sending your report to the conductor, your work is complete. Mark the task as completed and go idle:
+**What is removed from the old template:**
+- No mention of "test" or "tester" role
+- No target skill information (name, path, purpose)
+- No test type information (positive/negative/edge/story)
+- No expected behavior
+- No test-type-specific execution instructions
 
-```
-TaskUpdate:
-  taskId: "{task-id}"
-  status: "completed"
-```
+**What is added:**
+- Structured "## Actions Taken" section for reliable tool call reporting
+- Neutral "assistant helping a user" framing
+- Generic task handling instructions
 
-Wait for shutdown request from the conductor.
-
-### Important Notes
-
-- You are executing exactly ONE test scenario
-- Do not evaluate pass/fail - just report observations
-- Be thorough in documenting what you observe
-- After reporting, wait for shutdown (do not claim more tasks)
-```
+**Why this design:**
+The tester does not know which skill is being tested or what the expected outcome is. This eliminates confirmation bias and tests whether skills naturally trigger based on their descriptions. The conductor evaluates results by checking for Skill tool invocations in the "## Actions Taken" section.
 
 ## Template Usage Examples
 
-### Example 1: Spawning a Tester for Test P1
+### Example 1: Spawning a Tester for a Request
 
-The conductor would construct a tester prompt like:
+The conductor constructs a tester prompt like:
 
 ```
-You are a **Tester** agent executing a single skill test...
+You are an assistant helping a user with their request...
 
-### Target Skill
-
-- **Name**: tmux-sender
-- **Path**: /Users/wadackel/.claude/skills/tmux-sender/SKILL.md
-- **Purpose**: Send commands to tmux panes
-
-### Your Task
-
-Use TaskGet to read task "P1" (it will be your only task).
-
-[rest of template...]
+[Full template with {conductor-agent-name} replaced with actual conductor name]
 ```
 
-The conductor fills in `{skill-name}`, `{skill-path}`, and `{skill-purpose-summary}`.
+The tester then receives a task via TaskGet that contains only:
+```
+## User Request
+
+"Send echo hello to pane 1"
+
+Handle this request using whatever approach seems most appropriate.
+```
 
 ### Example 2: Tester Report to Conductor
 
-After executing test P1, the tester sends:
+After handling the request, the tester sends:
 
 ```
 SendMessage:
   type: "message"
-  recipient: "{conductor-agent-name}"
+  recipient: "team-lead"
   content: |
-    ## Test Execution Report
+    ## Request Summary
+    User wanted to send "echo hello" to tmux pane 1.
 
-    **Task**: P1
-    **Test Type**: positive
-    **Prompt**: "Send echo hello to pane 1"
+    ## Actions Taken
+    1. Skill(skill: "tmux-sender", args: "Send echo hello to pane 1") → Invoked tmux-sender skill
+    2. Bash(command: "tmux list-panes -F '#{pane_index}'") → Listed available panes
+    3. Bash(command: "tmux send-keys -t 1 'echo hello' Enter") → Sent command to pane 1
 
-    ### Observations
+    ## Outcome
+    Command "echo hello" successfully sent to tmux pane 1.
 
-    **Skill Triggered**: yes
-    **Evidence**: Skill "tmux-sender" appeared in output, workflow executed
-
-    **Workflow Steps**:
-    1. Listed tmux panes using `tmux list-panes`
-    2. Sent command using `tmux send-keys -t 1 'echo hello' Enter`
-    3. Confirmed command was sent
-
-    **Output**: Command successfully sent to pane 1
-
-    **Errors**: None
-
-    **Duration**: ~3 seconds
-
-    **Additional Notes**: Skill correctly identified target pane by number
-  summary: "Test P1 executed"
+    ## Issues
+    None
+  summary: "Handled tmux request"
 ```
+
+The conductor reads this report and identifies:
+- Primary signal: Skill tool was invoked with skill="tmux-sender"
+- Secondary signal: tmux-specific workflow steps (list-panes, send-keys)
+- Conclusion: Skill triggered and executed correctly

@@ -173,9 +173,11 @@ After user approval:
 
 ```
 TeamCreate:
-  team_name: "skill-test-{skill-name}"
+  team_name: "skill-test-session"
   description: "Testing skill: {skill-name}"
 ```
+
+**Important**: Use a generic team name that does not contain the skill name. Tester agents can read the team config, and including the skill name would leak which skill is being tested.
 
 **2. Read validation criteria**:
 
@@ -183,93 +185,97 @@ Read [validation-criteria.md](references/validation-criteria.md) to prepare for 
 
 **3. Create tasks for each scenario**:
 
+**IMPORTANT**: Task descriptions visible to testers must NOT contain:
+- Expected behavior or success criteria
+- Target skill name or path
+- Test type classification
+- Any indication that this is a test
+
+The conductor maintains this information privately in Step 2 notes.
+
 For simple tests (positive/negative/edge):
 ```
 TaskCreate:
-  subject: "[{type}] {scenario-id}: {brief description}"
+  subject: "Handle request: {scenario-id}"
   description: |
-    ## Test Scenario
+    ## User Request
 
-    **Type**: {positive/negative/edge}
-    **ID**: {scenario-id}
-    **Prompt**: "{exact prompt}"
-    **Expected behavior**: {expected behavior}
-    **Validation focus**: {dimension}
+    "{exact prompt}"
 
-    ## Target Skill
-    **Name**: {skill-name}
-    **Path**: {skill-path}
-
-    ## Success Criteria
-    {what constitutes a pass for this test}
-  activeForm: "Testing {scenario-id}: {brief description}"
+    Handle this request using whatever approach seems most appropriate.
+  activeForm: "Handling request {scenario-id}"
 ```
 
 For story tests:
 ```
 TaskCreate:
-  subject: "[story] {scenario-id}: {story-name}"
+  subject: "Multi-step request: {scenario-id}"
   description: |
-    ## Story Test Scenario
+    ## Work Sequence
 
-    **Type**: story
-    **ID**: {scenario-id}
-    **Name**: {story-name}
+    Complete the following work requests in order.
+    You MUST complete each step in the listed order.
+    Do not skip or combine steps.
+    If any step fails, note the failure and proceed to the next step.
 
-    **Setup Prompts** (send sequentially):
-    1. "{setup-prompt-1}" - {description}
-    2. "{setup-prompt-2}" - {description}
-    3. "{setup-prompt-3}" - {description}
+    1. "{setup-prompt-1}"
+    2. "{setup-prompt-2}"
+    3. "{setup-prompt-3}"
 
-    **Test Prompt**: "{test-prompt}"
-    **Expected**: {expected behavior}
-    **Validation focus**: {dimension}
+    After completing all the above, handle this final request:
+    "{test-prompt}"
 
-    ## Target Skill
-    **Name**: {skill-name}
-    **Path**: {skill-path}
-
-    ## Success Criteria
-    {what constitutes a pass, including context utilization requirements}
-  activeForm: "Testing story {scenario-id}"
+    Report what you did for each step.
+  activeForm: "Handling story {scenario-id}"
 ```
 
 **4. Execute tests sequentially**:
 
 Process tests in priority order:
-1. Negative tests first (lightest, semantic analysis only)
-2. Edge tests next (also semantic analysis)
-3. Positive tests (skill execution)
-4. Story tests last (most expensive, multiple prompts)
+1. **Negative tests first** (false positives indicate description problems — a blocker)
+2. **Positive tests** (core use case validation)
+3. **Edge tests** (boundary behavior)
+4. **Story tests last** (most expensive, multiple prompts)
+
+**Early termination**: If multiple negative tests trigger the skill when they shouldn't, flag this immediately as a critical description issue and consider stopping further tests.
 
 For each test:
 
 ```
-a. Spawn a dedicated tester for this specific test (see agent-prompts.md for template):
+a. Spawn a dedicated tester for this specific test:
    Task:
-     subagent_type: "general-purpose"
-     team_name: "skill-test-{skill-name}"
+     subagent_type: "general-purpose"  # Required for Skill tool access
+     team_name: "skill-test-session"
      name: "tester-{scenario-id}"
      model: "sonnet"
      prompt: |
-       [Tester Prompt Template with skill-name, skill-path, skill-purpose-summary filled in]
+       [Use the Naive User template from agent-prompts.md]
+       [Replace {conductor-agent-name} with your actual agent name]
 
 b. Wait for the tester to send its report to you (SendMessage)
 
-c. Evaluate the report:
-   - Read the task description for expected behavior
-   - Assess against validation dimensions (from validation-criteria.md):
-     * Triggering accuracy: Did it activate appropriately?
-     * Workflow execution: Steps followed in order?
-     * Resource usage: Scripts/references used correctly?
-     * Output quality: Requirements met, no unexpected errors?
-     * Context efficiency: Only necessary info loaded?
-   - For story tests: additionally check context utilization and setup validity
-   - Determine PASS/FAIL/PARTIAL
+c. Evaluate the report using your private Step 2 notes:
 
-d. If report insufficient: spawn a new tester with additional guidance
+   **Primary evaluation (Skill tool observation):**
+   - Check the "## Actions Taken" section for Skill tool invocations
+   - Did the tester call Skill(skill: "{target-skill-name}")?
+   - If yes: Skill triggered
+   - If no: Skill did NOT trigger (even if task was accomplished)
 
-e. Record the evaluation result (dimension assessments, issues, recommendations)
+   **Secondary evaluation (workflow quality):**
+   - If Skill tool was invoked, check if the workflow steps match SKILL.md
+   - Verify output quality meets the skill's documented purpose
+   - Check for errors or unexpected behavior
+
+   **Determine result:**
+   - Positive test: PASS if Skill tool was invoked, FAIL if not
+   - Negative test: PASS if Skill tool was NOT invoked, FAIL if invoked
+   - Edge test: Evaluate based on your Step 2 expectation for this scenario
+   - Story test: PASS if Skill tool invoked AND output shows context awareness
+
+d. If report insufficient: spawn a new tester with instructions to provide more detailed tool call reporting
+
+e. Record the evaluation result (trigger status, workflow quality, issues, recommendations)
 
 f. Shutdown the tester:
    SendMessage:
@@ -280,9 +286,13 @@ f. Shutdown the tester:
 g. Proceed to the next test
 ```
 
-**Important**: Always specify `model: "sonnet"` when spawning agents. Using opus increases token costs significantly without proportional quality gains for testing tasks.
+**Important notes**:
+- Always specify `model: "sonnet"` when spawning agents
+- The tester does not know which skill is being tested — this eliminates confirmation bias
+- You (conductor) maintain all test expectations in your conversation context from Step 2
+- Skill tool invocation is the primary signal — if the tester solves the problem with Bash/Read/etc without using Skill tool, the skill did not trigger
 
-**Key principle**: Each tester executes exactly ONE test scenario in a fresh agent context, eliminating cross-test context contamination. You evaluate all results directly using validation-criteria.md.
+**Key principle**: Each tester executes exactly ONE test scenario in a fresh agent context, eliminating cross-test context contamination. The conductor evaluates all results by checking for Skill tool invocations in the tester's "## Actions Taken" section.
 
 ### Step 5: Compile Final Report
 
@@ -380,15 +390,19 @@ The conductor consults this file when evaluating test results.
 ### references/agent-prompts.md
 
 Prompt template for spawning tester agents. Contains:
-- Complete tester prompt template with workflow, message formats, and single-test execution
+- Naive User template: frames the tester as "assistant helping a user" without test awareness
+- Structured reporting format with "## Actions Taken" section for tool call observation
 - Template usage examples
 
-The conductor uses this template in Step 4 when spawning testers.
+The conductor uses this template in Step 4 when spawning testers. The template removes all skill-specific information and expected behavior to eliminate confirmation bias.
 
 ### references/known-limitations.md
 
 Testing constraints and considerations including:
-- Agent-based testing constraints (context awareness, triggering accuracy, test isolation)
-- Story test constraints (non-determinism, context utilization, setup execution)
-- When to use semantic analysis results
-- Cost and duration trade-offs
+- Agent-based testing constraints (testers see all available skills but don't know test target)
+- Triggering accuracy testing (relies on natural Skill tool invocation)
+- Skill tool observation limitations (completeness not guaranteed)
+- Positive test false negatives (skill description improvement signal)
+- Story test constraints (non-determinism, step ordering, context utilization)
+- Cost considerations (negative tests now execute fully)
+- Subagent configuration (why `general-purpose` type is required)

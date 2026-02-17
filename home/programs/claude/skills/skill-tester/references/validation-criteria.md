@@ -30,44 +30,61 @@ The conductor analyzes the tester's execution report for each test. Each report 
 
 ### Identifying Skill Triggering from Reports
 
-When analyzing tester execution reports, look for these indicators to determine if a skill triggered:
+The conductor determines whether a skill triggered by analyzing the tester's "## Actions Taken" section, which lists all tool calls made during the request handling.
 
-**Indicators that a skill triggered:**
-- Skill name appears in the tester's observations (loading messages, section titles)
-- Skill-specific workflow steps are visible in the report (matching documented steps in SKILL.md)
-- References or resources from the skill's directory are mentioned or loaded
-- Output format matches the skill's documented output structure
-- Tool calls specific to the skill's workflow (e.g., specific Bash commands, file reads)
+**Primary signal (most reliable): Skill tool invocation**
+- Check for `Skill(skill: "xxx")` entries in the "## Actions Taken" section
+- Verify the skill name matches the target skill being tested
+- This is the strongest indicator of skill triggering
+- **Critical distinction**: If the tester used Bash or other direct tools to accomplish the task (e.g., `tmux send-keys` via Bash), this is NOT skill triggering — only Skill tool invocation counts
 
-**Indicators that a skill did NOT trigger:**
-- Generic Claude response without skill-specific patterns
-- No skill loading messages or headers visible
-- Response addresses the prompt using general knowledge rather than the skill's workflow
-- Different tools or approaches used than what the skill prescribes
-- No references to the skill's resources or documentation
+**Secondary signals (supporting evidence):**
+- Skill-specific workflow steps appear in the Actions Taken list
+- References or resources from the skill's directory are accessed
+- Output format matches the skill's documented structure
+- Workflow sequence matches the skill's documented steps in SKILL.md
 
-**Ambiguous cases:**
-- Claude Code performed the action but no obvious skill-specific markers
-- Output could be from either the skill or general Claude capabilities
-- In these cases, mark as "unclear" and spawn a new tester with more specific observation instructions
+**When a skill did NOT trigger:**
+- No Skill tool invocation in the "## Actions Taken" section
+- The tester solved the problem using direct tools (Bash, Read, Edit, etc.)
+- Generic response without skill-specific workflow patterns
+
+**If the report is unclear:**
+- The "## Actions Taken" section is incomplete or missing
+- Tool call descriptions are too vague to determine Skill tool usage
+- In these cases, spawn a new tester with instructions to provide more detailed tool call reporting
 
 ### Parsing Tester Reports
 
-Tester execution reports contain:
-- Test metadata (task ID, test type, prompt used)
-- Skill triggering status (yes/no/unclear) with evidence
-- Workflow steps executed
-- Output produced
-- Errors encountered
-- Duration and additional notes
-- For story tests: setup execution summary and Skill tool usage during setup
+Tester execution reports use a structured format with the following sections:
 
-When analyzing:
-1. Review the "Skill Triggered" field and supporting evidence
-2. Identify the workflow steps executed and compare against SKILL.md
-3. Examine the output quality and error messages
-4. For story tests, verify proper setup execution (no Skill tool during setup)
-5. Note any additional observations from the tester
+**Report structure:**
+- **Request Summary**: What the tester understood the request to be
+- **Actions Taken**: Numbered list of all tool calls made, in order (PRIMARY EVALUATION SOURCE)
+- **Outcome**: What the final result was
+- **Issues**: Any problems or errors encountered
+
+**How to analyze:**
+
+1. **Extract tool calls from "## Actions Taken" section**
+   - Look for `Skill(skill: "xxx")` entries to identify skill invocation
+   - Note which skill was called and with what arguments
+   - Identify the sequence of tools used after/before the Skill invocation
+
+2. **Compare workflow against SKILL.md**
+   - If a Skill tool call is present, verify the subsequent actions match the skill's documented workflow
+   - Check if the right tools were used in the right order
+   - Validate that skill-specific resources were accessed if applicable
+
+3. **Evaluate outcome quality**
+   - Does the outcome match what the skill is supposed to produce?
+   - Are there unexpected errors or warnings?
+   - Is the output complete and correct?
+
+4. **For story tests, additionally check:**
+   - Did the setup work execute without Skill tool invocations?
+   - Does the final outcome demonstrate awareness of prior setup work?
+   - Are the planted elements from setup properly identified?
 
 ## Core Validation Dimensions
 
@@ -170,8 +187,8 @@ Story tests verify that a skill can effectively utilize prior conversation conte
 **Setup fidelity:**
 - Did the setup prompts create a realistic conversation context?
 - Were the setup steps natural and believable?
-- Did Claude respond appropriately during setup (no test awareness)?
-- **Was the Skill tool avoided during setup?** If the tester used the Skill tool for setup prompts, the target skill may have been triggered prematurely, contaminating the conversation context. Check the tester's report for "Skill Tool Usage During Setup: none" to confirm.
+- Did the tester complete setup steps in the specified order?
+- **Was the Skill tool avoided during setup?** Check the tester's "## Actions Taken" section for the setup phase — there should be no Skill tool invocations until the final test prompt is processed.
 
 **Temporal awareness:**
 - Does the skill correctly identify the chronological order of events?
@@ -191,11 +208,11 @@ A story test passes when:
 
 When reviewing a tester's report from a story test:
 
-1. **Identify conversation structure**: Review the tester's setup execution summary to see all prompts (setup + test)
-2. **Check setup execution**: Verify that setup prompts were executed directly using tools (Read, Edit, Bash, etc.), not via the Skill tool
-3. **Analyze test response**: Does the skill's output show awareness of the entire conversation?
-4. **Count element identification**: How many planted elements (errors, corrections, patterns) did the skill identify?
-5. **Check for artifacts**: Did the test setup inadvertently reveal the testing context?
+1. **Identify conversation structure**: Review the "## Request Summary" to understand how the tester interpreted the multi-step work sequence
+2. **Check setup execution**: In "## Actions Taken", verify that setup steps used direct tools (Read, Edit, Bash, etc.) without Skill tool invocations
+3. **Identify the test prompt handling**: Look for the Skill tool invocation (if any) that should correspond to the final test prompt
+4. **Analyze context utilization**: Does the outcome demonstrate awareness of the entire work sequence, not just the final prompt?
+5. **Count element identification**: How many planted elements (errors, corrections, patterns) from the setup work did the skill's output identify?
 
 **Common issues in story tests:**
 - Setup responses vary between runs (Claude non-determinism) - this is expected
