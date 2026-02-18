@@ -24,18 +24,19 @@ This skill automates the process of testing Claude Code skills by:
 1. Analyzing the skill to understand its purpose and expected behavior
 2. Designing test scenarios that cover positive, negative, edge cases, and story-based tests
 3. Presenting test plan for user approval
-4. Creating team and executing tests via dedicated tester agents with evaluation
+4. Executing tests via isolated headless Claude sessions with automatic evaluation
 5. Compiling a final report with pass/fail results and improvement recommendations
-6. Cleaning up team resources
+6. Cleaning up temporary test artifacts
 7. Iterating on improvements if needed
 
-**Agent roles**:
-- **Conductor** (you): Orchestrates workflow, spawns testers, evaluates reports against [validation-criteria.md](references/validation-criteria.md)
-- **Tester** (tester-{id}): Single-use agent, one test per agent, fresh context. See [agent-prompts.md](references/agent-prompts.md) for prompt template
+**Testing approach**:
+- **Conductor** (you): Orchestrates workflow, executes tests via shell scripts, evaluates results against [validation-criteria.md](references/validation-criteria.md)
+- **Headless tests**: Each test runs in a completely isolated `claude -p` session with stream-json output
+- **Automatic detection**: Skill tool invocations are automatically parsed from stream-json (no self-reporting)
 
-**Message flow**: Conductor → spawn Tester → Tester executes → Tester sends report → Conductor evaluates → shutdown Tester → next test
+**Test flow**: Conductor → run-test.sh → headless Claude session → stream-json output → analyze-test.sh → Conductor evaluates → next test
 
-**Key principle**: Each test runs in a dedicated tester agent with fresh context, eliminating cross-test context contamination. The conductor evaluates all results directly using validation-criteria.md.
+**Key principle**: Each test executes in a fresh headless Claude session with zero prior context, ensuring complete isolation. Skills trigger naturally based on their descriptions, and invocations are detected automatically from stream-json output.
 
 ## Workflow
 
@@ -165,71 +166,22 @@ This will create a team with dedicated tester agents. Proceed with these tests?
 
 Wait for user confirmation before proceeding.
 
-### Step 4: Create Team and Execute
+### Step 4: Execute Tests
 
 After user approval:
 
-**1. Create the team**:
+**1. Create output directory**:
 
+```bash
+OUTPUT_DIR="/tmp/skill-test-$(date +%s)"
+Bash: mkdir -p "$OUTPUT_DIR"
 ```
-TeamCreate:
-  team_name: "skill-test-session"
-  description: "Testing skill: {skill-name}"
-```
-
-**Important**: Use a generic team name that does not contain the skill name. Tester agents can read the team config, and including the skill name would leak which skill is being tested.
 
 **2. Read validation criteria**:
 
 Read [validation-criteria.md](references/validation-criteria.md) to prepare for evaluating test results.
 
-**3. Create tasks for each scenario**:
-
-**IMPORTANT**: Task descriptions visible to testers must NOT contain:
-- Expected behavior or success criteria
-- Target skill name or path
-- Test type classification
-- Any indication that this is a test
-
-The conductor maintains this information privately in Step 2 notes.
-
-For simple tests (positive/negative/edge):
-```
-TaskCreate:
-  subject: "Handle request: {scenario-id}"
-  description: |
-    ## User Request
-
-    "{exact prompt}"
-
-    Handle this request using whatever approach seems most appropriate.
-  activeForm: "Handling request {scenario-id}"
-```
-
-For story tests:
-```
-TaskCreate:
-  subject: "Multi-step request: {scenario-id}"
-  description: |
-    ## Work Sequence
-
-    Complete the following work requests in order.
-    You MUST complete each step in the listed order.
-    Do not skip or combine steps.
-    If any step fails, note the failure and proceed to the next step.
-
-    1. "{setup-prompt-1}"
-    2. "{setup-prompt-2}"
-    3. "{setup-prompt-3}"
-
-    After completing all the above, handle this final request:
-    "{test-prompt}"
-
-    Report what you did for each step.
-  activeForm: "Handling story {scenario-id}"
-```
-
-**4. Execute tests sequentially**:
+**3. Execute tests sequentially**:
 
 Process tests in priority order:
 1. **Negative tests first** (false positives indicate description problems — a blocker)
@@ -239,60 +191,76 @@ Process tests in priority order:
 
 **Early termination**: If multiple negative tests trigger the skill when they shouldn't, flag this immediately as a critical description issue and consider stopping further tests.
 
-For each test:
+**For simple tests (positive/negative/edge):**
+
+For each test scenario from Step 2:
 
 ```
-a. Spawn a dedicated tester for this specific test:
-   Task:
-     subagent_type: "general-purpose"  # Required for Skill tool access
-     team_name: "skill-test-session"
-     name: "tester-{scenario-id}"
-     model: "sonnet"
-     prompt: |
-       [Use the Naive User template from agent-prompts.md]
-       [Replace {conductor-agent-name} with your actual agent name]
+a. Execute test with run-test.sh:
+   Bash: ~/.claude/skills/skill-tester/scripts/run-test.sh \
+     "$OUTPUT_DIR" "{test-id}" "{prompt}" 10
 
-b. Wait for the tester to send its report to you (SendMessage)
+b. Analyze results with analyze-test.sh:
+   Bash: ~/.claude/skills/skill-tester/scripts/analyze-test.sh \
+     "$OUTPUT_DIR/{test-id}.jsonl" "{target-skill-name}"
 
-c. Evaluate the report using your private Step 2 notes:
+   This outputs JSON with:
+   - triggered: true/false (whether Skill tool was invoked)
+   - skills_invoked: array of skill names invoked
+   - tool_usage: summary of all tool calls
+   - num_turns: number of agentic turns
+   - cost_usd: API cost
+   - result_preview: final output (truncated)
 
-   **Primary evaluation (Skill tool observation):**
-   - Check the "## Actions Taken" section for Skill tool invocations
-   - Did the tester call Skill(skill: "{target-skill-name}")?
-   - If yes: Skill triggered
-   - If no: Skill did NOT trigger (even if task was accomplished)
+c. Determine PASS/FAIL using your private Step 2 expectations:
+   - Positive test: PASS if triggered=true, FAIL if triggered=false
+   - Negative test: PASS if triggered=false, FAIL if triggered=true
+   - Edge test: Evaluate based on your Step 2 expectation
 
-   **Secondary evaluation (workflow quality):**
-   - If Skill tool was invoked, check if the workflow steps match SKILL.md
-   - Verify output quality meets the skill's documented purpose
-   - Check for errors or unexpected behavior
+d. Record the result (PASS/FAIL, reasoning, issues, recommendations)
 
-   **Determine result:**
-   - Positive test: PASS if Skill tool was invoked, FAIL if not
-   - Negative test: PASS if Skill tool was NOT invoked, FAIL if invoked
-   - Edge test: Evaluate based on your Step 2 expectation for this scenario
-   - Story test: PASS if Skill tool invoked AND output shows context awareness
+e. Keep the stream-json output for debugging:
+   Read: "$OUTPUT_DIR/{test-id}.jsonl" (if needed for detailed analysis)
+```
 
-d. If report insufficient: spawn a new tester with instructions to provide more detailed tool call reporting
+**For story tests:**
 
-e. Record the evaluation result (trigger status, workflow quality, issues, recommendations)
+For each story scenario from Step 2:
 
-f. Shutdown the tester:
-   SendMessage:
-     type: "shutdown_request"
-     recipient: "tester-{scenario-id}"
-     content: "Test complete, thank you"
+```
+a. Create setup prompts file:
+   Write: "$OUTPUT_DIR/{test-id}-setup.txt"
+   Content: One setup prompt per line from the story scenario
 
-g. Proceed to the next test
+b. Execute story test with run-story-test.sh:
+   Bash: ~/.claude/skills/skill-tester/scripts/run-story-test.sh \
+     "$OUTPUT_DIR" "{test-id}" "$OUTPUT_DIR/{test-id}-setup.txt" "{test-prompt}" 10
+
+c. Analyze results (same analyze-test.sh as simple tests):
+   Bash: ~/.claude/skills/skill-tester/scripts/analyze-test.sh \
+     "$OUTPUT_DIR/{test-id}.jsonl" "{target-skill-name}"
+
+d. Additional story test evaluation:
+   - Check result_preview for context awareness indicators
+   - Does the output reference elements from setup prompts?
+   - Are planted elements (corrections, patterns, errors) identified?
+   - Context utilization rate should be ≥60%
+
+e. Determine PASS/FAIL:
+   - PASS if triggered=true AND output demonstrates context awareness
+   - FAIL if triggered=false OR output ignores setup context
+
+f. Record the result with story-specific notes
 ```
 
 **Important notes**:
-- Always specify `model: "sonnet"` when spawning agents
-- The tester does not know which skill is being tested — this eliminates confirmation bias
-- You (conductor) maintain all test expectations in your conversation context from Step 2
-- Skill tool invocation is the primary signal — if the tester solves the problem with Bash/Read/etc without using Skill tool, the skill did not trigger
+- Each test runs in a completely independent `claude -p` session
+- No context contamination between tests (unlike agent teams approach)
+- Skill tool detection is automatic via stream-json parsing
+- All test output is preserved in `$OUTPUT_DIR` for debugging
+- Tests use `--dangerously-skip-permissions` to avoid interactive prompts
 
-**Key principle**: Each tester executes exactly ONE test scenario in a fresh agent context, eliminating cross-test context contamination. The conductor evaluates all results by checking for Skill tool invocations in the tester's "## Actions Taken" section.
+**Key principle**: Each test executes in a fresh headless Claude session with zero prior context, ensuring complete isolation. Skills trigger naturally based on their descriptions, and invocations are detected automatically from stream-json output.
 
 ### Step 5: Compile Final Report
 
@@ -320,11 +288,11 @@ Would you like me to apply these fixes?
 
 After the report is delivered:
 
-1. (Individual testers are already shut down after each test in Step 4)
-2. Delete the team:
-   ```
-   TeamDelete
-   ```
+```bash
+Bash: rm -rf "$OUTPUT_DIR"
+```
+
+This removes all temporary test output files. The headless approach doesn't require team cleanup since no agent teams are created.
 
 ### Step 7: Iterate on Improvements
 
@@ -381,28 +349,21 @@ Before reporting test completion, ensure:
 Comprehensive validation framework covering:
 - Test completion assessment
 - Core validation dimensions (triggering, workflow, resources, output, context)
+- Stream-JSON output analysis
 - Test scenario design patterns
-- Validation workflow with role annotations
+- Validation workflow
 - Success metrics and common issues
 
 The conductor consults this file when evaluating test results.
 
-### references/agent-prompts.md
-
-Prompt template for spawning tester agents. Contains:
-- Naive User template: frames the tester as "assistant helping a user" without test awareness
-- Structured reporting format with "## Actions Taken" section for tool call observation
-- Template usage examples
-
-The conductor uses this template in Step 4 when spawning testers. The template removes all skill-specific information and expected behavior to eliminate confirmation bias.
-
 ### references/known-limitations.md
 
 Testing constraints and considerations including:
-- Agent-based testing constraints (testers see all available skills but don't know test target)
+- Headless testing constraints (complete isolation, process orchestration)
 - Triggering accuracy testing (relies on natural Skill tool invocation)
-- Skill tool observation limitations (completeness not guaranteed)
+- Skill tool detection (automatic parsing from stream-json)
 - Positive test false negatives (skill description improvement signal)
-- Story test constraints (non-determinism, step ordering, context utilization)
-- Cost considerations (negative tests now execute fully)
-- Subagent configuration (why `general-purpose` type is required)
+- Story test constraints (non-determinism, `--resume` context preservation)
+- Cost considerations (each test is a full Claude session)
+- Headless mode constraints (`env -u CLAUDECODE`, skills in `-p` mode, stream-json format)
+- Comparison with agent teams approach

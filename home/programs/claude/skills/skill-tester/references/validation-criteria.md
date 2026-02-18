@@ -1,89 +1,97 @@
 # Skill Validation Criteria
 
-This document defines the criteria for validating Claude Code skills through team-based testing.
+This document defines the criteria for validating Claude Code skills through headless testing.
 
 ## Test Completion Assessment
 
 ### How test results are determined
 
-The conductor analyzes the tester's execution report for each test. Each report shows what happened when the test prompt was sent to Claude Code in a fresh agent session.
+The conductor analyzes the stream-json output from each test. Each test runs in a completely isolated `claude -p` session with zero prior context.
 
 **Assessment process**:
-1. Read the tester's execution report for the test
-2. Analyze the report to identify skill triggering, workflow execution, and results (see Test Report Analysis below)
-3. Compare observations against the task's expected behavior
+1. Execute test using `run-test.sh` or `run-story-test.sh`
+2. Parse stream-json output using `analyze-test.sh` to detect Skill tool invocations
+3. Compare observations against expected behavior (maintained privately in Step 2 notes)
 4. Evaluate each validation dimension (see Core Validation Dimensions below)
 5. Determine overall result: PASS, FAIL, or PARTIAL
 
-**When to request re-execution**:
-- Tester's report lacks detail on a critical dimension
-- Report is truncated or unclear
-- Key workflow steps are not visible in the report
-- Triggering was unclear (no obvious skill-specific patterns in the report)
+**When to re-execute**:
+- Test execution failed with non-zero exit code
+- stream-json output is malformed or incomplete
+- analyze-test.sh failed to parse results
 
 **Result definitions**:
 - **PASS**: Skill behaved as expected for this test scenario
 - **FAIL**: Skill did not behave as expected (wrong trigger, broken workflow, wrong output)
 - **PARTIAL**: Skill partially worked but with limitations (expected limitations are acceptable)
 
-## Test Report Analysis
+## Stream-JSON Output Analysis
 
-### Identifying Skill Triggering from Reports
+### Identifying Skill Triggering from Stream-JSON
 
-The conductor determines whether a skill triggered by analyzing the tester's "## Actions Taken" section, which lists all tool calls made during the request handling.
+The conductor determines whether a skill triggered by parsing the stream-json output automatically using `analyze-test.sh`.
 
 **Primary signal (most reliable): Skill tool invocation**
-- Check for `Skill(skill: "xxx")` entries in the "## Actions Taken" section
-- Verify the skill name matches the target skill being tested
-- This is the strongest indicator of skill triggering
-- **Critical distinction**: If the tester used Bash or other direct tools to accomplish the task (e.g., `tmux send-keys` via Bash), this is NOT skill triggering — only Skill tool invocation counts
+- `analyze-test.sh` extracts `Skill` tool invocations from stream-json events
+- Looks for `{"type":"tool_use","name":"Skill","input":{"skill":"xxx"}}` in assistant messages
+- Returns `triggered: true` if target skill name matches
+- This is the strongest and most reliable indicator of skill triggering
+- **Critical distinction**: If Claude solved the problem using Bash, Read, or other direct tools without invoking the Skill tool, the skill did NOT trigger
 
 **Secondary signals (supporting evidence):**
-- Skill-specific workflow steps appear in the Actions Taken list
-- References or resources from the skill's directory are accessed
-- Output format matches the skill's documented structure
+- Skill-specific workflow steps appear in tool usage
+- References or resources from the skill's directory are accessed (visible in tool_usage)
+- Output format (in result_preview) matches the skill's documented structure
 - Workflow sequence matches the skill's documented steps in SKILL.md
 
 **When a skill did NOT trigger:**
-- No Skill tool invocation in the "## Actions Taken" section
-- The tester solved the problem using direct tools (Bash, Read, Edit, etc.)
+- `analyze-test.sh` returns `triggered: false`
+- No Skill tool invocation in stream-json
+- Claude solved the problem using direct tools (Bash, Read, Edit, etc.)
 - Generic response without skill-specific workflow patterns
 
-**If the report is unclear:**
-- The "## Actions Taken" section is incomplete or missing
-- Tool call descriptions are too vague to determine Skill tool usage
-- In these cases, spawn a new tester with instructions to provide more detailed tool call reporting
+**If output is unclear:**
+- Exit code is non-zero (test failed)
+- stream-json is malformed or incomplete
+- analyze-test.sh output is missing required fields
+- In these cases, check the raw jsonl file for errors
 
-### Parsing Tester Reports
+### Parsing Stream-JSON Output
 
-Tester execution reports use a structured format with the following sections:
+Each test produces stream-json output analyzed by `analyze-test.sh`, which returns:
 
-**Report structure:**
-- **Request Summary**: What the tester understood the request to be
-- **Actions Taken**: Numbered list of all tool calls made, in order (PRIMARY EVALUATION SOURCE)
-- **Outcome**: What the final result was
-- **Issues**: Any problems or errors encountered
+**Output structure:**
+```json
+{
+  "triggered": true/false,
+  "skills_invoked": ["skill-name"],
+  "tool_usage": "tool call summary",
+  "num_turns": N,
+  "cost_usd": X.XX,
+  "result_preview": "truncated final output"
+}
+```
 
 **How to analyze:**
 
-1. **Extract tool calls from "## Actions Taken" section**
-   - Look for `Skill(skill: "xxx")` entries to identify skill invocation
-   - Note which skill was called and with what arguments
-   - Identify the sequence of tools used after/before the Skill invocation
+1. **Check triggered field**
+   - `true`: Skill tool was invoked
+   - `false`: Skill tool was NOT invoked
+   - This is the primary evaluation metric
 
-2. **Compare workflow against SKILL.md**
-   - If a Skill tool call is present, verify the subsequent actions match the skill's documented workflow
-   - Check if the right tools were used in the right order
-   - Validate that skill-specific resources were accessed if applicable
+2. **Review tool_usage**
+   - Which tools were called and how many times
+   - Identify the sequence of tools used
+   - Check if skill-specific tools/resources were accessed
 
-3. **Evaluate outcome quality**
-   - Does the outcome match what the skill is supposed to produce?
+3. **Evaluate result_preview**
+   - Does the output match what the skill is supposed to produce?
    - Are there unexpected errors or warnings?
    - Is the output complete and correct?
 
 4. **For story tests, additionally check:**
-   - Did the setup work execute without Skill tool invocations?
-   - Does the final outcome demonstrate awareness of prior setup work?
+   - Did setup prompts avoid Skill tool invocations? (check setup-*.json files)
+   - Does result_preview demonstrate awareness of prior setup work?
    - Are the planted elements from setup properly identified?
 
 ## Core Validation Dimensions
@@ -175,7 +183,7 @@ Tester execution reports use a structured format with the following sections:
 
 ## Story Test Assessment
 
-Story tests verify that a skill can effectively utilize prior conversation context. These tests involve multi-turn conversations where setup prompts build context before the actual test prompt.
+Story tests verify that a skill can effectively utilize prior conversation context. These tests use `run-story-test.sh` to execute multi-turn conversations via `--resume`, building context before the final test prompt.
 
 ### What to Evaluate
 
@@ -187,8 +195,8 @@ Story tests verify that a skill can effectively utilize prior conversation conte
 **Setup fidelity:**
 - Did the setup prompts create a realistic conversation context?
 - Were the setup steps natural and believable?
-- Did the tester complete setup steps in the specified order?
-- **Was the Skill tool avoided during setup?** Check the tester's "## Actions Taken" section for the setup phase — there should be no Skill tool invocations until the final test prompt is processed.
+- Were setup steps executed in the specified order?
+- **Was the Skill tool avoided during setup?** Check the setup-*.json files — there should be no Skill tool invocations until the final test prompt.
 
 **Temporal awareness:**
 - Does the skill correctly identify the chronological order of events?
@@ -198,26 +206,28 @@ Story tests verify that a skill can effectively utilize prior conversation conte
 ### Success Criteria for Story Tests
 
 A story test passes when:
+- `analyze-test.sh` returns `triggered: true` (Skill tool was invoked)
 - Skill output demonstrates awareness of setup conversation (not just test prompt)
 - At least 60% of planted elements (corrections, patterns, errors) are identified
 - Output quality is comparable to what a real session would produce
 - No hallucinated elements that weren't in the setup conversation
 - The skill's analysis respects the temporal order of the conversation
 
-### Evaluating Story Test Reports
+### Evaluating Story Test Results
 
-When reviewing a tester's report from a story test:
+When reviewing stream-json output from a story test:
 
-1. **Identify conversation structure**: Review the "## Request Summary" to understand how the tester interpreted the multi-step work sequence
-2. **Check setup execution**: In "## Actions Taken", verify that setup steps used direct tools (Read, Edit, Bash, etc.) without Skill tool invocations
-3. **Identify the test prompt handling**: Look for the Skill tool invocation (if any) that should correspond to the final test prompt
-4. **Analyze context utilization**: Does the outcome demonstrate awareness of the entire work sequence, not just the final prompt?
-5. **Count element identification**: How many planted elements (errors, corrections, patterns) from the setup work did the skill's output identify?
+1. **Check triggered status**: `analyze-test.sh` output should show `triggered: true`
+2. **Review setup execution**: Read setup-*.json files to verify setup steps used direct tools (Read, Edit, Bash, etc.) without Skill tool invocations
+3. **Analyze context utilization**: Does result_preview demonstrate awareness of the entire conversation sequence, not just the final prompt?
+4. **Count element identification**: How many planted elements (errors, corrections, patterns) from the setup work did the skill's output identify?
+5. **Verify temporal ordering**: Does the output respect the chronological sequence of the setup steps?
 
 **Common issues in story tests:**
 - Setup responses vary between runs (Claude non-determinism) - this is expected
 - Skill may miss some planted elements if Claude's setup responses were atypical
 - Very long setup conversations may exceed context windows
+- `--resume` session state may not persist perfectly across many turns
 
 ## Test Scenario Design
 
@@ -263,20 +273,28 @@ Example for a PDF skill:
 - [ ] Check description matches actual functionality
 - [ ] Ensure workflow documentation is accurate
 
-### 2. Test Execution (Conductor spawning testers)
+### 2. Test Execution (Conductor)
 
-- [ ] Create tasks for each test scenario
-- [ ] For each test, spawn a dedicated tester agent
-- [ ] Tester executes the skill and reports to conductor
-- [ ] Conductor analyzes tester report
-- [ ] Conductor shuts down the tester
-- [ ] Proceed to next test
+- [ ] Create output directory for test artifacts
+- [ ] Read validation-criteria.md for evaluation framework
+- [ ] For each simple test (positive/negative/edge):
+  - [ ] Execute with `run-test.sh`
+  - [ ] Parse results with `analyze-test.sh`
+  - [ ] Determine PASS/FAIL based on Step 2 expectations
+  - [ ] Record result and issues
+- [ ] For each story test:
+  - [ ] Create setup prompts file
+  - [ ] Execute with `run-story-test.sh`
+  - [ ] Parse results with `analyze-test.sh`
+  - [ ] Check context awareness in result_preview
+  - [ ] Determine PASS/FAIL
+  - [ ] Record result with story-specific notes
 
 ### 3. Results Analysis (Conductor)
 
-- [ ] Receive test execution report from tester
+- [ ] Review all test results
 - [ ] Compare actual vs. expected behavior
-- [ ] Spawn new tester where report is insufficient
+- [ ] Check raw jsonl files if results are unclear
 - [ ] Evaluate against validation criteria
 - [ ] Identify patterns across test results
 
