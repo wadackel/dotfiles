@@ -398,6 +398,11 @@
           {
             "type": "command",
             "command": "claude-notify.sh send Hero"
+          },
+          {
+            "type": "command",
+            "command": "claude-memo.sh",
+            "async": true
           }
         ]
       }
