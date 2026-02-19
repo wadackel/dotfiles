@@ -94,6 +94,15 @@ ast-grep scan --rule test_rule.yml test_example.js
 3. Use `--debug-query` to understand the AST structure (see below)
 4. Check if `kind` values are correct for the language
 
+**Common errors:**
+- `duplicate field 'has'` or `duplicate field 'inside'`: You cannot have multiple `has` or `inside` at the same level in YAML. Use `all` to group them:
+  ```yaml
+  rule:
+    all:
+      - has: { pattern: await $EXPR, stopBy: end }
+      - has: { kind: formal_parameters, stopBy: end }
+  ```
+
 ### Step 5: Search the Codebase
 
 Once the rule matches the example code correctly, search the actual codebase:
