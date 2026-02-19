@@ -48,7 +48,7 @@ project_dir="${cwd:-$PWD}"
 repo_name=$(basename "$(git -C "$project_dir" rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)
 repo_name="${repo_name:-$(basename "$project_dir")}"
 
-daily_note="/Users/wadackel/Documents/Main/99_Tracking/Daily/$(date +%Y-%m-%d).md"
+daily_note="${HOME}/Documents/Main/99_Tracking/Daily/$(date +%Y-%m-%d).md"
 if [ ! -f "$daily_note" ]; then
   log "SKIP: daily note not found ($daily_note)"
   exit 0
