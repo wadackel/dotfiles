@@ -28,6 +28,7 @@ while IFS= read -r setup_prompt; do
     result=$(env -u CLAUDECODE claude -p "$setup_prompt" \
       --output-format json \
       --max-turns "$max_turns" \
+      --dangerously-skip-permissions \
       2>/dev/null)
     session_id=$(echo "$result" | jq -r '.session_id')
     echo "$result" > "${output_dir}/${test_id}.setup-${setup_index}.json"
@@ -37,6 +38,7 @@ while IFS= read -r setup_prompt; do
       --resume "$session_id" \
       --output-format json \
       --max-turns "$max_turns" \
+      --dangerously-skip-permissions \
       > "${output_dir}/${test_id}.setup-${setup_index}.json" 2>/dev/null
   fi
 
@@ -49,6 +51,7 @@ env -u CLAUDECODE claude -p "$test_prompt" \
   --output-format stream-json \
   --verbose \
   --max-turns "$max_turns" \
+  --dangerously-skip-permissions \
   > "${output_dir}/${test_id}.jsonl" 2>/dev/null
 
 echo "$?" > "${output_dir}/${test_id}.exit"

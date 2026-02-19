@@ -19,6 +19,7 @@ env -u CLAUDECODE claude -p "$prompt" \
   --verbose \
   --max-turns "$max_turns" \
   --no-session-persistence \
+  --dangerously-skip-permissions \
   > "$output_file" 2>/dev/null
 
 echo "$?" > "${output_dir}/${test_id}.exit"
