@@ -42,8 +42,11 @@ in
     # テーマ
     "zellij/themes/dogrun.kdl".source = ./themes/dogrun.kdl;
 
-    # zjstatus プラグイン
-    "zellij/plugins/zjstatus.wasm".source = "${pkgs.zjstatus}/bin/zjstatus.wasm";
+    # zjstatus プラグイン（pre-built binary）
+    "zellij/plugins/zjstatus.wasm".source = pkgs.fetchurl {
+      url = "https://github.com/dj95/zjstatus/releases/download/v0.22.0/zjstatus.wasm";
+      sha256 = "0lyxah0pzgw57wbrvfz2y0bjrna9bgmsw9z9f898dgqw1g92dr2d";
+    };
 
     # zellij-tab-name プラグイン
     "zellij/plugins/zellij-tab-name.wasm".source = pkgs.zellij-tab-name;

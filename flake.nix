@@ -12,7 +12,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     treefmt-nix.url = "github:numtide/treefmt-nix";
-    zjstatus.url = "github:dj95/zjstatus";
     zellij-tab-name = {
       url = "https://github.com/Cynary/zellij-tab-name/releases/download/v0.4.1/zellij-tab-name.wasm";
       flake = false;
@@ -26,7 +25,6 @@
       home-manager,
       nix-darwin,
       treefmt-nix,
-      zjstatus,
       zellij-tab-name,
       ...
     }:
@@ -44,7 +42,6 @@
           home-manager
           nix-darwin
           treefmt-nix
-          zjstatus
           zellij-tab-name
           ;
       };
@@ -52,10 +49,8 @@
       # treefmt 設定の評価
       treefmtEval = treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
 
-      # zjstatus overlay を定義
       overlays = [
         (final: prev: {
-          zjstatus = zjstatus.packages.${system}.default;
           zellij-tab-name = zellij-tab-name;
         })
       ];
