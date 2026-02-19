@@ -39,6 +39,10 @@
     mkcert # Simple tool for making locally-trusted development certificates
 
     # Container & Cloud Tools
+    colima # Container runtime (Docker alternative)
+    docker-client # Docker CLI
+    docker-compose # Multi-container Docker applications
+    docker-buildx # Docker Buildx plugin
     dive # Docker image layer analyzer
     cloudflared # Cloudflare Tunnel client
 
