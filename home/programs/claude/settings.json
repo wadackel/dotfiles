@@ -431,6 +431,6 @@
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true,
-  "teammateMode": "in-process",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "teammateMode": "in-process"
 }

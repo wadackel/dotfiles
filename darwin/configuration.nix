@@ -77,6 +77,7 @@
     # Cask configuration
     casks = [
       # Applications
+      "1password"
       "1password-cli"
       "appcleaner"
       "arc"
@@ -84,6 +85,7 @@
       "claude"
       "claude-code"
       "codex"
+      "figma"
       "firefox"
       "fuwari"
       "google-chrome@canary"
@@ -96,6 +98,7 @@
       "wezterm"
       "xcodes-app"
       "imageoptim"
+      "google-japanese-ime"
     ];
 
     # Cask installation arguments
@@ -301,6 +304,7 @@
       };
 
       # アクセシビリティ: スクロールズーム設定
+      # NOTE: ターミナル (WezTerm) に Full Disk Access が必要
       "com.apple.universalaccess" = {
         HIDScrollZoomModifierMask = 262144; # Control (^) キー
         closeViewScrollWheelToggle = true; # スクロールでズーム有効化
