@@ -49,10 +49,8 @@
       lockfiles = false; # Don't write lockfiles to Nix store
     };
 
-    # Tap configuration (11 repositories after cleanup)
+    # Tap configuration
     taps = [
-      "homebrew/bundle"
-      "homebrew/cask-versions"
       "wadackel/tap"
       "hashicorp/tap"
     ];
@@ -94,6 +92,7 @@
       "keycastr"
       "obsidian"
       "raycast"
+      "slack"
       "wezterm"
       "xcodes-app"
       "imageoptim"
