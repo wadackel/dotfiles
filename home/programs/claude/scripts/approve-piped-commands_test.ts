@@ -1,0 +1,132 @@
+import { assertEquals } from "jsr:@std/assert";
+import {
+  ALLOWED_COMMANDS,
+  extractCommands,
+  isCompoundCommand,
+  shouldApprove,
+} from "./approve-piped-commands.ts";
+
+// --- isCompoundCommand ---
+
+Deno.test("isCompoundCommand: pipe", () => {
+  assertEquals(isCompoundCommand("echo test | grep foo"), true);
+});
+
+Deno.test("isCompoundCommand: &&", () => {
+  assertEquals(isCompoundCommand("git add . && git commit -m msg"), true);
+});
+
+Deno.test("isCompoundCommand: ||", () => {
+  assertEquals(isCompoundCommand("test -f a || echo missing"), true);
+});
+
+Deno.test("isCompoundCommand: semicolon", () => {
+  assertEquals(isCompoundCommand("echo a; echo b"), true);
+});
+
+Deno.test("isCompoundCommand: simple command", () => {
+  assertEquals(isCompoundCommand("echo hello"), false);
+});
+
+Deno.test("isCompoundCommand: command with redirect only", () => {
+  assertEquals(isCompoundCommand("echo hello 2>&1"), false);
+});
+
+// --- extractCommands ---
+
+Deno.test("extractCommands: simple pipe", () => {
+  assertEquals(extractCommands("echo test | grep foo"), ["echo", "grep"]);
+});
+
+Deno.test("extractCommands: pipe with redirect", () => {
+  assertEquals(
+    extractCommands("echo test | gemini -p 'hello' 2>&1"),
+    ["echo", "gemini"],
+  );
+});
+
+Deno.test("extractCommands: subshell with pipe and redirect", () => {
+  assertEquals(
+    extractCommands('time (echo "test" | gemini -p "Reply" 2>&1)'),
+    ["time", "echo", "gemini"],
+  );
+});
+
+Deno.test("extractCommands: &&", () => {
+  assertEquals(
+    extractCommands("git add . && git commit -m msg"),
+    ["git", "git"],
+  );
+});
+
+Deno.test("extractCommands: mixed operators", () => {
+  assertEquals(
+    extractCommands("echo a | grep b && echo c; wc -l"),
+    ["echo", "grep", "echo", "wc"],
+  );
+});
+
+Deno.test("extractCommands: strips input redirect", () => {
+  assertEquals(extractCommands("sort <input.txt | head"), ["sort", "head"]);
+});
+
+Deno.test("extractCommands: strips numbered redirect", () => {
+  assertEquals(
+    extractCommands("npm test 2>/dev/null | tail -5"),
+    ["npm", "tail"],
+  );
+});
+
+Deno.test("extractCommands: empty segments ignored", () => {
+  assertEquals(extractCommands("| echo test"), ["echo"]);
+});
+
+// --- shouldApprove ---
+
+Deno.test("shouldApprove: real-world gemini pipe command", () => {
+  assertEquals(
+    shouldApprove('time (echo "test" | gemini -p "Reply with one word" 2>&1)'),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: simple pipe with allowed commands", () => {
+  assertEquals(shouldApprove("echo test | grep foo"), true);
+});
+
+Deno.test("shouldApprove: && with allowed commands", () => {
+  assertEquals(shouldApprove("git add . && git commit -m msg"), true);
+});
+
+Deno.test("shouldApprove: pipe with unknown command rejects", () => {
+  assertEquals(shouldApprove("echo test | evil-cmd"), false);
+});
+
+Deno.test("shouldApprove: && with unknown command rejects", () => {
+  assertEquals(shouldApprove("echo test && evil-cmd --flag"), false);
+});
+
+Deno.test("shouldApprove: simple command (no operators) rejects", () => {
+  assertEquals(shouldApprove("echo hello"), false);
+});
+
+Deno.test("shouldApprove: single command with redirect (no pipe) rejects", () => {
+  assertEquals(shouldApprove("npm test 2>&1"), false);
+});
+
+Deno.test("shouldApprove: custom allowed set", () => {
+  const custom = new Set(["foo", "bar"]);
+  assertEquals(shouldApprove("foo | bar", custom), true);
+  assertEquals(shouldApprove("foo | baz", custom), false);
+});
+
+Deno.test("shouldApprove: triple pipe chain", () => {
+  assertEquals(shouldApprove("cat file | grep pattern | wc -l"), true);
+});
+
+Deno.test("shouldApprove: all ALLOWED_COMMANDS entries are lowercase strings", () => {
+  for (const cmd of ALLOWED_COMMANDS) {
+    assertEquals(cmd, cmd.toLowerCase(), `${cmd} should be lowercase`);
+    assertEquals(cmd.trim(), cmd, `${cmd} should have no whitespace`);
+  }
+});

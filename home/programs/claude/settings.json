@@ -12,6 +12,10 @@
     "DISABLE_TELEMETRY": "true"
   },
   "permissions": {
+    "additionalDirectories": [
+      "~/dotfiles",
+      "/tmp"
+    ],
     "allow": [
       "Bash(* --help *)",
       "Bash(* --version)",
@@ -43,6 +47,7 @@
       "Bash(chmod *)",
       "Bash(chown *)",
       "Bash(claude *)",
+      "Bash(claude-memo.ts*)",
       "Bash(clippy *)",
       "Bash(cloc *)",
       "Bash(cmake *)",
@@ -65,6 +70,7 @@
       "Bash(entr *)",
       "Bash(env)",
       "Bash(esbuild *)",
+      "Bash(extract-session-history.ts*)",
       "Bash(eslint *)",
       "Bash(exa *)",
       "Bash(export *)",
@@ -263,12 +269,13 @@
       "Bash(zellij-tab-notify *)",
       "Bash(zoxide *)",
       "Edit(**)",
-      "Edit(//tmp/**)",
+      "Edit(~/.claude/**)",
+      "Write(**)",
+      "Write(~/.claude/**)",
       "Glob(**)",
       "Grep(**)",
       "LS(**)",
       "Read(**)",
-      "Read(//tmp/**)",
       "Search",
       "Skill",
       "Task",
@@ -380,6 +387,17 @@
   },
   "model": "opusplan",
   "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "approve-piped-commands.ts"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "",
@@ -401,7 +419,7 @@
           },
           {
             "type": "command",
-            "command": "claude-memo.sh",
+            "command": "claude-memo.ts",
             "async": true
           }
         ]

@@ -248,10 +248,20 @@ This repository includes comprehensive Claude Code configuration:
 - **Agents**: 20 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, cloud, code-review, debugging, DevOps, documentation, error-detective, frontend, JavaScript/TypeScript, performance, QA, React, refactoring, security-audit, security-engineering, SRE, technical writing)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
   - `claude-notify.sh`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.sh debug`
+  - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
+  - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(<script-name>*)"` を追記すること（shebang 経由実行は `deno *` 等の汎用パターンでは不十分）
+  - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
+- **`permissions.allow`**: `Edit(~/.claude/**)` と `Write(~/.claude/**)` を追加することで、skill が `~/.claude/` 配下のファイルを確認ダイアログなしに編集できる
 
-Changes to Claude Code settings require `darwin-rebuild` to update symlinks.
+Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
 ### Hook Data
 
 Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`) plus event-specific fields. Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
+
+### `permissions.allow` の制限
+
+パイプ `|`、`&&`、`||`、`;`、リダイレクト `2>&1` などを含むコマンドは `Bash(cmd *)` パターンにマッチしない既知の制限がある（[Issue #13137](https://github.com/anthropics/claude-code/issues/13137)）。対処法:
+- `PermissionRequest` hook で各パイプセグメントをホワイトリスト照合して自動承認する（`home/programs/claude/scripts/approve-piped-commands.ts` 参照）
+- `PermissionRequest` は権限ダイアログが発生する直前のみ発火するため、`PreToolUse` より低オーバーヘッド

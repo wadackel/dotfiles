@@ -4,6 +4,10 @@
 
 正確さよりもシンプルさを常に優先する。YAGNI、KISS、DRY。循環的複雑度を増やさずに無償で得られる場合を除き、後方互換シムやフォールバックパスは不要。
 
+### Git コマンドの実行規則
+
+`git -C <path>` を使用しないこと。`permissions.allow` のパターン（例: `Bash(git diff *)`）にマッチせず毎回権限確認が発生する。代わりに作業ディレクトリで直接 git コマンドを実行する。別ディレクトリを操作する場合は `cd <path> && git <subcommand>` を使用。
+
 ### Browser Automation
 
 ブラウザを利用する操作には **chrome-devtools スキル**（Chrome DevTools MCP）を積極的に使用すること。
@@ -22,6 +26,11 @@
 - 初めて使う API・ライブラリの使い方調査
 
 gemini-research は**調査・分析**担当（コード分析を含む）。実装コードは Claude Code が書く。
+
+**例外**: Claude Code 自体の仕様（permissions、hooks、settings等）は gemini-research や claude-code-guide より公式ドキュメントを直接 WebFetch する方が正確:
+- `https://code.claude.com/docs/en/permissions`
+- `https://code.claude.com/docs/en/settings`
+- `https://code.claude.com/docs/en/security`
 
 ### codex-review スキル使用時の特別ルール
 
@@ -82,6 +91,11 @@ GitHub の Issue や Pull Request など、ユーザーから提供された URL
 - flex コンテナ内で `transform: scale()` を使う場合、`flex-shrink: 0`（Tailwind: `shrink-0`）を指定して flex による縮小を防ぐ
 - ブラウザデフォルトの `max-width: 100%` も transform との組み合わせで二重制約を引き起こすため、`max-w-none` も併用
 - 例: 画像を transform でスケーリングする場合 → `class="shrink-0 max-w-none max-h-none"`
+
+### Deno スクリプト
+
+- stdin 読み取りは `new Response(Deno.stdin.readable).text()`（Deno 2.x）。パーミッションフラグ不要
+- inline コード実行は `deno eval`。`deno run -e` は存在しない
 
 ### ファイル構成
 

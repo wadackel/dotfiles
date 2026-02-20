@@ -28,23 +28,30 @@ No arguments needed. The skill analyzes the current session context automaticall
 
 ### Phase 1: Analyze Session
 
-Reflect on the session by examining:
+Gather full session data and reflect on it:
 
-1. **Conversation history** (available in context):
+1. **Extract full transcript history** (Compact で失われた内容も含む完全な記録):
+   ```bash
+   extract-session-history.ts
+   ```
+   stdout に出力されたファイルパスを Read ツールで読み込む。
+
+2. **Review extracted history** focusing on:
    - Tasks performed and their outcomes
    - Errors encountered and how they were resolved
    - Questions asked to the user (signals missing context)
    - User corrections to Claude's approach
    - Repeated patterns of work
-   - Frequently used tools or commands
+   - Tool usage patterns (Tool Usage Summary セクション参照)
+   - Compact boundaries (セッション内のフェーズ遷移を示す)
 
-2. **Git activity** (if in a git repository):
+3. **Git activity** (if in a git repository):
    ```bash
    git log --oneline -20
    git diff --stat HEAD~5..HEAD
    ```
 
-3. **Current context files**:
+4. **Current context files**:
    - Read project CLAUDE.md (if exists)
    - Read global ~/.claude/CLAUDE.md
    - List existing skills in ~/.claude/skills/
