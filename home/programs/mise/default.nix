@@ -13,7 +13,7 @@
         deno = "latest";
         go = "latest";
         node = "lts";
-        rust = "latest";
+        rust = "nightly";
         usage = "latest";
         uv = "latest";
         yamllint = "latest";

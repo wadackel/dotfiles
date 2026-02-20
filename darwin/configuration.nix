@@ -158,6 +158,8 @@
       NSDocumentSaveNewDocumentsToCloud = false; # 新規ドキュメントをiCloudではなくローカルに保存
 
       # 外観・アニメーション設定
+      AppleInterfaceStyle = "Dark"; # ダークモード
+      AppleInterfaceStyleSwitchesAutomatically = false; # 自動切替しない
       # work profile: 常時表示、private profile: スクロール時のみ表示
       AppleShowScrollBars = if profile == "work" then "Always" else "Automatic";
       NSAutomaticWindowAnimationsEnabled = true; # ウィンドウ開閉アニメーション
@@ -309,6 +311,31 @@
         HIDScrollZoomModifierMask = 262144; # Control (^) キー
         closeViewScrollWheelToggle = true; # スクロールでズーム有効化
       };
+
+      # Spotlightショートカット無効化
+      "com.apple.symbolichotkeys" = {
+        AppleSymbolicHotKeys = {
+          "64" = {
+            enabled = false; # Cmd+Space (Spotlight Search) を無効化
+            value = {
+              parameters = [
+                32
+                49
+                1048576
+              ];
+              type = "standard";
+            };
+          };
+        };
+      };
+    };
+
+    # システムレベルのカスタム設定
+    CustomSystemPreferences = {
+      # 自動輝度調整の無効化
+      "com.apple.iokit.AmbientLightSensor" = {
+        "Automatic Display Enabled" = false;
+      };
     };
   };
 
@@ -319,5 +346,8 @@
 
     # Finder設定を即座に反映
     killall Finder 2>/dev/null || true
+
+    # Spotlightショートカット設定を即座に反映（ログアウト不要）
+    /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u 2>/dev/null || true
   '';
 }

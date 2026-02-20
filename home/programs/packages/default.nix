@@ -31,6 +31,7 @@
     just # Handy way to save and run project-specific commands
     tokei # Fast code statistics tool
     tig # Text-mode interface for git
+    tree-sitter # Incremental parsing library (provides tree-sitter CLI)
 
     # Repository Management
     ghq # Remote repository management made easy
