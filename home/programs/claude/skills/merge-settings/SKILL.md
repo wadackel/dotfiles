@@ -2,7 +2,7 @@
 name: merge-settings
 description: Merge project-local .claude/settings.local.json permissions into global ~/.claude/settings.json with user approval
 permissions:
-  - Bash(~/.claude/skills/merge-settings/merge.sh*)
+  - Bash(~/.claude/skills/merge-settings/merge.ts*)
 ---
 
 # Settings Merger
@@ -16,7 +16,7 @@ Merges project-specific permission rules from `.claude/settings.local.json` into
 After approval, apply with the approved rules JSON:
 
 ```
-~/.claude/skills/merge-settings/merge.sh --apply '<rules_json>'
+~/.claude/skills/merge-settings/merge.ts --apply '<rules_json>'
 ```
 
 ## How it works
@@ -45,41 +45,41 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
   - `WebFetch(domain:docs.python.org)` - Language docs
 
 **Specific-purpose safe CLI tools**
-- Pattern: `Bash(<tool>:*)`
+- Pattern: `Bash(<tool> *)`
 - Rationale: Tools limited to specific safe purposes (NOT universal shells/scripting tools)
 - Examples:
-  - `Bash(claude:*)` - Claude CLI operations
-  - `Bash(gemini:*)` - Gemini CLI operations
-  - `Bash(starship config:*)` - starship configuration
-  - `Bash(rg:*)` - ripgrep search
-  - `Bash(tmux:*)` - Terminal multiplexer
-  - `Bash(git status:*)` - Git read operations
-  - `Bash(nvim:*)` - Neovim editor
-  - `Bash(zellij:*)` - Terminal workspace
+  - `Bash(claude *)` - Claude CLI operations
+  - `Bash(gemini *)` - Gemini CLI operations
+  - `Bash(starship config *)` - starship configuration
+  - `Bash(rg *)` - ripgrep search
+  - `Bash(tmux *)` - Terminal multiplexer
+  - `Bash(git status *)` - Git read operations
+  - `Bash(nvim *)` - Neovim editor
+  - `Bash(zellij *)` - Terminal workspace
 
 **IMPORTANT**: Do NOT include universal shells/scripting tools like:
-- `bash:*`, `sh:*`, `zsh:*` - Universal shells allowing arbitrary code execution
-- `expect:*` - Universal scripting tool
-- `python:*`, `perl:*`, `ruby:*` - Languages allowing arbitrary code via `-c` flag
+- `Bash(bash *)`, `Bash(sh *)`, `Bash(zsh *)` - Universal shells allowing arbitrary code execution
+- `Bash(expect *)` - Universal scripting tool
+- `Bash(python *)`, `Bash(perl *)`, `Bash(ruby *)` - Languages allowing arbitrary code via `-c` flag
 
 **Read-only inspection commands**
 - Pattern: Commands that only query system state
 - Rationale: No side effects, safe for global use
 - Examples:
-  - `Bash(defaults read:*)` - macOS preferences reader
-  - `Bash(plutil:*)` - Property list utility
-  - `Bash(ioreg:*)` - I/O registry explorer
+  - `Bash(defaults read *)` - macOS preferences reader
+  - `Bash(plutil *)` - Property list utility
+  - `Bash(ioreg *)` - I/O registry explorer
 
-**Note**: Commands like `cat:*` and `ls:*` can read arbitrary files, so consider project-specific sensitivity before adding globally. For most users, these are safe, but in sensitive environments, keep them project-local.
+**Note**: Commands like `Bash(cat *)` and `Bash(ls *)` can read arbitrary files, so consider project-specific sensitivity before adding globally. For most users, these are safe, but in sensitive environments, keep them project-local.
 
 **Package/dependency managers (read-only)**
 - Pattern: Query operations for package managers
 - Rationale: Portable across projects using the same tools
 - Examples:
-  - `Bash(nix search:*)` - Nix package search
-  - `Bash(npm list:*)` - Node packages
-  - `Bash(pip list:*)` - Python packages
-  - `Bash(cargo search:*)` - Rust packages
+  - `Bash(nix search *)` - Nix package search
+  - `Bash(npm list *)` - Node packages
+  - `Bash(pip list *)` - Python packages
+  - `Bash(cargo search *)` - Rust packages
 
 **Version check commands**
 - Pattern: Commands that display version information
@@ -87,7 +87,7 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
 - Examples:
   - `Bash(node --version)` - Node.js version
   - `Bash(python --version)` - Python version
-  - `Bash(gcloud version:*)` - Cloud SDK version
+  - `Bash(gcloud version *)` - Cloud SDK version
 
 ### EXCLUDE - Keep in project-local settings
 
@@ -95,14 +95,14 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
 - Pattern: Tools allowing arbitrary code execution
 - Rationale: Universal shells and scripting languages can execute any code, making global permission extremely dangerous
 - Examples:
-  - `Bash(bash:*)` - Universal shell
-  - `Bash(sh:*)` - Universal shell
-  - `Bash(zsh:*)` - Universal shell
-  - `Bash(expect:*)` - Universal scripting tool
-  - `Bash(python:*)` - Can execute arbitrary code via `python -c`
-  - `Bash(perl:*)` - Can execute arbitrary code via `perl -e`
-  - `Bash(ruby:*)` - Can execute arbitrary code via `ruby -e`
-  - `Bash(node:*)` - Can execute arbitrary code via `node -e`
+  - `Bash(bash *)` - Universal shell
+  - `Bash(sh *)` - Universal shell
+  - `Bash(zsh *)` - Universal shell
+  - `Bash(expect *)` - Universal scripting tool
+  - `Bash(python *)` - Can execute arbitrary code via `python -c`
+  - `Bash(perl *)` - Can execute arbitrary code via `perl -e`
+  - `Bash(ruby *)` - Can execute arbitrary code via `ruby -e`
+  - `Bash(node *)` - Can execute arbitrary code via `node -e`
 
 **Absolute or relative paths**
 - Pattern: Any command with explicit filesystem paths
@@ -146,9 +146,9 @@ When evaluating new rules from `settings.local.json`, Claude applies the followi
 - Pattern: Non-standard command names unique to the project
 - Rationale: Tools don't exist in other environments
 - Examples:
-  - `appserver:*` - Custom application server
-  - `myapp:*` - Project-specific binary
-  - `deploy-to-staging:*` - Custom deployment script
+  - `Bash(appserver *)` - Custom application server
+  - `Bash(myapp *)` - Project-specific binary
+  - `Bash(deploy-to-staging *)` - Custom deployment script
 
 ## Skill Execution Workflow
 
@@ -158,7 +158,7 @@ When `/merge-settings` is invoked, Claude should follow this workflow:
 
 Run the merge script in proposal mode:
 ```bash
-~/.claude/skills/merge-settings/merge.sh
+~/.claude/skills/merge-settings/merge.ts
 ```
 
 This outputs JSON with:
@@ -203,7 +203,7 @@ Apply <count> recommended rules to ~/.claude/settings.json?
 If user approves, construct the approved rules JSON array (only RECOMMEND rules) and apply:
 
 ```bash
-~/.claude/skills/merge-settings/merge.sh --apply '<rules_json>'
+~/.claude/skills/merge-settings/merge.ts --apply '<rules_json>'
 ```
 
 Notes:
@@ -228,8 +228,14 @@ After successful application:
 - Example: `WebFetch(domain:api.github.com)` → RECOMMEND
 - Example: `WebFetch(https://internal.company.com/api)` → EXCLUDE
 
+**Note on deprecated `:*` syntax**:
+- Claude Code previously used `Bash(cmd:*)` syntax, which is now deprecated
+- The merge script automatically normalizes `:*)` → ` *)` before comparison and application
+- When evaluating rules, treat `Bash(cmd:*)` the same as `Bash(cmd *)` — they are equivalent
+- Always propose rules in the new ` *` format (e.g., `Bash(tmux *)` not `Bash(tmux:*)`)
+
 **For Bash rules**:
-- Extract the command name (before first `:` or space)
+- Extract the command name (before first space)
 - **CRITICAL**: Immediately EXCLUDE if it's a universal shell/scripting tool (bash, sh, zsh, expect, python, perl, ruby, node)
 - Check if it's a specific-purpose safe tool (claude, gemini, starship, rg, git, tmux, etc.)
 - Look for path indicators (`/`, `~`, `./`) → EXCLUDE
@@ -237,14 +243,14 @@ After successful application:
 - Check for shell execution patterns (`source`, `exec`, `-c`) → EXCLUDE
 
 **Edge cases**:
-- `Bash(git update-index:*)` - Standard tool, specific subcommand → RECOMMEND
-- `Bash(nix-store --query --references:*)` - Nix tool, read-only → RECOMMEND
-- `Bash(defaults -currentHost read -g:*)` - Read-only BUT currentHost implies machine-specific → check content
+- `Bash(git update-index *)` - Standard tool, specific subcommand → RECOMMEND
+- `Bash(nix-store --query --references *)` - Nix tool, read-only → RECOMMEND
+- `Bash(defaults -currentHost read -g *)` - Read-only BUT currentHost implies machine-specific → check content
   - If it includes device IDs: EXCLUDE
   - If it's generic: RECOMMEND
 
 **Wildcards and specificity**:
-- `tool:*` generally indicates a pattern, lean toward RECOMMEND if tool is standard
+- `Bash(tool *)` generally indicates a pattern, lean toward RECOMMEND if tool is standard
 - Specific arguments without wildcards may indicate project-specific usage → scrutinize carefully
 
 **When uncertain**:
@@ -266,7 +272,7 @@ When a project requires specific permissions not in your global settings:
 You can also pass the approved JSON array directly:
 
 ```
-~/.claude/skills/merge-settings/merge.sh --apply '<rules_json>'
+~/.claude/skills/merge-settings/merge.ts --apply '<rules_json>'
 ```
 
 ## Safety features

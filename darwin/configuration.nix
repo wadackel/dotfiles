@@ -53,6 +53,7 @@
     taps = [
       "wadackel/tap"
       "hashicorp/tap"
+      "steipete/tap"
     ];
 
     # Formula configuration
@@ -61,6 +62,7 @@
       "ofsht"
       "pinact"
       "gemini-cli"
+      "gogcli"
 
       # Python Ecosystem
       "python@3.14"

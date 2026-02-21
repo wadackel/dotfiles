@@ -80,3 +80,4 @@ auto-discovery により import 登録は不要。設定ファイルは同ディ
 - ユーザーが「Homebrew で」と明示した場合はその指示を優先
 - mise 管理のツール（Node.js, Go, Rust 等）は `home/programs/mise/default.nix` を先に確認し重複を避ける
 - `darwin-rebuild` が失敗した場合は優先順位の次の方法にフォールバック
+- カスタム tap 経由のフォーミュラでも `brew search <name>` で homebrew-core 収録済みか先に確認する（tap 追加が不要な場合がある）

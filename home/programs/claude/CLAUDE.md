@@ -45,6 +45,13 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
 
 ### Skill 設計原則
 
+- **スキルは英語で作成する**
+  - SKILL.md のコンテンツ（説明文、セクション見出し、コメント等）は原則英語で記述
+  - ユーザーが明示的に日本語を指定した場合のみ例外
+
+- **新規スキル作成後は skill-improver を実行する**
+  - スキル作成完了後、`/skill-improver <name>` で品質評価と最適化を実施してから完了とする
+
 - **ツール/スキルの委譲パターン**
   - スキル内で他のスキルやツールの詳細な使い方（コマンド例、フラグ、引数など）を記載しない
   - 代わりに「Use the **[skill-name] skill** for [purpose]」のような簡潔な委譲指示を使用
@@ -52,6 +59,8 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
   - 例: qa-planner では chrome-devtools MCP のコマンド例を列挙せず、「Use the **chrome-devtools skill** for browser automation」と記載
 
 ### 全般
+
+- `AskUserQuestion` の `options` は1質問あたり最大4つまで（それ以上は ValidationError）
 
 - **すべての作業に Subagents を積極的に利用する**
 - **Plan mode で具体的な実装コードを確認したい場合**

@@ -249,8 +249,10 @@ This repository includes comprehensive Claude Code configuration:
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
   - `claude-notify.ts`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.ts debug`
   - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
+  - `claude-memo.ts`: セッション要約を Obsidian デイリーノートに書き込む Stop hook。デバッグ: `$TMPDIR/claude-memo.log`
   - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(<script-name>*)"` を追記すること（shebang 経由実行は `deno *` 等の汎用パターンでは不十分）
   - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
+  - 新スクリプト追加時は `chmod +x` で実行権限を付与すること（hooks からの実行に execute bit が必要。git が 100644/100755 でモードを管理するので commit も必要）
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
 - **`permissions.allow`**: `Edit(~/.claude/**)` と `Write(~/.claude/**)` を追加することで、skill が `~/.claude/` 配下のファイルを確認ダイアログなしに編集できる
 
