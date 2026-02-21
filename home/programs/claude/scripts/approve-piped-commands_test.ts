@@ -2,34 +2,46 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   ALLOWED_COMMANDS,
   extractCommands,
-  isCompoundCommand,
+  hasShellSyntax,
   shouldApprove,
 } from "./approve-piped-commands.ts";
 
-// --- isCompoundCommand ---
+// --- hasShellSyntax ---
 
-Deno.test("isCompoundCommand: pipe", () => {
-  assertEquals(isCompoundCommand("echo test | grep foo"), true);
+Deno.test("hasShellSyntax: pipe", () => {
+  assertEquals(hasShellSyntax("echo test | grep foo"), true);
 });
 
-Deno.test("isCompoundCommand: &&", () => {
-  assertEquals(isCompoundCommand("git add . && git commit -m msg"), true);
+Deno.test("hasShellSyntax: &&", () => {
+  assertEquals(hasShellSyntax("git add . && git commit -m msg"), true);
 });
 
-Deno.test("isCompoundCommand: ||", () => {
-  assertEquals(isCompoundCommand("test -f a || echo missing"), true);
+Deno.test("hasShellSyntax: ||", () => {
+  assertEquals(hasShellSyntax("test -f a || echo missing"), true);
 });
 
-Deno.test("isCompoundCommand: semicolon", () => {
-  assertEquals(isCompoundCommand("echo a; echo b"), true);
+Deno.test("hasShellSyntax: semicolon", () => {
+  assertEquals(hasShellSyntax("echo a; echo b"), true);
 });
 
-Deno.test("isCompoundCommand: simple command", () => {
-  assertEquals(isCompoundCommand("echo hello"), false);
+Deno.test("hasShellSyntax: simple command", () => {
+  assertEquals(hasShellSyntax("echo hello"), false);
 });
 
-Deno.test("isCompoundCommand: command with redirect only", () => {
-  assertEquals(isCompoundCommand("echo hello 2>&1"), false);
+Deno.test("hasShellSyntax: stderr redirect 2>&1", () => {
+  assertEquals(hasShellSyntax("gemini -p 'test' 2>&1"), true);
+});
+
+Deno.test("hasShellSyntax: output redirect >/dev/null", () => {
+  assertEquals(hasShellSyntax("echo hello >/dev/null"), true);
+});
+
+Deno.test("hasShellSyntax: numbered output redirect 2>/dev/null", () => {
+  assertEquals(hasShellSyntax("npm test 2>/dev/null"), true);
+});
+
+Deno.test("hasShellSyntax: input redirect", () => {
+  assertEquals(hasShellSyntax("sort <input.txt"), true);
 });
 
 // --- extractCommands ---
@@ -106,12 +118,24 @@ Deno.test("shouldApprove: && with unknown command rejects", () => {
   assertEquals(shouldApprove("echo test && evil-cmd --flag"), false);
 });
 
-Deno.test("shouldApprove: simple command (no operators) rejects", () => {
+Deno.test("shouldApprove: simple command (no shell syntax) rejects", () => {
   assertEquals(shouldApprove("echo hello"), false);
 });
 
-Deno.test("shouldApprove: single command with redirect (no pipe) rejects", () => {
-  assertEquals(shouldApprove("npm test 2>&1"), false);
+Deno.test("shouldApprove: allowed command with 2>&1", () => {
+  assertEquals(shouldApprove("gemini -p 'test' 2>&1"), true);
+});
+
+Deno.test("shouldApprove: allowed command with >/dev/null", () => {
+  assertEquals(shouldApprove("npm test >/dev/null"), true);
+});
+
+Deno.test("shouldApprove: unknown command with 2>&1 rejects", () => {
+  assertEquals(shouldApprove("evil-cmd 2>&1"), false);
+});
+
+Deno.test("shouldApprove: pipe + redirect combined", () => {
+  assertEquals(shouldApprove("echo test | gemini -p 'hello' 2>&1"), true);
 });
 
 Deno.test("shouldApprove: custom allowed set", () => {

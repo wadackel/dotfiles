@@ -18,9 +18,9 @@ export const ALLOWED_COMMANDS = new Set([
   "zellij",
 ]);
 
-/** Compound operator (|, &&, ||, ;) を含むかチェック。リダイレクト (>&) は除外 */
-export function isCompoundCommand(command: string): boolean {
-  return /[|;]|&&/.test(command);
+/** Compound operator (|, &&, ||, ;) またはリダイレクト (2>&1, >/dev/null 等) を含むかチェック */
+export function hasShellSyntax(command: string): boolean {
+  return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*/.test(command);
 }
 
 /** コマンド文字列から各セグメントの先頭コマンド名を抽出 */
@@ -49,7 +49,7 @@ export function shouldApprove(
   command: string,
   allowed: Set<string> = ALLOWED_COMMANDS,
 ): boolean {
-  if (!isCompoundCommand(command)) return false;
+  if (!hasShellSyntax(command)) return false;
   const cmds = extractCommands(command);
   if (cmds.length === 0) return false;
   return cmds.every((cmd) => allowed.has(cmd));

@@ -265,5 +265,5 @@ Claude Code hooks receive JSON via stdin with common fields (`session_id`, `tran
 ### `permissions.allow` の制限
 
 パイプ `|`、`&&`、`||`、`;`、リダイレクト `2>&1` などを含むコマンドは `Bash(cmd *)` パターンにマッチしない既知の制限がある（[Issue #13137](https://github.com/anthropics/claude-code/issues/13137)）。対処法:
-- `PermissionRequest` hook で各パイプセグメントをホワイトリスト照合して自動承認する（`home/programs/claude/scripts/approve-piped-commands.ts` 参照）
+- `PermissionRequest` hook でパイプ・リダイレクト等のシェル構文を含むコマンドをセグメント分割してホワイトリスト照合し自動承認する（`home/programs/claude/scripts/approve-piped-commands.ts` 参照）
 - `PermissionRequest` は権限ダイアログが発生する直前のみ発火するため、`PreToolUse` より低オーバーヘッド
