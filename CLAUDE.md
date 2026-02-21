@@ -247,7 +247,7 @@ This repository includes comprehensive Claude Code configuration:
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
 - **Agents**: 20 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, cloud, code-review, debugging, DevOps, documentation, error-detective, frontend, JavaScript/TypeScript, performance, QA, React, refactoring, security-audit, security-engineering, SRE, technical writing)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
-  - `claude-notify.sh`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.sh debug`
+  - `claude-notify.ts`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.ts debug`
   - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
   - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(<script-name>*)"` を追記すること（shebang 経由実行は `deno *` 等の汎用パターンでは不十分）
   - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
