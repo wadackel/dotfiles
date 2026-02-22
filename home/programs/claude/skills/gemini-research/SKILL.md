@@ -39,6 +39,26 @@ gemini -p "research prompt here" --output-format json
 gemini -p "Analyze the testing strategy in this repository. What frameworks are used and how are tests organized?" --include-directories ./tests --output-format json
 ```
 
+### `--include-directories` syntax
+
+**Directories must be comma-separated, not space-separated.** Space-separated paths are interpreted as positional arguments and conflict with `-p`, producing the error `Cannot use both a positional prompt and the --prompt (-p) flag together`.
+
+```bash
+# ✅ Correct: comma-separated
+gemini -p "..." --include-directories ./src,./tests --output-format json
+
+# ❌ Wrong: space-separated (causes positional arg conflict)
+gemini -p "..." --include-directories ./src ./tests --output-format json
+```
+
+For large prompts, stdin is more reliable:
+
+```bash
+cat <<'EOF' | gemini -p "" --include-directories ./src,./tests --output-format json
+Your large research prompt here...
+EOF
+```
+
 ## Research Workflows
 
 ### Workflow 1: Repository Analysis (Plan Mode)
