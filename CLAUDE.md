@@ -258,6 +258,11 @@ This repository includes comprehensive Claude Code configuration:
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
+### プロジェクトディレクトリのエンコード規則
+
+`~/.claude/projects/` のディレクトリ名はプロジェクトパスのエンコード: 先頭 `/` 除去後に `-` を prefix、`/` と `.` をどちらも `-` に置換。
+例: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
+
 ### Hook Data
 
 Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`) plus event-specific fields. Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
