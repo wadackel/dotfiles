@@ -41,7 +41,7 @@ function formatSize(bytes: number): string {
 // --- Transcript Discovery ---
 
 function findTranscript(projectDir: string): string {
-  const encoded = projectDir.replace(/^\//, "").replaceAll("/", "-");
+  const encoded = projectDir.replace(/^\//, "").replaceAll("/", "-").replaceAll(".", "-");
   const dir = `${Deno.env.get("HOME")}/.claude/projects/-${encoded}`;
 
   let entries: { path: string; mtime: number }[];
