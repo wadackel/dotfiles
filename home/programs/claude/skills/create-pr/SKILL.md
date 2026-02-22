@@ -2,7 +2,6 @@
 name: create-pr
 description: Creates a GitHub pull request following project conventions. Use when the user asks to create a PR, submit changes for review, or open a pull request. Handles commit analysis, branch management, and PR creation using the gh CLI tool.
 argument-hint: "[draft] [ja]"
-disable-model-invocation: true
 ---
 
 # Create Pull Request
@@ -122,13 +121,14 @@ Write in **English** by default. If `ja` was passed in `$ARGUMENTS`, write in **
 
 ### Create PR with gh CLI
 
-Use a **heredoc** to pass the PR body inline, avoiding temporary files:
+Write the PR body to a temporary file using the **Write** tool:
+
+- File path: `/tmp/pr-body-<random>.md` (use a short random suffix, e.g. 6 alphanumeric chars, to avoid conflicts across parallel sessions)
+
+Then create the PR referencing the file:
 
 ```bash
-gh pr create --title "PR_TITLE" --body "$(cat <<'EOF'
-PR body content here...
-EOF
-)" --base main
+gh pr create --title "PR_TITLE" --body-file /tmp/pr-body-<random>.md --base main
 ```
 
 - If `draft` was passed in `$ARGUMENTS`, add the `--draft` flag
@@ -141,6 +141,10 @@ After creating the PR:
 2. **Suggest next steps** if applicable:
    - Add reviewers: `gh pr edit --add-reviewer USERNAME`
    - Add labels: `gh pr edit --add-label "bug"`
+3. **Clean up** the temporary file:
+   ```bash
+   rm /tmp/pr-body-<random>.md
+   ```
 
 ## Error Handling
 
