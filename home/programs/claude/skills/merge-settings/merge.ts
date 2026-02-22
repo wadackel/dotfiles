@@ -72,23 +72,6 @@ function writeJsonFile(path: string, data: unknown): void {
   Deno.writeTextFileSync(realPath, JSON.stringify(data, null, 2) + "\n");
 }
 
-function createBackup(settingsPath: string, backupDir: string): string {
-  Deno.mkdirSync(backupDir, { recursive: true });
-  const now = new Date();
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-    "_",
-    String(now.getHours()).padStart(2, "0"),
-    String(now.getMinutes()).padStart(2, "0"),
-    String(now.getSeconds()).padStart(2, "0"),
-  ].join("");
-  const backupPath = `${backupDir}/settings_${timestamp}.json`;
-  Deno.copyFileSync(settingsPath, backupPath);
-  return backupPath;
-}
-
 // ================================================================
 // Output helpers
 // ================================================================
@@ -96,7 +79,7 @@ function createBackup(settingsPath: string, backupDir: string): string {
 type Result =
   | { status: "proposal"; new_rules: string[]; new_rules_count: number; project_path: string; user_settings_path: string }
   | { status: "noop"; message: string }
-  | { status: "success"; applied_count: number; backup_path: string; message: string }
+  | { status: "success"; applied_count: number; message: string }
   | { status: "error"; error_type: string; message: string };
 
 function output(result: Result): void {
@@ -153,7 +136,7 @@ function proposalMode(userSettingsPath: string): void {
   });
 }
 
-function applyMode(rulesJsonArg: string, userSettingsPath: string, backupDir: string): void {
+function applyMode(rulesJsonArg: string, userSettingsPath: string): void {
   // Parse incoming rules
   let incomingRules: unknown;
   try {
@@ -183,14 +166,6 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string, backupDir: st
     die("no_user_settings", "~/.claude/settings.json が見つかりません");
   }
 
-  // Backup
-  let backupPath: string;
-  try {
-    backupPath = createBackup(userSettingsPath, backupDir);
-  } catch (e) {
-    die("backup_failed", `バックアップの作成に失敗しました: ${e}`);
-  }
-
   // Merge and write
   const existingRules = extractAllowRules(globalSettings);
   const merged = mergeAllowRules(existingRules, canonicalized);
@@ -206,19 +181,12 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string, backupDir: st
   try {
     writeJsonFile(userSettingsPath, updated);
   } catch (e) {
-    // Attempt restore from backup
-    try {
-      Deno.copyFileSync(backupPath, Deno.realPathSync(userSettingsPath));
-    } catch {
-      // ignore restore error
-    }
     die("write_failed", `設定ファイルの更新に失敗しました: ${e}`);
   }
 
   output({
     status: "success",
     applied_count: canonicalized.length,
-    backup_path: backupPath,
     message: `${canonicalized.length}件のルールを追加しました`,
   });
 }
@@ -230,7 +198,6 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string, backupDir: st
 if (import.meta.main) {
   const claudeHome = `${Deno.env.get("HOME")}/.claude`;
   const userSettingsPath = `${claudeHome}/settings.json`;
-  const backupDir = `${claudeHome}/backups`;
 
   const mode = Deno.args[0];
 
@@ -239,7 +206,7 @@ if (import.meta.main) {
     if (!rulesJson) {
       die("missing_rules", "Usage: merge.ts --apply '<rules_json>'");
     }
-    applyMode(rulesJson, userSettingsPath, backupDir);
+    applyMode(rulesJson, userSettingsPath);
   } else {
     proposalMode(userSettingsPath);
   }
