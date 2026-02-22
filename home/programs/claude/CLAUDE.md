@@ -58,15 +58,23 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
   - 詳細はそのツール/スキルのドキュメントに委ねる
   - 例: qa-planner では chrome-devtools MCP のコマンド例を列挙せず、「Use the **chrome-devtools skill** for browser automation」と記載
 
+- **引数を受け取るスキルには `argument-hint` を追加する**
+  - `$ARGUMENTS` を使用するスキルは `argument-hint: "[引数名]"` を frontmatter に記述
+  - オートコンプリート時にユーザーへヒントが表示される（例: `/plan-deeper [max-rounds]`）
+
 ### 全般
 
 - `AskUserQuestion` の `options` は1質問あたり最大4つまで（それ以上は ValidationError）
 
-- **すべての作業に Subagents を積極的に利用する**
 - **Plan mode で具体的な実装コードを確認したい場合**
   - プランに実装コード全体を含めてユーザーに提示
   - ユーザーが「いいね」「OK」と確認してから実装フェーズへ移行
   - 実装後の修正コストを削減
+- **Plan mode での完了条件（Definition of Done）の明示**
+  - プランには作業の完了条件を含める（例: 実装のみ、実装＋軽量検証＋PR＋CI など）
+  - 完了条件を事前に定義することで、実装フェーズでの Claude の自律性が高まりユーザーへの確認頻度を下げられる
+  - `/plan-deeper` を使用する場合はスキルが自動的に提案・合意フローを実行する
+
 - **実装完了後の動作確認**
   - 実装が完了したら、必ず動作確認を実施すること
   - スクリプトなら実行して期待通りの出力を得る

@@ -1,144 +1,214 @@
 ---
 name: plan-deeper
-description: Deepens plan quality through iterative adversarial critique and user interviews. Each round spawns a fresh critic subagent to challenge assumptions and identify weaknesses, then interviews the user on items requiring domain knowledge, and refines the plan until convergence. Plan mode only. Use when asked to "反証して", "計画を深掘りして", "悲観的に評価して", "計画の精度を上げて", "もっと練って", "plan deeper", "challenge this plan", "deepen the plan", or when adversarial plan improvement is needed.
+description: Deepens plan quality through iterative adversarial critique and user interviews, then defines completion criteria for autonomous execution. Each round spawns a fresh critic subagent to challenge assumptions and identify weaknesses, then interviews the user on items requiring domain knowledge, and refines the plan until convergence. Finally, establishes a Definition of Done pipeline agreed upon with the user. Plan mode only. Use when asked to "反証して", "深掘り", "計画を深掘りして", "悲観的に評価して", "計画の精度を上げて", "もっと練って", "もう少し練って", "plan deeper", "challenge this plan", "deepen the plan", or when adversarial plan improvement is needed.
+argument-hint: "[max-rounds]"
 ---
 
 # Plan Deeper
 
-Plan mode で計画の精度を反復的に向上させる。毎ラウンド新しい Critic Subagent を生成し、確証バイアスのない独立した視点から計画を批判する。Critic の指摘のうちユーザーのドメイン知識が必要な項目はインタビューで解消し、計画を改善する。
+Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic Subagent to critique the plan from an independent, bias-free perspective. Issues requiring user domain knowledge are resolved through interviews. After convergence, establishes a Definition of Done pipeline with the user to enable autonomous execution.
 
-**Plan mode 専用。** 計画の精錬に特化しており、実装は行わない。
+**Plan mode only.** Focused exclusively on plan refinement — does not perform implementation.
 
 ## Quick Start
 
 ```
-/plan-deeper        # デフォルト: 最大3ラウンド
-/plan-deeper 5      # 最大5ラウンド
+/plan-deeper        # Default: max 3 rounds
+/plan-deeper 5      # Max 5 rounds
 ```
 
 ## Workflow
 
-### Step 1: コンテキスト収集
+### Step 1: Context Collection
 
-1. 現在の計画を取得（plan file またはコンテキストから）
-2. プロジェクトの CLAUDE.md を読み込み（コードベース整合性の判断材料）
-3. `$ARGUMENTS` から最大ラウンド数を取得（デフォルト: 3、上限: 5）
+1. Retrieve the current plan (from plan file or conversation context)
+2. Read the project CLAUDE.md (for codebase alignment reference)
+3. Parse `$ARGUMENTS` for max rounds (default: 3, cap: 5)
 
-### Step 2: Critic Subagent の生成（各ラウンド）
+### Step 2: Critic Subagent (Each Round)
 
-**毎ラウンド新しい Subagent を生成する。** 継続した Subagent は前ラウンドの視点を引き継ぎ、確証バイアスが蓄積するため。
+**Spawn a fresh subagent every round.** Continuing the same subagent carries over prior-round context and accumulates confirmation bias.
 
 ```
 Task:
   subagent_type: "Plan"
   model: "sonnet"
-  prompt: [references/critic-prompt.md のテンプレートに基づいて構築]
+  prompt: [built from references/critic-prompt.md template]
 ```
 
-Critic に渡す情報:
-- 計画の全文
-- プロジェクトコンテキスト（CLAUDE.md の要約）
-- ラウンド番号
-- 前ラウンドの Deepening Log（あれば）
+Pass to the Critic:
+- Full plan text
+- Project context (summary of CLAUDE.md)
+- Round number
+- Deepening Log from prior rounds (if any)
 
-Critic が返す情報:
-- 6つの評価軸ごとの構造化された批評
-- Critical Issues（修正必須）のリスト
-- Improvement Suggestions（検討推奨）のリスト
-- Verdict: `ITERATE`（続行）または `CONVERGED`（収束）
+The Critic returns:
+- Structured critique across 6 evaluation dimensions
+- Critical Issues (must-fix) list
+- Improvement Suggestions (should-consider) list
+- Verdict: `ITERATE` (continue) or `CONVERGED` (done)
 
-### Step 3: 批評の処理・ユーザーインタビュー・計画更新
+### Step 3: Process Critique, Interview User, Update Plan
 
-Critic の返答を処理する:
+Process the Critic's response:
 
-1. Critical Issues と Suggestions を抽出
-2. 各指摘を3種に分類:
-   - **自己解決可能**: メインエージェントが文脈に基づいて判断・対応
-   - **ユーザー判断が必要**: 前提の確認、トレードオフの選択、要件の曖昧さ解消
-   - **却下**: 文脈上不適切な指摘
-3. ユーザー判断が必要な項目がある場合、AskUserQuestion でインタビュー:
-   - Critic が検出した未検証の前提について「この前提は正しいですか？」
-   - 代替アプローチの提案に対して「どちらのアプローチを好みますか？」
-   - スコープの過不足について「この機能は必要ですか？」
-   - 実装の曖昧な部分について「この部分の期待動作は？」
-4. ユーザーの回答と自己判断を踏まえて計画を更新
-5. Deepening Log を計画に追記:
+1. Extract Critical Issues and Improvement Suggestions
+2. Classify each into one of three categories:
+   - **Self-resolvable**: Main agent resolves based on codebase context
+   - **Needs user input**: Unverified assumptions, trade-off choices, ambiguous requirements
+   - **Reject**: Irrelevant or inapplicable given the actual context
+3. If user-input items exist, interview via AskUserQuestion:
+   - Unverified assumptions: "Is this assumption correct?"
+   - Alternative approaches: "Which approach do you prefer?"
+   - Scope questions: "Is this feature in scope?"
+   - Ambiguous behavior: "What is the expected behavior here?"
+4. Update the plan based on user answers and self-resolutions
+5. Append a Deepening Log entry to the plan:
 
 ```markdown
 ## Deepening Log
 
 ### Round N
-- **Accepted**: [反映した変更のリスト]
-- **User Clarified**: [ユーザーに確認した項目と回答]
-- **Rejected**: [却下した指摘と理由]
+- **Accepted**: [list of changes applied]
+- **User Clarified**: [items confirmed with user and their answers]
+- **Rejected**: [items rejected and why]
 - **Verdict**: ITERATE | CONVERGED
 ```
 
-**インタビューの原則:**
-- Critic の指摘のうちユーザーしか答えられない項目のみ質問する（自明な技術判断は聞かない）
-- 1ラウンドの質問は最大4問（AskUserQuestion の制約）に絞り、優先度の高いものから
-- ユーザーの回答は計画に直接反映し、後続の Critic にも伝わるようにする
+**Interview principles:**
+- Only ask what the user uniquely knows — skip obvious technical decisions
+- Limit to max 4 questions per round (AskUserQuestion constraint)
+- Prioritize by impact; defer lower-priority items to next round if needed
+- User answers are incorporated into the plan and passed to subsequent Critics
 
-### Step 4: 収束判定
+### Step 4: Convergence Check
 
-以下のいずれかで停止:
+Stop when any condition is met:
 
-| 条件 | アクション |
-|------|-----------|
-| Critic の Verdict が CONVERGED | 停止 — 計画は十分堅牢 |
-| 最大ラウンド到達 | 停止 — 未解決項目を報告 |
-| 前ラウンドと同一の指摘が繰り返される | 停止 — ユーザーに判断を委ねる |
-| Critical Issues がゼロ | 停止 — 計画は準備完了 |
+| Condition | Action |
+|---|---|
+| Critic verdict is `CONVERGED` | Stop — plan is sufficiently robust |
+| Max rounds reached | Stop — report remaining open items |
+| Same issues repeat from prior round | Stop — escalate to user |
+| Zero Critical Issues | Stop — plan is ready |
 
-収束していない場合、Step 2 に戻り新しい Subagent を生成。
+If none apply, return to Step 2 with a fresh subagent.
 
-### Step 5: 結果報告
+### Step 5: Define Completion Criteria
+
+After the plan converges, define what "done" looks like. This enables Claude to work through implementation autonomously without repeatedly asking "what should I do next?"
+
+#### 5a. Analyze Plan for Stage Signals
+
+Scan the finalized plan and infer which completion stages are appropriate:
+
+| Signal in Plan | Implied Stage |
+|---|---|
+| Code changes described | **Implementation** |
+| Test files, test commands, "add tests" | **Lightweight Verification** (tests, lint) |
+| UI/visual/browser changes | **Manual Verification** (visual check) |
+| API endpoints, request/response changes | **Manual Verification** (API testing) |
+| Branch management, "create PR" | **PR** |
+| CI pipeline, GitHub Actions referenced | **CI Pass** |
+| Deployment targets, production URLs | **Deployment Verification** |
+
+Build a candidate pipeline as an ordered sequence. "User Review" is always the final stage unless a PR+merge is the terminal action.
+
+#### 5b. Interview User for Approval
+
+Present the inferred pipeline via AskUserQuestion:
+
+```
+question: |
+  Based on the plan, I've inferred this completion pipeline:
+
+  1. Implementation complete
+  2. Lightweight verification (run tests + lint)
+  3. User review
+
+  Does this look right?
+options:
+  - "Looks good"
+  - "Simpler (fewer stages)"
+  - "More thorough (add PR/CI)"
+  - "Let me specify"
+```
+
+Adapt the pipeline based on the user's response. Ask at most one follow-up question for stage-specific details (e.g., which test command, which URL to verify).
+
+#### 5c. Write Criteria to Plan
+
+Append a `## Completion Criteria` section to the plan file:
+
+```markdown
+## Completion Criteria
+
+Definition of Done for this task. Each stage must pass before proceeding to the next.
+
+### Pipeline
+
+- [ ] **Implementation** — [specific description of what "implemented" means for this plan]
+- [ ] **Lightweight Verification** — [specific commands, e.g., `npm test && npm run lint`]
+- [ ] **Manual Verification** — [specific check, e.g., "open /settings, confirm toggle renders and saves"]
+- [ ] **User Review** — Present changes summary for final approval
+
+### Notes
+- [Prerequisites, ordering constraints, or caveats specific to this plan]
+```
+
+Each stage description must be **concrete and plan-specific**. Never write generic placeholders like "tests pass" — specify which test command, which URL, which behavior to verify.
+
+### Step 6: Result Report
 
 ```
 ## Plan Deepening Complete
 
-**Rounds**: N (収束理由)
+**Rounds**: N (convergence reason)
 **Critical issues resolved**: X
 **Improvements applied**: Y
 
 ### Changes Summary
-[計画に加えた主要な変更]
+[Major changes made to the plan]
+
+### Completion Criteria
+[Summary of the agreed pipeline, e.g.:]
+Implementation → Lightweight Verification (tests + lint) → Manual Verification → User Review
 
 ### Remaining Considerations
-[未解決の項目やトレードオフ（あれば）]
+[Unresolved items or trade-offs, if any]
 ```
 
-## 評価軸
+## Evaluation Dimensions
 
-Critic は 6 つの軸で計画を評価する。各軸の詳細定義とプロンプトテンプレートは [references/critic-prompt.md](references/critic-prompt.md) を参照。
+The Critic evaluates the plan across 6 axes. See [references/critic-prompt.md](references/critic-prompt.md) for the full prompt template and dimension definitions.
 
-| # | 軸 | 観点 |
-|---|------|------|
-| 1 | **前提の妥当性** | 未検証の仮定はないか？ |
-| 2 | **失敗モード** | 何が失敗しうるか？ |
-| 3 | **代替アプローチ** | より単純な方法はないか？ |
-| 4 | **スコープの適切性** | 過剰設計または不足はないか？ |
-| 5 | **実装の具体性** | 曖昧さなく実装できるか？ |
-| 6 | **コードベース整合性** | 既存パターンと一貫しているか？ |
+| # | Dimension | Focus |
+|---|---|---|
+| 1 | **Assumption Validity** | Are there unverified assumptions? |
+| 2 | **Failure Modes** | What could go wrong? |
+| 3 | **Alternative Approaches** | Is there a simpler way? |
+| 4 | **Scope Appropriateness** | Over-engineered or under-scoped? |
+| 5 | **Implementation Specificity** | Concrete enough to implement without ambiguity? |
+| 6 | **Codebase Alignment** | Consistent with existing patterns? |
 
-## 設計判断
+## Design Decisions
 
-**新しい Subagent を毎ラウンド生成する理由:**
-同一の Subagent を継続すると、前ラウンドの議論を引き継ぎ確証バイアスが蓄積する。異なるレビュアーに見てもらうのと同じ効果を得るため、毎回新規生成する。
+**Why spawn a fresh Plan-type subagent each round:**
+Continuing the same subagent carries prior-round context, causing confirmation bias to accumulate. A fresh subagent gives the same effect as an independent reviewer. The read-only "Plan" type is used because the Critic only analyzes — no file writes needed.
 
-**"Plan" type Subagent を使う理由:**
-Critic は読み取りと分析のみ行い、ファイル変更は不要。読み取り専用の "Plan" type が適切。
+**Why default 3 rounds:**
+Round 1 detects most major issues, Round 2 verifies fixes and finds secondary issues, Round 3 confirms convergence. Returns diminish after round 3.
 
-**デフォルト 3 ラウンドの理由:**
-実践上、Round 1 で主要な問題の大半を検出し、Round 2 で修正確認と二次的問題を発見、Round 3 で収束確認。3 ラウンド以降は収穫逓減。
+**Why append Deepening Log to the plan:**
+Visualizes plan evolution for the user, and provides context for subsequent Critics — letting them verify "was the previous round's feedback actually addressed?"
 
-**Deepening Log を計画に追記する理由:**
-計画の進化過程をユーザーに可視化するとともに、次の Critic に「前ラウンドで何が対処されたか」を伝える文脈として機能する。
+**Why define and negotiate completion criteria after convergence:**
+The plan must be stable before committing to a Definition of Done, or criteria risk being invalidated by subsequent rounds. Autonomous execution also requires explicit user agreement on scope — Claude infers likely stages from plan signals, but the user decides whether "CI pass" or "deployment verification" is actually required.
 
 ## Tips
 
-- 初期ドラフトを書いた後に `/plan-deeper` を実行するのが最も効果的
-- Critic の指摘すべてが正しいとは限らない — メインエージェントが会話コンテキストに基づいて取捨選択する
-- 複雑な計画では `/plan-deeper 5` で徹底的なレビューを
-- ユーザーへのインタビューは計画精度の鍵 — Critic が見つけた問題のうち、ドメイン知識が必要なものはユーザーに聞く方が正確で速い
-- **qa-planner** (Mode A) と組み合わせると、深掘り後にテストケース設計まで一気に進められる
+- Run `/plan-deeper` after writing an initial draft for maximum effectiveness
+- Not all Critic issues are valid — the main agent uses conversation context to decide what to accept or reject
+- For complex plans, use `/plan-deeper 5` for thorough review
+- User interviews are key to accuracy — items requiring domain knowledge are faster and more accurate when asked directly
+- Combine with the **qa-planner** skill (Mode A) to proceed from plan deepening straight to test case design

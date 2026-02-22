@@ -1,10 +1,8 @@
 # Critic Prompt Template
 
-このファイルは plan-deeper スキルが各ラウンドで Critic Subagent を生成する際のプロンプトテンプレートを含む。
+This file contains the prompt template used by plan-deeper to construct each round's Critic Subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
 
-## テンプレート
-
-`{placeholders}` を実際の値で置換して使用する。
+## Template
 
 ---
 
@@ -30,27 +28,27 @@ Evaluate the plan on each dimension. For each, provide:
 - **Issues**: Specific problems found (empty list if none)
 - **Suggestion**: Concrete improvement for each issue (empty if none)
 
-### 1. Assumption Validity (前提の妥当性)
+### 1. Assumption Validity
 What is the plan assuming? Are those assumptions verified or just hoped for?
 Look for: unverified technical feasibility, assumed API/library behavior, assumed codebase patterns that may not exist, implicit dependencies.
 
-### 2. Failure Modes (失敗モード)
+### 2. Failure Modes
 What could go wrong? What happens when things fail?
 Look for: missing error handling, race conditions, partial failure states, data loss scenarios, recovery gaps, unhandled edge cases.
 
-### 3. Alternative Approaches (代替アプローチ)
+### 3. Alternative Approaches
 Is this the simplest viable approach? Are there better options?
 Look for: over-complicated solutions where simpler ones exist, missed standard library features, fighting the framework instead of using it, reinventing existing patterns.
 
-### 4. Scope Appropriateness (スコープの適切性)
+### 4. Scope Appropriateness
 Is the plan over-engineering or under-scoping?
-Look for: YAGNI violations (building what's not needed), missing critical functionality, gold-plating, doing more than what was requested, insufficient definition of done.
+Look for: YAGNI violations (building what's not needed), missing critical functionality, gold-plating, doing more than what was requested, insufficient definition of done, missing verification steps that match the scope of changes.
 
-### 5. Implementation Specificity (実装の具体性)
+### 5. Implementation Specificity
 Is this concrete enough to implement without ambiguity?
 Look for: vague steps like "handle errors appropriately", missing file paths, unspecified data formats, unclear step sequencing, ambiguous variable/function naming.
 
-### 6. Codebase Alignment (コードベース整合性)
+### 6. Codebase Alignment
 Does this match existing patterns and reuse existing utilities?
 Look for: reinventing existing helpers, breaking established conventions, inconsistent naming/structure, missed opportunities to reuse shared code.
 
@@ -107,34 +105,34 @@ Reasoning: [1-2 sentences explaining why the plan needs more iteration or is rea
 
 ---
 
-## テンプレート使用例
+## Usage Examples
 
-### Round 1 のプロンプト構築
+### Round 1 Prompt Construction
 
 ```
 Task:
   subagent_type: "Plan"
   model: "sonnet"
   prompt: |
-    [テンプレート全文]
+    [Full template text above]
 
-    {plan_content} → 現在の計画ファイルの全文
-    {project_context} → CLAUDE.md の関連セクション
+    {plan_content} → Full text of the current plan file
+    {project_context} → Relevant sections from CLAUDE.md
     {deepening_log} → "This is the first round."
 ```
 
-### Round 2 以降のプロンプト構築
+### Round 2+ Prompt Construction
 
 ```
 Task:
   subagent_type: "Plan"
   model: "sonnet"
   prompt: |
-    [テンプレート全文]
+    [Full template text above]
 
-    {plan_content} → 更新済みの計画ファイル全文
-    {project_context} → CLAUDE.md の関連セクション
-    {deepening_log} → 計画に追記された Deepening Log セクション
+    {plan_content} → Full text of the updated plan file
+    {project_context} → Relevant sections from CLAUDE.md
+    {deepening_log} → The Deepening Log section appended to the plan
 ```
 
-前ラウンドの Deepening Log を渡すことで、Critic は「前回の指摘が適切に対処されたか」を検証できる。
+Passing the prior Deepening Log lets the Critic verify whether the previous round's feedback was actually addressed.

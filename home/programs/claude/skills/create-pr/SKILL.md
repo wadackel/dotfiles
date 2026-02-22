@@ -1,6 +1,7 @@
 ---
 name: create-pr
 description: Creates a GitHub pull request following project conventions. Use when the user asks to create a PR, submit changes for review, or open a pull request. Handles commit analysis, branch management, and PR creation using the gh CLI tool.
+argument-hint: "[draft] [ja]"
 disable-model-invocation: true
 ---
 
@@ -11,33 +12,21 @@ Create a well-structured GitHub pull request.
 ## Quick Start
 
 ```
-/create-pull-request
+/create-pr
+/create-pr draft
+/create-pr ja
+/create-pr draft ja
 ```
 
-Optionally pass a draft flag or title hint as arguments.
+## Argument Handling
+
+Parse `$ARGUMENTS` for the following flags (order-independent):
+- `draft` → create the PR as a draft
+- `ja` → write the PR title and body in Japanese (default: English)
 
 ## Prerequisites Check
 
-### 1. Check if `gh` CLI is installed
-
-```bash
-gh --version
-```
-
-If not installed, inform the user:
-> The GitHub CLI (`gh`) is required but not installed. Please install it:
-> - macOS: `brew install gh`
-> - Other: https://cli.github.com/
-
-### 2. Check if authenticated with GitHub
-
-```bash
-gh auth status
-```
-
-If not authenticated, guide the user to run `gh auth login`.
-
-### 3. Verify clean working directory
+Verify clean working directory:
 
 ```bash
 git status
@@ -129,23 +118,20 @@ cat .github/pull_request_template.md 2>/dev/null || echo "NO_TEMPLATE"
 - <If none, use "n/a">
 ```
 
+Write in **English** by default. If `ja` was passed in `$ARGUMENTS`, write in **Japanese** instead.
+
 ### Create PR with gh CLI
 
-**Use a temporary file for the PR body** to avoid shell escaping issues:
+Use a **heredoc** to pass the PR body inline, avoiding temporary files:
 
-1. Write the PR body to `/tmp/pr-body.md`
+```bash
+gh pr create --title "PR_TITLE" --body "$(cat <<'EOF'
+PR body content here...
+EOF
+)" --base main
+```
 
-2. Create the PR:
-   ```bash
-   gh pr create --title "PR_TITLE" --body-file /tmp/pr-body.md --base main
-   ```
-
-3. Clean up:
-   ```bash
-   rm /tmp/pr-body.md
-   ```
-
-For draft PRs, add `--draft` flag.
+- If `draft` was passed in `$ARGUMENTS`, add the `--draft` flag
 
 ## Post-Creation
 
