@@ -2,7 +2,7 @@
 
 // --- Types ---
 
-interface ContentBlock {
+export interface ContentBlock {
   type: string;
   text?: string;
   name?: string;
@@ -10,7 +10,7 @@ interface ContentBlock {
   is_error?: boolean;
 }
 
-interface TranscriptEntry {
+export interface TranscriptEntry {
   type: string;
   subtype?: string;
   message?: {
@@ -26,13 +26,13 @@ interface TranscriptEntry {
 
 // --- Helpers ---
 
-function truncate(s: string, max: number): string {
+export function truncate(s: string, max: number): string {
   const cleaned = s.replaceAll("\n", " ");
   if (cleaned.length <= max) return cleaned;
   return `${cleaned.slice(0, max)}... [${cleaned.length} chars]`;
 }
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
   return bytes > 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1)}M`
     : `${(bytes / 1024).toFixed(0)}K`;
@@ -40,8 +40,12 @@ function formatSize(bytes: number): string {
 
 // --- Transcript Discovery ---
 
+export function encodeProjectDir(projectDir: string): string {
+  return projectDir.replace(/^\//, "").replaceAll("/", "-").replaceAll(".", "-");
+}
+
 function findTranscript(projectDir: string): string {
-  const encoded = projectDir.replace(/^\//, "").replaceAll("/", "-").replaceAll(".", "-");
+  const encoded = encodeProjectDir(projectDir);
   const dir = `${Deno.env.get("HOME")}/.claude/projects/-${encoded}`;
 
   let entries: { path: string; mtime: number }[];
@@ -79,7 +83,7 @@ function parseTranscript(path: string): TranscriptEntry[] {
 
 // --- Extraction ---
 
-function extractTimeline(
+export function extractTimeline(
   entries: TranscriptEntry[],
   maxUser: number,
   maxAsst: number,
@@ -137,7 +141,7 @@ function extractTimeline(
   return lines.join("\n");
 }
 
-function collectToolSummary(entries: TranscriptEntry[]): string {
+export function collectToolSummary(entries: TranscriptEntry[]): string {
   const counts = new Map<string, number>();
   for (const e of entries) {
     if (e.type !== "assistant" || !Array.isArray(e.message?.content)) continue;
@@ -156,7 +160,7 @@ function collectToolSummary(entries: TranscriptEntry[]): string {
   );
 }
 
-function collectErrorSummary(entries: TranscriptEntry[]): string {
+export function collectErrorSummary(entries: TranscriptEntry[]): string {
   const errors: string[] = [];
   for (const e of entries) {
     if (e.type !== "user" || !Array.isArray(e.message?.content)) continue;
@@ -171,21 +175,22 @@ function collectErrorSummary(entries: TranscriptEntry[]): string {
 
 // --- Main ---
 
-const MAX_OUTPUT_BYTES = 100 * 1024;
+if (import.meta.main) {
+  const MAX_OUTPUT_BYTES = 100 * 1024;
 
-const projectDir = Deno.args[0] ?? Deno.cwd();
-const transcriptPath = findTranscript(projectDir);
-const sessionId = transcriptPath.split("/").pop()!.replace(".jsonl", "");
-const fileSize = Deno.statSync(transcriptPath).size;
-const entries = parseTranscript(transcriptPath);
+  const projectDir = Deno.args[0] ?? Deno.cwd();
+  const transcriptPath = findTranscript(projectDir);
+  const sessionId = transcriptPath.split("/").pop()!.replace(".jsonl", "");
+  const fileSize = Deno.statSync(transcriptPath).size;
+  const entries = parseTranscript(transcriptPath);
 
-const toolSummary = collectToolSummary(entries);
-const errorSummary = collectErrorSummary(entries);
-const sizeStr = formatSize(fileSize);
+  const toolSummary = collectToolSummary(entries);
+  const errorSummary = collectErrorSummary(entries);
+  const sizeStr = formatSize(fileSize);
 
-// Tier 1
-let timeline = extractTimeline(entries, 300, 200);
-let output = `# Session History Extract
+  // Tier 1
+  let timeline = extractTimeline(entries, 300, 200);
+  let output = `# Session History Extract
 - **Session ID**: ${sessionId}
 - **Transcript size**: ${sizeStr}
 
@@ -199,10 +204,10 @@ ${errorSummary}
 ## Conversation Timeline
 ${timeline}`;
 
-// Tier 2: condense if too large
-if (new TextEncoder().encode(output).length > MAX_OUTPUT_BYTES) {
-  timeline = extractTimeline(entries, 150, 100);
-  output = `# Session History Extract (Condensed)
+  // Tier 2: condense if too large
+  if (new TextEncoder().encode(output).length > MAX_OUTPUT_BYTES) {
+    timeline = extractTimeline(entries, 150, 100);
+    output = `# Session History Extract (Condensed)
 - **Session ID**: ${sessionId}
 - **Transcript size**: ${sizeStr}
 
@@ -217,9 +222,10 @@ ${errorSummary}
 ---
 ## Conversation Timeline
 ${timeline}`;
-}
+  }
 
-// Write to temp file, print path
-const outputPath = `/tmp/claude-session-history-${Deno.pid}.md`;
-Deno.writeTextFileSync(outputPath, output);
-console.log(outputPath);
+  // Write to temp file, print path
+  const outputPath = `/tmp/claude-session-history-${Deno.pid}.md`;
+  Deno.writeTextFileSync(outputPath, output);
+  console.log(outputPath);
+}
