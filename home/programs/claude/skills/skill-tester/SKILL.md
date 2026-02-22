@@ -181,7 +181,31 @@ Bash: mkdir -p "$OUTPUT_DIR"
 
 Read [validation-criteria.md](references/validation-criteria.md) to prepare for evaluating test results.
 
-**3. Execute tests sequentially**:
+**3. Pre-flight: Description quick check**:
+
+Before running the full suite, validate that the skill's description is discoverable using the first positive test case with `--max-turns 2` (~30–60 seconds):
+
+```
+a. Run the first positive test scenario (P1) with max-turns=2:
+   Bash: ~/.claude/skills/skill-tester/scripts/run-test.sh \
+     "$OUTPUT_DIR" "preflight" "{P1-prompt}" 2
+
+b. Analyze result:
+   Bash: ~/.claude/skills/skill-tester/scripts/analyze-test.sh \
+     "$OUTPUT_DIR/preflight.jsonl" "{target-skill-name}"
+
+c. Evaluate:
+   - triggered=true  → ✅ Description is discoverable. Proceed to full suite.
+   - triggered=false → ❌ Description problem detected. Stop immediately and report:
+       "Pre-flight failed: the skill did not trigger on '{P1-prompt}'.
+        Likely cause: description is unclear or missing key trigger phrases.
+        Recommendation: revise the description before running the full test suite."
+     Ask the user whether to fix the description now or proceed anyway.
+```
+
+This prevents spending 10–15 minutes on the full suite when the description is the only problem.
+
+**4. Execute tests sequentially**:
 
 Process tests in priority order:
 1. **Negative tests first** (false positives indicate description problems — a blocker)
@@ -191,7 +215,7 @@ Process tests in priority order:
 
 **Early termination**: If multiple negative tests trigger the skill when they shouldn't, flag this immediately as a critical description issue and consider stopping further tests.
 
-**For simple tests (positive/negative/edge):**
+**5. For simple tests (positive/negative/edge):**
 
 For each test scenario from Step 2:
 
