@@ -2914,6 +2914,23 @@ require("lazy").setup({
       keys = {
         { "<Leader>gD", "<cmd>DiffviewOpen<CR>", mode = "n", noremap = true },
         { "<Leader>gh", "<cmd>DiffviewFileHistory<CR>", mode = "n", noremap = true },
+        {
+          "<Leader>go",
+          function()
+            Snacks.picker.git_log({
+              confirm = function(picker)
+                local item = picker:current()
+                picker:close()
+                if item and item.commit then
+                  vim.cmd("DiffviewOpen " .. item.commit)
+                end
+              end,
+            })
+          end,
+          mode = "n",
+          noremap = true,
+          desc = "Git log → Diffview",
+        },
       },
       config = function()
         local actions = require("diffview.actions")
@@ -3251,6 +3268,21 @@ require("lazy").setup({
                 "L",
                 actions.open_commit_log,
                 { desc = "Open the commit log panel" },
+              },
+              {
+                "n",
+                "y",
+                function()
+                  local view = require("diffview.lib").get_current_view()
+                  if view then
+                    local file = view:infer_cur_file()
+                    if file then
+                      vim.fn.setreg("+", file.path)
+                      vim.notify("Copied: " .. file.path)
+                    end
+                  end
+                end,
+                { desc = "Copy file path" },
               },
               { "n", "zo", actions.open_fold, { desc = "Expand fold" } },
               { "n", "h", actions.close_fold, { desc = "Collapse fold" } },
