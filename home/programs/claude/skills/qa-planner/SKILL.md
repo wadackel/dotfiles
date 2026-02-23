@@ -118,6 +118,8 @@ Category coverage checklist:
 - On SKIP: document reason (user action required? environment missing?)
 - If an existing test suite covers a case, run it instead of duplicating
 
+**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation — the data hasn't arrived yet, not a bug. Always use `wait_for` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
+
 **Can Claude execute this?**
 
 ```

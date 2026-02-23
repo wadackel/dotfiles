@@ -134,6 +134,7 @@
                   username
                   homeDir
                   storeRoot
+                  profile
                   ;
               };
             }

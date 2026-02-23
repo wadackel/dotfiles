@@ -101,7 +101,8 @@
       "xcodes-app"
       "imageoptim"
       "google-japanese-ime"
-    ];
+    ]
+    ++ (if profile == "private" then [ "tailscale-app" ] else [ ]);
 
     # Cask installation arguments
     caskArgs = {
@@ -351,5 +352,6 @@
 
     # Spotlightショートカット設定を即座に反映（ログアウト不要）
     /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u 2>/dev/null || true
+
   '';
 }

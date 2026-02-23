@@ -12,10 +12,6 @@
     "DISABLE_TELEMETRY": "true"
   },
   "permissions": {
-    "additionalDirectories": [
-      "~/dotfiles",
-      "/tmp"
-    ],
     "allow": [
       "Bash(* --help *)",
       "Bash(* --version)",
@@ -105,27 +101,6 @@
       "Bash(gh run view *)",
       "Bash(gh run watch *)",
       "Bash(gh search *)",
-      "Bash(git -C * add *)",
-      "Bash(git -C * branch *)",
-      "Bash(git -C * check-ignore *)",
-      "Bash(git -C * checkout *)",
-      "Bash(git -C * commit *)",
-      "Bash(git -C * diff *)",
-      "Bash(git -C * fetch *)",
-      "Bash(git -C * log *)",
-      "Bash(git -C * ls-tree *)",
-      "Bash(git -C * merge-base *)",
-      "Bash(git -C * mv *)",
-      "Bash(git -C * push *)",
-      "Bash(git -C * push)",
-      "Bash(git -C * rebase *)",
-      "Bash(git -C * reset *)",
-      "Bash(git -C * rev-list *)",
-      "Bash(git -C * rev-parse *)",
-      "Bash(git -C * show *)",
-      "Bash(git -C * stash *)",
-      "Bash(git -C * status *)",
-      "Bash(git -C * update-index *)",
       "Bash(git add *)",
       "Bash(git branch *)",
       "Bash(git check-ignore *)",
@@ -430,9 +405,13 @@
       "Write(~/.ssh/*_ed25519)",
       "Write(~/.ssh/*_rsa)",
       "Write(~/.ssh/id_*)"
+    ],
+    "additionalDirectories": [
+      "~/dotfiles",
+      "/tmp"
     ]
   },
-  "model": "opusplan",
+  "model": "sonnet",
   "hooks": {
     "PermissionRequest": [
       {

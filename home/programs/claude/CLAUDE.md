@@ -8,6 +8,15 @@
 
 `git -C <path>` を使用しないこと。`permissions.allow` のパターン（例: `Bash(git diff *)`）にマッチせず毎回権限確認が発生する。代わりに作業ディレクトリで直接 git コマンドを実行する。別ディレクトリを操作する場合は `cd <path> && git <subcommand>` を使用。
 
+### tmux コマンドの実行規則
+
+`TMUX` 環境変数が設定された状態（tmux セッション内）で `tmux` コマンドを実行する場合は `TMUX=""` プレフィックスを付けること。付けないと入れ子 tmux セッションとして扱われ、`send-keys` の内容が自セッションのペインに混入する等の意図しない挙動が発生する。
+
+- ✗ `tmux send-keys -t "0:1.1" "text" ""`
+- ✓ `TMUX="" tmux send-keys -t "0:1.1" "text" ""`
+
+`tmux capture-pane -p` は tall terminal（63行以上）では末尾に大量の空行が現れる。最後の N 行を取る場合は空行をフィルタしてからスライスする: `.filter(l => l.trim() !== "").slice(-5)`
+
 ### Browser Automation
 
 ブラウザを利用する操作には **chrome-devtools スキル**（Chrome DevTools MCP）を積極的に使用すること。
@@ -89,6 +98,13 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
 - ユーザーから修正指示を受けた場合の動作:
     - どのような作業にも適用できる汎用的な指示の場合は `~/.claude/CLAUDE.md` へ追記することを検討する
     - 追記を行うべきと判断した場合は、必ずユーザーへの確認を行う。承認が得られた場合にのみ追加作業を行うこと
+
+### Obsidian
+
+Vault のディレクトリ構造（数字プレフィックス付き）:
+- 新規ファイルの保存先: `00_Inbox/<filename>.md`
+- 主なディレクトリ: `00_Inbox/`, `01_Projects/`, `02_Notes/`, `03_Books/`, `05_Private/`
+- ディレクトリ名を推測しないこと。`list_vault_files` で確認してから保存する
 
 ### GitHub URL の扱い
 
