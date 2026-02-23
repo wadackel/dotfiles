@@ -93,6 +93,20 @@ Deno.test("extractCommands: empty segments ignored", () => {
   assertEquals(extractCommands("| echo test"), ["echo"]);
 });
 
+Deno.test("extractCommands: env var prefix before command", () => {
+  assertEquals(
+    extractCommands('TMUX="" tmux capture-pane -p 2>/dev/null | grep -v \'^$\' | tail -3'),
+    ["tmux", "grep", "tail"],
+  );
+});
+
+Deno.test("extractCommands: multiple env vars before command", () => {
+  assertEquals(
+    extractCommands("FOO=bar BAZ=qux git diff | grep foo"),
+    ["git", "grep"],
+  );
+});
+
 // --- shouldApprove ---
 
 Deno.test("shouldApprove: real-world gemini pipe command", () => {
@@ -146,6 +160,17 @@ Deno.test("shouldApprove: custom allowed set", () => {
 
 Deno.test("shouldApprove: triple pipe chain", () => {
   assertEquals(shouldApprove("cat file | grep pattern | wc -l"), true);
+});
+
+Deno.test("shouldApprove: env var prefix with allowed command", () => {
+  assertEquals(
+    shouldApprove('TMUX="" tmux capture-pane -t "%53" -p 2>/dev/null | grep -v \'^$\' | tail -3'),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: env var prefix with unknown command rejects", () => {
+  assertEquals(shouldApprove("TMUX=\"\" evil-cmd | grep foo"), false);
 });
 
 Deno.test("shouldApprove: all ALLOWED_COMMANDS entries are lowercase strings", () => {

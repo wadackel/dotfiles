@@ -37,7 +37,9 @@ export function extractCommands(command: string): string[] {
   for (const part of parts) {
     const segments = part.split(/\s*(?:\|{1,2}|&&|;)\s*/);
     for (const segment of segments) {
-      const cmd = segment.trim().split(/\s+/)[0];
+      const words = segment.trim().split(/\s+/);
+      const cmdIdx = words.findIndex((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w));
+      const cmd = cmdIdx >= 0 ? words[cmdIdx] : undefined;
       if (cmd) result.push(cmd);
     }
   }
