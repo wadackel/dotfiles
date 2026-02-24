@@ -25,6 +25,7 @@
       "**/.claude/settings.local.json"
       "**/.claude/commands/wadackel-*"
       "**/.claude/skills/wadackel-*"
+      "**/.claude/bash-guard.yaml"
       ".playwright-mcp"
       ".playwright-cli"
       "playwright-cli.json"

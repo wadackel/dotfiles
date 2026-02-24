@@ -1,0 +1,3 @@
+rules:
+  - pattern: "git -C *"
+    message: "Do not use 'git -C <path>'. Use 'cd <path> && git <subcmd>' instead (see CLAUDE.md)."
