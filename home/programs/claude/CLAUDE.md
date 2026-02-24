@@ -4,7 +4,25 @@
 
 正確さよりもシンプルさを常に優先する。YAGNI、KISS、DRY。循環的複雑度を増やさずに無償で得られる場合を除き、後方互換シムやフォールバックパスは不要。
 
-### Git コマンドの実行規則
+### CLI ツールの優先順位
+
+- ファイル検索には `find` ではなく `fd` を使用すること
+
+### Plan mode での静的解析活用
+
+lint エラーや型エラーの修正タスクでは、plan mode 中に `pnpm lint:script` / `tsc` を実行して
+実際のエラー内容を確認してから修正方針を決定すること。
+理論的推測だけで方針を立てると、実際には違うエラーが出て無駄な修正になる。
+
+### Git Workflow
+
+#### 安全なステージング
+
+`git add -A` や `git add .` を使用する前に `git status --porcelain` を実行し、
+意図しないファイル（.env, credentials*, *.pem, secrets* など）が含まれていないか必ず確認してください。
+機密情報が含まれる可能性がある場合は、個別に `git add <file>` を使用します。
+
+#### Git コマンドの実行規則
 
 `git -C <path>` を使用しないこと。`permissions.allow` のパターン（例: `Bash(git diff *)`）にマッチせず毎回権限確認が発生する。代わりに作業ディレクトリで直接 git コマンドを実行する。別ディレクトリを操作する場合は `cd <path> && git <subcommand>` を使用。
 
@@ -35,6 +53,10 @@
 - 初めて使う API・ライブラリの使い方調査
 
 gemini-research は**調査・分析**担当（コード分析を含む）。実装コードは Claude Code が書く。
+
+**テキストデータ一括分析には `gemini-data-analyst` スキルを使用**:
+- `gemini-research` はコードベース探索専用（`--include-directories`）
+- JSONL・ログ・テキストデータの分析には `/gemini-data-analyst` を使う
 
 **例外**: Claude Code 自体の仕様（permissions、hooks、settings等）は gemini-research や claude-code-guide より公式ドキュメントを直接 WebFetch する方が正確:
 - `https://code.claude.com/docs/en/permissions`
