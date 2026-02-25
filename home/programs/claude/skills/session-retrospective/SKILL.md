@@ -82,6 +82,24 @@ Classify each learning into categories. See [references/learning-categories.md](
    - Example: "User prefers concise output, dislikes verbose explanations"
    - Example: "User wants draft PRs with English descriptions"
 
+### Generalization Check (apply after categorizing every learning)
+
+For each identified learning, ask:
+> "Is this specific to a narrow context (tool X, environment Y, one-off situation Z),
+> or does it reflect a **broader methodological/behavioral principle**?"
+
+- **If broader principle exists**: Document the **general principle** as the primary entry.
+  Include the specific instance as a concrete example, not as the title/framing.
+  Route to `~/.claude/CLAUDE.md` with the general principle.
+
+- **If genuinely narrow**: Keep specific, but flag it:
+  "Does this narrow symptom suggest a general principle that was missed?"
+
+**Anti-pattern to avoid (from real session):**
+- ✗ Extracted: "non-interactive environment debugging tip" (env-specific framing)
+- ✓ Should extract: "investigation plans must include direct observation means" (general principle)
+  with "non-interactive env" as one concrete example
+
 ### Phase 3: Route Proposals
 
 Determine where each learning belongs using routing logic. See [references/routing-logic.md](references/routing-logic.md) for the full decision tree.

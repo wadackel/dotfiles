@@ -140,6 +140,9 @@ Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` sec
 2. Create module: `home/programs/<program-name>/default.nix`
 3. Add configuration files in the same directory
 4. Track new files in Git: `git add home/programs/<program-name>/` (Nix flake only recognizes tracked files)
+   - **シェルスクリプトの場合**: `chmod +x <file>` でファイルシステムの execute bit を付与してから `darwin-rebuild`
+   - `git update-index --chmod=+x` は git INDEX のみ変更しファイルシステムは変更しない点に注意
+   - nix store はソースの execute bit を引き継ぐため、ソースへの `chmod +x` → `darwin-rebuild` が必要
 5. Apply: `sudo darwin-rebuild switch --flake .#private`
 
 Example module structure:

@@ -94,6 +94,23 @@ Stop when any condition is met:
 
 If none apply, return to Step 2 with a fresh subagent.
 
+### Step 4.5: Investigation & Falsification Check
+
+Before defining completion criteria, verify the plan addresses:
+
+1. **Direct observation means** (if the plan involves debugging or fixing a failure)
+   - Is there a concrete way to observe the actual error or behavior?
+   - Examples: enabling debug logs, running a test command, capturing output
+   - If missing: add it to the plan before continuing
+
+2. **Falsification of the fix direction** (if a specific fix approach is proposed)
+   - Explicitly ask: "Why could this approach be wrong?"
+   - If no counter-argument applies: document "considered and ruled out"
+   - If counter-arguments exist: address them in the plan
+
+Skip this step only if the plan has no failure investigation or fix component
+(e.g., pure feature additions, documentation changes).
+
 ### Step 5: Define Completion Criteria
 
 After the plan converges, define what "done" looks like. This enables Claude to work through implementation autonomously without repeatedly asking "what should I do next?"
