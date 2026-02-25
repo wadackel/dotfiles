@@ -255,6 +255,7 @@ This repository includes comprehensive Claude Code configuration:
   - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
   - 新スクリプト追加時は `chmod +x` で実行権限を付与すること（hooks からの実行に execute bit が必要。git が 100644/100755 でモードを管理するので commit も必要）
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
+- **グローバル CLAUDE.md**: `home/programs/claude/CLAUDE.md` が `~/.claude/CLAUDE.md` のシンボリックリンク元。グローバル設定を編集する際はこのファイルを直接編集する
 - **`permissions.allow`**: `Edit(~/.claude/**)` と `Write(~/.claude/**)` を追加することで、skill が `~/.claude/` 配下のファイルを確認ダイアログなしに編集できる
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
