@@ -1,5 +1,5 @@
 import { assertEquals, assertMatch, assertNotMatch } from "jsr:@std/assert";
-import { getSegments, globToRegex } from "./bash-guard.ts";
+import { getSegments, globToRegex } from "./bash-policy.ts";
 
 // ===== globToRegex =====
 

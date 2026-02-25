@@ -419,7 +419,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash-guard.ts"
+            "command": "bash-policy.ts"
           }
         ]
       }

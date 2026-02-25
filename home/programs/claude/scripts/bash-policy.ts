@@ -4,9 +4,9 @@
 // Reads rules from YAML config files (global + project-level) and blocks
 // commands where any segment matches a defined glob pattern.
 //
-// Config files: bash-guard.yaml
-//   - Global: same directory as this script (~/.claude/scripts/bash-guard.yaml)
-//   - Project: .claude/bash-guard.yaml (searched upward from cwd)
+// Config files: bash-policy.yaml
+//   - Global: same directory as this script (~/.claude/scripts/bash-policy.yaml)
+//   - Project: .claude/bash-policy.yaml (searched upward from cwd)
 //
 // YAML format:
 //   rules:
@@ -74,11 +74,11 @@ export async function loadRules(path: string): Promise<Rule[]> {
   }
 }
 
-/** Walk up from cwd to find .claude/bash-guard.yaml */
+/** Walk up from cwd to find .claude/bash-policy.yaml */
 export async function findProjectConfig(cwd: string): Promise<string | null> {
   let dir = cwd;
   while (true) {
-    const candidate = join(dir, ".claude", "bash-guard.yaml");
+    const candidate = join(dir, ".claude", "bash-policy.yaml");
     try {
       await Deno.stat(candidate);
       return candidate;
@@ -104,7 +104,7 @@ if (import.meta.main) {
 
   // Load global config (co-located with this script)
   const scriptDir = new URL(".", import.meta.url).pathname;
-  const globalRules = await loadRules(join(scriptDir, "bash-guard.yaml"));
+  const globalRules = await loadRules(join(scriptDir, "bash-policy.yaml"));
 
   // Load project config (walk up from cwd)
   const projectConfigPath = await findProjectConfig(cwd);
@@ -125,7 +125,7 @@ if (import.meta.main) {
       if (regex.test(segment)) {
         console.error(
           [
-            `[bash-guard] Pattern matched: "${rule.pattern}"`,
+            `[bash-policy] Pattern matched: "${rule.pattern}"`,
             rule.message,
             `Blocked: ${command}`,
           ].join("\n"),

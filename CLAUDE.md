@@ -250,6 +250,7 @@ This repository includes comprehensive Claude Code configuration:
   - `claude-notify.ts`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.ts debug`
   - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
   - `claude-memo.ts`: セッション要約を Obsidian デイリーノートに書き込む Stop hook。デバッグ: `$TMPDIR/claude-memo.log`
+  - `bash-policy.ts`: 禁止コマンドパターンをブロックする `PreToolUse` hook（常時稼働）。ルール定義: `bash-policy.yaml`（同ディレクトリ）
   - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(<script-name>*)"` を追記すること（shebang 経由実行は `deno *` 等の汎用パターンでは不十分）
   - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
   - 新スクリプト追加時は `chmod +x` で実行権限を付与すること（hooks からの実行に execute bit が必要。git が 100644/100755 でモードを管理するので commit も必要）
@@ -263,9 +264,17 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 `~/.claude/projects/` のディレクトリ名はプロジェクトパスのエンコード: 先頭 `/` 除去後に `-` を prefix、`/` と `.` をどちらも `-` に置換。
 例: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
 
+### bash-policy
+
+`bash-policy.ts` はグローバル `PreToolUse` hook として全 Bash コマンドを評価する。
+- **ブロック動作**: exit 2 → コマンド不実行 → stderr がエラーフィードバックとして Claude へ返却 → 自己修正
+- **グローバルルール**: `~/.claude/scripts/bash-policy.yaml`（現在: `git -C *`）
+- **プロジェクトルール**: `.claude/bash-policy.yaml` を作成すると `cwd` から上方探索して自動ロード（グローバル gitignore 済み）
+- **ルール形式**: `pattern: "npx *"` + `message: "..."` の YAML（glob マッチ）
+
 ### Hook Data
 
-Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`) plus event-specific fields. Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
+Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`, `cwd`) plus event-specific fields. `cwd` はセッション開始時のプロジェクトルート（bash コマンド内の `cd` に関わらず一定）。 Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
 
 ### `permissions.allow` の制限
 
