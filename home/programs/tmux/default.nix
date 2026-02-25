@@ -15,4 +15,7 @@
 
   # Tmux popup session script
   home.file.".local/bin/tmux-popup-session.sh".source = dotfiles.linkHere ./. "popup-session.sh";
+
+  # Tmux window picker script
+  home.file.".local/bin/tmux-window-picker.sh".source = dotfiles.linkHere ./. "tmux-window-picker.sh";
 }
