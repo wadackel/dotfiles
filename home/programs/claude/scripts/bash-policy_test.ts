@@ -132,3 +132,19 @@ Deno.test("integration: pnpm -F is not caught by npx rule", () => {
   const segments = getSegments("pnpm -F my-app build");
   assertEquals(segments.some((s) => globToRegex("npx *").test(s)), false);
 });
+
+// ===== Rule.exclude =====
+
+Deno.test("exclude: npx scaffdog is not blocked when excluded", () => {
+  const pattern = globToRegex("npx *");
+  const exclude = globToRegex("npx scaffdog *");
+  const segment = "npx scaffdog generate component";
+  assertEquals(pattern.test(segment) && !exclude.test(segment), false);
+});
+
+Deno.test("exclude: npx tsc is still blocked when not in exclude list", () => {
+  const pattern = globToRegex("npx *");
+  const exclude = globToRegex("npx scaffdog *");
+  const segment = "npx tsc --noEmit";
+  assertEquals(pattern.test(segment) && !exclude.test(segment), true);
+});

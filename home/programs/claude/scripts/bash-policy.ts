@@ -19,6 +19,7 @@ import { dirname, join } from "jsr:@std/path";
 export interface Rule {
   pattern: string;
   message: string;
+  exclude?: string[];
 }
 
 interface Config {
@@ -121,8 +122,10 @@ if (import.meta.main) {
 
   for (const rule of rules) {
     const regex = globToRegex(rule.pattern);
+    const excludeRegexes = (rule.exclude ?? []).map(globToRegex);
     for (const segment of segments) {
       if (regex.test(segment)) {
+        if (excludeRegexes.some((er) => er.test(segment))) continue;
         console.error(
           [
             `[bash-policy] Pattern matched: "${rule.pattern}"`,
