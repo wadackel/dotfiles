@@ -62,6 +62,14 @@ gemini-research は**調査・分析**担当（コード分析を含む）。実
 - `https://code.claude.com/docs/en/permissions`
 - `https://code.claude.com/docs/en/settings`
 - `https://code.claude.com/docs/en/security`
+- `https://code.claude.com/docs/en/hooks`
+
+### Claude Code Hooks の注意点
+
+- **`Skill` ツールは `PreToolUse` でマッチできない**: 有効なマッチ対象は `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Task`, `WebFetch`, `WebSearch`, MCP tools のみ（公式ドキュメント記載）
+- **スキル実行前に処理を挟む場合は `UserPromptSubmit` を使う**: stdin JSON の `prompt` フィールドで `/skill-name` を検知。例: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
+- **hook コマンドの JSON エスケープ**: `bash -c '...'` ラップは避ける。JSON 文字列に直接コマンドを書き `\"` でエスケープする（シングルクォートとのネスト問題を回避）
+- **`UserPromptSubmit` でブロックする場合**: exit 2 より `{"decision":"block","reason":"..."}` を stdout に出力 + exit 0 の方が理由を Claude に伝えられる
 
 ### codex-review スキル使用時の特別ルール
 
