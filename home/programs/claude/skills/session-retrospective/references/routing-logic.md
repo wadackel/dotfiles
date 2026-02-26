@@ -7,26 +7,31 @@ This document provides the complete decision tree for routing session learnings 
 For each categorized learning, follow this decision tree:
 
 ```
-1. Is this learning project-specific?
-   └─ YES → Route to PROJECT CLAUDE.md
+1. Did the Skill Opportunity Scan (Phase 2.5) flag this as a skill candidate?
+   └─ YES → Continue to step 5
    └─ NO → Continue to step 2
 
-2. Is this learning universal/cross-project?
-   └─ YES → Route to GLOBAL ~/.claude/CLAUDE.md
+2. Is this learning project-specific?
+   └─ YES → Route to PROJECT CLAUDE.md
    └─ NO → Continue to step 3
 
-3. Is this a repeated workflow (2+ times, 3+ steps)?
-   └─ YES → Continue to step 4
-   └─ NO → Skip (too specific or one-off)
+3. Is this learning universal/cross-project?
+   └─ YES → Route to GLOBAL ~/.claude/CLAUDE.md
+   └─ NO → Continue to step 4
 
-4. Does an existing skill already cover this workflow?
-   └─ YES → Route to SKILL MODIFICATION proposal
-   └─ NO → Route to NEW SKILL proposal
+4. Skip (too specific or one-off)
 
-5. Is this tool-specific knowledge for an existing skill?
+5. Does an existing skill already cover this workflow?
    └─ YES → Route to SKILL MODIFICATION proposal
-   └─ NO → Route to appropriate CLAUDE.md (step 1-2)
+   └─ NO → Apply the /invoke litmus test:
+          "Would the user realistically type /skill-name for this?"
+          └─ YES → Route to NEW SKILL proposal
+          └─ NO → Route to appropriate CLAUDE.md (step 2-3)
+                  AND note: "Considered as skill, but better as CLAUDE.md
+                  because: [reason]"
 ```
+
+**Important**: Skill candidates are checked FIRST (step 1) before defaulting to CLAUDE.md routing. This prevents the "path of least resistance" bias toward CLAUDE.md.
 
 ## Rules for Determining Project-Specific vs Universal
 
@@ -93,32 +98,51 @@ A learning is **universal** if it:
 
 ### When to Propose a New Skill
 
-Propose a new skill when:
+Propose a new skill when ANY of the following conditions are met:
 
-**Repetition threshold met:**
-- Workflow was performed 2+ times in the session
-- Each occurrence followed the same basic structure
+**Condition A: Complex workflow observed (even once)**
+- 4+ distinct steps in a consistent sequence
+- Multiple tool types involved
+- Clear parameterization points exist
+- Non-obvious step ordering (outputs feed into next steps)
 
-**Sufficient complexity:**
-- Involves 3 or more distinct steps
-- Each step requires a different tool or operation
-- Not trivial enough to be a single command
+**Condition B: User taught a multi-step process**
+- User correction included 3+ specific sequential steps
+- User described conditional logic within the workflow
+- User provided a complete recipe, not just a preference
 
-**Generalizable:**
-- Can be parameterized for different inputs
-- Applies to multiple scenarios, not just this one-off case
-- Would be useful in future sessions
+**Condition C: Cross-session repetition signal**
+- User explicitly stated this is a recurring task
+- Workflow relates to a recurring development lifecycle phase
+- Task maps to something the user does in every project/session
 
-**No existing skill covers it:**
-- Checked ~/.claude/skills/ and found no match
-- Existing skills are too narrow or too broad
-- This workflow has unique characteristics
+**Condition D: Tool orchestration pattern**
+- 2+ external tools chained in a non-obvious sequence
+- Specific flags or configurations required for correct execution
+- Output of one tool feeds as input to the next
 
-**Examples of new skill proposals:**
-- ✅ "Edit Nix file → nix flake check → darwin-rebuild switch" (repeated 3 times)
-- ✅ "Check CI → read logs → identify failure → fix → push → wait" (repeated 2 times)
-- ❌ "Read file → make one edit → save" (too simple, only 1 occurrence)
-- ❌ "Complex 10-step process" (only happened once, too specific)
+**Condition E: Repeated within session (original criterion)**
+- Workflow performed 2+ times in the session
+- Each occurrence followed the same structure
+
+**All conditions also require:**
+- Involves 3+ distinct steps
+- Generalizable (can be parameterized for different inputs)
+- No existing skill covers it
+- Passes the /invoke litmus test ("Would the user type `/skill-name` for this?")
+
+**Examples of skill-worthy learnings by condition:**
+- (A) "Parse Google Doc URL → download as docx → convert with pandoc → extract images → report"
+- (B) User: "When fixing CI, always: check status → read logs → identify root cause → fix → push → wait"
+- (C) User: "I always need to convert docs to markdown for my project"
+- (D) "gog export → pandoc conversion with media extraction → cleanup"
+- (E) "Edit nix → check → rebuild" repeated 3 times in session
+
+**Examples that should NOT be skills:**
+- "Use pnpm instead of npm" (preference, no orchestration → CLAUDE.md)
+- "Port 3001, not 3000" (fact, no workflow → CLAUDE.md)
+- "Prefer named exports" (code style → CLAUDE.md)
+- "Read file → make one edit → save" (too simple, fewer than 3 meaningful steps)
 
 ### When to Propose Skill Modification
 
@@ -187,8 +211,12 @@ Propose a skill modification when:
 
 **Default to requiring clear generalizability:**
 - If the workflow involved very project-specific steps → Don't propose a skill
-- If the workflow was only done once → Don't propose a skill
 - If unsure whether it would apply to other cases → Don't propose a skill
+
+Note: Single occurrence alone is NOT a disqualifier. A complex workflow done once
+can be a valid skill candidate if it meets Conditions A-D. Only default to "don't
+propose" if the workflow also lacks orchestration, parameterization, or cross-session
+relevance.
 
 **Heuristic:** A workflow is generalizable if:
 - You can imagine parameterizing it (e.g., "file path", "target environment")
@@ -227,10 +255,10 @@ Before finalizing routing decisions, verify:
 
 ## Routing Summary Table
 
-| Learning Category | Default Target | Alternative Target | Condition |
-|-------------------|----------------|-------------------|-----------|
-| Missing Context | Project CLAUDE.md | Global CLAUDE.md | If universal |
-| Corrected Approaches | Global CLAUDE.md | Project CLAUDE.md | If project-specific |
-| Repeated Workflows | New Skill | Skill Modification | If existing skill covers it |
-| Tool/Library Knowledge | Project/Global CLAUDE.md | Skill Modification | If related to existing skill |
-| Preference Patterns | Global CLAUDE.md | Rarely project CLAUDE.md | Almost always universal |
+| Learning Category | Default Target | Skill Route Possible? | Skill Condition |
+|-------------------|----------------|----------------------|-----------------|
+| Missing Context | Project/Global CLAUDE.md | Yes, if discovery revealed a multi-step workflow | Condition A or D |
+| Corrected Approaches | Global/Project CLAUDE.md | Yes, if correction described a multi-step process | Condition B |
+| Repeated Workflows | New Skill | Always | Condition E (+ A, C, D if applicable) |
+| Tool/Library Knowledge | CLAUDE.md or Skill Modification | Yes, for existing skill enhancement | Skill Modification |
+| Preference Patterns | Global CLAUDE.md | Rarely | Only if preference implies a workflow |

@@ -12,9 +12,11 @@ Review the current session to extract learnings and propose improvements to CLAU
 This skill analyzes the conversation history to identify learnings that should be codified into:
 - **Project CLAUDE.md** — Project-specific patterns, commands, and conventions
 - **Global ~/.claude/CLAUDE.md** — Universal coding styles, Claude behaviors, and cross-project patterns
-- **Skills** — Repeated multi-step workflows that can be automated
+- **Skills** — Multi-step workflows worth automating (the most valuable output)
 
-Unlike `/revise-claude-md` which focuses on missing context, this skill provides broader analysis including corrected approaches, repeated workflows, and skill improvement opportunities.
+Skill proposals are the highest-value output of a retrospective. A single well-designed skill saves more future time than a dozen CLAUDE.md entries. Actively hunt for skill opportunities — do not default to CLAUDE.md when a skill would be more appropriate.
+
+Unlike `/revise-claude-md` which focuses on missing context, this skill provides broader analysis including corrected approaches, skill opportunity detection, and skill improvement opportunities.
 
 ## Quick Start
 
@@ -82,9 +84,34 @@ Classify each learning into categories. See [references/learning-categories.md](
    - Example: "User prefers concise output, dislikes verbose explanations"
    - Example: "User wants draft PRs with English descriptions"
 
-### Generalization Check (apply after categorizing every learning)
+### Phase 2.5: Skill Opportunity Scan
 
-For each identified learning, ask:
+After categorizing learnings, perform a dedicated scan for skill opportunities across ALL categories — not just "Repeated Workflows". See [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md) for the full detection framework.
+
+**For every learning in every category**, apply these quick checks:
+
+1. **The /invoke test**: "Would the user type `/skill-name` for this?"
+2. **The orchestration test**: "Does this involve 3+ steps with tool chaining?"
+3. **The teaching test**: "Did the user describe a multi-step process?"
+4. **The cross-session test**: "Did the user signal this is a recurring task?"
+5. **The ecosystem test**: "Does this resemble an existing skill's structure?"
+
+If ANY check passes, flag the learning as a skill candidate and carry it forward to Phase 3 routing with a skill proposal bias.
+
+**Explicit requirement**: Consider at least one skill proposal per retrospective. If no learnings pass the checks above, document why in the results ("No skill opportunities detected because: [reason]"). This forces active evaluation rather than passive defaulting to CLAUDE.md.
+
+**Scan existing skills for modification opportunities**:
+```bash
+ls ~/.claude/skills/
+```
+For each skill that was used or relevant to the session, check:
+- Was the skill missing information that was discovered during the session?
+- Did the workflow deviate from what the skill prescribed?
+- Would a new reference file improve the skill?
+
+#### Generalization Check
+
+For each identified learning, also ask:
 > "Is this specific to a narrow context (tool X, environment Y, one-off situation Z),
 > or does it reflect a **broader methodological/behavioral principle**?"
 
@@ -112,7 +139,8 @@ Determine where each learning belongs using routing logic. See [references/routi
 - **Universal/cross-project** (coding style, general tool usage, Claude's behavior)
   → ~/.claude/CLAUDE.md
 
-- **Repeated workflow** (2+ occurrences, 3+ steps, generalizable)
+- **Skill opportunity** (detected via Phase 2.5 scan — complex workflow, user-taught
+  process, cross-session repetition signal, or tool orchestration pattern)
   → New skill or skill modification proposal
 
 - **Tool-specific knowledge for existing skill**
@@ -132,16 +160,16 @@ For each routed learning, draft a concrete proposal:
   + nix flake check - Validate Nix syntax before applying changes
   ```
 
-**New skill proposals:**
-- Proposed name and description (frontmatter)
-- Brief SKILL.md outline
-- Needed resources (scripts/, references/)
-- Example:
-  ```
-  Skill: nix-rebuild-workflow
-  Description: Automates nix flake check → darwin-rebuild switch workflow
-  Resources: None (uses Read, Bash tools only)
-  ```
+**New skill proposals** (use template from [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md)):
+- Proposed name and invocation example
+- When to use (trigger scenario)
+- **Why-not-CLAUDE.md justification** (mandatory — why this needs to be a skill)
+- Workflow outline (numbered steps with tools used)
+- Parameters (what would be parameterized)
+- Similar existing skill (for calibration)
+- Estimated complexity (Simple / Medium / Complex)
+
+A skill proposal without a why-not-CLAUDE.md justification is incomplete.
 
 **Skill modification proposals:**
 - Show before/after diff of changes

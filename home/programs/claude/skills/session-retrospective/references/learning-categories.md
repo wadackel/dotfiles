@@ -62,8 +62,13 @@ This document provides detailed definitions, identification heuristics, and exam
 
 **Definition:** Multi-step procedures that were performed more than once during the session.
 
-**Qualification criteria:**
-- Occurred 2+ times in the session
+**Qualification criteria (any one sufficient):**
+- Occurred 2+ times in the session (classic repetition)
+- Complex single occurrence: 4+ steps with tool orchestration and parameterization
+- User explicitly described as a recurring cross-session task
+- User taught a multi-step process through corrections
+
+**All also require:**
 - Involves 3+ distinct steps
 - Steps follow a consistent order
 - Could be generalized with parameters
@@ -89,10 +94,13 @@ This document provides detailed definitions, identification heuristics, and exam
 - "Search with Glob → refine with Grep → read matching files"
 
 **When NOT to propose a skill:**
-- Single occurrence (no repetition)
 - Less than 3 steps (too trivial)
-- Highly context-specific (not generalizable)
+- Highly context-specific (not generalizable to other inputs)
 - Already covered by an existing skill
+- No tool orchestration or conditional logic (would be a one-liner in CLAUDE.md)
+- Fails the /invoke litmus test ("Would the user type `/skill-name` for this?")
+
+Note: Single occurrence alone is NOT a disqualifier. A complex 6-step workflow done once is a stronger skill candidate than a trivial 2-step action done 3 times.
 
 ## 4. Tool/Library Knowledge
 
@@ -174,7 +182,7 @@ Did Claude lack information it needed?
 Did the user correct Claude's approach or output?
   YES → Corrected Approaches
 
-Was a multi-step workflow repeated 2+ times?
+Was a multi-step workflow observed (repeated OR complex single occurrence)?
   YES → Repeated Workflows
 
 Did Claude learn something new about a tool/library?
@@ -186,6 +194,15 @@ Did a user preference pattern emerge?
 None of the above?
   → May not be worth recording (one-off or too specific)
 ```
+
+After applying the category decision tree above, also check:
+
+```
+Was a multi-step workflow observed (regardless of category)?
+  YES → Flag as potential skill candidate (see routing-logic.md)
+```
+
+This cross-category check ensures skill opportunities are detected even when learnings are categorized as Missing Context or Corrected Approaches.
 
 ## Edge Cases
 
