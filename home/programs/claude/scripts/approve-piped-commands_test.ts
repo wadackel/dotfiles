@@ -95,7 +95,9 @@ Deno.test("extractCommands: empty segments ignored", () => {
 
 Deno.test("extractCommands: env var prefix before command", () => {
   assertEquals(
-    extractCommands('TMUX="" tmux capture-pane -p 2>/dev/null | grep -v \'^$\' | tail -3'),
+    extractCommands(
+      'TMUX="" tmux capture-pane -p 2>/dev/null | grep -v \'^$\' | tail -3',
+    ),
     ["tmux", "grep", "tail"],
   );
 });
@@ -104,6 +106,15 @@ Deno.test("extractCommands: multiple env vars before command", () => {
   assertEquals(
     extractCommands("FOO=bar BAZ=qux git diff | grep foo"),
     ["git", "grep"],
+  );
+});
+
+Deno.test("extractCommands: ANSI-C quoted string with parens and pipes", () => {
+  assertEquals(
+    extractCommands(
+      `TMUX="" tmux list-panes -a -F $'#{pane_id}\\t(#{pane_current_command})' | cat -A | head -5`,
+    ),
+    ["tmux", "cat", "head"],
   );
 });
 
@@ -164,13 +175,24 @@ Deno.test("shouldApprove: triple pipe chain", () => {
 
 Deno.test("shouldApprove: env var prefix with allowed command", () => {
   assertEquals(
-    shouldApprove('TMUX="" tmux capture-pane -t "%53" -p 2>/dev/null | grep -v \'^$\' | tail -3'),
+    shouldApprove(
+      'TMUX="" tmux capture-pane -t "%53" -p 2>/dev/null | grep -v \'^$\' | tail -3',
+    ),
     true,
   );
 });
 
 Deno.test("shouldApprove: env var prefix with unknown command rejects", () => {
-  assertEquals(shouldApprove("TMUX=\"\" evil-cmd | grep foo"), false);
+  assertEquals(shouldApprove('TMUX="" evil-cmd | grep foo'), false);
+});
+
+Deno.test("shouldApprove: tmux list-panes with ANSI-C quoting and parens", () => {
+  assertEquals(
+    shouldApprove(
+      `TMUX="" tmux list-panes -a -F $'#{pane_id}\\t#{session_name}:#{window_index}.#{pane_index}\\t#{pane_current_command}\\t#{session_name}:#{window_index}.#{pane_index}  #{window_name}  #{pane_title}  (#{pane_current_command})' | cat -A | head -5`,
+    ),
+    true,
+  );
 });
 
 // --- basename fallback ---

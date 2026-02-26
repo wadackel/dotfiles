@@ -3,6 +3,8 @@
 // PermissionRequest hook for Bash: auto-approve compound commands
 // where all individual commands are in the allowed set.
 
+import { parse } from "npm:shell-quote@1";
+
 export const ALLOWED_COMMANDS = new Set([
   "7z", "ag", "awk", "bat", "cargo", "cat", "chmod", "chown", "claude",
   "cp", "curl", "date", "deno", "dig", "docker", "docker-compose", "du",
@@ -24,26 +26,42 @@ export function hasShellSyntax(command: string): boolean {
   return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*/.test(command);
 }
 
-/** コマンド文字列から各セグメントの先頭コマンド名を抽出 */
+type Token = string | { op: string } | { comment: string };
+
+const SEGMENT_OPS = new Set(["|", "||", "&&", ";", "(", ")"]);
+const REDIRECT_OPS = new Set([">", ">>", ">&", "<", "<<"]);
+
+/** shell-quote でパースし、各セグメントの先頭コマンド名を抽出 */
 export function extractCommands(command: string): string[] {
-  const normalized = command
-    .replace(/\d*>&\d+/g, "") // 2>&1 等
-    .replace(/\d*>[^ ]*/g, "") // >/dev/null, 2>/dev/null 等
-    .replace(/\d*<[^ ]*/g, ""); // <input 等
-
-  // ) を除去し ( でサブシェルを分割してから演算子で分割する
-  const parts = normalized.replace(/\)/g, "").split("(");
-
+  const tokens = parse(command) as Token[];
   const result: string[] = [];
-  for (const part of parts) {
-    const segments = part.split(/\s*(?:\|{1,2}|&&|;)\s*/);
-    for (const segment of segments) {
-      const words = segment.trim().split(/\s+/);
-      const cmdIdx = words.findIndex((w) => !/^[A-Z_][A-Z0-9_]*=/.test(w));
-      const cmd = cmdIdx >= 0 ? words[cmdIdx] : undefined;
-      if (cmd) result.push(cmd);
+  let expectCmd = true;
+  let skipNext = false;
+
+  for (const token of tokens) {
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+
+    if (typeof token === "object" && "op" in token) {
+      if (REDIRECT_OPS.has(token.op)) {
+        skipNext = true;
+      } else if (SEGMENT_OPS.has(token.op)) {
+        expectCmd = true;
+      }
+      continue;
+    }
+
+    if (typeof token !== "string") continue;
+
+    if (expectCmd) {
+      if (/^[A-Z_][A-Z0-9_]*=/.test(token)) continue;
+      result.push(token);
+      expectCmd = false;
     }
   }
+
   return result;
 }
 

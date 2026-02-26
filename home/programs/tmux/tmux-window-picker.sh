@@ -16,9 +16,14 @@ if [[ "${1:-}" == "--preview" ]]; then
 fi
 
 # --filter <pattern>: 一覧をパターンで事前フィルタ（case-insensitive, 固定文字列マッチ）
+# --command <name>: pane_current_command の完全一致でフィルタ
 FILTER_PATTERN=""
+COMMAND_FILTER=""
 if [[ "${1:-}" == "--filter" && $# -ge 2 ]]; then
   FILTER_PATTERN="$2"
+  shift 2
+elif [[ "${1:-}" == "--command" && $# -ge 2 ]]; then
+  COMMAND_FILTER="$2"
   shift 2
 fi
 
@@ -26,12 +31,12 @@ fi
 # display-popup 内で失敗する場合に備えてフォールバック
 SELF_PANE_ID=$(tmux display-message -p '#{pane_id}' 2>/dev/null || echo '')
 
-# pane 一覧生成（TAB 区切り: pane_id TAB target TAB 表示テキスト）
+# pane 一覧生成（TAB 区切り: pane_id TAB target TAB command TAB 表示テキスト）
 # pane_id を先頭に付けて自ペインを grep -v で除外する
 list_panes() {
   local panes
   panes=$(tmux list-panes -a \
-    -F $'#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{session_name}:#{window_index}.#{pane_index}  #{window_name}  #{pane_title}  (#{pane_current_command})')
+    -F $'#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_current_command}\t#{session_name}:#{window_index}.#{pane_index}  #{window_name}  #{pane_title}  (#{pane_current_command})')
   if [[ -n "$SELF_PANE_ID" ]]; then
     echo "$panes" | grep -v "^${SELF_PANE_ID}"$'\t' || true
   else
@@ -47,6 +52,11 @@ if [[ -n "$FILTER_PATTERN" ]]; then
   pane_list=$(echo "$pane_list" | grep -iF "$FILTER_PATTERN" || true)
 fi
 
+# --command 指定時は pane_current_command（フィールド3）の完全一致でフィルタ
+if [[ -n "$COMMAND_FILTER" ]]; then
+  pane_list=$(echo "$pane_list" | awk -F'\t' -v cmd="$COMMAND_FILTER" '$3 == cmd' || true)
+fi
+
 if [[ -z "$pane_list" ]]; then
   exit 0
 fi
@@ -56,6 +66,9 @@ PROMPT='pane ❯ '
 if [[ -n "$FILTER_PATTERN" ]]; then
   HEADER="Select pane (filter: ${FILTER_PATTERN})  [Enter: jump / Esc: cancel]"
   PROMPT="${FILTER_PATTERN} ❯ "
+elif [[ -n "$COMMAND_FILTER" ]]; then
+  HEADER="Select pane (command: ${COMMAND_FILTER})  [Enter: jump / Esc: cancel]"
+  PROMPT="${COMMAND_FILTER} ❯ "
 fi
 
 selected=$(echo "$pane_list" \
@@ -64,7 +77,7 @@ selected=$(echo "$pane_list" \
       --no-sort \
       --reverse \
       --delimiter=$'\t' \
-      --with-nth=3 \
+      --with-nth=4 \
       --no-select-1 \
       --no-exit-0 \
       --cycle \
