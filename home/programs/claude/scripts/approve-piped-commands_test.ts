@@ -173,6 +173,42 @@ Deno.test("shouldApprove: env var prefix with unknown command rejects", () => {
   assertEquals(shouldApprove("TMUX=\"\" evil-cmd | grep foo"), false);
 });
 
+// --- basename fallback ---
+
+Deno.test("extractCommands: path-based command with redirect", () => {
+  assertEquals(
+    extractCommands("~/.claude/scripts/extract-session-history.ts 2>/dev/null"),
+    ["~/.claude/scripts/extract-session-history.ts"],
+  );
+});
+
+Deno.test("shouldApprove: bare script name with redirect", () => {
+  assertEquals(
+    shouldApprove("extract-session-history.ts 2>/dev/null"),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: full path script with redirect (basename fallback)", () => {
+  assertEquals(
+    shouldApprove("~/.claude/scripts/extract-session-history.ts 2>/dev/null"),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: unknown path-based command with redirect rejects", () => {
+  assertEquals(
+    shouldApprove("/usr/local/bin/evil-cmd 2>/dev/null"),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: basename fallback with custom set", () => {
+  const custom = new Set(["my-script.ts"]);
+  assertEquals(shouldApprove("/some/path/my-script.ts 2>&1", custom), true);
+  assertEquals(shouldApprove("/some/path/other.ts 2>&1", custom), false);
+});
+
 Deno.test("shouldApprove: all ALLOWED_COMMANDS entries are lowercase strings", () => {
   for (const cmd of ALLOWED_COMMANDS) {
     assertEquals(cmd, cmd.toLowerCase(), `${cmd} should be lowercase`);

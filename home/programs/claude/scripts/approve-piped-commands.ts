@@ -6,7 +6,8 @@
 export const ALLOWED_COMMANDS = new Set([
   "7z", "ag", "awk", "bat", "cargo", "cat", "chmod", "chown", "claude",
   "cp", "curl", "date", "deno", "dig", "docker", "docker-compose", "du",
-  "echo", "env", "esbuild", "eslint", "eza", "fd", "ffmpeg", "ffprobe",
+  "echo", "env", "esbuild", "eslint", "extract-session-history.ts", "eza",
+  "fd", "ffmpeg", "ffprobe",
   "find", "fold", "fzf", "gemini", "gh", "git", "go", "grep", "gunzip",
   "gzip", "head", "http", "jq", "kill", "killall", "kubectl", "ln", "ls",
   "lsof", "make", "mkdir", "mv", "node", "npm", "nix", "nix-build",
@@ -54,7 +55,11 @@ export function shouldApprove(
   if (!hasShellSyntax(command)) return false;
   const cmds = extractCommands(command);
   if (cmds.length === 0) return false;
-  return cmds.every((cmd) => allowed.has(cmd));
+  return cmds.every((cmd) => {
+    if (allowed.has(cmd)) return true;
+    const base = cmd.includes("/") ? cmd.split("/").pop()! : cmd;
+    return allowed.has(base);
+  });
 }
 
 // --- Entry point ---

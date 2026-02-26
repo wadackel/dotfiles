@@ -71,7 +71,7 @@
       "Bash(eslint *)",
       "Bash(exa *)",
       "Bash(export *)",
-      "Bash(extract-session-history.ts*)",
+      "Bash(*extract-session-history.ts*)",
       "Bash(eza *)",
       "Bash(fc-list *)",
       "Bash(fd *)",

@@ -329,6 +329,17 @@
               type = "standard";
             };
           };
+          "27" = {
+            enabled = true; # 同一アプリのウィンドウ切り替えを Option+Tab に変更
+            value = {
+              parameters = [
+                65535 # special key (Tab)
+                48 # keycode: Tab
+                524288 # modifier: Option (0x80000)
+              ];
+              type = "standard";
+            };
+          };
         };
       };
     };

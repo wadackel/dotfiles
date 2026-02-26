@@ -15,6 +15,13 @@ if [[ "${1:-}" == "--preview" ]]; then
   exit 0
 fi
 
+# --filter <pattern>: 一覧をパターンで事前フィルタ（case-insensitive, 固定文字列マッチ）
+FILTER_PATTERN=""
+if [[ "${1:-}" == "--filter" && $# -ge 2 ]]; then
+  FILTER_PATTERN="$2"
+  shift 2
+fi
+
 # このペイン自身（popup pane）を除外するため pane_id を取得
 # display-popup 内で失敗する場合に備えてフォールバック
 SELF_PANE_ID=$(tmux display-message -p '#{pane_id}' 2>/dev/null || echo '')
@@ -32,7 +39,26 @@ list_panes() {
   fi
 }
 
-selected=$(list_panes \
+pane_list=$(list_panes)
+
+# --filter 指定時はパターンでフィルタ（全行に対して case-insensitive 固定文字列 grep）
+# session名/window名/pane_title/command いずれかに含まれていればマッチ
+if [[ -n "$FILTER_PATTERN" ]]; then
+  pane_list=$(echo "$pane_list" | grep -iF "$FILTER_PATTERN" || true)
+fi
+
+if [[ -z "$pane_list" ]]; then
+  exit 0
+fi
+
+HEADER='Select pane  [Enter: jump / Esc: cancel]'
+PROMPT='pane ❯ '
+if [[ -n "$FILTER_PATTERN" ]]; then
+  HEADER="Select pane (filter: ${FILTER_PATTERN})  [Enter: jump / Esc: cancel]"
+  PROMPT="${FILTER_PATTERN} ❯ "
+fi
+
+selected=$(echo "$pane_list" \
   | FZF_DEFAULT_OPTS="" fzf \
       --ansi \
       --no-sort \
@@ -42,10 +68,10 @@ selected=$(list_panes \
       --no-select-1 \
       --no-exit-0 \
       --cycle \
-      --header='Select pane  [Enter: jump / Esc: cancel]' \
+      --header="$HEADER" \
       --preview="$SELF --preview {2}" \
       --preview-window='right:60%:wrap:follow' \
-      --prompt='pane ❯ ' \
+      --prompt="$PROMPT" \
       --pointer='»' \
       --marker='∙' \
       --color='fg:#8085a6,bg:#222433,hl:#bdc3e6' \
