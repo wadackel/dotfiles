@@ -42,6 +42,10 @@ lint エラーや型エラーの修正タスクでは、plan mode 中に `pnpm l
 
 Bash ツールのシェル環境では `$'...'`（ANSI-C quoting）がパイプ内で正しく解釈されないことがある。bash 固有構文を含むコマンドの動作確認は `bash -c '...'` でラップして実行すること。
 
+### Write/Edit ツールの Unicode 制限
+
+Write/Edit ツールは Unicode Private Use Area (PUA) の文字（Nerd Font アイコン等）をドロップすることがある。PUA 文字をファイルに含める場合は、直接埋め込まず `printf '\uXXXX'` / `printf '\U000XXXXX'` でランタイム生成するコードを書くこと。
+
 ### Browser Automation
 
 ブラウザを利用する操作には Claude Code 組み込みの **Chrome インテグレーション**（chrome-devtools MCP, claude-in-chrome MCP）を使用すること。

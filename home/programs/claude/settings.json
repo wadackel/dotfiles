@@ -1,4 +1,8 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/scripts/statusline.sh"
+  },
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -287,6 +291,7 @@
       "Bash(zellij *)",
       "Bash(zellij-tab-notify *)",
       "Bash(zoxide *)",
+      "Bash(xxd *)",
       "Edit(**)",
       "Edit(~/.claude/**)",
       "Glob(**)",
