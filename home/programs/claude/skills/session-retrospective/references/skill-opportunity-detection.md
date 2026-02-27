@@ -98,7 +98,7 @@ If the detected workflow resembles an existing skill in structure, it's a strong
 
 | Pattern | Examples | Characteristics |
 |---------|----------|-----------------|
-| CLI wrapper | gogcli, playwright-cli | Wraps external CLI with correct flags/sequence |
+| CLI wrapper | gogcli, tmux-sender | Wraps external CLI with correct flags/sequence |
 | Lifecycle automation | create-pr, iterate-pr | Automates a development lifecycle phase |
 | Analysis + action | session-retrospective, skill-improver | Analyzes context then proposes/applies changes |
 | Interview + build | bash-policy-add, plan-deeper | Gathers info from user then constructs output |

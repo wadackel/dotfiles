@@ -78,7 +78,7 @@ Classify each learning into categories. See [references/learning-categories.md](
 
 4. **Tool/Library Knowledge** — Discoveries about specific tools or APIs
    - Example: "ast-grep requires stopBy: end for relational rules"
-   - Example: "playwright-cli session-list should be checked first"
+   - Example: "Chrome DevTools MCP snapshot should be taken before interaction"
 
 5. **Preference Patterns** — User style or preference observations
    - Example: "User prefers concise output, dislikes verbose explanations"
@@ -178,8 +178,8 @@ A skill proposal without a why-not-CLAUDE.md justification is incomplete.
   ```diff
   ## Quick Start
 
-  - playwright-cli session-list
-  + playwright-cli session-list - Check active sessions first
+  - curl -s https://api.example.com/health
+  + curl -sf https://api.example.com/health - Add -f flag to fail on HTTP errors
   ```
 
 ### Phase 5: Present and Apply

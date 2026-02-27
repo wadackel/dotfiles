@@ -98,7 +98,7 @@ When multiple parameters interact, test all unique pairs instead of all combinat
 
 ## WebApp Scenarios
 
-Use the **playwright-cli skill** for test execution. Focus on what to verify:
+Use **Chrome DevTools MCP** tools for test execution. Focus on what to verify:
 
 ### Functional
 - Page loads with expected content and no console errors

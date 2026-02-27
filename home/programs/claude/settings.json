@@ -209,7 +209,6 @@
       "Bash(pip *)",
       "Bash(pipx *)",
       "Bash(pkill *)",
-      "Bash(playwright-cli *)",
       "Bash(plutil *)",
       "Bash(pnpm *)",
       "Bash(poetry *)",

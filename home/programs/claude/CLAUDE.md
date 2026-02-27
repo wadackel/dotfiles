@@ -44,10 +44,10 @@ Bash ツールのシェル環境では `$'...'`（ANSI-C quoting）がパイプ�
 
 ### Browser Automation
 
-ブラウザを利用する操作には **chrome-devtools スキル**（Chrome DevTools MCP）を積極的に使用すること。
+ブラウザを利用する操作には Claude Code 組み込みの **Chrome インテグレーション**（chrome-devtools MCP, claude-in-chrome MCP）を使用すること。
 
 **Plan mode での実測確認:**
-- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく chrome-devtools MCP で実測確認を行うこと
+- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく Chrome インテグレーションで実測確認を行うこと
 - DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは実測値を取得してから計画を立てる
 
 ### gemini-research スキル使用ガイドライン
@@ -102,7 +102,7 @@ codex-review で Plan→実装を行う場合、以下のフローを必ず完�
   - スキル内で他のスキルやツールの詳細な使い方（コマンド例、フラグ、引数など）を記載しない
   - 代わりに「Use the **[skill-name] skill** for [purpose]」のような簡潔な委譲指示を使用
   - 詳細はそのツール/スキルのドキュメントに委ねる
-  - 例: qa-planner では chrome-devtools MCP のコマンド例を列挙せず、「Use the **chrome-devtools skill** for browser automation」と記載
+  - 例: qa-planner では curl のフラグ詳細を列挙せず、対象ツールのドキュメントに委ねる
 
 - **引数を受け取るスキルには `argument-hint` を追加する**
   - `$ARGUMENTS` を使用するスキルは `argument-hint: "[引数名]"` を frontmatter に記述

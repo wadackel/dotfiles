@@ -26,7 +26,7 @@ This document provides detailed definitions, identification heuristics, and exam
 - "Check git status before proposing commits"
 
 **Tool-specific:**
-- "playwright-cli requires session-list to be run first"
+- "Chrome DevTools MCP requires take_snapshot before element interaction"
 - "ast-grep relational rules require stopBy: end parameter"
 - "gemini-research should be invoked for library recommendations"
 
@@ -127,7 +127,7 @@ Note: Single occurrence alone is NOT a disqualifier. A complex 6-step workflow d
 **API specifics:**
 - "Gemini CLI supports --output-format json for structured output"
 - "skill-creator init_skill.py takes --path for output directory"
-- "playwright-cli session-list shows all active browser sessions"
+- "Chrome DevTools MCP list_pages shows all available browser pages"
 
 **Tool limitations:**
 - "WebFetch fails for authenticated URLs — use specialized tools instead"

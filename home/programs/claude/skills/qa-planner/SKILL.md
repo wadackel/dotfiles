@@ -1,6 +1,6 @@
 ---
 name: qa-planner
-description: QA specialist that designs test cases and executes verification for applications (WebApp, API Server, CLI Tool, etc.). Analyzes features to create risk-based, prioritized test scenarios using systematic design techniques (equivalence partitioning, boundary value analysis, state transition, pairwise testing), then runs tests directly using playwright-cli, curl, and Bash. Use when finishing a plan and wanting QA perspective, after completing a feature implementation, when asked to "test this", "QA check", "verify the implementation", "write test cases", "what should we test", "テストして", "品質チェック", "テストケースを作って", or when quality assurance review is needed.
+description: QA specialist that designs test cases and executes verification for applications (WebApp, API Server, CLI Tool, etc.). Analyzes features to create risk-based, prioritized test scenarios using systematic design techniques (equivalence partitioning, boundary value analysis, state transition, pairwise testing), then runs tests directly using Chrome MCP tools, curl, and Bash. Use when finishing a plan and wanting QA perspective, after completing a feature implementation, when asked to "test this", "QA check", "verify the implementation", "write test cases", "what should we test", "テストして", "品質チェック", "テストケースを作って", or when quality assurance review is needed.
 ---
 
 # QA Planner
@@ -104,7 +104,7 @@ Category coverage checklist:
 
 | Type | Approach |
 |------|----------|
-| WebApp | Use the **playwright-cli skill** for browser automation (navigation, form fill, click, snapshot, screenshot, console/network checks) |
+| WebApp | Use **Chrome DevTools MCP** tools for browser automation (navigation, form fill, click, snapshot, screenshot, console/network checks) |
 | API Server | Use `curl -s -w "\n%{http_code}"` to capture response body and status code |
 | CLI Tool | Execute commands directly via `Bash`, verify stdout, stderr, and exit codes |
 | Background Service | Combine `curl` (trigger/check endpoints) + log inspection |
@@ -123,7 +123,7 @@ Category coverage checklist:
 **Can Claude execute this?**
 
 ```
-UI rendering/interaction?  → playwright-cli skill → EXECUTE
+UI rendering/interaction?  → Chrome DevTools MCP  → EXECUTE
 HTTP endpoint?             → curl                 → EXECUTE
 CLI command?               → Bash                 → EXECUTE
 Library function?          → test suite           → EXECUTE

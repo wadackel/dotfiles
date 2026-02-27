@@ -170,7 +170,7 @@ Propose a skill modification when:
 
 **Examples of skill modification proposals:**
 - ✅ skill-improver: Add "スキルを改善して" trigger phrase
-- ✅ playwright-cli: Add note about checking session-list first
+- ✅ qa-planner: Add note about WebApp timing caveat
 - ✅ gemini-research: Clarify that it's for research only, not implementation
 - ❌ Generic git usage: Not specific to any skill, goes to CLAUDE.md
 
@@ -185,10 +185,10 @@ Propose a skill modification when:
 - Could be: Multiple skill modifications (any skill that explores code)
 - **Decision:** Global CLAUDE.md (broader applicability, affects all workflows)
 
-**Example 2:** "playwright-cli requires session-list to be run first"
+**Example 2:** "Chrome DevTools MCP requires take_snapshot before interaction"
 - Could be: Global CLAUDE.md (tool knowledge)
-- Could be: playwright-cli skill modification (tool-specific)
-- **Decision:** playwright-cli skill modification (more specific, users already using the skill will benefit)
+- Could be: qa-planner skill modification (tool-specific)
+- **Decision:** qa-planner skill modification (more specific, users already using the skill will benefit)
 
 **Example 3:** "Always run nix flake check before darwin-rebuild"
 - Could be: Project CLAUDE.md (this is a Nix project)
