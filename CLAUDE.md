@@ -45,25 +45,11 @@ When asked to add a new program or modify configuration:
 
 ## Common Development Commands
 
-### Code Formatting
-
-```bash
-# Format all Nix files using treefmt (nixfmt)
-nix fmt
-
-# Check formatting (CI)
-nix flake check
-```
-
-### Testing Configuration Changes
-
-```bash
-# Verify syntax before applying
-nix flake check
-
-# Apply and test changes
-sudo darwin-rebuild switch --flake .#private
-```
+| Command | Description |
+|---------|-------------|
+| `nix fmt` | Format all Nix files (treefmt/nixfmt) |
+| `nix flake check` | Verify syntax and formatting |
+| `sudo darwin-rebuild switch --flake .#private` | Apply configuration changes |
 
 ## Architecture
 
@@ -191,36 +177,6 @@ sudo darwin-rebuild switch --flake .#private
 
 For rollback commands and generation management, see [README.md](README.md#rollback).
 
-## Development Environment
-
-### Supported Languages and Tools
-
-This configuration includes comprehensive support for:
-
-- **Node.js**: pnpm, npm, yarn (via mise/asdf)
-- **Rust**: cargo, rustc, rustfmt
-- **Python**: Multiple versions via Homebrew, poetry
-- **Ruby**: rbenv
-- **Go**: go toolchain
-- **Dart/Flutter**: Flutter SDK
-- **Java/Android**: JDK, Android SDK tools
-- **WebAssembly**: wabt, wasmtime
-
-### Editor Configuration
-
-- **Neovim**: Lua config at `home/programs/neovim/init.lua`
-- **Vim**: Traditional vimrc configuration
-- **Git**: git config with 40+ aliases
-
-### Terminal Stack
-
-Multiple terminal options configured:
-
-- **Shells**: zsh, bash, fish
-- **Prompt**: starship with custom configuration
-- **Multiplexers**: tmux, zellij (with layouts and themes)
-- **Emulators**: WezTerm, ghostty
-
 ## Troubleshooting
 
 ### launchd / macOS 通知からのコマンド実行
@@ -286,3 +242,5 @@ Claude Code hooks receive JSON via stdin with common fields (`session_id`, `tran
 パイプ `|`、`&&`、`||`、`;`、リダイレクト `2>&1` などを含むコマンドは `Bash(cmd *)` パターンにマッチしない既知の制限がある（[Issue #13137](https://github.com/anthropics/claude-code/issues/13137)）。対処法:
 - `PermissionRequest` hook でパイプ・リダイレクト等のシェル構文を含むコマンドをセグメント分割してホワイトリスト照合し自動承認する（`home/programs/claude/scripts/approve-piped-commands.ts` 参照）
 - `PermissionRequest` は権限ダイアログが発生する直前のみ発火するため、`PreToolUse` より低オーバーヘッド
+
+`Tool(**)` パターン（例: `Read(**)`）はプロジェクトディレクトリと `additionalDirectories` 内のパスのみカバーする。`~/.claude/` のようなプロジェクト外パスには `Tool(~/.claude/**)` を別途追加すること。`Read`, `Edit`, `Write` の3つ全てに `~/.claude/**` パターンが必要。
