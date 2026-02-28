@@ -74,12 +74,21 @@ EXCLUDED (<count> rules) - Project-specific, keeping local:
   ✗ <rule> - <reason>
   ...
 
-Apply <count> recommended rules to ~/.claude/settings.json?
+How would you like to review the <count> recommended rules?
 ```
+
+Then ask the user to choose a review mode:
+1. **全て適用** — Apply all recommended rules at once
+2. **1つずつ確認** — Review and approve each rule individually
+3. **適用しない** — Skip all
+
+If the user chooses **individual review**, iterate through each RECOMMEND rule
+with a separate AskUserQuestion (追加する / スキップ), applying approved
+rules immediately after each approval via `merge.ts --apply`.
 
 ### Step 4: Apply Approved Rules
 
-If user approves, construct the approved rules JSON array (only RECOMMEND rules) and apply:
+If user approves (batch mode), construct the approved rules JSON array (only RECOMMEND rules) and apply:
 
 ```bash
 ~/.claude/skills/merge-settings/merge.ts --apply '<rules_json>'

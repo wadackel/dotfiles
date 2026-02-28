@@ -13,7 +13,7 @@ export const ALLOWED_COMMANDS = new Set([
   "find", "fold", "fzf", "gemini", "gh", "git", "go", "grep", "gunzip",
   "gzip", "head", "http", "jq", "kill", "killall", "kubectl", "ln", "ls",
   "lsof", "make", "mkdir", "mv", "node", "npm", "nix", "nix-build",
-  "nix-env", "nix-store", "oxlint", "pgrep", "pkill", "plutil", "pnpm",
+  "nix-env", "nix-store", "oxlint", "permission-review.ts", "pgrep", "pkill", "plutil", "pnpm",
   "prettier", "ps", "python", "python3", "readlink", "rg", "rm", "rsync",
   "sed", "sleep", "sort", "ssh", "starship", "tail", "tar", "tee",
   "terminal-notifier", "test", "time", "timeout", "tmux", "tokei", "touch",
