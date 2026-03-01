@@ -15,6 +15,7 @@
     "DISABLE_MICROCOMPACT": "true",
     "DISABLE_TELEMETRY": "true"
   },
+  "model": "opusplan",
   "permissions": {
     "allow": [
       "Bash(* --help *)",
