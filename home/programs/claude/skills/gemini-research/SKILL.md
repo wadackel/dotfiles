@@ -61,6 +61,19 @@ EOF
 
 ## Research Workflows
 
+### Step 0: Select Workflow
+
+Choose the appropriate workflow based on the task:
+
+```
+Exploring an unfamiliar or large codebase?    → Workflow 1 (Repository Analysis)
+Choosing or comparing libraries/frameworks?   → Workflow 2 (Library Research)
+Investigating a build error or runtime bug?   → Workflow 3 (Error Investigation)
+Learning an API or finding best practices?    → Workflow 4 (Documentation & Best Practices)
+```
+
+If the task spans multiple categories (e.g., error in an unfamiliar codebase), combine workflows — use Workflow 1 first for context, then Workflow 3 for the error.
+
 ### Workflow 1: Repository Analysis (Plan Mode)
 
 **Trigger**: User requests feature work requiring codebase understanding

@@ -1,70 +1,81 @@
 ---
 name: tmux-sender
-description: tmux の別ペインにコマンドを送信・実行する。「ペインで実行して」「tmuxで送信」「別ペインで走らせて」「ターミナルでコマンド実行」「隣のペインで」「ペインを分割して実行」などのリクエストで使用。
+description: Sends commands to another tmux pane and executes them. Use when asked to "run in another pane", "send to tmux", "execute in another terminal", "split pane and run", "ペインで実行して", "tmuxで送信", "別ペインで走らせて", "ターミナルでコマンド実行", "隣のペインで", "ペインを分割して実行".
 allowed-tools: Bash(tmux:*)
 ---
 
-# tmux コマンド送信スキル
+# tmux Command Sender
 
-tmux の別ペインにコマンドを送信して実行する。
+Sends commands to another tmux pane and executes them.
 
-## 手順
+## Workflow
 
-### 1. 自分のペインを特定する
+### Step 0: Validate tmux environment
 
-`$TMUX_PANE` から Claude Code が動作しているセッション・ウィンドウ・ペインを取得する。
-
-```bash
-tmux display-message -t "$TMUX_PANE" -p "#{session_name}:#{window_index}.#{pane_index}"
-```
-
-以降、この値を `<session>:<window>.<pane>` として使う。
-
-### 2. 同一ウィンドウのペイン一覧を確認する
+Check that `$TMUX_PANE` is set (this skill requires an active tmux session):
 
 ```bash
-tmux list-panes -t "<session>:<window>" -F "#{pane_index}: #{pane_current_command} (#{pane_current_path})"
+echo "${TMUX_PANE:-}"
 ```
 
-自分のペイン番号以外に送信先候補があるか確認する。
+If the output is empty, inform the user that this skill requires running inside a tmux session and stop.
 
-### 3. 送信先ペインを決定する
+### Step 1: Identify own pane
 
-- **既存ペインがある場合**: 自分以外のペイン番号を送信先にする
-- **自分しかいない場合**: 新しいペインを作成する
+Retrieve the current session, window, and pane from `$TMUX_PANE`:
 
 ```bash
-# 垂直分割（右に新ペイン）
-tmux split-window -h -t "<session>:<window>.<pane>"
-
-# 水平分割（下に新ペイン）
-tmux split-window -v -t "<session>:<window>.<pane>"
+TMUX="" tmux display-message -t "$TMUX_PANE" -p "#{session_name}:#{window_index}.#{pane_index}"
 ```
 
-作成後、再度 `list-panes` で新ペインの番号を確認する。
+Use the returned value as `<session>:<window>.<pane>` throughout.
 
-### 4. コマンドを送信する
+### Step 2: List panes in the same window
 
 ```bash
-tmux send-keys -t "<session>:<window>.<target_pane>" '<コマンド>' Enter
+TMUX="" tmux list-panes -t "<session>:<window>" -F "#{pane_index}: #{pane_current_command} (#{pane_current_path})"
 ```
 
-## 特殊文字のエスケープ
+Check if there are other panes besides your own.
 
-`send-keys` に渡すコマンドにシングルクォートが含まれる場合：
+### Step 3: Determine target pane
+
+- **If other panes exist**: Use a pane other than your own as the target
+- **If only your own pane exists**: Create a new pane
 
 ```bash
-tmux send-keys -t "<session>:<window>.<target_pane>" "echo 'hello world'" Enter
+# Vertical split (new pane to the right)
+TMUX="" tmux split-window -h -t "<session>:<window>.<pane>"
+
+# Horizontal split (new pane below)
+TMUX="" tmux split-window -v -t "<session>:<window>.<pane>"
 ```
 
-実行中のコマンドを中断してから送信する場合：
+After creating, run `list-panes` again to get the new pane's number.
+
+### Step 4: Send the command
 
 ```bash
-tmux send-keys -t "<session>:<window>.<target_pane>" C-c
-tmux send-keys -t "<session>:<window>.<target_pane>" '<新しいコマンド>' Enter
+TMUX="" tmux send-keys -t "<session>:<window>.<target_pane>" '<command>' Enter
 ```
 
-## 注意事項
+## Special Character Escaping
 
-- ペイン番号は 1 始まり
-- 別ウィンドウのペインに送る場合はウィンドウ番号を変える: `<session>:<other_window>.<pane>`
+If the command contains single quotes, use double quotes:
+
+```bash
+TMUX="" tmux send-keys -t "<session>:<window>.<target_pane>" "echo 'hello world'" Enter
+```
+
+To interrupt a running command before sending a new one:
+
+```bash
+TMUX="" tmux send-keys -t "<session>:<window>.<target_pane>" C-c
+TMUX="" tmux send-keys -t "<session>:<window>.<target_pane>" '<new-command>' Enter
+```
+
+## Notes
+
+- Pane indices start at 1
+- To send to a pane in a different window, change the window number: `<session>:<other_window>.<pane>`
+- Always prefix tmux commands with `TMUX=""` to avoid nested session issues

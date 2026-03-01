@@ -60,7 +60,7 @@ Claude Code extends the Agent Skills standard with additional frontmatter fields
 
 ### Additional Frontmatter Fields
 
-**argument-hint**: Hint shown during autocomplete (e.g., "[issue-number]", "[filename] [format]")
+**argument-hint**: Hint shown during autocomplete (e.g., "[issue-number]", "[filename] [format]"). **Required when the skill uses `$ARGUMENTS`** — omitting it means users won't know what to type.
 
 **disable-model-invocation**:
 - true|false (default: false)
@@ -103,9 +103,10 @@ Example:
 
 ### Description Writing
 
+- **Start with an action verb** (e.g., "Sends...", "Adds...", "Reviews...", "Translates...")
 - **Always write in third person** (not "I can help" or "You can use")
 - Include both WHAT and WHEN
-- Add specific trigger phrases users would naturally say
+- Add specific trigger phrases users would naturally say, including bilingual phrases if the user communicates in multiple languages
 - Be comprehensive but concise (max 1024 chars)
 
 Good example:
@@ -161,6 +162,14 @@ skill/
   - Medium (pseudocode): Preferred pattern exists
   - Low (specific scripts): Operations fragile, consistency critical
 
+**Step 0 patterns:**
+- **Prerequisite validation**: If the skill depends on external env vars, tools, or services, add a Step 0 that checks them and stops with a clear error if missing. Example: checking `$TMUX_PANE` before running tmux commands.
+- **Workflow selection**: If the skill has multiple distinct workflows, add a Step 0 decision tree so Claude can navigate to the right workflow immediately.
+
+**Safe command patterns:**
+- Never use `git add -A` or `git add .` without first running `git status --porcelain` and reviewing the output.
+- Avoid blind destructive commands (e.g., `rm -rf`) in skill workflows.
+
 ### Naming Conventions
 
 Recommended: Use gerund form (verb + -ing)
@@ -183,10 +192,14 @@ Avoid:
 2. **Too many options**: Provide a default with escape hatch, not a list of 5 alternatives
 3. **Over-explained content**: Don't explain well-known concepts
 4. **Vague descriptions**: Include specific trigger phrases and keywords
-5. **Missing progressive disclosure**: Don't put everything in SKILL.md
-6. **Inconsistent terminology**: Choose one term and use it throughout
-7. **Time-sensitive information**: Avoid "before August 2025" style statements
-8. **Deeply nested references**: Keep references one level deep
+5. **Description not starting with action verb**: "Helps with X" → "Reviews X and..."
+6. **Missing progressive disclosure**: Don't put everything in SKILL.md
+7. **Inconsistent terminology**: Choose one term and use it throughout
+8. **Time-sensitive information**: Avoid "before August 2025" style statements
+9. **Deeply nested references**: Keep references one level deep
+10. **Missing argument-hint**: Any skill using `$ARGUMENTS` must declare `argument-hint`
+11. **No prerequisite validation**: Skills with external dependencies should check them at Step 0
+12. **Unsafe shell commands**: `git add -A`, `rm -rf` without guards are dangerous in skill workflows
 
 ## Validation Quick Check
 

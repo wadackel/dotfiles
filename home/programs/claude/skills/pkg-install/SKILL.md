@@ -1,50 +1,52 @@
 ---
 name: pkg-install
-description: ツールやパッケージを dotfiles リポジトリに追加する。home-manager（Nix）を優先し、なければ Homebrew で導入する。「xxxをインストールして」「xxxを追加して」「xxxを入れて」「xxxを導入して」「install xxx」「set up xxx」などのリクエストで使用。
+description: Adds tools and packages to the dotfiles repository, preferring home-manager (Nix) and falling back to Homebrew. Use when asked to install, add, or set up a tool with "install xxx", "set up xxx", "xxxをインストールして", "xxxを追加して", "xxxを入れて", "xxxを導入して".
 argument-hint: [package-name]
 ---
 
 # Package Install
 
-`$ARGUMENTS` をこの dotfiles リポジトリに追加する。
+Adds `$ARGUMENTS` to this dotfiles repository.
 
 ## Quick Start
 
+```
 /pkg-install <package-name>
+```
 
-## 判断フロー
+## Decision Flow
 
 ```
-GUI アプリか？
+GUI app?
   YES -> homebrew.casks (darwin/configuration.nix)
-  NO  -> `nix search nixpkgs#<name>` で見つかるか？
+  NO  -> Found via `nix search nixpkgs#<name>`?
            NO  -> homebrew.brews (darwin/configuration.nix)
-           YES -> home-manager に programs.<name> があるか？
-                    YES -> home/programs/<name>/default.nix (新規モジュール)
+           YES -> home-manager has programs.<name>?
+                    YES -> home/programs/<name>/default.nix (new module)
                     NO  -> home/programs/packages/default.nix (home.packages)
 ```
 
-## ワークフロー
+## Workflow
 
-### 1. 分類と検索
+### 1. Classify and search
 
-- **GUI アプリ** → Step 3 (Homebrew)
-- **CLI ツール** → `nix search nixpkgs#<name>` で nixpkgs を確認
+- **GUI app** → Skip to Step 3 (Homebrew)
+- **CLI tool** → Check nixpkgs: `nix search nixpkgs#<name>`
 
-見つからない場合は一般的な別名も試す（例: `rg` → `ripgrep`）。それでもなければ Step 3 へ。
+If not found, try common aliases (e.g., `rg` → `ripgrep`). If still not found, go to Step 3.
 
-### 2. Nix インストール方法の選択
+### 2. Choose Nix installation method
 
-home-manager に `programs.<name>` モジュールがあるか判断する。不確かな場合は Web 検索で確認。
+Determine if home-manager has a `programs.<name>` module. If unsure, search the web.
 
-**専用モジュールがある場合** → `home/programs/<name>/default.nix` を新規作成:
+**If dedicated module exists** → Create `home/programs/<name>/default.nix`:
 
 ```nix
 { config, lib, ... }:
 {
   programs.<name> = {
     enable = true;
-    # シェル統合がある場合:
+    # Shell integrations if available:
     # enableZshIntegration = lib.mkIf (config.programs.zsh.enable or false) true;
     # enableFishIntegration = lib.mkIf (config.programs.fish.enable or false) true;
     # enableBashIntegration = lib.mkIf (config.programs.bash.enable or false) true;
@@ -52,32 +54,32 @@ home-manager に `programs.<name>` モジュールがあるか判断する。不
 }
 ```
 
-auto-discovery により import 登録は不要。設定ファイルは同ディレクトリに配置。
+Auto-discovery handles imports automatically. Place config files in the same directory.
 
-**専用モジュールがない場合** → `home/programs/packages/default.nix` の適切なカテゴリに追加:
+**If no dedicated module** → Add to the appropriate category in `home/programs/packages/default.nix`:
 
 ```nix
-<package-name> # 短い説明
+<package-name> # short description
 ```
 
-### 3. Homebrew でインストール
+### 3. Install via Homebrew
 
-`darwin/configuration.nix` の該当セクションに追加:
+Add to the relevant section in `darwin/configuration.nix`:
 
 - **CLI formula** → `homebrew.brews`
 - **GUI app** → `homebrew.casks`
 
-### 4. 検証と適用
+### 4. Verify and apply
 
-1. 新規ファイルがあれば `git add home/programs/<name>/`
+1. Stage new files if any: `git add home/programs/<name>/`
 2. `nix fmt` && `nix flake check`
-3. `whoami` でプロファイル判定（`wadackel` → `.#private`、`tsuyoshi.wada` → `.#work`）
+3. Determine profile via `whoami` (`wadackel` → `.#private`, `tsuyoshi.wada` → `.#work`)
 4. `sudo darwin-rebuild switch --flake .#<profile>`
-5. `which <name>` や `<name> --version` で動作確認
+5. Verify with `which <name>` or `<name> --version`
 
-## 注意事項
+## Notes
 
-- ユーザーが「Homebrew で」と明示した場合はその指示を優先
-- mise 管理のツール（Node.js, Go, Rust 等）は `home/programs/mise/default.nix` を先に確認し重複を避ける
-- `darwin-rebuild` が失敗した場合は優先順位の次の方法にフォールバック
-- カスタム tap 経由のフォーミュラでも `brew search <name>` で homebrew-core 収録済みか先に確認する（tap 追加が不要な場合がある）
+- If the user explicitly requests Homebrew, follow that preference
+- Check `home/programs/mise/default.nix` first for mise-managed tools (Node.js, Go, Rust, etc.) to avoid duplication
+- If `darwin-rebuild` fails, fall back to the next option in priority order
+- For custom tap formulas, check `brew search <name>` first to see if it's in homebrew-core (tap may not be needed)

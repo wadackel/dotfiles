@@ -17,16 +17,19 @@ This checklist consolidates evaluation criteria from Claude Code documentation, 
 
 #### description Field
 - [ ] Non-empty, 1-1024 characters
+- [ ] Starts with an action verb (e.g., "Sends...", "Adds...", "Reviews...", "Translates...")
 - [ ] Written in third person (not "I can" or "You can")
 - [ ] Includes WHAT the skill does
 - [ ] Includes WHEN to use it (trigger conditions)
 - [ ] Contains specific trigger phrases users would naturally say
+- [ ] Trigger phrases cover the user's primary language(s) (bilingual if user communicates in multiple languages)
 - [ ] Includes relevant keywords for discovery
 - [ ] Avoids vague terms ("helps with", "does stuff", "works with")
 - [ ] Comprehensive enough for Claude to understand when to activate
 
 #### Optional Fields (if present)
 - [ ] allowed-tools: Correctly scoped and formatted
+- [ ] argument-hint: Present if the skill uses `$ARGUMENTS` (shows autocomplete hint)
 - [ ] disable-model-invocation: Appropriate for the skill's use case
 - [ ] user-invocable: Appropriate for the skill's use case
 - [ ] context: "fork" used appropriately (if applicable)
@@ -113,12 +116,15 @@ This checklist consolidates evaluation criteria from Claude Code documentation, 
 - [ ] Logical ordering (most important information first)
 - [ ] Decision points are clearly marked
 - [ ] Conditional logic is explicit with examples
+- [ ] Multi-workflow skills start with a selection decision tree (Step 0) before the individual workflows
 
 #### Completeness
 - [ ] Error handling is addressed
 - [ ] Edge cases are considered
 - [ ] Feedback loops included for quality-critical tasks
 - [ ] Exit conditions are clear
+- [ ] Skills with external dependencies (env vars, tools, services) validate prerequisites at Step 0
+- [ ] Shell commands with side effects use safe patterns (e.g., `git status --porcelain` before staging, no blind `git add -A` or `rm -rf`)
 
 #### Degrees of Freedom
 - [ ] Appropriate level of specificity for task fragility
@@ -230,9 +236,11 @@ When identifying improvements, prioritize by impact:
 
 ### Frontmatter Issues
 - Description too vague or generic
-- Missing trigger phrases
+- Description does not start with an action verb
+- Missing trigger phrases (or missing bilingual triggers)
 - Not written in third person
 - Name doesn't follow conventions
+- Uses `$ARGUMENTS` but missing `argument-hint`
 
 ### Content Issues
 - Over-explaining well-known concepts
@@ -251,6 +259,9 @@ When identifying improvements, prioritize by impact:
 - Decision points unclear
 - No error handling
 - Missing feedback loops
+- Missing Step 0 prerequisite validation for external dependencies
+- Multi-workflow skill lacks a decision tree for selecting the right workflow
+- Unsafe shell commands used without guards (git add -A, rm -rf, etc.)
 
 ### Structure Issues
 - No quick start section

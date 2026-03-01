@@ -1,6 +1,7 @@
 ---
 name: skill-tester
-description: Automated skill validation through isolated agent testing. Use when users want to test or validate newly created or modified Claude Code skills. Triggers include "test this skill", "validate the skill", "verify skill functionality", "check if the skill works correctly", or any request to ensure a skill behaves as expected. Each test runs in a fresh tester agent with minimal context contamination, including support for story-based tests with conversation context.
+description: Automated skill validation through isolated agent testing. Use when users want to test or validate newly created or modified Claude Code skills. Triggers include "test this skill", "validate the skill", "verify skill functionality", "check if the skill works correctly", "スキルをテストして", "スキルを検証して", or any request to ensure a skill behaves as expected. Each test runs in a fresh tester agent with minimal context contamination, including support for story-based tests with conversation context.
+argument-hint: "[skill-name]"
 ---
 
 # Skill Tester

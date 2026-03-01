@@ -1,6 +1,6 @@
 ---
 name: iterate-pr
-description: Iterate on a PR until CI passes. Use when you need to fix CI failures, address review feedback, or continuously push fixes until all checks are green. Automates the feedback-fix-push-wait cycle.
+description: Iterates on the current branch's pull request until all CI checks pass and review feedback is addressed. Automates the feedback-fix-push-wait cycle with gh CLI. Use when you need to fix CI failures, address review feedback, or continuously push fixes until all checks are green. Also use when asked to "fix CI", "iterate PR", "CIを通して", "PRを直して", "CI失敗を修正して", "レビュー指摘を対応して".
 ---
 
 # Iterate on PR Until CI Passes
@@ -77,8 +77,16 @@ Make minimal, targeted code changes. Only fix what is actually broken.
 
 ### Step 7: Commit and Push
 
+Check what changed before staging:
+
 ```bash
-git add -A
+git status --porcelain
+```
+
+Review the list and stage only the intended files (avoid accidentally including `.env`, credentials, or unrelated files):
+
+```bash
+git add <file1> <file2> ...
 git commit -m "fix: <descriptive message of what was fixed>"
 git push origin $(git branch --show-current)
 ```

@@ -1,6 +1,7 @@
 ---
 name: skill-improver
-description: Improves existing Claude Code skill definitions by evaluating them against official best practices. Use when users want to improve, refine, review, or optimize a skill's quality, description, structure, or workflow. Triggers include "improve this skill", "review skill quality", "make this skill better", "スキルを改善して", or when skill definitions need refinement.
+description: Improves existing Claude Code skill definitions by evaluating them against official best practices. Use when users want to improve, refine, review, or optimize a skill's quality, description, structure, or workflow. Triggers include "improve this skill", "review skill quality", "make this skill better", "スキルを改善して", "スキルの品質を上げて", "スキルをレビューして", or when skill definitions need refinement.
+argument-hint: "[skill-name]"
 ---
 
 # Skill Improver
@@ -294,66 +295,13 @@ This builds confidence and helps users learn the principles.
 
 ## Common Improvement Patterns
 
-### Pattern 1: Vague Description → Specific Description
+See [references/improvement-patterns.md](references/improvement-patterns.md) for concrete before/after examples of the most frequent improvements:
 
-**Before:**
-```yaml
-description: Helps with code review
-```
-
-**After:**
-```yaml
-description: Reviews code changes for quality, security, and adherence to project conventions. Use when reviewing pull requests, staged changes, or when the user asks for code review, quality check, or feedback on their code.
-```
-
-### Pattern 2: Missing Progressive Disclosure
-
-**Before:** 400-line SKILL.md with everything inline
-
-**After:**
-- ~150-line SKILL.md with overview and navigation
-- `references/` directory with detailed content
-- Clear links from SKILL.md to references
-
-### Pattern 3: Over-Explained Content
-
-**Before:**
-```markdown
-Git is a distributed version control system that helps you track changes...
-[lengthy explanation of git basics]
-
-To see recent commits, run:
-```
-
-**After:**
-```markdown
-See recent commits:
-```
-
-### Pattern 4: Unclear Workflow
-
-**Before:** Prose-style instructions without clear steps
-
-**After:**
-```markdown
-## Workflow
-
-1. First, do X
-2. Then, do Y
-3. Finally, do Z
-```
-
-### Pattern 5: Missing Trigger Phrases
-
-**Before:**
-```yaml
-description: Processes Excel files
-```
-
-**After:**
-```yaml
-description: Processes Excel files, creates pivot tables, generates charts. Use when analyzing Excel files, spreadsheets, tabular data, .xlsx files, or when the user asks to "work with Excel" or "analyze this spreadsheet".
-```
+- Vague → Specific description
+- Missing progressive disclosure
+- Over-explained content
+- Unclear workflow
+- Missing trigger phrases
 
 ## Related Skills
 
