@@ -1,14 +1,13 @@
 ---
 name: permission-review
-description: Reviews logged permission requests and interactively applies permissions.allow patterns, bash-policy rules, or ALLOWED_COMMANDS entries. Use when asked to "review permissions", "check permission logs", "permission review", "権限ログを確認", "許可パターンを見直し", "権限の最適化", or when optimizing permission dialog frequency.
+description: Reviews logged permission requests and interactively applies permissions.allow patterns or bash-policy rules. Use when asked to "review permissions", "check permission logs", "permission review", "権限ログを確認", "許可パターンを見直し", "権限の最適化", or when optimizing permission dialog frequency.
 argument-hint: "[--days N] [--project NAME] [--tool NAME]"
 ---
 
 # permission-review
 
 Analyzes accumulated permission request logs and guides the user through
-adding patterns to `permissions.allow`, `bash-policy.yaml`, or
-`approve-piped-commands.ts` ALLOWED_COMMANDS.
+adding patterns to `permissions.allow` or `bash-policy.yaml`.
 
 ## Quick start
 
@@ -39,7 +38,7 @@ Present **all** candidate patterns with full details. For each pattern in
 `allowCandidates` and `reviewItems`, use this format:
 
 ```markdown
-### `Bash(git *)` -- N件 (project1, project2)
+### `Bash(git *)` -- 5件リクエスト / 3件実行 (project1, project2)
 
 確認が発生した理由: [reason-based explanation]
 
@@ -53,8 +52,16 @@ Present **all** candidate patterns with full details. For each pattern in
 - `Bash(git *)` -- git 全般を許可
 ```
 
+For patterns with `executed: 0`, add a caution:
+
+```markdown
+### `Bash(pip3 *)` -- 1件リクエスト / 0件実行 (dotfiles)
+
+⚠ 一度も承認されていないパターンです（承認を拒否された可能性があります）
+```
+
 Display the `reason` field as a human-readable explanation:
-- `compound_command`: "パイプ/複合コマンドのため `permissions.allow` にマッチしない（既知制限）。ALLOWED_COMMANDS で対応可能"
+- `compound_command`: "パイプ/複合コマンドのため `permissions.allow` にマッチしない（既知制限）。`approve-piped-commands.ts` が settings.json のパターンから自動承認"
 - `pattern_gap`: "既存パターン `Bash(X *)` は登録済みだが、このサブコマンドはカバーされていない"
 - `no_pattern` (or absent): "対応するパターンが未登録"
 
@@ -97,19 +104,12 @@ When the user enters a custom pattern via Other:
 
 Record all added patterns for Step 4.
 
-#### ALLOWED_COMMANDS Candidates
-
-If the JSON output contains `allowedCommandsCandidates`, process them as a separate step after the main review. For each, offer:
-
-1. **ALLOWED_COMMANDS に追加** -- Edit `~/dotfiles/home/programs/claude/scripts/approve-piped-commands.ts`
-2. **スキップ**
-
 ### Step 4: Apply Changes and Selective Purge
 
-1. Edit the relevant files (`settings.json`, `bash-policy.yaml`, `approve-piped-commands.ts`)
+1. Edit the relevant files (`settings.json`, `bash-policy.yaml`)
 2. **Selectively purge only patterns that were added** (quote patterns containing `*`, `(`, `)` with single quotes):
    ```bash
-   permission-review.ts --purge-pattern 'Bash(git commit *)' --purge-pattern 'AskUserQuestion'
+   permission-review.ts --purge-pattern 'Bash(git commit *)' --purge-pattern 'WebFetch(*)'
    ```
 3. **If all candidates were skipped, do NOT run purge** -- entries remain for next review
 4. Show a change summary:

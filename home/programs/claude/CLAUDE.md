@@ -88,6 +88,7 @@ gemini-research は**調査・分析**担当（コード分析を含む）。実
 - **スキル実行前に処理を挟む場合は `UserPromptSubmit` を使う**: stdin JSON の `prompt` フィールドで `/skill-name` を検知。例: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
 - **hook コマンドの JSON エスケープ**: `bash -c '...'` ラップは避ける。JSON 文字列に直接コマンドを書き `\"` でエスケープする（シングルクォートとのネスト問題を回避）
 - **`UserPromptSubmit` でブロックする場合**: exit 2 より `{"decision":"block","reason":"..."}` を stdout に出力 + exit 0 の方が理由を Claude に伝えられる
+- **`PostToolUse` で承認追跡**: `PermissionRequest` は「ダイアログが表示された」事実のみ記録（承認/拒否を区別不可）。実際に実行された（承認済み）コマンドを追跡するには `PostToolUse` hook を組み合わせる。高頻度ツール（Read/Glob/Grep）は matcher で除外してオーバーヘッドを抑える
 
 ### codex-review スキル使用時の特別ルール
 
@@ -124,6 +125,7 @@ gemini-research は**調査・分析**担当（コード分析を含む）。実
 #### Plan mode
 
 - **具体的な実装コードを確認したい場合**: プランに実装コード全体を含めてユーザーに提示し、確認後に実装フェーズへ移行
+- **データ処理ツールの計画**: ログ解析・集計ツールの改善計画では、架空シナリオではなく実ファイルを使った Before/After を plan mode 中に提示してから ExitPlanMode すること。ユーザーが実データで問題の規模感を確認してから承認判断する
 - **完了条件（Definition of Done）の明示**: プランに作業の完了条件を含める（例: 実装のみ、実装＋軽量検証＋PR＋CI など）。`/plan-deeper` 使用時はスキルが自動的に提案・合意フローを実行
 - **ExitPlanMode 前の必須確認**: 不具合調査・修正を含む計画では以下をプランに明記:
   - 「どのコマンド・ログ・実測でこの修正が効いたことを確認するか」

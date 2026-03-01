@@ -297,6 +297,8 @@
       "Bash(zellij *)",
       "Bash(zellij-tab-notify *)",
       "Bash(zoxide *)",
+      "Bash([ *)",
+      "Bash([[ *)",
       "Edit(**)",
       "Edit(~/.claude/**)",
       "Glob(**)",
@@ -456,6 +458,17 @@
           {
             "type": "command",
             "command": "approve-piped-commands.ts"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "permission-logger.ts"
           }
         ]
       }

@@ -1,6 +1,6 @@
 ---
 name: skill-tester
-description: Automated skill validation through isolated agent testing. Use when users want to test or validate newly created or modified Claude Code skills. Triggers include "test this skill", "validate the skill", "verify skill functionality", "check if the skill works correctly", "スキルをテストして", "スキルを検証して", or any request to ensure a skill behaves as expected. Each test runs in a fresh tester agent with minimal context contamination, including support for story-based tests with conversation context.
+description: Tests and validates Claude Code skills through isolated headless agent sessions. Use when users want to test or validate newly created or modified Claude Code skills. Triggers include "test this skill", "validate the skill", "verify skill functionality", "check if the skill works correctly", "スキルをテストして", "スキルを検証して", or any request to ensure a skill behaves as expected. Each test runs in a fresh headless Claude session with minimal context contamination, including support for story-based tests with conversation context. Do NOT use for quality scoring or description improvement (use skill-improver instead).
 argument-hint: "[skill-name]"
 ---
 
@@ -62,6 +62,20 @@ Extract and record:
 This information will be used to design test scenarios and to evaluate test results.
 
 ### Step 2: Design Test Scenarios
+
+#### Description Quality Check
+
+Before designing test scenarios, check the skill's description against these criteria:
+
+- [ ] Starts with an action verb (third person singular, e.g., "Validates", "Generates", "Converts")
+- [ ] Includes WHAT the skill does
+- [ ] Includes WHEN to use it (trigger conditions)
+- [ ] Contains specific trigger phrases users would say
+- [ ] Has bilingual triggers if the user communicates in multiple languages
+- [ ] If `$ARGUMENTS` is used, `argument-hint` is present in frontmatter
+- [ ] Description is under 100 words (concise for context efficiency)
+
+Flag any failures as pre-test recommendations. These inform test design (e.g., undertriggering risk) but do not block test execution.
 
 #### Context Dependency Assessment
 
@@ -306,6 +320,14 @@ Test Results for {skill-name}
 2. {specific recommendation}
 3. {specific recommendation}
 
+### Performance Summary
+| Test | Turns | Cost (USD) |
+|------|-------|------------|
+| P1   | N     | $X.XX      |
+| N1   | N     | $X.XX      |
+| ...  | ...   | ...        |
+| **Total** | **N** | **$X.XX** |
+
 Would you like me to apply these fixes?
 ```
 
@@ -358,14 +380,14 @@ Recommendations:
 
 Before reporting test completion, ensure:
 
-- [ ] All test scenarios assigned as tasks
-- [ ] Each tester executed its assigned scenario
+- [ ] All test scenarios executed via run-test.sh / run-story-test.sh
+- [ ] Each test result parsed with analyze-test.sh
 - [ ] Each test result evaluated against validation criteria
 - [ ] Both successful and failed tests documented
 - [ ] Root causes identified for failures
 - [ ] Specific, actionable recommendations provided
 - [ ] User given option to apply fixes
-- [ ] Team cleaned up (agents shut down, TeamDelete called)
+- [ ] Temporary test output directory cleaned up
 
 ## Resources
 

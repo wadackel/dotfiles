@@ -1,81 +1,94 @@
-#!/usr/bin/env -S deno run
+#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
 
 // PermissionRequest hook for Bash: auto-approve compound commands
 // where all individual commands are in the allowed set.
+// Derives the allowed set dynamically from permissions.allow in settings.json files.
 
-import { parse } from "npm:shell-quote@1";
+import { getSegments } from "./shell-utils.ts";
 
-export const ALLOWED_COMMANDS = new Set([
-  "7z", "ag", "awk", "bat", "cargo", "cat", "chmod", "chown", "claude",
-  "cp", "curl", "date", "deno", "dig", "docker", "docker-compose", "du",
-  "echo", "env", "esbuild", "eslint", "extract-session-history.ts", "eza",
-  "fd", "ffmpeg", "ffprobe",
-  "find", "fold", "fzf", "gemini", "gh", "git", "go", "grep", "gunzip",
-  "gzip", "head", "http", "jq", "kill", "killall", "kubectl", "ln", "ls",
-  "lsof", "make", "mkdir", "mv", "node", "npm", "nix", "nix-build",
-  "nix-env", "nix-store", "oxlint", "permission-review.ts", "pgrep", "pkill", "plutil", "pnpm",
-  "prettier", "ps", "python", "python3", "readlink", "rg", "rm", "rsync",
-  "sed", "sleep", "sort", "ssh", "starship", "tail", "tar", "tee",
-  "terminal-notifier", "test", "time", "timeout", "tmux", "tokei", "touch",
-  "tr", "tree", "tsx", "wc", "wget", "which", "whoami", "xargs", "yq",
-  "zellij",
-]);
-
-/** Compound operator (|, &&, ||, ;) またはリダイレクト (2>&1, >/dev/null 等) を含むかチェック */
+/** Compound operator (|, &&, ||, ;) or redirect (2>&1, >/dev/null, etc.) check */
 export function hasShellSyntax(command: string): boolean {
   return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*/.test(command);
 }
 
-type Token = string | { op: string } | { comment: string };
+/** Extract the command name from a single Bash(...) permission pattern. Returns null if not applicable. */
+export function extractCommandName(pattern: string): string | null {
+  const m = pattern.match(/^Bash\((.+)\)$/);
+  if (!m) return null;
 
-const SEGMENT_OPS = new Set(["|", "||", "&&", ";", "(", ")"]);
-const REDIRECT_OPS = new Set([">", ">>", ">&", "<", "<<"]);
+  let content = m[1];
 
-/** shell-quote でパースし、各セグメントの先頭コマンド名を抽出 */
-export function extractCommands(command: string): string[] {
-  const tokens = parse(command) as Token[];
-  const result: string[] = [];
-  let expectCmd = true;
-  let skipNext = false;
-
-  for (const token of tokens) {
-    if (skipNext) {
-      skipNext = false;
-      continue;
-    }
-
-    if (typeof token === "object" && "op" in token) {
-      if (REDIRECT_OPS.has(token.op)) {
-        skipNext = true;
-      } else if (SEGMENT_OPS.has(token.op)) {
-        expectCmd = true;
-      }
-      continue;
-    }
-
-    if (typeof token !== "string") continue;
-
-    if (expectCmd) {
-      if (/^[A-Z_][A-Z0-9_]*=/.test(token)) continue;
-      result.push(token);
-      expectCmd = false;
-    }
+  // Handle colon separator format from settings.local.json (e.g. "rg:*" -> "rg", "nix fmt:*" -> "nix fmt")
+  const colonIdx = content.indexOf(":");
+  if (colonIdx !== -1) {
+    content = content.slice(0, colonIdx);
   }
 
+  const tokens = content.split(/\s+/);
+  for (const token of tokens) {
+    // Skip env var assignments (FOO=bar, TMUX=, etc.)
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue;
+    // Strip leading/trailing wildcards
+    const cleaned = token.replace(/^\*+/, "").replace(/\*+$/, "");
+    // Skip if empty after stripping (pure wildcards like "*" or "**")
+    if (cleaned === "") continue;
+    // Skip system paths (//...)
+    if (cleaned.startsWith("//")) return null;
+    // Skip flags
+    if (cleaned.startsWith("-")) continue;
+    // Skip redirect operators
+    if (/^[><#!]/.test(cleaned)) continue;
+    // If contains /, take basename
+    const name = cleaned.includes("/") ? (cleaned.split("/").pop() ?? "") : cleaned;
+    if (name === "") continue;
+    return name;
+  }
+  return null;
+}
+
+interface Settings {
+  permissions?: { allow?: string[] };
+}
+
+/** Load permissions.allow from multiple settings files, extract allowed command names. */
+export async function loadAllowedCommands(
+  paths: string[],
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  for (const path of paths) {
+    try {
+      const text = await Deno.readTextFile(path);
+      const json: Settings = JSON.parse(text);
+      for (const pattern of json?.permissions?.allow ?? []) {
+        const cmd = extractCommandName(pattern);
+        if (cmd) result.add(cmd);
+      }
+    } catch {
+      // File not found or parse error -- skip
+    }
+  }
   return result;
 }
 
-/** すべてのコマンドが許可リストに含まれるか判定 */
-export function shouldApprove(
+/** Extract command names from each segment of a compound shell command. */
+export async function extractCommands(command: string): Promise<string[]> {
+  const segments = await getSegments(command);
+  return segments
+    .map((seg) => seg.split(/\s+/)[0])
+    .filter((cmd) => cmd.length > 0);
+}
+
+/** Determine if all commands in a compound command are in the allowed set. */
+export async function shouldApprove(
   command: string,
-  allowed: Set<string> = ALLOWED_COMMANDS,
-): boolean {
+  allowed: Set<string>,
+): Promise<boolean> {
   if (!hasShellSyntax(command)) return false;
-  const cmds = extractCommands(command);
+  const cmds = await extractCommands(command);
   if (cmds.length === 0) return false;
   return cmds.every((cmd) => {
     if (allowed.has(cmd)) return true;
-    const base = cmd.includes("/") ? cmd.split("/").pop()! : cmd;
+    const base = cmd.includes("/") ? (cmd.split("/").pop() ?? "") : cmd;
     return allowed.has(base);
   });
 }
@@ -86,6 +99,7 @@ if (import.meta.main) {
   interface HookInput {
     tool_name: string;
     tool_input: { command: string };
+    cwd?: string;
   }
 
   const input: HookInput = JSON.parse(
@@ -93,12 +107,24 @@ if (import.meta.main) {
   );
 
   if (input.tool_name !== "Bash") Deno.exit(0);
-  if (!shouldApprove(input.tool_input.command)) Deno.exit(0);
 
-  console.log(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PermissionRequest",
-      decision: { behavior: "allow" },
-    },
-  }));
+  const cwd = input.cwd ?? Deno.cwd();
+  const home = Deno.env.get("HOME") ?? "";
+  const paths = [
+    `${home}/.claude/settings.json`,
+    `${cwd}/.claude/settings.json`,
+    `${cwd}/.claude/settings.local.json`,
+  ];
+  const allowed = await loadAllowedCommands(paths);
+
+  if (!(await shouldApprove(input.tool_input.command, allowed))) Deno.exit(0);
+
+  console.log(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        decision: { behavior: "allow" },
+      },
+    }),
+  );
 }

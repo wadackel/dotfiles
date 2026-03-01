@@ -8,10 +8,7 @@
 
 {
   # Claude Code configuration
-  home.file.".claude/agents" = {
-    source = dotfiles.linkHere ./. "agents";
-    recursive = true;
-  };
+  home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
 
   home.file.".claude/skills".source = dotfiles.linkHere ./. "skills";
 

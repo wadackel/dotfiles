@@ -24,9 +24,19 @@ const SUBCOMMAND_TOOLS = new Set([
   "brew",
 ]);
 
+export const ACTIONABLE_TOOLS = new Set([
+  "Bash", "Edit", "Write", "Read",
+  "Glob", "Grep", "Task", "WebFetch", "WebSearch",
+]);
+
+export function isActionableTool(toolName: string): boolean {
+  return ACTIONABLE_TOOLS.has(toolName) || toolName.startsWith("mcp__");
+}
+
 // --- Types ---
 
 interface LogEntry {
+  event?: string;
   ts: string;
   sid: string;
   tool: string;
@@ -44,7 +54,8 @@ interface PermissionSuggestion {
 
 interface PatternInfo {
   pattern: string;
-  count: number;
+  requested: number;
+  executed: number;
   lastSeen: string;
   projects: Set<string>;
   examples: string[];
@@ -64,7 +75,6 @@ interface ReviewResult {
   period: { from: string; to: string; days: number };
   total: number;
   allowCandidates: PatternOutput[];
-  allowedCommandsCandidates: AllowedCommandCandidate[];
   reviewItems: PatternOutput[];
   stats: {
     byTool: Record<string, number>;
@@ -74,18 +84,13 @@ interface ReviewResult {
 
 interface PatternOutput {
   pattern: string;
-  count: number;
+  requested: number;
+  executed: number;
   lastSeen: string;
   projects: string[];
   examples: string[];
   subPatterns: string[];
   reason?: string;
-}
-
-interface AllowedCommandCandidate {
-  command: string;
-  count: number;
-  example: string;
 }
 
 // --- Log Parsing ---
@@ -318,7 +323,6 @@ export function aggregatePatterns(
 ): {
   allowCandidates: PatternInfo[];
   reviewItems: PatternInfo[];
-  allowedCommandsCandidates: AllowedCommandCandidate[];
   stats: { byTool: Record<string, number>; byProject: Record<string, number> };
 } {
   const allowList = settings.permissions?.allow ?? [];
@@ -327,16 +331,12 @@ export function aggregatePatterns(
   const byTool: Record<string, number> = {};
   const byProject: Record<string, number> = {};
 
-  // Track piped Bash commands for ALLOWED_COMMANDS analysis
-  const pipedCommands = new Map<
-    string,
-    { count: number; example: string }
-  >();
-
   for (const entry of entries) {
+    if (!isActionableTool(entry.tool)) continue;
     byTool[entry.tool] = (byTool[entry.tool] ?? 0) + 1;
     byProject[entry.project] = (byProject[entry.project] ?? 0) + 1;
 
+    const event = entry.event ?? "request";
     let patterns: string[];
     let rawExample = "";
 
@@ -347,43 +347,19 @@ export function aggregatePatterns(
         ? cmd.slice(0, options.maxExampleLen) + "..."
         : cmd;
       patterns = generalizeBashCommand(cmd);
-
-      // Check if this is a piped/compound command
-      if (/[|;]|&&|\d*>&/.test(cmd)) {
-        // Extract first command for ALLOWED_COMMANDS check
-        try {
-          const tokens = shellParse(cmd) as ShellToken[];
-          for (const t of tokens) {
-            if (typeof t === "string" && !/^[A-Z_][A-Z0-9_]*=/.test(t)) {
-              const base = t.includes("/") ? t.split("/").pop()! : t;
-              const existing = pipedCommands.get(base);
-              pipedCommands.set(base, {
-                count: (existing?.count ?? 0) + 1,
-                example: rawExample,
-              });
-              break;
-            }
-          }
-        } catch {
-          // parse failure
-        }
-      }
     } else {
       const pattern = generalizeNonBashTool(entry.tool, entry.input);
       patterns = [pattern];
       rawExample = extractNonBashExample(entry.tool, entry.input);
     }
 
-    const hasSuggestion =
-      Array.isArray(entry.permission_suggestions) &&
-      entry.permission_suggestions.length > 0;
-
     // Use the most general pattern for grouping
     const groupPattern = patterns[patterns.length - 1] ?? entry.tool;
 
     const info = patternMap.get(groupPattern) ?? {
       pattern: groupPattern,
-      count: 0,
+      requested: 0,
+      executed: 0,
       lastSeen: "",
       projects: new Set<string>(),
       examples: [],
@@ -392,45 +368,42 @@ export function aggregatePatterns(
       reason: "no_pattern",
     };
 
-    info.count++;
+    if (event === "executed") {
+      info.executed++;
+    } else {
+      info.requested++;
+    }
     if (entry.ts > info.lastSeen) info.lastSeen = entry.ts;
     info.projects.add(entry.project);
-    if (hasSuggestion) info.hasSuggestion = true;
-    if (
-      rawExample &&
-      info.examples.length < options.maxExamples &&
-      !info.examples.includes(rawExample)
-    ) {
-      info.examples.push(rawExample);
-    }
-    // Accumulate all sub-patterns from this entry
-    for (const p of patterns) info.subPatterns.add(p);
-    // Diagnose reason for Bash entries
-    if (entry.tool === "Bash") {
-      const cmd = entry.input.command as string;
-      const reason = diagnoseReason(cmd, patterns, allowList);
-      // Prioritize: compound_command > pattern_gap > no_pattern
+
+    if (event === "request") {
+      const hasSuggestion =
+        Array.isArray(entry.permission_suggestions) &&
+        entry.permission_suggestions.length > 0;
+      if (hasSuggestion) info.hasSuggestion = true;
       if (
-        reason === "compound_command" ||
-        (reason === "pattern_gap" && info.reason === "no_pattern")
+        rawExample &&
+        info.examples.length < options.maxExamples &&
+        !info.examples.includes(rawExample)
       ) {
-        info.reason = reason;
+        info.examples.push(rawExample);
+      }
+      // Accumulate all sub-patterns from this entry
+      for (const p of patterns) info.subPatterns.add(p);
+      // Diagnose reason for Bash entries
+      if (entry.tool === "Bash") {
+        const cmd = entry.input.command as string;
+        const reason = diagnoseReason(cmd, patterns, allowList);
+        // Prioritize: compound_command > pattern_gap > no_pattern
+        if (
+          reason === "compound_command" ||
+          (reason === "pattern_gap" && info.reason === "no_pattern")
+        ) {
+          info.reason = reason;
+        }
       }
     }
     patternMap.set(groupPattern, info);
-  }
-
-  // Load ALLOWED_COMMANDS from approve-piped-commands.ts to detect missing entries
-  const existingAllowed = loadAllowedCommands();
-  const allowedCommandsCandidates: AllowedCommandCandidate[] = [];
-  for (const [cmd, data] of pipedCommands) {
-    if (!existingAllowed.has(cmd)) {
-      allowedCommandsCandidates.push({
-        command: cmd,
-        count: data.count,
-        example: data.example,
-      });
-    }
   }
 
   // Classify patterns
@@ -441,37 +414,17 @@ export function aggregatePatterns(
     if (isPatternCovered(info.pattern, allowList)) continue;
     if (isPatternDenied(info.pattern, denyList)) continue;
 
-    if (info.hasSuggestion || info.count >= 3) {
+    if (info.hasSuggestion || info.executed >= 3) {
       allowCandidates.push(info);
     } else {
       reviewItems.push(info);
     }
   }
 
-  allowCandidates.sort((a, b) => b.count - a.count);
-  reviewItems.sort((a, b) => b.count - a.count);
-  allowedCommandsCandidates.sort((a, b) => b.count - a.count);
+  allowCandidates.sort((a, b) => b.executed - a.executed);
+  reviewItems.sort((a, b) => b.requested - a.requested);
 
-  return { allowCandidates, reviewItems, allowedCommandsCandidates, stats: { byTool, byProject } };
-}
-
-// --- ALLOWED_COMMANDS Detection ---
-
-function loadAllowedCommands(): Set<string> {
-  const scriptDir = new URL(".", import.meta.url).pathname;
-  const path = `${scriptDir}approve-piped-commands.ts`;
-  try {
-    const content = Deno.readTextFileSync(path);
-    const match = content.match(
-      /ALLOWED_COMMANDS\s*=\s*new\s+Set\(\[([^\]]+)\]/s,
-    );
-    if (!match) return new Set();
-    const items = match[1].match(/"([^"]+)"/g);
-    if (!items) return new Set();
-    return new Set(items.map((s) => s.replace(/"/g, "")));
-  } catch {
-    return new Set();
-  }
+  return { allowCandidates, reviewItems, stats: { byTool, byProject } };
 }
 
 // --- Output Formatting ---
@@ -479,7 +432,8 @@ function loadAllowedCommands(): Set<string> {
 function toPatternOutput(info: PatternInfo): PatternOutput {
   return {
     pattern: info.pattern,
-    count: info.count,
+    requested: info.requested,
+    executed: info.executed,
     lastSeen: info.lastSeen.slice(0, 10),
     projects: [...info.projects],
     examples: info.examples,
@@ -502,13 +456,14 @@ function formatText(result: ReviewResult, top: number): string {
     lines.push(`## permissions.allow candidates (${result.allowCandidates.length} patterns)`);
     lines.push("");
     lines.push(
-      "  Count  Pattern                                         Last Seen    Projects",
+      "   Req  Exec  Pattern                                    Last Seen    Projects",
     );
     for (const item of result.allowCandidates.slice(0, top)) {
-      const count = String(item.count).padStart(5);
-      const pattern = item.pattern.padEnd(48);
+      const req = String(item.requested).padStart(4);
+      const exec = String(item.executed).padStart(4);
+      const pattern = item.pattern.padEnd(46);
       const projects = item.projects.join(", ");
-      lines.push(`  ${count}  ${pattern}${item.lastSeen}   ${projects}`);
+      lines.push(`  ${req}  ${exec}  ${pattern}${item.lastSeen}   ${projects}`);
     }
 
     // Show examples for top patterns
@@ -524,28 +479,18 @@ function formatText(result: ReviewResult, top: number): string {
     lines.push("");
   }
 
-  if (result.allowedCommandsCandidates.length > 0) {
-    lines.push("## approve-piped-commands.ts ALLOWED_COMMANDS candidates");
-    lines.push("");
-    for (const item of result.allowedCommandsCandidates) {
-      lines.push(
-        `  Missing: "${item.command}" (count: ${item.count}, e.g. "${item.example}")`,
-      );
-    }
-    lines.push("");
-  }
-
   if (result.reviewItems.length > 0) {
     lines.push(`## Needs review (${result.reviewItems.length} patterns)`);
     lines.push("");
     lines.push(
-      "  Count  Pattern                                         Last Seen    Projects",
+      "   Req  Exec  Pattern                                    Last Seen    Projects",
     );
     for (const item of result.reviewItems.slice(0, top)) {
-      const count = String(item.count).padStart(5);
-      const pattern = item.pattern.padEnd(48);
+      const req = String(item.requested).padStart(4);
+      const exec = String(item.executed).padStart(4);
+      const pattern = item.pattern.padEnd(46);
       const projects = item.projects.join(", ");
-      lines.push(`  ${count}  ${pattern}${item.lastSeen}   ${projects}`);
+      lines.push(`  ${req}  ${exec}  ${pattern}${item.lastSeen}   ${projects}`);
     }
     lines.push("");
   }
@@ -592,6 +537,11 @@ export function purgeResolvedEntries(
   for (const line of lines) {
     try {
       const entry = JSON.parse(line) as LogEntry;
+      // In bulk mode (no allowListOverride), remove non-actionable tool entries
+      if (!allowListOverride && !isActionableTool(entry.tool)) {
+        removed++;
+        continue;
+      }
       let patterns: string[];
       if (entry.tool === "Bash") {
         const cmd = entry.input.command as string | undefined;
@@ -680,7 +630,7 @@ if (import.meta.main) {
     format === "json"
       ? { maxExamples: 50, maxExampleLen: 2000 }
       : { maxExamples: 5, maxExampleLen: 200 };
-  const { allowCandidates, reviewItems, allowedCommandsCandidates, stats } =
+  const { allowCandidates, reviewItems, stats } =
     aggregatePatterns(entries, settings, opts);
 
   const now = new Date();
@@ -695,7 +645,6 @@ if (import.meta.main) {
     },
     total: entries.length,
     allowCandidates: allowCandidates.map(toPatternOutput),
-    allowedCommandsCandidates,
     reviewItems: reviewItems.map(toPatternOutput),
     stats,
   };

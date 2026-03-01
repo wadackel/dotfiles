@@ -242,6 +242,11 @@ Example for a PDF skill:
 - "Fill out the PDF form fields"
 ```
 
+**Paraphrase coverage**: Include variations of the same intent to verify the description catches different phrasings. For example, if the skill sets up a project, test:
+- "set up X" / "create X" / "initialize X" / "configure X"
+
+Synonyms and alternative wordings a user might naturally say should all trigger the skill.
+
 ### Negative Test Cases
 
 Create scenarios that might seem related but shouldn't trigger:
@@ -311,6 +316,8 @@ Based on test results, the conductor compiles recommendations:
 
 ### Issue: Skill doesn't trigger when expected
 
+**Signal pattern**: Multiple positive tests fail → strong signal that description lacks clear trigger phrases or domain boundaries.
+
 **Possible causes:**
 - Description too narrow or vague
 - Missing key trigger phrases
@@ -320,8 +327,11 @@ Based on test results, the conductor compiles recommendations:
 - Expand description to include more scenarios
 - Add explicit trigger phrases
 - Clarify the unique use case
+- Test paraphrase coverage: verify that "set up X", "create X", and "initialize X" all trigger if the skill handles project/resource creation
 
 ### Issue: Skill triggers on unrelated requests
+
+**Signal pattern**: Multiple negative tests trigger the skill → strong signal that description is too broad.
 
 **Possible causes:**
 - Description too broad
@@ -331,6 +341,10 @@ Based on test results, the conductor compiles recommendations:
 - Narrow the description scope
 - Add negative examples in description
 - Specify file types or explicit contexts
+- Use "Do NOT use for..." exclusion pattern in the description to set explicit boundaries, e.g.:
+  ```
+  description: "...Do NOT use for simple exploration (use data-viz skill instead)."
+  ```
 
 ### Issue: Workflow steps executed out of order
 

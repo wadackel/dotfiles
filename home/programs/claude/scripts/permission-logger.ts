@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
 
-// PermissionRequest hook: logs all permission requests to JSONL for later analysis.
+// PermissionRequest / PostToolUse hook: logs permission requests and executed
+// tool calls to JSONL for later analysis via permission-review.ts.
 // IMPORTANT: stdout output is strictly forbidden — it would be interpreted as a
 // hook decision and break the approve-piped-commands.ts hook chain.
 
@@ -11,10 +12,20 @@ const LOG_FILE = `${LOG_DIR}/permission-requests.jsonl`;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_LINES_KEEP = 50_000;
 
+const ACTIONABLE_TOOLS = new Set([
+  "Bash", "Edit", "Write", "Read",
+  "Glob", "Grep", "Task", "WebFetch", "WebSearch",
+]);
+
+function isActionableTool(toolName: string): boolean {
+  return ACTIONABLE_TOOLS.has(toolName) || toolName.startsWith("mcp__");
+}
+
 // --- Types ---
 
 interface HookInput {
   session_id?: string;
+  hook_event_name?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   cwd?: string;
@@ -22,6 +33,7 @@ interface HookInput {
 }
 
 interface LogEntry {
+  event?: string;
   ts: string;
   sid: string;
   tool: string;
@@ -135,9 +147,13 @@ async function main(): Promise<void> {
   }
 
   const toolName = hookData.tool_name ?? "";
+  if (!isActionableTool(toolName)) return;
+
   const toolInput = hookData.tool_input ?? {};
   const cwd = hookData.cwd ?? "";
   const sessionId = hookData.session_id ?? "";
+  const hookEventName = hookData.hook_event_name ?? "";
+  const event = hookEventName === "PostToolUse" ? "executed" : "request";
 
   try {
     Deno.mkdirSync(LOG_DIR, { recursive: true });
@@ -152,6 +168,7 @@ async function main(): Promise<void> {
   }
 
   const entry: LogEntry = {
+    event,
     ts: new Date().toISOString(),
     sid: sessionId.slice(0, 8),
     tool: toolName,
@@ -161,6 +178,7 @@ async function main(): Promise<void> {
   };
 
   if (
+    event === "request" &&
     hookData.permission_suggestions &&
     hookData.permission_suggestions.length > 0
   ) {

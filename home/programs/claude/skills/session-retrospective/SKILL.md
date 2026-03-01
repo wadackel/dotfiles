@@ -95,6 +95,7 @@ After categorizing learnings, perform a dedicated scan for skill opportunities a
 3. **The teaching test**: "Did the user describe a multi-step process?"
 4. **The cross-session test**: "Did the user signal this is a recurring task?"
 5. **The ecosystem test**: "Does this resemble an existing skill's structure?"
+6. **The systematization test**: "Did this session consume external knowledge AND encode it into a reusable tool? (Requires 2+ indicators from Signal 6 in skill-opportunity-detection.md)"
 
 If ANY check passes, flag the learning as a skill candidate and carry it forward to Phase 3 routing with a skill proposal bias.
 
@@ -126,6 +127,31 @@ For each identified learning, also ask:
 - ✗ Extracted: "non-interactive environment debugging tip" (env-specific framing)
 - ✓ Should extract: "investigation plans must include direct observation means" (general principle)
   with "non-interactive env" as one concrete example
+
+**Artifact Pipeline Check**: Beyond generalizing facts, also ask:
+> "Did this session produce a reusable artifact? If so, is the *artifact-creation pipeline* itself generalizable across domains?"
+
+If yes, recommend the appropriate mechanism using this routing:
+
+```
+Is the methodology a repeatable workflow the user would invoke by name?
+  YES → Skill (standard). Use skill-creator to build it.
+  NO → Is it background knowledge that should always be available?
+    YES → Skill (user-invocable: false, Reference content).
+    NO → Does it need constrained tool access (read-only analysis)?
+      YES → Custom Agent (agents/*.md). Use context: fork + agent: from skills.
+      NO → Does it augment an existing skill's evaluation criteria?
+        YES → Reference file in existing skill's references/.
+        NO → Skill (standard) as default. Most flexible option.
+```
+
+Default to Skill (standard) when uncertain — it matches the user's preference for skill-based workflows.
+
+**Example:**
+- Artifact: Evaluation agent derived from Anthropic PDF (specific instance)
+- Pipeline: "Methodology document → extract criteria → create evaluation tool" (generalizable)
+- Recommended: Skill (standard) — e.g., `/review-accessibility [url]`
+- Alternative: Custom Agent if read-only constraint is needed
 
 ### Phase 3: Route Proposals
 

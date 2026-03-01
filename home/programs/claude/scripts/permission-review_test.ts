@@ -9,6 +9,7 @@ import {
   diagnoseReason,
   aggregatePatterns,
   purgeResolvedEntries,
+  isActionableTool,
 } from "./permission-review.ts";
 
 // --- generalizeBashCommand ---
@@ -338,5 +339,196 @@ Deno.test("purgeResolvedEntries: empty allowListOverride purges nothing", () => 
   const settings = { permissions: { allow: [] } };
   const removed = purgeResolvedEntries(tmpFile, settings, []);
   assertEquals(removed, 0);
+  Deno.removeSync(tmpFile);
+});
+
+// --- isActionableTool ---
+
+Deno.test("isActionableTool: standard tools are actionable", () => {
+  assertEquals(isActionableTool("Bash"), true);
+  assertEquals(isActionableTool("Edit"), true);
+  assertEquals(isActionableTool("Write"), true);
+  assertEquals(isActionableTool("Read"), true);
+  assertEquals(isActionableTool("Glob"), true);
+  assertEquals(isActionableTool("Grep"), true);
+  assertEquals(isActionableTool("WebFetch"), true);
+  assertEquals(isActionableTool("WebSearch"), true);
+});
+
+Deno.test("isActionableTool: mcp__ prefix is actionable", () => {
+  assertEquals(isActionableTool("mcp__codex__codex"), true);
+  assertEquals(isActionableTool("mcp__obsidian-mcp-tools__fetch"), true);
+});
+
+Deno.test("isActionableTool: non-actionable tools", () => {
+  assertEquals(isActionableTool("AskUserQuestion"), false);
+  assertEquals(isActionableTool("ExitPlanMode"), false);
+  assertEquals(isActionableTool("EnterPlanMode"), false);
+  assertEquals(isActionableTool("Skill"), false);
+});
+
+// --- aggregatePatterns: event-based counting ---
+
+Deno.test("aggregatePatterns: event-based counting separates requested and executed", () => {
+  const entries = [
+    {
+      event: "request",
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "man tmux" },
+      cwd: "/tmp",
+      project: "test",
+    },
+    {
+      event: "executed",
+      ts: "2025-01-01T00:01:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "man tmux" },
+      cwd: "/tmp",
+      project: "test",
+    },
+    {
+      event: "request",
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "man git" },
+      cwd: "/tmp",
+      project: "test",
+    },
+  ];
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  const all = [...result.allowCandidates, ...result.reviewItems];
+  const manPattern = all.find((c) => c.pattern === "Bash(man *)");
+  assertEquals(manPattern!.requested, 2);
+  assertEquals(manPattern!.executed, 1);
+});
+
+Deno.test("aggregatePatterns: executed >= 3 becomes allowCandidate", () => {
+  const entries = Array.from({ length: 3 }, (_, i) => ({
+    event: "executed",
+    ts: `2025-01-0${i + 1}T00:00:00Z`,
+    sid: "s1",
+    tool: "Bash",
+    input: { command: "sudo darwin-rebuild switch" },
+    cwd: "/tmp",
+    project: "dotfiles",
+  }));
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  const candidate = result.allowCandidates.find(
+    (c) => c.pattern === "Bash(sudo *)",
+  );
+  assertEquals(candidate !== undefined, true);
+  assertEquals(candidate!.executed, 3);
+});
+
+Deno.test("aggregatePatterns: non-actionable tools excluded from candidates and stats", () => {
+  const entries = [
+    {
+      event: "request",
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "AskUserQuestion",
+      input: { question: "Which option?" },
+      cwd: "/tmp",
+      project: "test",
+    },
+    {
+      event: "request",
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "whoami" },
+      cwd: "/tmp",
+      project: "test",
+    },
+  ];
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  // AskUserQuestion must not appear in candidates
+  const all = [...result.allowCandidates, ...result.reviewItems];
+  assertEquals(all.every((c) => !c.pattern.includes("AskUserQuestion")), true);
+  // AskUserQuestion must not appear in stats
+  assertEquals(result.stats.byTool["AskUserQuestion"], undefined);
+  // Bash still counted
+  assertEquals(result.stats.byTool["Bash"], 1);
+});
+
+Deno.test("aggregatePatterns: backward compat — entry without event treated as request", () => {
+  const entries = [
+    {
+      // No event field (legacy entry)
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git status" },
+      cwd: "/tmp",
+      project: "test",
+    },
+  ];
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  const all = [...result.allowCandidates, ...result.reviewItems];
+  const gitPattern = all.find((c) => c.pattern === "Bash(git *)");
+  assertEquals(gitPattern!.requested, 1);
+  assertEquals(gitPattern!.executed, 0);
+});
+
+// --- purgeResolvedEntries: bulk non-actionable filter ---
+
+Deno.test("purgeResolvedEntries: bulk purge removes non-actionable entries", () => {
+  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+  const lines = [
+    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git status" }, cwd: "/tmp", project: "test" }),
+    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
+    JSON.stringify({ ts: "2025-01-03T00:00:00Z", sid: "s1", tool: "ExitPlanMode", input: {}, cwd: "/tmp", project: "test" }),
+  ];
+  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+
+  const settings = { permissions: { allow: [] } };
+  // Bulk purge (no allowListOverride) removes non-actionable entries
+  const removed = purgeResolvedEntries(tmpFile, settings);
+  assertEquals(removed, 2); // AskUserQuestion + ExitPlanMode
+
+  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  assertEquals(remaining.length, 1);
+  const kept = JSON.parse(remaining[0]);
+  assertEquals(kept.tool, "Bash");
+  Deno.removeSync(tmpFile);
+});
+
+Deno.test("purgeResolvedEntries: selective purge does NOT remove non-actionable entries", () => {
+  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+  const lines = [
+    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git commit -m test" }, cwd: "/tmp", project: "test" }),
+    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
+  ];
+  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+
+  const settings = { permissions: { allow: [] } };
+  // Selective purge (with allowListOverride) only purges matched patterns
+  const removed = purgeResolvedEntries(tmpFile, settings, ["Bash(git commit *)"]);
+  assertEquals(removed, 1); // only Bash entry
+
+  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  assertEquals(remaining.length, 1);
+  const kept = JSON.parse(remaining[0]);
+  assertEquals(kept.tool, "AskUserQuestion"); // still present
   Deno.removeSync(tmpFile);
 });

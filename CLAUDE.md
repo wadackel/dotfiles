@@ -210,8 +210,9 @@ This repository includes comprehensive Claude Code configuration:
   - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
   - `claude-memo.ts`: セッション要約を Obsidian デイリーノートに書き込む Stop hook。デバッグ: `$TMPDIR/claude-memo.log`
   - `bash-policy.ts`: 禁止コマンドパターンをブロックする `PreToolUse` hook（常時稼働）。ルール定義: `bash-policy.yaml`（同ディレクトリ）
+  - Claude scripts のテスト実行: `deno test --allow-env=HOME --allow-read --allow-write home/programs/claude/scripts/<name>_test.ts`
   - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(*<script-name>*)"` を追記すること（ワイルドカード接頭辞で、Claude がフルパスで呼び出す場合にも対応。`Bash(<script-name>*)` ではパス付き呼び出しにマッチしない）
-  - リダイレクト付き呼び出し（`2>/dev/null` 等）は `Bash()` パターンにマッチしない既知制限があるため、`approve-piped-commands.ts` の `ALLOWED_COMMANDS` にもスクリプト名を追加すること
+  - リダイレクト付き呼び出し（`2>/dev/null` 等）は `Bash()` パターンにマッチしない既知制限があるが、`approve-piped-commands.ts` が `settings.json` のパターンを読み込んで自動承認するため追加作業は不要
   - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
   - 新スクリプト追加時は `chmod +x` で実行権限を付与すること（hooks からの実行に execute bit が必要。git が 100644/100755 でモードを管理するので commit も必要）
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`

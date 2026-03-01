@@ -21,7 +21,7 @@ A CLAUDE.md entry is better when:
 - It's a preference that applies passively to all interactions
 - It's a one-liner that modifies existing behavior
 
-## Five Detection Signals
+## Detection Signals
 
 Apply these to ALL learnings in every category — not just "Repeated Workflows".
 
@@ -104,8 +104,33 @@ If the detected workflow resembles an existing skill in structure, it's a strong
 | Interview + build | bash-policy-add, plan-deeper | Gathers info from user then constructs output |
 | Format conversion | gdocs-to-md | Transforms input format to output format |
 | Multi-tool orchestration | codex-review, qa-planner | Chains multiple tools in a reviewed workflow |
+| Knowledge Systematization | PDF-based evaluator, methodology-derived reviewer | Consumes external document, extracts structured criteria, produces reusable tool (skill/agent/reference/script) |
 
 If the detected workflow matches one of these patterns, propose it as a skill.
+
+### Signal 6: Knowledge Systematization
+
+A session consumed an external knowledge source (PDF, guide, specification, checklist) and encoded its methodology into a reusable mechanism within the Claude ecosystem (skill, agent, reference, script).
+
+**Why existing signals miss this:** Signals 1/4/5 detect process characteristics (step count, tool types, structural similarity). Signal 6 detects a different dimension — the internalization of external knowledge into a reusable tool. A session that reads an API doc and makes API calls triggers Signal 1 but not Signal 6. A session that reads a design guide and creates an evaluation skill from it triggers both.
+
+**Indicators (require at least 2 of 4):**
+- External document was consumed (WebFetch, Read of external file, gemini-research)
+- Structured criteria, checklists, or evaluation dimensions were extracted from the document
+- Extracted content was written to `~/.claude/` files (skills/, agents/, scripts/, references/)
+- The resulting mechanism is domain-portable (replacing the source document with a different one would produce a useful tool for a different domain)
+
+**Language indicators (Japanese/English):**
+- "このガイドの基準で評価できるようにしたい"
+- "このチェックリストをスキル化して"
+- "Turn this document into a reusable workflow"
+- "Create a reviewer based on this guide"
+
+**Example:**
+- Session consumed Anthropic's skill-building PDF, extracted 6-dimension testing framework, created an evaluation agent → Signal 6 fires (3 of 4 indicators met)
+
+**Anti-example:**
+- Session read an API doc and made API calls using it → Signal 6 does NOT fire (only 1 of 4 indicators met: document consumed, but no reusable mechanism created)
 
 ## Borderline Cases: Skill vs CLAUDE.md
 
@@ -138,6 +163,12 @@ If the detected workflow matches one of these patterns, propose it as a skill.
 - **As CLAUDE.md**: If it's "create default.nix in programs/" → already documented
 - **As Skill**: If the full process includes mkdir → write template → add config files → git add → darwin-rebuild → verify
 - **Decision**: Skill candidate if the orchestration goes beyond what's already documented. Check existing CLAUDE.md first.
+
+### Case 7: "External guide consumed → evaluation tool created"
+- **As Skill**: `/evaluate-X` — repeatable evaluation workflow triggered by name → Skill
+- **As Agent**: Read-only constrained reviewer → Custom Agent (invoked from skill via `context: fork`)
+- **As Reference**: Augments existing skill's evaluation criteria → Reference file
+- **Decision**: If a workflow exists (input → analyze → output) → Skill is first choice. If tool constraints needed (read-only) → Agent. If extending an existing skill → Reference.
 
 ## Skill Proposal Template
 

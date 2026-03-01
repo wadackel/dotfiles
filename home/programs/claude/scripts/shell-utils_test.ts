@@ -4,7 +4,7 @@ import {
   getSegmentsFallback,
   globToRegex,
   stripHeredocs,
-} from "./bash-policy.ts";
+} from "./shell-utils.ts";
 
 // ===== globToRegex =====
 
