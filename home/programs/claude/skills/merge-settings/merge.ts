@@ -166,9 +166,16 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string): void {
     die("no_user_settings", "~/.claude/settings.json が見つかりません");
   }
 
-  // Merge and write
+  // Merge and calculate actual diff
   const existingRules = extractAllowRules(globalSettings);
+  const normalizedExistingCount = canonicalizeRules(existingRules).length;
   const merged = mergeAllowRules(existingRules, canonicalized);
+  const actuallyAdded = merged.length - normalizedExistingCount;
+
+  if (actuallyAdded === 0) {
+    output({ status: "noop", message: "新規ルールはありません（すべて既存）" });
+    return;
+  }
 
   const updated = {
     ...(globalSettings as Record<string, unknown>),
@@ -186,8 +193,8 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string): void {
 
   output({
     status: "success",
-    applied_count: canonicalized.length,
-    message: `${canonicalized.length}件のルールを追加しました`,
+    applied_count: actuallyAdded,
+    message: `${actuallyAdded}件のルールを追加しました`,
   });
 }
 
