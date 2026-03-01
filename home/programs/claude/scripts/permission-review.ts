@@ -49,6 +49,8 @@ interface PatternInfo {
   projects: Set<string>;
   examples: string[];
   hasSuggestion: boolean;
+  subPatterns: Set<string>;
+  reason: string;
 }
 
 interface Settings {
@@ -76,6 +78,8 @@ interface PatternOutput {
   lastSeen: string;
   projects: string[];
   examples: string[];
+  subPatterns: string[];
+  reason?: string;
 }
 
 interface AllowedCommandCandidate {
@@ -289,11 +293,28 @@ function isPatternDenied(pattern: string, denyList: string[]): boolean {
   return false;
 }
 
+export function diagnoseReason(
+  command: string,
+  patterns: string[],
+  allowList: string[],
+): string {
+  // 1. Compound command check
+  if (/[|;]|&&|\d*>&/.test(command)) return "compound_command";
+  // 2. Same tool name pattern exists in allowList but doesn't cover this
+  const cmdName = patterns[0]?.match(/^Bash\((\S+)/)?.[1];
+  if (cmdName && allowList.some((a) => a.startsWith(`Bash(${cmdName} `))) {
+    return "pattern_gap";
+  }
+  // 3. No matching pattern at all
+  return "no_pattern";
+}
+
 // --- Aggregation ---
 
-function aggregatePatterns(
+export function aggregatePatterns(
   entries: LogEntry[],
   settings: Settings,
+  options: { maxExamples: number; maxExampleLen: number },
 ): {
   allowCandidates: PatternInfo[];
   reviewItems: PatternInfo[];
@@ -322,7 +343,9 @@ function aggregatePatterns(
     if (entry.tool === "Bash") {
       const cmd = entry.input.command as string | undefined;
       if (!cmd) continue;
-      rawExample = cmd.length > 120 ? cmd.slice(0, 120) + "..." : cmd;
+      rawExample = cmd.length > options.maxExampleLen
+        ? cmd.slice(0, options.maxExampleLen) + "..."
+        : cmd;
       patterns = generalizeBashCommand(cmd);
 
       // Check if this is a piped/compound command
@@ -365,14 +388,34 @@ function aggregatePatterns(
       projects: new Set<string>(),
       examples: [],
       hasSuggestion: false,
+      subPatterns: new Set<string>(),
+      reason: "no_pattern",
     };
 
     info.count++;
     if (entry.ts > info.lastSeen) info.lastSeen = entry.ts;
     info.projects.add(entry.project);
     if (hasSuggestion) info.hasSuggestion = true;
-    if (rawExample && info.examples.length < 3 && !info.examples.includes(rawExample)) {
+    if (
+      rawExample &&
+      info.examples.length < options.maxExamples &&
+      !info.examples.includes(rawExample)
+    ) {
       info.examples.push(rawExample);
+    }
+    // Accumulate all sub-patterns from this entry
+    for (const p of patterns) info.subPatterns.add(p);
+    // Diagnose reason for Bash entries
+    if (entry.tool === "Bash") {
+      const cmd = entry.input.command as string;
+      const reason = diagnoseReason(cmd, patterns, allowList);
+      // Prioritize: compound_command > pattern_gap > no_pattern
+      if (
+        reason === "compound_command" ||
+        (reason === "pattern_gap" && info.reason === "no_pattern")
+      ) {
+        info.reason = reason;
+      }
     }
     patternMap.set(groupPattern, info);
   }
@@ -440,6 +483,8 @@ function toPatternOutput(info: PatternInfo): PatternOutput {
     lastSeen: info.lastSeen.slice(0, 10),
     projects: [...info.projects],
     examples: info.examples,
+    subPatterns: [...info.subPatterns],
+    ...(info.reason !== "no_pattern" ? { reason: info.reason } : {}),
   };
 }
 
@@ -527,7 +572,11 @@ function formatText(result: ReviewResult, top: number): string {
 
 // --- Purge ---
 
-function purgeResolvedEntries(logFile: string, settings: Settings): number {
+export function purgeResolvedEntries(
+  logFile: string,
+  settings: Settings,
+  allowListOverride?: string[],
+): number {
   let content: string;
   try {
     content = Deno.readTextFileSync(logFile);
@@ -535,7 +584,7 @@ function purgeResolvedEntries(logFile: string, settings: Settings): number {
     return 0;
   }
 
-  const allowList = settings.permissions?.allow ?? [];
+  const allowList = allowListOverride ?? settings.permissions?.allow ?? [];
   const lines = content.split("\n").filter((l) => l.trim());
   const kept: string[] = [];
   let removed = 0;
@@ -579,6 +628,7 @@ if (import.meta.main) {
   const flags = parseArgs(Deno.args, {
     string: ["project", "tool", "format"],
     boolean: ["purge"],
+    collect: ["purge-pattern"],
     default: { days: 30, top: 20, format: "text", purge: false },
   });
 
@@ -587,6 +637,17 @@ if (import.meta.main) {
   const format = flags.format as string;
   const projectFilter = flags.project as string | undefined;
   const toolFilter = flags.tool as string | undefined;
+
+  // Selective purge by specific patterns
+  const purgePatterns = (flags["purge-pattern"] ?? []) as string[];
+  if (purgePatterns.length > 0) {
+    const settings = loadSettings();
+    const removed = purgeResolvedEntries(LOG_FILE, settings, purgePatterns);
+    console.log(
+      `Purged ${removed} entries matching ${purgePatterns.length} patterns.`,
+    );
+    Deno.exit(0);
+  }
 
   if (flags.purge) {
     const settings = loadSettings();
@@ -615,8 +676,12 @@ if (import.meta.main) {
   }
 
   const settings = loadSettings();
+  const opts =
+    format === "json"
+      ? { maxExamples: 50, maxExampleLen: 2000 }
+      : { maxExamples: 5, maxExampleLen: 200 };
   const { allowCandidates, reviewItems, allowedCommandsCandidates, stats } =
-    aggregatePatterns(entries, settings);
+    aggregatePatterns(entries, settings, opts);
 
   const now = new Date();
   const from = new Date(now);

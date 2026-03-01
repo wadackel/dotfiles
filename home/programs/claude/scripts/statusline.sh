@@ -56,7 +56,12 @@ fi
 if [ -n "$cwd" ]; then
   cd "$cwd" 2>/dev/null || true
   if git rev-parse --git-dir >/dev/null 2>&1; then
-    repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null || basename "$cwd")
+    git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    if [ -n "$git_common_dir" ]; then
+      repo=$(basename "$(cd "$git_common_dir/.." && pwd)")
+    else
+      repo=$(basename "$cwd")
+    fi
     branch=$(git branch --show-current 2>/dev/null || echo "")
     dirty=""
     [ -n "$(git status --porcelain 2>/dev/null | head -1)" ] && dirty="*"

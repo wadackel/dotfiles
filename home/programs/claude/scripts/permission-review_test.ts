@@ -6,6 +6,9 @@ import {
   generalizeBashCommand,
   extractNonBashExample,
   isPatternCovered,
+  diagnoseReason,
+  aggregatePatterns,
+  purgeResolvedEntries,
 } from "./permission-review.ts";
 
 // --- generalizeBashCommand ---
@@ -191,4 +194,149 @@ Deno.test("isPatternCovered: Tool(**) covers Tool(path)", () => {
     isPatternCovered("Read(/src/main.ts)", ["Read(**)"]),
     true,
   );
+});
+
+// Asymmetric: broad pattern covers specific, but not vice-versa
+Deno.test("isPatternCovered: git * covers git commit *", () => {
+  assertEquals(
+    isPatternCovered("Bash(git commit *)", ["Bash(git *)"]),
+    true,
+  );
+});
+
+Deno.test("isPatternCovered: git commit * does NOT cover git *", () => {
+  assertEquals(
+    isPatternCovered("Bash(git *)", ["Bash(git commit *)"]),
+    false,
+  );
+});
+
+// --- diagnoseReason ---
+
+Deno.test("diagnoseReason: compound command with pipe", () => {
+  assertEquals(
+    diagnoseReason("git status | head -5", ["Bash(git status *)"], ["Bash(git status *)"]),
+    "compound_command",
+  );
+});
+
+Deno.test("diagnoseReason: compound command with &&", () => {
+  assertEquals(
+    diagnoseReason("git add . && git commit -m msg", ["Bash(git add *)"], ["Bash(git *)"]),
+    "compound_command",
+  );
+});
+
+Deno.test("diagnoseReason: pattern gap — same tool registered but subcmd missing", () => {
+  assertEquals(
+    diagnoseReason("git merge feature", ["Bash(git merge *)"], ["Bash(git commit *)"]),
+    "pattern_gap",
+  );
+});
+
+Deno.test("diagnoseReason: no pattern at all", () => {
+  assertEquals(
+    diagnoseReason("whoami", ["Bash(whoami *)"], []),
+    "no_pattern",
+  );
+});
+
+// --- aggregatePatterns ---
+
+Deno.test("aggregatePatterns: JSON mode collects many examples", () => {
+  const entries = Array.from({ length: 10 }, (_, i) => ({
+    ts: `2025-01-0${Math.min(i + 1, 9)}T00:00:00Z`,
+    sid: "s1",
+    tool: "Bash",
+    input: { command: `git status --short-${i}` },
+    cwd: "/tmp",
+    project: "test",
+  }));
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  // All 10 unique examples should be collected
+  const candidate = [...result.allowCandidates, ...result.reviewItems].find(
+    (c) => c.pattern === "Bash(git *)",
+  );
+  assertEquals(candidate!.examples.length, 10);
+});
+
+Deno.test("aggregatePatterns: subPatterns accumulated as union", () => {
+  const entries = [
+    {
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git commit -m first" },
+      cwd: "/tmp",
+      project: "test",
+    },
+    {
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git push origin main" },
+      cwd: "/tmp",
+      project: "test",
+    },
+    {
+      ts: "2025-01-03T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git status --short" },
+      cwd: "/tmp",
+      project: "test",
+    },
+  ];
+  const settings = { permissions: { allow: [] } };
+  const result = aggregatePatterns(entries, settings, {
+    maxExamples: 50,
+    maxExampleLen: 2000,
+  });
+  const candidate = [...result.allowCandidates, ...result.reviewItems].find(
+    (c) => c.pattern === "Bash(git *)",
+  );
+  const subs = new Set(candidate!.subPatterns);
+  // Should contain sub-patterns from all 3 commands
+  assertEquals(subs.has("Bash(git commit *)"), true);
+  assertEquals(subs.has("Bash(git push *)"), true);
+  assertEquals(subs.has("Bash(git status *)"), true);
+  assertEquals(subs.has("Bash(git *)"), true);
+});
+
+// --- purgeResolvedEntries ---
+
+Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only", () => {
+  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+  const lines = [
+    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git commit -m test" }, cwd: "/tmp", project: "test" }),
+    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "whoami" }, cwd: "/tmp", project: "test" }),
+    JSON.stringify({ ts: "2025-01-03T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
+  ];
+  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+
+  const settings = { permissions: { allow: [] } };
+  const removed = purgeResolvedEntries(tmpFile, settings, ["Bash(git commit *)"]);
+  assertEquals(removed, 1);
+
+  // Remaining entries
+  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  assertEquals(remaining.length, 2);
+  Deno.removeSync(tmpFile);
+});
+
+Deno.test("purgeResolvedEntries: empty allowListOverride purges nothing", () => {
+  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+  const lines = [
+    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git status" }, cwd: "/tmp", project: "test" }),
+  ];
+  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+
+  const settings = { permissions: { allow: [] } };
+  const removed = purgeResolvedEntries(tmpFile, settings, []);
+  assertEquals(removed, 0);
+  Deno.removeSync(tmpFile);
 });
