@@ -179,6 +179,15 @@ For rollback commands and generation management, see [README.md](README.md#rollb
 
 ## Troubleshooting
 
+### tmux 設定の即時反映
+
+tmux の設定ファイルは XDG パス `~/.config/tmux/tmux.conf` に配置される（`~/.tmux.conf` は存在しない）。
+編集後の即時反映コマンド: `TMUX="" tmux source-file ~/.config/tmux/tmux.conf`
+
+`bind-key` の `if-shell` 引数内で `\;` はコマンドセパレータとして機能しない（`tmux list-keys` で `\\;` と表示され、リテラル文字として保持される）。複数コマンドを順に実行する場合は、`bind-key` のトップレベルで `\;` で分離すること:
+- ✗ `bind-key h if-shell -F cond 'cmd1 \; cmd2'` — `cmd1 \; cmd2` が単一コマンド扱い
+- ✓ `bind-key h if-shell -F cond 'cmd1' \; if-shell -F cond2 'cmd2'` — トップレベルで分離
+
 ### launchd / macOS 通知からのコマンド実行
 
 `terminal-notifier -execute` など macOS 通知クリック時に実行されるスクリプトは launchd 環境で動作し、PATH が `/usr/bin:/bin:/usr/sbin:/sbin` に限定される。Nix 管理のコマンド (tmux, jq など) を使う場合はフルパスを渡す必要がある。

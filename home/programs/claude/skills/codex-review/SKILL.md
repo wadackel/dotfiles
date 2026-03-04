@@ -37,7 +37,8 @@ mcp__codex__codex-reply --threadId <id> --prompt "修正しました。再レビ
 
 1. Read plan file (plan.md)
 2. Read CLAUDE.md for project guidelines
-3. Call `mcp__codex__codex`:
+3. Read source code of the functions/sections being modified (enables Codex to validate line numbers, variable names, and patterns against actual code)
+4. Call `mcp__codex__codex`:
    - `sandbox: "read-only"`
    - `approval-policy: "on-failure"`
    - Include plan content, guidelines, and review criteria in prompt
@@ -92,6 +93,7 @@ Focus on security aspects:
 - Project CLAUDE.md (coding standards)
 - Plan file (for plan review)
 - Git diff (for code review)
+- Source code of the functions/sections being modified (for plan review: enables Codex to validate line numbers, variable names, and patterns against actual code)
 
 **Include when relevant:**
 - Architecture documents (for plan review)
