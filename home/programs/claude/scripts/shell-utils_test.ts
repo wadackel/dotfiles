@@ -3,6 +3,7 @@ import {
   getSegments,
   getSegmentsFallback,
   globToRegex,
+  parseCommand,
   stripHeredocs,
 } from "./shell-utils.ts";
 
@@ -36,6 +37,13 @@ Deno.test("globToRegex: npx pattern", () => {
   assertMatch("npx tsc --watch", globToRegex("npx *"));
   assertMatch("npx create-react-app my-app", globToRegex("npx *"));
   assertNotMatch("pnpm exec tsc", globToRegex("npx *"));
+});
+
+Deno.test("globToRegex: wildcard matches newlines (multiline segment)", () => {
+  // Heredoc-stripped segments may contain embedded newlines
+  const segment = "gh pr create --title Test --body \"$(cat <<'HEREDOC'\n)\"";
+  assertMatch(segment, globToRegex("gh pr create * <<*"));
+  assertNotMatch("gh pr create --title Test --body-file /tmp/body.md", globToRegex("gh pr create * <<*"));
 });
 
 // ===== getSegments =====
@@ -339,4 +347,91 @@ Deno.test("getSegmentsFallback: semicolon splits", () => {
     "git fetch",
     "git pull",
   ]);
+});
+
+// ===== parseCommand: isCompound + segments =====
+
+Deno.test("parseCommand: simple command is not compound", async () => {
+  const result = await parseCommand("git stash");
+  assertEquals(result.isCompound, false);
+  assertEquals(result.segments, ["git stash"]);
+});
+
+Deno.test("parseCommand: pipeline is compound", async () => {
+  const result = await parseCommand("echo test | grep foo");
+  assertEquals(result.isCompound, true);
+  assertEquals(result.segments, ["echo test", "grep foo"]);
+});
+
+Deno.test("parseCommand: redirect 2>&1 is compound", async () => {
+  const result = await parseCommand("gemini -p 'test' 2>&1");
+  assertEquals(result.isCompound, true);
+  assertEquals(result.segments, ["gemini -p test"]);
+});
+
+Deno.test("parseCommand: redirect >/dev/null is compound", async () => {
+  const result = await parseCommand("echo hello >/dev/null");
+  assertEquals(result.isCompound, true);
+  assertEquals(result.segments, ["echo hello"]);
+});
+
+Deno.test("parseCommand: redirect 2>/dev/null is compound", async () => {
+  const result = await parseCommand("npm test 2>/dev/null");
+  assertEquals(result.isCompound, true);
+  assertEquals(result.segments, ["npm test"]);
+});
+
+Deno.test("parseCommand: input redirect is compound", async () => {
+  const result = await parseCommand("sort <input.txt");
+  assertEquals(result.isCompound, true);
+  assertEquals(result.segments, ["sort"]);
+});
+
+Deno.test("parseCommand: quoted pipe is not compound", async () => {
+  const result = await parseCommand('git commit -m "fix | update"');
+  assertEquals(result.isCompound, false);
+});
+
+Deno.test("parseCommand: quoted && is not compound", async () => {
+  const result = await parseCommand('git commit -m "fix && update"');
+  assertEquals(result.isCompound, false);
+});
+
+Deno.test("parseCommand: env var prefix only is not compound", async () => {
+  const result = await parseCommand('TMUX="" tmux send-keys');
+  assertEquals(result.isCompound, false);
+  assertEquals(result.segments, ["tmux send-keys"]);
+});
+
+Deno.test("parseCommand: command substitution $() is compound", async () => {
+  const result = await parseCommand("echo $(git merge-base HEAD master)");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: for loop is compound", async () => {
+  const result = await parseCommand("for f in *.txt; do echo hello; done");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: if statement is compound", async () => {
+  const result = await parseCommand("if [ -f a ]; then echo yes; fi");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: subshell is compound", async () => {
+  const result = await parseCommand("(cd /app && git status)");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: empty string returns empty segments and not compound", async () => {
+  const result = await parseCommand("");
+  assertEquals(result.isCompound, false);
+  assertEquals(result.segments, []);
+});
+
+Deno.test("parseCommand: process substitution falls back gracefully", async () => {
+  // Parser doesn't support <(), falls back to regex which detects <
+  const result = await parseCommand("cat <(echo hello)");
+  assertEquals(result.isCompound, true);
+  assertEquals(Array.isArray(result.segments), true);
 });

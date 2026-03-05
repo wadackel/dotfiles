@@ -2,48 +2,9 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   extractCommandName,
   extractCommands,
-  hasShellSyntax,
   loadAllowedCommands,
   shouldApprove,
 } from "./approve-piped-commands.ts";
-
-// --- hasShellSyntax ---
-
-Deno.test("hasShellSyntax: pipe", () => {
-  assertEquals(hasShellSyntax("echo test | grep foo"), true);
-});
-
-Deno.test("hasShellSyntax: &&", () => {
-  assertEquals(hasShellSyntax("git add . && git commit -m msg"), true);
-});
-
-Deno.test("hasShellSyntax: ||", () => {
-  assertEquals(hasShellSyntax("test -f a || echo missing"), true);
-});
-
-Deno.test("hasShellSyntax: semicolon", () => {
-  assertEquals(hasShellSyntax("echo a; echo b"), true);
-});
-
-Deno.test("hasShellSyntax: simple command", () => {
-  assertEquals(hasShellSyntax("echo hello"), false);
-});
-
-Deno.test("hasShellSyntax: stderr redirect 2>&1", () => {
-  assertEquals(hasShellSyntax("gemini -p 'test' 2>&1"), true);
-});
-
-Deno.test("hasShellSyntax: output redirect >/dev/null", () => {
-  assertEquals(hasShellSyntax("echo hello >/dev/null"), true);
-});
-
-Deno.test("hasShellSyntax: numbered output redirect 2>/dev/null", () => {
-  assertEquals(hasShellSyntax("npm test 2>/dev/null"), true);
-});
-
-Deno.test("hasShellSyntax: input redirect", () => {
-  assertEquals(hasShellSyntax("sort <input.txt"), true);
-});
 
 // --- extractCommandName ---
 
@@ -323,6 +284,23 @@ Deno.test("extractCommands: multiple env vars before command", async () => {
 });
 
 // --- shouldApprove ---
+
+// AST-based detection: quoted operators are not treated as compound
+Deno.test("shouldApprove: quoted pipe in argument is not compound", async () => {
+  const allowed = new Set(["git"]);
+  assertEquals(
+    await shouldApprove('git commit -m "fix | update"', allowed),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: quoted && in argument is not compound", async () => {
+  const allowed = new Set(["git"]);
+  assertEquals(
+    await shouldApprove('git commit -m "fix && update"', allowed),
+    false,
+  );
+});
 
 Deno.test("shouldApprove: pipe with allowed commands", async () => {
   const allowed = new Set(["echo", "grep"]);

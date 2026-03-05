@@ -4,12 +4,7 @@
 // where all individual commands are in the allowed set.
 // Derives the allowed set dynamically from permissions.allow in settings.json files.
 
-import { getSegments } from "./shell-utils.ts";
-
-/** Compound operator (|, &&, ||, ;) or redirect (2>&1, >/dev/null, etc.) check */
-export function hasShellSyntax(command: string): boolean {
-  return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*/.test(command);
-}
+import { parseCommand } from "./shell-utils.ts";
 
 /** Extract the command name from a single Bash(...) permission pattern. Returns null if not applicable. */
 export function extractCommandName(pattern: string): string | null {
@@ -72,7 +67,7 @@ export async function loadAllowedCommands(
 
 /** Extract command names from each segment of a compound shell command. */
 export async function extractCommands(command: string): Promise<string[]> {
-  const segments = await getSegments(command);
+  const { segments } = await parseCommand(command);
   return segments
     .map((seg) => seg.split(/\s+/)[0])
     .filter((cmd) => cmd.length > 0);
@@ -83,8 +78,11 @@ export async function shouldApprove(
   command: string,
   allowed: Set<string>,
 ): Promise<boolean> {
-  if (!hasShellSyntax(command)) return false;
-  const cmds = await extractCommands(command);
+  const { segments, isCompound } = await parseCommand(command);
+  if (!isCompound) return false;
+  const cmds = segments
+    .map((seg) => seg.split(/\s+/)[0])
+    .filter((cmd) => cmd.length > 0);
   if (cmds.length === 0) return false;
   return cmds.every((cmd) => {
     if (allowed.has(cmd)) return true;

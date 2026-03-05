@@ -1,3 +1,10 @@
 rules:
   - pattern: "git -C *"
     message: "Do not use 'git -C <path>'. Use 'cd <path> && git <subcmd>' instead (see CLAUDE.md)."
+  - pattern: "gh pr create * <<*"
+    message: |
+      Do not inline heredoc in 'gh pr create --body'. Instead:
+      1. Use the Write tool to write the PR body to a temp file with a random suffix:
+         File path: /tmp/pr-body-<random>.md  (e.g. 6 alphanumeric chars to avoid conflicts across parallel sessions)
+      2. Run: gh pr create --title "..." --body-file /tmp/pr-body-<random>.md
+      3. Clean up: rm /tmp/pr-body-<random>.md

@@ -3,10 +3,10 @@
 
 import { parse as parseBash } from "jsr:@ein/bash-parser@0.18";
 
-/** Convert glob pattern to anchored regex. * matches any characters including spaces. */
+/** Convert glob pattern to anchored regex. * matches any characters including spaces and newlines. */
 export function globToRegex(pattern: string): RegExp {
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  return new RegExp("^" + escaped.replace(/\*/g, ".*").replace(/\?/g, ".") + "$");
+  return new RegExp("^" + escaped.replace(/\*/g, "[\\s\\S]*").replace(/\?/g, "[\\s\\S]") + "$");
 }
 
 /**
@@ -92,6 +92,49 @@ function extractCommands(node: any): string[] {
   }
 }
 
+/** Regex-based compound detection fallback (used when AST parser fails). */
+function hasShellSyntaxFallback(command: string): boolean {
+  return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*|\$\(/.test(command);
+}
+
+/** Check if a Command node has any Redirect suffix. */
+function hasRedirect(cmd: any): boolean {
+  return (cmd.suffix ?? []).some((s: any) => s.type === "Redirect");
+}
+
+/** Check if a Command node has CommandExpansion in any word (name or suffix). */
+function hasCommandExpansion(cmd: any): boolean {
+  const words = [cmd.name, ...(cmd.suffix ?? [])].filter(
+    (w: any) => w?.type === "Word",
+  );
+  return words.some((w: any) =>
+    (w.expansion ?? []).some((e: any) => e.type === "CommandExpansion")
+  );
+}
+
+/** Check if an AST node represents compound shell syntax (pipes, redirects, logical ops, etc.). */
+function isCompound(node: any): boolean {
+  switch (node.type) {
+    case "Script":
+    case "CompoundList":
+      return node.commands.length > 1 || node.commands.some(isCompound);
+    case "Pipeline":
+    case "LogicalExpression":
+    case "For":
+    case "While":
+    case "Until":
+    case "If":
+    case "Case":
+    case "Function":
+    case "Subshell":
+      return true;
+    case "Command":
+      return hasRedirect(node) || hasCommandExpansion(node);
+    default:
+      return false;
+  }
+}
+
 /**
  * Split a shell command into individual command segments by operators (&&, ||, |, ;).
  * Strips redirections and env var prefixes from each segment.
@@ -122,17 +165,44 @@ export function getSegmentsFallback(command: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/** Structured result of parsing a shell command: extracted segments and compound detection. */
+export interface ParsedCommand {
+  segments: string[];
+  isCompound: boolean;
+}
+
+/**
+ * Parse a shell command into segments and compound detection in a single AST parse.
+ * Falls back to regex-based detection on parse errors or empty AST result.
+ */
+export async function parseCommand(command: string): Promise<ParsedCommand> {
+  try {
+    const preprocessed = stripHeredocs(command);
+    const ast = await parseBash(preprocessed);
+    const segments = extractCommands(ast);
+    if (segments.length > 0) {
+      return { segments, isCompound: isCompound(ast) };
+    }
+    // AST parsed but returned no commands (e.g. empty string): fall back
+    return {
+      segments: getSegmentsFallback(command),
+      isCompound: hasShellSyntaxFallback(command),
+    };
+  } catch {
+    // Parser failure (e.g. process substitution <()): fall back to regex
+    // Note: fallback inherits the original regex's false-positive limitations
+    // (quoted operators may be misdetected), but parser failure is rare.
+    return {
+      segments: getSegmentsFallback(command),
+      isCompound: hasShellSyntaxFallback(command),
+    };
+  }
+}
+
 /**
  * Split a shell command into individual command segments using a bash AST parser.
  * Falls back to regex-based splitting on parse errors.
  */
 export async function getSegments(command: string): Promise<string[]> {
-  try {
-    const preprocessed = stripHeredocs(command);
-    const ast = await parseBash(preprocessed);
-    const commands = extractCommands(ast);
-    return commands.length > 0 ? commands : getSegmentsFallback(command);
-  } catch {
-    return getSegmentsFallback(command);
-  }
+  return (await parseCommand(command)).segments;
 }
