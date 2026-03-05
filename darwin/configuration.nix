@@ -59,7 +59,6 @@
     # Formula configuration
     brews = [
       # Custom Tap Tools
-      "ofsht"
       "pinact"
       "gemini-cli"
       "gogcli"

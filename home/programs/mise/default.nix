@@ -18,6 +18,7 @@
         uv = "latest";
         yamllint = "latest";
         "npm:@playwright/cli" = "latest";
+        "npm:@googleworkspace/cli" = "latest";
       };
       settings = {
         idiomatic_version_file_enable_tools = [ "node" ];

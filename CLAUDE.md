@@ -114,7 +114,7 @@ Despite Nix, Homebrew is used for:
 - **Applications/Casks**: Arc, Chrome Canary, Claude Code, Raycast, WezTerm, 1Password CLI, etc.
 - **Python versions**: 3.8, 3.9, 3.10, 3.11, 3.13, 3.14 (not yet stable in nixpkgs)
 - **Specialized tools**: z3, cask, numpy, pillow
-- **Custom taps**: wadackel/tap (ofsht, pinact)
+- **Custom taps**: wadackel/tap (pinact)
 
 Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` section.
 
