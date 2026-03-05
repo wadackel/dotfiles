@@ -144,8 +144,6 @@
       "Bash(gog calendar events list *)",
       "Bash(gog docs *)",
       "Bash(gog gdocs *)",
-      "Bash(gogcli --help *)",
-      "Bash(gogcli version *)",
       "Bash(golint *)",
       "Bash(grep *)",
       "Bash(gunzip *)",

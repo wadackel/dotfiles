@@ -2,15 +2,24 @@
 
 ## Flag Reference
 
-### gog export flags
+### gws drive files get flags (title fetch)
 
 | Flag | Purpose |
 |---|---|
-| `--format=docx` | Export as Microsoft Word format (required for pandoc conversion) |
-| `--out="$WORK_DIR"` | Output directory; filename is derived from document title |
-| `--plain` | Tab-separated output: line 1 is `path\t<filepath>` |
+| `--params '{"fileId":"<ID>","fields":"name"}'` | Fetch only the document name field |
 
-**Critical**: Use `-F'\t'` in awk — whitespace splitting breaks on document titles with spaces.
+Output is JSON: `{"name": "Document Title"}`. Pipe to `jq -r '.name'` to extract the string.
+
+### gws drive files export flags (docx export)
+
+| Flag | Purpose |
+|---|---|
+| `--params '{"fileId":"<ID>","mimeType":"..."}'` | Document ID and target MIME type |
+| `--output "$DOCX_PATH"` | Save binary content to this path |
+
+MIME type for docx: `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+
+On success, gws prints a JSON summary to stdout: `{"bytes": N, "saved_file": "...", "status": "success"}`.
 
 ### pandoc flags
 
@@ -26,8 +35,9 @@
 |---|---|
 | `$ARGUMENTS` not provided | Use AskUserQuestion to prompt for URL or document ID |
 | URL provided but no ID found | Report parsing failure; ask user to provide the raw document ID instead |
-| gog auth / permission error | Report error; suggest `--account <email>` if multiple accounts exist |
-| DOCX path validation fails | Print raw gog output + temp dir path; stop |
+| gws auth / permission error | Report error; suggest running `gws auth login` to re-authenticate |
+| Drive API not enabled | Report the error message; direct user to enable Drive API in GCP Console |
+| DOCX path validation fails | Print raw gws output + temp dir path; stop |
 | pandoc fails | Print error + temp dir path (docx preserved); stop |
 
 ## Known Limitations

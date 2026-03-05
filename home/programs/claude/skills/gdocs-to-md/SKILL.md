@@ -2,22 +2,24 @@
 name: gdocs-to-md
 description: >-
   Convert a Google Docs document to GitHub Flavored Markdown via docx export.
-  Extracts images to media/ alongside the output file. Distinct from gogcli:
-  this skill orchestrates gog + pandoc to produce Markdown, not just export.
-  Use when asked to "convert Google Docs to Markdown", "Google DocsをMarkdownに変換して",
-  "docsをmdにして", "MarkdownにExportして", or when a Google Docs URL is provided
-  with intent to produce a .md file.
+  Extracts images to media/ alongside the output file. Downloads via gws drive
+  files export, then converts with pandoc. Use when asked to "convert Google
+  Docs to Markdown", "Google DocsをMarkdownに変換して", "docsをmdにして",
+  "MarkdownにExportして", or when a Google Docs URL is provided with intent to
+  produce a .md file.
 argument-hint: "[Google Docs URL or ID]"
 ---
 
 # Google Docs to Markdown
 
-Convert a Google Docs document to GitHub Flavored Markdown. Downloads the document as docx via the gog CLI, then converts it with pandoc — preserving formatting and extracting images into a per-document subdirectory.
+Convert a Google Docs document to GitHub Flavored Markdown. Downloads the document as docx via the gws CLI (Google Drive API), then converts it with pandoc — preserving formatting and extracting images into a per-document subdirectory.
 
 ## Prerequisites
 
-- **gog CLI** — for Google Docs export. Use the **gogcli skill** for setup and authentication.
+- **gws CLI** — for Google Docs export via Drive API. See the **gws-shared skill** for auth setup.
+- **jq** — for parsing gws JSON output.
 - **pandoc** — for docx → GFM conversion.
+- **Google Drive API** must be enabled for your GCP project (required for `drive files export`).
 
 ## Quick Start
 
@@ -54,17 +56,28 @@ WORK_DIR=$(mktemp -d -t gdocs-to-md)
 
 ### Step 3 — Download as docx
 
+**Step 3a — Fetch document title:**
+
 ```bash
-DOCX_PATH=$(gog docs export <ID> --format=docx --out="$WORK_DIR" --plain | awk -F'\t' 'NR==1{print $2}')
+TITLE=$(gws drive files get --params '{"fileId":"<ID>","fields":"name"}' | jq -r '.name')
 ```
 
-**After extraction, validate:**
-- `$DOCX_PATH` is non-empty
+**Step 3b — Export as docx:**
+
+```bash
+DOCX_PATH="$WORK_DIR/${TITLE}.docx"
+gws drive files export \
+  --params '{"fileId":"<ID>","mimeType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}' \
+  --output "$DOCX_PATH"
+```
+
+**After export, validate:**
+- `$TITLE` is non-empty
 - `test -f "$DOCX_PATH"` passes
 
-If validation fails: print the raw gog output and `"temp files preserved at: $WORK_DIR"`, then stop.
+If validation fails: print the raw gws output and `"temp files preserved at: $WORK_DIR"`, then stop.
 
-**On gog failure**: print the error and `"temp files at: $WORK_DIR"`. If the error is a permission/auth issue, suggest retrying with `--account <email>`. Do not proceed to pandoc.
+**On gws failure**: print the error and `"temp files at: $WORK_DIR"`. If the error is an auth/permission issue, suggest running `gws auth login`. If the error mentions Drive API not enabled, direct user to enable it in GCP Console. Do not proceed to pandoc.
 
 ### Step 4 — Convert with pandoc
 

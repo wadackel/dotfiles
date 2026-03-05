@@ -61,7 +61,6 @@
       # Custom Tap Tools
       "pinact"
       "gemini-cli"
-      "gogcli"
 
       # Python Ecosystem
       "python@3.14"

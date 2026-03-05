@@ -86,8 +86,7 @@ Workflows that chain 2+ external tools in a non-obvious way are strong skill can
 - Output of one tool feeds as input to the next
 
 **Examples from this ecosystem:**
-- gogcli: orchestrates gog CLI with specific subcommands and flags
-- gdocs-to-md: chains gog → pandoc with media extraction
+- gdocs-to-md: chains gws → pandoc with media extraction
 - codex-review: chains git diff → codex MCP → apply fixes → re-review loop
 
 ### Signal 5: Pattern Similar to Existing Successful Skills
@@ -98,7 +97,7 @@ If the detected workflow resembles an existing skill in structure, it's a strong
 
 | Pattern | Examples | Characteristics |
 |---------|----------|-----------------|
-| CLI wrapper | gogcli, tmux-sender | Wraps external CLI with correct flags/sequence |
+| CLI wrapper | tmux-sender | Wraps external CLI with correct flags/sequence |
 | Lifecycle automation | create-pr, iterate-pr | Automates a development lifecycle phase |
 | Analysis + action | session-retrospective, skill-improver | Analyzes context then proposes/applies changes |
 | Interview + build | bash-policy-add, plan-deeper | Gathers info from user then constructs output |

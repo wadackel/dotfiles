@@ -176,7 +176,6 @@ The following categories are confirmed safe:
 - Examples:
   - `Bash(gcloud version *)` - Cloud SDK version
   - `Bash(tailscale version *)` - Tailscale version
-  - `Bash(gogcli version *)` - gogcli version
 
 **Network read-only tools**
 - Pattern: Commands that only read network information

@@ -88,7 +88,7 @@ First, determine if the skill requires conversation context:
 
 **Context-independent skills** (simple tests sufficient):
 - Skills that operate on explicit input (e.g., `tmux-sender`, `ast-grep`)
-- Skills that fetch external data (e.g., `gemini-research`, `gogcli`)
+- Skills that fetch external data (e.g., `gemini-research`, `gws-docs`)
 - Skills with self-contained workflows
 
 #### Test Scenario Types
