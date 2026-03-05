@@ -233,18 +233,22 @@ async function callGemini(condensed: string): Promise<LLMResult | null> {
 
   try {
     const cmd = new Deno.Command("gemini", {
-      args: ["-p", prompt, "-m", "gemini-2.0-flash"],
+      args: ["-p", prompt, "-m", "gemini-2.5-flash"],
       stdin: "piped",
       stdout: "piped",
-      stderr: "null",
+      stderr: "piped",
     });
     const proc = cmd.spawn();
     const writer = proc.stdin.getWriter();
     await writer.write(new TextEncoder().encode(condensed));
     await writer.close();
 
-    const { code, stdout } = await proc.output();
-    if (code !== 0) return null;
+    const { code, stdout, stderr } = await proc.output();
+    if (code !== 0) {
+      const errMsg = new TextDecoder().decode(stderr).trim().slice(0, 200);
+      await log(`GEMINI ERROR: exit=${code} ${errMsg}`);
+      return null;
+    }
 
     const raw = new TextDecoder().decode(stdout);
     return parseLLMOutput(raw);

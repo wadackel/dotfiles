@@ -18,6 +18,18 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
   → Output: test case list to append to the plan. No execution.
 - **Mode B (Post-Implementation Verification)**: Feature is implemented, user wants verification
   → Output: executed test results with pass/fail status.
+- **Mode C (Agent Team QA)**: Large-scale verification where parallel execution is beneficial.
+  Use when: 3+ pages or 4+ independent test phases, bug fix + re-verification cycle is expected,
+  or user explicitly requests a team structure.
+  → Output: same as Mode B, but orchestrated via a QA Tester agent.
+
+  **Mode C structure (Lead + QA Tester as base):**
+  1. `TeamCreate` → spawn QA Tester (general-purpose) for Chrome MCP testing
+  2. Lead (self) handles triage: receives bug reports and decides repair strategy
+  3. **Simple bugs** (1–3 lines, location is obvious): Lead fixes directly
+  4. **Complex bugs** (root-cause investigation needed, multiple files): spawn Fixer on demand
+  5. After fix: `SendMessage` to QA Tester for re-verification
+  6. Shutdown order: `SendMessage(shutdown_request)` to all members → wait for all terminated → `TeamDelete`
 
 ### Step 2: Understand the Target
 

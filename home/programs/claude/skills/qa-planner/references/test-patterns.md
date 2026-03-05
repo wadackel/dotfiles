@@ -103,6 +103,8 @@ Use **Chrome DevTools MCP** tools for test execution. Focus on what to verify:
 ### Functional
 - Page loads with expected content and no console errors
 - Form submission: valid input → success state; invalid input → error messages
+- **File download**: Click button → verify with `read_network_requests` that the API returns HTTP 200 and no error toast appears. "Button exists and is clickable" alone is insufficient — confirm the network response.
+- **Sort (ASC/DESC)**: Verify that (1) row count is identical for ASC and DESC, (2) values are in correct order. If the feature uses client-side filtering after an API fetch (e.g., filtering by an `ownerUserIdSet`), verify that sorting applies correctly to all filtered records — a mismatch between sort scope and filter scope can silently hide rows.
 - Navigation: links, routing, browser back/forward work correctly
 - Interactive UI: modals, dropdowns, tabs, accordions open/close correctly
 - Data display: lists, tables, pagination render correctly

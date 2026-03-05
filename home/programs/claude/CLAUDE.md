@@ -29,6 +29,16 @@ lint エラーや型エラーの修正タスクでは、plan mode 中に `pnpm l
 
 `git -C <path>` を使用しないこと。`permissions.allow` のパターン（例: `Bash(git diff *)`）にマッチせず毎回権限確認が発生する。代わりに作業ディレクトリで直接 git コマンドを実行する。別ディレクトリを操作する場合は `cd <path> && git <subcommand>` を使用。**この規則は `bash-policy.ts` により自動強制されており、違反コマンドは実行前にブロックされる。**
 
+#### 独立 PR のブランチ作成
+
+現在の作業と無関係な修正を「別 PR」として出す場合:
+
+1. **必ず master (または対象ベースブランチ) から切る**:
+   `git switch master && git pull origin master && git switch -c fix/...`
+   現在の feature ブランチから切ると、そのブランチの差分が混入する。
+2. **PR 作成前に diff を検証**:
+   `git diff master...HEAD` で意図した変更のみであることを確認する。
+
 ### tmux コマンドの実行規則
 
 `TMUX` 環境変数が設定された状態（tmux セッション内）で `tmux` コマンドを実行する場合は `TMUX=""` プレフィックスを付けること。付けないと入れ子 tmux セッションとして扱われ、`send-keys` の内容が自セッションのペインに混入する等の意図しない挙動が発生する。
@@ -189,6 +199,7 @@ GitHub の Issue や Pull Request など、ユーザーから提供された URL
 - stdin 読み取りは `new Response(Deno.stdin.readable).text()`（Deno 2.x）。パーミッションフラグ不要
 - inline コード実行は `deno eval`。`deno run -e` は存在しない
 - スクリプト自身のディレクトリ取得: `new URL(".", import.meta.url).pathname`（設定ファイルを同じディレクトリに置くパターンで有用）
+- `Deno.Command` の subprocess で障害原因を診断する場合は `stderr: "null"` ではなく `stderr: "piped"` にし、exit code が非ゼロ時に stderr 内容をログ出力する
 
 ### ファイル構成
 

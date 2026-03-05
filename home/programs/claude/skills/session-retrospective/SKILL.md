@@ -33,7 +33,9 @@ No arguments needed. The skill analyzes the current session context automaticall
 Gather full session data and reflect on it:
 
 1. **Extract full transcript history** (Compact で失われた内容も含む完全な記録):
+   **Note**: モノレポルートから実行すること（`Deno.cwd()` でトランスクリプトディレクトリを探すため、サブパッケージディレクトリから実行するとファイルが見つからない）。
    ```bash
+   cd $(git rev-parse --show-toplevel)
    ~/.claude/scripts/extract-session-history.ts
    ```
    stdout に出力されたファイルパスを Read ツールで読み込む。

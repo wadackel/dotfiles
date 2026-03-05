@@ -14,10 +14,26 @@ Continuously iterate on the current branch until all CI checks pass and review f
 ### Step 1: Identify the PR
 
 ```bash
-gh pr view --json number,url,headRefName,baseRefName
+gh pr view --json number,url,headRefName,baseRefName,isDraft
 ```
 
 If no PR exists for the current branch, stop and inform the user.
+
+### Step 1.5: Check for Merge Conflicts
+
+Before proceeding, verify the branch has no merge conflicts:
+
+```bash
+gh pr view --json mergeable,mergeStateStatus
+```
+
+If `mergeable` is `CONFLICTING`:
+1. Fetch and rebase: `git fetch origin <base-branch> && git rebase origin/<base-branch>`
+2. Resolve conflicts in the conflicting files
+3. `git add <resolved-files> && git rebase --continue`
+   - If `index.lock` error occurs: `rm <repo>/.git/worktrees/<name>/index.lock` then retry
+4. `git push --force-with-lease origin $(git branch --show-current)`
+5. Return to Step 1
 
 ### Step 2: Check CI Status First
 
@@ -104,10 +120,20 @@ This waits until all checks complete. Exit code 0 means all passed, exit code 1 
 Alternatively, poll manually if you need more control:
 
 ```bash
-gh pr checks --json name,state,bucket | jq '.[] | select(.bucket != "pass")'
+gh pr checks --json name,state,bucket | jq '[.[] | select(.bucket == "fail" or .bucket == "pending" or .bucket == "cancel")]'
 ```
 
-### Step 9: Repeat
+### Step 9: Mark Ready for Review
+
+If all CI checks passed (`bucket: pass` for all) and the PR was draft (`isDraft: true` from Step 1), remove the draft status:
+
+```bash
+gh pr ready
+```
+
+Only run this once per session (skip if already marked ready).
+
+### Step 10: Repeat
 
 Return to Step 2 if:
 - Any CI checks failed
