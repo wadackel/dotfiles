@@ -1,10 +1,10 @@
 ---
 name: gdocs-to-md
 description: >-
-  Convert a Google Docs document to GitHub Flavored Markdown via docx export.
-  Extracts images to media/ alongside the output file. Downloads via gws drive
-  files export, then converts with pandoc. Use when asked to "convert Google
-  Docs to Markdown", "Google DocsをMarkdownに変換して", "docsをmdにして",
+  Convert a Google Docs document to GitHub Flavored Markdown via Docs API.
+  Fetches document structure as JSON via gws docs, then converts with a Deno
+  script. Use when asked to "convert Google Docs to Markdown",
+  "Google DocsをMarkdownに変換して", "docsをmdにして",
   "MarkdownにExportして", or when a Google Docs URL is provided with intent to
   produce a .md file.
 argument-hint: "[Google Docs URL or ID]"
@@ -12,14 +12,14 @@ argument-hint: "[Google Docs URL or ID]"
 
 # Google Docs to Markdown
 
-Convert a Google Docs document to GitHub Flavored Markdown. Downloads the document as docx via the gws CLI (Google Drive API), then converts it with pandoc — preserving formatting and extracting images into a per-document subdirectory.
+Convert a Google Docs document to GitHub Flavored Markdown. Fetches the document via `gws docs documents get` (Google Docs API), then converts the JSON structure to GFM using a Deno script.
 
 ## Prerequisites
 
-- **gws CLI** — for Google Docs export via Drive API. See the **gws-shared skill** for auth setup.
-- **jq** — for parsing gws JSON output.
-- **pandoc** — for docx → GFM conversion.
-- **Google Drive API** must be enabled for your GCP project (required for `drive files export`).
+- **gws CLI** — for Google Docs API access. See the **gws-shared skill** for auth setup.
+- **jq** — for JSON parsing.
+- **Deno** — for running the conversion script.
+- **Google Docs API** must be enabled for your GCP project.
 
 ## Quick Start
 
@@ -48,56 +48,43 @@ Output will be written to: <cwd>
 - **Raw ID**: use as-is (alphanumeric string, typically 30+ characters)
 - **No argument**: use AskUserQuestion to ask for the URL or document ID
 
-### Step 2 — Create isolated temp directory
+### Step 2 — Create isolated temp file
 
 ```bash
-WORK_DIR=$(mktemp -d -t gdocs-to-md)
+TMP_JSON=$(mktemp -t gdoc-XXXXXX.json)
 ```
 
-### Step 3 — Download as docx
-
-**Step 3a — Fetch document title:**
+### Step 3 — Fetch document JSON
 
 ```bash
-TITLE=$(gws drive files get --params '{"fileId":"<ID>","fields":"name"}' | jq -r '.name')
+gws docs documents get --params '{"documentId":"<ID>"}' > "$TMP_JSON"
 ```
 
-**Step 3b — Export as docx:**
+**Validate after fetch:**
+- Check `jq -e '.body' "$TMP_JSON" > /dev/null` passes — confirms a valid document response
+- Extract title: `TITLE=$(jq -r '.title' "$TMP_JSON")`
+- Check `$TITLE` is non-empty
+
+If validation fails: print the raw content of `$TMP_JSON` and `"temp file preserved at: $TMP_JSON"`, then stop.
+
+**On gws failure**: print the error and `"temp file at: $TMP_JSON"`. If the error is an auth/permission issue, suggest running `gws auth login`. If the error mentions Docs API not enabled, direct user to enable it in GCP Console. Do not proceed to conversion.
+
+### Step 4 — Convert with Deno script
 
 ```bash
-DOCX_PATH="$WORK_DIR/${TITLE}.docx"
-gws drive files export \
-  --params '{"fileId":"<ID>","mimeType":"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}' \
-  --output "$DOCX_PATH"
+OUTPUT_STEM=$(echo "$TITLE" | tr '/' '-')
+deno run ~/dotfiles/home/programs/claude/scripts/gdoc-json-to-md.ts < "$TMP_JSON" > "${OUTPUT_STEM}.md"
 ```
 
-**After export, validate:**
-- `$TITLE` is non-empty
-- `test -f "$DOCX_PATH"` passes
-
-If validation fails: print the raw gws output and `"temp files preserved at: $WORK_DIR"`, then stop.
-
-**On gws failure**: print the error and `"temp files at: $WORK_DIR"`. If the error is an auth/permission issue, suggest running `gws auth login`. If the error mentions Drive API not enabled, direct user to enable it in GCP Console. Do not proceed to pandoc.
-
-### Step 4 — Convert with pandoc
-
-```bash
-OUTPUT_STEM=$(basename "$DOCX_PATH" .docx | tr '/' '-')
-pandoc "$DOCX_PATH" -f docx -t gfm \
-  --wrap=none \
-  --extract-media="media/${OUTPUT_STEM}" \
-  -o "${OUTPUT_STEM}.md"
-```
-
-**On pandoc failure**: print the error and `"docx preserved at: $WORK_DIR"`, then stop.
+**On conversion failure**: print the error and `"JSON preserved at: $TMP_JSON"`, then stop.
 
 ### Step 5 — Cleanup (success only)
 
 ```bash
-rm -rf "$WORK_DIR"
+rm -f "$TMP_JSON"
 ```
 
-Only clean up after successful pandoc conversion.
+Only clean up after successful conversion. On failure, preserve `$TMP_JSON` for debugging.
 
 ### Step 6 — Report result
 
@@ -107,7 +94,6 @@ Verify the output file exists, then report absolute paths. Do not read the full 
 ✓ Conversion complete
 
 Markdown : /absolute/path/to/${OUTPUT_STEM}.md
-Images   : /absolute/path/to/media/${OUTPUT_STEM}/  (N images)
 ```
 
 ## Output
@@ -115,9 +101,8 @@ Images   : /absolute/path/to/media/${OUTPUT_STEM}/  (N images)
 | File | Description |
 |---|---|
 | `<title>.md` | GitHub Flavored Markdown, no hard line-wrapping |
-| `media/<title>/` | Extracted images (only present if the document contains images) |
 
-Both are written to the current working directory.
+Written to the current working directory.
 
 ## Additional Resources
 
