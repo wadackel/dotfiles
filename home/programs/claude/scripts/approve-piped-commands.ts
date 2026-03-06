@@ -1,62 +1,81 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env=HOME
 
 // PermissionRequest hook for Bash: auto-approve compound commands
-// where all individual commands are in the allowed set.
-// Derives the allowed set dynamically from permissions.allow in settings.json files.
+// where all individual commands match the allowed glob patterns.
+// Derives the allowed patterns dynamically from permissions.allow in settings.json files.
 
-import { parseCommand } from "./shell-utils.ts";
+import { globToRegex, parseCommand } from "./shell-utils.ts";
 
-/** Extract the command name from a single Bash(...) permission pattern. Returns null if not applicable. */
-export function extractCommandName(pattern: string): string | null {
+/** Extract a normalized glob pattern from a single Bash(...) permission pattern. Returns null if not applicable. */
+export function extractAllowedPattern(pattern: string): string | null {
   const m = pattern.match(/^Bash\((.+)\)$/);
   if (!m) return null;
 
   let content = m[1];
 
-  // Handle colon separator format from settings.local.json (e.g. "rg:*" -> "rg", "nix fmt:*" -> "nix fmt")
+  // Handle colon separator format from settings.local.json (e.g. "rg:*" -> "rg *", "nix fmt:*" -> "nix fmt *")
   const colonIdx = content.indexOf(":");
   if (colonIdx !== -1) {
-    content = content.slice(0, colonIdx);
+    content = content.slice(0, colonIdx) + " " + content.slice(colonIdx + 1);
   }
 
+  // Strip leading env var assignments (FOO=bar, TMUX=, etc.)
   const tokens = content.split(/\s+/);
-  for (const token of tokens) {
-    // Skip env var assignments (FOO=bar, TMUX=, etc.)
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue;
-    // Strip leading/trailing wildcards
-    const cleaned = token.replace(/^\*+/, "").replace(/\*+$/, "");
-    // Skip if empty after stripping (pure wildcards like "*" or "**")
-    if (cleaned === "") continue;
-    // Skip system paths (//...)
-    if (cleaned.startsWith("//")) return null;
-    // Skip flags
-    if (cleaned.startsWith("-")) continue;
-    // Skip redirect operators
-    if (/^[><#!]/.test(cleaned)) continue;
-    // If contains /, take basename
-    const name = cleaned.includes("/") ? (cleaned.split("/").pop() ?? "") : cleaned;
-    if (name === "") continue;
-    return name;
+  let cmdStart = 0;
+  while (
+    cmdStart < tokens.length &&
+    /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdStart])
+  ) {
+    cmdStart++;
   }
-  return null;
+  if (cmdStart >= tokens.length) return null;
+
+  const cmdTokens = tokens.slice(cmdStart);
+  const firstToken = cmdTokens[0];
+  const cleaned = firstToken.replace(/^\*+/, "").replace(/\*+$/, "");
+
+  // Skip if first meaningful token is empty (pure wildcards like "* --help *")
+  // or a flag (generic patterns like "* -v")
+  if (cleaned === "" || cleaned.startsWith("-")) return null;
+  // Skip system paths (//...)
+  if (cleaned.startsWith("//")) return null;
+  // Skip redirect operators
+  if (/^[><#!]/.test(cleaned)) return null;
+
+  return cmdTokens.join(" ");
+}
+
+/** Check if a command segment matches an allowed glob pattern. */
+export function matchesAllowedPattern(
+  segment: string,
+  pattern: string,
+): boolean {
+  if (globToRegex(pattern).test(segment)) return true;
+  // "cmd *" should also match bare "cmd" (no args)
+  if (pattern.endsWith(" *") && segment === pattern.slice(0, -2)) return true;
+  return false;
 }
 
 interface Settings {
   permissions?: { allow?: string[] };
 }
 
-/** Load permissions.allow from multiple settings files, extract allowed command names. */
-export async function loadAllowedCommands(
+/** Load permissions.allow from multiple settings files, extract allowed glob patterns. */
+export async function loadAllowedPatterns(
   paths: string[],
-): Promise<Set<string>> {
-  const result = new Set<string>();
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const result: string[] = [];
   for (const path of paths) {
     try {
       const text = await Deno.readTextFile(path);
       const json: Settings = JSON.parse(text);
       for (const pattern of json?.permissions?.allow ?? []) {
-        const cmd = extractCommandName(pattern);
-        if (cmd) result.add(cmd);
+        const p = extractAllowedPattern(pattern);
+        if (p && !seen.has(p)) {
+          seen.add(p);
+          result.push(p);
+        }
       }
     } catch {
       // File not found or parse error -- skip
@@ -73,21 +92,26 @@ export async function extractCommands(command: string): Promise<string[]> {
     .filter((cmd) => cmd.length > 0);
 }
 
-/** Determine if all commands in a compound command are in the allowed set. */
+/** Determine if all commands in a compound command match the allowed patterns. */
 export async function shouldApprove(
   command: string,
-  allowed: Set<string>,
+  patterns: string[],
 ): Promise<boolean> {
   const { segments, isCompound } = await parseCommand(command);
   if (!isCompound) return false;
-  const cmds = segments
-    .map((seg) => seg.split(/\s+/)[0])
-    .filter((cmd) => cmd.length > 0);
-  if (cmds.length === 0) return false;
-  return cmds.every((cmd) => {
-    if (allowed.has(cmd)) return true;
-    const base = cmd.includes("/") ? (cmd.split("/").pop() ?? "") : cmd;
-    return allowed.has(base);
+  if (segments.length === 0) return false;
+  return segments.every((seg) => {
+    if (patterns.some((p) => matchesAllowedPattern(seg, p))) return true;
+    // Basename fallback: if segment starts with a path, try with basename
+    const firstWord = seg.split(/\s+/)[0];
+    if (firstWord.includes("/")) {
+      const base = firstWord.split("/").pop() ?? "";
+      if (base) {
+        const baseSeg = base + seg.slice(firstWord.length);
+        return patterns.some((p) => matchesAllowedPattern(baseSeg, p));
+      }
+    }
+    return false;
   });
 }
 
@@ -113,9 +137,9 @@ if (import.meta.main) {
     `${cwd}/.claude/settings.json`,
     `${cwd}/.claude/settings.local.json`,
   ];
-  const allowed = await loadAllowedCommands(paths);
+  const patterns = await loadAllowedPatterns(paths);
 
-  if (!(await shouldApprove(input.tool_input.command, allowed))) Deno.exit(0);
+  if (!(await shouldApprove(input.tool_input.command, patterns))) Deno.exit(0);
 
   console.log(
     JSON.stringify({

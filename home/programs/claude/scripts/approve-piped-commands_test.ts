@@ -1,110 +1,165 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
-  extractCommandName,
+  extractAllowedPattern,
   extractCommands,
-  loadAllowedCommands,
+  loadAllowedPatterns,
+  matchesAllowedPattern,
   shouldApprove,
 } from "./approve-piped-commands.ts";
 
-// --- extractCommandName ---
+// --- extractAllowedPattern ---
 
-Deno.test("extractCommandName: simple command pattern", () => {
-  assertEquals(extractCommandName("Bash(echo *)"), "echo");
+Deno.test("extractAllowedPattern: simple command pattern", () => {
+  assertEquals(extractAllowedPattern("Bash(echo *)"), "echo *");
 });
 
-Deno.test("extractCommandName: subcommand pattern returns first word", () => {
-  assertEquals(extractCommandName("Bash(git add *)"), "git");
+Deno.test("extractAllowedPattern: subcommand pattern preserves subcommand", () => {
+  assertEquals(extractAllowedPattern("Bash(git add *)"), "git add *");
 });
 
-Deno.test("extractCommandName: wrapped wildcard pattern", () => {
+Deno.test("extractAllowedPattern: wrapped wildcard pattern", () => {
   assertEquals(
-    extractCommandName("Bash(*extract-session-history.ts*)"),
-    "extract-session-history.ts",
+    extractAllowedPattern("Bash(*extract-session-history.ts*)"),
+    "*extract-session-history.ts*",
   );
 });
 
-Deno.test("extractCommandName: generic wildcard with flags returns null", () => {
-  assertEquals(extractCommandName("Bash(* --help *)"), null);
+Deno.test("extractAllowedPattern: generic wildcard with flags returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* --help *)"), null);
 });
 
-Deno.test("extractCommandName: version flag only returns null", () => {
-  assertEquals(extractCommandName("Bash(* --version)"), null);
+Deno.test("extractAllowedPattern: version flag only returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* --version)"), null);
 });
 
-Deno.test("extractCommandName: short help flag returns null", () => {
-  assertEquals(extractCommandName("Bash(* -h *)"), null);
+Deno.test("extractAllowedPattern: short help flag returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* -h *)"), null);
 });
 
-Deno.test("extractCommandName: short version flag returns null", () => {
-  assertEquals(extractCommandName("Bash(* -v)"), null);
+Deno.test("extractAllowedPattern: short version flag returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* -v)"), null);
 });
 
-Deno.test("extractCommandName: system path returns null", () => {
-  assertEquals(extractCommandName("Bash(//dev/null)"), null);
+Deno.test("extractAllowedPattern: system path returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(//dev/null)"), null);
 });
 
-Deno.test("extractCommandName: bare command no wildcard", () => {
-  assertEquals(extractCommandName("Bash(env)"), "env");
+Deno.test("extractAllowedPattern: bare command no wildcard", () => {
+  assertEquals(extractAllowedPattern("Bash(env)"), "env");
 });
 
-Deno.test("extractCommandName: whoami bare command", () => {
-  assertEquals(extractCommandName("Bash(whoami)"), "whoami");
+Deno.test("extractAllowedPattern: whoami bare command", () => {
+  assertEquals(extractAllowedPattern("Bash(whoami)"), "whoami");
 });
 
-Deno.test("extractCommandName: pwd bare command", () => {
-  assertEquals(extractCommandName("Bash(pwd)"), "pwd");
+Deno.test("extractAllowedPattern: pwd bare command", () => {
+  assertEquals(extractAllowedPattern("Bash(pwd)"), "pwd");
 });
 
-Deno.test("extractCommandName: env var prefix is skipped", () => {
-  assertEquals(extractCommandName("Bash(TMUX= tmux:*)"), "tmux");
+Deno.test("extractAllowedPattern: env var prefix is stripped", () => {
+  assertEquals(extractAllowedPattern("Bash(TMUX= tmux:*)"), "tmux *");
 });
 
-Deno.test("extractCommandName: colon separator format", () => {
-  assertEquals(extractCommandName("Bash(rg:*)"), "rg");
+Deno.test("extractAllowedPattern: colon separator format", () => {
+  assertEquals(extractAllowedPattern("Bash(rg:*)"), "rg *");
 });
 
-Deno.test("extractCommandName: colon separator with subcommand", () => {
-  assertEquals(extractCommandName("Bash(nix fmt:*)"), "nix");
+Deno.test("extractAllowedPattern: colon separator with subcommand", () => {
+  assertEquals(extractAllowedPattern("Bash(nix fmt:*)"), "nix fmt *");
 });
 
-Deno.test("extractCommandName: non-Bash pattern returns null", () => {
-  assertEquals(extractCommandName("Read(**)"), null);
+Deno.test("extractAllowedPattern: non-Bash pattern returns null", () => {
+  assertEquals(extractAllowedPattern("Read(**)"), null);
 });
 
-Deno.test("extractCommandName: Edit pattern returns null", () => {
-  assertEquals(extractCommandName("Edit(~/.claude/**)"), null);
+Deno.test("extractAllowedPattern: Edit pattern returns null", () => {
+  assertEquals(extractAllowedPattern("Edit(~/.claude/**)"), null);
 });
 
-Deno.test("extractCommandName: path-based command returns basename", () => {
+Deno.test("extractAllowedPattern: path-based command preserves glob", () => {
   assertEquals(
-    extractCommandName("Bash(~/.claude/scripts/foo.ts:*)"),
-    "foo.ts",
+    extractAllowedPattern("Bash(~/.claude/scripts/foo.ts:*)"),
+    "~/.claude/scripts/foo.ts *",
   );
 });
 
-Deno.test("extractCommandName: sudo returns sudo", () => {
-  assertEquals(extractCommandName("Bash(sudo -k *)"), "sudo");
+Deno.test("extractAllowedPattern: sudo -k preserves flag", () => {
+  assertEquals(extractAllowedPattern("Bash(sudo -k *)"), "sudo -k *");
 });
 
-Deno.test("extractCommandName: bracket test command", () => {
-  assertEquals(extractCommandName("Bash([ *)"), "[");
+Deno.test("extractAllowedPattern: bracket test command", () => {
+  assertEquals(extractAllowedPattern("Bash([ *)"), "[ *");
 });
 
-Deno.test("extractCommandName: double bracket test command", () => {
-  assertEquals(extractCommandName("Bash([[ *)"), "[[");
+Deno.test("extractAllowedPattern: double bracket test command", () => {
+  assertEquals(extractAllowedPattern("Bash([[ *)"), "[[ *");
 });
 
-Deno.test("extractCommandName: multiple env vars then command", () => {
+Deno.test("extractAllowedPattern: multiple env vars then command", () => {
   assertEquals(
-    extractCommandName("Bash(FOO=bar BAZ=qux git diff *)"),
-    "git",
+    extractAllowedPattern("Bash(FOO=bar BAZ=qux git diff *)"),
+    "git diff *",
   );
 });
 
-// --- loadAllowedCommands ---
+Deno.test("extractAllowedPattern: deep subcommand preserved", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(nix-store --query --references *)"),
+    "nix-store --query --references *",
+  );
+});
+
+Deno.test("extractAllowedPattern: defaults with flags preserved", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(defaults -currentHost read -g *)"),
+    "defaults -currentHost read -g *",
+  );
+});
+
+// --- matchesAllowedPattern ---
+
+Deno.test("matchesAllowedPattern: exact glob match", () => {
+  assertEquals(matchesAllowedPattern("git diff HEAD", "git diff *"), true);
+});
+
+Deno.test("matchesAllowedPattern: bare command matches 'cmd *' pattern", () => {
+  assertEquals(matchesAllowedPattern("echo", "echo *"), true);
+});
+
+Deno.test("matchesAllowedPattern: wrong subcommand does not match", () => {
+  assertEquals(matchesAllowedPattern("git push --force", "git diff *"), false);
+});
+
+Deno.test("matchesAllowedPattern: wrapped wildcard matches path", () => {
+  assertEquals(
+    matchesAllowedPattern(
+      "~/.claude/scripts/extract-session-history.ts",
+      "*extract-session-history.ts*",
+    ),
+    true,
+  );
+});
+
+Deno.test("matchesAllowedPattern: exact bare command", () => {
+  assertEquals(matchesAllowedPattern("whoami", "whoami"), true);
+});
+
+Deno.test("matchesAllowedPattern: bare command with args does not match exact pattern", () => {
+  assertEquals(matchesAllowedPattern("whoami extra", "whoami"), false);
+});
+
+Deno.test("matchesAllowedPattern: sudo -k matches", () => {
+  assertEquals(matchesAllowedPattern("sudo -k", "sudo -k *"), true);
+});
+
+Deno.test("matchesAllowedPattern: sudo rm does not match sudo -k", () => {
+  assertEquals(matchesAllowedPattern("sudo rm -rf /", "sudo -k *"), false);
+});
+
+// --- loadAllowedPatterns ---
 
 Deno.test({
-  name: "loadAllowedCommands: extracts commands from Bash patterns",
+  name: "loadAllowedPatterns: extracts patterns from Bash patterns",
   permissions: { read: true, write: true },
   async fn() {
     const tmpDir = await Deno.makeTempDir();
@@ -123,19 +178,19 @@ Deno.test({
       }),
     );
 
-    const allowed = await loadAllowedCommands([path]);
-    assertEquals(allowed.has("echo"), true);
-    assertEquals(allowed.has("git"), true);
-    assertEquals(allowed.has("extract-session-history.ts"), true);
+    const patterns = await loadAllowedPatterns([path]);
+    assertEquals(patterns.includes("echo *"), true);
+    assertEquals(patterns.includes("git add *"), true);
+    assertEquals(patterns.includes("*extract-session-history.ts*"), true);
     // Non-Bash patterns are skipped
-    assertEquals(allowed.has("Read(**)" as string), false);
+    assertEquals(patterns.length, 3);
 
     await Deno.remove(tmpDir, { recursive: true });
   },
 });
 
 Deno.test({
-  name: "loadAllowedCommands: merges multiple files",
+  name: "loadAllowedPatterns: merges multiple files",
   permissions: { read: true, write: true },
   async fn() {
     const tmpDir = await Deno.makeTempDir();
@@ -150,21 +205,21 @@ Deno.test({
       JSON.stringify({ permissions: { allow: ["Bash(rg:*)"] } }),
     );
 
-    const allowed = await loadAllowedCommands([file1, file2]);
-    assertEquals(allowed.has("echo"), true);
-    assertEquals(allowed.has("rg"), true);
+    const patterns = await loadAllowedPatterns([file1, file2]);
+    assertEquals(patterns.includes("echo *"), true);
+    assertEquals(patterns.includes("rg *"), true);
 
     await Deno.remove(tmpDir, { recursive: true });
   },
 });
 
-Deno.test("loadAllowedCommands: missing file is silently skipped", async () => {
-  const allowed = await loadAllowedCommands(["/nonexistent/path.json"]);
-  assertEquals(allowed.size, 0);
+Deno.test("loadAllowedPatterns: missing file is silently skipped", async () => {
+  const patterns = await loadAllowedPatterns(["/nonexistent/path.json"]);
+  assertEquals(patterns.length, 0);
 });
 
 Deno.test({
-  name: "loadAllowedCommands: wildcard-only and system path patterns excluded",
+  name: "loadAllowedPatterns: wildcard-only and system path patterns excluded",
   permissions: { read: true, write: true },
   async fn() {
     const tmpDir = await Deno.makeTempDir();
@@ -183,31 +238,31 @@ Deno.test({
       }),
     );
 
-    const allowed = await loadAllowedCommands([path]);
-    assertEquals(allowed.size, 1);
-    assertEquals(allowed.has("echo"), true);
+    const patterns = await loadAllowedPatterns([path]);
+    assertEquals(patterns.length, 1);
+    assertEquals(patterns[0], "echo *");
 
     await Deno.remove(tmpDir, { recursive: true });
   },
 });
 
 Deno.test({
-  name: "loadAllowedCommands: no permissions key returns empty set",
+  name: "loadAllowedPatterns: no permissions key returns empty array",
   permissions: { read: true, write: true },
   async fn() {
     const tmpDir = await Deno.makeTempDir();
     const path = `${tmpDir}/settings.json`;
     await Deno.writeTextFile(path, JSON.stringify({ model: "sonnet" }));
 
-    const allowed = await loadAllowedCommands([path]);
-    assertEquals(allowed.size, 0);
+    const patterns = await loadAllowedPatterns([path]);
+    assertEquals(patterns.length, 0);
 
     await Deno.remove(tmpDir, { recursive: true });
   },
 });
 
 Deno.test({
-  name: "loadAllowedCommands: deduplicates across files",
+  name: "loadAllowedPatterns: deduplicates across files",
   permissions: { read: true, write: true },
   async fn() {
     const tmpDir = await Deno.makeTempDir();
@@ -222,8 +277,8 @@ Deno.test({
       JSON.stringify({ permissions: { allow: ["Bash(echo *)"] } }),
     );
 
-    const allowed = await loadAllowedCommands([file1, file2]);
-    assertEquals(allowed.size, 1);
+    const patterns = await loadAllowedPatterns([file1, file2]);
+    assertEquals(patterns.length, 1);
 
     await Deno.remove(tmpDir, { recursive: true });
   },
@@ -287,98 +342,97 @@ Deno.test("extractCommands: multiple env vars before command", async () => {
 
 // AST-based detection: quoted operators are not treated as compound
 Deno.test("shouldApprove: quoted pipe in argument is not compound", async () => {
-  const allowed = new Set(["git"]);
+  const patterns = ["git *"];
   assertEquals(
-    await shouldApprove('git commit -m "fix | update"', allowed),
+    await shouldApprove('git commit -m "fix | update"', patterns),
     false,
   );
 });
 
 Deno.test("shouldApprove: quoted && in argument is not compound", async () => {
-  const allowed = new Set(["git"]);
+  const patterns = ["git *"];
   assertEquals(
-    await shouldApprove('git commit -m "fix && update"', allowed),
+    await shouldApprove('git commit -m "fix && update"', patterns),
     false,
   );
 });
 
 Deno.test("shouldApprove: pipe with allowed commands", async () => {
-  const allowed = new Set(["echo", "grep"]);
-  assertEquals(await shouldApprove("echo test | grep foo", allowed), true);
+  const patterns = ["echo *", "grep *"];
+  assertEquals(await shouldApprove("echo test | grep foo", patterns), true);
 });
 
 Deno.test("shouldApprove: && with allowed commands", async () => {
-  const allowed = new Set(["git"]);
+  const patterns = ["git add *", "git commit *"];
   assertEquals(
-    await shouldApprove("git add . && git commit -m msg", allowed),
+    await shouldApprove("git add . && git commit -m msg", patterns),
     true,
   );
 });
 
 Deno.test("shouldApprove: pipe with unknown command rejects", async () => {
-  const allowed = new Set(["echo"]);
-  assertEquals(await shouldApprove("echo test | evil-cmd", allowed), false);
+  const patterns = ["echo *"];
+  assertEquals(await shouldApprove("echo test | evil-cmd", patterns), false);
 });
 
 Deno.test("shouldApprove: && with unknown command rejects", async () => {
-  const allowed = new Set(["echo"]);
+  const patterns = ["echo *"];
   assertEquals(
-    await shouldApprove("echo test && evil-cmd --flag", allowed),
+    await shouldApprove("echo test && evil-cmd --flag", patterns),
     false,
   );
 });
 
 Deno.test("shouldApprove: simple command (no shell syntax) rejects", async () => {
-  const allowed = new Set(["echo"]);
-  assertEquals(await shouldApprove("echo hello", allowed), false);
+  const patterns = ["echo *"];
+  assertEquals(await shouldApprove("echo hello", patterns), false);
 });
 
 Deno.test("shouldApprove: allowed command with 2>&1", async () => {
-  const allowed = new Set(["gemini"]);
-  assertEquals(await shouldApprove("gemini -p 'test' 2>&1", allowed), true);
+  const patterns = ["gemini *"];
+  assertEquals(await shouldApprove("gemini -p 'test' 2>&1", patterns), true);
 });
 
 Deno.test("shouldApprove: allowed command with >/dev/null", async () => {
-  const allowed = new Set(["npm"]);
-  assertEquals(await shouldApprove("npm test >/dev/null", allowed), true);
+  const patterns = ["npm *"];
+  assertEquals(await shouldApprove("npm test >/dev/null", patterns), true);
 });
 
 Deno.test("shouldApprove: unknown command with 2>&1 rejects", async () => {
-  const allowed = new Set<string>();
-  assertEquals(await shouldApprove("evil-cmd 2>&1", allowed), false);
+  assertEquals(await shouldApprove("evil-cmd 2>&1", []), false);
 });
 
 Deno.test("shouldApprove: pipe + redirect combined", async () => {
-  const allowed = new Set(["echo", "gemini"]);
+  const patterns = ["echo *", "gemini *"];
   assertEquals(
-    await shouldApprove("echo test | gemini -p 'hello' 2>&1", allowed),
+    await shouldApprove("echo test | gemini -p 'hello' 2>&1", patterns),
     true,
   );
 });
 
 Deno.test("shouldApprove: triple pipe chain", async () => {
-  const allowed = new Set(["cat", "grep", "wc"]);
+  const patterns = ["cat *", "grep *", "wc *"];
   assertEquals(
-    await shouldApprove("cat file | grep pattern | wc -l", allowed),
+    await shouldApprove("cat file | grep pattern | wc -l", patterns),
     true,
   );
 });
 
 Deno.test("shouldApprove: env var prefix with allowed command", async () => {
-  const allowed = new Set(["tmux", "grep", "tail"]);
+  const patterns = ["tmux *", "grep *", "tail *"];
   assertEquals(
     await shouldApprove(
       'TMUX="" tmux capture-pane -t "%53" -p 2>/dev/null | grep -v \'^$\' | tail -3',
-      allowed,
+      patterns,
     ),
     true,
   );
 });
 
 Deno.test("shouldApprove: env var prefix with unknown command rejects", async () => {
-  const allowed = new Set(["grep"]);
+  const patterns = ["grep *"];
   assertEquals(
-    await shouldApprove('TMUX="" evil-cmd | grep foo', allowed),
+    await shouldApprove('TMUX="" evil-cmd | grep foo', patterns),
     false,
   );
 });
@@ -395,26 +449,99 @@ Deno.test("extractCommands: path-based command with redirect", async () => {
 });
 
 Deno.test("shouldApprove: full path script with redirect (basename fallback)", async () => {
-  const allowed = new Set(["extract-session-history.ts"]);
+  const patterns = ["*extract-session-history.ts*"];
   assertEquals(
     await shouldApprove(
       "~/.claude/scripts/extract-session-history.ts 2>/dev/null",
-      allowed,
+      patterns,
     ),
     true,
   );
 });
 
 Deno.test("shouldApprove: unknown path-based command with redirect rejects", async () => {
-  const allowed = new Set<string>();
   assertEquals(
-    await shouldApprove("/usr/local/bin/evil-cmd 2>/dev/null", allowed),
+    await shouldApprove("/usr/local/bin/evil-cmd 2>/dev/null", []),
     false,
   );
 });
 
-Deno.test("shouldApprove: basename fallback with custom set", async () => {
-  const custom = new Set(["my-script.ts"]);
-  assertEquals(await shouldApprove("/some/path/my-script.ts 2>&1", custom), true);
-  assertEquals(await shouldApprove("/some/path/other.ts 2>&1", custom), false);
+Deno.test("shouldApprove: basename fallback with custom patterns", async () => {
+  const patterns = ["my-script.ts *"];
+  assertEquals(await shouldApprove("/some/path/my-script.ts arg 2>&1", patterns), true);
+  assertEquals(await shouldApprove("/some/path/other.ts arg 2>&1", patterns), false);
+});
+
+// --- subcommand granularity (regression tests for security fix) ---
+
+Deno.test("shouldApprove: git push rejected when only git diff allowed", async () => {
+  const patterns = ["git diff *"];
+  assertEquals(
+    await shouldApprove("git push --force 2>&1", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: git diff approved when git diff allowed", async () => {
+  const patterns = ["git diff *"];
+  assertEquals(
+    await shouldApprove("git diff HEAD 2>&1", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: sudo rm rejected when only sudo -k allowed", async () => {
+  const patterns = ["sudo -k *"];
+  assertEquals(
+    await shouldApprove("sudo rm -rf / 2>&1", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: sudo -k approved when sudo -k allowed", async () => {
+  const patterns = ["sudo -k *"];
+  assertEquals(
+    await shouldApprove("sudo -k 2>&1", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: nix profile rejected when only nix fmt allowed", async () => {
+  const patterns = ["nix fmt *"];
+  assertEquals(
+    await shouldApprove("nix profile wipe-history 2>&1", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: nix fmt approved when nix fmt allowed", async () => {
+  const patterns = ["nix fmt *"];
+  assertEquals(
+    await shouldApprove("nix fmt 2>&1", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: gh auth rejected when only gh api and gh pr allowed", async () => {
+  const patterns = ["gh api *", "gh pr *"];
+  assertEquals(
+    await shouldApprove("gh auth logout 2>&1", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: compound with mixed subcommands, one not allowed", async () => {
+  const patterns = ["git diff *", "git add *"];
+  assertEquals(
+    await shouldApprove("git add . && git push origin main", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: compound with all subcommands allowed", async () => {
+  const patterns = ["git diff *", "git add *"];
+  assertEquals(
+    await shouldApprove("git add . && git diff HEAD", patterns),
+    true,
+  );
 });
