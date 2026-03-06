@@ -1,6 +1,10 @@
 { config, lib, ... }:
 
 {
+  home.activation.miseInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run ${config.programs.mise.package}/bin/mise install --yes 2>&1 || true
+  '';
+
   programs.mise = {
     enable = true;
     enableZshIntegration = lib.mkIf (config.programs.zsh.enable or false) true;
