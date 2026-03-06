@@ -67,6 +67,21 @@ Write/Edit ツールは Unicode Private Use Area (PUA) の文字（Nerd Font ア
 
 ブラウザを利用する操作には Claude Code 組み込みの **Chrome インテグレーション**（chrome-devtools MCP, claude-in-chrome MCP）を使用すること。
 
+**検証時の動的データ導出:**
+- 検証操作の入力値や期待値をハードコードしない。会話コンテキストから特定できる場合はそれを使い、不明な場合はアプリのランタイム状態（DOM要素、APIレスポンス等）から導出するか、`AskUserQuestion` でユーザーに確認する
+- 例: 「現在のユーザーが X に表示されない」検証では、ユーザー名をハードコードせず DOM/API からプログラマティックに特定してから検証する
+
+**`read_network_requests` の制約:**
+- トラッキングは初回呼び出し時に開始される。それ以前のリクエストはキャプチャされない
+- ページロード時のリクエストを取得するパターン: (1) `read_network_requests(clear: true)` でトラッキング開始 → (2) ページリロード/ナビゲーション → (3) wait → (4) `read_network_requests` で結果取得
+- ページが既にロード済みの場合、DOM からの情報取得（`javascript_tool`）を優先する
+
+**SPA からのランタイム情報取得の優先順位:**
+1. **DOM 検査**（最優先）: `img[alt]`, `[aria-label]`, テキストコンテンツ — 最も確実で高速
+2. **`javascript_tool` でグローバル変数/cookie**: `window.__NEXT_DATA__`, localStorage 等
+3. **`read_network_requests`** でAPI レスポンス: タイミング制約あり、ページリロードが必要
+4. **React fiber / state store 探索**: 最も脆弱、最終手段としてのみ使用
+
 **Plan mode での実測確認:**
 - ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく Chrome インテグレーションで実測確認を行うこと
 - DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは実測値を取得してから計画を立てる
