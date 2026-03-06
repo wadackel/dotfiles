@@ -19,12 +19,12 @@ gws docs documents get --params '{"documentId":"<ID>"}' > "$TMP_JSON"
 
 ### gdoc-json-to-md.ts
 
-Located at `~/dotfiles/home/programs/claude/scripts/gdoc-json-to-md.ts`.
+Located at `~/.claude/skills/gdocs-to-md/gdoc-json-to-md.ts`.
 
 Reads JSON from stdin, writes GitHub Flavored Markdown to stdout.
 
 ```bash
-deno run ~/dotfiles/home/programs/claude/scripts/gdoc-json-to-md.ts < "$TMP_JSON" > output.md
+~/.claude/skills/gdocs-to-md/gdoc-json-to-md.ts < "$TMP_JSON" > output.md
 ```
 
 No Deno permission flags required (stdin-only, no file/network access).

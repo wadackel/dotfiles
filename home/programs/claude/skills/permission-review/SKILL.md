@@ -22,7 +22,7 @@ adding patterns to `permissions.allow` or `bash-policy.yaml`.
 Execute the CLI tool and capture the JSON output:
 
 ```bash
-permission-review.ts --format json
+~/.claude/skills/permission-review/permission-review.ts --format json
 ```
 
 If the user specifies filters, pass them as flags (e.g. `--days 7`, `--project dotfiles`, `--tool Bash`).
@@ -109,7 +109,7 @@ Record all added patterns for Step 4.
 1. Edit the relevant files (`settings.json`, `bash-policy.yaml`)
 2. **Selectively purge only patterns that were added** (quote patterns containing `*`, `(`, `)` with single quotes):
    ```bash
-   permission-review.ts --purge-pattern 'Bash(git commit *)' --purge-pattern 'WebFetch(*)'
+   ~/.claude/skills/permission-review/permission-review.ts --purge-pattern 'Bash(git commit *)' --purge-pattern 'WebFetch(*)'
    ```
 3. **If all candidates were skipped, do NOT run purge** -- entries remain for next review
 4. Show a change summary:

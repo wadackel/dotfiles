@@ -15,8 +15,9 @@
     "DISABLE_MICROCOMPACT": "true",
     "DISABLE_TELEMETRY": "true"
   },
-  "model": "opusplan",
+  "model": "opus",
   "permissions": {
+    "defaultMode": "plan",
     "allow": [
       "Bash(* --help *)",
       "Bash(* --version)",
@@ -24,7 +25,7 @@
       "Bash(* -v)",
       "Bash(*extract-session-history.ts*)",
       "Bash(*merge-settings/merge.ts*)",
-      "Bash(*permission-review.ts*)",
+      "Bash(*permission-review/permission-review.ts*)",
       "Bash(//dev/null)",
       "Bash(7z *)",
       "Bash([ *)",
@@ -139,6 +140,7 @@
       "Bash(go *)",
       "Bash(gofmt *)",
       "Bash(gws docs *)",
+      "Bash(gws calendar *)",
       "Bash(golint *)",
       "Bash(grep *)",
       "Bash(gunzip *)",

@@ -73,7 +73,7 @@ If validation fails: print the raw content of `$TMP_JSON` and `"temp file preser
 
 ```bash
 OUTPUT_STEM=$(echo "$TITLE" | tr '/' '-')
-deno run ~/dotfiles/home/programs/claude/scripts/gdoc-json-to-md.ts < "$TMP_JSON" > "${OUTPUT_STEM}.md"
+~/.claude/skills/gdocs-to-md/gdoc-json-to-md.ts < "$TMP_JSON" > "${OUTPUT_STEM}.md"
 ```
 
 **On conversion failure**: print the error and `"JSON preserved at: $TMP_JSON"`, then stop.

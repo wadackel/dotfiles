@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
 
 // PermissionRequest / PostToolUse hook: logs permission requests and executed
-// tool calls to JSONL for later analysis via permission-review.ts.
+// tool calls to JSONL for later analysis via the permission-review skill.
 // IMPORTANT: stdout output is strictly forbidden — it would be interpreted as a
 // hook decision and break the approve-piped-commands.ts hook chain.
 
