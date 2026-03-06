@@ -188,6 +188,18 @@ Vault のディレクトリ構造（数字プレフィックス付き）:
 - 主なディレクトリ: `00_Inbox/`, `01_Projects/`, `02_Notes/`, `03_Books/`, `05_Private/`
 - ディレクトリ名を推測しないこと。`list_vault_files` で確認してから保存する
 
+ノート作成時のフォーマット:
+- **h1 見出しを入れない**: Obsidian ではファイル名がタイトルとして表示されるため、コンテンツ先頭に `# タイトル` を書かない。本文は h2 (`##`) から始める
+- **frontmatter を付与する**: `Templates/Note_Template.md` に準拠した YAML frontmatter を先頭に付ける。特別な指定がない限り以下の構成:
+  ```yaml
+  ---
+  aliases:
+  tags:
+  description:
+  ---
+  ```
+- frontmatter の各フィールドは常に空のままにする（ユーザーが後から埋める）
+
 ### GitHub URL の扱い
 
 GitHub の Issue や Pull Request など、ユーザーから提供された URL は Private Repository が多いため直接参照できないことが多い。そのため、原則ユーザーから提供された GitHub の URL に関しては `gh` コマンドを使って情報を参照すること。
