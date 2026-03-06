@@ -38,21 +38,13 @@ Parse `$ARGUMENTS`:
 - `2026-W08` → as-is
 - Empty → current week via `date +%G-W%V`
 
-Compute Monday–Sunday dates and prev/next week numbers using `deno eval`:
+Compute Monday–Sunday dates and prev/next week numbers:
 
-```ts
-const [y, w] = [YEAR, WEEK];
-const jan4 = new Date(Date.UTC(y, 0, 4));
-const dayOfWeek = jan4.getUTCDay() || 7;
-const mon = new Date(jan4.getTime() + ((w - 1) * 7 - (dayOfWeek - 1)) * 86400000);
-for (let i = 0; i < 7; i++) {
-  const d = new Date(mon.getTime() + i * 86400000);
-  console.log(d.toISOString().slice(0, 10));
-}
+```
+deno run ~/.claude/skills/weekly-review/iso-week.ts YYYY-WNN
 ```
 
-Replace `YEAR` and `WEEK` with actual values at runtime.
-Handle year boundaries: ISO 8601 allows Dec 29–31 to belong to W01 of the next year.
+Output: 7 lines of dates (Mon–Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`.
 
 ### Step 2: Load Data (Parallel)
 
@@ -102,6 +94,16 @@ Generate 4 subsections in Japanese:
 #### `2.来週やること`
 
 - Collect incomplete To-Do `[ ]` items + Tasks + "next week" mentions from Memo
+- **Group by project label** (same as "今週やったこと"): `P&L`, `concierge-app`, `dotfiles`, `Misc`, etc.
+- Use nested bullet format:
+  ```
+  - P&L
+      - ex-proxy リファクタ（Start/Resume を WS で実装）
+      - 背景切り替え対応
+  - Misc
+      - FE スキル面接内容の検討・再設計
+  ```
+- Carry over sub-item structure from To-Do where available
 - **Merge mode**: respect existing content, add only new items
 
 #### `3.感想`
