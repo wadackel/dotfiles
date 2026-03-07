@@ -79,3 +79,25 @@ TMUX="" tmux send-keys -t "<session>:<window>.<target_pane>" '<new-command>' Ent
 - Pane indices start at 1
 - To send to a pane in a different window, change the window number: `<session>:<other_window>.<pane>`
 - Always prefix tmux commands with `TMUX=""` to avoid nested session issues
+
+## tmux Command Rules
+
+### Sending prompts to Claude Code TUI
+
+When sending a prompt to a Claude Code TUI via `send-keys`, separate text and Enter with a `sleep 2` delay. Sending them together causes the Enter to be interpreted as a newline within the text:
+
+```bash
+# Correct
+TMUX="" tmux send-keys -t TARGET "prompt text" && sleep 2 && TMUX="" tmux send-keys -t TARGET Enter
+
+# Wrong -- Enter becomes a newline in the prompt
+TMUX="" tmux send-keys -t TARGET "prompt text" Enter
+```
+
+### `capture-pane` empty line filtering
+
+On tall terminals (63+ lines), `capture-pane -p` appends many blank lines at the end. When extracting the last N lines, filter empty lines first:
+
+```javascript
+.filter(l => l.trim() !== "").slice(-5)
+```

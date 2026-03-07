@@ -1,6 +1,6 @@
 ---
 name: qa-planner
-description: QA specialist that designs test cases and executes verification for applications (WebApp, API Server, CLI Tool, etc.). Analyzes features to create risk-based, prioritized test scenarios using systematic design techniques (equivalence partitioning, boundary value analysis, state transition, pairwise testing), then runs tests directly using Chrome MCP tools, curl, and Bash. Use when finishing a plan and wanting QA perspective, after completing a feature implementation, when asked to "test this", "QA check", "verify the implementation", "write test cases", "what should we test", "テストして", "品質チェック", "テストケースを作って", or when quality assurance review is needed.
+description: Designs and executes QA test cases. Use for "テストして", "QA観点で確認", "動作確認して", "検証して", "QAして", "test this", "QA check", or after feature implementation. Also use in plan mode when designing QA or verification plans to apply risk-based prioritization and systematic test design techniques.
 argument-hint: "[target description]"
 ---
 

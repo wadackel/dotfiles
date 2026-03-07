@@ -48,7 +48,7 @@ Output: 7 lines of dates (Mon–Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `
 
 ### Step 2: Load Data (Parallel)
 
-Fetch all of the following in a **single parallel call** using `get_vault_file`:
+Fetch all of the following in **parallel Bash calls** using `obsidian read`:
 
 1. **Weekly note**: `99_Tracking/Weekly/YYYY-WWW.md` — if not found, print error and **abort**
 2. **Previous week**: `99_Tracking/Weekly/YYYY-W{prev}.md` — for "next week" carryover; skip if missing
@@ -134,7 +134,17 @@ Only modify when corruption is detected. This addresses known Templater bugs.
 
 Before writing, output a brief summary: section counts, major changes, merge/fresh mode.
 
-Use `create_vault_file` for full rewrite (not `patch_vault_file` — emoji headings cause errors):
+Use `obsidian create path="..." content="..." overwrite` for full rewrite. Content escaping rules:
+- Use `\n` for newlines and `\t` for tabs (the CLI interprets these sequences)
+- Escape `"` inside content as `\"`
+- Escape `$` as `\$` to prevent shell variable expansion
+- Escape backticks as `` \` `` (including triple-backtick code fences: `` \`\`\`dataviewjs ``)
+
+**Important**: Content containing `!` (e.g., `![[DATE#SECTION]]` embedded links) triggers bash history expansion, corrupting `!` to `\!`. Always prefix with `set +H` to disable history expansion:
+
+```
+set +H && obsidian create path="..." content="..." overwrite
+```
 
 - **Frontmatter**: preserve existing values exactly
 - **`## Notes`**: Step 4 synthesized content (no `- tba`)
@@ -144,7 +154,7 @@ Use `create_vault_file` for full rewrite (not `patch_vault_file` — emoji headi
 
 ### Step 7: Open in Obsidian
 
-Use `show_file_in_obsidian` to display the updated weekly note.
+Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated weekly note.
 
 ## Content Style Guidelines
 

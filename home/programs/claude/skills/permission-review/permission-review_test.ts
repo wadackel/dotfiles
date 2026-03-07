@@ -357,7 +357,7 @@ Deno.test("isActionableTool: standard tools are actionable", () => {
 
 Deno.test("isActionableTool: mcp__ prefix is actionable", () => {
   assertEquals(isActionableTool("mcp__codex__codex"), true);
-  assertEquals(isActionableTool("mcp__obsidian-mcp-tools__fetch"), true);
+  assertEquals(isActionableTool("mcp__playwright__navigate"), true);
 });
 
 Deno.test("isActionableTool: non-actionable tools", () => {

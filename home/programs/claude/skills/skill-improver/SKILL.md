@@ -249,49 +249,7 @@ Each dimension is scored 1-5, with specific criteria for each score level.
 
 ## Tips for Effective Improvements
 
-### Respect Existing Choices
-- **Language**: Keep Japanese skills in Japanese, English skills in English
-- **Voice**: Preserve the author's style and intent
-- **Scope**: Only change what needs improving
-
-### Prioritize Impact
-- Fix Critical issues first (broken functionality, invalid formats)
-- Address High issues next (poor triggering, unclear workflows)
-- Medium issues can wait (verbosity, minor organizational improvements)
-- Low issues are nice-to-have (additional examples, minor formatting)
-
-### Focus on High-Impact Areas
-
-**Description improvements often have the highest impact:**
-- Adding missing trigger phrases fixes false negatives
-- Narrowing scope fixes false positives
-- Making WHEN explicit helps Claude understand context
-
-**Progressive disclosure improvements save tokens:**
-- Moving 200 lines of reference material to a separate file keeps SKILL.md focused
-- Users see faster loading and clearer navigation
-- Context window pressure is reduced
-
-**Workflow clarity improvements reduce confusion:**
-- Numbered steps make sequences obvious
-- Explicit decision points guide Claude through branching logic
-- Error handling prevents Claude from getting stuck
-
-### Use Before/After Examples
-
-Always show concrete before/after for improvements:
-- Makes the change clear and actionable
-- Helps user understand the rationale
-- Demonstrates best practices in context
-
-### Cite Best Practices
-
-Reference the authoritative sources when explaining why:
-- "According to Claude Code docs, descriptions should be in third person"
-- "Agent Skills spec recommends keeping file references one level deep"
-- "Platform best practices suggest SKILL.md under 500 lines"
-
-This builds confidence and helps users learn the principles.
+See [references/tips.md](references/tips.md) for prioritization strategies, high-impact areas, and best practices for communicating improvements.
 
 ## Common Improvement Patterns
 
@@ -311,33 +269,4 @@ See [references/improvement-patterns.md](references/improvement-patterns.md) for
 
 ## Troubleshooting
 
-### WebFetch fails for authoritative sources
-
-**Solution:** Read [references/specification-summary.md](references/specification-summary.md) as fallback. Inform user that local cached specifications are being used.
-
-### Skill not found
-
-**Solution:**
-- Check spelling of skill name
-- Verify skill location (personal vs. project)
-- List available skills again
-
-### User wants to improve skill-improver itself
-
-**Solution:** This is valid! Use the same workflow on this skill. Reference the evaluation checklist and apply improvements. This is a good integration test.
-
-### Improvements break existing functionality
-
-**Solution:**
-- Revert the changes
-- Analyze what went wrong
-- Apply more conservative improvements
-- Test incrementally
-
-### User disagrees with evaluation
-
-**Solution:**
-- Explain rationale citing best practices
-- Respect user's judgment on subjective matters
-- Skip improvements they don't want
-- Focus on objective criteria (format requirements, best practices)
+See [references/troubleshooting.md](references/troubleshooting.md) for common issues (WebFetch failures, skill not found, disagreements with evaluation).

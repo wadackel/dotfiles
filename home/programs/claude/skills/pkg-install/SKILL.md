@@ -1,7 +1,7 @@
 ---
 name: pkg-install
 description: Adds tools and packages to the dotfiles repository, preferring home-manager (Nix) and falling back to Homebrew. Use when asked to install, add, or set up a tool with "install xxx", "set up xxx", "xxxをインストールして", "xxxを追加して", "xxxを入れて", "xxxを導入して".
-argument-hint: [package-name]
+argument-hint: "[package-name]"
 ---
 
 # Package Install

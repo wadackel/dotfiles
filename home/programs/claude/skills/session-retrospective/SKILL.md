@@ -112,6 +112,15 @@ For each skill that was used or relevant to the session, check:
 - Did the workflow deviate from what the skill prescribed?
 - Would a new reference file improve the skill?
 
+**Auto-loading failure analysis** (for "Corrected Approaches" category):
+When a user correction is "use skill X instead of [raw approach]", perform root cause analysis:
+1. Was the skill loaded at the time? If not, why?
+   - **Description gap**: The scenario wasn't covered by the skill's trigger phrases → Propose description improvement (skill modification)
+   - **Chicken-and-egg**: The skill can't self-trigger → Reminder rule must stay in CLAUDE.md
+   - **Judgment error**: Claude saw the skill but chose not to use it → CLAUDE.md guardrail may be needed
+2. Route the proposal to the diagnosed root cause, not the surface symptom.
+   A description gap should produce a **skill modification**, not a CLAUDE.md addition.
+
 #### Generalization Check
 
 For each identified learning, also ask:

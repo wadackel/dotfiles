@@ -1,6 +1,6 @@
 ---
 name: gemini-research
-description: Research and codebase analysis assistant. Use for large codebase analysis and exploration ("analyze this code", "investigate the architecture", "コードを調査して"), library recommendations, error solutions, and best practices. Also use when users ask "what's the best library for X?", "which framework should I use?", "how do I fix this error?", or need web-enhanced research. Leverages Gemini CLI with Google Search integration and --include-directories for codebase exploration. Gemini analyzes and researches but does NOT write implementation code - Claude Code handles all implementation.
+description: Research and codebase analysis via Gemini CLI. Use proactively for large codebase exploration, library/framework comparison, error troubleshooting, and best practices research. Also use in plan mode for pre-implementation research. Triggers: "analyze this code", "what's the best library for X?", "how do I fix this error?", "コードを調査して", "ライブラリ比較". Gemini researches; Claude Code implements.
 ---
 
 # Gemini Research
@@ -225,6 +225,21 @@ Claude Code:
    - Testing strategy
 6. After approval, implements (without Gemini)
 ```
+
+## NOT for These Use Cases
+
+### Text Data Analysis
+
+For analyzing JSONL files, logs, or other text datasets, use the **gemini-data-analyst** skill instead. This skill (`gemini-research`) is for codebase exploration via `--include-directories`, not arbitrary text file processing.
+
+### Claude Code's Own Specifications
+
+For Claude Code internals (permissions, hooks, settings, security), fetch the official documentation directly via WebFetch rather than using Gemini:
+
+- `https://code.claude.com/docs/en/permissions`
+- `https://code.claude.com/docs/en/settings`
+- `https://code.claude.com/docs/en/security`
+- `https://code.claude.com/docs/en/hooks`
 
 ## Tips for Effective Usage
 

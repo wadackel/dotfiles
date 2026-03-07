@@ -156,8 +156,8 @@ Present results according to user preference:
 
 - **Chat display**: Summarize key findings inline
 - **File save**: Write to a specified path
-- **Obsidian save**: Use the **obsidian-mcp-tools** for vault file creation
-  - List vault structure before saving: `list_vault_files` to confirm target directory
+- **Obsidian save**: Use the **obsidian CLI** for vault file creation
+  - List vault structure before saving: `obsidian files` or `obsidian folders` to confirm target directory
   - Default inbox: `00_Inbox/<filename>.md`
 
 ## Common Data Types

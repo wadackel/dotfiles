@@ -53,6 +53,14 @@ This document provides detailed definitions, identification heuristics, and exam
 - "Import paths should use @ alias, not relative paths"
 - "Use TypeScript strict mode, not loose typing"
 
+**Skill routing corrections (special sub-pattern):**
+When the correction is "use skill X for this task", do NOT default to adding a CLAUDE.md rule.
+Instead, diagnose WHY the skill wasn't auto-loaded:
+- Skill description missing trigger phrases for this scenario → Fix description (skill modification)
+- Skill exists but Claude judged it unnecessary → May need CLAUDE.md guardrail
+- Skill doesn't exist for this workflow → May need new skill proposal
+See Phase 2.5 "Auto-loading failure analysis" for the full diagnostic flow.
+
 **Output format corrections:**
 - "Show diffs before applying changes, not after"
 - "Group proposals by target file, not by category"
