@@ -1,8 +1,4 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/scripts/statusline.sh"
-  },
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -15,9 +11,7 @@
     "DISABLE_MICROCOMPACT": "true",
     "DISABLE_TELEMETRY": "true"
   },
-  "model": "opus",
   "permissions": {
-    "defaultMode": "plan",
     "allow": [
       "Bash(* --help *)",
       "Bash(* --version)",
@@ -206,6 +200,7 @@
       "Bash(nslookup *)",
       "Bash(nuxt *)",
       "Bash(nvim *)",
+      "Bash(obsidian *)",
       "Bash(nvm *)",
       "Bash(nx *)",
       "Bash(oxlint *)",
@@ -248,6 +243,7 @@
       "Bash(scp *)",
       "Bash(screen *)",
       "Bash(sed *)",
+      "Bash(set +H)",
       "Bash(sg *)",
       "Bash(sleep *)",
       "Bash(solid *)",
@@ -364,7 +360,6 @@
       "mcp__chrome-devtools",
       "mcp__codex",
       "mcp__figma",
-      "mcp__obsidian-mcp-tools",
       "mcp__playwright",
       "mcp__serena"
     ],
@@ -437,6 +432,7 @@
       "Write(~/.ssh/*_rsa)",
       "Write(~/.ssh/id_*)"
     ],
+    "defaultMode": "plan",
     "additionalDirectories": [
       "~/dotfiles",
       "/tmp"
@@ -523,6 +519,10 @@
         "hooks": []
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/scripts/statusline.sh"
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
