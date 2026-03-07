@@ -1,237 +1,157 @@
-## 開発ガイド
+## Development Guide
 
 ### Agent Guidelines
 
-正確さよりもシンプルさを常に優先する。YAGNI、KISS、DRY。循環的複雑度を増やさずに無償で得られる場合を除き、後方互換シムやフォールバックパスは不要。
+Always prioritize simplicity over correctness. YAGNI, KISS, DRY. No backward-compatibility shims or fallback paths unless they come for free without increasing cyclomatic complexity.
 
-ただし構文解析（シェルコマンド、AST 等）では正規表現より専用パーサーライブラリを優先する。正規表現はクォートやエスケープのエッジケースに弱い。
+Exception: For parsing (shell commands, ASTs, etc.), prefer dedicated parser libraries over regular expressions. Regex is fragile against quoting and escape edge cases.
 
-### CLI ツールの優先順位
+### CLI Tool Preferences
 
-- ファイル検索には `find` ではなく `fd` を使用すること
-- 内容検索には `grep` ではなく `rg` を使用すること（専用の `Grep` ツールが利用できる場合はそちらを優先）
+- Use `fd` instead of `find` for file search
+- Use `rg` instead of `grep` for content search (prefer the dedicated `Grep` tool when available)
 
-### Plan mode での静的解析活用
+### Scripting Language Choice
 
-lint エラーや型エラーの修正タスクでは、plan mode 中に `pnpm lint:script` / `tsc` を実行して
-実際のエラー内容を確認してから修正方針を決定すること。
-理論的推測だけで方針を立てると、実際には違うエラーが出て無駄な修正になる。
+When a script involves state management, parsing, or conditional logic, prefer Deno/TypeScript over Bash.
+- Short 1-2 command chains → Bash is fine
+- File processing, JSON parsing, error handling needed → Deno/TypeScript
+
+### Feature Design Flow
+
+When designing new features in plan mode, follow this order:
+1. Research existing code and libraries with `/gemini-research` (as needed)
+2. Create a design plan based on research findings
+3. Critique and refine with `/plan-deeper`
+
+### Static Analysis in Plan Mode
+
+For lint error or type error fix tasks, run `pnpm lint:script` / `tsc` during plan mode to confirm actual errors before deciding the fix approach. Theorizing without real error output leads to wasted fixes on non-existent issues.
 
 ### Git Workflow
 
-#### 安全なステージング
+#### Safe Staging
 
-`git add -A` や `git add .` を使用する前に `git status --porcelain` を実行し、
-意図しないファイル（.env, credentials*, *.pem, secrets* など）が含まれていないか必ず確認してください。
-機密情報が含まれる可能性がある場合は、個別に `git add <file>` を使用します。
+Before using `git add -A` or `git add .`, run `git status --porcelain` to verify no unintended files (.env, credentials*, *.pem, secrets*, etc.) are included. If sensitive files may be present, use `git add <file>` individually.
 
-#### Git コマンドの実行規則
+#### Git Command Execution Rules
 
-`git -C <path>` を使用しないこと。`permissions.allow` のパターン（例: `Bash(git diff *)`）にマッチせず毎回権限確認が発生する。代わりに作業ディレクトリで直接 git コマンドを実行する。別ディレクトリを操作する場合は `cd <path> && git <subcommand>` を使用。**この規則は `bash-policy.ts` により自動強制されており、違反コマンドは実行前にブロックされる。**
+Do not use `git -C <path>`. It does not match `permissions.allow` patterns (e.g., `Bash(git diff *)`) and triggers permission prompts every time. Instead, run git commands directly in the working directory. For other directories, use `cd <path> && git <subcommand>`. **This rule is auto-enforced by `bash-policy.ts` — violating commands are blocked before execution.**
 
-#### 独立 PR のブランチ作成
+#### Branch Creation for Independent PRs
 
-現在の作業と無関係な修正を「別 PR」として出す場合:
+When creating a separate PR for fixes unrelated to current work:
 
-1. **必ず master (または対象ベースブランチ) から切る**:
+1. **Always branch from master (or the target base branch)**:
    `git switch master && git pull origin master && git switch -c fix/...`
-   現在の feature ブランチから切ると、そのブランチの差分が混入する。
-2. **PR 作成前に diff を検証**:
-   `git diff master...HEAD` で意図した変更のみであることを確認する。
+   Branching from the current feature branch contaminates the PR with that branch's diff.
+2. **Verify diff before PR creation**:
+   `git diff master...HEAD` to confirm only intended changes are included.
 
-### tmux コマンドの実行規則
+### Shell-Specific Syntax in Bash Tool
 
-`TMUX` 環境変数が設定された状態（tmux セッション内）で `tmux` コマンドを実行する場合は `TMUX=""` プレフィックスを付けること。付けないと入れ子 tmux セッションとして扱われ、`send-keys` の内容が自セッションのペインに混入する等の意図しない挙動が発生する。
+`$'...'` (ANSI-C quoting) may not be interpreted correctly inside pipes in the Bash tool's shell environment. Wrap commands containing bash-specific syntax in `bash -c '...'` to verify behavior.
 
-- ✗ `tmux send-keys -t "0:1.1" "text" ""`
-- ✓ `TMUX="" tmux send-keys -t "0:1.1" "text" ""`
+**`!` history expansion**: `!` inside double quotes (e.g., `![[file#heading]]`) triggers history expansion, escaping to `\!`. Disable with `set +H &&` before the command: `set +H && obsidian create ...`
 
-Claude Code の TUI に tmux send-keys でプロンプトを送る場合、テキストと Enter を同じコマンドで送ると改行扱いになる。テキスト送信後に `sleep 2` を挟んでから Enter を送ること:
-- `TMUX="" tmux send-keys -t TARGET "prompt text" && sleep 2 && TMUX="" tmux send-keys -t TARGET Enter`
+### Background Processes in Bash Tool
 
-`tmux capture-pane -p` は tall terminal（63行以上）では末尾に大量の空行が現れる。最後の N 行を取る場合は空行をフィルタしてからスライスする: `.filter(l => l.trim() !== "").slice(-5)`
+Launch long-running processes (dev servers, etc.) with `run_in_background: true` instead of chaining with `&` or `;`. Verify startup in a separate Bash call with `sleep N && curl ...`. Putting `cmd &` + subsequent commands in a single Bash call breaks argument parsing.
 
-### Bash ツールでのシェル固有構文
+### Write/Edit Tool Unicode Limitation
 
-Bash ツールのシェル環境では `$'...'`（ANSI-C quoting）がパイプ内で正しく解釈されないことがある。bash 固有構文を含むコマンドの動作確認は `bash -c '...'` でラップして実行すること。
-
-### Bash ツールでのバックグラウンドプロセス
-
-長時間実行プロセス（dev サーバー等）は `&` や `;` でチェーンせず、`run_in_background: true` で起動する。起動確認は別の Bash コールで `sleep N && curl ...` のように行う。`cmd &` + 後続コマンドを1つの Bash コールに入れると引数パースが壊れる。
-
-### Write/Edit ツールの Unicode 制限
-
-Write/Edit ツールは Unicode Private Use Area (PUA) の文字（Nerd Font アイコン等）をドロップすることがある。PUA 文字をファイルに含める場合は、直接埋め込まず `printf '\uXXXX'` / `printf '\U000XXXXX'` でランタイム生成するコードを書くこと。
+Write/Edit tools may drop Unicode Private Use Area (PUA) characters (Nerd Font icons, etc.). To include PUA characters in files, generate them at runtime with `printf '\uXXXX'` / `printf '\U000XXXXX'` instead of embedding directly.
 
 ### Browser Automation
 
-ブラウザを利用する操作には Claude Code 組み込みの **Chrome インテグレーション**（chrome-devtools MCP, claude-in-chrome MCP）を使用すること。
+For tasks involving browser interaction, load the following skills via the `Skill` tool (parameter name: `skill`).
+**Load before planning even in plan mode** (skills contain test design techniques and verification patterns that improve plan quality):
 
-**検証時の動的データ導出:**
-- 検証操作の入力値や期待値をハードコードしない。会話コンテキストから特定できる場合はそれを使い、不明な場合はアプリのランタイム状態（DOM要素、APIレスポンス等）から導出するか、`AskUserQuestion` でユーザーに確認する
-- 例: 「現在のユーザーが X に表示されない」検証では、ユーザー名をハードコードせず DOM/API からプログラマティックに特定してから検証する
+- **`/browser-automation`**: Required when using Chrome MCP tools. Includes SPA data extraction priorities and constraints
+- **`/qa-planner`**: Use alongside when QA-perspective verification is requested. Provides systematic test case design → execution flow
 
-**`read_network_requests` の制約:**
-- トラッキングは初回呼び出し時に開始される。それ以前のリクエストはキャプチャされない
-- ページロード時のリクエストを取得するパターン: (1) `read_network_requests(clear: true)` でトラッキング開始 → (2) ページリロード/ナビゲーション → (3) wait → (4) `read_network_requests` で結果取得
-- ページが既にロード済みの場合、DOM からの情報取得（`javascript_tool`）を優先する
+### Claude Code Hooks Notes
 
-**SPA からのランタイム情報取得の優先順位:**
-1. **DOM 検査**（最優先）: `img[alt]`, `[aria-label]`, テキストコンテンツ — 最も確実で高速
-2. **`javascript_tool` でグローバル変数/cookie**: `window.__NEXT_DATA__`, localStorage 等
-3. **`read_network_requests`** でAPI レスポンス: タイミング制約あり、ページリロードが必要
-4. **React fiber / state store 探索**: 最も脆弱、最終手段としてのみ使用
+- **`Skill` tool cannot be matched in `PreToolUse`**: Valid match targets are `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Task`, `WebFetch`, `WebSearch`, and MCP tools only (per official docs)
+- **To intercept before skill execution, use `UserPromptSubmit`**: Detect `/skill-name` in the stdin JSON `prompt` field. Example: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
+- **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
+- **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
+- **Approval tracking with `PostToolUse`**: `PermissionRequest` only records that a dialog was shown (cannot distinguish approval/denial). To track actually executed (approved) commands, combine with a `PostToolUse` hook. Exclude high-frequency tools (Read/Glob/Grep) via matcher to reduce overhead
 
-**Plan mode での実測確認:**
-- ブラウザUIやレンダリングに関する技術的問題を Plan mode で調査する際は、理論的推測だけでなく Chrome インテグレーションで実測確認を行うこと
-- DOM 要素のサイズ、CSS 適用状態、レイアウト計算などは実測値を取得してから計画を立てる
+### codex-review Skill Special Rule
 
-**SPA での MutationObserver ログ収集パターン:**
-- `sessionStorage.setItem` は環境によって non-function になることがある → `window.__xxx` でログを蓄積する
-- Next.js SPA は client-side navigation 後も `window` 変数を保持するため、遷移先ページでもログを読み取れる
-- 変数名衝突を避けるため `window.__mo`（Observer）、`window.__labelLog`（ログ配列）のように `__` プレフィックスを使う
+**Absolute rule**: Always execute the Code Review Loop after implementation is complete (exception only when the user explicitly says "no review needed"). See codex-review skill's SKILL.md for the detailed flow.
 
-### gemini-research スキル使用ガイドライン
+### General
 
-ユーザーが明示的にスキル名を出さなくても、以下の状況では積極的に使用:
-- 大規模・未知のコードベースの構造分析やアーキテクチャ調査
-- ライブラリ・フレームワーク選定や比較
-- エラー調査・トラブルシューティング
-- ベストプラクティスや最新トレンドの調査
-- 初めて使う API・ライブラリの使い方調査
+- `AskUserQuestion` `options` limited to 4 per question (more causes ValidationError)
+- When receiving correction instructions from the user, consider appending to `~/.claude/CLAUDE.md` if the instruction is general-purpose, with user approval before appending
 
-gemini-research は**調査・分析**担当（コード分析を含む）。実装コードは Claude Code が書く。
+#### Plan Mode
 
-**テキストデータ一括分析には `gemini-data-analyst` スキルを使用**:
-- `gemini-research` はコードベース探索専用（`--include-directories`）
-- JSONL・ログ・テキストデータの分析には `/gemini-data-analyst` を使う
+- **Run `/plan-deeper` before ExitPlanMode**: After creating a plan in plan mode, run `/plan-deeper` via the Skill tool before calling ExitPlanMode. May skip ONLY when ALL of these conditions are met:
+  - Target is a single file with a few lines of changes (typo fix, config value change, simple addition)
+  - No design decisions or multiple implementation approaches exist
+  - User explicitly says "no plan-deeper needed", "just implement it", etc.
+- **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to implementation phase after confirmation
+- **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during plan mode before ExitPlanMode. Let the user assess the scale of the problem with real data before approval
+- **Definition of Done**: `/plan-deeper` auto-executes the completion criteria proposal and agreement flow. When skipping, manually include completion criteria in the plan (e.g., implementation only, implementation + lightweight verification + PR + CI)
+- **Required checks before ExitPlanMode**: For plans involving bug investigation/fixes, explicitly include:
+  - "Which command/log/measurement confirms this fix works"
+  - "Considered whether this fix approach could be wrong, and the evidence that rules it out"
 
-**例外**: Claude Code 自体の仕様（permissions、hooks、settings等）は gemini-research や claude-code-guide より公式ドキュメントを直接 WebFetch する方が正確:
-- `https://code.claude.com/docs/en/permissions`
-- `https://code.claude.com/docs/en/settings`
-- `https://code.claude.com/docs/en/security`
-- `https://code.claude.com/docs/en/hooks`
+#### Implementation and Verification
 
-### Claude Code Hooks の注意点
+- **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
+- **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
+  - Load `/browser-automation` and open the target page with Chrome MCP
+  - Take screenshots and compare layout, sizing, and spacing against Figma designs or reference pages (existing pages with the same pattern)
+  - Check for browser console errors
+  - Perform responsive checks (viewport changes) and interaction verification as needed
+- **Tests**: When test files exist, include expected value updates and new test cases for behavior changes in both the plan and implementation. Include tests in the work plan unless the user explicitly says "no test plan needed"
+- **Temporary verification files (test-*.mjs, verify-*.sh, etc.)**: Not for committing. Exclude during git add and suggest .gitignore additions as needed
+- **Establish measurement baseline → implement → re-measure → compare → conclude**: Follow this cycle for all improvement work, not just performance optimization. The definition of done is "demonstrated the effect with before/after numbers", not "made the fix"
 
-- **`Skill` ツールは `PreToolUse` でマッチできない**: 有効なマッチ対象は `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Task`, `WebFetch`, `WebSearch`, MCP tools のみ（公式ドキュメント記載）
-- **スキル実行前に処理を挟む場合は `UserPromptSubmit` を使う**: stdin JSON の `prompt` フィールドで `/skill-name` を検知。例: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
-- **hook コマンドの JSON エスケープ**: `bash -c '...'` ラップは避ける。JSON 文字列に直接コマンドを書き `\"` でエスケープする（シングルクォートとのネスト問題を回避）
-- **`UserPromptSubmit` でブロックする場合**: exit 2 より `{"decision":"block","reason":"..."}` を stdout に出力 + exit 0 の方が理由を Claude に伝えられる
-- **`PostToolUse` で承認追跡**: `PermissionRequest` は「ダイアログが表示された」事実のみ記録（承認/拒否を区別不可）。実際に実行された（承認済み）コマンドを追跡するには `PostToolUse` hook を組み合わせる。高頻度ツール（Read/Glob/Grep）は matcher で除外してオーバーヘッドを抑える
+#### Bug Fixes
 
-### codex-review スキル使用時の特別ルール
+- **Investigation approach**: Always verify these two points:
+  1. **Direct observation means included in the plan** — Include means to directly observe facts: log output, debug commands, measurement confirmation. In non-interactive environments, set up debug logging first with `exec >> /tmp/<name>.log 2>&1`
+  2. **Fix approach has been falsified** — Do not adopt unverified assumptions as the fix approach
+- **Present alternatives**: When both a minimal workaround and a root-cause fix exist, present both options. For areas with TODO comments or technical debt, prioritize the option that resolves the debt
+- **Reproduction conditions**: Treat user-provided reproduction conditions ("occurs during X") as hypotheses. Plans must explicitly separate "facts", "analysis", and "estimates (not confirmed)", and must not adopt unconfirmed assumptions as the fix approach
 
-**絶対ルール**: 実装完了後の Code Review Loop を必ず実行する（ユーザーが明示的に「レビュー不要」と言った場合のみ例外）。詳細フローは codex-review スキルの SKILL.md を参照。
+### GitHub URL Handling
 
-### Skill 設計原則
+GitHub Issue and Pull Request URLs provided by the user are often from private repositories and cannot be accessed directly. As a rule, use the `gh` CLI to retrieve information from GitHub URLs provided by the user.
 
-- **対話フローでの情報提示**
-  - ユーザーに判断（追加/スキップ等）を求める前に、判断材料となる具体的情報（コマンド例、影響範囲、理由）を必ず提示する
-  - 不可逆操作（ログ削除、データ変更等）はユーザーがアクションを取った対象のみに適用し、スキップされた項目には触れない
+## Design Principles
 
-- **スキルは英語で作成する**
-  - SKILL.md のコンテンツ（説明文、セクション見出し、コメント等）は原則英語で記述
-  - ユーザーが明示的に日本語を指定した場合のみ例外
+- Single responsibility is context-dependent. Allow side effects in internal implementations; prefer pure functions for public APIs
+- Group 3+ arguments into an object
+- Abstract common patterns early; apply Rule of Three for domain-specific ones
+- Prefer function composition over inheritance. Avoid excessive abstraction
+- Use descriptive names for exports, concise names for locals
 
-- **新規スキル作成後は skill-improver を実行する**
-  - スキル作成完了後、`/skill-improver <name>` で品質評価と最適化を実施してから完了とする
+## Coding Conventions
 
-- **ツール/スキルの委譲パターン**
-  - スキル内で他のスキルやツールの詳細な使い方（コマンド例、フラグ、引数など）を記載しない
-  - 代わりに「Use the **[skill-name] skill** for [purpose]」のような簡潔な委譲指示を使用
-  - 詳細はそのツール/スキルのドキュメントに委ねる
-  - 例: qa-planner では curl のフラグ詳細を列挙せず、対象ツールのドキュメントに委ねる
+### CSS/Layout Best Practices
 
-- **引数を受け取るスキルには `argument-hint` を追加する**
-  - `$ARGUMENTS` を使用するスキルは `argument-hint: "[引数名]"` を frontmatter に記述
-  - オートコンプリート時にユーザーへヒントが表示される（例: `/plan-deeper [max-rounds]`）
+**flexbox and transform interaction:**
+- When using `transform: scale()` inside a flex container, set `flex-shrink: 0` (Tailwind: `shrink-0`) to prevent flex-based shrinking
+- Browser default `max-width: 100%` also causes double constraints when combined with transform; also apply `max-w-none`
+- Example: When scaling an image with transform → `class="shrink-0 max-w-none max-h-none"`
 
-### 全般
+### Deno Scripts
 
-- `AskUserQuestion` の `options` は1質問あたり最大4つまで（それ以上は ValidationError）
-- ユーザーから修正指示を受けた場合、汎用的な指示なら `~/.claude/CLAUDE.md` への追記を検討し、ユーザー承認を得てから追記する
+- Read stdin with `new Response(Deno.stdin.readable).text()` (Deno 2.x). No permission flags needed
+- Inline code execution uses `deno eval`. `deno run -e` does not exist
+- Get the script's own directory: `new URL(".", import.meta.url).pathname` (useful for co-locating config files)
+- When diagnosing subprocess failures with `Deno.Command`, use `stderr: "piped"` not `stderr: "null"`, and log stderr content when exit code is non-zero
 
-#### Plan mode
+### File Organization
 
-- **ExitPlanMode 前に `/plan-deeper` を実行**: plan mode でプラン作成後、`ExitPlanMode` を呼ぶ前に Skill ツールで `/plan-deeper` を実行すること。以下のスキップ条件に**全て**該当する場合のみ省略可:
-  - 変更対象が単一ファイル・数行の修正（typo 修正、設定値変更、単純な追加など）
-  - 設計判断や複数の実装方針が存在しない
-  - ユーザーが明示的に「plan-deeper 不要」「すぐ実装して」等と指示した場合
-- **具体的な実装コードを確認したい場合**: プランに実装コード全体を含めてユーザーに提示し、確認後に実装フェーズへ移行
-- **データ処理ツールの計画**: ログ解析・集計ツールの改善計画では、架空シナリオではなく実ファイルを使った Before/After を plan mode 中に提示してから ExitPlanMode すること。ユーザーが実データで問題の規模感を確認してから承認判断する
-- **完了条件（Definition of Done）の明示**: `/plan-deeper` が完了条件の提案・合意フローを自動実行する。スキップ時はプランに作業の完了条件を手動で含める（例: 実装のみ、実装＋軽量検証＋PR＋CI など）
-- **ExitPlanMode 前の必須確認**: 不具合調査・修正を含む計画では以下をプランに明記:
-  - 「どのコマンド・ログ・実測でこの修正が効いたことを確認するか」
-  - 「この修正方針が間違いである可能性を検討し、否定できた根拠」
-
-#### 実装と検証
-
-- **実装完了後の動作確認**: 必ず動作確認を実施。スクリプトなら実行、変更検知テストも含める（意図的に変更 → 再実行 → 検知確認 → 元に戻す）。ユーザーの確認を待たず Claude が主体的に検証
-- **UI の視覚的確認**: スクリーンショットを撮るだけでなく、Figma デザインや参照ページ（同一パターンの既存ページ）と並べてレイアウト・サイズ・間隔が正しいかを比較すること。「表示されている」だけでは確認完了とみなさない
-- **テスト**: テストファイルが存在する場合、挙動変更に伴う期待値の更新と新ケースの追加もプランと実装に含める。ユーザーが「test planは不要」と明示しない限りテストを作業計画に含める
-- **検証用の一時ファイル（test-*.mjs, verify-*.sh 等）**: コミット対象外。git add 時に除外し、必要に応じて .gitignore への追加を提案
-- **計測基盤確立 → 実装 → 再計測 → 比較評価 → 結論**: パフォーマンス改善・最適化に限らず、あらゆる改善作業でこのサイクルを守る。「修正した」ではなく「修正前後の数値で効果を示した」が完了の定義
-
-#### バグ修正
-
-- **原因調査の方針**: 以下の2点を必ず確認:
-  1. **直接観察の手段が計画に含まれているか** — ログ出力・デバッグコマンド・実測確認など「事実を直接見る手段」を計画に組み込む。非対話環境では `exec >> /tmp/<name>.log 2>&1` でデバッグログを先に仕込む
-  2. **修正方針の反証を行ったか** — 反証できていない推測を修正方針として採用しない
-- **選択肢提示**: ワークアラウンド的な最小修正と根本解決の両方が存在する場合は両案提示。TODO コメントや技術的負債の解消が示唆されている箇所では、その解消を含む案を優先検討
-- **再現条件の扱い**: ユーザーが提供した再現条件（「X 中に発生する」など）は仮説として扱う。プランは「事実」「分析」「推定（断定不可）」を明示的に分離し、断定できていない推測を修正方針として採用しない
-
-### Obsidian
-
-Vault のディレクトリ構造（数字プレフィックス付き）:
-- 新規ファイルの保存先: `00_Inbox/<filename>.md`
-- 主なディレクトリ: `00_Inbox/`, `01_Projects/`, `02_Notes/`, `03_Books/`, `05_Private/`
-- ディレクトリ名を推測しないこと。`list_vault_files` で確認してから保存する
-
-ノート作成時のフォーマット:
-- **h1 見出しを入れない**: Obsidian ではファイル名がタイトルとして表示されるため、コンテンツ先頭に `# タイトル` を書かない。本文は h2 (`##`) から始める
-- **frontmatter を付与する**: `Templates/Note_Template.md` に準拠した YAML frontmatter を先頭に付ける。特別な指定がない限り以下の構成:
-  ```yaml
-  ---
-  aliases:
-  tags:
-  description:
-  ---
-  ```
-- frontmatter の各フィールドは常に空のままにする（ユーザーが後から埋める）
-
-### GitHub URL の扱い
-
-GitHub の Issue や Pull Request など、ユーザーから提供された URL は Private Repository が多いため直接参照できないことが多い。そのため、原則ユーザーから提供された GitHub の URL に関しては `gh` コマンドを使って情報を参照すること。
-
-## 設計原則
-
-- 単一責任は文脈に応じて柔軟に。内部実装では副作用を許容、公開 API は純粋関数寄せ
-- 3 つ以上の引数はオブジェクトにまとめる
-- よくあるパターンは早期に抽象化、ドメイン固有は Rule of Three
-- 継承より関数合成。過度な抽象化は避ける
-- エクスポートは説明的な名前、ローカルは簡潔に
-
-## コーディング規則
-
-### CSS/レイアウトのベストプラクティス
-
-**flexbox と transform の相互作用:**
-- flex コンテナ内で `transform: scale()` を使う場合、`flex-shrink: 0`（Tailwind: `shrink-0`）を指定して flex による縮小を防ぐ
-- ブラウザデフォルトの `max-width: 100%` も transform との組み合わせで二重制約を引き起こすため、`max-w-none` も併用
-- 例: 画像を transform でスケーリングする場合 → `class="shrink-0 max-w-none max-h-none"`
-
-### Deno スクリプト
-
-- stdin 読み取りは `new Response(Deno.stdin.readable).text()`（Deno 2.x）。パーミッションフラグ不要
-- inline コード実行は `deno eval`。`deno run -e` は存在しない
-- スクリプト自身のディレクトリ取得: `new URL(".", import.meta.url).pathname`（設定ファイルを同じディレクトリに置くパターンで有用）
-- `Deno.Command` の subprocess で障害原因を診断する場合は `stderr: "null"` ではなく `stderr: "piped"` にし、exit code が非ゼロ時に stderr 内容をログ出力する
-
-### ファイル構成
-
-- 依存関係順にコードを配置（下から上へ読める構造）
-    - 最初に基本的な定数、型定義、ヘルパー関数
-    - 最後にそれらを使用するメインのロジックやエクスポート
-- ファイルを下から読み上げることで依存関係が理解できる構成を意識
-- 循環参照を避ける設計
+- Arrange code in dependency order (readable bottom-to-top)
+    - Constants, type definitions, and helper functions first
+    - Main logic and exports that use them last
+- Structure files so dependencies are understood by reading from the bottom up
+- Avoid circular references
