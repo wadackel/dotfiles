@@ -110,6 +110,23 @@ description: "... Also use in plan mode when designing verification plans ..."
 description: "Use for 'test this', 'QA check', or after feature implementation."
 ```
 
+### Name/directory/trigger mismatch
+
+The skill's frontmatter `name`, directory name, and any manual trigger references (in CLAUDE.md or description) must all match. A mismatch means `/skill-name` won't invoke the skill.
+
+```yaml
+# Good: all three match
+# Directory: skills/debug/
+name: debug
+# CLAUDE.md: "load the /debug skill"
+# Description: "Manual trigger: /debug."
+
+# Bad: name doesn't match trigger
+# Directory: skills/systematic-debugging/
+name: systematic-debugging
+# CLAUDE.md: "load the /debug skill"  ← won't work
+```
+
 ### Extracting guardrails vs reference content
 
 When moving content from CLAUDE.md to a skill, distinguish between:

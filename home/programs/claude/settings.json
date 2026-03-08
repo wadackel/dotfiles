@@ -196,6 +196,7 @@
       "Bash(nodenv *)",
       "Bash(notebook *)",
       "Bash(npm *)",
+      "Bash(npx skills *)",
       "Bash(npx turbo *)",
       "Bash(nslookup *)",
       "Bash(nuxt *)",

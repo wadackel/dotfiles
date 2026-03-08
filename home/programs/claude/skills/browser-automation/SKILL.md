@@ -68,6 +68,16 @@ When investigating browser UI or rendering issues in plan mode:
 - Capture DOM element sizes, CSS applied state, layout calculations before forming a plan
 - Compare against Figma designs or reference pages for visual accuracy
 
+## Reconnaissance-Then-Action
+
+Before performing any interaction (click, input, etc.):
+1. Take a screenshot or `read_page` to observe current state
+2. Identify target selectors from the observation
+3. Execute the action with discovered selectors
+
+Do not guess selectors from source code alone -- always verify against rendered state.
+After `navigate`, wait briefly or check for expected content before inspecting -- SPA client-side transitions may not be complete immediately.
+
 ## Anti-patterns
 
 - Do not hardcode user names, IDs, or expected values -- derive from DOM/API
