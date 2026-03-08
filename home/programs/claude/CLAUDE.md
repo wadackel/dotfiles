@@ -62,13 +62,20 @@ Launch long-running processes (dev servers, etc.) with `run_in_background: true`
 
 Write/Edit tools may drop Unicode Private Use Area (PUA) characters (Nerd Font icons, etc.). To include PUA characters in files, generate them at runtime with `printf '\uXXXX'` / `printf '\U000XXXXX'` instead of embedding directly.
 
+### QA Verification
+
+When QA-perspective verification is requested (e.g., "QA観点で確認", "動作確認して", "merge前に確認", dependency update review), load `/qa-planner` via the `Skill` tool.
+**Load before planning even in plan mode** (skill contains test design techniques and risk-based prioritization that improve plan quality):
+
+- **`/qa-planner`**: Systematic test case design with risk-based prioritization. Works in both plan mode (test plan output) and implementation mode (test execution)
+- If browser verification is also needed, additionally load `/browser-automation`
+
 ### Browser Automation
 
-For tasks involving browser interaction, load the following skills via the `Skill` tool (parameter name: `skill`).
-**Load before planning even in plan mode** (skills contain test design techniques and verification patterns that improve plan quality):
+For tasks involving browser interaction, load `/browser-automation` via the `Skill` tool (parameter name: `skill`).
+**Load before planning even in plan mode** (skill contains SPA data extraction patterns and verification constraints that improve plan quality):
 
 - **`/browser-automation`**: Required when using Chrome MCP tools. Includes SPA data extraction priorities and constraints
-- **`/qa-planner`**: Use alongside when QA-perspective verification is requested. Provides systematic test case design → execution flow
 
 ### Claude Code Hooks Notes
 
@@ -102,6 +109,7 @@ For tasks involving browser interaction, load the following skills via the `Skil
 
 #### Implementation and Verification
 
+- **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
   - Load `/browser-automation` and open the target page with Chrome MCP

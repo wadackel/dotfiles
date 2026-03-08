@@ -282,6 +282,12 @@ function saveDebounceState(sessionShort: string, userCount: number): void {
   Deno.writeTextFileSync(statePath, JSON.stringify(state));
 }
 
+// --- Obsidian Syntax Escape ---
+
+function escapeObsidianSyntax(text: string): string {
+  return text.replace(/#(?=\w)/g, "＃");
+}
+
 // --- Daily Note Upsert ---
 
 function upsertDailyNote(
@@ -408,7 +414,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const heuristicLines = [`- ${timestamp} - \`(${repoName}/${sessionShort})\` ${heuristic}`];
+  const heuristicLines = [`- ${timestamp} - \`(${repoName}/${sessionShort})\` ${escapeObsidianSyntax(heuristic)}`];
   upsertDailyNote(dailyPath, sessionShort, heuristicLines);
   await log(`HEURISTIC: ${heuristicLines[0]}`);
 
@@ -429,8 +435,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${llmResult.summary}`;
-  const detailLines = llmResult.details.map((d) => `    - ${d}`);
+  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${escapeObsidianSyntax(llmResult.summary)}`;
+  const detailLines = llmResult.details.map((d) => `    - ${escapeObsidianSyntax(d)}`);
   const llmLines = [mainLine, ...detailLines];
 
   upsertDailyNote(dailyPath, sessionShort, llmLines);

@@ -1,6 +1,6 @@
 ---
 name: qa-planner
-description: Designs and executes QA test cases. Use for "テストして", "QA観点で確認", "動作確認して", "検証して", "QAして", "test this", "QA check", or after feature implementation. Also use in plan mode when designing QA or verification plans to apply risk-based prioritization and systematic test design techniques.
+description: Designs and executes QA test cases. Use for "テストして", "QA観点で確認", "動作確認して", "検証して", "QAして", "test this", "QA check", "merge前に確認", or after feature implementation / dependency updates. Also use in plan mode when designing QA or verification plans to apply risk-based prioritization and systematic test design techniques.
 argument-hint: "[target description]"
 ---
 

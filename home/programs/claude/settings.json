@@ -127,6 +127,7 @@
       "Bash(git stash *)",
       "Bash(git stash)",
       "Bash(git status *)",
+      "Bash(git switch *)",
       "Bash(git update-index *)",
       "Bash(git worktree remove *)",
       "Bash(gitui *)",
