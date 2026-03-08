@@ -32,24 +32,52 @@ The `--format json` mode automatically provides:
 - `subPatterns` array for each candidate (ordered specific to general)
 - `reason` field for Bash entries explaining why the permission confirmation occurred
 
+### Step 1.5: Duplicate Check
+
+Before presenting candidates, verify each proposed pattern against existing
+`settings.json` entries:
+
+```bash
+grep 'Bash(git clone' ~/dotfiles/home/programs/claude/settings.json
+```
+
+For each candidate:
+- If the pattern already exists in `settings.json`, mark as "既存パターンあり"
+- Investigate why dialogs still occurred despite the pattern existing
+  (typically: compound commands where `approve-piped-commands.ts` couldn't
+  match all segments)
+- For compound_command reason candidates with existing patterns, run
+  unmatched segment analysis to find the actual missing patterns
+
 ### Step 2: Detail Presentation (Phase 1)
 
 Present **all** candidate patterns with full details. For each pattern in
 `allowCandidates` and `reviewItems`, use this format:
 
 ```markdown
-### `Bash(git *)` -- 5件リクエスト / 3件実行 (project1, project2)
+### `Bash(git *)` -- 24件リクエスト / 140件実行 (project1, project2)
 
 確認が発生した理由: [reason-based explanation]
+既存パターン: `Bash(git add *)`, `Bash(git commit *)`, ... (既に登録済み)
 
-実行されたコマンド:
-- `git add CLAUDE.md config/dax3.keymap && git commit -m "refactor(keymap): ..."`
-- `git status --short && echo "---" && git log --oneline -3`
+実際にダイアログが表示されたコマンド（直近5件）:
+- `git add app/styles.css && git commit -m "..."` (cloudflare-d1-sandbox, 2026-03-01)
+- `git switch main && git pull origin main` (blog.wadackel.me, 2026-03-08)
+- `git clone --depth 1 https://github.com/... 2>&1` (dotfiles, 2026-03-06)
 
 追加可能なパターン:
 - `Bash(git commit *)` -- commit のみ許可
 - `Bash(git status *)` -- status のみ許可
 - `Bash(git *)` -- git 全般を許可
+```
+
+To get the actual dialog-triggering commands, extract from the raw permission log:
+
+```bash
+grep '"event":"request"' ~/.claude/logs/permission-requests.jsonl | \
+  grep '"tool":"Bash"' | \
+  jq -r 'select(.input.command | test("^git ")) | "\(.ts[0:10]) [\(.project)] \(.input.command | split("\n")[0][:100])"' | \
+  tail -5
 ```
 
 For patterns with `executed: 0`, add a caution:
@@ -68,6 +96,11 @@ Display the `reason` field as a human-readable explanation:
 Every candidate **must** be presented in this format. This is a required format, not illustrative.
 
 ### Step 3: Individual Review (Phase 2)
+
+Review each candidate **one at a time** in a separate `AskUserQuestion` call.
+Do NOT batch multiple candidates into a single question -- the user needs to see
+the full context (command examples, reason, existing patterns) for each candidate
+before deciding.
 
 For each candidate in `allowCandidates` / `reviewItems`, use `AskUserQuestion` with up to 3 options + Other:
 

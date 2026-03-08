@@ -7,8 +7,8 @@ description: >-
   classification. Use when asked to "cross-session analysis", "複数セッション分析",
   "会話履歴を横断分析して", "セッション横断の振り返り", "過去の会話から改善点を抽出",
   or any request to analyze patterns across past sessions. Distinct from /session-retrospective
-  (single session only).
-argument-hint: "[project-filter]"
+  (single session only). Defaults to past 30 days; use --days all for full history.
+argument-hint: "[--days N|all] [project-filter]"
 ---
 
 # Cross-Session Analysis
@@ -19,9 +19,12 @@ Analyze conversation history across all Claude Code projects to detect recurring
 
 ## Arguments
 
-Parse `$ARGUMENTS` for an optional project filter:
-- No argument: analyze all projects under `~/.claude/projects/`
-- With argument: filter to projects whose path contains the argument (e.g., `dotfiles`)
+Parse `$ARGUMENTS` for options:
+- `--days N`: Limit analysis to sessions from the past N days (default: 30). If N is not a positive integer, default to 30
+- `--days all`: Analyze all sessions regardless of date
+- No `--days` flag: defaults to `--days 30`
+- Project filter (remaining args): filter to projects whose path contains the argument (e.g., `dotfiles`)
+- Examples: `/cross-session-analysis`, `/cross-session-analysis --days 7 dotfiles`, `/cross-session-analysis --days all`
 
 ## Workflow
 
@@ -45,7 +48,18 @@ Scan all projects and extract lightweight metadata for a quick overview.
 
 2. For each project, check for `sessions-index.json`. Extract `firstPrompt` + `summary` from each session entry. For projects without an index, scan JSONL files for the first user message as fallback.
 
-3. Combine into a single file and send to Gemini for clustering:
+3. **Date filtering**: Compute cutoff date from `--days` argument (`new Date(Date.now() - days * 86400000)`). For each project:
+   - If `sessions-index.json` exists: keep only entries where `created >= cutoffDate`
+   - If no index: keep only `.jsonl` files where file mtime >= cutoffDate (use `stat` or `Deno.stat()`)
+   - Write all target session IDs to `/tmp/gemini_analysis/cross_session/target_sessions.txt` (one ID per line)
+   - Report to user before proceeding:
+     ```
+     Date filter: past N days (since YYYY-MM-DD)
+     Sessions: X/Y in range, Z excluded
+     ```
+   - If `--days all`, skip this step entirely (no target file written).
+
+4. Combine into a single file and send to Gemini for clustering:
    ```bash
    cat /tmp/gemini_analysis/cross_session/all_index.txt \
      | gemini -m gemini-2.5-pro -p "$(cat)" \
@@ -53,11 +67,13 @@ Scan all projects and extract lightweight metadata for a quick overview.
    ```
    See [references/gemini-prompts.md](references/gemini-prompts.md) for the Phase 1 prompt.
 
-4. Present cluster results to user for validation before proceeding.
+5. Present cluster results to user for validation before proceeding.
 
 ### Phase 2: Text Extraction
 
-Extract full text from all sessions using Deno. **Do not use jq** — `message.content` is sometimes a string, sometimes an array, and jq filters silently produce empty output.
+Extract full text from target sessions using Deno. **Do not use jq** — `message.content` is sometimes a string, sometimes an array, and jq filters silently produce empty output.
+
+Before extraction, read `/tmp/gemini_analysis/cross_session/target_sessions.txt` if it exists. Skip any JSONL file whose session ID (filename without `.jsonl`) is not in the target list. If the file does not exist (`--days all` was specified), extract all sessions.
 
 See [references/extraction-logic.md](references/extraction-logic.md) for the Deno extraction script pattern.
 
