@@ -1,64 +1,115 @@
 ---
 name: codex-review
-description: Reviews implementation plans and code changes through Codex MCP, enabling iterative quality assurance with automatic fix loops until Codex approves. Use when asked to "review with Codex", "Codex review", "plan review", "Codexでレビュー", "コードレビューして", "プランレビュー", "実装をレビューして", or when automated multi-round code review with an independent reviewer is needed after completing implementation.
+description: Reviews implementation plans and code changes through Codex CLI, enabling iterative quality assurance with automatic fix loops until Codex approves. Use when asked to "review with Codex", "Codex review", "plan review", "Codexでレビュー", "コードレビューして", "プランレビュー", "実装をレビューして", or when automated multi-round code review with an independent reviewer is needed after completing implementation.
 argument-hint: "[plan|code|security]"
 ---
 
-# Code Review with Codex MCP
+# Code Review with Codex CLI
 
 ## Quick start
 
 ```bash
-# Plan review
-Read plan.md
-Read CLAUDE.md
-mcp__codex__codex --sandbox read-only --prompt "[plan review prompt]"
+# Code review (uncommitted changes, default criteria)
+codex exec review --uncommitted --full-auto
 
-# Code review
-git diff HEAD
-Read CLAUDE.md
-mcp__codex__codex --sandbox workspace-write --prompt "[code review prompt]"
+# Code review (custom criteria — use `codex exec`, not `codex exec review`)
+codex exec --full-auto "
+Review uncommitted changes (run git diff to see them).
+Review guidelines: ./CLAUDE.md
+Criteria: code quality, security, performance
+"
+
+# Plan review
+codex exec -s read-only "
+Review the plan at ./plan.md
+Project guidelines: ./CLAUDE.md
+Related source: src/foo.ts, src/bar.ts
+"
 
 # Follow-up review
-mcp__codex__codex-reply --threadId <id> --prompt "修正しました。再レビューをお願いします。"
+codex exec resume --last --full-auto "修正しました。再レビューをお願いします。"
+```
+
+## Important: `codex exec review` vs `codex exec`
+
+`codex exec review` scope selectors (`--uncommitted`, `--base`, `--commit`) and custom prompts are **mutually exclusive**:
+
+- `codex exec review --uncommitted --full-auto` — reviews uncommitted changes with Codex's default criteria
+- `codex exec review "custom instructions"` — custom review, but Codex decides the scope
+
+For **custom criteria + specific scope**, use `codex exec --full-auto` instead and instruct Codex to read the diff:
+
+```bash
+codex exec --full-auto "
+Review uncommitted changes (run git diff to see them).
+Guidelines: ./CLAUDE.md
+Focus on: security vulnerabilities
+"
 ```
 
 ## Core workflow
 
-1. **Context collection**: Read CLAUDE.md and related files
-2. **Start review**: Use `mcp__codex__codex` to start review session
-3. **Analyze issues**: Extract issues from Codex response
+1. **Context collection**: Gather file paths (not contents) for guidelines, plan, and related source
+2. **Start review**: Invoke Codex CLI via Bash tool with paths in prompt
+3. **Analyze issues**: Parse Codex's plain-text output for issues
 4. **Apply fixes** (optional): Use Edit/Write tools to fix issues
-5. **Follow-up** (optional): Use `mcp__codex__codex-reply` to continue review
+5. **Follow-up** (optional): Use `codex exec resume` to continue the review session
 
 ## Commands
 
-### Start plan review
+### Code review (standard)
 
-1. Read plan file (plan.md)
-2. Read CLAUDE.md for project guidelines
-3. Read source code of the functions/sections being modified (enables Codex to validate line numbers, variable names, and patterns against actual code)
-4. Call `mcp__codex__codex`:
-   - `sandbox: "read-only"`
-   - `approval-policy: "on-failure"`
-   - Include plan content, guidelines, and review criteria in prompt
+Use when default review criteria are sufficient:
 
-### Start code review
+```bash
+codex exec review --uncommitted --full-auto
+```
+- `--uncommitted`: Codex auto-reads staged/unstaged/untracked changes
+- `--full-auto`: `-a on-request -s workspace-write`
+- Use `--base <BRANCH>` instead of `--uncommitted` to review against a branch
 
-1. Collect changes: `git diff HEAD`
-2. Read CLAUDE.md for coding standards
-3. Call `mcp__codex__codex`:
-   - `sandbox: "workspace-write"`
-   - `approval-policy: "on-failure"`
-   - Include diff, guidelines, and review criteria in prompt
-4. Save threadId from response
+### Code review (custom criteria)
 
-### Continue review
+Use when specific review focus is needed (security audit, guideline compliance, etc.):
+
+```bash
+codex exec --full-auto "
+Review uncommitted changes (run git diff to see them).
+Guidelines: ./CLAUDE.md
+Review criteria:
+1. Security (highest priority)
+2. Code quality
+3. Performance
+Mark each issue with severity: Critical/High/Medium/Low
+"
+```
+- Uses `codex exec` (not `codex exec review`) to allow custom prompt with scope instructions
+- Codex reads the diff and referenced files locally
+
+### Plan review
+
+```bash
+codex exec -s read-only "
+Review the implementation plan:
+- Plan: ./path/to/plan.md
+- Guidelines: ./CLAUDE.md
+- Related source: src/foo.ts, src/bar.ts
+
+Review criteria: ...
+"
+```
+- `-s read-only`: No filesystem writes, but Codex can read files
+- Pass file paths only; Codex reads them locally
+
+### Continue review (follow-up)
 
 1. Apply fixes using Edit/Write tools
-2. Call `mcp__codex__codex-reply`:
-   - `threadId: <saved-id>`
-   - `prompt: "修正を適用しました。再度レビューをお願いします。"`
+2. Invoke via Bash tool:
+   ```bash
+   codex exec resume --last --full-auto "修正を適用しました。再度レビューをお願いします。"
+   ```
+   - `--last`: Resumes the most recent session in the current directory (cwd-filtered)
+   - For parallel reviews, use explicit session ID: `codex exec resume <SESSION_ID> --full-auto "..."`
 3. Repeat until no issues remain (max 5 iterations)
 
 ## Use cases
@@ -87,70 +138,40 @@ Focus on security aspects:
 
 ## Best practices
 
-### 1. Context collection
+### 1. Path-based context (not content)
 
-**Always include:**
-- Project CLAUDE.md (coding standards)
-- Plan file (for plan review)
-- Git diff (for code review)
-- Source code of the functions/sections being modified (for plan review: enables Codex to validate line numbers, variable names, and patterns against actual code)
-
-**Include when relevant:**
-- Architecture documents (for plan review)
-- Test files (for code review)
-- Security requirements (for security review)
-
-**Avoid:**
-- Loading all files at once (token inefficiency)
-- Including irrelevant context
+Pass file **paths** in the prompt, not file contents. For detailed guidelines, see the **codex-cli** skill.
 
 ### 2. Clear review criteria
 
-Specify what to review:
-```javascript
-const prompt = `
-## レビュー観点（優先順位順）
-1. セキュリティ（最優先）
-2. コード品質
-3. パフォーマンス
-4. テスト
+Specify what to review with prioritized criteria:
+```
+## Review criteria (priority order)
+1. Security (highest)
+2. Code quality
+3. Performance
+4. Test coverage
 
-各指摘に重要度（Critical/High/Medium/Low）を明記してください。
-`
+Mark each issue with severity: Critical/High/Medium/Low
 ```
 
-### 3. Structured responses
-
-Request JSON format for easier parsing:
-```javascript
-const prompt = `
-レビュー結果を以下のJSON形式で提供してください:
-{
-  "overall_status": "approved|conditional|rejected",
-  "issues": [
-    {
-      "severity": "critical|high|medium|low",
-      "file": "path",
-      "line": 123,
-      "description": "...",
-      "suggestion": "..."
-    }
-  ]
-}
-`
-```
-
-### 4. Loop safety
+### 3. Loop safety
 
 Prevent infinite loops (max 5 iterations). If the same issues persist after 3 attempts, stop and ask the user for guidance.
 
-### 5. Progress reporting
+### 4. Progress reporting
 
 Keep user informed during iteration cycles.
 
-## Configuration reference
+### 5. Timeout awareness
 
-See `references/configuration.md` for sandbox modes and approval policies.
+Codex CLI runs synchronously via Bash tool. Default timeout is 10 minutes (max 20 minutes). For large reviews, consider:
+- Splitting review by file groups
+- Using `--base` with a narrow commit range
+
+## CLI reference
+
+For CLI flag details, run `codex exec review --help`. For general Codex CLI usage (sandbox modes, session management, path-based context), see the **codex-cli** skill.
 
 ## Examples
 
@@ -158,12 +179,13 @@ See `references/examples.md` for complete examples of plan review, code review w
 
 ## Limitations
 
-1. **Token limits**: Large codebases may exceed token limits. Review diffs only, split by file.
-2. **Network dependency**: Requires Codex MCP connection.
+1. **Scope + prompt exclusivity**: `codex exec review` scope selectors (`--uncommitted`/`--base`/`--commit`) cannot be combined with custom prompts. Use `codex exec` for custom criteria.
+2. **Token limits**: Large codebases may exceed Codex's context. Use `--uncommitted` (auto-scoped) or split by file groups.
 3. **Review quality variance**: AI responses are non-deterministic. Specify clear criteria, use human final review.
 4. **Loop convergence**: Same issues may repeat. Max iteration limit (5 recommended).
-5. **Security and privacy**: Code sent to Codex MCP servers. Exclude sensitive files (.env, credentials).
+5. **Bash tool timeout**: Default 10 min, max 20 min. Large reviews may need to be split.
+6. **Session resume scope**: `--last` selects the most recent session in cwd. For parallel reviews, use explicit session IDs.
 
 ---
 
-**Important**: This skill depends on Codex MCP availability. Review results are **reference information** - final decisions should be made by humans, especially for security and architecture changes.
+**Important**: Review results are **reference information** - final decisions should be made by humans, especially for security and architecture changes.

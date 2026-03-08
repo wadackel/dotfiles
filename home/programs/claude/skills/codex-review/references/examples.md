@@ -1,141 +1,101 @@
-# Code Review with Codex MCP — Examples
+# Code Review with Codex CLI - Examples
 
 ## Example 1: Plan review
 
-```javascript
-// 1. Collect context
-const planContent = await Read({ file_path: "plan.md" })
-const guidelines = await Read({ file_path: "CLAUDE.md" })
+```bash
+# 1. Collect file paths (not contents)
+#    - Plan file: ./plan.md
+#    - Guidelines: ./CLAUDE.md
+#    - Related source: src/auth/middleware.ts, src/auth/types.ts
 
-// 2. Start review
-const result = await mcp__codex__codex({
-  prompt: `あなたは経験豊富なシニアアーキテクトです。
-以下の実装計画をレビューしてください。
+# 2. Start review (read-only sandbox, Codex reads files locally)
+codex exec -s read-only "
+You are an experienced senior architect. Review the implementation plan below.
 
-## 実装計画
-${planContent}
+## Files to read
+- Implementation plan: ./plan.md
+- Project guidelines: ./CLAUDE.md
+- Related source code: src/auth/middleware.ts, src/auth/types.ts
 
-## プロジェクトガイドライン
-${guidelines}
+## Review criteria
+- Approach validity
+- Technology selection appropriateness
+- Risks and alternatives
+- Guideline compliance
+- Scalability and maintainability
 
-## レビュー観点
-- 実装アプローチの妥当性
-- 技術選択の適切性
-- リスクと代替案
-- ガイドライン準拠
-- スケーラビリティと保守性
+Provide your review in this format:
+1. Overall assessment (Approved / Conditionally Approved / Needs Rework)
+2. Strengths (good design decisions)
+3. Concerns (areas needing improvement)
+4. Alternatives (if any)
+5. Recommended actions
+"
 
-レビュー結果を以下の形式で提供してください:
-1. 総合評価（承認/条件付き承認/再検討推奨）
-2. 強み（良い設計判断）
-3. 懸念事項（改善が必要な点）
-4. 代替案（あれば）
-5. 推奨アクション`,
-  sandbox: "read-only",
-  "approval-policy": "on-failure"
-})
-
-// 3. Analyze and report results
+# 3. Analyze and report results to user
 ```
 
 ## Example 2: Code review with auto-fix loop
 
-```javascript
-// 1. Collect changes
-const gitDiff = await Bash({
-  command: "git diff HEAD",
-  description: "Get uncommitted changes for review"
-})
-const guidelines = await Read({ file_path: "CLAUDE.md" })
+```bash
+# 1a. Standard review (default criteria, Codex auto-reads uncommitted changes)
+codex exec review --uncommitted --full-auto
 
-// 2. Start review
-let review = await mcp__codex__codex({
-  prompt: `あなたは厳格なシニアコードレビューアです。
-以下のコード変更を徹底的にレビューしてください。
+# 1b. OR: Custom criteria review (use `codex exec` to combine scope + criteria)
+codex exec --full-auto "
+You are a strict senior code reviewer.
+Review the uncommitted changes (run git diff to see them).
 
-## 変更内容
-${gitDiff}
+## Reference files
+- Project guidelines: ./CLAUDE.md
 
-## プロジェクトガイドライン
-${guidelines}
+## Review criteria
+- Code quality (readability, maintainability, naming conventions)
+- Security (OWASP Top 10, input validation)
+- Performance (algorithm efficiency, async patterns)
+- Guideline compliance
+- Test coverage
+- Error handling
 
-## レビュー観点
-- コード品質（可読性、保守性、命名規則）
-- セキュリティ（OWASP Top 10、入力検証）
-- パフォーマンス（アルゴリズム効率、非同期処理）
-- ガイドライン準拠
-- テストカバレッジ
-- エラーハンドリング
+For each issue, include:
+1. File name and line number
+2. Problem description
+3. Severity (Critical/High/Medium/Low)
+4. Suggested fix
+"
 
-各指摘には以下を含めてください:
-1. ファイル名と行番号
-2. 問題の説明
-3. 重要度（Critical/High/Medium/Low）
-4. 修正方法の提案`,
-  sandbox: "workspace-write",
-  "approval-policy": "on-failure"
-})
+# 2. Apply fixes based on review feedback
+# (Use Edit/Write tools to fix issues identified by Codex)
 
-const threadId = review.threadId
-let iteration = 0
-const maxIterations = 5
+# 3. Follow-up review (max 5 iterations)
+codex exec resume --last --full-auto "
+Applied fixes for the identified issues. Please re-review.
+"
 
-// 3. Fix loop
-while (iteration < maxIterations) {
-  iteration++
-
-  const issues = parseCodexResponse(review)
-
-  if (issues.length === 0) {
-    console.log("✓ すべての指摘が解消されました")
-    break
-  }
-
-  console.log(`反復 ${iteration}: ${issues.length}件の指摘を修正中...`)
-
-  // Apply fixes
-  for (const issue of issues) {
-    await Edit({
-      file_path: issue.file,
-      old_string: issue.problematicCode,
-      new_string: issue.suggestedFix
-    })
-  }
-
-  // Continue review
-  review = await mcp__codex__codex_reply({
-    threadId: threadId,
-    prompt: `${issues.length}件の指摘を修正しました。再度レビューをお願いします。`
-  })
-}
+# 4. Repeat steps 2-3 until no issues remain or max iterations reached
+# If same issues persist after 3 attempts, stop and ask user for guidance
 ```
 
 ## Example 3: Security-focused review
 
-```javascript
-const diff = await Bash({ command: "git diff HEAD" })
-const guidelines = await Read({ file_path: "CLAUDE.md" })
+```bash
+# Security review with focused criteria (use `codex exec` for custom prompt)
+codex exec --full-auto "
+Conduct a security review of the uncommitted changes.
+Run git diff to see the changes.
 
-const securityReview = await mcp__codex__codex({
-  prompt: `セキュリティレビューを実施してください。
+## Reference files
+- Project guidelines: ./CLAUDE.md
 
-## 変更内容
-${diff}
+## Security checklist (priority order)
+1. **OWASP Top 10**: SQL injection, XSS, CSRF, authentication flaws
+2. **Input validation**: Sanitization and validation of all external inputs
+3. **Sensitive data**: Safe handling of passwords, tokens, API keys
+4. **Auth/authz**: Proper permission checks and session management
+5. **Encryption**: Encryption in transit and at rest
+6. **Error handling**: Prevent leakage of sensitive information
+7. **Dependencies**: Use of libraries with known vulnerabilities
 
-## ガイドライン
-${guidelines}
-
-## セキュリティチェック項目（優先順位順）
-1. **OWASP Top 10**: SQLインジェクション、XSS、CSRF、認証不備
-2. **入力検証**: すべての外部入力のサニタイズと検証
-3. **機密データ**: パスワード、トークン、APIキーの安全な取り扱い
-4. **認証・認可**: 適切な権限チェックとセッション管理
-5. **暗号化**: 転送時・保管時の暗号化
-6. **エラーハンドリング**: 機密情報の漏洩防止
-7. **依存関係**: 既知の脆弱性を持つライブラリの使用
-
-Critical/High の指摘を最優先で報告してください。`,
-  sandbox: "workspace-write",
-  "approval-policy": "on-request"  // 厳格なレビューでは毎回確認
-})
+Report Critical/High severity issues first.
+"
 ```

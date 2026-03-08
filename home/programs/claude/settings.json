@@ -53,6 +53,7 @@
       "Bash(chmod *)",
       "Bash(chown *)",
       "Bash(claude *)",
+      "Bash(codex *)",
       "Bash(claude-memo.ts*)",
       "Bash(clippy *)",
       "Bash(cloc *)",
@@ -368,7 +369,6 @@
       "Write(**)",
       "Write(~/.claude/**)",
       "mcp__chrome-devtools",
-      "mcp__codex",
       "mcp__figma",
       "mcp__playwright",
       "mcp__serena"
