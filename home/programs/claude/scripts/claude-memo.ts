@@ -66,6 +66,22 @@ function parseTranscript(path: string): TranscriptEntry[] {
     });
 }
 
+// --- Repo Name Resolution ---
+
+export function resolveRepoName(cwd: string, gitCommonDir: string): string {
+  let gitDir = gitCommonDir;
+  if (!gitDir.startsWith("/")) {
+    gitDir = `${cwd}/${gitDir}`;
+  }
+  const segments: string[] = [];
+  for (const s of gitDir.split("/")) {
+    if (s === "..") segments.pop();
+    else if (s !== ".") segments.push(s);
+  }
+  gitDir = segments.join("/");
+  return gitDir.replace(/\/\.git\/?$/, "").split("/").at(-1) ?? "";
+}
+
 // --- Extraction ---
 
 const NOISE_PATTERNS: RegExp[] = [
@@ -365,12 +381,8 @@ async function main(): Promise<void> {
       stderr: "null",
     });
     const { stdout } = await cmd.output();
-    let gitDir = new TextDecoder().decode(stdout).trim();
-    // 通常リポジトリ: ".git"（相対）、worktree: "/path/to/repo/.git"（絶対）
-    if (!gitDir.startsWith("/")) {
-      gitDir = `${cwd}/${gitDir}`;
-    }
-    repoName = gitDir.replace(/\/\.git\/?$/, "").split("/").at(-1) ?? "";
+    const gitCommonDir = new TextDecoder().decode(stdout).trim();
+    repoName = resolveRepoName(cwd, gitCommonDir);
   } catch {
     repoName = "";
   }
