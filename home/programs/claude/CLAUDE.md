@@ -129,7 +129,7 @@ For tasks involving browser interaction, load `/browser-automation` via the `Ski
   2. **Fix approach has been falsified** — Do not adopt unverified assumptions as the fix approach
 - **Present alternatives**: When both a minimal workaround and a root-cause fix exist, present both options. For areas with TODO comments or technical debt, prioritize the option that resolves the debt
 - **Reproduction conditions**: Treat user-provided reproduction conditions ("occurs during X") as hypotheses. Plans must explicitly separate "facts", "analysis", and "estimates (not confirmed)", and must not adopt unconfirmed assumptions as the fix approach
-- **Detailed process**: For step-by-step debugging methodology, load the `/debug` skill
+- **Detailed process**: For step-by-step debugging methodology, load the `/systematic-debugging` skill
 
 ### Google Docs URL Handling
 

@@ -116,10 +116,10 @@ The skill's frontmatter `name`, directory name, and any manual trigger reference
 
 ```yaml
 # Good: all three match
-# Directory: skills/debug/
-name: debug
-# CLAUDE.md: "load the /debug skill"
-# Description: "Manual trigger: /debug."
+# Directory: skills/systematic-debugging/
+name: systematic-debugging
+# CLAUDE.md: "load the /systematic-debugging skill"
+# Description: "Manual trigger: /systematic-debugging."
 
 # Bad: name doesn't match trigger
 # Directory: skills/systematic-debugging/

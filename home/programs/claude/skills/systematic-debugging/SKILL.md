@@ -1,5 +1,5 @@
 ---
-name: debug
+name: systematic-debugging
 description: >-
   Systematic 4-phase debugging process (investigate, analyze, hypothesize, fix).
   Auto-loads when encountering bugs, test failures, errors, unexpected behavior,
@@ -7,7 +7,7 @@ description: >-
   fix before understanding the root cause. Always use this skill before proposing
   code fixes for any error or failure — even if the fix seems obvious.
   Also use in plan mode when planning bug investigation or fix approaches.
-  Manual trigger: /debug.
+  Manual trigger: /systematic-debugging.
   デバッグ、バグ修正、テスト失敗、エラー調査、動かない、おかしい、原因不明の時に使用。
 ---
 
