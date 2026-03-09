@@ -63,12 +63,9 @@ if [ -n "$cwd" ]; then
       repo=$(basename "$cwd")
     fi
     branch=$(git branch --show-current 2>/dev/null || echo "")
-    dirty=""
-    [ -n "$(git status --porcelain 2>/dev/null | head -1)" ] && dirty="*"
-
     parts+=("$(printf "${BLUE}${ICON_REPO}${RST} ${DIM}${repo}${RST}")")
     if [ -n "$branch" ]; then
-      parts+=("$(printf "${GREEN}${ICON_BRANCH}${RST} ${DIM}${branch}${dirty}${RST}")")
+      parts+=("$(printf "${GREEN}${ICON_BRANCH}${RST} ${DIM}${branch}${RST}")")
     fi
   fi
 fi
