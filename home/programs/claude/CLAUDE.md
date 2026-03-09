@@ -131,6 +131,10 @@ For tasks involving browser interaction, load `/browser-automation` via the `Ski
 - **Reproduction conditions**: Treat user-provided reproduction conditions ("occurs during X") as hypotheses. Plans must explicitly separate "facts", "analysis", and "estimates (not confirmed)", and must not adopt unconfirmed assumptions as the fix approach
 - **Detailed process**: For step-by-step debugging methodology, load the `/debug` skill
 
+### Google Docs URL Handling
+
+Google Docs の URL（`https://docs.google.com/document/d/...`）が提供され、その内容を参照・読み取る必要がある場合は、`/gdocs-to-md` スキルを使用してドキュメントをMarkdownに変換し、その内容をコンテキストに読み込む。WebFetch では Google Docs の構造化された内容を取得できないため、gws Docs API 経由の変換が必要。
+
 ### GitHub URL Handling
 
 GitHub Issue and Pull Request URLs provided by the user are often from private repositories and cannot be accessed directly. As a rule, use the `gh` CLI to retrieve information from GitHub URLs provided by the user.

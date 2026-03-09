@@ -8,3 +8,7 @@ rules:
          File path: /tmp/pr-body-<random>.md  (e.g. 6 alphanumeric chars to avoid conflicts across parallel sessions)
       2. Run: gh pr create --title "..." --body-file /tmp/pr-body-<random>.md
       3. Clean up: rm /tmp/pr-body-<random>.md
+  - pattern: "grep *"
+    message: "Use rg (ripgrep) instead of grep. Example: rg 'pattern' path/"
+  - pattern: "find *"
+    message: "Use fd instead of find. Example: fd 'pattern' path/"
