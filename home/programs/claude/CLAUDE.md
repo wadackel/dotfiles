@@ -102,6 +102,11 @@ For tasks involving browser interaction, load `/browser-automation` via the `Ski
   - Target is a single file with a few lines of changes (typo fix, config value change, simple addition)
   - No design decisions or multiple implementation approaches exist
   - User explicitly says "no plan-deeper needed", "just implement it", etc.
+- **Wait for explicit user approval before ExitPlanMode**: After plan-deeper converges, present the final plan summary and wait for the user to say "実装して", "OK", "進めて", etc. before calling ExitPlanMode. Do not auto-exit after plan-deeper completion — the user may have additional feedback
+- **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
+  1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
+  2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect
+  3. **Entry points and preconditions**: From which states/locations/environments can this be invoked? List all valid combinations and verify the design handles each
 - **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to implementation phase after confirmation
 - **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during plan mode before ExitPlanMode. Let the user assess the scale of the problem with real data before approval
 - **Definition of Done**: `/plan-deeper` auto-executes the completion criteria proposal and agreement flow. When skipping, manually include completion criteria in the plan (e.g., implementation only, implementation + lightweight verification + PR + CI)
