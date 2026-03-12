@@ -121,6 +121,9 @@ For tasks involving browser interaction, load `/browser-automation` via the `Ski
 - **Tests**: When test files exist, include expected value updates and new test cases for behavior changes in both the plan and implementation. Include tests in the work plan unless the user explicitly says "no test plan needed"
 - **Temporary verification files (test-*.mjs, verify-*.sh, etc.)**: Not for committing. Exclude during git add and suggest .gitignore additions as needed
 - **Establish measurement baseline → implement → re-measure → compare → conclude**: Follow this cycle for all improvement work, not just performance optimization. The definition of done is "demonstrated the effect with before/after numbers", not "made the fix"
+- **External library output verification**: Do not trust assumed data structures from external libraries based solely on reading source code or docs. When the implementation depends on the shape of external tool output (JSON schema, file paths, etc.), generate or obtain real sample data during planning phase to verify assumptions before implementation
+- **Output value verification**: When verifying new feature output (CI logs, script results), check value correctness — not just error absence. Before inspecting actual output, define what correct output looks like. Divergence signals a bug even without errors (e.g., expected ~3 items, got 16)
+- **Evidence over analysis**: When any analysis — yours, a subagent's, or documentation — conflicts with concrete evidence (actual output, user observations, reproducible behavior), trust the evidence. Investigate the discrepancy rather than rationalizing it
 
 #### Bug Fixes
 

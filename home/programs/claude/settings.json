@@ -110,9 +110,10 @@
       "Bash(gh workflow *)",
       "Bash(git add *)",
       "Bash(git branch *)",
+      "Bash(git cat-file *)",
       "Bash(git check-ignore *)",
-      "Bash(git clone *)",
       "Bash(git checkout *)",
+      "Bash(git clone *)",
       "Bash(git commit *)",
       "Bash(git config *)",
       "Bash(git diff *)",
@@ -447,7 +448,7 @@
       "Write(~/.ssh/*_rsa)",
       "Write(~/.ssh/id_*)"
     ],
-    "defaultMode": "plan",
+    "defaultMode": "auto",
     "additionalDirectories": [
       "~/dotfiles",
       "/tmp"
@@ -551,5 +552,6 @@
   "language": "japanese",
   "alwaysThinkingEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "teammateMode": "in-process"
+  "teammateMode": "in-process",
+  "skipAutoPermissionPrompt": true
 }

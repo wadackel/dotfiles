@@ -134,10 +134,14 @@ For each identified learning, also ask:
 - **If genuinely narrow**: Keep specific, but flag it:
   "Does this narrow symptom suggest a general principle that was missed?"
 
-**Anti-pattern to avoid (from real session):**
+**Anti-pattern to avoid (from real sessions):**
 - ✗ Extracted: "non-interactive environment debugging tip" (env-specific framing)
 - ✓ Should extract: "investigation plans must include direct observation means" (general principle)
   with "non-interactive env" as one concrete example
+
+- ✗ Extracted: "git diff in shallow clone returns incorrect results" (tool-specific fact)
+- ✓ Should extract: "verify output value correctness, not just error absence" (general principle)
+  with "git diff returned 16 packages instead of expected 3" as a concrete example
 
 **Artifact Pipeline Check**: Beyond generalizing facts, also ask:
 > "Did this session produce a reusable artifact? If so, is the *artifact-creation pipeline* itself generalizable across domains?"
@@ -186,6 +190,19 @@ Determine where each learning belongs using routing logic. See [references/routi
 ### Phase 4: Draft Proposals
 
 For each routed learning, draft a concrete proposal:
+
+**Before finalizing each proposal, apply the Abstraction Test:**
+
+> "If I replaced the specific tool/context with a different one, would this rule still be useful?"
+
+- YES → The proposal is at the right abstraction level
+- NO → Extract the underlying principle. The specific instance becomes an example, not the rule
+
+**Anti-patterns (from real sessions):**
+- ✗ "shallow clone での git diff は 2-dot ではなく refs/pull/N/merge を使う" → tool-specific fact
+- ✓ "Output value verification: check value correctness, not just error absence" → general principle
+- ✗ "execSync の maxBuffer を 10MB に設定する" → one-off fix
+- ✓ "Evidence over analysis: trust concrete evidence over reasoning when they conflict" → behavioral principle
 
 **CLAUDE.md additions:**
 - Format: One line per concept (consistent with `/revise-claude-md`)
