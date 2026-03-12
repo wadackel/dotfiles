@@ -342,17 +342,35 @@
       };
     };
 
-    # システムレベルのカスタム設定
-    CustomSystemPreferences = {
-      # 自動輝度調整の無効化
-      "com.apple.iokit.AmbientLightSensor" = {
-        "Automatic Display Enabled" = false;
-      };
-    };
   };
 
   # 設定反映スクリプト
   system.activationScripts.postActivation.text = ''
+    # 自動輝度調整の無効化（CoreBrightness plist 経由）
+    CB_PLIST="/private/var/root/Library/Preferences/com.apple.CoreBrightness.plist"
+    if [ -f "$CB_PLIST" ]; then
+      # ディスプレイレベル: 全ディスプレイの AutoBrightnessEnable を無効化
+      /usr/libexec/PlistBuddy -c "Print :DisplayPreferences" "$CB_PLIST" 2>/dev/null | \
+        /usr/bin/awk '/^    [A-Za-z0-9-]+ =/{print $1}' | while read -r display_id; do
+          /usr/libexec/PlistBuddy -c "Set :DisplayPreferences:''${display_id}:AutoBrightnessEnable false" "$CB_PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :DisplayPreferences:''${display_id}:AutoBrightnessEnable bool false" "$CB_PLIST" 2>/dev/null || true
+        done
+
+      # ユーザーレベル: コンソールユーザーの CBAutoBrightnessEnabled を無効化
+      CONSOLE_USER=$(/usr/bin/stat -f%Su /dev/console)
+      if [ "$CONSOLE_USER" != "root" ] && [ "$CONSOLE_USER" != "loginwindow" ] && [ "$CONSOLE_USER" != "_windowserver" ]; then
+        USER_UUID=$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" GeneratedUID 2>/dev/null | /usr/bin/awk '{print $2}')
+        if [ -n "$USER_UUID" ]; then
+          /usr/libexec/PlistBuddy -c "Add :CBUser-''${USER_UUID} dict" "$CB_PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Set :CBUser-''${USER_UUID}:CBAutoBrightnessEnabled false" "$CB_PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :CBUser-''${USER_UUID}:CBAutoBrightnessEnabled bool false" "$CB_PLIST" 2>/dev/null || true
+        fi
+      fi
+
+      # デーモン再起動で即時反映
+      killall corebrightnessd 2>/dev/null || true
+    fi
+
     # Dock設定を即座に反映
     killall Dock 2>/dev/null || true
 
