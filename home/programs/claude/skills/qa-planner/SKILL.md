@@ -117,7 +117,7 @@ Category coverage checklist:
 
 | Type | Approach |
 |------|----------|
-| WebApp | Use **Chrome DevTools MCP** tools for browser automation (navigation, form fill, click, snapshot, screenshot, console/network checks) |
+| WebApp | Use **agent-browser** CLI for browser automation (open, fill, click, snapshot, screenshot, console/network checks) |
 | API Server | Use `curl -s -w "\n%{http_code}"` to capture response body and status code |
 | CLI Tool | Execute commands directly via `Bash`, verify stdout, stderr, and exit codes |
 | Background Service | Combine `curl` (trigger/check endpoints) + log inspection |
@@ -131,12 +131,30 @@ Category coverage checklist:
 - On SKIP: document reason (user action required? environment missing?)
 - If an existing test suite covers a case, run it instead of duplicating
 
-**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation — the data hasn't arrived yet, not a bug. Always use `wait_for` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
+#### Evidence Recording (WebApp)
+
+Record evidence to prove test execution results. Commands reference `agent-browser` skill.
+
+**Video recording workflow:**
+1. Before executing the first test case: `agent-browser record start /tmp/qa-test-evidence.webm`
+2. Execute all test cases sequentially
+3. After the last test case completes: `agent-browser record stop`
+
+One continuous recording captures the entire session. Do not start/stop per test case.
+
+**Screenshot rules:**
+- Take a screenshot **after each test action** that produces a visible result
+- Also capture **important intermediate states** (modal open, preview displayed, loading complete)
+- On FAIL: always capture the error state screenshot
+- Naming: `qa-{test-id}-{description}.png` (e.g., `qa-t1-home.png`, `qa-t4-upload-preview.png`)
+- Save to `/tmp/` (temporary files, not committed)
+
+**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation — the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
 
 **Can Claude execute this?**
 
 ```
-UI rendering/interaction?  → Chrome DevTools MCP  → EXECUTE
+UI rendering/interaction?  → agent-browser        → EXECUTE
 HTTP endpoint?             → curl                 → EXECUTE
 CLI command?               → Bash                 → EXECUTE
 Library function?          → test suite           → EXECUTE
@@ -206,6 +224,13 @@ After structured tests pass, run a brief exploratory session focused on high-ris
 
 ### Issues Found
 [bugs, concerns, or observations discovered during testing]
+
+### Evidence
+- **Video**: `/tmp/qa-test-evidence.webm`
+- **Screenshots**:
+  - `/tmp/qa-t1-home.png` - T1: [description]
+  - `/tmp/qa-t2-error.png` - T2: [description]
+  - ...
 
 ### Recommendations
 [next steps: fix critical issues, add regression tests, etc.]

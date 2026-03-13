@@ -2,14 +2,11 @@
 name: repo-dive
 description: |
   Clone a GitHub repository to a temporary directory for efficient local code exploration.
-  Avoids GitHub API rate limits by using local file tools (Read, Grep, Glob, Agent) instead of
-  repeated `gh` API calls. Use when a user shares a GitHub repository URL for ANY purpose
-  requiring code access: investigation, analysis, comparison, reference, learning, or review.
-  Also use when multiple GitHub URLs are shared for comparison or as reference material.
-  Triggers include: "investigate this repo", "analyze this codebase", "explore this repository",
-  "review this code", "refer to this repo", "compare these repos", "use this as reference",
-  "このリポジトリを調査して", "コードを見て", "リポジトリを確認して", "参考にして", "比較して",
-  or when a GitHub repo URL appears and the task requires reading its contents.
+  ALWAYS prefer this over WebFetch or `gh api` for reading repository code — local clone is
+  faster and more complete. Use when a GitHub repository URL appears and the task involves
+  code access: investigation, analysis, comparison, reference, learning, or review.
+  Triggers: GitHub repo URL + any code exploration intent ("調査して", "コードを見て",
+  "investigate", "analyze", "explore", "compare", "refer to").
 argument-hint: "<repo-url> [branch-or-pr]"
 ---
 

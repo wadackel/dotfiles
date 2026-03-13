@@ -376,7 +376,6 @@
       "WebSearch",
       "Write(**)",
       "Write(~/.claude/**)",
-      "mcp__chrome-devtools",
       "mcp__figma",
       "mcp__playwright",
       "mcp__serena"

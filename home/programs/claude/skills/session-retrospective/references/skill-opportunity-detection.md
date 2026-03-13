@@ -81,7 +81,7 @@ Workflows that chain 2+ external tools in a non-obvious way are strong skill can
 
 **Indicators:**
 - Chaining CLI tools with specific flags and pipe patterns
-- Using MCP tools in a sequence (chrome-devtools → evaluate_script → screenshot)
+- Using CLI tools in a sequence (agent-browser open → snapshot → screenshot)
 - Combining file operations with external API calls
 - Output of one tool feeds as input to the next
 

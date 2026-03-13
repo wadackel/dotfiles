@@ -21,6 +21,7 @@
         usage = "latest";
         uv = "latest";
         yamllint = "latest";
+        "npm:agent-browser" = "latest";
         "npm:@playwright/cli" = "latest";
         "npm:@googleworkspace/cli" = "latest";
       };
