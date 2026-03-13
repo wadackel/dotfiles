@@ -10,7 +10,8 @@ Review the current session to extract learnings and propose improvements to CLAU
 ## Overview
 
 This skill analyzes the conversation history to identify learnings that should be codified into:
-- **Project CLAUDE.md** — Project-specific patterns, commands, and conventions
+- **Project CLAUDE.md** — Project-specific patterns, commands, and conventions (team-shared, checked into git)
+- **Project-local personal CLAUDE.md** (`~/.claude/projects/<hash>/CLAUDE.md`) — Project-specific patterns that are personal (not shared with team via git)
 - **Global ~/.claude/CLAUDE.md** — Universal coding styles, Claude behaviors, and cross-project patterns
 - **Skills** — Multi-step workflows worth automating (the most valuable output)
 
@@ -57,6 +58,7 @@ Gather full session data and reflect on it:
 
 4. **Current context files**:
    - Read project CLAUDE.md (if exists)
+   - Read project-local personal CLAUDE.md: `~/.claude/projects/<hash>/CLAUDE.md` (if exists)
    - Read global ~/.claude/CLAUDE.md
    - List existing skills in ~/.claude/skills/
 
@@ -174,8 +176,11 @@ Determine where each learning belongs using routing logic. See [references/routi
 
 **Quick routing summary:**
 
-- **Project-specific** (contains project paths, build commands, framework-specific details)
-  → Project CLAUDE.md
+- **Project-specific, team convention** (build commands, project structure, team coding standards)
+  → Project CLAUDE.md (git-managed, shared with team)
+
+- **Project-specific, personal** (individual workflow optimizations, personal coding checklists)
+  → Project-local personal CLAUDE.md (`~/.claude/projects/<hash>/CLAUDE.md`)
 
 - **Universal/cross-project** (coding style, general tool usage, Claude's behavior)
   → ~/.claude/CLAUDE.md
@@ -244,6 +249,9 @@ Present all proposals grouped by target:
 ## Session Retrospective Results
 
 ### Project CLAUDE.md Proposals (N items)
+[numbered proposals with diffs]
+
+### Project-local Personal CLAUDE.md Proposals (N items)
 [numbered proposals with diffs]
 
 ### Global CLAUDE.md Proposals (N items)

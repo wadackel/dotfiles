@@ -12,7 +12,9 @@ For each categorized learning, follow this decision tree:
    └─ NO → Continue to step 2
 
 2. Is this learning project-specific?
-   └─ YES → Route to PROJECT CLAUDE.md
+   └─ YES → Is this a team convention or a personal preference?
+          └─ Team convention → Route to PROJECT CLAUDE.md (git-managed)
+          └─ Personal preference → Route to PROJECT-LOCAL PERSONAL CLAUDE.md
    └─ NO → Continue to step 3
 
 3. Is this learning universal/cross-project?
@@ -63,6 +65,27 @@ A learning is **project-specific** if it:
 - ✅ "Tests run with `npm run test:unit` in this project"
 - ✅ "The API server runs on port 3001 (not 3000)"
 - ✅ "Always run `nix flake check` before `darwin-rebuild switch` in this dotfiles repo"
+
+### Project-Specific: Team vs Personal
+
+After determining a learning is project-specific, further classify:
+
+**Team convention** (→ Project CLAUDE.md, git-managed):
+- Build commands, test commands, project structure
+- Coding standards the team agreed upon
+- Architecture decisions documented in ADRs
+- Example: "Always run `task format` after modifying proto files"
+
+**Personal preference** (→ Project-local personal CLAUDE.md, `~/.claude/projects/<hash>/CLAUDE.md`):
+- Individual workflow optimizations
+- Personal coding checklist items
+- Preferences not mandated by the team
+- Example: "Check useMemo consistency after adding memoization"
+- Example: "Always create Stories for new components matching existing patterns"
+
+**Heuristic:** Ask "Would a new team member need to follow this rule?"
+- If YES → Team convention (Project CLAUDE.md)
+- If NO → Personal preference (Project-local personal CLAUDE.md)
 
 ### Universal/Cross-Project Indicators
 
@@ -257,8 +280,8 @@ Before finalizing routing decisions, verify:
 
 | Learning Category | Default Target | Skill Route Possible? | Skill Condition |
 |-------------------|----------------|----------------------|-----------------|
-| Missing Context | Project/Global CLAUDE.md | Yes, if discovery revealed a multi-step workflow | Condition A or D |
-| Corrected Approaches | Global/Project CLAUDE.md | Yes, if correction described a multi-step process | Condition B |
+| Missing Context | Project/Global/Personal CLAUDE.md | Yes, if discovery revealed a multi-step workflow | Condition A or D |
+| Corrected Approaches | Global/Project/Personal CLAUDE.md | Yes, if correction described a multi-step process | Condition B |
 | Repeated Workflows | New Skill | Always | Condition E (+ A, C, D if applicable) |
 | Tool/Library Knowledge | CLAUDE.md or Skill Modification | Yes, for existing skill enhancement | Skill Modification |
 | Preference Patterns | Global CLAUDE.md | Rarely | Only if preference implies a workflow |

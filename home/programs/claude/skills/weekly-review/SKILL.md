@@ -134,17 +134,9 @@ Only modify when corruption is detected. This addresses known Templater bugs.
 
 Before writing, output a brief summary: section counts, major changes, merge/fresh mode.
 
-Use `obsidian create path="..." content="..." overwrite` for full rewrite. Content escaping rules:
-- Use `\n` for newlines and `\t` for tabs (the CLI interprets these sequences)
-- Escape `"` inside content as `\"`
-- Escape `$` as `\$` to prevent shell variable expansion
-- Escape backticks as `` \` `` (including triple-backtick code fences: `` \`\`\`dataviewjs ``)
+Use the **Write tool** to write directly to the vault file path: `~/Documents/Main/99_Tracking/Weekly/YYYY-WNN.md`
 
-**Important**: Content containing `!` (e.g., `![[DATE#SECTION]]` embedded links) triggers bash history expansion, corrupting `!` to `\!`. Always prefix with `set +H` to disable history expansion:
-
-```
-set +H && obsidian create path="..." content="..." overwrite
-```
+> **Why not `obsidian create`?** The CLI escapes `!` to `\!` in content, breaking Obsidian embed syntax (`![[...]]`) and JS double negation (`!!`) in dataviewjs blocks. The Write tool bypasses shell escaping entirely.
 
 - **Frontmatter**: preserve existing values exactly
 - **`## Notes`**: Step 4 synthesized content (no `- tba`)
