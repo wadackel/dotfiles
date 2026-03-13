@@ -79,6 +79,10 @@ For tasks involving browser interaction, load `/agent-browser` via the `Skill` t
 
 - **`/agent-browser`**: Required when using agent-browser CLI. Includes SPA data extraction priorities and constraints
 
+### Obsidian Notes
+
+When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` tool and use the `obsidian` CLI. Direct file access (Read/Grep/Glob) may fail due to iCloud sync path resolution issues.
+
 ### Claude Code Hooks Notes
 
 - **`Skill` tool cannot be matched in `PreToolUse`**: Valid match targets are `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Task`, `WebFetch`, `WebSearch`, and MCP tools only (per official docs)
