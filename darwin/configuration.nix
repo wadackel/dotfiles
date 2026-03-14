@@ -58,8 +58,7 @@
 
     # Formula configuration
     brews = [
-      # Custom Tap Tools
-      "pinact"
+      # CLI Tools (version-sensitive - Homebrew tracks releases faster than nixpkgs)
       "gemini-cli"
 
       # Python Ecosystem
