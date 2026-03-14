@@ -53,6 +53,23 @@
         (final: prev: {
           zellij-tab-name = zellij-tab-name;
         })
+        (final: prev: {
+          mo = final.stdenv.mkDerivation {
+            pname = "mo";
+            version = "0.18.3";
+            src = final.fetchzip {
+              url = "https://github.com/k1LoW/mo/releases/download/v0.18.3/mo_v0.18.3_darwin_arm64.zip";
+              hash = "sha256-ajQZFyDyplpI078STAIp3X+UDqxamvLSv8S8QPMqW5c=";
+              stripRoot = false;
+            };
+            dontConfigure = true;
+            dontBuild = true;
+            installPhase = ''
+              mkdir -p $out/bin
+              install -m755 mo $out/bin/
+            '';
+          };
+        })
       ];
 
       # Profile definitions - Single source of truth for all configurations

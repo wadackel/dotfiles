@@ -29,6 +29,7 @@
     # Code Analysis & Development Tools
     ast-grep # Fast and polyglot tool for code searching, linting, rewriting
     just # Handy way to save and run project-specific commands
+    mo # Markdown viewer in browser
     pinact # Pin GitHub Actions versions to full commit SHAs
     tokei # Fast code statistics tool
     tig # Text-mode interface for git
