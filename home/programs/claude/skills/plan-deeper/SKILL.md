@@ -1,12 +1,12 @@
 ---
 name: plan-deeper
-description: Deepens plan quality through iterative adversarial critique and user interviews, then defines completion criteria for autonomous execution. Each round spawns a fresh critic subagent to challenge assumptions and identify weaknesses, then interviews the user on items requiring domain knowledge, and refines the plan until convergence. Finally, establishes a Definition of Done pipeline agreed upon with the user. Plan mode only. Use when asked to "反証して", "深掘り", "計画を深掘りして", "悲観的に評価して", "計画の精度を上げて", "もっと練って", "もう少し練って", "plan deeper", "challenge this plan", "deepen the plan", or when adversarial plan improvement is needed.
+description: Deepens plan quality through iterative adversarial critique, code-level falsification, and user interviews, then defines completion criteria for autonomous execution. Each round spawns a fresh critic subagent to challenge assumptions and identify weaknesses, then interviews the user on items requiring domain knowledge, and refines the plan until convergence. After convergence, an Adversarial Falsification round verifies factual claims against actual code. Finally, establishes a Definition of Done pipeline agreed upon with the user. Plan mode only. Use when asked to "反証して", "深掘り", "計画を深掘りして", "悲観的に評価して", "計画の精度を上げて", "もっと練って", "もう少し練って", "plan deeper", "challenge this plan", "deepen the plan", or when adversarial plan improvement is needed.
 argument-hint: "[max-rounds]"
 ---
 
 # Plan Deeper
 
-Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic Subagent to critique the plan from an independent, bias-free perspective. Issues requiring user domain knowledge are resolved through interviews. After convergence, establishes a Definition of Done pipeline with the user to enable autonomous execution.
+Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic Subagent to critique the plan from an independent, bias-free perspective. Issues requiring user domain knowledge are resolved through interviews. After convergence, an Adversarial Falsification round independently verifies the plan's factual claims against actual code. Finally, establishes a Definition of Done pipeline with the user to enable autonomous execution.
 
 **Plan mode only.** Focused exclusively on plan refinement — does not perform implementation.
 
@@ -94,28 +94,62 @@ Stop when any condition is met:
 
 If none apply, return to Step 2 with a fresh subagent.
 
-### Step 4.5: Investigation & Falsification Check
+### Step 5: Adversarial Falsification Round
 
-Before defining completion criteria, verify the plan addresses:
+After the standard Critic converges, spawn one final subagent with a fundamentally different mandate: **try to BREAK the plan by finding concrete code-level evidence that specific claims are false.**
 
-1. **Direct observation means** (if the plan involves debugging or fixing a failure)
-   - Is there a concrete way to observe the actual error or behavior?
-   - Examples: enabling debug logs, running a test command, capturing output
-   - If missing: add it to the plan before continuing
+This is distinct from the standard Critic (which evaluates quality across dimensions). The Adversarial Falsification agent reads actual code to disprove specific factual claims in the plan.
 
-2. **Falsification of the fix direction** (if a specific fix approach is proposed)
-   - Explicitly ask: "Why could this approach be wrong?"
-   - If no counter-argument applies: document "considered and ruled out"
-   - If counter-arguments exist: address them in the plan
+**When to run:** Always run after convergence, unless the plan contains no verifiable technical claims (e.g., documentation-only changes, renames, comment additions).
 
-Skip this step only if the plan has no failure investigation or fix component
-(e.g., pure feature additions, documentation changes).
+Decision criteria:
+- Does the plan claim specific code paths, function behaviors, or system interactions?
+- Does the plan assert "if X is configured, Y will happen"?
+- If neither applies, skip this step.
 
-### Step 5: Define Completion Criteria
+**Spawn:**
+
+```
+Task:
+  subagent_type: "Explore"
+  prompt: [built from references/adversarial-prompt.md template]
+```
+
+Pass to the agent:
+- Full plan text
+- Project context (CLAUDE.md summary)
+- File paths referenced in the plan (the agent reads and explores code independently)
+
+The agent returns findings classified as:
+- **Falsified**: A specific claim in the plan is demonstrably wrong (code evidence cited)
+- **Unverified**: A claim could not be confirmed — needs runtime/integration testing
+- **Verified**: A claim was tested against code and held up (with evidence)
+- **Design Questions**: Legitimate alternatives surfaced during investigation
+
+**Processing results:**
+1. **Falsified** items → must-fix before implementation (update plan immediately)
+2. **Unverified** items → add to plan as explicit risks with mitigation/test strategy
+3. **Verified** items → append to Deepening Log as confidence evidence
+4. **Design Questions** → interview user if needed
+
+Append results to Deepening Log:
+
+```markdown
+### Round N (Adversarial Falsification)
+- **Falsified (CRITICAL)**: [claims disproved with code evidence]
+- **Unverified**: [claims that need runtime/integration testing]
+- **Verified**: [claims confirmed with evidence]
+- **Design Questions**: [alternatives surfaced]
+- **Verdict**: CONVERGED | ITERATE
+```
+
+If any Falsified items are found, update the plan and mark verdict as `ITERATE`. The main agent applies fixes directly — no additional Critic round is needed (fixes are recorded in the Deepening Log for traceability).
+
+### Step 6: Define Completion Criteria
 
 After the plan converges, define what "done" looks like. This enables Claude to work through implementation autonomously without repeatedly asking "what should I do next?"
 
-#### 5a. Analyze Plan for Stage Signals
+#### 6a. Analyze Plan for Stage Signals
 
 Scan the finalized plan and infer which completion stages are appropriate:
 
@@ -131,7 +165,7 @@ Scan the finalized plan and infer which completion stages are appropriate:
 
 Build a candidate pipeline as an ordered sequence. "User Review" is always the final stage unless a PR+merge is the terminal action.
 
-#### 5b. Interview User for Approval
+#### 6b. Interview User for Approval
 
 Present the inferred pipeline via AskUserQuestion:
 
@@ -153,7 +187,7 @@ options:
 
 Adapt the pipeline based on the user's response. Ask at most one follow-up question for stage-specific details (e.g., which test command, which URL to verify).
 
-#### 5c. Write Criteria to Plan
+#### 6c. Write Criteria to Plan
 
 Append a `## Completion Criteria` section to the plan file:
 
@@ -175,7 +209,7 @@ Definition of Done for this task. Each stage must pass before proceeding to the 
 
 Each stage description must be **concrete and plan-specific**. Never write generic placeholders like "tests pass" — specify which test command, which URL, which behavior to verify.
 
-### Step 6: Result Report
+### Step 7: Result Report
 
 ```
 ## Plan Deepening Complete
@@ -197,7 +231,7 @@ Implementation → Lightweight Verification (tests + lint) → Manual Verificati
 
 ## Evaluation Dimensions
 
-The Critic evaluates the plan across 6 axes. See [references/critic-prompt.md](references/critic-prompt.md) for the full prompt template and dimension definitions.
+The Critic evaluates the plan across 6 axes. See [references/critic-prompt.md](references/critic-prompt.md) for the full prompt template and dimension definitions. For the Adversarial Falsification prompt, see [references/adversarial-prompt.md](references/adversarial-prompt.md).
 
 | # | Dimension | Focus |
 |---|---|---|
@@ -218,6 +252,12 @@ Round 1 detects most major issues, Round 2 verifies fixes and finds secondary is
 
 **Why append Deepening Log to the plan:**
 Visualizes plan evolution for the user, and provides context for subsequent Critics — letting them verify "was the previous round's feedback actually addressed?"
+
+**Why use an Explore subagent for Adversarial Falsification (not Plan):**
+Plan-type subagents evaluate plan text analytically but cannot discover what the plan doesn't mention. Adversarial Falsification needs to explore code the plan references — and code it doesn't reference — to find missing prerequisites or incorrect assumptions. Explore subagents use Grep/Glob/Read to actively investigate the codebase. Real-world example: a Plan critic approved a sleep configuration plan, but an Explore-based falsification agent searched other ZMK keyboards' device trees and discovered a missing `wakeup-source` property that would have caused permanent system-off with no wake path.
+
+**Why run Adversarial Falsification after convergence (not during):**
+Mixing falsification into the standard Critic rounds dilutes both processes. The Critic's 6-dimension evaluation focuses on plan quality (scope, specificity, alternatives). Falsification focuses on factual correctness ("is this code claim actually true?"). Running them separately lets each agent concentrate on its distinct mandate. The sequencing also ensures the plan is structurally sound before investing in code-level verification.
 
 **Why define and negotiate completion criteria after convergence:**
 The plan must be stable before committing to a Definition of Done, or criteria risk being invalidated by subsequent rounds. Autonomous execution also requires explicit user agreement on scope — Claude infers likely stages from plan signals, but the user decides whether "CI pass" or "deployment verification" is actually required.
