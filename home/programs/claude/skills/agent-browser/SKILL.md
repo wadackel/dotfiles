@@ -8,38 +8,39 @@ allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 
 ## Default Flags
 
-Unless explicitly instructed otherwise, always apply these flags when opening a browser:
+Unless explicitly instructed otherwise, always use `--auto-connect` when opening a browser:
 
-- **`--headed`**: Opens a visible browser window. Allows the user to observe actions, handle authentication handoffs (OAuth, Auth0, etc.), and intervene if needed.
-- **`--session-name {project}`**: Persists cookies and localStorage across browser restarts. Session name is the project directory name, shared across branches and worktrees:
-  - In a git repository: `basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"` (stable across worktrees)
-  - Not in a git repository: `basename "$PWD"`
+- **`--auto-connect`**: Connects to the user's existing Chrome with remote debugging enabled (`chrome://inspect/#remote-debugging`). Reuses the user's authentication state (cookies, localStorage) directly — no save/restore cycle needed.
 
-Combined open command:
+### Tab-Safe Navigation (Default)
+
+`agent-browser open <url>` navigates the **active tab**, which can overwrite pinned or unrelated tabs. Always open URLs in a new tab instead:
 
 ```bash
-common_git=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-project=$(basename "$(dirname "${common_git:-$PWD/dummy}")")
-
-agent-browser --session-name "$project" --headed open <url>
+agent-browser --auto-connect tab new <url>
 ```
 
-**When to omit these flags:**
-- User explicitly requests headless mode → omit `--headed`
-- User explicitly requests a clean (no-cookie) browser state → omit `--session-name`
+First-time connection (daemon not yet connected) uses `agent-browser --auto-connect open <url>` to establish the connection.
+
+If auto-connect fails (Chrome not running or remote debugging not enabled), stop and inform the user:
+- "Chrome のリモートデバッグが有効になっていません。`chrome://inspect/#remote-debugging` を開いて有効化してください。"
+
+**When to use other modes instead:**
+- User explicitly requests a fresh/clean browser state → `--headed --session-name {project}` or `--headed` alone
+- User explicitly requests headless mode → omit `--headed`, use `--session-name` only
 
 ## Core Workflow
 
 Every browser automation follows this pattern:
 
-1. **Navigate**: `agent-browser open <url>`
+1. **Navigate**: `agent-browser tab new <url>` (always opens in a new tab to avoid overwriting existing tabs)
 2. **Wait**: `agent-browser wait --load networkidle` (for SPAs and async content)
 3. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
 4. **Interact**: Use refs to click, fill, select
 5. **Re-snapshot**: After navigation or DOM changes, get fresh refs
 
 ```bash
-agent-browser open https://example.com/form
+agent-browser tab new https://example.com/form
 agent-browser wait --load networkidle
 agent-browser snapshot -i
 # Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
