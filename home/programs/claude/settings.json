@@ -215,6 +215,7 @@
       "Bash(nslookup *)",
       "Bash(nuxt *)",
       "Bash(nvim *)",
+      "Bash(*nvim-verify.ts*)",
       "Bash(nvm *)",
       "Bash(nx *)",
       "Bash(obsidian *)",

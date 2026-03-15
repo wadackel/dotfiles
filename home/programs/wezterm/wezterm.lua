@@ -24,7 +24,7 @@ return {
     { family = "Noto Sans CJK JP" },
   }),
 
-  font_size = 14.0,
+  font_size = 13.0,
 
   color_scheme = "dogrun",
 
