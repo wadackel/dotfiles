@@ -2810,12 +2810,15 @@ require("lazy").setup({
               flatten_dirs = true,
               folder_statuses = "only_folded",
             },
-            win_config = {
-              position = "left",
-              width = 40,
-              height = 10,
-              win_opts = {},
-            },
+            win_config = function()
+              local cols = vim.o.columns
+              return {
+                position = "left",
+                width = cols < 140 and math.max(20, math.floor(cols * 0.15)) or 40,
+                height = 10,
+                win_opts = {},
+              }
+            end,
           },
           file_history_panel = {
             log_options = {
