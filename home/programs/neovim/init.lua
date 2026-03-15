@@ -631,6 +631,16 @@ require("lazy").setup({
     -- LSP x Completion
     -- =============================================================
     {
+      "folke/lazydev.nvim",
+      ft = "lua",
+      opts = {
+        library = {
+          { path = "snacks.nvim", words = { "Snacks" } },
+        },
+      },
+    },
+
+    {
       "neovim/nvim-lspconfig",
       lazy = false,
       init = function()
@@ -668,8 +678,8 @@ require("lazy").setup({
               },
               diagnostics = {
                 globals = {
-                  "vim",
                   "require",
+                  "Snacks",
                 },
               },
             },
@@ -943,12 +953,18 @@ require("lazy").setup({
 
           sources = {
             default = {
+              "lazydev",
               "lsp",
               "path",
               "buffer",
               -- "avante",
             },
             providers = {
+              lazydev = {
+                name = "LazyDev",
+                module = "lazydev.integrations.blink",
+                score_offset = 100,
+              },
               cmdline = {
                 enabled = function()
                   return vim.fn.getcmdtype() ~= ":" or not vim.fn.getcmdline():match("^[%%0-9,'<>%-]*!")
