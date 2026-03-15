@@ -666,64 +666,6 @@ require("lazy").setup({
           },
         })
       end,
-    },
-
-    {
-      "williamboman/mason.nvim",
-      opts = {
-        ui = {
-          border = "rounded",
-        },
-      },
-    },
-
-    {
-      "WhoIsSethDaniel/mason-tool-installer.nvim",
-      cmd = {
-        "MasonToolsInstall",
-        "MasonToolsInstallSync",
-        "MasonToolsUpdate",
-        "MasonToolsUpdateSync",
-        "MasonToolsClean",
-      },
-      dependencies = {
-        { "williamboman/mason.nvim" },
-      },
-      opts = {
-        ensure_installed = {
-          -- LSP
-          "astro",
-          "rust_analyzer",
-          "terraformls",
-          "lua_ls",
-          "vimls",
-          "gopls",
-          "ts_ls",
-          "denols",
-
-          -- Linter
-          "actionlint",
-          "eslint_d",
-          "eslint",
-          "oxlint",
-          "stylelint",
-          "textlint",
-          "typos-lsp",
-
-          -- Formatter
-          "prettierd",
-          "biome",
-          "gofumpt",
-          "goimports",
-          "stylua",
-        },
-        run_on_start = false,
-      },
-    },
-
-    {
-      "williamboman/mason-lspconfig.nvim",
-      lazy = false,
       config = function()
         vim.lsp.config("*", {
           capabilities = require("blink.cmp").get_lsp_capabilities(),
@@ -763,15 +705,16 @@ require("lazy").setup({
           },
         })
 
-        require("mason-lspconfig").setup({
-          automatic_enable = {
-            exclude = {
-              -- Use typescript-tools.nvim
-              "ts_ls",
-              -- Use rustaceanvim
-              "rust_analyzer",
-            },
-          },
+        -- ts_ls: typescript-tools.nvim が管理
+        -- rust_analyzer: rustaceanvim が管理
+        vim.lsp.enable({
+          "astro",
+          "denols",
+          "gopls",
+          "lua_ls",
+          "terraformls",
+          "typos_lsp",
+          "vimls",
         })
       end,
     },
@@ -1221,65 +1164,6 @@ require("lazy").setup({
       },
     },
 
-    -- {
-    --   "nvimtools/none-ls.nvim",
-    --   lazy = false,
-    --   dependencies = {
-    --     "williamboman/mason-lspconfig.nvim",
-    --     "neovim/nvim-lspconfig",
-    --   },
-    --   config = function()
-    --     local null_ls = require("null-ls")
-    --     local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
-    --     vim.print("test1")
-    --
-    --     null_ls.setup({
-    --       -- debug = false,
-    --       sources = {
-    --         -- Linter
-    --         -- null_ls.builtins.diagnostics.eslint_d,
-    --         -- null_ls.builtins.diagnostics.oxlint,
-    --         null_ls.builtins.diagnostics.actionlint,
-    --         null_ls.builtins.diagnostics.textlint,
-    --         -- null_ls.builtins.diagnostics.typos_lsp,
-    --
-    --         -- Formatter
-    --         null_ls.builtins.formatting.prettierd,
-    --         -- TODO: condition
-    --         -- null_ls.builtins.formatting.biome,
-    --         null_ls.builtins.formatting.gofumpt,
-    --         null_ls.builtins.formatting.goimports,
-    --         null_ls.builtins.formatting.stylua,
-    --       },
-    --       -- you can reuse a shared lspconfig on_attach callback here
-    --       on_attach = function(client, bufnr)
-    --         vim.print("test")
-    --         if client.supports_method("textDocument/formatting") then
-    --           vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-    --           vim.api.nvim_create_autocmd("BufWritePre", {
-    --             group = augroup,
-    --             buffer = bufnr,
-    --             callback = function()
-    --               vim.lsp.buf.format({
-    --                 bufnr = bufnr,
-    --                 async = false,
-    --                 timeout_ms = 5000,
-    --               })
-    --             end,
-    --           })
-    --
-    --           keymap({ "n" }, "<Leader>p", function()
-    --             vim.lsp.buf.format({
-    --               async = true,
-    --               timeout_ms = 5000,
-    --             })
-    --           end)
-    --         end
-    --       end,
-    --     })
-    --   end,
-    -- },
-
     {
       "mfussenegger/nvim-lint",
       event = {
@@ -1350,13 +1234,8 @@ require("lazy").setup({
           typescript = { "oxlint" },
           javascriptreact = { "oxlint" },
           typescriptreact = { "oxlint" },
-          -- javascript = { "eslint_d", "oxlint" },
-          -- typescript = { "eslint_d", "oxlint" },
-          -- javascriptreact = { "eslint_d", "oxlint" },
-          -- typescriptreact = { "eslint_d", "oxlint" },
           css = { "stylelint" },
           yaml = { "actionlint" },
-          terraform = { "tflint" },
         }
 
         local check_local = {
