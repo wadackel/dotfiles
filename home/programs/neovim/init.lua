@@ -516,7 +516,7 @@ local function lsp_on_attach(_, bufnr)
   end
 
   -- Enable completion triggered by <C-x><C-o>
-  vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
+  vim.bo[bufnr].omnifunc = "v:lua.vim.lsp.omnifunc"
 
   -- Mappings
   keymap({ "n" }, "<Leader>ee", "<cmd>lua vim.diagnostic.open_float()<CR>")
@@ -525,9 +525,9 @@ local function lsp_on_attach(_, bufnr)
   keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
   kmap({ "n" }, "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
-  kmap({ "n" }, "<C-w><C-]>", "<cmd>Lspsaga peek_definition<CR>")
-  kmap({ "n" }, "K", "<cmd>Lspsaga goto_type_definition<CR>")
-  kmap({ "n" }, "<Leader>i", "<cmd>Lspsaga hover_doc<CR>")
+  kmap({ "n" }, "<C-w><C-]>", function() Snacks.picker.lsp_definitions({ auto_confirm = false }) end)
+  kmap({ "n" }, "K", function() vim.lsp.buf.type_definition() end)
+  kmap({ "n" }, "<Leader>i", function() vim.lsp.buf.hover({ border = "rounded" }) end)
   kmap({ "n" }, "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap({ "n" }, "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
   kmap({ "n" }, "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
@@ -639,29 +639,16 @@ require("lazy").setup({
         -- Base
         vim.diagnostic.config({
           float = { border = "rounded" },
+          virtual_text = {
+            prefix = "",
+            spacing = 0,
+          },
           signs = {
             text = {
               [vim.diagnostic.severity.ERROR] = "•",
               [vim.diagnostic.severity.WARN] = "•",
               [vim.diagnostic.severity.INFO] = "•",
               [vim.diagnostic.severity.HINT] = "•",
-            },
-          },
-        })
-
-        vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, { border = "rounded" })
-
-        vim.lsp.handlers["textDocument/publishDiagnostics"] = vim.lsp.with(vim.lsp.diagnostic.on_publish_diagnostics, {
-          virtual_text = {
-            prefix = "",
-            spacing = 0,
-          },
-          signs = {
-            active = {
-              { name = "DiagnosticSignError", text = "•" },
-              { name = "DiagnosticSignWarn", text = "•" },
-              { name = "DiagnosticSignHint", text = "•" },
-              { name = "DiagnosticSignInfo", text = "•" },
             },
           },
         })
@@ -916,35 +903,6 @@ require("lazy").setup({
       end,
     },
 
-    {
-      "nvimdev/lspsaga.nvim",
-      event = "LspAttach",
-      opts = {
-        ui = {
-          code_action = "",
-        },
-        lightbulb = {
-          enable = false,
-        },
-        beacon = {
-          enable = false,
-        },
-        symbol_in_winbar = {
-          enable = false,
-        },
-        definition = {
-          width = 0.8,
-          keys = {
-            edit = "o",
-            vsplit = "vv",
-            split = "ss",
-            tabe = "<C-t>",
-            quit = "q",
-            close = "<C-c>",
-          },
-        },
-      },
-    },
 
     {
       "saghen/blink.cmp",
@@ -2278,7 +2236,7 @@ require("lazy").setup({
           local windows = vim.api.nvim_tabpage_list_wins(0)
           for _, win in ipairs(windows) do
             local buf = vim.api.nvim_win_get_buf(win)
-            local filetype = vim.api.nvim_buf_get_option(buf, "filetype")
+            local filetype = vim.bo[buf].filetype
             if filetype == "toggleterm" then
               return buf
             end
