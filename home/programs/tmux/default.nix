@@ -18,4 +18,7 @@
 
   # Tmux window picker script
   home.file.".local/bin/tmux-window-picker.sh".source = dotfiles.linkHere ./. "tmux-window-picker.sh";
+
+  # Dev layout script
+  home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "dev-layout.sh";
 }

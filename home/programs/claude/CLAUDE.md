@@ -93,12 +93,24 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 ### codex-review Skill Special Rule
 
-**Absolute rule**: Always execute the Code Review Loop after implementation is complete (exception only when the user explicitly says "no review needed"). See codex-review skill's SKILL.md for the detailed flow.
+**Absolute rule**: When `/codex-review` is triggered, always complete the full Code Review Loop (never skip midway). See codex-review skill's SKILL.md for the detailed flow.
+
+**Default review**: Unless the user explicitly requests codex-review, `/subagent-review` runs as the default review after each implementation task completion.
 
 ### General
 
 - `AskUserQuestion` `options` limited to 4 per question (more causes ValidationError)
 - When receiving correction instructions from the user, consider appending to `~/.claude/CLAUDE.md` if the instruction is general-purpose, with user approval before appending
+
+#### Rule Compliance
+
+- **Following the letter of the rules IS following the spirit**: "I'm following the spirit of the rules" is a classic rationalization. Execute rules exactly as written
+- **These thought patterns are rationalization red flags** — if you catch yourself thinking any of these, STOP and re-read the relevant rule:
+  - "This is simple enough to skip the process" → The process applies to simple tasks too
+  - "I'm in a hurry, so I'll skip this" → Following the process avoids rework and is faster
+  - "Just this once is fine" → There are no exceptions. Execute as written
+  - "No need to verify" → Confidence is not a substitute for verification
+  - "The plan says X but Y is better" → Plan deviation requires user approval
 
 #### Plan Mode
 
@@ -118,10 +130,32 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - "Which command/log/measurement confirms this fix works"
   - "Considered whether this fix approach could be wrong, and the evidence that rules it out"
 
+#### Plan Execution (after ExitPlanMode)
+
+- **Convert plan to tasks**: After ExitPlanMode, extract steps from the plan file and register each as an individual task via TaskCreate
+  - **Separate implementation and verification tasks** (e.g., "Implement feature A" and "Verify feature A" are distinct tasks)
+  - Verification task descriptions must include the exact commands to run and expected output (recoverable from tasks after compaction)
+  - Verification tasks must include "Run `/verification-before-completion` before marking complete"
+  - Convert ALL verification steps in the plan to tasks (test execution, smoke tests, lint, etc.)
+  - Task granularity: one task per numbered plan step or verifiable unit. Do not create separate tasks for sub-bullets
+  - Implementation task descriptions must include acceptance criteria sufficient for subagent spec review — a bare title like "Implement X" is insufficient
+  - May skip task creation ONLY when the user explicitly says to skip, or the plan has no numbered steps (e.g., a single direct instruction)
+- **Faithful step execution**: Do not skip, rephrase, or reorder plan steps. Execute commands, file paths, and verification procedures exactly as written in the plan
+- **Progress tracking**: Update each task to in_progress when starting (record current HEAD SHA in task metadata as baseline_sha), completed when done. If a step is skipped, state the reason explicitly
+- **Subagent review on task completion**: Run `/subagent-review` after each implementation task completes. See the skill's SKILL.md for skip conditions and detailed flow
+- **Recovery after compaction**: If context compression occurs, check TaskList for incomplete tasks, re-read the plan file, then resume work
+- **Handling plan deviations**: If you discover a problem with the plan during implementation:
+  1. State what the problem is and why the plan cannot be followed
+  2. Propose alternatives
+  3. Get user approval before deviating
+  - Implicit plan changes are prohibited (do not silently change the plan because "this way is better")
+- **Plan compliance check on completion**: After all tasks are done, re-read the plan file and compare implemented results against plan items one by one. Check for omissions, extras, or misinterpretations
+
 #### Implementation and Verification
 
 - **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
+- **No completion claims without verification**: Before claiming work is complete or successful, run `/verification-before-completion` and follow the Gate Function
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
   - Load `/agent-browser` and use agent-browser to open the target page
   - Take screenshots and compare layout, sizing, and spacing against Figma designs or reference pages (existing pages with the same pattern)
@@ -142,6 +176,15 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **Present alternatives**: When both a minimal workaround and a root-cause fix exist, present both options. For areas with TODO comments or technical debt, prioritize the option that resolves the debt
 - **Reproduction conditions**: Treat user-provided reproduction conditions ("occurs during X") as hypotheses. Plans must explicitly separate "facts", "analysis", and "estimates (not confirmed)", and must not adopt unconfirmed assumptions as the fix approach
 - **Detailed process**: For step-by-step debugging methodology, load the `/systematic-debugging` skill
+
+#### Code Review Reception
+
+Applies to human code review feedback (PR reviews, direct user feedback, etc.). Does NOT apply to codex-review's automated review loop.
+
+- **Technical evaluation first**: When receiving review feedback, verify technical correctness before implementing. Do not implement before verifying
+- **No performative agreement**: Skip platitudes like "Great point!" or "Absolutely right!". Respond with technical substance or direct fixes
+- **Clarify all unknowns before starting**: If multi-item feedback has unclear items, do not implement only the clear items first — clarify all unknowns before starting (items may have dependencies). For async reviews (PR comments, etc.) where immediate clarification is not possible, state assumptions explicitly before proceeding
+- **Pushback when warranted**: If review feedback is inappropriate for the existing codebase, violates YAGNI, or contradicts the user's design decisions, push back with technical reasoning
 
 ### Google Docs URL Handling
 
