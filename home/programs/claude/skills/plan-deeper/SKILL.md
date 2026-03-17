@@ -162,6 +162,7 @@ Scan the finalized plan and infer which completion stages are appropriate:
 | Branch management, "create PR" | **PR** |
 | CI pipeline, GitHub Actions referenced | **CI Pass** |
 | Deployment targets, production URLs | **Deployment Verification** |
+| Any implementation task | **Final Verification** (`/verification-before-completion`) |
 
 Build a candidate pipeline as an ordered sequence. "User Review" is always the final stage unless a PR+merge is the terminal action.
 
@@ -175,7 +176,8 @@ question: |
 
   1. Implementation complete
   2. Lightweight verification (run tests + lint)
-  3. User review
+  3. Final verification (/verification-before-completion)
+  4. User review
 
   Does this look right?
 options:
@@ -201,6 +203,7 @@ Definition of Done for this task. Each stage must pass before proceeding to the 
 - [ ] **Implementation** — [specific description of what "implemented" means for this plan]
 - [ ] **Lightweight Verification** — [specific commands, e.g., `npm test && npm run lint`]
 - [ ] **Manual Verification** — [specific check, e.g., "open /settings, confirm toggle renders and saves"]
+- [ ] **Final Verification** — Run `/verification-before-completion` Gate Function against all completion claims
 - [ ] **User Review** — Present changes summary for final approval
 
 ### Notes

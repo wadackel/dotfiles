@@ -138,11 +138,12 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - Verification tasks must include "Run `/verification-before-completion` before marking complete"
   - Convert ALL verification steps in the plan to tasks (test execution, smoke tests, lint, etc.)
   - Task granularity: one task per numbered plan step or verifiable unit. Do not create separate tasks for sub-bullets
-  - Implementation task descriptions must include acceptance criteria sufficient for subagent spec review — a bare title like "Implement X" is insufficient
+  - Implementation task descriptions must include acceptance criteria sufficient for subagent spec review, and must end with: "Before completing: run /verification-before-completion Gate Function" — a bare title like "Implement X" is insufficient
   - May skip task creation ONLY when the user explicitly says to skip, or the plan has no numbered steps (e.g., a single direct instruction)
 - **Faithful step execution**: Do not skip, rephrase, or reorder plan steps. Execute commands, file paths, and verification procedures exactly as written in the plan
 - **Progress tracking**: Update each task to in_progress when starting (record current HEAD SHA in task metadata as baseline_sha), completed when done. If a step is skipped, state the reason explicitly
-- **Subagent review on task completion**: Run `/subagent-review` after each implementation task completes. See the skill's SKILL.md for skip conditions and detailed flow
+- **Verification before task completion**: Before marking any implementation task as completed, run `/verification-before-completion` Gate Function. This is the only reliable mechanism to prevent false completion claims — especially after compaction when prior verification context is lost
+- **Subagent review after task completion**: Run `/subagent-review` after marking each implementation task completed. See the skill's SKILL.md for skip conditions and detailed flow
 - **Recovery after compaction**: If context compression occurs, check TaskList for incomplete tasks, re-read the plan file, then resume work
 - **Handling plan deviations**: If you discover a problem with the plan during implementation:
   1. State what the problem is and why the plan cannot be followed

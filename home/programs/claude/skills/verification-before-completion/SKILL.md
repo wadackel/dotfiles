@@ -1,6 +1,6 @@
 ---
 name: verification-before-completion
-description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims
+description: "Mandatory verification gate before any completion claim. Run this skill before: marking tasks completed (TaskUpdate), claiming a bug is fixed, claiming tests pass, claiming a build succeeds, committing changes, or creating PRs. If you are about to write \"done\", \"complete\", \"fixed\", \"passing\", or \"all tests pass\" \u2014 stop and run this skill first. Even for simple changes. Skipping verification is the #1 cause of false completion claims."
 ---
 
 # Verification Before Completion
