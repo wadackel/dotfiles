@@ -23,10 +23,10 @@ structured checks, returning results as JSON to stdout.
 
 ```bash
 # Startup check (minimum — always run after editing init.lua)
-nvim-verify.ts startup
+.claude/skills/nvim-verify/nvim-verify.ts startup
 
 # Run all checks
-nvim-verify.ts all
+.claude/skills/nvim-verify/nvim-verify.ts all
 ```
 
 ## Workflow
@@ -50,19 +50,19 @@ init.lua is symlinked, so verification runs immediately after editing
 
 ```bash
 # Startup check
-nvim-verify.ts startup
+.claude/skills/nvim-verify/nvim-verify.ts startup
 
 # Verify a specific plugin (forces lazy-loaded plugins to load)
-nvim-verify.ts plugins telescope.nvim
+.claude/skills/nvim-verify/nvim-verify.ts plugins telescope.nvim
 
 # Verify a specific keymap (use Neovim internal notation)
-nvim-verify.ts keymaps "<Space>cc"
+.claude/skills/nvim-verify/nvim-verify.ts keymaps "<Space>cc"
 
 # Check option values
-nvim-verify.ts options number tabstop shiftwidth
+.claude/skills/nvim-verify/nvim-verify.ts options number tabstop shiftwidth
 
 # Run all checks
-nvim-verify.ts all
+.claude/skills/nvim-verify/nvim-verify.ts all
 ```
 
 ### Step 3: Interpret the result
