@@ -17,7 +17,7 @@ export function globToRegex(pattern: string): RegExp {
  * Supports multiple heredocs by iterating until no more matches.
  */
 export function stripHeredocs(command: string): string {
-  const re = /(<<-?\s*["']?)(\w+)(["']?[^\n]*)\n[\s\S]*?\n\s*\2\b/g;
+  const re = /(<<-?\s*["']?)(\w+)(["']?[^\n]*)\n(?:[\s\S]*?\n)?\s*\2\b/g;
   let result = command;
   let prev: string;
   do {
@@ -97,9 +97,11 @@ function hasShellSyntaxFallback(command: string): boolean {
   return /[|;]|&&|\d*>&\d+|\d*>[^ ]*|\d*<[^ ]*|\$\(/.test(command);
 }
 
-/** Check if a Command node has any Redirect suffix. */
+/** Check if a Command node has any Redirect suffix (including heredoc operators). */
 function hasRedirect(cmd: any): boolean {
-  return (cmd.suffix ?? []).some((s: any) => s.type === "Redirect");
+  return (cmd.suffix ?? []).some((s: any) =>
+    s.type === "Redirect" || s.type === "Dless" || s.type === "Dlessdash"
+  );
 }
 
 /** Check if a Command node has CommandExpansion in any word (name or suffix). */

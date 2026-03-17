@@ -333,6 +333,47 @@ Deno.test("getSegmentsFallback: strips do/done/then/fi keywords", () => {
   );
 });
 
+// ===== Empty heredoc (stripHeredocs regex fix) =====
+
+Deno.test("stripHeredocs: handles empty heredoc", () => {
+  assertEquals(
+    stripHeredocs("cat <<EOF\nEOF"),
+    "cat <<HEREDOC",
+  );
+});
+
+Deno.test("stripHeredocs: handles empty single-quoted heredoc", () => {
+  assertEquals(
+    stripHeredocs("cat <<'EOF'\nEOF"),
+    "cat <<'HEREDOC'",
+  );
+});
+
+Deno.test("stripHeredocs: handles empty indented heredoc", () => {
+  assertEquals(
+    stripHeredocs("cat <<-EOF\nEOF"),
+    "cat <<-HEREDOC",
+  );
+});
+
+// ===== Heredoc isCompound detection (Dless/Dlessdash) =====
+
+Deno.test("parseCommand: heredoc command is compound", async () => {
+  const result = await parseCommand("cat <<EOF\nhello\nEOF");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: indented heredoc command is compound", async () => {
+  const result = await parseCommand("cat <<-EOF\n\thello\n\tEOF");
+  assertEquals(result.isCompound, true);
+});
+
+Deno.test("parseCommand: heredoc segments exclude redirect", async () => {
+  const result = await parseCommand("agent-browser eval <<'EOF'\nconsole.log(1);\nEOF");
+  assertEquals(result.segments, ["agent-browser eval"]);
+  assertEquals(result.isCompound, true);
+});
+
 // ===== getSegmentsFallback =====
 
 Deno.test("getSegmentsFallback: works same as before for simple cases", () => {

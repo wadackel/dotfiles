@@ -545,3 +545,85 @@ Deno.test("shouldApprove: compound with all subcommands allowed", async () => {
     true,
   );
 });
+
+// --- heredoc approval ---
+
+Deno.test("shouldApprove: standalone heredoc with allowed command", async () => {
+  const patterns = ["agent-browser *"];
+  assertEquals(
+    await shouldApprove("agent-browser eval <<'EOF'\nconsole.log(1);\nEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: empty heredoc with allowed command", async () => {
+  const patterns = ["agent-browser *"];
+  assertEquals(
+    await shouldApprove("agent-browser eval <<'EOF'\nEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc with unquoted delimiter", async () => {
+  const patterns = ["cat *"];
+  assertEquals(
+    await shouldApprove("cat <<EOF\nhello\nEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc with double-quoted delimiter", async () => {
+  const patterns = ["cat *"];
+  assertEquals(
+    await shouldApprove('cat <<"EOF"\nhello\nEOF', patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc with indented delimiter (<<-)", async () => {
+  const patterns = ["cat *"];
+  assertEquals(
+    await shouldApprove("cat <<-EOF\n\thello\n\tEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc combined with pipe", async () => {
+  const patterns = ["cat *", "grep *"];
+  assertEquals(
+    await shouldApprove("cat <<EOF | grep foo\nhello world\nEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc combined with &&", async () => {
+  const patterns = ["agent-browser *", "echo *"];
+  assertEquals(
+    await shouldApprove("agent-browser eval <<'EOF' && echo done\nconsole.log(1);\nEOF", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: heredoc with disallowed command rejects", async () => {
+  const patterns = ["echo *"];
+  assertEquals(
+    await shouldApprove("evil-cmd <<'EOF'\nhello\nEOF", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: heredoc pipe where one command is disallowed rejects", async () => {
+  const patterns = ["cat *"];
+  assertEquals(
+    await shouldApprove("cat <<EOF | evil-cmd\nhello\nEOF", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: multiple heredocs with allowed commands", async () => {
+  const patterns = ["cat *"];
+  assertEquals(
+    await shouldApprove("cat <<A\na\nA\ncat <<B\nb\nB", patterns),
+    true,
+  );
+});
