@@ -341,19 +341,19 @@ Deno.test("extractCommands: multiple env vars before command", async () => {
 // --- shouldApprove ---
 
 // AST-based detection: quoted operators are not treated as compound
-Deno.test("shouldApprove: quoted pipe in argument is not compound", async () => {
+Deno.test("shouldApprove: quoted pipe — single command matches pattern", async () => {
   const patterns = ["git *"];
   assertEquals(
     await shouldApprove('git commit -m "fix | update"', patterns),
-    false,
+    true,
   );
 });
 
-Deno.test("shouldApprove: quoted && in argument is not compound", async () => {
+Deno.test("shouldApprove: quoted && — single command matches pattern", async () => {
   const patterns = ["git *"];
   assertEquals(
     await shouldApprove('git commit -m "fix && update"', patterns),
-    false,
+    true,
   );
 });
 
@@ -383,9 +383,9 @@ Deno.test("shouldApprove: && with unknown command rejects", async () => {
   );
 });
 
-Deno.test("shouldApprove: simple command (no shell syntax) rejects", async () => {
+Deno.test("shouldApprove: simple command matches pattern (non-compound approved)", async () => {
   const patterns = ["echo *"];
-  assertEquals(await shouldApprove("echo hello", patterns), false);
+  assertEquals(await shouldApprove("echo hello", patterns), true);
 });
 
 Deno.test("shouldApprove: allowed command with 2>&1", async () => {
@@ -626,4 +626,32 @@ Deno.test("shouldApprove: multiple heredocs with allowed commands", async () => 
     await shouldApprove("cat <<A\na\nA\ncat <<B\nb\nB", patterns),
     true,
   );
+});
+
+// --- Reproduction tests for codex CLI permission prompt issue ---
+
+Deno.test("shouldApprove: H1 — multiline prompt with 2>&1 (Pattern A)", async () => {
+  const patterns = ["codex *"];
+  const cmd =
+    'codex exec --full-auto "\nReview uncommitted changes.\n\n## Review criteria\n1. Correctness\n2. Security\n3. Code quality\n\nMark each issue with severity: Critical/High/Medium/Low\n" 2>&1';
+  assertEquals(await shouldApprove(cmd, patterns), true);
+});
+
+Deno.test("shouldApprove: H2 — special chars without shell syntax (Pattern C)", async () => {
+  const patterns = ["codex *"];
+  const cmd =
+    'codex exec -s read-only "text with ${row.pr_number} syntax"';
+  assertEquals(await shouldApprove(cmd, patterns), true);
+});
+
+Deno.test("shouldApprove: non-compound unknown command still rejects", async () => {
+  const patterns = ["codex *"];
+  assertEquals(await shouldApprove("evil-cmd hello", patterns), false);
+});
+
+Deno.test("shouldApprove: H3 — multiline with pipe char in prompt + 2>&1", async () => {
+  const patterns = ["codex *"];
+  const cmd =
+    'codex exec --full-auto "\n| Header | Value |\n|--------|-------|\n| a      | b     |\n" 2>&1';
+  assertEquals(await shouldApprove(cmd, patterns), true);
 });

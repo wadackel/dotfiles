@@ -97,8 +97,7 @@ export async function shouldApprove(
   command: string,
   patterns: string[],
 ): Promise<boolean> {
-  const { segments, isCompound } = await parseCommand(command);
-  if (!isCompound) return false;
+  const { segments } = await parseCommand(command);
   if (segments.length === 0) return false;
   return segments.every((seg) => {
     if (patterns.some((p) => matchesAllowedPattern(seg, p))) return true;
