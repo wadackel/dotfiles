@@ -120,6 +120,7 @@
       "Bash(git config *)",
       "Bash(git diff *)",
       "Bash(git fetch *)",
+      "Bash(git grep *)",
       "Bash(git log *)",
       "Bash(git ls-files *)",
       "Bash(git ls-tree *)",

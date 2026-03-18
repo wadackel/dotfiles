@@ -85,7 +85,7 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 ### Claude Code Hooks Notes
 
-- **`Skill` tool cannot be matched in `PreToolUse`**: Valid match targets are `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `Task`, `WebFetch`, `WebSearch`, and MCP tools only (per official docs)
+- **`Skill` tool cannot be matched in `PreToolUse`**: Valid match targets are `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, `Agent`, and MCP tools only (per official docs). **`Task` tools (`TaskCreate`, `TaskUpdate`, etc.) are NOT matchable** —実機テストで `"TaskUpdate"`, `"Task"`, `".*"` いずれも PreToolUse が発火しないことを確認済 (2026-03-19)
 - **To intercept before skill execution, use `UserPromptSubmit`**: Detect `/skill-name` in the stdin JSON `prompt` field. Example: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
 - **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
 - **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
@@ -138,7 +138,8 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - Verification tasks must include "Run `/verification-before-completion` before marking complete"
   - Convert ALL verification steps in the plan to tasks (test execution, smoke tests, lint, etc.)
   - Task granularity: one task per numbered plan step or verifiable unit. Do not create separate tasks for sub-bullets
-  - Implementation task descriptions must include acceptance criteria sufficient for subagent spec review, and must end with: "Before completing: run /verification-before-completion Gate Function" — a bare title like "Implement X" is insufficient
+  - Implementation task descriptions must include acceptance criteria sufficient for subagent spec review. Do NOT embed "/verification-before-completion" in implementation task descriptions — it gets ignored by implementation momentum
+  - **Verification as final gate task**: Always create a dedicated final task named "Run /verification-before-completion" that is blockedBy all other tasks. This task's description must list the specific verification commands from the plan's Verification section (manual smoke tests, CLI execution, etc.). This structural separation ensures verification is visible in TaskList as a pending task and cannot be silently absorbed into implementation completion
   - May skip task creation ONLY when the user explicitly says to skip, or the plan has no numbered steps (e.g., a single direct instruction)
 - **Faithful step execution**: Do not skip, rephrase, or reorder plan steps. Execute commands, file paths, and verification procedures exactly as written in the plan
 - **Progress tracking**: Update each task to in_progress when starting (record current HEAD SHA in task metadata as baseline_sha), completed when done. If a step is skipped, state the reason explicitly

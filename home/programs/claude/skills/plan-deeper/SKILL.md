@@ -159,6 +159,8 @@ Scan the finalized plan and infer which completion stages are appropriate:
 | Test files, test commands, "add tests" | **Lightweight Verification** (tests, lint) |
 | UI/visual/browser changes | **Manual Verification** (visual check) |
 | API endpoints, request/response changes | **Manual Verification** (API testing) |
+| CLI behavior changes, command output changes | **Manual Verification** (CLI smoke test) |
+| Plan has a "Verification" or "手動テスト" section | **Manual Verification** (execute those steps) |
 | Branch management, "create PR" | **PR** |
 | CI pipeline, GitHub Actions referenced | **CI Pass** |
 | Deployment targets, production URLs | **Deployment Verification** |
@@ -170,14 +172,16 @@ Build a candidate pipeline as an ordered sequence. "User Review" is always the f
 
 Present the inferred pipeline via AskUserQuestion:
 
+Present the **actually inferred** pipeline (not a fixed template). The example below includes Manual Verification — include or omit stages based on what 6a actually inferred:
+
 ```
 question: |
   Based on the plan, I've inferred this completion pipeline:
 
   1. Implementation complete
-  2. Lightweight verification (run tests + lint)
-  3. Final verification (/verification-before-completion)
-  4. User review
+  2. Lightweight verification (cargo test + just check)
+  3. Manual verification (run `ofsht add` with failing hook, confirm warning + cd works)
+  4. Final verification (/verification-before-completion)
 
   Does this look right?
 options:
@@ -186,6 +190,8 @@ options:
   - "More thorough (add PR/CI)"
   - "Let me specify"
 ```
+
+**Important**: Always present what 6a inferred — do not fall back to a minimal default pipeline. If 6a inferred Manual Verification, it must appear in this question.
 
 Adapt the pipeline based on the user's response. Ask at most one follow-up question for stage-specific details (e.g., which test command, which URL to verify).
 
