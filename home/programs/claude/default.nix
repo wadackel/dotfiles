@@ -12,6 +12,9 @@
 
   home.file.".claude/skills".source = dotfiles.linkHere ./. "skills";
 
+  # Codex CLI からも参照できるようにする
+  home.file.".agents/skills".source = dotfiles.linkHere ./. "skills";
+
   # scripts ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
   home.file.".claude/scripts".source = dotfiles.linkHere ./. "scripts";
 

@@ -23,6 +23,7 @@
       ".ofsht.toml"
       "CLAUDE.local.md"
       "**/.claude/settings.local.json"
+      "**/.claude/rules/wadackel.md"
       "**/.claude/commands/wadackel-*"
       "**/.claude/skills/wadackel-*"
       "**/.claude/bash-policy.yaml"
