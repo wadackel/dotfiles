@@ -25,6 +25,7 @@
     tmux # Terminal multiplexer
     tree # Display directory tree structure
     procps # Process monitoring utilities (includes watch)
+    ttyd # Share your terminal over the web
 
     # Code Analysis & Development Tools
     ast-grep # Fast and polyglot tool for code searching, linting, rewriting
