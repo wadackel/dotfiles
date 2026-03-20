@@ -29,7 +29,7 @@ Skipping any step = not verified.
 
 - Tests pass → Run test command + confirm failure=0 in output (previous run results or "should pass" are insufficient)
 - Build succeeds → Run build command + confirm exit 0 (lint passing alone is insufficient)
-- Bug fixed → Reproduction test for original symptom passes (code change alone is insufficient)
+- Bug fixed → Reproduce the original symptom's trigger scenario and confirm it no longer occurs (code change alone is insufficient; unit tests passing is insufficient — the reproduction must exercise the same entry point that exhibited the bug, e.g., run the CLI command, call the API endpoint, load the UI page)
 - Requirements met → Compare against each plan item (tests passing alone is insufficient)
 - Non-executable changes (docs, etc.) → Read back the changes to confirm (having written it is insufficient)
 

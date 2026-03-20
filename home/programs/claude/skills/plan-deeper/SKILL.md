@@ -208,7 +208,7 @@ Definition of Done for this task. Each stage must pass before proceeding to the 
 
 - [ ] **Implementation** — [specific description of what "implemented" means for this plan]
 - [ ] **Lightweight Verification** — [specific commands, e.g., `npm test && npm run lint`]
-- [ ] **Manual Verification** — [specific check, e.g., "open /settings, confirm toggle renders and saves"]
+- [ ] **Manual Verification** — [specific check, e.g., "run `cargo run -- add '#33'` and confirm worktree is created"]
 - [ ] **Final Verification** — Run `/verification-before-completion` Gate Function against all completion claims
 - [ ] **User Review** — Present changes summary for final approval
 
@@ -217,6 +217,8 @@ Definition of Done for this task. Each stage must pass before proceeding to the 
 ```
 
 Each stage description must be **concrete and plan-specific**. Never write generic placeholders like "tests pass" — specify which test command, which URL, which behavior to verify.
+
+**Manual Verification is opt-out, not opt-in.** The pipeline template always includes Manual Verification. To remove it, you must explicitly state the reason (e.g., "No observable behavior change — internal refactoring only"). Simply omitting it without justification is a pipeline construction error. This prevents the failure mode where CLI behavior changes, API changes, or UI changes are verified only by unit tests.
 
 ### Step 7: Result Report
 
