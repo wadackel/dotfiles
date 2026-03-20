@@ -7,6 +7,8 @@
 }:
 
 {
+  home.packages = [ pkgs.tmux ];
+
   # Tmux configuration
   xdg.configFile."tmux/tmux.conf".source = dotfiles.linkHere ./. "tmux.conf";
 

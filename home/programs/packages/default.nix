@@ -8,21 +8,12 @@
 {
   # Shell-independent CLI tools
   home.packages = with pkgs; [
-    # Cloud Tools
-    google-cloud-sdk # Google Cloud SDK
-    google-cloud-sql-proxy # Cloud SQL Auth Proxy
-
     # JSON/YAML/XML Processing
     jq # JSON processor
     yq-go # YAML/JSON/XML processor (Go version)
 
-    # Text Editors
-    neovim # Hyperextensible Vim-based text editor
-    vim # Vi IMproved - advanced text editor
-
     # Terminal Utilities
     htop # Interactive process viewer
-    tmux # Terminal multiplexer
     tree # Display directory tree structure
     procps # Process monitoring utilities (includes watch)
     ttyd # Share your terminal over the web

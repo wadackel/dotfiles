@@ -6,7 +6,11 @@
 }:
 
 {
-  # Google Cloud SDK の設定
-  # 注: パッケージ本体は packages/default.nix でインストール
+  # Google Cloud SDK
+  home.packages = with pkgs; [
+    google-cloud-sdk
+    google-cloud-sql-proxy
+  ];
+
   # 注: appserver エイリアスは zsh/default.nix で定義
 }

@@ -21,8 +21,10 @@ GUI app?
   YES -> homebrew.casks (darwin/configuration.nix)
   NO  -> Found via `nix search nixpkgs#<name>`?
            YES -> home-manager has programs.<name>?
-                    YES -> home/programs/<name>/default.nix (new module)
-                    NO  -> home/programs/packages/default.nix (home.packages)
+                    YES -> home/programs/<name>/default.nix (programs.<name>.enable)
+                    NO  -> Has config files to manage?
+                             YES -> home/programs/<name>/default.nix (home.packages + config)
+                             NO  -> home/programs/packages/default.nix (home.packages)
            NO  -> Tool provides official flake? (check GitHub repo for flake.nix)
                     YES -> Add as flake input in flake.nix + overlay (Step 2a)
                     NO  -> Go/Rust source available on GitHub?
@@ -62,7 +64,17 @@ Determine if home-manager has a `programs.<name>` module. If unsure, search the 
 
 Auto-discovery handles imports automatically. Place config files in the same directory.
 
-**If no dedicated module** → Add to the appropriate category in `home/programs/packages/default.nix`:
+**If no dedicated module but has config files** → Create `home/programs/<name>/default.nix` with package and config co-located:
+
+```nix
+{ config, lib, pkgs, dotfiles, ... }:
+{
+  home.packages = [ pkgs.<name> ];
+  xdg.configFile."<name>/<config>".source = dotfiles.linkHere ./. "<config>";
+}
+```
+
+**If no dedicated module and no config files** → Add to the appropriate category in `home/programs/packages/default.nix`:
 
 ```nix
 <package-name> # short description

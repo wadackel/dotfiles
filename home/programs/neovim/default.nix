@@ -12,8 +12,10 @@
     "nvim/init.lua".source = dotfiles.linkHere ./. "init.lua";
   };
 
-  # Tools used by Neovim (LSP servers, linters, formatters)
+  # Neovim and tools (LSP servers, linters, formatters)
   home.packages = with pkgs; [
+    neovim
+
     # LSP servers
     astro-language-server
     gopls
