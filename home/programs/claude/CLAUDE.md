@@ -85,11 +85,12 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 ### Claude Code Hooks Notes
 
-- **`Skill` tool cannot be matched in `PreToolUse`**: Valid match targets are `Bash`, `Edit`, `Write`, `Read`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, `Agent`, and MCP tools only (per official docs). **`Task` tools (`TaskCreate`, `TaskUpdate`, etc.) are NOT matchable** —実機テストで `"TaskUpdate"`, `"Task"`, `".*"` いずれも PreToolUse が発火しないことを確認済 (2026-03-19)
+- **PreToolUse の matcher 制限**: `Task` tools (`TaskCreate`, `TaskUpdate`, etc.) と `Skill` tool は NOT matchable（実機テスト確認済み 2026-03-19）。`ExitPlanMode` はマッチ可能（実機検証済み 2026-03-20）。`{"decision":"block","reason":"..."}` を stdout に出力すると block + メッセージ配信が動作する
 - **To intercept before skill execution, use `UserPromptSubmit`**: Detect `/skill-name` in the stdin JSON `prompt` field. Example: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
 - **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
 - **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
 - **Approval tracking with `PostToolUse`**: `PermissionRequest` only records that a dialog was shown (cannot distinguish approval/denial). To track actually executed (approved) commands, combine with a `PostToolUse` hook. Exclude high-frequency tools (Read/Glob/Grep) via matcher to reduce overhead
+- **task-planner gate**: `task-planner-gate.ts` が ExitPlanMode を PreToolUse でゲート。block 時は `touch /tmp/claude-task-planner-ready-{session_id}` でマーカー作成後に ExitPlanMode を再試行
 
 ### codex-review Skill Special Rule
 
@@ -161,6 +162,7 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
 - **Baseline capture（実装前の状態記録）**: 変更を加える前に、変更対象の現在の動作を記録する。CLI ならコマンド出力、設定なら現在値、UI ならスクリーンショット。「変更前の状態がわからない」は検証不能を意味する
 - **End-to-end behavioral verification**: 実装完了後、変更が実際に機能していることを確認する。「コードを書いた」は「動作する」を意味しない。スクリプト → 実行して出力を確認、hook → フック発火条件を再現して介入動作を確認、設定変更 → 設定が反映された環境で確認。詳細は `verification-before-completion/references/behavioral-verification.md` 参照
+- **Verification observability**: 変更した振る舞い自体をテストツールが観測可能か確認する。テストが変更を検出できない場合（例: スピナーの in-place 更新は stdout キャプチャでは検出不可、CSS の視覚的変化はユニットテストでは検出不可）、その観測限界を明示し、適切な検証手段（手動確認、スクリーンショット比較等）を選択する
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
 - **No completion claims without verification**: Before claiming work is complete or successful, run `/verification-before-completion` and follow the Gate Function
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete

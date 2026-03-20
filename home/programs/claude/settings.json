@@ -494,6 +494,15 @@
             "command": "bash-policy.ts"
           }
         ]
+      },
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "task-planner-gate.ts"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
