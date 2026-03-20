@@ -19,7 +19,7 @@ gh pr view --json number,url,headRefName,baseRefName,isDraft
 
 If no PR exists for the current branch, stop and inform the user.
 
-### Step 1.5: Check for Merge Conflicts
+### Step 2: Check for Merge Conflicts
 
 Before proceeding, verify the branch has no merge conflicts:
 
@@ -35,7 +35,7 @@ If `mergeable` is `CONFLICTING`:
 4. `git push --force-with-lease origin $(git branch --show-current)`
 5. Return to Step 1
 
-### Step 2: Check CI Status First
+### Step 3: Check CI Status First
 
 Always check CI/GitHub Actions status before looking at review feedback:
 
@@ -45,7 +45,7 @@ gh pr checks --json name,state,bucket,link,workflow
 
 The `bucket` field categorizes state into: `pass`, `fail`, `pending`, `skipping`, or `cancel`.
 
-### Step 3: Gather Review Feedback
+### Step 4: Gather Review Feedback
 
 Once CI checks have completed (or at least the bot-related checks), gather human and bot feedback:
 
@@ -64,7 +64,7 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/comments
 gh api repos/{owner}/{repo}/issues/{pr_number}/comments
 ```
 
-### Step 4: Investigate Failures
+### Step 5: Investigate Failures
 
 For each CI failure, get the actual logs:
 
@@ -78,7 +78,7 @@ gh run view <run-id> --log-failed
 
 Do NOT assume what failed based on the check name alone. Always read the actual logs.
 
-### Step 5: Validate Feedback
+### Step 6: Validate Feedback
 
 For each piece of feedback (CI failure or review comment):
 
@@ -87,11 +87,28 @@ For each piece of feedback (CI failure or review comment):
 3. **Check if already addressed** - The issue may have been fixed in a subsequent commit
 4. **Skip invalid feedback** - If the concern is not legitimate, move on
 
-### Step 6: Address Valid Issues
+### Step 7: Address Valid Issues
 
 Make minimal, targeted code changes. Only fix what is actually broken.
 
-### Step 7: Commit and Push
+### Step 8: Local Verification Before Push
+
+Before committing and pushing, verify the fix locally by reproducing the failed CI check:
+
+1. **Identify the reproduction command**: Read the CI workflow YAML (`.github/workflows/`) or the failed job's logs to determine what command was executed. For example:
+   - A `typecheck` job might run `pnpm -F <pkg> build` (not just `tsc --noEmit`)
+   - A `gen` job might run `pnpm -F <pkg> generate` followed by `git diff --exit-code`
+   - A `test_*` job might run a specific test script with coverage thresholds
+
+2. **Run the command locally**: Execute the same command (or its local equivalent) and confirm it passes.
+
+3. **If the local check fails**: Fix the issue and repeat from Step 7 until it passes. Do NOT push until local verification succeeds.
+
+4. **If the failed job cannot be reproduced locally** (e.g., environment-specific, requires external services, Storybook VRT): Skip this step for that specific job and note it when pushing.
+
+This step prevents wasted CI cycles. Most CI failures (build errors, type errors, test failures, coverage thresholds, generate diffs) are reproducible locally.
+
+### Step 9: Commit and Push
 
 Check what changed before staging:
 
@@ -107,7 +124,7 @@ git commit -m "fix: <descriptive message of what was fixed>"
 git push origin $(git branch --show-current)
 ```
 
-### Step 8: Wait for CI
+### Step 10: Wait for CI
 
 Use the built-in watch functionality:
 
@@ -123,7 +140,7 @@ Alternatively, poll manually if you need more control:
 gh pr checks --json name,state,bucket | jq '[.[] | select(.bucket == "fail" or .bucket == "pending" or .bucket == "cancel")]'
 ```
 
-### Step 9: Mark Ready for Review
+### Step 11: Mark Ready for Review
 
 If all CI checks passed (`bucket: pass` for all) and the PR was draft (`isDraft: true` from Step 1), remove the draft status:
 
@@ -133,9 +150,9 @@ gh pr ready
 
 Only run this once per session (skip if already marked ready).
 
-### Step 10: Repeat
+### Step 12: Repeat
 
-Return to Step 2 if:
+Return to Step 3 if:
 - Any CI checks failed
 - New review feedback appeared
 

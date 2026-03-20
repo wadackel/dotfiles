@@ -133,6 +133,9 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 #### Plan Execution (after ExitPlanMode)
 
 - **Convert plan to tasks**: After ExitPlanMode, extract steps from the plan file and register each as an individual task via TaskCreate
+  - **task-planner エージェントの活用**: 3つ以上のタスクに分解される計画では、plan ファイルを `task-planner` サブエージェントに渡して構造化されたタスク分解を生成する。その出力を TaskCreate に使用する
+  - **タスク記述の3要素**: 各タスクの description は以下を含むこと: (1) 変更対象ファイル, (2) 変更後の期待される振る舞い, (3) 検証方法（コマンド + 期待される出力）
+  - **関心の分離**: 異なる関心事（例: エージェント追加とCLAUDE.md修正）は別タスクに分離。同じ関心事のファイル群（モジュール + テスト）は1タスクにまとめる
   - **Separate implementation and verification tasks** (e.g., "Implement feature A" and "Verify feature A" are distinct tasks)
   - Verification task descriptions must include the exact commands to run and expected output (recoverable from tasks after compaction)
   - Verification tasks must include "Run `/verification-before-completion` before marking complete"
@@ -156,6 +159,8 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 #### Implementation and Verification
 
 - **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
+- **Baseline capture（実装前の状態記録）**: 変更を加える前に、変更対象の現在の動作を記録する。CLI ならコマンド出力、設定なら現在値、UI ならスクリーンショット。「変更前の状態がわからない」は検証不能を意味する
+- **End-to-end behavioral verification**: 実装完了後、変更が実際に機能していることを確認する。「コードを書いた」は「動作する」を意味しない。スクリプト → 実行して出力を確認、hook → フック発火条件を再現して介入動作を確認、設定変更 → 設定が反映された環境で確認。詳細は `verification-before-completion/references/behavioral-verification.md` 参照
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
 - **No completion claims without verification**: Before claiming work is complete or successful, run `/verification-before-completion` and follow the Gate Function
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete

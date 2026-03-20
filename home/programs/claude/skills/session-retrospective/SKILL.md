@@ -33,13 +33,13 @@ No arguments needed. The skill analyzes the current session context automaticall
 
 Gather full session data and reflect on it:
 
-1. **Extract full transcript history** (Compact で失われた内容も含む完全な記録):
-   **Note**: モノレポルートから実行すること（`Deno.cwd()` でトランスクリプトディレクトリを探すため、サブパッケージディレクトリから実行するとファイルが見つからない）。
+1. **Extract full transcript history** (includes content lost to compaction):
+   **Note**: Run from the monorepo root. The script uses `Deno.cwd()` to locate the transcript directory, so running from a sub-package directory will fail to find files.
    ```bash
    cd $(git rev-parse --show-toplevel)
    ~/.claude/scripts/extract-session-history.ts
    ```
-   stdout に出力されたファイルパスを Read ツールで読み込む。
+   Read the file path printed to stdout using the Read tool.
 
 2. **Review extracted history** focusing on:
    - Tasks performed and their outcomes
@@ -47,8 +47,8 @@ Gather full session data and reflect on it:
    - Questions asked to the user (signals missing context)
    - User corrections to Claude's approach
    - Repeated patterns of work
-   - Tool usage patterns (Tool Usage Summary セクション参照)
-   - Compact boundaries (セッション内のフェーズ遷移を示す)
+   - Tool usage patterns (see Tool Usage Summary section)
+   - Compact boundaries (indicate phase transitions within the session)
 
 3. **Git activity** (if in a git repository):
    ```bash
@@ -169,6 +169,30 @@ Default to Skill (standard) when uncertain — it matches the user's preference 
 - Pipeline: "Methodology document → extract criteria → create evaluation tool" (generalizable)
 - Recommended: Skill (standard) — e.g., `/review-accessibility [url]`
 - Alternative: Custom Agent if read-only constraint is needed
+
+### Phase 2.6: Instinct Extraction
+
+For learnings categorized as **Corrected Approaches** and **Repeated Workflows** in Phase 2:
+
+1. Register learnings that passed the Generalization Check as instincts
+2. Execute automatically without confirmation (as part of the retrospective)
+3. Include instincts that reach the promotion threshold (confidence >= 0.7) in Phase 4 CLAUDE.md proposals
+
+```bash
+# Add new instinct (for each learning)
+~/.claude/skills/instinct-learner/scripts/instincts.ts add \
+  --rule "generalized rule statement" \
+  --domain "verification|workflow|code-style|debugging|git" \
+  --session "$(cat /tmp/claude-session-id 2>/dev/null || echo unknown)"
+
+# Reinforce if matching existing instinct
+~/.claude/skills/instinct-learner/scripts/instincts.ts reinforce <id>
+
+# Check promotion candidates for Phase 4 proposals
+~/.claude/skills/instinct-learner/scripts/instincts.ts promote
+```
+
+**Note**: Learnings in the Missing Context and Tool/Library Knowledge categories are routed directly to CLAUDE.md proposals (not instincts), as these are factual information that does not need confidence accumulation across sessions.
 
 ### Phase 3: Route Proposals
 
