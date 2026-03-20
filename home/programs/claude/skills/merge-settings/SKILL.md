@@ -82,12 +82,12 @@ How would you like to review the <count> recommended rules?
 ```
 
 Then ask the user to choose a review mode:
-1. **全て適用** — Apply all recommended rules at once
-2. **1つずつ確認** — Review and approve each rule individually
-3. **適用しない** — Skip all
+1. **Apply all** — Apply all recommended rules at once
+2. **Review individually** — Review and approve each rule individually
+3. **Skip all** — Skip all
 
 If the user chooses **individual review**, iterate through each RECOMMEND rule
-with a separate AskUserQuestion (追加する / スキップ), collecting approved rules.
+with a separate AskUserQuestion (Add / Skip), collecting approved rules.
 
 ### Step 4: Apply Approved Rules
 

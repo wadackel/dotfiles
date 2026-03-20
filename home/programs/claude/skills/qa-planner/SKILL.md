@@ -15,21 +15,21 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
 ### Step 1: Determine Mode
 
 - **Mode A (Plan Review QA)**: Called during plan mode or "what should we test?"
-  → Output: test case list to append to the plan. No execution.
+  -> Output: test case list to append to the plan. No execution.
 - **Mode B (Post-Implementation Verification)**: Feature is implemented, user wants verification
-  → Output: executed test results with pass/fail status.
+  -> Output: executed test results with pass/fail status.
 - **Mode C (Agent Team QA)**: Large-scale verification where parallel execution is beneficial.
   Use when: 3+ pages or 4+ independent test phases, bug fix + re-verification cycle is expected,
   or user explicitly requests a team structure.
-  → Output: same as Mode B, but orchestrated via a QA Tester agent.
+  -> Output: same as Mode B, but orchestrated via a QA Tester agent.
 
   **Mode C structure (Lead + QA Tester as base):**
-  1. `TeamCreate` → spawn QA Tester (general-purpose) for Chrome MCP testing
+  1. `TeamCreate` -> spawn QA Tester (general-purpose) for Chrome MCP testing
   2. Lead (self) handles triage: receives bug reports and decides repair strategy
-  3. **Simple bugs** (1–3 lines, location is obvious): Lead fixes directly
+  3. **Simple bugs** (1-3 lines, location is obvious): Lead fixes directly
   4. **Complex bugs** (root-cause investigation needed, multiple files): spawn Fixer on demand
   5. After fix: `SendMessage` to QA Tester for re-verification
-  6. Shutdown order: `SendMessage(shutdown_request)` to all members → wait for all terminated → `TeamDelete`
+  6. Shutdown order: `SendMessage(shutdown_request)` to all members -> wait for all terminated -> `TeamDelete`
 
 ### Step 2: Understand the Target
 
@@ -66,7 +66,7 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
 
 #### Risk-Based Prioritization
 
-Assess each test scenario using a risk matrix (Impact × Likelihood):
+Assess each test scenario using a risk matrix (Impact x Likelihood):
 
 | | Low Likelihood | Medium Likelihood | High Likelihood |
 |---|---|---|---|
@@ -90,8 +90,8 @@ Apply systematically per application type. See [references/test-patterns.md](ref
 |-----------|----------|---------|
 | **Equivalence Partitioning** | Input validation (all types) | Valid/invalid email classes for a form field |
 | **Boundary Value Analysis** | Numeric limits, string lengths | Password 7/8/16/17 chars for 8-16 range |
-| **State Transition** | Workflows, lifecycles | Order: draft→submitted→approved→shipped |
-| **Pairwise Testing** | Multi-parameter interactions | Browser × OS × user role combinations |
+| **State Transition** | Workflows, lifecycles | Order: draft->submitted->approved->shipped |
+| **Pairwise Testing** | Multi-parameter interactions | Browser x OS x user role combinations |
 
 #### Test Case Format
 
@@ -149,7 +149,7 @@ One continuous recording captures the entire session. Do not start/stop per test
 - Naming: `qa-{test-id}-{description}.png` (e.g., `qa-t1-home.png`, `qa-t4-upload-preview.png`)
 - Save to `/tmp/` (temporary files, not committed)
 
-**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation — the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
+**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation -- the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
 
 **Can Claude execute this?**
 

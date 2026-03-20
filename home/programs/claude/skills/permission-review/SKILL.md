@@ -42,7 +42,7 @@ grep 'Bash(git clone' ~/dotfiles/home/programs/claude/settings.json
 ```
 
 For each candidate:
-- If the pattern already exists in `settings.json`, mark as "既存パターンあり"
+- If the pattern already exists in `settings.json`, mark as "existing pattern found"
 - Investigate why dialogs still occurred despite the pattern existing
   (typically: compound commands where `approve-piped-commands.ts` couldn't
   match all segments)
@@ -55,20 +55,20 @@ Present **all** candidate patterns with full details. For each pattern in
 `allowCandidates` and `reviewItems`, use this format:
 
 ```markdown
-### `Bash(git *)` -- 24件リクエスト / 140件実行 (project1, project2)
+### `Bash(git *)` -- 24 requests / 140 executions (project1, project2)
 
-確認が発生した理由: [reason-based explanation]
-既存パターン: `Bash(git add *)`, `Bash(git commit *)`, ... (既に登録済み)
+Reason for confirmation: [reason-based explanation]
+Existing patterns: `Bash(git add *)`, `Bash(git commit *)`, ... (already registered)
 
-実際にダイアログが表示されたコマンド（直近5件）:
+Commands that actually triggered dialogs (last 5):
 - `git add app/styles.css && git commit -m "..."` (cloudflare-d1-sandbox, 2026-03-01)
 - `git switch main && git pull origin main` (blog.wadackel.me, 2026-03-08)
 - `git clone --depth 1 https://github.com/... 2>&1` (dotfiles, 2026-03-06)
 
-追加可能なパターン:
-- `Bash(git commit *)` -- commit のみ許可
-- `Bash(git status *)` -- status のみ許可
-- `Bash(git *)` -- git 全般を許可
+Available patterns to add:
+- `Bash(git commit *)` -- allow commit only
+- `Bash(git status *)` -- allow status only
+- `Bash(git *)` -- allow all git commands
 ```
 
 To get the actual dialog-triggering commands, extract from the raw permission log:
@@ -83,15 +83,15 @@ grep '"event":"request"' ~/.claude/logs/permission-requests.jsonl | \
 For patterns with `executed: 0`, add a caution:
 
 ```markdown
-### `Bash(pip3 *)` -- 1件リクエスト / 0件実行 (dotfiles)
+### `Bash(pip3 *)` -- 1 request / 0 executions (dotfiles)
 
-⚠ 一度も承認されていないパターンです（承認を拒否された可能性があります）
+⚠ This pattern has never been approved (may have been denied)
 ```
 
 Display the `reason` field as a human-readable explanation:
-- `compound_command`: "パイプ/複合コマンドのため `permissions.allow` にマッチしない（既知制限）。`approve-piped-commands.ts` が settings.json のパターンから自動承認"
-- `pattern_gap`: "既存パターン `Bash(X *)` は登録済みだが、このサブコマンドはカバーされていない"
-- `no_pattern` (or absent): "対応するパターンが未登録"
+- `compound_command`: "Does not match `permissions.allow` due to pipe/compound command (known limitation). `approve-piped-commands.ts` auto-approves based on settings.json patterns"
+- `pattern_gap`: "Existing pattern `Bash(X *)` is registered, but this subcommand is not covered"
+- `no_pattern` (or absent): "No corresponding pattern registered"
 
 Every candidate **must** be presented in this format. This is a required format, not illustrative.
 
@@ -104,13 +104,13 @@ before deciding.
 
 For each candidate in `allowCandidates` / `reviewItems`, use `AskUserQuestion` with up to 3 options + Other:
 
-1. **パターンを選んで追加** -- proceed to sub-flow for pattern selection
-2. **bash-policy に追加** -- use the **bash-policy-add skill**
-3. **スキップ (ログ保持)** -- take no action; log entries are preserved for next review
+1. **Select and add pattern** -- proceed to sub-flow for pattern selection
+2. **Add to bash-policy** -- use the **bash-policy-add skill**
+3. **Skip (keep log)** -- take no action; log entries are preserved for next review
 
 #### Pattern Selection Sub-flow
 
-When "パターンを選んで追加" is chosen:
+When "Select and add pattern" is chosen:
 
 - If `subPatterns` has **1 entry** (typical for non-Bash tools): skip sub-flow, add directly
 - If `subPatterns` has **2 entries**: present 2 options + Other (3 options total)
@@ -119,10 +119,10 @@ When "パターンを選んで追加" is chosen:
 Each option should include a brief explanation:
 ```
 AskUserQuestion:
-  - "Bash(git commit *)" -- commit のみ許可
-  - "Bash(git status *)" -- status のみ許可
-  - "Bash(git *)" -- git 全般を許可
-  - Other (自由入力)
+  - "Bash(git commit *)" -- allow commit only
+  - "Bash(git status *)" -- allow status only
+  - "Bash(git *)" -- allow all git commands
+  - Other (free input)
 ```
 
 **Critical**: Always generate options from the JSON output's `subPatterns` field. Do not invent patterns.

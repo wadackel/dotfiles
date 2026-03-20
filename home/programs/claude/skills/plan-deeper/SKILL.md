@@ -160,7 +160,7 @@ Scan the finalized plan and infer which completion stages are appropriate:
 | UI/visual/browser changes | **Manual Verification** (visual check) |
 | API endpoints, request/response changes | **Manual Verification** (API testing) |
 | CLI behavior changes, command output changes | **Manual Verification** (CLI smoke test) |
-| Plan has a "Verification" or "手動テスト" section | **Manual Verification** (execute those steps) |
+| Plan has a "Verification" or "Manual Testing" section | **Manual Verification** (execute those steps) |
 | Branch management, "create PR" | **PR** |
 | CI pipeline, GitHub Actions referenced | **CI Pass** |
 | Deployment targets, production URLs | **Deployment Verification** |

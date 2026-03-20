@@ -34,25 +34,25 @@ Generate a weekly review by reading Obsidian daily notes and synthesizing them i
 ### Step 1: Determine Target Week
 
 Parse `$ARGUMENTS`:
-- `W08` → current year's W08
-- `2026-W08` → as-is
-- Empty → current week via `date +%G-W%V`
+- `W08` -> current year's W08
+- `2026-W08` -> as-is
+- Empty -> current week via `date +%G-W%V`
 
-Compute Monday–Sunday dates and prev/next week numbers:
+Compute Monday-Sunday dates and prev/next week numbers:
 
 ```
 deno run ~/.claude/skills/weekly-review/iso-week.ts YYYY-WNN
 ```
 
-Output: 7 lines of dates (Mon–Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`.
+Output: 7 lines of dates (Mon-Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`.
 
 ### Step 2: Load Data (Parallel)
 
 Fetch all of the following in **parallel Bash calls** using `obsidian read`:
 
-1. **Weekly note**: `99_Tracking/Weekly/YYYY-WWW.md` — if not found, print error and **abort**
-2. **Previous week**: `99_Tracking/Weekly/YYYY-W{prev}.md` — for "next week" carryover; skip if missing
-3. **Daily notes**: Mon–Sun (7 files) — skip missing days silently
+1. **Weekly note**: `99_Tracking/Weekly/YYYY-WWW.md` -- if not found, print error and **abort**
+2. **Previous week**: `99_Tracking/Weekly/YYYY-W{prev}.md` -- for "next week" carryover; skip if missing
+3. **Daily notes**: Mon-Sun (7 files) -- skip missing days silently
 
 Total: up to 9 files in one parallel call.
 
@@ -64,13 +64,13 @@ Extract from each daily note:
 - **Tasks** (`## 🧑‍💻 Tasks`): long-term task items
 - **Memo** (`## ✍️ Memo`): timestamped entries
   - Project identification: extract `repo-name` from `` `(repo-name/short-hash)` `` pattern
-  - Entries without pattern: work-related → `Misc`, personal → material for "feelings" section
+  - Entries without pattern: work-related -> `Misc`, personal -> material for "feelings" section
 - **Frontmatter**: `emotion` score (0 may mean "not recorded"; if all days are 0, infer tone from Memo content)
 
 Assess existing weekly note state:
 
-- **Bare template**: all subsections (0–3) are empty or contain only `- tba` → **fresh generation** (no merge needed)
-- **Partially filled**: 1+ subsections have substantive content → **merge mode**
+- **Bare template**: all subsections (0-3) are empty or contain only `- tba` -> **fresh generation** (no merge needed)
+- **Partially filled**: 1+ subsections have substantive content -> **merge mode**
 - Always discard `- tba` placeholder under `## Notes`
 - `## Analysis`: **preserve dataviewjs blocks verbatim** (never modify)
 - `## History` / `## Reading`: validate and fix in Step 5
@@ -98,17 +98,17 @@ Generate 4 subsections in Japanese:
 - Use nested bullet format:
   ```
   - P&L
-      - ex-proxy リファクタ（Start/Resume を WS で実装）
-      - 背景切り替え対応
+      - ex-proxy のリファクタ（Start/Resume を WS で実装）
+      - バックグラウンド切り替え対応
   - Misc
-      - FE スキル面接内容の検討・再設計
+      - FE スキル面接コンテンツの見直し・再設計
   ```
 - Carry over sub-item structure from To-Do where available
 - **Merge mode**: respect existing content, add only new items
 
 #### `3.感想`
 
-- Emotion trend (only days with recorded values), notable events, overall tone (3–5 bullets)
+- Emotion trend (only days with recorded values), notable events, overall tone (3-5 bullets)
 - Write in first-person conversational Japanese
 - **Merge mode**: preserve existing reflections, add new insights from daily notes
 
@@ -118,17 +118,17 @@ Only modify when corruption is detected. This addresses known Templater bugs.
 
 **History validation**:
 - Extract all `### [[YYYY-MM-DD]]` dates
-- Compare against Mon–Sun dates from Step 1
+- Compare against Mon-Sun dates from Step 1
 - Corruption = missing dates, wrong order, or out-of-range dates
-- If corrupted → regenerate 7 entries (Mon–Sun) in correct order
-- If valid → preserve as-is
+- If corrupted -> regenerate 7 entries (Mon-Sun) in correct order
+- If valid -> preserve as-is
 
 **Reading validation**:
 - Extract `date >= "START"` and `date <= "END"` values
 - START must equal Monday, END must equal Sunday
 - Corruption = mismatch or inversion (START > END)
-- If corrupted → fix to correct Monday/Sunday values
-- If valid → preserve as-is
+- If corrupted -> fix to correct Monday/Sunday values
+- If valid -> preserve as-is
 
 ### Step 6: Rewrite Weekly Note
 

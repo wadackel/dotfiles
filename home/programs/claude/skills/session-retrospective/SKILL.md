@@ -228,9 +228,9 @@ For each routed learning, draft a concrete proposal:
 - NO → Extract the underlying principle. The specific instance becomes an example, not the rule
 
 **Anti-patterns (from real sessions):**
-- ✗ "shallow clone での git diff は 2-dot ではなく refs/pull/N/merge を使う" → tool-specific fact
+- ✗ "In shallow clone, use refs/pull/N/merge instead of 2-dot git diff" → tool-specific fact
 - ✓ "Output value verification: check value correctness, not just error absence" → general principle
-- ✗ "execSync の maxBuffer を 10MB に設定する" → one-off fix
+- ✗ "Set execSync maxBuffer to 10MB" → one-off fix
 - ✓ "Evidence over analysis: trust concrete evidence over reasoning when they conflict" → behavioral principle
 
 **CLAUDE.md additions:**

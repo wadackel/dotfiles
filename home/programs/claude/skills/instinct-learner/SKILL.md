@@ -5,32 +5,32 @@ description: Extracts atomic behavioral rules (instincts) from session learnings
 
 # Instinct Learner
 
-セッションの学びを原子的な「instinct」（1行ルール + confidence スコア）として蓄積し、十分な確信度に達したら CLAUDE.md に昇格させる。
+Accumulates session learnings as atomic "instincts" (one-line rules + confidence scores), and promotes them to CLAUDE.md once sufficient confidence is reached.
 
 ## Overview
 
-session-retrospective が学びを抽出 → instinct-learner が原子的ルールとして蓄積 → confidence が蓄積 → CLAUDE.md に昇格
+session-retrospective extracts learnings -> instinct-learner accumulates them as atomic rules -> confidence accumulates -> promoted to CLAUDE.md
 
 ```
-Session A: "出力件数を確認しなかった" → instinct 作成 (confidence: 0.5)
-Session B: "テスト結果の値を検証しなかった" → 同じ instinct を reinforce (confidence: 0.6)
-Session C: ユーザーが "数を確認して" と補正 → reinforce +0.2 (confidence: 0.8)
-→ confidence 0.7+ → CLAUDE.md promotion 候補
+Session A: "Didn't verify output count" → instinct created (confidence: 0.5)
+Session B: "Didn't verify test result values" → same instinct reinforced (confidence: 0.6)
+Session C: User corrects with "check the count" → reinforce +0.2 (confidence: 0.8)
+→ confidence 0.7+ → CLAUDE.md promotion candidate
 ```
 
 ## When to Use
 
-- `/session-retrospective` の Phase 2.6 から自動呼び出し
-- 手動で `/instinct-learner` として呼び出し（instinct の管理）
+- Automatically called from `/session-retrospective` Phase 2.6
+- Manually invoked as `/instinct-learner` (for instinct management)
 
 ## Instinct Format
 
-ストレージ: `~/.claude/instincts.jsonl`（1行1 instinct、JSON Lines）
+Storage: `~/.claude/instincts.jsonl` (one instinct per line, JSON Lines)
 
 ```json
 {
   "id": "inst-001",
-  "rule": "出力値の正しさを検証する（エラー不在だけでなく）",
+  "rule": "Verify output value correctness (not just error absence)",
   "status": "active",
   "confidence": 0.5,
   "domain": "verification",
@@ -44,72 +44,72 @@ Session C: ユーザーが "数を確認して" と補正 → reinforce +0.2 (co
 
 ## Confidence Scoring
 
-| イベント | confidence 変化 |
+| Event | Confidence Change |
 |---|---|
-| 初回作成 | 0.5 |
-| 別セッションで再観測 | +0.1 |
-| ユーザー補正による確認 | +0.2（最強シグナル） |
-| 5セッション以上で強化なし | -0.1 |
+| Initial creation | 0.5 |
+| Re-observed in a different session | +0.1 |
+| Confirmed by user correction | +0.2 (strongest signal) |
+| No reinforcement for 5+ sessions | -0.1 |
 
-| 閾値 | アクション |
+| Threshold | Action |
 |---|---|
-| 0.3 以下 | 自動 prune（status=active のもののみ） |
-| 0.7 以上 | CLAUDE.md promotion 候補 |
-| 0.9 | 上限 |
+| 0.3 or below | Auto-prune (active status only) |
+| 0.7 or above | CLAUDE.md promotion candidate |
+| 0.9 | Upper limit |
 
 ## Lifecycle States
 
-- **active**: デフォルト。蓄積中
-- **promoted**: CLAUDE.md に昇格済み。prune 対象外
-- **pruned**: 削除済み
+- **active**: Default. Accumulating
+- **promoted**: Promoted to CLAUDE.md. Exempt from pruning
+- **pruned**: Deleted
 
 ## CLI Commands
 
 ```bash
-# 新規 instinct 追加
-instincts.ts add --rule "ルール文" --domain "verification" --session "session-id"
+# Add new instinct
+instincts.ts add --rule "Rule text" --domain "verification" --session "session-id"
 
-# 既存 instinct の強化
+# Reinforce existing instinct
 instincts.ts reinforce <id>
 
-# 一覧表示
+# List instincts
 instincts.ts list [--min-confidence 0.5]
 
-# 低 confidence の prune
+# Prune low-confidence instincts
 instincts.ts prune
 
-# promotion 候補の表示
+# Show promotion candidates
 instincts.ts promote
 ```
 
 ## Domains
 
-instinct の分類:
-- `verification` — 検証に関するルール
-- `workflow` — 作業フローに関するルール
-- `code-style` — コーディングスタイル
-- `debugging` — デバッグ手法
-- `git` — Git 操作
-- `tool-usage` — ツール使用法
-- `communication` — ユーザーとのコミュニケーション
+Instinct classification:
+- `verification` -- rules about verification
+- `workflow` -- rules about work processes
+- `code-style` -- coding style
+- `debugging` -- debugging techniques
+- `git` -- Git operations
+- `tool-usage` -- tool usage
+- `communication` -- communication with users
 
 ## Integration with session-retrospective
 
-Phase 2.6 (Instinct Extraction) で呼び出される:
+Called during Phase 2.6 (Instinct Extraction):
 
-1. **Corrected Approaches** と **Repeated Workflows** カテゴリの学びを対象
-2. Generalization Check を通過した学びを `instincts.ts add` で登録
-3. 既存 instinct と類似する場合は `instincts.ts reinforce` で強化
-4. **Missing Context** と **Tool Knowledge** は instinct ではなく CLAUDE.md 直接提案にルーティング
+1. Target learnings from the **Corrected Approaches** and **Repeated Workflows** categories
+2. Register learnings that pass the Generalization Check via `instincts.ts add`
+3. If similar to an existing instinct, reinforce via `instincts.ts reinforce`
+4. **Missing Context** and **Tool Knowledge** are routed to direct CLAUDE.md proposals, not instincts
 
 ## Promotion to CLAUDE.md
 
-confidence 0.7+ の instinct は `/session-retrospective` Phase 4 の CLAUDE.md 提案に含まれる。ユーザー承認後:
-1. CLAUDE.md に1行ルールとして追加
-2. instinct の status を `promoted` に更新
-3. `promoted_at` と `claude_md_section` を記録
+Instincts with confidence 0.7+ are included in `/session-retrospective` Phase 4 CLAUDE.md proposals. After user approval:
+1. Added to CLAUDE.md as a one-line rule
+2. Instinct status updated to `promoted`
+3. `promoted_at` and `claude_md_section` recorded
 
 ## Related
 
-- **session-retrospective** — Phase 2.6 で instinct-learner を呼び出す
-- **cross-session-analysis** — 複数セッションの横断分析（より大規模）
+- **session-retrospective** -- calls instinct-learner in Phase 2.6
+- **cross-session-analysis** -- cross-session analysis (larger scale)

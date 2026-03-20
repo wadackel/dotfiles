@@ -87,7 +87,7 @@ The `programs/default.nix` auto-imports all subdirectories, enabling modular con
 
 ### `dotfiles.linkHere` and `recursive`
 
-`lib/dotfiles-path.nix` の `linkHere` は out-of-store symlink を作成する。`home.file` の `recursive = true` と組み合わせると Nix store 経由の個別ファイルリンクとなり、新ファイル追加時に `darwin-rebuild` が必要。ディレクトリ全体をリンク (`recursive` なし) にすれば新ファイルが自動反映される。
+`lib/dotfiles-path.nix`'s `linkHere` creates out-of-store symlinks. When combined with `home.file`'s `recursive = true`, it creates individual file links via the Nix store, requiring `darwin-rebuild` when adding new files. Linking the entire directory (without `recursive`) allows new files to be reflected automatically.
 
 ### Helper Functions in flake.nix
 
@@ -126,9 +126,9 @@ Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` sec
 2. Create module: `home/programs/<program-name>/default.nix`
 3. Add configuration files in the same directory
 4. Track new files in Git: `git add home/programs/<program-name>/` (Nix flake only recognizes tracked files)
-   - **シェルスクリプトの場合**: `chmod +x <file>` でファイルシステムの execute bit を付与してから `darwin-rebuild`
-   - `git update-index --chmod=+x` は git INDEX のみ変更しファイルシステムは変更しない点に注意
-   - nix store はソースの execute bit を引き継ぐため、ソースへの `chmod +x` → `darwin-rebuild` が必要
+   - **For shell scripts**: Run `chmod +x <file>` to set the filesystem execute bit before `darwin-rebuild`
+   - Note: `git update-index --chmod=+x` only changes the git INDEX, not the actual filesystem
+   - The Nix store inherits the execute bit from the source, so `chmod +x` on the source → `darwin-rebuild` is required
 5. Apply: `sudo darwin-rebuild switch --flake .#private`
 
 Example module structure:
@@ -179,18 +179,18 @@ For rollback commands and generation management, see [README.md](README.md#rollb
 
 ## Troubleshooting
 
-### tmux 設定の即時反映
+### Hot-reloading tmux Configuration
 
-tmux の設定ファイルは XDG パス `~/.config/tmux/tmux.conf` に配置される（`~/.tmux.conf` は存在しない）。
-編集後の即時反映コマンド: `TMUX="" tmux source-file ~/.config/tmux/tmux.conf`
+The tmux config file is located at the XDG path `~/.config/tmux/tmux.conf` (`~/.tmux.conf` does not exist).
+Command to hot-reload after editing: `TMUX="" tmux source-file ~/.config/tmux/tmux.conf`
 
-`bind-key` の `if-shell` 引数内で `\;` はコマンドセパレータとして機能しない（`tmux list-keys` で `\\;` と表示され、リテラル文字として保持される）。複数コマンドを順に実行する場合は、`bind-key` のトップレベルで `\;` で分離すること:
-- ✗ `bind-key h if-shell -F cond 'cmd1 \; cmd2'` — `cmd1 \; cmd2` が単一コマンド扱い
-- ✓ `bind-key h if-shell -F cond 'cmd1' \; if-shell -F cond2 'cmd2'` — トップレベルで分離
+`\;` inside `bind-key`'s `if-shell` arguments does not function as a command separator (`tmux list-keys` shows `\\;`, meaning it is retained as a literal character). To execute multiple commands sequentially, separate with `\;` at the top level of `bind-key`:
+- ✗ `bind-key h if-shell -F cond 'cmd1 \; cmd2'` — `cmd1 \; cmd2` treated as a single command
+- ✓ `bind-key h if-shell -F cond 'cmd1' \; if-shell -F cond2 'cmd2'` — separated at top level
 
-### launchd / macOS 通知からのコマンド実行
+### Command Execution from launchd / macOS Notifications
 
-`terminal-notifier -execute` など macOS 通知クリック時に実行されるスクリプトは launchd 環境で動作し、PATH が `/usr/bin:/bin:/usr/sbin:/sbin` に限定される。Nix 管理のコマンド (tmux, jq など) を使う場合はフルパスを渡す必要がある。
+Scripts executed on macOS notification click (e.g., `terminal-notifier -execute`) run in the launchd environment where PATH is limited to `/usr/bin:/bin:/usr/sbin:/sbin`. When using Nix-managed commands (tmux, jq, etc.), full paths must be provided.
 
 ### Configuration Not Applied
 
@@ -214,43 +214,43 @@ This repository includes comprehensive Claude Code configuration:
 
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
 - **Agents**: 20 specialized agents in `home/programs/claude/agents/` (accessibility, architecture, backend, cloud, code-review, debugging, DevOps, documentation, error-detective, frontend, JavaScript/TypeScript, performance, QA, React, refactoring, security-audit, security-engineering, SRE, technical writing)
-- **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, PATH に追加済み)
-  - `claude-notify.ts`: terminal-notifier + tmux 連携通知。デバッグ: `claude-notify.ts debug`
-  - `extract-session-history.ts`: セッションの transcript JSONL を読み取り、構造化された markdown に変換して出力
-  - `claude-memo.ts`: セッション要約を Obsidian デイリーノートに書き込む Stop hook。デバッグ: `$TMPDIR/claude-memo.log`
-  - `bash-policy.ts`: 禁止コマンドパターンをブロックする `PreToolUse` hook（常時稼働）。ルール定義: `bash-policy.yaml`（同ディレクトリ）
-  - Claude scripts のテスト実行: `deno test --allow-env=HOME --allow-read --allow-write home/programs/claude/scripts/<name>_test.ts`
-  - 新スクリプト追加時は `settings.json` の `permissions.allow` に `"Bash(*<script-name>*)"` を追記すること（ワイルドカード接頭辞で、Claude がフルパスで呼び出す場合にも対応。`Bash(<script-name>*)` ではパス付き呼び出しにマッチしない）
-  - リダイレクト付き呼び出し（`2>/dev/null` 等）は `Bash()` パターンにマッチしない既知制限があるが、`approve-piped-commands.ts` が `settings.json` のパターンを読み込んで自動承認するため追加作業は不要
-  - 例外: `hooks` から呼び出されるスクリプトは Bash tool call ではないため `permissions.allow` への追加不要
-  - 新スクリプト追加時は `chmod +x` で実行権限を付与すること（hooks からの実行に execute bit が必要。git が 100644/100755 でモードを管理するので commit も必要）
+- **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, added to PATH)
+  - `claude-notify.ts`: terminal-notifier + tmux integration notifications. Debug: `claude-notify.ts debug`
+  - `extract-session-history.ts`: Reads session transcript JSONL and outputs structured markdown
+  - `claude-memo.ts`: Stop hook that writes session summaries to Obsidian daily notes. Debug: `$TMPDIR/claude-memo.log`
+  - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory)
+  - Running Claude script tests: `deno test --allow-env=HOME --allow-read --allow-write home/programs/claude/scripts/<name>_test.ts`
+  - When adding new scripts, add `"Bash(*<script-name>*)"` to `permissions.allow` in `settings.json` (wildcard prefix handles full-path invocations by Claude. `Bash(<script-name>*)` does not match path-prefixed invocations)
+  - Invocations with redirects (`2>/dev/null`, etc.) do not match `Bash()` patterns (known limitation), but `approve-piped-commands.ts` reads patterns from `settings.json` and auto-approves, so no additional work is needed
+  - Exception: Scripts called from `hooks` are not Bash tool calls, so adding to `permissions.allow` is not required
+  - When adding new scripts, grant execute permission with `chmod +x` (execute bit is required for hook execution. Git manages mode as 100644/100755, so a commit is also needed)
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
-- **グローバル CLAUDE.md**: `home/programs/claude/CLAUDE.md` が `~/.claude/CLAUDE.md` のシンボリックリンク元。グローバル設定を編集する際はこのファイルを直接編集する
-- **`permissions.allow`**: `Edit(~/.claude/**)` と `Write(~/.claude/**)` を追加することで、skill が `~/.claude/` 配下のファイルを確認ダイアログなしに編集できる
+- **Global CLAUDE.md**: `home/programs/claude/CLAUDE.md` is the symlink source for `~/.claude/CLAUDE.md`. Edit this file directly when modifying global settings
+- **`permissions.allow`**: Adding `Edit(~/.claude/**)` and `Write(~/.claude/**)` allows skills to edit files under `~/.claude/` without confirmation dialogs
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
-### プロジェクトディレクトリのエンコード規則
+### Project Directory Encoding Rules
 
-`~/.claude/projects/` のディレクトリ名はプロジェクトパスのエンコード: 先頭 `/` 除去後に `-` を prefix、`/` と `.` をどちらも `-` に置換。
-例: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
+Directory names under `~/.claude/projects/` are encoded from the project path: strip the leading `/`, add `-` as a prefix, and replace both `/` and `.` with `-`.
+Example: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
 
 ### bash-policy
 
-`bash-policy.ts` はグローバル `PreToolUse` hook として全 Bash コマンドを評価する。
-- **ブロック動作**: exit 2 → コマンド不実行 → stderr がエラーフィードバックとして Claude へ返却 → 自己修正
-- **グローバルルール**: `~/.claude/scripts/bash-policy.yaml`（現在: `git -C *`）
-- **プロジェクトルール**: `.claude/bash-policy.yaml` を作成すると `cwd` から上方探索して自動ロード（グローバル gitignore 済み）
-- **ルール形式**: `pattern: "npx *"` + `message: "..."` の YAML（glob マッチ）
+`bash-policy.ts` evaluates all Bash commands as a global `PreToolUse` hook.
+- **Blocking behavior**: exit 2 → command not executed → stderr returned to Claude as error feedback → self-correction
+- **Global rules**: `~/.claude/scripts/bash-policy.yaml` (currently: `git -C *`)
+- **Project rules**: Create `.claude/bash-policy.yaml` and it will be auto-loaded by searching upward from `cwd` (already in global gitignore)
+- **Rule format**: YAML with `pattern: "npx *"` + `message: "..."` (glob matching)
 
 ### Hook Data
 
-Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`, `cwd`) plus event-specific fields. `cwd` はセッション開始時のプロジェクトルート（bash コマンド内の `cd` に関わらず一定）。 Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
+Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`, `cwd`) plus event-specific fields. `cwd` is the project root at session start (constant regardless of `cd` within bash commands). Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
 
-### `permissions.allow` の制限
+### `permissions.allow` Limitations
 
-パイプ `|`、`&&`、`||`、`;`、リダイレクト `2>&1` などを含むコマンドは `Bash(cmd *)` パターンにマッチしない既知の制限がある（[Issue #13137](https://github.com/anthropics/claude-code/issues/13137)）。対処法:
-- `PermissionRequest` hook でパイプ・リダイレクト等のシェル構文を含むコマンドをセグメント分割してホワイトリスト照合し自動承認する（`home/programs/claude/scripts/approve-piped-commands.ts` 参照）
-- `PermissionRequest` は権限ダイアログが発生する直前のみ発火するため、`PreToolUse` より低オーバーヘッド
+Commands containing pipes `|`, `&&`, `||`, `;`, or redirects `2>&1` do not match `Bash(cmd *)` patterns — this is a known limitation ([Issue #13137](https://github.com/anthropics/claude-code/issues/13137)). Workaround:
+- Use a `PermissionRequest` hook to segment commands containing shell syntax (pipes, redirects, etc.), match against a whitelist, and auto-approve (see `home/programs/claude/scripts/approve-piped-commands.ts`)
+- `PermissionRequest` fires only just before a permission dialog appears, making it lower overhead than `PreToolUse`
 
-`Tool(**)` パターン（例: `Read(**)`）はプロジェクトディレクトリと `additionalDirectories` 内のパスのみカバーする。`~/.claude/` のようなプロジェクト外パスには `Tool(~/.claude/**)` を別途追加すること。`Read`, `Edit`, `Write` の3つ全てに `~/.claude/**` パターンが必要。
+`Tool(**)` patterns (e.g., `Read(**)`) only cover paths within the project directory and `additionalDirectories`. For paths outside the project like `~/.claude/`, add `Tool(~/.claude/**)` separately. All three of `Read`, `Edit`, and `Write` need the `~/.claude/**` pattern.

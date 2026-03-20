@@ -85,12 +85,12 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 ### Claude Code Hooks Notes
 
-- **PreToolUse の matcher 制限**: `Task` tools (`TaskCreate`, `TaskUpdate`, etc.) と `Skill` tool は NOT matchable（実機テスト確認済み 2026-03-19）。`ExitPlanMode` はマッチ可能（実機検証済み 2026-03-20）。`{"decision":"block","reason":"..."}` を stdout に出力すると block + メッセージ配信が動作する
+- **PreToolUse matcher limitation**: `Task` tools (`TaskCreate`, `TaskUpdate`, etc.) and `Skill` tool are NOT matchable (verified on real device 2026-03-19). `ExitPlanMode` IS matchable (verified 2026-03-20). Output `{"decision":"block","reason":"..."}` to stdout to block + deliver message
 - **To intercept before skill execution, use `UserPromptSubmit`**: Detect `/skill-name` in the stdin JSON `prompt` field. Example: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
 - **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
 - **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
 - **Approval tracking with `PostToolUse`**: `PermissionRequest` only records that a dialog was shown (cannot distinguish approval/denial). To track actually executed (approved) commands, combine with a `PostToolUse` hook. Exclude high-frequency tools (Read/Glob/Grep) via matcher to reduce overhead
-- **task-planner gate**: `task-planner-gate.ts` が ExitPlanMode を PreToolUse でゲート。block 時は `touch /tmp/claude-task-planner-ready-{session_id}` でマーカー作成後に ExitPlanMode を再試行
+- **task-planner gate**: `task-planner-gate.ts` gates ExitPlanMode via PreToolUse. When blocked, create a marker with `touch /tmp/claude-task-planner-ready-{session_id}` then retry ExitPlanMode
 
 ### codex-review Skill Special Rule
 
@@ -134,9 +134,9 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 #### Plan Execution (after ExitPlanMode)
 
 - **Convert plan to tasks**: After ExitPlanMode, extract steps from the plan file and register each as an individual task via TaskCreate
-  - **task-planner エージェントの活用**: 3つ以上のタスクに分解される計画では、plan ファイルを `task-planner` サブエージェントに渡して構造化されたタスク分解を生成する。その出力を TaskCreate に使用する
-  - **タスク記述の3要素**: 各タスクの description は以下を含むこと: (1) 変更対象ファイル, (2) 変更後の期待される振る舞い, (3) 検証方法（コマンド + 期待される出力）
-  - **関心の分離**: 異なる関心事（例: エージェント追加とCLAUDE.md修正）は別タスクに分離。同じ関心事のファイル群（モジュール + テスト）は1タスクにまとめる
+  - **Leverage task-planner agent**: For plans that decompose into 3+ tasks, pass the plan file to the `task-planner` subagent to generate structured task decomposition. Use its output for TaskCreate
+  - **Three elements of task descriptions**: Each task description must include: (1) target files to modify, (2) expected behavior after change, (3) verification method (command + expected output)
+  - **Separation of concerns**: Separate different concerns (e.g., adding an agent vs. modifying CLAUDE.md) into distinct tasks. Group files sharing the same concern (module + tests) into a single task
   - **Separate implementation and verification tasks** (e.g., "Implement feature A" and "Verify feature A" are distinct tasks)
   - Verification task descriptions must include the exact commands to run and expected output (recoverable from tasks after compaction)
   - Verification tasks must include "Run `/verification-before-completion` before marking complete"
@@ -160,9 +160,9 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 #### Implementation and Verification
 
 - **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
-- **Baseline capture（実装前の状態記録）**: 変更を加える前に、変更対象の現在の動作を記録する。CLI ならコマンド出力、設定なら現在値、UI ならスクリーンショット。「変更前の状態がわからない」は検証不能を意味する
-- **End-to-end behavioral verification**: 実装完了後、変更が実際に機能していることを確認する。「コードを書いた」は「動作する」を意味しない。スクリプト → 実行して出力を確認、hook → フック発火条件を再現して介入動作を確認、設定変更 → 設定が反映された環境で確認。詳細は `verification-before-completion/references/behavioral-verification.md` 参照
-- **Verification observability**: 変更した振る舞い自体をテストツールが観測可能か確認する。テストが変更を検出できない場合（例: スピナーの in-place 更新は stdout キャプチャでは検出不可、CSS の視覚的変化はユニットテストでは検出不可）、その観測限界を明示し、適切な検証手段（手動確認、スクリーンショット比較等）を選択する
+- **Baseline capture (pre-implementation state recording)**: Before making changes, record the current behavior of the target. For CLI: command output, for config: current values, for UI: screenshots. "Unknown pre-change state" means verification is impossible
+- **End-to-end behavioral verification**: After implementation, confirm changes actually work. "Code was written" does not mean "it works". Scripts → execute and check output, hooks → reproduce trigger conditions and verify intervention behavior, config changes → verify in the environment where settings are applied. See `verification-before-completion/references/behavioral-verification.md` for details
+- **Verification observability**: Confirm that the changed behavior itself is observable by the test tool. When tests cannot detect the change (e.g., spinner in-place updates are not captured by stdout capture, CSS visual changes are not detectable by unit tests), explicitly state the observation limitations and choose appropriate verification methods (manual confirmation, screenshot comparison, etc.)
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
 - **No completion claims without verification**: Before claiming work is complete or successful, run `/verification-before-completion` and follow the Gate Function
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
@@ -197,13 +197,13 @@ Applies to human code review feedback (PR reviews, direct user feedback, etc.). 
 
 ### Google Docs URL Handling
 
-Google Docs の URL（`https://docs.google.com/document/d/...`）が提供され、その内容を参照・読み取る必要がある場合は、`/gdocs-to-md` スキルを使用してドキュメントをMarkdownに変換し、その内容をコンテキストに読み込む。WebFetch では Google Docs の構造化された内容を取得できないため、gws Docs API 経由の変換が必要。
+When a Google Docs URL (`https://docs.google.com/document/d/...`) is provided and its content needs to be referenced or read, use the `/gdocs-to-md` skill to convert the document to Markdown and load it into context. WebFetch cannot retrieve structured Google Docs content, so conversion via gws Docs API is required.
 
 ### GitHub URL Handling
 
 GitHub Issue and Pull Request URLs provided by the user are often from private repositories and cannot be accessed directly. As a rule, use the `gh` CLI to retrieve information from GitHub URLs provided by the user.
 
-GitHub リポジトリ URL が提供され、コードの調査・分析・比較・参照が必要な場合は、`/repo-dive` スキルを使用してローカルにクローンし、ネイティブファイルツール（Read, Grep, Glob, Agent）で探索する。WebFetch や `gh api` でのコード取得は遅く不完全なため使用しない。
+When a GitHub repository URL is provided and code investigation, analysis, comparison, or reference is needed, use the `/repo-dive` skill to clone locally and explore with native file tools (Read, Grep, Glob, Agent). Do not use WebFetch or `gh api` for code retrieval as they are slow and incomplete.
 
 ## Design Principles
 

@@ -5,94 +5,94 @@ description: Enforces test-first development patterns. Use when writing new feat
 
 # TDD Workflow
 
-テストファーストの開発パターンを強制する。「実装 → 検証」ではなく「検証の設計 → 実装 → 検証の実行」の順序で作業する。
+Enforces test-first development patterns. Work in the order "design verification -> implement -> run verification" instead of "implement -> verify".
 
 ## When to Use
 
-- 新機能の実装（テスト可能な振る舞いがある場合）
-- バグ修正（再現可能な症状がある場合）
-- CLI スクリプトの作成・修正
-- hook スクリプトの作成・修正
-- 新機能実装時に proactive に使用
+- Implementing new features (when testable behavior exists)
+- Bug fixes (when symptoms are reproducible)
+- Creating or modifying CLI scripts
+- Creating or modifying hook scripts
+- Proactively use when implementing new features
 
 ## When NOT to Use
 
-- 設定値の変更のみ
-- ドキュメント修正
-- 既存テストカバレッジ内のリファクタリング
+- Configuration value changes only
+- Documentation fixes
+- Refactoring within existing test coverage
 
 ## Workflow
 
-### Step 1: 期待される振る舞いを定義する
+### Step 1: Define Expected Behavior
 
-実装を始める前に、「何が正しい動作か」を具体的に書き出す。
+Before starting implementation, concretely write out "what correct behavior looks like".
 
-- Deno スクリプト → `_test.ts` にテストケースを書く
-- Nix 設定 → 期待される出力（`which <command>`, generation 番号変化）を定義
-- hook → 入力→期待出力のペアを列挙
-- skill → positive/negative トリガーテストケースを定義
+- Deno scripts -> write test cases in `_test.ts`
+- Nix configuration -> define expected output (`which <command>`, generation number changes)
+- Hooks -> enumerate input -> expected output pairs
+- Skills -> define positive/negative trigger test cases
 
-### Step 2: テストを書く → 失敗を確認する (RED)
-
-```bash
-# Deno の場合
-deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
-# → FAILED が出ることを確認（実装がないので当然）
-```
-
-テストが失敗することの確認は必須。既に通るテストを書いても意味がない。
-
-### Step 3: 最小限の実装 (GREEN)
-
-テストを通すためだけのコードを書く。余分な機能は追加しない。
+### Step 2: Write Tests -> Confirm Failure (RED)
 
 ```bash
-# 再度テスト実行
+# For Deno
 deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
-# → PASSED を確認
+# -> Confirm FAILED output (expected since no implementation exists)
 ```
 
-### Step 4: リファクタリング
+Confirming test failure is mandatory. Writing tests that already pass is meaningless.
 
-テストがパスし続けることを確認しながら、コード品質を改善する。
+### Step 3: Minimal Implementation (GREEN)
 
-### Step 5: 検証完了を宣言
+Write only enough code to make the tests pass. Do not add extra features.
 
-全テストがパスし、期待される振る舞いが実装されたことを確認してから完了を宣言する。
+```bash
+# Run tests again
+deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
+# -> Confirm PASSED
+```
 
-## コンテキスト別ガイド
+### Step 4: Refactor
 
-### Deno スクリプト
+Improve code quality while confirming tests continue to pass.
 
-既存のテストパターンに従う:
-- `bash-policy_test.ts` — glob パターンマッチのテスト
-- `approve-piped-commands_test.ts` — パイプコマンド分割のテスト
-- `shell-utils_test.ts` — ユーティリティ関数のテスト
+### Step 5: Declare Verification Complete
 
-テスト実行: `deno test --allow-env=HOME --allow-read --allow-write <path>`
+Declare completion only after confirming all tests pass and expected behavior is implemented.
 
-### Nix 設定
+## Context-Specific Guide
 
-純粋な TDD ではなく「構造検証ゲート」:
-1. 期待結果を事前定義（例: "htop が PATH に存在する"）
-2. `nix flake check` で構文検証
-3. `darwin-rebuild switch` で適用
-4. 期待結果を確認
+### Deno Scripts
 
-### hook スクリプト
+Follow existing test patterns:
+- `bash-policy_test.ts` -- glob pattern matching tests
+- `approve-piped-commands_test.ts` -- pipe command splitting tests
+- `shell-utils_test.ts` -- utility function tests
 
-1. テストシナリオ定義（stdin JSON → 期待 stdout/exit code）
-2. hook 実装
-3. テストシナリオ実行
+Test execution: `deno test --allow-env=HOME --allow-read --allow-write <path>`
 
-### skill 定義
+### Nix Configuration
 
-1. skill-tester のテストケース定義（positive/negative/edge triggers）
-2. SKILL.md 作成
-3. skill-tester 実行
+Not pure TDD but a "structural verification gate":
+1. Pre-define expected results (e.g., "htop exists in PATH")
+2. Syntax verification with `nix flake check`
+3. Apply with `darwin-rebuild switch`
+4. Confirm expected results
+
+### Hook Scripts
+
+1. Define test scenarios (stdin JSON -> expected stdout/exit code)
+2. Implement hook
+3. Run test scenarios
+
+### Skill Definitions
+
+1. Define skill-tester test cases (positive/negative/edge triggers)
+2. Create SKILL.md
+3. Run skill-tester
 
 ## Related
 
-- **tdd-guide agent** — TDD の実行を支援するサブエージェント
-- **verification-before-completion** — 完了前の検証ゲート
-- **qa-planner** — QA テストケース設計
+- **tdd-guide agent** -- subagent that assists with TDD execution
+- **verification-before-completion** -- pre-completion verification gate
+- **qa-planner** -- QA test case design

@@ -27,7 +27,7 @@ Related source: src/foo.ts, src/bar.ts
 "
 
 # Follow-up review
-codex exec resume --last --full-auto "修正しました。再レビューをお願いします。"
+codex exec resume --last --full-auto "Fixes applied. Please re-review."
 ```
 
 ## Important: `codex exec review` vs `codex exec`
@@ -106,7 +106,7 @@ Review criteria: ...
 1. Apply fixes using Edit/Write tools
 2. Invoke via Bash tool:
    ```bash
-   codex exec resume --last --full-auto "修正を適用しました。再度レビューをお願いします。"
+   codex exec resume --last --full-auto "Fixes applied. Please re-review."
    ```
    - `--last`: Resumes the most recent session in the current directory (cwd-filtered)
    - For parallel reviews, use explicit session ID: `codex exec resume <SESSION_ID> --full-auto "..."`

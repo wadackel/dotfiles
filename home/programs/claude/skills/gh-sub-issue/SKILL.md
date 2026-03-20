@@ -27,8 +27,8 @@ Without arguments, Claude will ask for the parent issue URL.
 
 Parse `$ARGUMENTS` to extract the parent issue:
 
-- Full URL: `https://github.com/owner/repo/issues/N` → owner=`owner`, repo=`repo`, number=`N`
-- Shorthand: `owner/repo#N` → owner=`owner`, repo=`repo`, number=`N`
+- Full URL: `https://github.com/owner/repo/issues/N` -> owner=`owner`, repo=`repo`, number=`N`
+- Shorthand: `owner/repo#N` -> owner=`owner`, repo=`repo`, number=`N`
 
 If `$ARGUMENTS` is empty or unparseable, ask the user for the parent issue URL.
 
@@ -45,11 +45,11 @@ Determine the operation from conversational context or `$ARGUMENTS`:
 
 | User intent | Operation |
 |-------------|-----------|
-| "create new sub-issue", "add sub-issue", "子イシューを作成" | → Create and Add |
-| "attach/link existing issue", "既存のissueを追加" | → Add Existing Issue |
-| "list/show sub-issues", "サブイシュー一覧" | → List |
-| "remove/unlink/detach sub-issue", "サブイシューを外す" | → Remove |
-| "reorder/move sub-issue", "並び替え" | → Reorder |
+| "create new sub-issue", "add sub-issue", "子イシューを作成" | -> Create and Add |
+| "attach/link existing issue", "既存のissueを追加" | -> Add Existing Issue |
+| "list/show sub-issues", "サブイシュー一覧" | -> List |
+| "remove/unlink/detach sub-issue", "サブイシューを外す" | -> Remove |
+| "reorder/move sub-issue", "並び替え" | -> Reorder |
 
 If only a parent issue URL is provided with no clear operation, ask the user which operation they want.
 
@@ -59,8 +59,8 @@ Create a new issue and immediately attach it as a sub-issue.
 
 1. Gather from context or ask the user:
    - **Title** (required)
-   - **Body** (optional — defaults to empty string if not provided)
-   - **Labels, assignees, milestone** (optional — pass through if provided)
+   - **Body** (optional -- defaults to empty string if not provided)
+   - **Labels, assignees, milestone** (optional -- pass through if provided)
 
 2. Create the issue:
 

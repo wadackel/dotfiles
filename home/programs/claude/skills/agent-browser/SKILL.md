@@ -23,7 +23,7 @@ agent-browser --auto-connect tab new <url>
 First-time connection (daemon not yet connected) uses `agent-browser --auto-connect open <url>` to establish the connection.
 
 If auto-connect fails (Chrome not running or remote debugging not enabled), stop and inform the user:
-- "Chrome のリモートデバッグが有効になっていません。`chrome://inspect/#remote-debugging` を開いて有効化してください。"
+- "Chrome remote debugging is not enabled. Please open `chrome://inspect/#remote-debugging` to enable it."
 
 **When to use other modes instead:**
 - User explicitly requests a fresh/clean browser state → `--headed --session-name {project}` or `--headed` alone
