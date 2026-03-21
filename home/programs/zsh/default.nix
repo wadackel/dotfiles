@@ -60,9 +60,6 @@
       df = "df -h";
       rmrf = "rm -rf";
 
-      # zellij
-      zj = "zellij";
-
       # tmux - basic aliases
       tm = "tmux";
       tmls = "tmux ls";

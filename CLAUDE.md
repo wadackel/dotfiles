@@ -105,7 +105,7 @@ Both configurations use the same overlays and extraSpecialArgs to ensure consist
 - **CLI tools**: Most development tools are in `home/programs/packages/default.nix` as Nix packages
 - **Fonts**: Nerd Fonts managed via home-manager (auto-synced to `~/Library/Fonts/HomeManager/`)
 - **Shell configuration**: zsh, bash, fish with starship prompt
-- **Program configs**: git, neovim, tmux, zellij, fzf, and 20+ other tools
+- **Program configs**: git, neovim, tmux, fzf, and 20+ other tools
 
 ### What's Still Using Homebrew
 

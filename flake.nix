@@ -12,10 +12,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     treefmt-nix.url = "github:numtide/treefmt-nix";
-    zellij-tab-name = {
-      url = "https://github.com/Cynary/zellij-tab-name/releases/download/v0.4.1/zellij-tab-name.wasm";
-      flake = false;
-    };
   };
 
   outputs =
@@ -25,7 +21,6 @@
       home-manager,
       nix-darwin,
       treefmt-nix,
-      zellij-tab-name,
       ...
     }:
     let
@@ -42,7 +37,6 @@
           home-manager
           nix-darwin
           treefmt-nix
-          zellij-tab-name
           ;
       };
 
@@ -50,9 +44,6 @@
       treefmtEval = treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
 
       overlays = [
-        (final: prev: {
-          zellij-tab-name = zellij-tab-name;
-        })
         (final: prev: {
           mo = final.stdenv.mkDerivation {
             pname = "mo";
