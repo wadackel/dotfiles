@@ -213,7 +213,7 @@ Nix keeps all previous generations - you can always rollback safely. See [README
 This repository includes comprehensive Claude Code configuration:
 
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
-- **Agents**: 9 specialized agents in `home/programs/claude/agents/` (code-review, security-audit, architecture-review, debugging, frontend, refactoring, task-planning, TDD, skill-review)
+- **Agents**: 10 specialized agents in `home/programs/claude/agents/` (code-review, security-audit, architecture-review, debugging, frontend, refactoring, build-error-resolution, task-planning, TDD, skill-review)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, added to PATH)
   - `claude-notify.ts`: terminal-notifier + tmux integration notifications. Debug: `claude-notify.ts debug`
   - `extract-session-history.ts`: Reads session transcript JSONL and outputs structured markdown
