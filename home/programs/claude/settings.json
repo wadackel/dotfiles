@@ -10,8 +10,7 @@
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "true",
     "FORCE_AUTOUPDATE_PLUGINS": "true",
     "DISABLE_AUTOUPDATER": "1",
-    "DISABLE_ERROR_REPORTING": "true",
-    "DISABLE_TELEMETRY": "true"
+    "DISABLE_ERROR_REPORTING": "true"
   },
   "permissions": {
     "allow": [
