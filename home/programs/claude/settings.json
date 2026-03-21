@@ -19,7 +19,7 @@
       "Bash(* --version)",
       "Bash(* -h *)",
       "Bash(* -v)",
-      "Bash(*extract-session-history.ts*)",
+      "Bash(*session-retrospective/extract-session-history.ts*)",
       "Bash(*instincts.ts*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*merge-settings/merge.ts*)",

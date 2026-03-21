@@ -216,7 +216,6 @@ This repository includes comprehensive Claude Code configuration:
 - **Agents**: 10 specialized agents in `home/programs/claude/agents/` (code-review, security-audit, architecture-review, debugging, frontend, refactoring, build-error-resolution, task-planning, TDD, skill-review)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`, added to PATH)
   - `claude-notify.ts`: terminal-notifier + tmux integration notifications. Debug: `claude-notify.ts debug`
-  - `extract-session-history.ts`: Reads session transcript JSONL and outputs structured markdown
   - `claude-memo.ts`: Stop hook that writes session summaries to Obsidian daily notes. Debug: `$TMPDIR/claude-memo.log`
   - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory)
   - Running Claude script tests: `deno test --allow-env=HOME --allow-read --allow-write home/programs/claude/scripts/<name>_test.ts`

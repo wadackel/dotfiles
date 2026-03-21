@@ -37,7 +37,7 @@ Gather full session data and reflect on it:
    **Note**: Run from the monorepo root. The script uses `Deno.cwd()` to locate the transcript directory, so running from a sub-package directory will fail to find files.
    ```bash
    cd $(git rev-parse --show-toplevel)
-   ~/.claude/scripts/extract-session-history.ts
+   ~/.claude/skills/session-retrospective/extract-session-history.ts
    ```
    Read the file path printed to stdout using the Read tool.
 
