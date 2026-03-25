@@ -119,7 +119,8 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - Target is a single file with a few lines of changes (typo fix, config value change, simple addition)
   - No design decisions or multiple implementation approaches exist
   - User explicitly says "no plan-deeper needed", "just implement it", etc.
-- **Wait for explicit user approval before ExitPlanMode**: After plan-deeper converges, present the final plan summary and wait for the user to say "実装して", "OK", "進めて", etc. before calling ExitPlanMode. Do not auto-exit after plan-deeper completion — the user may have additional feedback
+- **Run `/simplify-review` after plan-deeper converges**: After `/plan-deeper` completes, run `/simplify-review plan` to detect over-engineering and eliminate unnecessary complexity before ExitPlanMode. Same skip conditions as plan-deeper apply (single file, few lines, no design decisions, user explicitly skips)
+- **Wait for explicit user approval before ExitPlanMode**: After plan-deeper and simplify-review complete, present the final plan summary and wait for the user to say "実装して", "OK", "進めて", etc. before calling ExitPlanMode. Do not auto-exit after plan-deeper/simplify-review completion — the user may have additional feedback
 - **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
   1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
   2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect
@@ -148,6 +149,7 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **Faithful step execution**: Do not skip, rephrase, or reorder plan steps. Execute commands, file paths, and verification procedures exactly as written in the plan
 - **Progress tracking**: Update each task to in_progress when starting (record current HEAD SHA in task metadata as baseline_sha), completed when done. If a step is skipped, state the reason explicitly
 - **Verification before task completion**: Before marking any implementation task as completed, run `/verification-before-completion` Gate Function. This is the only reliable mechanism to prevent false completion claims — especially after compaction when prior verification context is lost
+- **Simplify review for large diffs**: For tasks with large changes (20+ files or 500+ lines), run `/simplify-review code` before `/subagent-review` to identify over-engineering. Skip for small changes or when user explicitly skips
 - **Subagent review after task completion**: Run `/subagent-review` after marking each implementation task completed. See the skill's SKILL.md for skip conditions and detailed flow
 - **Recovery after compaction**: If context compression occurs, check TaskList for incomplete tasks, re-read the plan file, then resume work
 - **Handling plan deviations**: If you discover a problem with the plan during implementation:

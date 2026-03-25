@@ -96,12 +96,12 @@ Same handling as Step 3:
 
 ## Relationship with codex-review
 
-| Aspect | subagent-review | codex-review |
-|--------|----------------|--------------|
-| Scope | Per-task incremental | Full implementation |
-| Trigger | Auto after each task (default) | User explicitly requests |
-| Reviewer | Claude subagent (fresh context) | Codex CLI (external tool) |
-| Purpose | Long-context quality correction | Holistic quality, security |
+| Aspect | simplify-review | subagent-review | codex-review |
+|--------|----------------|----------------|--------------|
+| Scope | Plan or per-task code | Per-task incremental | Full implementation |
+| Trigger | After plan-deeper / large diffs / manual | Auto after each task (default) | User explicitly requests |
+| Reviewer | Claude subagent (fresh context) | Claude subagent (fresh context) | Codex CLI (external tool) |
+| Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality | Holistic quality, security |
 
-Normal flow: `task → subagent-review → next task → subagent-review → ... → done`
+Normal flow: `task → simplify-review (large diffs) → subagent-review → next task → ... → done`
 With codex-review: `... → all tasks done → codex-review (additional)`

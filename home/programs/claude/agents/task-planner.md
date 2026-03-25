@@ -56,6 +56,7 @@ Analyze the changes in the plan and generate verification tasks according to the
 | Nix config | Confirm settings are applied after `darwin-rebuild` |
 | Skill/agent addition | Verify with skill-tester trigger test or manual invocation |
 | Improvement task | Record a Before baseline and compare with After to demonstrate improvement numerically |
+| Large implementation (5+ plan steps or 10+ files) | Insert a `/simplify-review code` task before the final `/verification-before-completion` gate task |
 
 See `verification-before-completion/references/behavioral-verification.md` for details.
 

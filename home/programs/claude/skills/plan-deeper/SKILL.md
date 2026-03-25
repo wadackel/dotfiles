@@ -145,11 +145,40 @@ Append results to Deepening Log:
 
 If any Falsified items are found, update the plan and mark verdict as `ITERATE`. The main agent applies fixes directly — no additional Critic round is needed (fixes are recorded in the Deepening Log for traceability).
 
-### Step 6: Define Completion Criteria
+### Step 6: Simplify Review
+
+After Adversarial Falsification confirms the plan is factually correct, check whether the plan is also *minimal*. Each round of critique and falsification can accumulate defensive complexity — extra error handling, speculative abstractions, "just in case" patterns. This step counterbalances that tendency.
+
+**When to run:** Always, unless:
+- The plan has 3 or fewer implementation steps (already lean)
+- The user explicitly says "skip simplify review" or equivalent
+
+**Execution:**
+
+Run `/simplify-review plan` via the Skill tool. The skill spawns a fresh SubAgent that sees only the plan and the original user request — no knowledge of the design journey. This clean perspective naturally surfaces complexity that feels justified to the author but isn't justified by the requirements.
+
+**Processing results:**
+
+| Verdict | Action |
+|---|---|
+| `SIMPLIFY` (has proposals) | Triage proposals by confidence (HIGH/MEDIUM/LOW). Apply HIGH-confidence simplifications directly. Present MEDIUM/LOW to user for approval. Update plan and append to Deepening Log |
+| `MINIMAL` (already lean) | No changes needed. Record in Deepening Log and proceed |
+
+Append results to Deepening Log:
+
+```markdown
+### Simplify Review
+- **Auto-applied (HIGH)**: [simplifications applied directly]
+- **User-approved**: [simplifications approved by user]
+- **Rejected**: [proposals rejected and why]
+- **Verdict**: SIMPLIFY | MINIMAL
+```
+
+### Step 7: Define Completion Criteria
 
 After the plan converges, define what "done" looks like. This enables Claude to work through implementation autonomously without repeatedly asking "what should I do next?"
 
-#### 6a. Analyze Plan for Stage Signals
+#### 7a. Analyze Plan for Stage Signals
 
 Scan the finalized plan and infer which completion stages are appropriate:
 
@@ -168,11 +197,11 @@ Scan the finalized plan and infer which completion stages are appropriate:
 
 Build a candidate pipeline as an ordered sequence. "User Review" is always the final stage unless a PR+merge is the terminal action.
 
-#### 6b. Interview User for Approval
+#### 7b. Interview User for Approval
 
 Present the inferred pipeline via AskUserQuestion:
 
-Present the **actually inferred** pipeline (not a fixed template). The example below includes Manual Verification — include or omit stages based on what 6a actually inferred:
+Present the **actually inferred** pipeline (not a fixed template). The example below includes Manual Verification — include or omit stages based on what 7a actually inferred:
 
 ```
 question: |
@@ -195,7 +224,7 @@ options:
 
 Adapt the pipeline based on the user's response. Ask at most one follow-up question for stage-specific details (e.g., which test command, which URL to verify).
 
-#### 6c. Write Criteria to Plan
+#### 7c. Write Criteria to Plan
 
 Append a `## Completion Criteria` section to the plan file:
 
@@ -220,7 +249,7 @@ Each stage description must be **concrete and plan-specific**. Never write gener
 
 **Manual Verification is opt-out, not opt-in.** The pipeline template always includes Manual Verification. To remove it, you must explicitly state the reason (e.g., "No observable behavior change — internal refactoring only"). Simply omitting it without justification is a pipeline construction error. This prevents the failure mode where CLI behavior changes, API changes, or UI changes are verified only by unit tests.
 
-### Step 7: Result Report
+### Step 8: Result Report
 
 ```
 ## Plan Deepening Complete
