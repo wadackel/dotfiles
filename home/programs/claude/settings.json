@@ -399,6 +399,7 @@
       "WebSearch",
       "Write(**)",
       "Write(~/.claude/**)",
+      "mcp__claude_ai_Notion",
       "mcp__figma",
       "mcp__playwright",
       "mcp__serena"

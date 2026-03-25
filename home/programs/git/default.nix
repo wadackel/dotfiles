@@ -22,6 +22,7 @@
       "/.worktrees"
       ".ofsht.toml"
       "CLAUDE.local.md"
+      ".claude/scheduled_tasks.lock"
       "**/.claude/settings.local.json"
       "**/.claude/rules/wadackel.md"
       "**/.claude/commands/wadackel-*"
