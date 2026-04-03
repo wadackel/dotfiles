@@ -54,6 +54,8 @@ When creating a separate PR for fixes unrelated to current work:
 
 **`!` history expansion**: `!` inside double quotes (e.g., `![[file#heading]]`) triggers history expansion, escaping to `\!`. Disable with `set +H &&` before the command: `set +H && obsidian create ...`
 
+**just (justfile) shell variables**: `just` recipes run with `sh` by default. Shell variable references use `$var` (not `$$var`). `just` does NOT require double-dollar escaping — `$$` in a justfile is interpreted by `sh` as the PID, not as an escaped `$`.
+
 **Bulk text replacement with special characters**: macOS BSD `sed` silently fails or corrupts patterns containing `!`, `$`, backticks. For bulk file replacement, use `fd -x python3 -c "import pathlib; ..."` instead of `sed`.
 
 ### Background Processes in Bash Tool
@@ -175,6 +177,7 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **Tests**: When test files exist, include expected value updates and new test cases for behavior changes in both the plan and implementation. Include tests in the work plan unless the user explicitly says "no test plan needed"
 - **Temporary verification files (test-*.mjs, verify-*.sh, etc.)**: Not for committing. Exclude during git add and suggest .gitignore additions as needed
 - **Establish measurement baseline → implement → re-measure → compare → conclude**: Follow this cycle for all improvement work, not just performance optimization. The definition of done is "demonstrated the effect with before/after numbers", not "made the fix"
+- **Performance optimization**: Do not pre-commit to a fixed optimization list before baseline measurement. Treat items as candidates, measure first, then select based on data. "Likely faster" is not a substitute for "measured faster"
 - **External library output verification**: Do not trust assumed data structures from external libraries based solely on reading source code or docs. When the implementation depends on the shape of external tool output (JSON schema, file paths, etc.), generate or obtain real sample data during planning phase to verify assumptions before implementation
 - **Output value verification**: When verifying new feature output (CI logs, script results), check value correctness — not just error absence. Before inspecting actual output, define what correct output looks like. Divergence signals a bug even without errors (e.g., expected ~3 items, got 16)
 - **Evidence over analysis**: When any analysis — yours, a subagent's, or documentation — conflicts with concrete evidence (actual output, user observations, reproducible behavior), trust the evidence. Investigate the discrepancy rather than rationalizing it

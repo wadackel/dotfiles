@@ -493,6 +493,81 @@ for _, pattern in ipairs({ ".eslintrc", ".stylelintrc", ".prettierrc", ".textlin
 end
 
 -- =============================================================
+-- mo (Markdown viewer)
+-- =============================================================
+local function mo_run(args)
+  if vim.fn.executable("mo") == 0 then
+    vim.notify("mo is not installed", vim.log.levels.ERROR)
+    return nil
+  end
+  local cmd = { "mo" }
+  vim.list_extend(cmd, args)
+  local result = vim.fn.system(cmd)
+  if vim.v.shell_error ~= 0 then
+    vim.notify("mo: " .. vim.trim(result), vim.log.levels.ERROR)
+    return nil
+  end
+  return vim.trim(result)
+end
+
+vim.api.nvim_create_user_command("MoOpen", function(opts)
+  local file = vim.fn.expand("%:p")
+  if file == "" then
+    vim.notify("mo: no file in current buffer", vim.log.levels.WARN)
+    return
+  end
+  local args = {}
+  if opts.args ~= "" then
+    vim.list_extend(args, { "--target", opts.args })
+  end
+  table.insert(args, file)
+  mo_run(args)
+end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("MoStatus", function()
+  local result = mo_run({ "--status", "--json" })
+  if not result then return end
+  local ok, data = pcall(vim.json.decode, result)
+  if not ok or type(data) ~= "table" then
+    vim.notify("mo: failed to parse status", vim.log.levels.ERROR)
+    return
+  end
+  local lines = {}
+  for _, server in ipairs(data) do
+    table.insert(lines, server.url .. " (" .. server.status .. ")")
+    if server.groups then
+      for _, group in ipairs(server.groups) do
+        table.insert(lines, "  " .. group.name .. ": " .. group.files .. " file(s)")
+      end
+    end
+  end
+  if #lines == 0 then
+    vim.notify("mo: no servers", vim.log.levels.INFO)
+  else
+    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+  end
+end, {})
+
+vim.api.nvim_create_user_command("MoWatch", function(opts)
+  local pattern = opts.args ~= "" and opts.args or "**/*.md"
+  mo_run({ "--watch", pattern })
+end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("MoUnwatch", function(opts)
+  local pattern = opts.args ~= "" and opts.args or "**/*.md"
+  mo_run({ "--unwatch", pattern })
+end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("MoBrowse", function() mo_run({}) end, {})
+vim.api.nvim_create_user_command("MoShutdown", function() mo_run({ "--shutdown" }) end, {})
+vim.api.nvim_create_user_command("MoRestart", function() mo_run({ "--restart" }) end, {})
+
+keymap({ "n" }, "<Space>mo", "<cmd>MoOpen<CR>")
+keymap({ "n" }, "<Space>ms", "<cmd>MoStatus<CR>")
+keymap({ "n" }, "<Space>mq", "<cmd>MoShutdown<CR>")
+keymap({ "n" }, "<Space>mb", "<cmd>MoBrowse<CR>")
+
+-- =============================================================
 -- Plugins
 -- =============================================================
 local has_config_file = function(bufnr, files)
@@ -525,9 +600,15 @@ local function lsp_on_attach(_, bufnr)
   keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
   kmap({ "n" }, "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
-  kmap({ "n" }, "<C-w><C-]>", function() Snacks.picker.lsp_definitions({ auto_confirm = false }) end)
-  kmap({ "n" }, "K", function() vim.lsp.buf.type_definition() end)
-  kmap({ "n" }, "<Leader>i", function() vim.lsp.buf.hover({ border = "rounded" }) end)
+  kmap({ "n" }, "<C-w><C-]>", function()
+    Snacks.picker.lsp_definitions({ auto_confirm = false })
+  end)
+  kmap({ "n" }, "K", function()
+    vim.lsp.buf.type_definition()
+  end)
+  kmap({ "n" }, "<Leader>i", function()
+    vim.lsp.buf.hover({ border = "rounded" })
+  end)
   kmap({ "n" }, "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap({ "n" }, "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
   kmap({ "n" }, "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
@@ -912,7 +993,6 @@ require("lazy").setup({
         require("telescope").load_extension("flutter")
       end,
     },
-
 
     {
       "saghen/blink.cmp",
@@ -1501,160 +1581,189 @@ require("lazy").setup({
     -- Filer
     -- =============================================================
     {
-      "A7Lavinraj/fyler.nvim",
+      "wadackel/eda.nvim",
+      lazy = false,
+      dir = "~/develop/github.com/wadackel/eda.nvim",
       dependencies = {
         "nvim-tree/nvim-web-devicons",
       },
-      branch = "stable", -- Use stable branch for production
-      lazy = false, -- Necessary for `default_explorer` to work properly
       keys = {
         {
           "<C-j>",
           function()
-            require("fyler").toggle({ kind = "float" })
+            require("eda").toggle({ kind = "float" })
           end,
           mode = "n",
           noremap = true,
+          desc = "Toggle eda file explorer",
         },
       },
       opts = {
-        integrations = {
-          icon = "nvim_web_devicons",
-          winpick = {
-            provider = "snacks",
-            opts = {},
-          },
+        hijack_netrw = true,
+        header = {
+          format = "minimal",
         },
-        views = {
-          finder = {
-            default_explorer = true,
-            git_status = {
-              enabled = true,
-              symbols = {
-                Untracked = "?",
-                Added = "✓",
-                Modified = "●",
-                Deleted = "",
-                Renamed = "➜",
-                Copied = "~",
-                Conflict = "!",
-                Ignored = "◌",
-              },
-            },
-            icon = {
-              directory_collapsed = "",
-              directory_empty = "",
-              directory_expanded = "",
-            },
-            mappings = {
-              ["="] = false,
-              ["<BS>"] = false,
-              ["."] = false,
-              ["#"] = false,
-              ["q"] = "CloseView",
-              ["<CR>"] = "Select",
-              ["<C-t>"] = "SelectTab",
-              ["|"] = "SelectVSplit",
-              ["-"] = "SelectSplit",
-              ["^"] = "GotoParent",
-              ["~"] = "GotoCwd",
-              ["W"] = "CollapseAll",
-              ["yp"] = function(self)
-                vim.fn.setreg(vim.v.register, vim.fn.fnamemodify(self:cursor_node_entry().path, ":."))
-              end,
-              ["gx"] = function(self)
-                vim.ui.open(self:cursor_node_entry().path)
-              end,
-              ["K"] = function(self)
-                vim.print(self:cursor_node_entry())
-              end,
-              ["<C-l>"] = function(self)
-                self:synchronize()
-              end,
-              ["<C-h>"] = function(self)
-                local current_node = self:cursor_node_entry()
-                local parent_ref_id = self.files:find_parent(current_node.ref_id)
-                if not parent_ref_id then
-                  return
-                end
-                if self.files.trie.value == parent_ref_id then
-                  self:exec_action("n_goto_parent")
-                else
-                  self:exec_action("n_collapse_node")
-                end
-              end,
-            },
-            win = {
-              border = "rounded",
-              buf_opts = {
-                filetype = "fyler",
-                syntax = "fyler",
-                buflisted = false,
-                buftype = "acwrite",
-                expandtab = true,
-                shiftwidth = 2,
-              },
-              kind = "replace",
-              kinds = {
-                float = {
-                  height = "80%",
-                  width = "94%",
-                  top = "5%",
-                  left = "2%",
-                },
-                replace = {},
-                split_above = {
-                  height = "70%",
-                },
-                split_above_all = {
-                  height = "70%",
-                  win_opts = {
-                    winfixheight = true,
-                  },
-                },
-                split_below = {
-                  height = "70%",
-                },
-                split_below_all = {
-                  height = "70%",
-                  win_opts = {
-                    winfixheight = true,
-                  },
-                },
-                split_left = {
-                  width = "30%",
-                },
-                split_left_most = {
-                  width = "30%",
-                  win_opts = {
-                    winfixwidth = true,
-                  },
-                },
-                split_right = {
-                  width = "30%",
-                },
-                split_right_most = {
-                  width = "30%",
-                  win_opts = {
-                    winfixwidth = true,
-                  },
-                },
-              },
-              win_opts = {
-                concealcursor = "nvic",
-                conceallevel = 3,
-                cursorline = false,
-                number = false,
-                relativenumber = false,
-                winhighlight = "Normal:FylerNormal,NormalNC:FylerNormalNC",
-                wrap = false,
-                signcolumn = "no",
-              },
-            },
-          },
+        mappings = {
+          ["<Tab>"] = "toggle_preview",
         },
       },
     },
+
+    -- {
+    --   "A7Lavinraj/fyler.nvim",
+    --   dependencies = {
+    --     "nvim-tree/nvim-web-devicons",
+    --   },
+    --   branch = "stable", -- Use stable branch for production
+    --   lazy = false, -- Necessary for `default_explorer` to work properly
+    --   keys = {
+    --     {
+    --       "<C-j>",
+    --       function()
+    --         require("fyler").toggle({ kind = "float" })
+    --       end,
+    --       mode = "n",
+    --       noremap = true,
+    --     },
+    --   },
+    --   opts = {
+    --     integrations = {
+    --       icon = "nvim_web_devicons",
+    --       winpick = {
+    --         provider = "snacks",
+    --         opts = {},
+    --       },
+    --     },
+    --     views = {
+    --       finder = {
+    --         default_explorer = true,
+    --         git_status = {
+    --           enabled = true,
+    --           symbols = {
+    --             Untracked = "?",
+    --             Added = "✓",
+    --             Modified = "●",
+    --             Deleted = "",
+    --             Renamed = "➜",
+    --             Copied = "~",
+    --             Conflict = "!",
+    --             Ignored = "◌",
+    --           },
+    --         },
+    --         icon = {
+    --           directory_collapsed = "",
+    --           directory_empty = "",
+    --           directory_expanded = "",
+    --         },
+    --         mappings = {
+    --           ["="] = false,
+    --           ["<BS>"] = false,
+    --           ["."] = false,
+    --           ["#"] = false,
+    --           ["q"] = "CloseView",
+    --           ["<CR>"] = "Select",
+    --           ["<C-t>"] = "SelectTab",
+    --           ["|"] = "SelectVSplit",
+    --           ["-"] = "SelectSplit",
+    --           ["^"] = "GotoParent",
+    --           ["~"] = "GotoCwd",
+    --           ["W"] = "CollapseAll",
+    --           ["yp"] = function(self)
+    --             vim.fn.setreg(vim.v.register, vim.fn.fnamemodify(self:cursor_node_entry().path, ":."))
+    --           end,
+    --           ["gx"] = function(self)
+    --             vim.ui.open(self:cursor_node_entry().path)
+    --           end,
+    --           ["K"] = function(self)
+    --             vim.print(self:cursor_node_entry())
+    --           end,
+    --           ["<C-l>"] = function(self)
+    --             self:synchronize()
+    --           end,
+    --           ["<C-h>"] = function(self)
+    --             local current_node = self:cursor_node_entry()
+    --             local parent_ref_id = self.files:find_parent(current_node.ref_id)
+    --             if not parent_ref_id then
+    --               return
+    --             end
+    --             if self.files.trie.value == parent_ref_id then
+    --               self:exec_action("n_goto_parent")
+    --             else
+    --               self:exec_action("n_collapse_node")
+    --             end
+    --           end,
+    --         },
+    --         win = {
+    --           border = "rounded",
+    --           buf_opts = {
+    --             filetype = "fyler",
+    --             syntax = "fyler",
+    --             buflisted = false,
+    --             buftype = "acwrite",
+    --             expandtab = true,
+    --             shiftwidth = 2,
+    --           },
+    --           kind = "replace",
+    --           kinds = {
+    --             float = {
+    --               height = "80%",
+    --               width = "94%",
+    --               top = "5%",
+    --               left = "2%",
+    --             },
+    --             replace = {},
+    --             split_above = {
+    --               height = "70%",
+    --             },
+    --             split_above_all = {
+    --               height = "70%",
+    --               win_opts = {
+    --                 winfixheight = true,
+    --               },
+    --             },
+    --             split_below = {
+    --               height = "70%",
+    --             },
+    --             split_below_all = {
+    --               height = "70%",
+    --               win_opts = {
+    --                 winfixheight = true,
+    --               },
+    --             },
+    --             split_left = {
+    --               width = "30%",
+    --             },
+    --             split_left_most = {
+    --               width = "30%",
+    --               win_opts = {
+    --                 winfixwidth = true,
+    --               },
+    --             },
+    --             split_right = {
+    --               width = "30%",
+    --             },
+    --             split_right_most = {
+    --               width = "30%",
+    --               win_opts = {
+    --                 winfixwidth = true,
+    --               },
+    --             },
+    --           },
+    --           win_opts = {
+    --             concealcursor = "nvic",
+    --             conceallevel = 3,
+    --             cursorline = false,
+    --             number = false,
+    --             relativenumber = false,
+    --             winhighlight = "Normal:FylerNormal,NormalNC:FylerNormalNC",
+    --             wrap = false,
+    --             signcolumn = "no",
+    --           },
+    --         },
+    --       },
+    --     },
+    --   },
+    -- },
 
     {
       "antosha417/nvim-lsp-file-operations",
@@ -3944,18 +4053,5 @@ require("lazy").setup({
       ft = "markdown",
     },
 
-    {
-      "toppair/peek.nvim",
-      event = { "VeryLazy" },
-      build = "deno task --quiet build:fast",
-      config = function()
-        require("peek").setup({
-          theme = "light",
-          app = "browser",
-        })
-        vim.api.nvim_create_user_command("PeekOpen", require("peek").open, {})
-        vim.api.nvim_create_user_command("PeekClose", require("peek").close, {})
-      end,
-    },
   },
 })
