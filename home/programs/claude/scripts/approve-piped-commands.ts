@@ -92,6 +92,35 @@ export async function extractCommands(command: string): Promise<string[]> {
     .filter((cmd) => cmd.length > 0);
 }
 
+/** Git global flags that consume the next token as an argument. */
+const GIT_FLAGS_WITH_ARG = new Set(["-c", "-C", "--git-dir", "--work-tree"]);
+
+/** Git global flags that are standalone (no argument). */
+const GIT_FLAGS_STANDALONE = new Set(["--no-pager", "--bare", "--no-replace-objects"]);
+
+/** Strip git global flags that appear before the subcommand. */
+export function stripGitGlobalFlags(segment: string): string {
+  const tokens = segment.split(/\s+/);
+  if (tokens[0] !== "git") return segment;
+
+  const result: string[] = ["git"];
+  let i = 1;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (GIT_FLAGS_WITH_ARG.has(t)) {
+      i += 2;
+    } else if (GIT_FLAGS_STANDALONE.has(t)) {
+      i += 1;
+    } else if (t.startsWith("--git-dir=") || t.startsWith("--work-tree=")) {
+      i += 1;
+    } else {
+      result.push(...tokens.slice(i));
+      break;
+    }
+  }
+  return result.join(" ");
+}
+
 /** Determine if all commands in a compound command match the allowed patterns. */
 export async function shouldApprove(
   command: string,
@@ -100,13 +129,14 @@ export async function shouldApprove(
   const { segments } = await parseCommand(command);
   if (segments.length === 0) return false;
   return segments.every((seg) => {
-    if (patterns.some((p) => matchesAllowedPattern(seg, p))) return true;
+    const normalized = stripGitGlobalFlags(seg);
+    if (patterns.some((p) => matchesAllowedPattern(normalized, p))) return true;
     // Basename fallback: if segment starts with a path, try with basename
-    const firstWord = seg.split(/\s+/)[0];
+    const firstWord = normalized.split(/\s+/)[0];
     if (firstWord.includes("/")) {
       const base = firstWord.split("/").pop() ?? "";
       if (base) {
-        const baseSeg = base + seg.slice(firstWord.length);
+        const baseSeg = base + normalized.slice(firstWord.length);
         return patterns.some((p) => matchesAllowedPattern(baseSeg, p));
       }
     }

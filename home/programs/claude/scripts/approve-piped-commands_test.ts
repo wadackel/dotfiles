@@ -655,3 +655,65 @@ Deno.test("shouldApprove: H3 — multiline with pipe char in prompt + 2>&1", asy
     'codex exec --full-auto "\n| Header | Value |\n|--------|-------|\n| a      | b     |\n" 2>&1';
   assertEquals(await shouldApprove(cmd, patterns), true);
 });
+
+// --- Git global flag stripping ---
+
+Deno.test("shouldApprove: strips git -c key=value before subcommand", async () => {
+  const patterns = ["git status *", "head *"];
+  assertEquals(
+    await shouldApprove(
+      "git -c core.excludesfile=/dev/null status --porcelain 2>&1 | head -5",
+      patterns,
+    ),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: strips git --no-pager before subcommand", async () => {
+  const patterns = ["git log *"];
+  assertEquals(
+    await shouldApprove("git --no-pager log --oneline -5", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: strips git -C dir before subcommand", async () => {
+  const patterns = ["git status *"];
+  assertEquals(
+    await shouldApprove("git -C /tmp/repo status", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: strips multiple git global flags", async () => {
+  const patterns = ["git diff *"];
+  assertEquals(
+    await shouldApprove(
+      "git --no-pager -c diff.color=never -C /tmp/repo diff HEAD",
+      patterns,
+    ),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: strips git --git-dir=value", async () => {
+  const patterns = ["git log *"];
+  assertEquals(
+    await shouldApprove("git --git-dir=/tmp/.git log --oneline", patterns),
+    true,
+  );
+});
+
+Deno.test("shouldApprove: git flag stripping does not affect non-git commands", async () => {
+  // gh -c is not a real flag, so it stays as-is and won't match "gh status *"
+  const patterns = ["gh status *"];
+  assertEquals(
+    await shouldApprove("gh -c something status", patterns),
+    false,
+  );
+});
+
+Deno.test("shouldApprove: git without flags still works", async () => {
+  const patterns = ["git commit *"];
+  assertEquals(await shouldApprove("git commit -m 'test'", patterns), true);
+});
