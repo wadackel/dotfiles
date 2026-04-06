@@ -6,6 +6,8 @@ allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 
 # Browser Automation with agent-browser
 
+The CLI uses Chrome/Chromium via CDP directly. Install via `npm i -g agent-browser`, `brew install agent-browser`, or `cargo install agent-browser`. Run `agent-browser install` to download Chrome. Existing Chrome, Brave, Playwright, and Puppeteer installations are detected automatically. Run `agent-browser upgrade` to update to the latest version.
+
 ## Default Flags
 
 Unless explicitly instructed otherwise, always use `--auto-connect` when opening a browser:
@@ -34,40 +36,91 @@ If auto-connect fails (Chrome not running or remote debugging not enabled), stop
 Every browser automation follows this pattern:
 
 1. **Navigate**: `agent-browser tab new <url>` (always opens in a new tab to avoid overwriting existing tabs)
-2. **Wait**: `agent-browser wait --load networkidle` (for SPAs and async content)
+2. **Wait** (if needed): `agent-browser wait 2000` or `agent-browser wait <selector>` for SPAs. Note: `open` already waits for the `load` event; additional waiting is only needed for async content
 3. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
 4. **Interact**: Use refs to click, fill, select
 5. **Re-snapshot**: After navigation or DOM changes, get fresh refs
 
 ```bash
 agent-browser tab new https://example.com/form
-agent-browser wait --load networkidle
+agent-browser wait 2000
 agent-browser snapshot -i
 # Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
 
 agent-browser fill @e1 "user@example.com"
 agent-browser fill @e2 "password123"
 agent-browser click @e3
-agent-browser wait --load networkidle
+agent-browser wait 2000
 agent-browser snapshot -i  # Check result
 ```
 
 ## Command Chaining
 
+**Prefer `batch` over `&&` chaining** for 2+ sequential commands. See Batch Execution section below. `&&` chaining still works but `batch` is more efficient.
+
 Commands can be chained with `&&` in a single shell invocation. The browser persists between commands via a background daemon, so chaining is safe and more efficient than separate calls.
 
 ```bash
-# Chain open + wait + snapshot in one call
-agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser snapshot -i
+# Chain open + snapshot in one call
+agent-browser open https://example.com && agent-browser snapshot -i
 
 # Chain multiple interactions
 agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "password123" && agent-browser click @e3
 
 # Navigate and capture
-agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser screenshot page.png
+agent-browser open https://example.com && agent-browser screenshot
 ```
 
-**When to chain:** Use `&&` when you don't need to read the output of an intermediate command before proceeding (e.g., open + wait + screenshot). Run commands separately when you need to parse the output first (e.g., snapshot to discover refs, then interact using those refs).
+**When to chain:** Use `&&` when you don't need to read the output of an intermediate command before proceeding (e.g., open + screenshot). Run commands separately when you need to parse the output first (e.g., snapshot to discover refs, then interact using those refs).
+
+## Batch Execution
+
+ALWAYS use `batch` when running 2+ commands in sequence. Batch executes commands in order, so dependent commands (like navigate then screenshot) work correctly. Each quoted argument is a separate command.
+
+```bash
+# Navigate and take a snapshot
+agent-browser batch "open https://example.com" "snapshot -i"
+
+# Navigate, snapshot, and screenshot in one call
+agent-browser batch "open https://example.com" "snapshot -i" "screenshot"
+
+# Click, wait, then screenshot
+agent-browser batch "click @e1" "wait 1000" "screenshot"
+
+# With --bail to stop on first error
+agent-browser batch --bail "open https://example.com" "click @e1" "screenshot"
+```
+
+Only use a single command (not batch) when you need to read the output before deciding the next command. For example, you must run `snapshot -i` as a single command when you need to read the refs to decide what to click. After reading the snapshot, batch the remaining steps.
+
+Stdin mode is also supported for programmatic use:
+
+```bash
+echo '[["open","https://example.com"],["screenshot"]]' | agent-browser batch --json
+agent-browser batch --bail < commands.json
+```
+
+## Efficiency Strategies
+
+These patterns minimize tool calls and token usage.
+
+**Use `--urls` to avoid re-navigation.** When you need to visit links from a page, use `snapshot -i --urls` to get all href URLs upfront. Then `open` each URL directly instead of clicking refs and navigating back.
+
+**Snapshot once, act many times.** Never re-snapshot the same page. Extract all needed info (refs, URLs, text) from a single snapshot, then batch the remaining actions.
+
+**Multi-page workflow (e.g. "visit N sites and screenshot each"):**
+
+```bash
+# 1. Get all URLs in one call
+agent-browser batch "open https://news.ycombinator.com" "snapshot -i --urls"
+# Read output to extract URLs, then visit each directly:
+# 2. One batch per target site
+agent-browser batch "open https://github.com/example/repo" "screenshot"
+agent-browser batch "open https://example.com/article" "screenshot"
+agent-browser batch "open https://other.com/page" "screenshot"
+```
+
+This approach uses 4 tool calls instead of 14+. Never go back to the listing page between visits.
 
 ## Handling Authentication
 
@@ -84,7 +137,17 @@ agent-browser --state ./auth.json open https://app.example.com/dashboard
 
 State files contain session tokens in plaintext -- add to `.gitignore` and delete when no longer needed. Set `AGENT_BROWSER_ENCRYPTION_KEY` for encryption at rest.
 
-**Option 2: Persistent profile (simplest for recurring tasks)**
+**Option 2: Chrome profile reuse (zero setup)**
+
+```bash
+# List available Chrome profiles
+agent-browser profiles
+
+# Reuse the user's existing Chrome login state
+agent-browser --profile Default open https://gmail.com
+```
+
+**Option 3: Persistent profile (for recurring tasks)**
 
 ```bash
 # First run: login manually or via automation
@@ -95,7 +158,7 @@ agent-browser --profile ~/.myapp open https://app.example.com/login
 agent-browser --profile ~/.myapp open https://app.example.com/dashboard
 ```
 
-**Option 3: Session name (auto-save/restore cookies + localStorage)**
+**Option 4: Session name (auto-save/restore cookies + localStorage)**
 
 ```bash
 agent-browser --session-name myapp open https://app.example.com/login
@@ -106,14 +169,16 @@ agent-browser close  # State auto-saved
 agent-browser --session-name myapp open https://app.example.com/dashboard
 ```
 
-**Option 4: Auth vault (credentials stored encrypted, login by name)**
+**Option 5: Auth vault (credentials stored encrypted, login by name)**
 
 ```bash
 echo "$PASSWORD" | agent-browser auth save myapp --url https://app.example.com/login --username user --password-stdin
 agent-browser auth login myapp
 ```
 
-**Option 5: State file (manual save/load)**
+`auth login` navigates with `load` and then waits for login form selectors to appear before filling/clicking, which is more reliable on delayed SPA login screens.
+
+**Option 6: State file (manual save/load)**
 
 ```bash
 # After logging in:
@@ -128,13 +193,19 @@ See [references/authentication.md](references/authentication.md) for OAuth, 2FA,
 ## Essential Commands
 
 ```bash
+# Batch: ALWAYS use batch for 2+ sequential commands. Commands run in order.
+agent-browser batch "open https://example.com" "snapshot -i"
+agent-browser batch "open https://example.com" "screenshot"
+agent-browser batch "click @e1" "wait 1000" "screenshot"
+
 # Navigation
 agent-browser open <url>              # Navigate (aliases: goto, navigate)
 agent-browser close                   # Close browser
+agent-browser close --all             # Close all active sessions
 
 # Snapshot
 agent-browser snapshot -i             # Interactive elements with refs (recommended)
-agent-browser snapshot -i -C          # Include cursor-interactive elements (divs with onclick, cursor:pointer)
+agent-browser snapshot -i --urls      # Include href URLs for links
 agent-browser snapshot -s "#selector" # Scope to CSS selector
 
 # Interaction (use @refs from snapshot)
@@ -158,10 +229,10 @@ agent-browser get cdp-url             # Get CDP WebSocket URL
 
 # Wait
 agent-browser wait @e1                # Wait for element
-agent-browser wait --load networkidle # Wait for network idle
-agent-browser wait --url "**/page"    # Wait for URL pattern
 agent-browser wait 2000               # Wait milliseconds
-agent-browser wait --text "Welcome"    # Wait for text to appear (substring match)
+agent-browser wait --url "**/page"    # Wait for URL pattern
+agent-browser wait --text "Welcome"   # Wait for text to appear (substring match)
+agent-browser wait --load networkidle # Wait for network idle (caution: hangs on ad-heavy sites, see Timeouts section)
 agent-browser wait --fn "!document.body.innerText.includes('Loading...')"  # Wait for text to disappear
 agent-browser wait "#spinner" --state hidden  # Wait for element to disappear
 
@@ -169,6 +240,24 @@ agent-browser wait "#spinner" --state hidden  # Wait for element to disappear
 agent-browser download @e1 ./file.pdf          # Click element to trigger download
 agent-browser wait --download ./output.zip     # Wait for any download to complete
 agent-browser --download-path ./downloads open <url>  # Set default download directory
+
+# Tab management
+agent-browser tab list                         # List all open tabs
+agent-browser tab new                          # Open a blank new tab
+agent-browser tab new https://example.com      # Open URL in a new tab
+agent-browser tab 2                            # Switch to tab by index (0-based)
+agent-browser tab close                        # Close the current tab
+agent-browser tab close 2                      # Close tab by index
+
+# Network
+agent-browser network requests                 # Inspect tracked requests
+agent-browser network requests --type xhr,fetch  # Filter by resource type
+agent-browser network requests --method POST   # Filter by HTTP method
+agent-browser network requests --status 2xx    # Filter by status (200, 2xx, 400-499)
+agent-browser network request <requestId>      # View full request/response detail
+agent-browser network route "**/api/*" --abort  # Block matching requests
+agent-browser network har start                # Start HAR recording
+agent-browser network har stop ./capture.har   # Stop and save HAR file
 
 # Viewport & Device Emulation
 agent-browser set viewport 1920 1080          # Set viewport size (default: 1280x720)
@@ -183,11 +272,26 @@ agent-browser screenshot --screenshot-dir ./shots  # Save to custom directory
 agent-browser screenshot --screenshot-format jpeg --screenshot-quality 80
 agent-browser pdf output.pdf          # Save as PDF
 
+# Live preview / streaming
+agent-browser stream enable           # Start runtime WebSocket streaming on an auto-selected port
+agent-browser stream enable --port 9223  # Bind a specific localhost port
+agent-browser stream status           # Inspect enabled state, port, connection, and screencasting
+agent-browser stream disable          # Stop runtime streaming and remove the .stream metadata file
+
 # Clipboard
 agent-browser clipboard read                      # Read text from clipboard
 agent-browser clipboard write "Hello, World!"     # Write text to clipboard
 agent-browser clipboard copy                      # Copy current selection
 agent-browser clipboard paste                     # Paste from clipboard
+
+# Dialogs (alert, confirm, prompt, beforeunload)
+# By default, alert and beforeunload dialogs are auto-accepted so they never block the agent.
+# confirm and prompt dialogs still require explicit handling.
+# Use --no-auto-dialog (or AGENT_BROWSER_NO_AUTO_DIALOG=1) to disable automatic handling.
+agent-browser dialog accept              # Accept dialog
+agent-browser dialog accept "my input"   # Accept prompt dialog with text
+agent-browser dialog dismiss             # Dismiss/cancel dialog
+agent-browser dialog status              # Check if a dialog is currently open
 
 # Diff (compare page states)
 agent-browser diff snapshot                          # Compare current vs last snapshot
@@ -196,21 +300,28 @@ agent-browser diff screenshot --baseline before.png  # Visual pixel diff
 agent-browser diff url <url1> <url2>                 # Compare two pages
 agent-browser diff url <url1> <url2> --wait-until networkidle  # Custom wait strategy
 agent-browser diff url <url1> <url2> --selector "#main"  # Scope to element
+
+# Chat (AI natural language control)
+agent-browser chat "open google.com and search for cats"  # Single-shot instruction
+agent-browser chat                                        # Interactive REPL mode
+agent-browser -q chat "summarize this page"               # Quiet (text only, no tool calls)
+agent-browser -v chat "fill in the login form"            # Verbose (show command output)
+agent-browser --model openai/gpt-4o chat "take a screenshot"  # Override model
 ```
+
+## Streaming
+
+Every session automatically starts a WebSocket stream server on an OS-assigned port. Use `agent-browser stream status` to see the bound port and connection state. Use `stream disable` to tear it down, and `stream enable --port <port>` to re-enable on a specific port.
 
 ## Common Patterns
 
 ### Form Submission
 
 ```bash
-agent-browser open https://example.com/signup
-agent-browser snapshot -i
-agent-browser fill @e1 "Jane Doe"
-agent-browser fill @e2 "jane@example.com"
-agent-browser select @e3 "California"
-agent-browser check @e4
-agent-browser click @e5
-agent-browser wait --load networkidle
+# Navigate and get the form structure
+agent-browser batch "open https://example.com/signup" "snapshot -i"
+# Read the snapshot output to identify form refs, then fill and submit
+agent-browser batch "fill @e1 \"Jane Doe\"" "fill @e2 \"jane@example.com\"" "select @e3 \"California\"" "check @e4" "click @e5" "wait 2000"
 ```
 
 ### Authentication with Auth Vault (Recommended)
@@ -229,21 +340,18 @@ agent-browser auth show github
 agent-browser auth delete github
 ```
 
+`auth login` waits for username/password/submit selectors before interacting, with a timeout tied to the default action timeout.
+
 ### Authentication with State Persistence
 
 ```bash
 # Login once and save state
-agent-browser open https://app.example.com/login
-agent-browser snapshot -i
-agent-browser fill @e1 "$USERNAME"
-agent-browser fill @e2 "$PASSWORD"
-agent-browser click @e3
-agent-browser wait --url "**/dashboard"
-agent-browser state save auth.json
+agent-browser batch "open https://app.example.com/login" "snapshot -i"
+# Read snapshot to find form refs, then fill and submit
+agent-browser batch "fill @e1 \"$USERNAME\"" "fill @e2 \"$PASSWORD\"" "click @e3" "wait --url **/dashboard" "state save auth.json"
 
 # Reuse in future sessions
-agent-browser state load auth.json
-agent-browser open https://app.example.com/dashboard
+agent-browser batch "state load auth.json" "open https://app.example.com/dashboard"
 ```
 
 ### Session Persistence
@@ -268,11 +376,31 @@ agent-browser state clear myapp
 agent-browser state clean --older-than 7
 ```
 
+### Working with Iframes
+
+Iframe content is automatically inlined in snapshots. Refs inside iframes carry frame context, so you can interact with them directly.
+
+```bash
+agent-browser batch "open https://example.com/checkout" "snapshot -i"
+# @e1 [heading] "Checkout"
+# @e2 [Iframe] "payment-frame"
+#   @e3 [input] "Card number"
+#   @e4 [input] "Expiry"
+#   @e5 [button] "Pay"
+
+# Interact directly — no frame switch needed
+agent-browser batch "fill @e3 \"4111111111111111\"" "fill @e4 \"12/28\"" "click @e5"
+
+# To scope a snapshot to one iframe:
+agent-browser batch "frame @e2" "snapshot -i"
+agent-browser frame main          # Return to main frame
+```
+
 ### Data Extraction
 
 ```bash
-agent-browser open https://example.com/products
-agent-browser snapshot -i
+agent-browser batch "open https://example.com/products" "snapshot -i"
+# Read snapshot to find element refs, then extract
 agent-browser get text @e5           # Get specific element text
 agent-browser get text body > page.txt  # Get all page text
 
@@ -315,7 +443,7 @@ Need runtime info from a SPA?
 - To capture page-load requests, follow this sequence:
   1. `agent-browser network requests --clear` -- start tracking
   2. Reload or navigate the page
-  3. `agent-browser wait --load networkidle`
+  3. `agent-browser wait 2000`
   4. `agent-browser network requests` -- read results
 - If the page is already loaded, prefer DOM inspection over network capture
 
@@ -358,6 +486,8 @@ agent-browser --auto-connect snapshot
 # Or with explicit CDP port
 agent-browser --cdp 9222 snapshot
 ```
+
+Auto-connect discovers Chrome via `DevToolsActivePort`, common debugging ports (9222, 9229), and falls back to a direct WebSocket connection if HTTP-based CDP discovery fails.
 
 ### Color Scheme (Dark Mode)
 
@@ -521,27 +651,97 @@ agent-browser diff url https://staging.example.com https://prod.example.com --sc
 
 ## Timeouts and Slow Pages
 
-The default Playwright timeout is 25 seconds for local browsers. This can be overridden with the `AGENT_BROWSER_DEFAULT_TIMEOUT` environment variable (value in milliseconds). For slow websites or large pages, use explicit waits instead of relying on the default timeout:
+The default timeout is 25 seconds. This can be overridden with the `AGENT_BROWSER_DEFAULT_TIMEOUT` environment variable (value in milliseconds).
+
+**Important:** `open` already waits for the page `load` event before returning. In most cases, no additional wait is needed before taking a snapshot or screenshot. Only add an explicit wait when content loads asynchronously after the initial page load.
 
 ```bash
-# Wait for network activity to settle (best for slow pages)
-agent-browser wait --load networkidle
-
-# Wait for a specific element to appear
+# Wait for a specific element to appear (preferred for dynamic content)
 agent-browser wait "#content"
 agent-browser wait @e1
+
+# Wait a fixed duration (good default for slow SPAs)
+agent-browser wait 2000
 
 # Wait for a specific URL pattern (useful after redirects)
 agent-browser wait --url "**/dashboard"
 
-# Wait for a JavaScript condition
-agent-browser wait --fn "document.readyState === 'complete'"
+# Wait for text to appear on the page
+agent-browser wait --text "Results loaded"
 
-# Wait a fixed duration (milliseconds) as a last resort
-agent-browser wait 5000
+# Wait for a JavaScript condition
+agent-browser wait --fn "document.querySelectorAll('.item').length > 0"
 ```
 
-When dealing with consistently slow websites, use `wait --load networkidle` after `open` to ensure the page is fully loaded before taking a snapshot. If a specific element is slow to render, wait for it directly with `wait <selector>` or `wait @ref`.
+**Avoid `wait --load networkidle`** unless you are certain the site has no persistent network activity. Ad-heavy sites, sites with analytics/tracking, and sites with websockets will cause `networkidle` to hang indefinitely. Prefer `wait 2000` or `wait <selector>` instead.
+
+**Exception for controlled SPAs:** For known single-page applications without ads or persistent network activity (e.g., internal corporate apps), `wait --load networkidle` remains the most reliable approach for ensuring async data loads complete fully.
+
+To auto-shutdown the daemon after a period of inactivity (useful for ephemeral/CI environments):
+
+```bash
+AGENT_BROWSER_IDLE_TIMEOUT_MS=60000 agent-browser open example.com
+```
+
+## Handling Native Dialogs
+
+When a page opens a JavaScript dialog (`alert()`, `confirm()`, or `prompt()`), it blocks all other browser commands (snapshot, screenshot, click, etc.) until the dialog is dismissed. By default, `alert` and `beforeunload` dialogs are auto-dismissed, but `confirm` and `prompt` require explicit handling. Use `--no-auto-dialog` (or `AGENT_BROWSER_NO_AUTO_DIALOG=1`) to disable automatic handling.
+
+When a dialog is pending, all command responses include a `warning` field indicating the dialog type and message. In `--json` mode this appears as a `"warning"` key in the response object.
+
+### Reactive: Dismiss a dialog that already appeared
+
+```bash
+agent-browser dialog status              # Check if a dialog is blocking
+agent-browser dialog accept              # OK/Accept
+agent-browser dialog dismiss             # Cancel/Dismiss
+agent-browser dialog accept "input text" # Accept prompt with text
+```
+
+If agent-browser hangs after a click (commands time out), a native dialog is likely blocking. Run `dialog accept` or `dialog dismiss` to unblock.
+
+### Proactive: Prevent dialogs from blocking (recommended for QA/testing)
+
+Before interacting with pages that may trigger `alert()` or `confirm()`, override them via eval to capture messages without blocking:
+
+```bash
+agent-browser eval --stdin <<'EVALEOF'
+window.__dialogMessages = [];
+window.alert = function(msg) { window.__dialogMessages.push({type:'alert',msg}); };
+window.confirm = function(msg) { window.__dialogMessages.push({type:'confirm',msg}); return true; };
+EVALEOF
+```
+
+After interactions, read captured messages:
+
+```bash
+agent-browser eval 'JSON.stringify(window.__dialogMessages)'
+```
+
+**Important**: Do NOT call the original `alert`/`confirm` from interceptors (e.g., `origAlert.call(window, msg)`). This re-triggers the native dialog and blocks again.
+
+### Inspecting API error responses
+
+`agent-browser network requests` captures request info but not response bodies. To diagnose API errors (e.g., 4xx/5xx responses), install a fetch interceptor:
+
+```bash
+agent-browser eval --stdin <<'EVALEOF'
+window.__fetchLog = [];
+const origFetch = window.fetch;
+window.fetch = async function(...args) {
+  const res = await origFetch.apply(this, args);
+  const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+  if (url.includes('target-api-path')) {
+    const clone = res.clone();
+    const body = await clone.text();
+    window.__fetchLog.push({ url, status: res.status, body: body.substring(0, 500) });
+  }
+  return res;
+};
+EVALEOF
+```
+
+Then read results with `agent-browser eval 'JSON.stringify(window.__fetchLog)'`.
 
 ## Session Management and Cleanup
 
@@ -561,9 +761,16 @@ Always close your browser session when done to avoid leaked processes:
 ```bash
 agent-browser close                    # Close default session
 agent-browser --session agent1 close   # Close specific session
+agent-browser close --all              # Close all active sessions
 ```
 
-If a previous session was not closed properly, the daemon may still be running. Use `agent-browser close` to clean it up before starting new work.
+If a previous session was not closed properly, the daemon may still be running. Use `agent-browser close` to clean it up, or `agent-browser close --all` to shut down every session at once.
+
+To auto-shutdown the daemon after a period of inactivity (useful for ephemeral/CI environments):
+
+```bash
+AGENT_BROWSER_IDLE_TIMEOUT_MS=60000 agent-browser open example.com
+```
 
 ## Ref Lifecycle (Important)
 
@@ -587,7 +794,7 @@ Before performing any interaction (click, input, etc.):
 3. Execute the action with discovered refs
 
 Do not guess selectors from source code alone -- always verify against rendered state.
-After `open`, wait for content (`agent-browser wait --load networkidle`) before inspecting -- SPA client-side transitions may not be complete immediately.
+After `open`, wait for content (`agent-browser wait 2000` or `agent-browser wait <selector>`) before inspecting -- SPA client-side transitions may not be complete immediately.
 
 ## Plan Mode Verification
 
@@ -682,6 +889,8 @@ Priority (lowest to highest): `~/.agent-browser/config.json` < `./agent-browser.
 - Do not use `sessionStorage.setItem` for MutationObserver logs -- use `window.__` variables
 - Do not rely solely on "it renders" for visual verification -- compare against reference designs
 - Do not guess refs -- always snapshot first and use the returned `@eN` references
+- Do not call original `alert`/`confirm` from eval interceptors -- it re-triggers the native dialog and blocks agent-browser
+- Do not use `wait --load networkidle` on ad-heavy or analytics-heavy sites -- it will hang indefinitely; use `wait 2000` or `wait <selector>` instead
 
 ## Deep-Dive Documentation
 
@@ -694,6 +903,25 @@ Priority (lowest to highest): `~/.agent-browser/config.json` < `./agent-browser.
 | [references/video-recording.md](references/video-recording.md)       | Recording workflows for debugging and documentation       |
 | [references/profiling.md](references/profiling.md)                   | Chrome DevTools profiling for performance analysis        |
 | [references/proxy-support.md](references/proxy-support.md)           | Proxy configuration, geo-testing, rotating proxies        |
+
+## Cloud Providers
+
+Use `-p <provider>` (or `AGENT_BROWSER_PROVIDER`) to run against a cloud browser instead of launching a local Chrome instance. Supported providers: `agentcore`, `browserbase`, `browserless`, `browseruse`, `kernel`.
+
+### AgentCore (AWS Bedrock)
+
+```bash
+# Credentials auto-resolved from env vars or AWS CLI (SSO, IAM roles, etc.)
+agent-browser -p agentcore open https://example.com
+
+# With persistent browser profile
+AGENTCORE_PROFILE_ID=my-profile agent-browser -p agentcore open https://example.com
+
+# With explicit region
+AGENTCORE_REGION=eu-west-1 agent-browser -p agentcore open https://example.com
+```
+
+Set `AWS_PROFILE` to select a named AWS profile.
 
 ## Experimental: Native Mode
 
@@ -731,6 +959,38 @@ Supported engines:
 - `lightpanda` -- Lightpanda headless browser via CDP (10x faster, 10x less memory than Chrome)
 
 Lightpanda does not support `--extension`, `--profile`, `--state`, or `--allow-file-access`. Install Lightpanda from https://lightpanda.io/docs/open-source/installation.
+
+## Observability Dashboard
+
+The dashboard is a standalone background server that shows live browser viewports, command activity, and console output for all sessions.
+
+```bash
+# Install the dashboard once
+agent-browser dashboard install
+
+# Start the dashboard server (background, port 4848)
+agent-browser dashboard start
+
+# All sessions are automatically visible in the dashboard
+agent-browser open example.com
+
+# Stop the dashboard
+agent-browser dashboard stop
+```
+
+The dashboard runs independently of browser sessions on port 4848 (configurable with `--port`). All sessions automatically stream to the dashboard. Sessions can also be created from the dashboard UI with local engines or cloud providers.
+
+### Dashboard AI Chat
+
+The dashboard has an optional AI chat tab powered by the Vercel AI Gateway. Enable it by setting:
+
+```bash
+export AI_GATEWAY_API_KEY=gw_your_key_here
+export AI_GATEWAY_MODEL=anthropic/claude-sonnet-4.6           # optional default
+export AI_GATEWAY_URL=https://ai-gateway.vercel.sh           # optional default
+```
+
+The Chat tab is always visible in the dashboard. Set `AI_GATEWAY_API_KEY` to enable AI responses.
 
 ## Ready-to-Use Templates
 
