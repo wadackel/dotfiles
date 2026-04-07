@@ -100,6 +100,8 @@ Process each proposal returned by the SubAgent:
 The main session auto-applies HIGH-confidence proposals **only when all of these hold**:
 - The change is purely subtractive (removes code/steps) or a direct substitution
 - No behavioral change — functionality is preserved
+- No scope reduction — the set of supported actions/endpoints/contexts is unchanged
+- No removal of correctness mechanisms — items the plan explicitly identifies as needed for correctness (guards, synchronization, validation) require code-level verification before removal and cannot be auto-applied
 - The proposal aligns with CLAUDE.md design principles (YAGNI, KISS, DRY)
 - The change does not affect public APIs or user-facing interfaces
 

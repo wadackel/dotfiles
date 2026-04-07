@@ -31,13 +31,17 @@ New files go to `00_Inbox/<filename>.md` unless specified otherwise.
 
 ## Note Format
 
-### No h1 heading
+### h1 → filename conversion
 
-Obsidian displays the filename as the note title. Do not add `# Title` at the top. Start content from `##` (h2).
+Obsidian displays the filename as the note title — h1 headings in the content are redundant and hurt readability.
+
+- If the source content contains `# Title`, **use that text as the filename** (e.g., `# Design Doc: git-prism.nvim` → `Design Doc: git-prism.nvim.md`) and **remove the h1 line** from the content
+- If the user has already specified a filename, use that instead (user-specified takes priority)
+- Start the note body from `##` (h2)
 
 ### Frontmatter
 
-Every note starts with YAML frontmatter based on `Templates/Note_Template.md`. Leave all fields empty (the user fills them in later):
+Every note starts with YAML frontmatter based on `Templates/Note_Template.md`. **Leave all fields empty** — the user fills them in later. **Do NOT populate `tags` or `description`**, even if you know appropriate values:
 
 ```yaml
 ---

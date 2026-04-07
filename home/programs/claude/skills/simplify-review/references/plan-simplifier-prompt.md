@@ -47,6 +47,12 @@ configuration option, pattern choice), ask yourself:
    The cost of removing premature abstraction is high; the cost of adding
    needed abstraction later is low.
 
+5. **Is this removal technically safe?**
+   If the plan says a mechanism is needed for correctness (not just performance),
+   do NOT propose removing it based on plan text alone.
+   If you cannot independently verify the technical claim, classify confidence as
+   LOW at most and note "Unverified technical claim — needs code-level review".
+
 ## What to Look For
 
 ### Speculative Generalization
@@ -73,6 +79,23 @@ configuration option, pattern choice), ask yourself:
 - Items added during plan refinement that exceed the original request
 - "While we're at it" additions that aren't in the user's requirements
 - Edge case handling that the user didn't ask for and isn't safety-critical
+
+### CRITICAL: Scope Reduction vs. Simplification
+
+Before proposing any change, verify it does NOT reduce scope:
+
+- **Simplification**: Same outcome, fewer moving parts (GOOD)
+  Example: Replace 3-class hierarchy with 1 function — same functionality, less code
+- **Scope reduction**: Fewer outcomes, fewer capabilities (BAD — this is a requirements change)
+  Example: "Only apply fix to select action" when the plan says "all tree operations"
+
+**Test**: After applying this proposal, can the user still do everything the plan promises?
+If NO, this is NOT a simplification — it is a scope reduction. Do NOT propose it.
+
+Specifically, do NOT propose:
+- Reducing the set of actions/endpoints/commands that a feature applies to
+- Replacing "works during X" with "blocks during X" (this removes capability)
+- Removing a feature from some contexts to "keep it simple"
 
 ## Output Format
 

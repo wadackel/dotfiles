@@ -55,6 +55,14 @@ Example — creating a note with frontmatter and body:
 obsidian create path="00_Inbox/example.md" content="---\naliases:\ntags:\ndescription:\n---\n\n## Section\n\ncontent here" overwrite
 ```
 
+## Note Formatting Rules
+
+When creating notes (`obsidian create`), follow the formatting rules defined in [obsidian-notes](../obsidian-notes/SKILL.md):
+
+- **h1 → filename**: If source content has `# Title`, use it as the filename and remove from content
+- **Frontmatter**: Always include empty `aliases:`, `tags:`, `description:` fields — do NOT populate them
+- **Start from h2**: Note body begins with `##`, never `#`
+
 ## Common Commands
 
 ```bash

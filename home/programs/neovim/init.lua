@@ -526,7 +526,9 @@ end, { nargs = "?" })
 
 vim.api.nvim_create_user_command("MoStatus", function()
   local result = mo_run({ "--status", "--json" })
-  if not result then return end
+  if not result then
+    return
+  end
   local ok, data = pcall(vim.json.decode, result)
   if not ok or type(data) ~= "table" then
     vim.notify("mo: failed to parse status", vim.log.levels.ERROR)
@@ -558,9 +560,15 @@ vim.api.nvim_create_user_command("MoUnwatch", function(opts)
   mo_run({ "--unwatch", pattern })
 end, { nargs = "?" })
 
-vim.api.nvim_create_user_command("MoBrowse", function() mo_run({}) end, {})
-vim.api.nvim_create_user_command("MoShutdown", function() mo_run({ "--shutdown" }) end, {})
-vim.api.nvim_create_user_command("MoRestart", function() mo_run({ "--restart" }) end, {})
+vim.api.nvim_create_user_command("MoBrowse", function()
+  mo_run({})
+end, {})
+vim.api.nvim_create_user_command("MoShutdown", function()
+  mo_run({ "--shutdown" })
+end, {})
+vim.api.nvim_create_user_command("MoRestart", function()
+  mo_run({ "--restart" })
+end, {})
 
 keymap({ "n" }, "<Space>mo", "<cmd>MoOpen<CR>")
 keymap({ "n" }, "<Space>ms", "<cmd>MoStatus<CR>")
@@ -1608,6 +1616,8 @@ require("lazy").setup({
         },
         mappings = {
           ["<Tab>"] = "toggle_preview",
+          ["ss"] = "vsplit",
+          ["sv"] = "split",
         },
       },
     },
@@ -4055,6 +4065,5 @@ require("lazy").setup({
       "rhysd/vim-gfm-syntax",
       ft = "markdown",
     },
-
   },
 })
