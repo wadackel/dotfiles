@@ -52,9 +52,10 @@ if [[ -n "$FILTER_PATTERN" ]]; then
   pane_list=$(echo "$pane_list" | grep -iF "$FILTER_PATTERN" || true)
 fi
 
-# --command 指定時は pane_current_command（フィールド3）の完全一致でフィルタ
+# --command 指定時は pane_current_command（フィールド3）でフィルタ
+# Nix ラッパー対応: "claude" → "claude" と ".claude-wrapped" の両方にマッチ
 if [[ -n "$COMMAND_FILTER" ]]; then
-  pane_list=$(echo "$pane_list" | awk -F'\t' -v cmd="$COMMAND_FILTER" '$3 == cmd' || true)
+  pane_list=$(echo "$pane_list" | awk -F'\t' -v cmd="$COMMAND_FILTER" '$3 == cmd || $3 == "." cmd "-wrapped"' || true)
 fi
 
 if [[ -z "$pane_list" ]]; then

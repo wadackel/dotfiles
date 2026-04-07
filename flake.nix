@@ -12,6 +12,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     treefmt-nix.url = "github:numtide/treefmt-nix";
+    nix-claude-code = {
+      url = "github:ryoppippi/nix-claude-code";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -21,6 +25,7 @@
       home-manager,
       nix-darwin,
       treefmt-nix,
+      nix-claude-code,
       ...
     }:
     let
@@ -37,6 +42,7 @@
           home-manager
           nix-darwin
           treefmt-nix
+          nix-claude-code
           ;
       };
 
@@ -44,6 +50,7 @@
       treefmtEval = treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
 
       overlays = [
+        nix-claude-code.overlays.default
         (final: prev: {
           mo = final.stdenv.mkDerivation {
             pname = "mo";
@@ -94,7 +101,11 @@
           modules = [
             ./lib/dotfiles-path.nix
             ./home/home.nix
-            { nixpkgs.overlays = overlays; }
+            {
+              nixpkgs.overlays = overlays;
+              nixpkgs.config.allowUnfreePredicate =
+                pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
+            }
           ];
         };
 
@@ -121,6 +132,8 @@
             home-manager.darwinModules.home-manager
             {
               nixpkgs.overlays = overlays;
+              nixpkgs.config.allowUnfreePredicate =
+                pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
               networking.hostName = hostname;
               system.primaryUser = username;
               users.users.${username} = {

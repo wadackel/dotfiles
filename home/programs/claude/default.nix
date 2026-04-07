@@ -7,6 +7,9 @@
 }:
 
 {
+  # Claude Code
+  home.packages = [ pkgs.claude-code ];
+
   # Claude Code configuration
   home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
 
