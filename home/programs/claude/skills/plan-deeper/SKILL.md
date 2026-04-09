@@ -32,9 +32,13 @@ Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic
 ```
 Task:
   subagent_type: "Plan"
-  model: "sonnet"
+  model: "opus"   # Round 1 only. Round 2+ uses "sonnet"
   prompt: [built from references/critic-prompt.md template]
 ```
+
+**Model selection by round:**
+- **Round 1**: `model: "opus"` — Round 1 detects the majority of issues. Investing higher reasoning quality here reduces detection gaps and can lower the total number of rounds needed.
+- **Round 2+**: `model: "sonnet"` — Subsequent rounds focus on verifying fixes and finding secondary issues. Sonnet is sufficient for this confirmation role.
 
 Pass to the Critic:
 - Full plan text
@@ -80,6 +84,7 @@ Process the Critic's response:
 - Limit to max 4 questions per round (AskUserQuestion constraint)
 - Prioritize by impact; defer lower-priority items to next round if needed
 - User answers are incorporated into the plan and passed to subsequent Critics
+- When presenting interview questions, include a summary of self-resolved items from the same round as a "以下を自己解決しました:" block before the questions. This gives the user an opportunity to flag disagreements with self-resolutions alongside their answers
 
 ### Step 4: Convergence Check
 
@@ -130,7 +135,7 @@ The agent returns findings classified as:
 1. **Falsified** items → must-fix before implementation (update plan immediately)
 2. **Unverified** items → add to plan as explicit risks with mitigation/test strategy
 3. **Verified** items → append to Deepening Log as confidence evidence
-4. **Design Questions** → interview user if needed
+4. **Design Questions** → add to pending user judgment list (do not interview at this point — deferred to consolidated interview in Step 7)
 
 Append results to Deepening Log:
 
@@ -161,7 +166,7 @@ Run `/simplify-review plan` via the Skill tool. The skill spawns a fresh SubAgen
 
 | Verdict | Action |
 |---|---|
-| `SIMPLIFY` (has proposals) | Triage proposals by confidence (HIGH/MEDIUM/LOW). Apply HIGH-confidence simplifications directly. Present MEDIUM/LOW to user for approval. Update plan and append to Deepening Log |
+| `SIMPLIFY` (has proposals) | Triage proposals by confidence (HIGH/MEDIUM/LOW). Apply HIGH-confidence simplifications directly. Add MEDIUM/LOW to pending user judgment list (do not interview at this point — deferred to consolidated interview in Step 7). Update plan and append to Deepening Log |
 | `MINIMAL` (already lean) | No changes needed. Record in Deepening Log and proceed |
 
 Append results to Deepening Log:
@@ -169,85 +174,88 @@ Append results to Deepening Log:
 ```markdown
 ### Simplify Review
 - **Auto-applied (HIGH)**: [simplifications applied directly]
-- **User-approved**: [simplifications approved by user]
-- **Rejected**: [proposals rejected and why]
+- **Pending user judgment (MEDIUM/LOW)**: [proposals deferred to consolidated interview in Step 7]
 - **Verdict**: SIMPLIFY | MINIMAL
 ```
 
-### Step 7: Define Completion Criteria
+### Step 7: Design Verification Plan
 
-After the plan converges, define what "done" looks like. This enables Claude to work through implementation autonomously without repeatedly asking "what should I do next?"
+After the plan converges, design what "done" looks like in observable terms. This enables Claude to work through implementation autonomously and verify completion by directly measuring outcomes.
 
-#### 7a. Analyze Plan for Stage Signals
+#### 7a. Autonomous Baseline (always executed, no user approval needed)
 
-Scan the finalized plan and infer which completion stages are appropriate:
+The following are implicitly executed for every plan. They are **not** presented to the user for approval in this step:
+- Implementation complete
+- Tests pass (when test files exist)
+- Lint / type check pass (when applicable tools exist)
+- `/verification-before-completion` Gate Function
 
-| Signal in Plan | Implied Stage |
-|---|---|
-| Code changes described | **Implementation** |
-| Test files, test commands, "add tests" | **Lightweight Verification** (tests, lint) |
-| UI/visual/browser changes | **Manual Verification** (visual check) |
-| API endpoints, request/response changes | **Manual Verification** (API testing) |
-| CLI behavior changes, command output changes | **Manual Verification** (CLI smoke test) |
-| Plan has a "Verification" or "Manual Testing" section | **Manual Verification** (execute those steps) |
-| Branch management, "create PR" | **PR** |
-| CI pipeline, GitHub Actions referenced | **CI Pass** |
-| Deployment targets, production URLs | **Deployment Verification** |
-| Any implementation task | **Final Verification** (`/verification-before-completion`) |
+**Note:** "Implicit" here means plan-deeper's completion criteria step does not ask the user to approve these. The Plan Execution phase rule requiring `/verification-before-completion` in task descriptions (CLAUDE.md) remains independently active — task descriptions still include it explicitly.
 
-Build a candidate pipeline as an ordered sequence. "User Review" is always the final stage unless a PR+merge is the terminal action.
+#### 7b. Design Observable Completion Conditions
 
-#### 7b. Interview User for Approval
+Based on the plan's content, design specific observable conditions that prove the implementation is complete. For each change, determine the appropriate verification method (command execution, browser screenshot, environment check, etc.) and specify the exact command or interaction with its expected outcome.
 
-Present the inferred pipeline via AskUserQuestion:
+Each condition must be **concrete and plan-specific**. Not "verify CLI works" but "`ofsht add '#33'` creates a worktree and `cd` switches to it".
 
-Present the **actually inferred** pipeline (not a fixed template). The example below includes Manual Verification — include or omit stages based on what 7a actually inferred:
+Classify items as **Requires User Confirmation** when Claude cannot directly execute, observe, or measure the outcome (e.g., subjective evaluation, logout-required settings, next-launch behavior).
+
+#### 7c. User Alignment (always run)
+
+Present the designed observable conditions to the user for alignment. **Always run this step**, even when conditions seem obvious — it prevents expectation mismatches.
+
+**Consolidation with Steps 5-6 pending items:**
+If there are pending Design Questions from Step 5 (Adversarial Falsification) or MEDIUM/LOW simplification proposals from Step 6 (Simplify Review), combine them into the same AskUserQuestion to minimize blocking user waits. Omit sections that have no items.
+
+Present in Japanese for the user:
 
 ```
 question: |
-  Based on the plan, I've inferred this completion pipeline:
+  以下の観測をもって完了と判断します:
 
-  1. Implementation complete
-  2. Lightweight verification (cargo test + just check)
-  3. Manual verification (run `ofsht add` with failing hook, confirm warning + cd works)
-  4. Final verification (/verification-before-completion)
+  【Adversarial Falsification — Design Questions】(omit section if none)
+  - Q1: ...
 
-  Does this look right?
+  【Simplify Review — Proposals】(omit section if none)
+  - Proposal 1 (MEDIUM): ...
+
+  【自律検証】
+  - `ofsht add '#33'` を実行し、worktree が作成されることを確認
+  - failing hook を設定した状態で実行し、warning 表示 + cd 動作を確認
+
+  【自律検証不可（ユーザー確認が必要）】
+  - (なし)
+
+  ※ ベースライン（tests, lint, /verification-before-completion）は自動実行します
 options:
-  - "Looks good"
-  - "Simpler (fewer stages)"
-  - "More thorough (add PR/CI)"
-  - "Let me specify"
+  - "All good"
+  - "I have adjustments (will specify)"
 ```
 
-**Important**: Always present what 6a inferred — do not fall back to a minimal default pipeline. If 6a inferred Manual Verification, it must appear in this question.
+**Both 【自律検証】 and 【自律検証不可】 are always shown** (show "なし" when empty). This ensures the user can flag misclassified items.
 
-Adapt the pipeline based on the user's response. Ask at most one follow-up question for stage-specific details (e.g., which test command, which URL to verify).
+If the user selects "I have adjustments", receive their free-form input and apply corrections.
 
-#### 7c. Write Criteria to Plan
+#### 7d. Write Criteria to Plan
 
-Append a `## Completion Criteria` section to the plan file:
+Append a `## Completion Criteria` section to the plan file in English (compatible with the Verification section extraction rule in CLAUDE.md):
 
 ```markdown
 ## Completion Criteria
 
-Definition of Done for this task. Each stage must pass before proceeding to the next.
+### Autonomous Verification
+Observable conditions that Claude verifies directly:
+- [ ] `ofsht add '#33'` → worktree created
+- [ ] Run with failing hook → warning displayed + cd works
 
-### Pipeline
+### Requires User Confirmation
+- None
 
-- [ ] **Implementation** — [specific description of what "implemented" means for this plan]
-- [ ] **Lightweight Verification** — [specific commands, e.g., `npm test && npm run lint`]
-- [ ] **Manual Verification** — [specific check, e.g., "run `cargo run -- add '#33'` and confirm worktree is created"]
-- [ ] **Final Verification** — Run `/verification-before-completion` Gate Function against all completion claims
-- [ ] **User Review** — Present changes summary for final approval
-
-### Notes
-- [Prerequisites, ordering constraints, or caveats specific to this plan]
+### Baseline (always executed)
+tests, lint, `/verification-before-completion` — implicit in plan-deeper's criteria step, but explicitly included in task descriptions during Plan Execution phase
 ```
 
-Each stage description must be **concrete and plan-specific**. Never write generic placeholders like "tests pass" — specify which test command, which URL, which behavior to verify.
-
-**Manual Verification is opt-out, not opt-in.** The pipeline template always includes Manual Verification. To remove it, you must explicitly state the reason (e.g., "No observable behavior change — internal refactoring only"). Simply omitting it without justification is a pipeline construction error. This prevents the failure mode where CLI behavior changes, API changes, or UI changes are verified only by unit tests.
+Each condition in `### Autonomous Verification` uses checkbox format (`- [ ] command → expected outcome`) — this is compatible with the downstream Verification section extraction rule that scans for executable commands to generate smoke-test tasks.
 
 ### Step 8: Result Report
 
@@ -260,10 +268,6 @@ Each stage description must be **concrete and plan-specific**. Never write gener
 
 ### Changes Summary
 [Major changes made to the plan]
-
-### Completion Criteria
-[Summary of the agreed pipeline, e.g.:]
-Implementation → Lightweight Verification (tests + lint) → Manual Verification → User Review
 
 ### Remaining Considerations
 [Unresolved items or trade-offs, if any]
@@ -301,6 +305,12 @@ Mixing falsification into the standard Critic rounds dilutes both processes. The
 
 **Why define and negotiate completion criteria after convergence:**
 The plan must be stable before committing to a Definition of Done, or criteria risk being invalidated by subsequent rounds. Autonomous execution also requires explicit user agreement on scope — Claude infers likely stages from plan signals, but the user decides whether "CI pass" or "deployment verification" is actually required.
+
+**Why use Opus for Round 1 and Sonnet for Round 2+:**
+Round 1 detects the majority of issues — it sees the plan fresh without prior context. Investing higher reasoning quality (Opus) at this critical first pass reduces detection gaps and can lower the total number of rounds needed for convergence. Round 2+ primarily verify that fixes were applied and catch secondary issues, a confirmation role where Sonnet is sufficient. This balances quality and cost.
+
+**Why consolidate post-convergence user interviews into one:**
+Steps 5 (Adversarial Falsification), 6 (Simplify Review), and 7 (Completion Criteria) each potentially require a separate user interview. In practice, the user waits for each subagent to complete, answers questions, then waits again — creating up to 3 sequential blocking waits. By collecting all pending user judgment items from Steps 5-6 and combining them with the Completion Criteria approval in a single AskUserQuestion, the user makes all decisions in one interaction. The auto-resolvable items (Falsified fixes, HIGH simplifications) are still applied immediately without waiting.
 
 ## Tips
 

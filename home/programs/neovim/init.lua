@@ -2689,6 +2689,11 @@ require("lazy").setup({
     -- Git
     -- =============================================================
     {
+      dir = "~/develop/github.com/wadackel/git-prism.nvim",
+      cmd = { "GitPrism", "GitPrismBlame", "GitPrismDiff", "GitPrismCommit" },
+      opts = {},
+    },
+    {
       "tpope/vim-fugitive",
       keys = {
         { "<Leader>gs", "<cmd>Git<CR>", mode = "n", noremap = true, silent = true },

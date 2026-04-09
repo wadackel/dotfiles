@@ -11,19 +11,49 @@ A completion claim without verification is a lie, not an optimization.
 
 **Core principle:** Evidence before claims, always.
 
-## Gate Function
+## Verification Workflow
 
-Before using any expression that implies completion or success, follow these steps:
+Before using any expression that implies completion or success, delegate verification to an independent subagent:
 
-1. **IDENTIFY**: What action proves this claim? (command to run, file to read back, output to inspect)
-2. **RUN**: Execute that command fully (no shortcuts)
-3. **READ**: Read the entire output, check exit code and failure count
-4. **VERIFY**: Does the output support the claim?
-   - NO → Report the actual state with evidence
-   - YES → Make the claim with evidence
-5. **CLAIM**: Only now may you declare completion
+### Step 1: Context Collection
 
-Skipping any step = not verified.
+Performed by the main session (the implementer):
+
+1. Identify all completion claims about to be made (e.g., "tests pass", "build succeeds", "bug fixed")
+2. Consult the "Claims and Required Verification" section below and `references/behavioral-verification.md` to determine recommended verification commands for each claim
+3. Run `git diff --name-only` to get the list of changed files
+
+### Step 2: Spawn Verification Auditor
+
+Dispatch a fresh `verification-auditor` subagent via the Agent tool:
+
+```
+Agent tool:
+  subagent_type: "verification-auditor"
+  prompt: [include the information below]
+```
+
+**Pass to the auditor:**
+- List of completion claims
+- Recommended verification commands (the auditor may add or modify these independently)
+- Changed file list
+
+**Do NOT pass:** implementation history, your own judgment about whether the claims are true, or results from prior verification attempts.
+
+### Step 3: Handle Result
+
+| Result | Action |
+|--------|--------|
+| `VERIFIED: PASS` | Completion claim is authorized. Proceed to Step 4 |
+| `VERIFIED: FAIL` | Read the auditor's findings, fix the issues, then re-run from Step 1 with a **fresh** subagent |
+| No VERIFIED line | Treat as FAIL |
+| 3 consecutive FAILs | Report the final audit result to the user and let them decide. Do not mark the task complete |
+
+Never retry with the same subagent — always spawn fresh.
+
+### Step 4: Claim
+
+Only after `VERIFIED: PASS` may you declare completion.
 
 ## Claims and Required Verification
 
@@ -35,7 +65,7 @@ Skipping any step = not verified.
 
 ## Red Flags — STOP
 
-If you catch yourself in any of these thought patterns, return to the Gate Function:
+If you catch yourself in any of these thought patterns, return to the Verification Workflow:
 
 - About to use "should work", "probably fixed", or "seems to pass"
 - About to write "done" or "complete" before running verification commands

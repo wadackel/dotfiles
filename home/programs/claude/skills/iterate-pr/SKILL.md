@@ -35,52 +35,46 @@ If `mergeable` is `CONFLICTING`:
 4. `git push --force-with-lease origin $(git branch --show-current)`
 5. Return to Step 1
 
-### Step 3: Check CI Status First
+### Step 3: Gather CI Status, Review Feedback, and Failure Logs (SubAgent)
 
-Always check CI/GitHub Actions status before looking at review feedback:
+Spawn a **fresh** SubAgent to collect all CI and review information in a single pass. This offloads log retrieval and review collection from the main context.
 
-```bash
-gh pr checks --json name,state,bucket,link,workflow
+```
+Agent tool:
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  prompt: [built from references/ci-monitor-prompt.md template]
 ```
 
-The `bucket` field categorizes state into: `pass`, `fail`, `pending`, `skipping`, or `cancel`.
+Pass to the SubAgent: `{owner}`, `{repo}`, `{pr_number}`, `{branch_name}` — all extracted from the Step 1 `gh pr view` output.
+
+The SubAgent checks CI status, gathers review feedback, and if failures exist, retrieves and summarizes the relevant logs. It returns a prose summary ending with a VERDICT line:
+
+- `VERDICT: ALL_PASS` — all checks green, no unaddressed review feedback
+- `VERDICT: NEEDS_FIX` — failed checks or review feedback requiring action
+- `VERDICT: BLOCKED` — CI infrastructure issue unrelated to branch changes
+- `VERDICT: PENDING` — all checks still pending (re-run Step 3 after a brief wait; after 3 consecutive PENDING verdicts, ask the user)
+
+See [references/ci-monitor-prompt.md](references/ci-monitor-prompt.md) for the full prompt template.
 
 ### Step 4: Gather Review Feedback
 
-Once CI checks have completed (or at least the bot-related checks), gather human and bot feedback:
-
-**Review Comments and Status:**
-```bash
-gh pr view --json reviews,comments,reviewDecision
-```
-
-**Inline Code Review Comments:**
-```bash
-gh api repos/{owner}/{repo}/pulls/{pr_number}/comments
-```
-
-**PR Conversation Comments (includes bot comments):**
-```bash
-gh api repos/{owner}/{repo}/issues/{pr_number}/comments
-```
+Review feedback is collected as part of Step 3's SubAgent invocation. See Step 3 for details.
 
 ### Step 5: Investigate Failures
 
-For each CI failure, get the actual logs:
-
-```bash
-# List recent runs for this branch
-gh run list --branch $(git branch --show-current) --limit 5 --json databaseId,name,status,conclusion
-
-# View failed logs for a specific run
-gh run view <run-id> --log-failed
-```
-
-Do NOT assume what failed based on the check name alone. Always read the actual logs.
+Failure logs are collected and summarized as part of Step 3's SubAgent invocation. See Step 3 for details.
 
 ### Step 6: Validate Feedback
 
-For each piece of feedback (CI failure or review comment):
+Based on the SubAgent's summary from Step 3, decide the course of action:
+
+- **VERDICT: ALL_PASS** — Skip to Step 11 (Mark Ready)
+- **VERDICT: NEEDS_FIX** — Continue to Step 7 with the failure details and review feedback from the summary
+- **VERDICT: BLOCKED** — Stop and inform the user (CI infrastructure issue)
+- **VERDICT: PENDING** — Wait briefly, then re-run Step 3 (max 3 consecutive times before asking the user)
+
+For each piece of feedback (CI failure or review comment) in the summary:
 
 1. **Read the relevant code** - Understand the context before making changes
 2. **Verify the issue is real** - Not all feedback is correct; reviewers and bots can be wrong
@@ -124,21 +118,25 @@ git commit -m "fix: <descriptive message of what was fixed>"
 git push origin $(git branch --show-current)
 ```
 
-### Step 10: Wait for CI
+### Step 10: Wait for CI (SubAgent)
 
-Use the built-in watch functionality:
+Spawn a **fresh** SubAgent to wait for CI completion and collect results.
 
-```bash
-gh pr checks --watch --interval 30
+```
+Agent tool:
+  subagent_type: "general-purpose"
+  model: "sonnet"
+  prompt: [built from references/ci-watch-prompt.md template]
 ```
 
-This waits until all checks complete. Exit code 0 means all passed, exit code 1 means failures.
+Pass the same `{owner}`, `{repo}`, `{pr_number}`, `{branch_name}` values from Step 1.
 
-Alternatively, poll manually if you need more control:
+The SubAgent runs `gh pr checks --watch --interval 30` to block until all checks complete, then collects the final status and any failure logs. It returns a prose summary ending with:
 
-```bash
-gh pr checks --json name,state,bucket | jq '[.[] | select(.bucket == "fail" or .bucket == "pending" or .bucket == "cancel")]'
-```
+- `VERDICT: ALL_PASS` — all checks passed
+- `VERDICT: NEEDS_FIX` — failures detected (summary includes failure details)
+
+See [references/ci-watch-prompt.md](references/ci-watch-prompt.md) for the full prompt template.
 
 ### Step 11: Mark Ready for Review
 
@@ -161,13 +159,13 @@ Continue until all checks pass and no unaddressed feedback remains.
 ## Exit Conditions
 
 **Success:**
-- All CI checks are green (`bucket: pass`)
-- No unaddressed human review feedback
+- SubAgent returns `VERDICT: ALL_PASS` — all CI checks green, no unaddressed review feedback
 
 **Ask for Help:**
-- Same failure persists after 3 attempts (likely a flaky test or deeper issue)
+- Same failure persists after 3 fix attempts (likely a flaky test or deeper issue)
+- SubAgent returns `VERDICT: BLOCKED` (CI infrastructure issue)
+- 3 consecutive `VERDICT: PENDING` results (CI may not be configured for this branch)
 - Review feedback requires clarification or decision from the user
-- CI failure is unrelated to branch changes (infrastructure issue)
 
 **Stop Immediately:**
 - No PR exists for the current branch
@@ -178,3 +176,4 @@ Continue until all checks pass and no unaddressed feedback remains.
 - Use `gh pr checks --required` to focus only on required checks
 - Use `gh run view <run-id> --verbose` to see all job steps, not just failures
 - If a check is from an external service, the `link` field in checks JSON provides the URL to investigate
+- Review comments collected by the SubAgent in Step 3 may become stale if the reviewer posts additional feedback while you are fixing code. New comments will be picked up in the next iteration cycle (Step 12 → Step 3)

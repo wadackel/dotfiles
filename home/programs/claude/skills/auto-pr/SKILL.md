@@ -17,36 +17,19 @@ This skill is the composition of `/create-pr` followed immediately by `/iterate-
 
 Parse `$ARGUMENTS` for:
 - `draft` → create the PR as a draft (CI will still be monitored)
-- `ja` → write the PR title and body in Japanese
+- `ja` → write the PR title and body in Japanese (default: English)
 
 ## Step 1: Create the PR
 
-Follow the full `/create-pr` workflow:
+Run the `/create-pr` skill. Pass through any `$ARGUMENTS` as-is (e.g., `draft`, `ja`).
 
-1. Check for uncommitted changes (`git status`). If any exist, commit or stash before proceeding.
-2. Ensure the branch is not `main`/`master`.
-3. Rebase on latest main if needed, then push.
-4. Write the PR body to `/tmp/pr-body-<random>.md` using the Write tool.
-5. Create the PR:
-   ```bash
-   gh pr create --title "TITLE" --body-file /tmp/pr-body-<random>.md --base main [--draft]
-   ```
-6. Display the PR URL.
-7. Clean up the temp file.
+Do NOT duplicate create-pr's workflow here — invoke the skill and let it handle all PR creation logic.
 
 ## Step 2: Iterate Until CI Passes
 
-Immediately follow the full `/iterate-pr` workflow without waiting for user input:
+Run the `/iterate-pr` skill immediately after Step 1 without waiting for user input.
 
-1. Check CI status: `gh pr checks --json name,state,bucket,link,workflow`
-2. If all checks pass → done (report success to user).
-3. If any checks fail:
-   - Read the actual failure logs: `gh run view <run-id> --log-failed`
-   - Fix the root cause
-   - Commit and push the fix
-   - Wait: `gh pr checks --watch --interval 30`
-   - Repeat from step 1
-4. If the PR was draft and all CI passes, mark ready: `gh pr ready`
+Do NOT duplicate iterate-pr's workflow here — invoke the skill and let it handle CI monitoring, failure fixing, and the iteration cycle.
 
 ## Exit Conditions
 
