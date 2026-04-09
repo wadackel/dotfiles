@@ -188,9 +188,9 @@ The following are implicitly executed for every plan. They are **not** presented
 - Implementation complete
 - Tests pass (when test files exist)
 - Lint / type check pass (when applicable tools exist)
-- `/verification-before-completion` Gate Function
+- `/completion-audit`（最終ゲートで1回実行）
 
-**Note:** "Implicit" here means plan-deeper's completion criteria step does not ask the user to approve these. The Plan Execution phase rule requiring `/verification-before-completion` in task descriptions (CLAUDE.md) remains independently active — task descriptions still include it explicitly.
+**Note:** "Implicit" here means plan-deeper's completion criteria step does not ask the user to approve these. The Plan Execution phase runs `/completion-audit` as the final gate task — it audits whether implementation and verification evidence are sufficient for the plan's purpose.
 
 #### 7b. Design Observable Completion Conditions
 
@@ -226,7 +226,7 @@ question: |
   【自律検証不可（ユーザー確認が必要）】
   - (なし)
 
-  ※ ベースライン（tests, lint, /verification-before-completion）は自動実行します
+  ※ ベースライン（tests, lint）は各タスク内で実行、/completion-audit は最終ゲートで1回実行します
 options:
   - "All good"
   - "I have adjustments (will specify)"
@@ -238,7 +238,7 @@ If the user selects "I have adjustments", receive their free-form input and appl
 
 #### 7d. Write Criteria to Plan
 
-Append a `## Completion Criteria` section to the plan file in English (compatible with the Verification section extraction rule in CLAUDE.md):
+Append a `## Completion Criteria` section to the plan file in English (consumed by task-planner for acceptance criteria and the final completion audit):
 
 ```markdown
 ## Completion Criteria
@@ -252,10 +252,10 @@ Observable conditions that Claude verifies directly:
 - None
 
 ### Baseline (always executed)
-tests, lint, `/verification-before-completion` — implicit in plan-deeper's criteria step, but explicitly included in task descriptions during Plan Execution phase
+tests, lint — executed within each implementation task's acceptance criteria. `/completion-audit` — runs once as the final completion audit gate task
 ```
 
-Each condition in `### Autonomous Verification` uses checkbox format (`- [ ] command → expected outcome`) — this is compatible with the downstream Verification section extraction rule that scans for executable commands to generate smoke-test tasks.
+Each condition in `### Autonomous Verification` uses checkbox format (`- [ ] command → expected outcome`) — task-planner embeds these as acceptance criteria within implementation tasks, and the completion-auditor checks evidence against them at the final gate.
 
 ### Step 8: Result Report
 

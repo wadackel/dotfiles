@@ -94,5 +94,5 @@ Not pure TDD but a "structural verification gate":
 ## Related
 
 - **tdd-guide agent** -- subagent that assists with TDD execution
-- **verification-before-completion** -- pre-completion verification gate
+- **completion-audit** -- completion audit gate (final gate only, audits evidence sufficiency)
 - **qa-planner** -- QA test case design

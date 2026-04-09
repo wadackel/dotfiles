@@ -1,6 +1,6 @@
 ---
 name: task-planner
-description: Decomposes implementation plans into well-structured task lists with acceptance criteria, verification commands, and dependencies. Use PROACTIVELY after ExitPlanMode when a plan has 3+ steps. Ensures implementation/verification separation and change-type-specific verification tasks.
+description: Decomposes implementation plans into well-structured task lists with acceptance criteria and dependencies. Use PROACTIVELY after ExitPlanMode when a plan has 3+ steps. Verification commands are embedded as acceptance criteria within implementation tasks, not as separate tasks. Final gate runs /completion-audit.
 tools: Read, Grep, Glob
 model: sonnet
 ---
@@ -21,34 +21,35 @@ Return the following structured text. The main session will use this to execute 
 ## Task List
 
 ### Task 1: [subject]
-- **description**: [what to change, expected behavior, verification method]
+- **description**: [what to change, expected behavior, acceptance criteria (verification commands + expected output)]
 - **files**: [target file paths to modify]
 - **blockedBy**: [dependent task numbers, or none]
 
-### Task 1-V: [verification of subject]
-- **description**: [specific verification commands and expected output]
-- **blockedBy**: [Task 1]
+### Task 2: [subject]
+- **description**: [what to change, expected behavior, acceptance criteria (verification commands + expected output)]
+- **files**: [target file paths to modify]
+- **blockedBy**: [dependent task numbers, or none]
 
 ...
 
-### Task N: Run /verification-before-completion
-- **description**: [list specific verification commands from the plan's Verification section]
-- **blockedBy**: [all tasks]
+### Task N: Run /completion-audit
+- **description**: Collect implementation summaries and raw verification evidence from all completed tasks. Run /completion-audit to dispatch the completion-auditor for final audit against the plan's purpose and Completion Criteria.
+- **blockedBy**: [all implementation tasks]
 ```
 
 ## Decomposition Rules
 
 1. **1 task = 1 verifiable unit**: Granularity where completion can be confirmed independently
-2. **Separate implementation and verification**: Create a corresponding verification task for each implementation task
+2. **Verification within implementation tasks**: Each implementation task includes its own acceptance criteria with verification commands. No separate verification tasks
 3. **Separation of concerns**: Different concerns go in separate tasks. Files sharing the same concern go in one task
-4. **Three elements of task descriptions**: (1) target files to modify, (2) expected behavior, (3) verification method
-5. **Final gate task**: Always include `/verification-before-completion` as the final task
+4. **Three elements of task descriptions**: (1) target files to modify, (2) expected behavior, (3) acceptance criteria (verification commands + expected output)
+5. **Final gate task**: Always include `/completion-audit` as the final task, blockedBy all implementation tasks
 
-## Verification Task Generation by Change Type
+## Acceptance Criteria by Change Type
 
-Analyze the changes in the plan and generate verification tasks according to their type:
+Analyze the changes in the plan and embed appropriate acceptance criteria within each implementation task description:
 
-| Change Type | Content to include in verification task description |
+| Change Type | Acceptance criteria to include in implementation task description |
 |---|---|
 | CLI script | Execute the script and confirm output matches expected values |
 | Hook script | Reproduce the hook trigger condition and confirm intervention works correctly |
@@ -56,13 +57,13 @@ Analyze the changes in the plan and generate verification tasks according to the
 | Nix config | Confirm settings are applied after `darwin-rebuild` |
 | Skill/agent addition | Verify with skill-tester trigger test or manual invocation |
 | Improvement task | Record a Before baseline and compare with After to demonstrate improvement numerically |
-| Large implementation (5+ plan steps or 10+ files) | Insert a `/simplify-review code` task before the final `/verification-before-completion` gate task |
+| Large implementation (5+ plan steps or 10+ files) | Insert a `/simplify-review code` task before the final `/completion-audit` gate task |
 
-See `verification-before-completion/references/behavioral-verification.md` for details.
+See `completion-audit/references/behavioral-verification.md` for details.
 
 ## Anti-patterns
 
-- Tasks too coarse (multiple concerns mixed into one task)
+- Creating separate verification tasks (verification is embedded in implementation task acceptance criteria)
 - Verification tasks that only say "confirm" without specific commands
 - Missing dependencies (tasks that cannot execute without a prerequisite task)
-- Missing final gate task
+- Missing final completion audit gate task
