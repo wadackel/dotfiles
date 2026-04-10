@@ -66,8 +66,14 @@ Process the Critic's response:
    - Alternative approaches: "Which approach do you prefer?"
    - Scope questions: "Is this feature in scope?"
    - Ambiguous behavior: "What is the expected behavior here?"
-4. Update the plan based on user answers and self-resolutions
-5. Append a Deepening Log entry to the plan:
+4. Update the plan based on user answers and self-resolutions:
+   - Apply accepted changes directly to the relevant plan steps
+   - Add a 1-line rationale comment (`-- Why: ...`) to each modified step so the decision is traceable without reading the log
+5. Append a Deepening Log entry to the **log file** (not the plan body):
+
+**Log file convention:** `{plan-file-basename}.log.md` in the same directory as the plan file. For example, if the plan is `adaptive-wishing-bird.md`, the log file is `adaptive-wishing-bird.log.md`. Create the log file on the first round if it does not exist.
+
+Write to log file:
 
 ```markdown
 ## Deepening Log
@@ -77,6 +83,13 @@ Process the Critic's response:
 - **User Clarified**: [items confirmed with user and their answers]
 - **Rejected**: [items rejected and why]
 - **Verdict**: ITERATE | CONVERGED
+```
+
+6. In the plan body, maintain a `## Deepening Log` section containing only a link to the log file:
+
+```markdown
+## Deepening Log
+See [{basename}.log.md]({basename}.log.md) for critique rounds and falsification results.
 ```
 
 **Interview principles:**
@@ -131,13 +144,14 @@ The agent returns findings classified as:
 - **Verified**: A claim was tested against code and held up (with evidence)
 - **Design Questions**: Legitimate alternatives surfaced during investigation
 
-**Processing results:**
-1. **Falsified** items → must-fix before implementation (update plan immediately)
-2. **Unverified** items → add to plan as explicit risks with mitigation/test strategy
-3. **Verified** items → append to Deepening Log as confidence evidence
-4. **Design Questions** → add to pending user judgment list (do not interview at this point — deferred to consolidated interview in Step 7)
+**Processing results — plan body reflection rules:**
+1. **Falsified** items → fix the plan body immediately + add 1-line rationale (`-- Why: ...`) at the corrected step
+2. **Verified** items that are implementation-critical (e.g., API usage, offset calculations) → add rationale comment to the relevant plan step
+3. **All items Verified** → add a single line to the plan body: `All claims verified against code.` (no per-claim details)
+4. **Unverified** items → add to plan body's Edge Cases section or relevant step as explicit risks with mitigation/test strategy
+5. **Design Questions** → add to pending user judgment list (deferred to consolidated interview in Step 7)
 
-Append results to Deepening Log:
+**Log file:** Write the full investigation details to the log file:
 
 ```markdown
 ### Round N (Adversarial Falsification)
@@ -148,7 +162,7 @@ Append results to Deepening Log:
 - **Verdict**: CONVERGED | ITERATE
 ```
 
-If any Falsified items are found, update the plan and mark verdict as `ITERATE`. The main agent applies fixes directly — no additional Critic round is needed (fixes are recorded in the Deepening Log for traceability).
+If any Falsified items are found, update the plan and mark verdict as `ITERATE`. The main agent applies fixes directly — no additional Critic round is needed (fixes are recorded in the log file for traceability).
 
 ### Step 6: Simplify Review
 
@@ -166,10 +180,10 @@ Run `/simplify-review plan` via the Skill tool. The skill spawns a fresh SubAgen
 
 | Verdict | Action |
 |---|---|
-| `SIMPLIFY` (has proposals) | Triage proposals by confidence (HIGH/MEDIUM/LOW). Apply HIGH-confidence simplifications directly. Add MEDIUM/LOW to pending user judgment list (do not interview at this point — deferred to consolidated interview in Step 7). Update plan and append to Deepening Log |
-| `MINIMAL` (already lean) | No changes needed. Record in Deepening Log and proceed |
+| `SIMPLIFY` (has proposals) | Triage proposals by confidence (HIGH/MEDIUM/LOW). Apply HIGH-confidence simplifications directly to the plan body (same inline rationale rule as Step 3). Add MEDIUM/LOW to pending user judgment list (deferred to consolidated interview in Step 7). Write details to log file |
+| `MINIMAL` (already lean) | No changes needed. Record in log file and proceed |
 
-Append results to Deepening Log:
+Write results to the **log file**:
 
 ```markdown
 ### Simplify Review
@@ -294,8 +308,8 @@ Continuing the same subagent carries prior-round context, causing confirmation b
 **Why default 3 rounds:**
 Round 1 detects most major issues, Round 2 verifies fixes and finds secondary issues, Round 3 confirms convergence. Returns diminish after round 3.
 
-**Why append Deepening Log to the plan:**
-Visualizes plan evolution for the user, and provides context for subsequent Critics — letting them verify "was the previous round's feedback actually addressed?"
+**Why separate the Deepening Log into a log file:**
+The full critique history (Accepted/Rejected lists, falsification evidence, simplify triage) is valuable for traceability and subsequent Critics, but it bloats the plan body — doubling its length in practice (e.g., 284 lines vs 117 lines without). By writing the log to `{basename}.log.md` and linking from the plan body, the user reviews only the plan (~120-150 lines) while subsequent Critics still receive the full log file content for context.
 
 **Why use an Explore subagent for Adversarial Falsification (not Plan):**
 Plan-type subagents evaluate plan text analytically but cannot discover what the plan doesn't mention. Adversarial Falsification needs to explore code the plan references — and code it doesn't reference — to find missing prerequisites or incorrect assumptions. Explore subagents use Grep/Glob/Read to actively investigate the codebase. Real-world example: a Plan critic approved a sleep configuration plan, but an Explore-based falsification agent searched other ZMK keyboards' device trees and discovered a missing `wakeup-source` property that would have caused permanent system-off with no wake path.
@@ -319,3 +333,26 @@ Steps 5 (Adversarial Falsification), 6 (Simplify Review), and 7 (Completion Crit
 - For complex plans, use `/plan-deeper 5` for thorough review
 - User interviews are key to accuracy — items requiring domain knowledge are faster and more accurate when asked directly
 - Combine with the **qa-planner** skill (Mode A) to proceed from plan deepening straight to test case design
+
+### Plan Body Guidelines
+
+Target: **120-150 lines** for the plan body (excluding Deepening Log). The log file has no length constraint.
+
+**Recommended plan body structure:**
+
+1. **Context** (3-5 lines) — problem, motivation, intended outcome
+2. **Critical Files** — file list with 1-line role description
+3. **Implementation Steps** — what to change + why per step; include code only for non-obvious logic (formulas, offset calculations, API patterns)
+4. **Edge Cases** — bullet list
+5. **Completion Criteria** — verification commands with expected output
+6. **Deepening Log** — link to `{basename}.log.md`
+
+**Keep in plan body:**
+- Design decisions with 1-line rationale (e.g., `-- Why: buffer reuse matches Preview pattern`)
+- Formulas, API calls, and patterns where implementation mistakes are likely
+- Edge case handling strategies
+
+**Move to log file:**
+- Critique round history (Accepted/Rejected/Clarified lists)
+- Falsification investigation details (claim extraction, per-claim evidence)
+- Simplify Review triage details (proposal confidence ratings, rejection reasoning)

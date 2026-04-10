@@ -132,7 +132,7 @@ Task:
 
     {plan_content} → Full text of the updated plan file
     {project_context} → Relevant sections from CLAUDE.md
-    {deepening_log} → The Deepening Log section appended to the plan
+    {deepening_log} → The full contents of the `{basename}.log.md` log file (separate from the plan body)
 ```
 
-Passing the prior Deepening Log lets the Critic verify whether the previous round's feedback was actually addressed.
+Passing the log file contents lets the Critic verify whether the previous round's feedback was actually addressed. The log file is maintained separately from the plan body — see SKILL.md Step 3 for the log file convention.
