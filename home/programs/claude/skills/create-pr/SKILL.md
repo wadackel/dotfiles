@@ -21,7 +21,7 @@ Create a well-structured GitHub pull request.
 
 Parse `$ARGUMENTS` for the following flags (order-independent):
 - `draft` → create the PR as a draft
-- `ja` → write the PR title and body in Japanese (default: English)
+- `ja` → write the PR title and body in Japanese. **Only apply when `ja` is explicitly present in `$ARGUMENTS`** — never infer from conversation language or user locale
 
 ## Prerequisites Check
 
@@ -49,7 +49,7 @@ Ensure you're not on `main` or `master`. If so, ask the user to create or switch
 ### 2. Find the base branch
 
 ```bash
-git remote show origin | grep "HEAD branch"
+git remote show origin | rg "HEAD branch"
 ```
 
 ### 3. Analyze recent commits
@@ -117,7 +117,9 @@ cat .github/pull_request_template.md 2>/dev/null || echo "NO_TEMPLATE"
 - <If none, use "n/a">
 ```
 
-Write in **English** by default. If `ja` was passed in `$ARGUMENTS`, write in **Japanese** instead.
+Write in **English** by default. Only write in Japanese when `ja` was explicitly passed in `$ARGUMENTS`. Do NOT infer the language from the user's conversation language — always default to English. If the project's CLAUDE.md has a Language section, follow its rules.
+
+Example: if `$ARGUMENTS` is empty or contains only `draft`, write in English regardless of what language the user is speaking.
 
 ### Create PR with gh CLI
 

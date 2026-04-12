@@ -17,11 +17,13 @@ This skill is the composition of `/create-pr` followed immediately by `/iterate-
 
 Parse `$ARGUMENTS` for:
 - `draft` → create the PR as a draft (CI will still be monitored)
-- `ja` → write the PR title and body in Japanese (default: English)
+- `ja` → write the PR title and body in Japanese. **Only apply when explicitly present in `$ARGUMENTS`**
 
 ## Step 1: Create the PR
 
-Run the `/create-pr` skill. Pass through any `$ARGUMENTS` as-is (e.g., `draft`, `ja`).
+Run the `/create-pr` skill. Pass through `$ARGUMENTS` exactly as-is — do not add flags that were not in the original arguments.
+
+Example: if the user runs `/auto-pr draft`, invoke `/create-pr draft` — do NOT add `ja` or any other flags not present in the original `$ARGUMENTS`.
 
 Do NOT duplicate create-pr's workflow here — invoke the skill and let it handle all PR creation logic.
 

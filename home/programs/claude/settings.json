@@ -609,6 +609,7 @@
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
   "voiceEnabled": true,
   "skipDangerousModePermissionPrompt": true,
   "skipAutoPermissionPrompt": true,
