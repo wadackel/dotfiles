@@ -73,6 +73,12 @@ Agent tool:
 
 ### Step 3: Handle Result
 
+**Relay the audit findings to the user.** The auditor's output is returned as an Agent tool result, which is not visible to the user. You MUST relay the auditor's complete findings — per-criterion assessments, dimension summaries, and verdict — before taking any action. Display the auditor's output in full; do not paraphrase or summarize into "audit passed" or similar.
+
+On re-runs (after FAIL), relay the new audit findings each time.
+
+Then take action based on the verdict:
+
 | Result | Action |
 |--------|--------|
 | `VERIFIED: PASS` | Completion claim is authorized. Proceed to Step 4 |

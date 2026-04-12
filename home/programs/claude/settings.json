@@ -498,6 +498,7 @@
     ],
     "defaultMode": "plan",
     "additionalDirectories": [
+      "~/.claude",
       "~/dotfiles",
       "/tmp"
     ]

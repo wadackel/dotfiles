@@ -2,38 +2,46 @@
 
 This document provides the complete decision tree for routing session learnings to the appropriate target: project CLAUDE.md, global ~/.claude/CLAUDE.md, or skill proposals.
 
-## Decision Tree
+## Enforcement Layer Ladder
 
-For each categorized learning, follow this decision tree:
+For each learning, walk down this ladder and stop at the **first rung that applies**. Higher rungs rely less on Claude's judgment and enforce the rule more strongly.
 
-```
-1. Did the Skill Opportunity Scan (Phase 2.5) flag this as a skill candidate?
-   └─ YES → Continue to step 5
-   └─ NO → Continue to step 2
+**Meaning of rung numbers**: Rung 1 is the strongest (deterministic enforcement by the harness). Rung 4 is the weakest (depends on Claude reading and voluntarily following a written rule). "Escalate" always means "decrease the rung number" (e.g., Rung 4 → Rung 3).
 
-2. Is this learning project-specific?
-   └─ YES → Is this a team convention or a personal preference?
-          └─ Team convention → Route to PROJECT CLAUDE.md (git-managed)
-          └─ Personal preference → Route to PROJECT-LOCAL PERSONAL CLAUDE.md
-   └─ NO → Continue to step 3
+**Rung 0: SKILL CANDIDATE PRECEDENCE** (evaluated in Phase 2.5, NOT in the Phase 2 Root Cause Check)
+  If the Phase 2.5 Skill Opportunity Scan flags the learning as a skill candidate, Phase 3 jumps straight to Rung 3 as the final routing (skipping Rungs 1-2). This precedence preserves the anti-bias mechanism from the previous Decision Tree: evaluating skill candidates before CLAUDE.md prevents the "path of least resistance" bias toward CLAUDE.md.
+  **Phase 2's Recurrence Check only evaluates Rungs 1-4**, because the Phase 2.5 skill-candidate flag is not yet available when Phase 2 runs.
 
-3. Is this learning universal/cross-project?
-   └─ YES → Route to GLOBAL ~/.claude/CLAUDE.md
-   └─ NO → Continue to step 4
+**Rung 1: DETERMINISTIC ENFORCEMENT (Hook / Policy)**
+  When to use: the behavior is deterministic and the harness can enforce it without Claude's cooperation.
+  In this dotfiles repo, `bash-policy.ts` already runs as a PreToolUse hook, so blocking or redirecting a Bash-command pattern is cheapest via **adding a rule to `bash-policy.yaml`**. Non-Bash enforcement (other tool calls, user-prompt monitoring) goes into **a new hook script under `~/.claude/scripts/`**.
+  - Sub-option A: Add a rule to `~/.claude/scripts/bash-policy.yaml` (Bash patterns only)
+  - Sub-option B: Add a new PreToolUse / PostToolUse / UserPromptSubmit hook script under `~/.claude/scripts/`
+  Example: "Use pnpm, not npm" → Sub-option A
+  Example: "Force plan-deeper to run before ExitPlanMode" → Sub-option B
 
-4. Skip (too specific or one-off)
+**Rung 2: PERMISSIONS** (`~/.claude/settings.json` permissions.deny/allow)
+  When to use: tool access should be structurally restricted.
+  Example: "Never WebFetch github.com" → permissions.deny
 
-5. Does an existing skill already cover this workflow?
-   └─ YES → Route to SKILL MODIFICATION proposal
-   └─ NO → Apply the /invoke litmus test:
-          "Would the user realistically type /skill-name for this?"
-          └─ YES → Route to NEW SKILL proposal
-          └─ NO → Route to appropriate CLAUDE.md (step 2-3)
-                  AND note: "Considered as skill, but better as CLAUDE.md
-                  because: [reason]"
-```
+**Rung 3: SKILL CREATION / DESCRIPTION FIX / REFERENCE DEEPENING**
+  When to use: a multi-step workflow worth automating, an existing skill that failed to auto-load (description gap), or an existing skill whose references are too shallow.
 
-**Important**: Skill candidates are checked FIRST (step 1) before defaulting to CLAUDE.md routing. This prevents the "path of least resistance" bias toward CLAUDE.md.
+  **Sub-option priority (cheapest first)**:
+  1. **Description fix** (lowest cost): only when a matching skill already exists but its trigger phrases miss the scenario. 1-2 line edit to the SKILL.md frontmatter.
+  2. **Reference deepening** (medium cost): the existing skill loads correctly but its guidance is insufficient. Add or extend a `references/*.md` file.
+  3. **New skill creation** (highest cost): neither of the above applies and the workflow passes the `/invoke` litmus test.
+
+  Always ask "is there a nearby existing skill?" first. If so, prefer description fix or reference deepening to avoid proliferating skills.
+
+**Rung 4: CLAUDE.md ADDITION**
+  When to use: only when Rungs 0-3 do not apply. This layer depends on Claude reading and obeying a written rule — the weakest form of prevention.
+  A proposal landing on Rung 4 MUST include one line per rejected rung explaining why Rungs 0-3 do not apply.
+
+  Sub-routing inside Rung 4 (Project-Specific vs Universal, Team vs Personal) uses the existing rules below (see "Rules for Determining Project-Specific vs Universal"). Those rules are unchanged by this ladder.
+
+**Execution-mode change (outside the ladder, referenced only)**:
+  Redefining a `~/.claude/agents/*.md` SubAgent is an "execution mode change", not a prevention layer. Consider it only when a specific class of task should run with different tool access (e.g., read-only). It does not have a rung assignment.
 
 ## Rules for Determining Project-Specific vs Universal
 

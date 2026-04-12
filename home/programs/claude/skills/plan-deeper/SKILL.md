@@ -212,7 +212,49 @@ Based on the plan's content, design specific observable conditions that prove th
 
 Each condition must be **concrete and plan-specific**. Not "verify CLI works" but "`ofsht add '#33'` creates a worktree and `cd` switches to it".
 
-Classify items as **Requires User Confirmation** when Claude cannot directly execute, observe, or measure the outcome (e.g., subjective evaluation, logout-required settings, next-launch behavior).
+##### Verifiability Classification
+
+**Default bias: every observable condition is autonomously verifiable.** A condition may be classified as "Requires User Confirmation" ONLY if you can name a **specific blocking capability** Claude lacks. Vague phrases like "Claude can't observe this" or "runtime-dependent" are rationalizations, not reasons — reject them.
+
+**Verifiability Falsification (mandatory self-challenge):**
+For every candidate you are about to mark "Requires User Confirmation", run this 3-step challenge before finalizing:
+
+1. **Name the missing capability concretely.** Not "I can't see the result" but e.g. "requires fresh GUI login after logout", "requires physical trackpad gesture", "requires human subjective judgment with no pixel proxy".
+2. **Search for a proxy observation.** Log files, state dumps, `defaults read`, exit codes, grep of generated files, subshell spawn, headless tool output, dry-run modes — is there ANY indirect measurement that would confirm the outcome?
+3. **Decide:** if step 1 yields a concrete blocker AND step 2 yields no proxy, keep the item in "Requires User Confirmation" and record the blocker verbatim. Otherwise, reclassify as Autonomous Verification and document the proxy method as the verification command.
+
+**Genuine blocking capabilities (the only acceptable reasons):**
+- Requires fresh GUI login/logout or system reboot for the *effect* (not just the value) to take hold
+- Requires human physical input (trackpad gesture, biometric, physical key, camera)
+- Requires subjective aesthetic/linguistic judgment with no objective proxy (taste, feel, "tone sounds right")
+- Requires third-party service credential Claude does not hold
+- Requires hardware/sensor state Claude cannot query (battery %, ambient light)
+
+**Persisted vs applied — avoid this anti-pattern:**
+`defaults read <domain> <key>` confirms only that the value was **written**. It does NOT confirm that GUI/runtime behavior has **applied** the change. If the condition under test is "the scroll bar actually always shows", `defaults read` is insufficient — the binding from preference to runtime requires logout/restart. In such cases, **split the condition into two**: (a) value persisted (autonomous, `defaults read`) + (b) effect applied (Requires User Confirmation, blocker: fresh GUI login). Never collapse (b) into (a) just because the value is readable.
+
+**Commonly misclassified — these ARE autonomously verifiable:**
+
+*(Illustrative patterns. Verify tool availability on the current system before relying on any single entry.)*
+
+| "Seems unverifiable" | Actual verification method |
+|---|---|
+| "Hook fires on event X" | Craft stdin/args and invoke the hook entry path directly |
+| "Script installed in PATH" | `command -v <name>` / `which <name>` |
+| "Symlink created correctly" | `readlink <path>` / `test -L <path>` |
+| "tmux keybind registered" | `tmux list-keys \| rg <key>` |
+| "Nix setting value written" | `defaults read <domain> <key>` (value only — see Persisted vs applied) |
+| "Notification fires" | `terminal-notifier` exit code + log file inspection |
+| "Shell function loads" | `zsh -i -c 'type <func>'` |
+| "Config file generated" | `test -f` + content grep |
+| "Command exits cleanly" | Run and check exit code + stdout |
+| "Web UI renders correctly" | `/agent-browser` screenshot + visual diff |
+| "Process/daemon reloaded" | `launchctl list` or process status check |
+| "Clipboard populated" | `pbpaste` |
+
+**Interaction with Step 5:** This challenge runs on the candidate Completion Criteria list, AFTER Step 5 Adversarial Falsification has concluded. Items that Step 5 marked as "Unverified" remain in the plan's Edge Cases section and are not re-scoped here — 7b operates only on what becomes the Completion Criteria list.
+
+If you catch yourself drafting an "unverifiable" item, pause and re-run the 3-step challenge. Only items with a named, irreducible blocker survive.
 
 #### 7c. User Alignment (always run)
 
@@ -248,6 +290,8 @@ options:
 
 **Both 【自律検証】 and 【自律検証不可】 are always shown** (show "なし" when empty). This ensures the user can flag misclassified items.
 
+**Format for 【自律検証不可（ユーザー確認が必要）】 items:** When non-empty, each entry spans two lines — the condition on the first line, and `    理由: <specific blocking capability>` (4-space indent) on the second, naming the genuine blocker from Step 7b's list. Items without a named blocker must be reclassified as Autonomous Verification before presenting to the user.
+
 If the user selects "I have adjustments", receive their free-form input and apply corrections.
 
 #### 7d. Write Criteria to Plan
@@ -270,6 +314,8 @@ tests, lint — executed within each implementation task's acceptance criteria. 
 ```
 
 Each condition in `### Autonomous Verification` uses checkbox format (`- [ ] command → expected outcome`) — task-planner embeds these as acceptance criteria within implementation tasks, and the completion-auditor checks evidence against them at the final gate.
+
+Each entry in `### Requires User Confirmation` (when non-empty) uses the format `- <condition> — blocker: <specific blocking capability>` so task-planner and completion-auditor can distinguish user-confirmation items from autonomous ones, and the auditor can verify that only genuine blockers (per Step 7b's list) live in this bucket. When empty, the block shows `- None` verbatim.
 
 ### Step 8: Result Report
 

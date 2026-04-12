@@ -41,7 +41,14 @@ Gather full session data and reflect on it:
    ```
    Read the file path printed to stdout using the Read tool.
 
-2. **Review extracted history** focusing on:
+2. **Build an evidence list** by extracting concrete observations from the transcript. **Do not summarize into categories yet.** For each potential learning, record:
+
+   - **What happened**: 1 sentence summary
+   - **Evidence**: direct quote from transcript (1-3 lines) OR turn number OR file path with line number
+
+   Record "at turn 42 the user said 'no, use Y instead' (quote)" — not an abstract "user prefers Y". Abstract summarization happens in Phase 2 while referencing the evidence list.
+
+   While building the list, scan the session as a whole through these lenses (original checklist retained):
    - Tasks performed and their outcomes
    - Errors encountered and how they were resolved
    - Questions asked to the user (signals missing context)
@@ -62,9 +69,15 @@ Gather full session data and reflect on it:
    - Read global ~/.claude/CLAUDE.md
    - List existing skills in ~/.claude/skills/
 
-### Phase 2: Categorize Learnings
+5. **Load existing instincts (for Phase 2 Recurrence Check)**:
+   ```bash
+   ~/.claude/skills/instinct-learner/scripts/instincts.ts list --min-confidence 0
+   ```
+   Reference the stdout directly (do not write to an intermediate file). The output is two lines per instinct (id/confidence/domain line + rule body line), so Phase 2's Recurrence Check scans both lines visually.
 
-Classify each learning into categories. See [references/learning-categories.md](references/learning-categories.md) for detailed definitions and examples.
+### Phase 2: Categorize & Diagnose
+
+Classify each learning into categories, then diagnose why it occurred and where it could have been prevented. See [references/learning-categories.md](references/learning-categories.md) for detailed definitions and examples.
 
 **Summary of categories:**
 
@@ -87,6 +100,26 @@ Classify each learning into categories. See [references/learning-categories.md](
 5. **Preference Patterns** — User style or preference observations
    - Example: "User prefers concise output, dislikes verbose explanations"
    - Example: "User wants draft PRs with English descriptions"
+
+**Root Cause & Recurrence Check (always run after categorization):**
+
+Answer three questions for each learning. The answers flow directly into Phase 2.5's scan, Phase 3's routing, and Phase 4's proposal drafting.
+
+1. **Why did this happen?** Pick exactly one:
+   - (a) Claude did not know the fact → **knowledge gap**
+   - (b) Claude knew but did not apply it → **judgment/trigger gap**
+   - (c) The environment allowed the mistake → **enforcement gap**
+
+2. **Which layer could have stopped it earliest?** Pick one Rung from the Enforcement Ladder (`references/routing-logic.md`), **choosing only from Rungs 1-4**. Do NOT evaluate Rung 0 (Skill candidate) at this step — skill-candidate judgment is Phase 2.5's job and is merged into the final routing in Phase 3. If you pick Rung 4 (CLAUDE.md), you must write one line per rejected rung explaining why Rungs 1-3 do not apply.
+
+3. **Has this recurred across sessions?** Visually scan the instinct list loaded in Phase 1 Step 5 (from the stdout of `instincts.ts list`) for matching rules. If a match exists, record the id and confidence. A repeated match is evidence that the previous layer choice was too weak → **lower the Rung number by one (escalate to stronger enforcement)**. Boundary handling:
+   - Recurrence at Rung 1 → no escalation available; re-examine the Rung 1 implementation itself (tighten the bash-policy rule, strengthen the hook script's conditions)
+   - Recurrence at Rung 4 → escalate to Rung 3 (skill / description fix / reference deepening)
+
+**Notes**:
+- Do not introduce a separate `Phase 2.1` sub-heading. This Root Cause & Recurrence Check lives inside Phase 2 as an in-line diagnosis step, preserving the existing Phase 2.5 / 2.6 numbering.
+- **Step 2 evaluates only Rungs 1-4**: Rung 0 is deliberately deferred to Phase 2.5 so that Phase 2 → Phase 2.5 → Phase 3 remains linear. At Phase 2 time, the skill-candidate flag is not yet known.
+- **Escalation direction**: Lower Rung number = stronger enforcement. "Escalate" always means "decrease the Rung number".
 
 ### Phase 2.5: Skill Opportunity Scan
 
@@ -114,14 +147,17 @@ For each skill that was used or relevant to the session, check:
 - Did the workflow deviate from what the skill prescribed?
 - Would a new reference file improve the skill?
 
-**Auto-loading failure analysis** (for "Corrected Approaches" category):
-When a user correction is "use skill X instead of [raw approach]", perform root cause analysis:
-1. Was the skill loaded at the time? If not, why?
-   - **Description gap**: The scenario wasn't covered by the skill's trigger phrases → Propose description improvement (skill modification)
-   - **Chicken-and-egg**: The skill can't self-trigger → Reminder rule must stay in CLAUDE.md
-   - **Judgment error**: Claude saw the skill but chose not to use it → CLAUDE.md guardrail may be needed
-2. Route the proposal to the diagnosed root cause, not the surface symptom.
-   A description gap should produce a **skill modification**, not a CLAUDE.md addition.
+**Prevention-Layer Failure Analysis** (for the "Corrected Approaches" category):
+
+When a user correction occurs, walk the Enforcement Ladder from the top and ask "which layer could have stopped this earliest?". Route the proposal to the failed layer, not the surface symptom:
+
+- **Rung 1 (Hook / bash-policy)**: Could a Bash-command pattern match have blocked this? → propose a `bash-policy.yaml` rule. For non-Bash behavior, propose a new hook script.
+- **Rung 2 (Permissions)**: Should the tool invocation have been denied? → propose a `permissions.deny` entry.
+- **Rung 3 (Skill description)**: Did a relevant skill exist but fail to auto-load because of missing trigger phrases? → propose a skill description fix.
+- **Rung 3 (Skill content)**: Did the skill load but lack sufficient guidance? → propose reference deepening.
+- **Rung 4 (CLAUDE.md)**: Only when none of the above applies.
+
+**Route the proposal to the failed layer, not to the symptom.** A description gap must not be flattened into a CLAUDE.md line addition.
 
 #### Generalization Check
 
@@ -174,6 +210,8 @@ Default to Skill (standard) when uncertain — it matches the user's preference 
 
 For learnings categorized as **Corrected Approaches** and **Repeated Workflows** in Phase 2:
 
+Re-consult the instinct list loaded in Phase 1 Step 5 before deciding `add` vs `reinforce` for each learning.
+
 1. Register learnings that passed the Generalization Check as instincts
 2. Execute automatically without confirmation (as part of the retrospective)
 3. Include instincts that reach the promotion threshold (confidence >= 0.7) in Phase 4 CLAUDE.md proposals
@@ -196,29 +234,44 @@ For learnings categorized as **Corrected Approaches** and **Repeated Workflows**
 
 ### Phase 3: Route Proposals
 
-Determine where each learning belongs using routing logic. See [references/routing-logic.md](references/routing-logic.md) for the full decision tree.
+Merge the Rung 1-4 selected in Phase 2's Root Cause Check with the skill-candidate flag produced by Phase 2.5's Skill Opportunity Scan to determine the final routing. See [references/routing-logic.md](references/routing-logic.md) for the full Enforcement Layer Ladder and detailed sub-routing criteria.
 
-**Quick routing summary:**
+**Final rung decision logic**:
 
-- **Project-specific, team convention** (build commands, project structure, team coding standards)
-  → Project CLAUDE.md (git-managed, shared with team)
+1. If Phase 2.5 flagged the learning as a skill candidate → final rung is **Rung 3** (Rung 0 precedence fires).
+2. Otherwise → use the Rung 1-4 chosen in Phase 2's Root Cause & Recurrence Check.
 
-- **Project-specific, personal** (individual workflow optimizations, personal coding checklists)
-  → Project-local personal CLAUDE.md (`~/.claude/projects/<hash>/CLAUDE.md`)
+**Ladder quick reference** (smaller rung number = stronger enforcement):
 
-- **Universal/cross-project** (coding style, general tool usage, Claude's behavior)
-  → ~/.claude/CLAUDE.md
+- **Rung 1**: Hook / bash-policy (deterministic enforcement, no Claude judgment required)
+- **Rung 2**: Permissions (structural tool-access restriction)
+- **Rung 3**: Skill creation / description fix / reference deepening
+  - Sub-priority: description fix → reference deepening → new skill creation
+  - Detailed skill-proposal criteria (`/invoke` litmus, Conditions A-E, weak-justification exclusion) live in `references/routing-logic.md` under "Rules for Skill Proposals"
+- **Rung 4**: CLAUDE.md (weakest layer; Rung 1-3 rejection rationale required)
+  - Rung 4 internal sub-routing (Project-Specific vs Universal, Team vs Personal) lives in `references/routing-logic.md` under "Rules for Determining Project-Specific vs Universal"
 
-- **Skill opportunity** (detected via Phase 2.5 scan — complex workflow, user-taught
-  process, cross-session repetition signal, or tool orchestration pattern)
-  → New skill or skill modification proposal
+**Skill opportunity identification criteria** (used by Phase 2.5 to decide whether to set the skill-candidate flag):
 
-- **Tool-specific knowledge for existing skill**
-  → Skill modification proposal
+- Complex workflow (4+ steps with tool orchestration)
+- User-taught multi-step process
+- Cross-session repetition signal
+- Tool orchestration pattern
+- Knowledge systematization (external doc → reusable tool)
 
 ### Phase 4: Draft Proposals
 
 For each routed learning, draft a concrete proposal:
+
+**Falsification Gate (run BEFORE the Abstraction Test):**
+
+For each proposal, write all three of the following. **Abstract hypotheticals are not allowed**:
+
+1. **Two concrete counter-examples**: scenarios where following this rule would be wrong or wasteful. Each counter-example must cite a direct transcript quote, a file path, or a specific observed past-session event. Hypotheticals like "if X is ever needed in the future" do not count as counter-examples.
+2. **One failure mode**: a concrete way this proposal could actively harm a future session (over-triggering, masking a real bug, locking in a premature decision).
+3. **Escape hatch**: one sentence describing the condition under which Claude should ignore this rule.
+
+If you cannot write all three with concrete citations, the proposal is underspecified — sharpen it or discard it. Vague proposals that pass because no one could think of counter-examples are the single biggest source of CLAUDE.md bloat.
 
 **Before finalizing each proposal, apply the Abstraction Test:**
 
