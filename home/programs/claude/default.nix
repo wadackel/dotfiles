@@ -3,12 +3,16 @@
   lib,
   pkgs,
   dotfiles,
+  inputs,
   ...
 }:
 
+let
+  claudeCodePackage = inputs.nix-claude-code.packages.${pkgs.system}."2.1.98";
+in
 {
   # Claude Code
-  home.packages = [ pkgs.claude-code ];
+  home.packages = [ claudeCodePackage ];
 
   # Claude Code configuration
   home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
