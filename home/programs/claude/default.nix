@@ -7,12 +7,9 @@
   ...
 }:
 
-let
-  claudeCodePackage = inputs.nix-claude-code.packages.${pkgs.system}."2.1.98";
-in
 {
   # Claude Code
-  home.packages = [ claudeCodePackage ];
+  home.packages = [ inputs.nix-claude-code.packages.${pkgs.system}.default ];
 
   # Claude Code configuration
   home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
