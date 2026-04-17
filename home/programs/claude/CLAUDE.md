@@ -117,12 +117,16 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 #### Plan Mode
 
+- **Question triage before AskUserQuestion**: In plan mode drafting (Phase 1-3), before calling AskUserQuestion, triage each unclear point into one of three categories and ask ONLY category 1:
+  1. **Ask now (user-only knowledge)**: goals, hidden constraints, deadlines, preferences, domain terminology, trade-offs requiring user judgment
+  2. **Document as assumption (analyzable later)**: implementation patterns, abstraction level, library choice when codebase signal is weak — write `Assumption: X` in the plan body and let `/plan-deeper` Critic / Adversarial Falsification validate
+  3. **Self-resolve via code (discoverable)**: existing function presence, current behavior, file structure — use Grep/Read/Explore agent, never AskUserQuestion
+  - Goal: apply the same Self-resolvable/Needs-user-input/Reject classification that `/plan-deeper` Step 3 uses, but at the initial drafting stage — eliminates duplicate interviews and shortens Phase 1-3
 - **Run `/plan-deeper` before ExitPlanMode**: After creating a plan in plan mode, run `/plan-deeper` via the Skill tool before calling ExitPlanMode. May skip ONLY when ALL of these conditions are met:
   - Target is a single file with a few lines of changes (typo fix, config value change, simple addition)
   - No design decisions or multiple implementation approaches exist
   - User explicitly says "no plan-deeper needed", "just implement it", etc.
 - **Run `/simplify-review` when plan-deeper was not run**: Run `/simplify-review plan` before ExitPlanMode ONLY when `/plan-deeper` was NOT run in this session. Detection: check whether the plan file contains a `### Simplify Review` entry in the Deepening Log — if present, plan-deeper Step 6 already ran it. Same skip conditions as plan-deeper apply (single file, few lines, no design decisions, user explicitly skips)
-- **Wait for explicit user approval before ExitPlanMode**: After plan-deeper and simplify-review complete, present the final plan summary and wait for the user to say "実装して", "OK", "進めて", etc. before calling ExitPlanMode. Do not auto-exit after plan-deeper/simplify-review completion — the user may have additional feedback
 - **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
   1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
   2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect

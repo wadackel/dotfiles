@@ -13,7 +13,7 @@ Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic
 ## Quick Start
 
 ```
-/plan-deeper        # Default: max 3 rounds
+/plan-deeper        # Default: max 2 rounds
 /plan-deeper 5      # Max 5 rounds
 ```
 
@@ -23,7 +23,7 @@ Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic
 
 1. Retrieve the current plan (from plan file or conversation context)
 2. Read the project CLAUDE.md (for codebase alignment reference)
-3. Parse `$ARGUMENTS` for max rounds (default: 3, cap: 5)
+3. Parse `$ARGUMENTS` for max rounds (default: 2, cap: 5)
 
 ### Step 2: Critic Subagent (Each Round)
 
@@ -114,6 +114,8 @@ If none apply, return to Step 2 with a fresh subagent.
 
 ### Step 5: Adversarial Falsification Round
 
+**Parallel execution with Step 6:** Spawn the Step 5 Explore subagent and the Step 6 `/simplify-review plan` SubAgent in the SAME message (parallel tool calls). Their mandates are orthogonal (facts vs. structure). Merge pending user-judgment items from both into the Step 7c interview. If outputs conflict, log the conflict and keep both changes — user resolves in Step 7c.
+
 After the standard Critic converges, spawn one final subagent with a fundamentally different mandate: **try to BREAK the plan by finding concrete code-level evidence that specific claims are false.**
 
 This is distinct from the standard Critic (which evaluates quality across dimensions). The Adversarial Falsification agent reads actual code to disprove specific factual claims in the plan.
@@ -166,7 +168,9 @@ If any Falsified items are found, update the plan and mark verdict as `ITERATE`.
 
 ### Step 6: Simplify Review
 
-After Adversarial Falsification confirms the plan is factually correct, check whether the plan is also *minimal*. Each round of critique and falsification can accumulate defensive complexity — extra error handling, speculative abstractions, "just in case" patterns. This step counterbalances that tendency.
+**Runs in parallel with Step 5** (see Step 5 header).
+
+Independently of Step 5 (runs in parallel), check whether the plan is *minimal*. Each round of critique and falsification can accumulate defensive complexity — extra error handling, speculative abstractions, "just in case" patterns. This step counterbalances that tendency.
 
 **When to run:** Always, unless:
 - The plan has 3 or fewer implementation steps (already lean)
@@ -351,8 +355,8 @@ The Critic evaluates the plan across 6 axes. See [references/critic-prompt.md](r
 **Why spawn a fresh Plan-type subagent each round:**
 Continuing the same subagent carries prior-round context, causing confirmation bias to accumulate. A fresh subagent gives the same effect as an independent reviewer. The read-only "Plan" type is used because the Critic only analyzes — no file writes needed.
 
-**Why default 3 rounds:**
-Round 1 detects most major issues, Round 2 verifies fixes and finds secondary issues, Round 3 confirms convergence. Returns diminish after round 3.
+**Why default 2 rounds:**
+Empirically 96% of plans converge within 2 rounds. Use `/plan-deeper 3` for complex plans.
 
 **Why separate the Deepening Log into a log file:**
 The full critique history (Accepted/Rejected lists, falsification evidence, simplify triage) is valuable for traceability and subsequent Critics, but it bloats the plan body — doubling its length in practice (e.g., 284 lines vs 117 lines without). By writing the log to `{basename}.log.md` and linking from the plan body, the user reviews only the plan (~120-150 lines) while subsequent Critics still receive the full log file content for context.
