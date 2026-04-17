@@ -51,7 +51,7 @@ Parse `$ARGUMENTS`:
 
 #### Spawn Simplifier SubAgent
 
-Spawn a **fresh** `Plan` subagent (model: `sonnet`).
+Spawn a **fresh** `Plan` subagent (model: `opus`).
 
 Build prompt from [references/plan-simplifier-prompt.md](references/plan-simplifier-prompt.md), filling:
 - `{user_request}` — the original user request that motivated this plan
@@ -195,8 +195,8 @@ The SubAgent evaluates against these patterns. They're encoded in the prompt tem
 **Why a fresh SubAgent (not inline review):**
 The main session has followed the entire design journey. It knows *why* each decision was made, which makes it blind to unnecessary complexity — every piece feels justified in context. A fresh SubAgent sees only the artifact and naturally asks "is this needed?" without the sunk-cost bias.
 
-**Why sonnet for plan review, code-reviewer agent for code:**
-Plan simplification is structural analysis — sonnet handles this well and is faster. Code simplification needs to read actual files and understand implementation patterns, which the code-reviewer agent type is equipped for.
+**Why opus for plan review, code-reviewer agent for code:**
+Plan simplification runs as a single-shot structural analysis where detection quality matters more than latency — opus reduces missed over-engineering signals, mirroring plan-deeper's Round 1 rationale. Code simplification needs to read actual files and understand implementation patterns, which the code-reviewer agent type (already defaults to opus) is equipped for.
 
 **Why confidence-based triage instead of binary PASS/FAIL:**
 Simplification is inherently subjective. Some proposals are obvious wins (dead code), others are judgment calls (fewer abstractions). The confidence system lets the main session auto-apply safe changes while escalating trade-offs to the user.

@@ -125,7 +125,7 @@ VERDICT: [SIMPLIFY if proposals exist, MINIMAL if the plan is already lean]
 ```
 Agent tool:
   subagent_type: "Plan"
-  model: "sonnet"
+  model: "opus"
   prompt: [Template above with placeholders filled]
 ```
 
