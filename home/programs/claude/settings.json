@@ -517,7 +517,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash-policy.ts"
+            "command": "~/.claude/scripts/bash-policy.ts"
           }
         ]
       },
@@ -526,7 +526,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "task-planner-gate.ts"
+            "command": "~/.claude/scripts/task-planner-gate.ts"
           }
         ]
       }
@@ -536,7 +536,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "permission-logger.ts"
+            "command": "~/.claude/scripts/permission-logger.ts"
           }
         ]
       },
@@ -545,7 +545,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "approve-piped-commands.ts"
+            "command": "~/.claude/scripts/approve-piped-commands.ts"
           }
         ]
       }
@@ -556,7 +556,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "permission-logger.ts"
+            "command": "~/.claude/scripts/permission-logger.ts"
           }
         ]
       }
@@ -567,7 +567,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "claude-notify.ts send Glass"
+            "command": "~/.claude/scripts/claude-notify.ts send Glass"
           }
         ]
       }
@@ -578,11 +578,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "claude-notify.ts send Hero"
+            "command": "~/.claude/scripts/claude-notify.ts send Hero"
           },
           {
             "type": "command",
-            "command": "claude-memo.ts",
+            "command": "~/.claude/scripts/claude-memo.ts",
             "async": true
           }
         ]
@@ -616,9 +616,9 @@
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true,
-  "effortLevel": "max",
-  "voiceEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "skipAutoPermissionPrompt": true,
-  "teammateMode": "in-process"
+  "useAutoModeDuringPlan": true,
+  "voiceEnabled": true,
+  "teammateMode": "in-process",
+  "skipAutoPermissionPrompt": true
 }

@@ -25,7 +25,4 @@
   # ファイルのシンボリックリンク
   home.file.".claude/CLAUDE.md".source = dotfiles.linkHere ./. "CLAUDE.md";
   home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
-
-  # ~/.claude/scripts をPATHに追加
-  home.sessionPath = [ "$HOME/.claude/scripts" ];
 }
