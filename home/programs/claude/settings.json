@@ -138,6 +138,7 @@
       "Bash(git merge *)",
       "Bash(git merge-base *)",
       "Bash(git mv *)",
+      "Bash(git name-rev *)",
       "Bash(git pull *)",
       "Bash(git push *)",
       "Bash(git rebase *)",
