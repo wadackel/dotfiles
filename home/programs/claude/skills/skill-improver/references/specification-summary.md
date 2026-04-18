@@ -1,5 +1,7 @@
 # Skill Specification Summary
 
+> **Position in workflow**: This document is the **Step 2 (Iteration 0) WebFetch fallback**. The empirical loop normally fetches the latest skill spec from `https://code.claude.com/docs/en/skills` and `https://agentskills.io/specification` at the start of every run; if WebFetch fails (network / 404 / rate limit), fall back to this cached summary and inform the user that cached spec is in use.
+
 This document provides a compact summary of key specifications from both Agent Skills standard and Claude Code documentation. Use this as a fallback reference when WebFetch is unavailable.
 
 ## Agent Skills Core Specification

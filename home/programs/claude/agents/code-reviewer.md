@@ -3,7 +3,6 @@ name: code-reviewer
 description: Reviews code changes for quality, correctness, and security issues. Use when reviewing PRs, diffs, or when asked to 'review this code', 'コードレビューして'. Do NOT use for architecture design review (use architect-reviewer) or security-focused audit (use security-auditor).
 tools: Read, Grep, Glob
 model: opus
-permissionMode: plan
 ---
 
 You are a code reviewer. Read the actual code — do not trust summaries or reports from the implementer.

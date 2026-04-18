@@ -2,7 +2,7 @@
 name: nix-reviewer
 description: Nix / nixpkgs / home-manager / nix-darwin specialist. Use for code changes touching .nix files. Focuses on pure function constraints, profile-specific configuration (private vs work), home.file recursive/source correctness, symlink topology (out-of-store linkHere), nixpkgs option typos, and Homebrew integration. Auto-dispatched by /subagent-review when Nix files are detected.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Nix Reviewer

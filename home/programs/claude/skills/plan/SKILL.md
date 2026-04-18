@@ -6,7 +6,7 @@ argument-hint: "[feature description]"
 
 # /plan
 
-Single fused entry point for feature planning. Replaces the CC builtin plan mode workflow and the separate `/plan-deeper` invocation. Runs 6 phases in one skill body: PARSE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
+Single fused entry point for feature planning. Replaces the CC builtin plan mode workflow. Runs 6 phases in one skill body: PARSE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
 
 After `/plan` completes, invoke `/impl` to execute the task list.
 
@@ -20,11 +20,10 @@ After `/plan` completes, invoke `/impl` to execute the task list.
 
 ## Why this skill
 
-The native plan mode had four structural problems:
+The native plan mode had three structural problems:
 1. `task-planner` decomposition only fired via an `ExitPlanMode` hook, not reliably for every plan.
-2. `/plan-deeper` required a throwaway "bare plan" round before deepening — wasted work.
-3. CC plan mode occasionally fails to engage, letting edits slip through.
-4. `/subagent-review` / `/completion-audit` integration was weak inside plan mode.
+2. CC plan mode occasionally fails to engage, letting edits slip through.
+3. `/subagent-review` / `/completion-audit` integration was weak inside plan mode.
 
 `/plan` fuses research, draft, adversarial deepening, and task decomposition into one artifact-producing command and is independent of CC plan mode. A companion PreToolUse hook (`plan-gate.ts`) blocks cwd-scoped Edit/Write/MultiEdit until `/plan` produces a marker, enforcing design-first without relying on plan mode's own gating.
 
@@ -95,9 +94,9 @@ Write the initial plan to `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (slug from r
 ### Language policy
 
 - **Body prose** (Context / Approach / Risks / Open Questions / `-- Why: ...` rationales / any natural-language narrative): write in the **user's configured language** (from `~/.claude/settings.json`'s `language` field, injected by Claude Code CLI into the session's system prompt as the `# Language` section). For `language: japanese` write in Japanese; for `language: english` write in English; etc. Matches review-time reading language to reduce cognitive load.
-- **Section headers** (`## Context`, `## Approach`, `## Files to Change`, `## Task Outline`, `## Verification Commands`, `## Definition of Done`, `## Completion Criteria`, etc.): keep in **English**. `completion-audit` and `task-planner` locate sections by these literal strings.
+- **Section headers** (`## Context`, `## Approach`, `## Files to Change`, `## Task Outline`, `## Verification Commands`, `## Definition of Done`, `## Completion Criteria`, etc.): keep in **English**. `completion-audit` and `/plan` Phase 5 locate sections by these literal strings.
 - **Machine-consumed contents**:
-  - `## Completion Criteria` body (Autonomous Verification / Requires User Confirmation / Baseline): English (consumed by `task-planner` and `completion-audit`)
+  - `## Completion Criteria` body (Autonomous Verification / Requires User Confirmation / Baseline): English (consumed by `/plan` Phase 5 and `completion-audit`)
   - Acceptance criteria lines in Task Outline (`verification command + expected output`): English
   - File paths, commands, code snippets, `EXPECT:` values: as-is (no translation)
 - **Mandatory Reading / Patterns to Mirror**: keep code snippets verbatim; prose around them follows the body-prose rule (user's language).
@@ -217,7 +216,7 @@ Do not pad. Empty Intentional Conventions sections hurt more than omission.
 
 `/santa-loop` reviewers are instructed (via `~/.claude/skills/santa-loop/references/reviewer-prompt.md`) to read this section and not flag documented items. This is the only defense layer — no orchestrator post-processing, no auto-dismiss, no warning UI. If a reviewer flags a documented item anyway, it surfaces as a normal NAUGHTY finding; the user sees it alongside other findings and decides (dismiss / accept / amend plan).
 
-Keep the plan body lean (target ~120-150 lines, excluding Deepening Log). Move per-round critique history to `<plan>.log.md`, same convention as `/plan-deeper`.
+Keep the plan body lean (target ~120-150 lines, excluding Deepening Log). Move per-round critique history to `<plan>.log.md`.
 
 ### Apply ECC-derived structure
 
@@ -228,13 +227,13 @@ From the ECC `/prp-plan` research:
 
 ## Phase 4 — DEEPEN (non-trivial only)
 
-Embeds the full `/plan-deeper` flow. Prompts live at `references/critic-prompt.md` and `references/adversarial-prompt.md` (duplicated copies — kept separate so `/plan-deeper` can evolve standalone).
+Embeds an iterative adversarial-critique flow. Prompts live at `references/critic-prompt.md` and `references/adversarial-prompt.md`.
 
 ### Step 1 — Context collection
 Gather: the plan just written, project CLAUDE.md, parsed `argument-hint` (max-rounds, default 2, cap 5).
 
 ### Step 2 — Critic Subagent (each round, fresh)
-Spawn a fresh `subagent_type: "Plan"` each round. Round 1 uses `model: "opus"`, Round 2+ use `model: "sonnet"`.
+Spawn a fresh `subagent_type: "Plan"` each round with `model: "opus"`.
 
 Inputs to the Critic: full plan text, CLAUDE.md summary, round number, prior rounds' log (if any). Prompt template: `references/critic-prompt.md`.
 
@@ -265,7 +264,17 @@ Skip only if the plan has no verifiable technical claims (pure doc change).
 Classify findings: Falsified (fix plan, -- Why rationale) / Unverified (add to Edge Cases/Risks) / Verified (record 1 line "All claims verified") / Design Questions (add to Consolidated Interview Queue).
 
 ### Step 6 — Simplify Review (parallel with Step 5)
-Invoke `/simplify-review plan` via the Skill tool in the same message that spawns Step 5's Explore subagent. The reviewer is context-isolated and spots defensive complexity accumulated across rounds.
+Spawn a fresh `plan-simplifier` subagent **via the Agent tool** in the SAME assistant turn as Step 5's Explore adversarial spawn. Both are true parallel tool calls — orthogonal mandates (Step 5: factual falsification; Step 6: structural simplification). The reviewer is context-isolated and spots defensive complexity accumulated across rounds.
+
+```
+Agent({
+  subagent_type: "plan-simplifier",
+  description: "Simplify review for plan",
+  prompt: `## Original User Request\n\n<the user's original request>\n\n## Plan to Review\n\n<full plan text>\n\n## Project Design Principles\n\n<CLAUDE.md summary of YAGNI / KISS / DRY and relevant conventions>`
+})
+```
+
+**Why direct Agent dispatch (not skill loading)**: Earlier designs invoked the simplification-review entry point via the skill-load path, which only loads the skill definition into context and does not spawn a subagent. In a single assistant turn where Step 5 also spawns an Explore subagent, that load call degrades to no-op — the simplifier effectively never runs. Direct Agent dispatch — `Agent({subagent_type: "plan-simplifier", ...})` — against the agent defined in `~/.claude/agents/plan-simplifier.md` is the only way to guarantee true parallel execution.
 
 HIGH confidence simplifications auto-apply (subtractive only, no behavior change). MEDIUM/LOW proposals go to the Consolidated Interview Queue.
 
@@ -299,11 +308,11 @@ Example tagged Completion Criteria:
 - [outcome] `/santa-loop` returns NICE
 ```
 
-Append `## Completion Criteria` section to the plan body (English, consumed by task-planner and completion-audit).
+Append `## Completion Criteria` section to the plan body (English, consumed by `/plan` Phase 5 and `/santa-loop`'s rubric at the final gate; `completion-audit` can also consume it when manually invoked for a stricter audit).
 
 ## Phase 5 — DECOMPOSE
 
-Dispatch the `task-planner` subagent (`~/.claude/agents/task-planner.md`) with the plan file path. It returns a structured task list.
+Main session decomposes the plan directly — no subagent dispatch. Consult `references/task-decomposition.md` for decomposition rules, the acceptance-criteria-by-change-type table, and anti-patterns. The main session already has the plan content in context from Phase 3/4, so a fresh subagent read would be redundant.
 
 ### 2-pass TaskCreate (required)
 
@@ -340,7 +349,7 @@ Each task description must contain the **three elements**:
 If `/impl` needs a re-plan mid-execution:
 - Keep `completed` tasks (evidence intact)
 - Delete `pending` / `in_progress` tasks only
-- Re-invoke `/plan` with the existing completed-task summaries passed to task-planner as context (avoid duplicate decomposition)
+- Re-invoke `/plan`; main session decomposes with the completed-task summaries already in its context (avoid duplicate decomposition)
 
 ## Phase 6 — ACTIVATE
 
@@ -409,19 +418,16 @@ File: <plan path> — open to review.
 
 ## Integration with existing skills
 
-- `/plan-deeper` is deprecated for normal feature work. Phase 4 above embeds the full logic. Standalone use (critiquing an externally-provided plan) is still supported via `/plan-deeper` directly.
-- `/simplify-review plan` is invoked in Phase 4 Step 6.
+- `plan-simplifier` subagent is spawned in Phase 4 Step 6 via the Agent tool (parallel with Step 5's Explore). The `/simplify-review plan` skill shares the same reviewer and is available for manual ad-hoc use outside `/plan`.
 - `/qa-planner`, `/agent-browser` load-before-planning rules from CLAUDE.md still apply — load them in Phase 1 or Phase 2 if the task requires.
 - `/obsidian-cli` applies when the plan involves vault work.
 
 ## Design decisions
 
-**Why fused instead of chained**: the user rejected `/design → /plan-deeper → /decompose` chaining. A single command eliminates the "bare plan before deepen" overhead and guarantees task-planner always runs (the historic hook-dependent failure mode).
+**Why fused instead of chained**: the user rejected multi-command chaining (`/design → /deepen → /decompose`). A single command eliminates intermediate hand-off overhead and guarantees decomposition always happens (the historic hook-dependent failure mode — decomposition was previously handled by a `task-planner` subagent dispatched via an `ExitPlanMode` hook that fired unreliably; the subagent was later inlined into Phase 5 to eliminate dispatch overhead).
 
 **Why PreToolUse gate instead of UserPromptSubmit redirect**: a blocking hook on `Edit|Write|MultiEdit` enforces design-first even when CC plan mode fails. Bootstrap risk (editing the gate itself) is handled by the infra-path allowlist in `plan-gate.ts`.
 
 **Why complexity-gated plan sections**: trivial changes don't need 10 sections; forcing them produces empty template fields.
 
 **Why consolidated interview**: interviewing inside each Step would block the user 3-4 times per plan. One queue, one call.
-
-**Why duplicate references (not share with plan-deeper)**: the user chose to keep `/plan-deeper` standalone-viable without coupling. References are copied at creation time; future prompt changes land in one or the other deliberately.

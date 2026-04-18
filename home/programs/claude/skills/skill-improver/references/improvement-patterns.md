@@ -1,5 +1,7 @@
 # Common Improvement Patterns
 
+> **Position in workflow**: This catalog is referenced during **Step 6 (Diagnose & Patch)** of the empirical improvement loop. After the iteration report identifies a root cause from the subagent's unclear-points list, pick a single patch theme from this catalog and apply it as a one-theme fix before re-dispatching.
+
 ## Pattern 1: Vague Description → Specific Description
 
 **Before:**

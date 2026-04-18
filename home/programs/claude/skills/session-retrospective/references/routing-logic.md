@@ -18,7 +18,7 @@ For each learning, walk down this ladder and stop at the **first rung that appli
   - Sub-option A: Add a rule to `~/.claude/scripts/bash-policy.yaml` (Bash patterns only)
   - Sub-option B: Add a new PreToolUse / PostToolUse / UserPromptSubmit hook script under `~/.claude/scripts/`
   Example: "Use pnpm, not npm" → Sub-option A
-  Example: "Force plan-deeper to run before ExitPlanMode" → Sub-option B
+  Example: "Force /verification-loop to run before declaring complete" → Sub-option B
 
 **Rung 2: PERMISSIONS** (`~/.claude/settings.json` permissions.deny/allow)
   When to use: tool access should be structurally restricted.

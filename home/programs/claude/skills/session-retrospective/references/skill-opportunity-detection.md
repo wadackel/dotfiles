@@ -97,10 +97,9 @@ If the detected workflow resembles an existing skill in structure, it's a strong
 
 | Pattern | Examples | Characteristics |
 |---------|----------|-----------------|
-| CLI wrapper | tmux-sender | Wraps external CLI with correct flags/sequence |
 | Lifecycle automation | create-pr, iterate-pr | Automates a development lifecycle phase |
 | Analysis + action | session-retrospective, skill-improver | Analyzes context then proposes/applies changes |
-| Interview + build | bash-policy-add, plan-deeper | Gathers info from user then constructs output |
+| Interview + build | bash-policy-add, requirements-interview | Gathers info from user then constructs output |
 | Format conversion | gdocs-to-md | Transforms input format to output format |
 | Multi-tool orchestration | codex-review, qa-planner | Chains multiple tools in a reviewed workflow |
 | Knowledge Systematization | PDF-based evaluator, methodology-derived reviewer | Consumes external document, extracts structured criteria, produces reusable tool (skill/agent/reference/script) |

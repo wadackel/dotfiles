@@ -2,7 +2,7 @@
 name: typescript-reviewer
 description: TypeScript language specialist. Use for code changes touching .ts, .tsx, .mts, .cts files. Focuses on type safety, async correctness, and module design. Auto-dispatched by /subagent-review when TS files are detected. Does NOT cover React-specific concerns (use react-reviewer), Deno runtime concerns (use deno-reviewer), or a11y (use a11y-reviewer).
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # TypeScript Reviewer

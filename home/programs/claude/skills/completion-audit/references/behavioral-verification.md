@@ -1,6 +1,6 @@
 # Behavioral Verification Guide
 
-変更タイプ別の動作確認テンプレート。task-planner が実装タスクの acceptance criteria 生成時に参照し、実装者がタスク内検証で使用する。
+変更タイプ別の動作確認テンプレート。`/plan` Phase 5 (main session) が実装タスクの acceptance criteria 生成時に参照し、実装者がタスク内検証で使用する。
 
 ## 原則
 

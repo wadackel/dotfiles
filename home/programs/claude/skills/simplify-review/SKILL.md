@@ -1,16 +1,18 @@
 ---
 name: simplify-review
-description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh SubAgent with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', 'YAGNI check', or when plan-deeper converges and the plan contains 5+ implementation steps. Also use proactively before ExitPlanMode for non-trivial plans, or at task completion when the diff is large (20+ changed files or 500+ lines)."
+description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', 'YAGNI check', or when /plan Phase 4 converges and the plan contains 5+ implementation steps. Also use proactively before ExitPlanMode for non-trivial plans, or at task completion when the diff is large (20+ changed files or 500+ lines)."
 argument-hint: "[plan|code|auto]"
 ---
 
 # Simplify Review
 
-Detects over-engineering in plans and code by spawning a fresh SubAgent that reviews from a clean perspective. The reviewer has no knowledge of the design journey — only the artifact and its context — so it naturally spots complexity that feels justified to the author but isn't justified by the requirements.
+Detects over-engineering in plans and code by spawning a fresh subagent (`plan-simplifier` / `code-simplifier`) that reviews from a clean perspective. The reviewer has no knowledge of the design journey — only the artifact and its context — so it naturally spots complexity that feels justified to the author but isn't justified by the requirements.
+
+This skill is a thin orchestrator: it collects context (user request, plan text, git diff), dispatches the appropriate simplifier agent via the Agent tool, then triages the returned proposals. Most invocations happen via `/plan` Phase 4 Step 6 or `/impl` diff-threshold trigger — those skills spawn the simplifier agents directly, not through this skill.
 
 ## Why This Matters
 
-Plan-deeper and iterative design improve quality, but each round can also **add** complexity: extra error handling "just in case", abstractions for hypothetical future use, defensive patterns against scenarios that can't happen. Humans catch this through experience ("this feels over-built"). This skill codifies that instinct.
+Iterative plan deepening improves quality, but each round can also **add** complexity: extra error handling "just in case", abstractions for hypothetical future use, defensive patterns against scenarios that can't happen. Humans catch this through experience ("this feels over-built"). This skill codifies that instinct.
 
 ## Quick Start
 
@@ -24,7 +26,7 @@ Plan-deeper and iterative design improve quality, but each round can also **add*
 
 | Context | Trigger |
 |---|---|
-| Plan mode, after plan-deeper converges | Proactive — run before ExitPlanMode |
+| After `/plan` Phase 4 converges | Proactive — run before ExitPlanMode |
 | User says "simplify", "YAGNI check", etc. | Manual |
 | Task completion with large diff | Proactive — before verification |
 | User review feedback says "too complex" | Reactive |
@@ -46,19 +48,32 @@ Parse `$ARGUMENTS`:
 #### Context Collection
 
 1. Read the current plan file
-2. Read CLAUDE.md for project conventions
+2. Read CLAUDE.md for project conventions (design principles, coding conventions)
 3. Extract the original user request (from conversation or plan's Context section)
 
-#### Spawn Simplifier SubAgent
+#### Dispatch `plan-simplifier` subagent
 
-Spawn a **fresh** `Plan` subagent (model: `opus`).
+Invoke the Agent tool with `subagent_type: "plan-simplifier"`. Pass the three context blocks inlined in the prompt:
 
-Build prompt from [references/plan-simplifier-prompt.md](references/plan-simplifier-prompt.md), filling:
-- `{user_request}` — the original user request that motivated this plan
-- `{plan_text}` — full plan content
-- `{project_guidelines}` — CLAUDE.md summary (design principles, conventions)
+```
+Agent({
+  subagent_type: "plan-simplifier",
+  description: "Simplify review for plan",
+  prompt: `## Original User Request
 
-The SubAgent returns:
+<the user's original request text>
+
+## Plan to Review
+
+<full plan file contents>
+
+## Project Design Principles
+
+<CLAUDE.md summary covering YAGNI / KISS / DRY and relevant conventions>`
+})
+```
+
+The agent returns:
 - Simplification proposals (each with rationale, before/after, risk assessment)
 - Verdict: `SIMPLIFY` (has proposals) or `MINIMAL` (already lean)
 
@@ -68,24 +83,39 @@ The SubAgent returns:
 
 1. Get changed files: `git diff --name-only` (uncommitted) or `git diff <baseline_sha>..HEAD --name-only`
 2. Get diff: `git diff` or `git diff <baseline_sha>..HEAD`
-3. Read CLAUDE.md for project conventions
+3. Identify the path to the project's CLAUDE.md
 
-#### Spawn Simplifier SubAgent
+#### Dispatch `code-simplifier` subagent
 
-Spawn a **fresh** `code-reviewer` subagent.
+Invoke the Agent tool with `subagent_type: "code-simplifier"`. Pass:
 
-Build prompt from [references/code-simplifier-prompt.md](references/code-simplifier-prompt.md), filling:
-- `{file_paths}` — changed file list
-- `{git_diff}` — diff output
-- `{project_guidelines_path}` — path to CLAUDE.md
+```
+Agent({
+  subagent_type: "code-simplifier",
+  description: "Simplify review for code diff",
+  prompt: `## Changed Files
 
-The SubAgent returns:
+<list of changed file paths>
+
+## Changes (git diff)
+
+<unified diff output>
+
+## Project Guidelines
+
+Read the project guidelines at: <absolute path to CLAUDE.md>
+
+Pay special attention to design principles (YAGNI, KISS, DRY) and coding conventions.`
+})
+```
+
+The agent returns:
 - Simplification proposals categorized by type and confidence
 - Verdict: `SIMPLIFY` or `MINIMAL`
 
 ### Step 3: Triage Proposals
 
-Process each proposal returned by the SubAgent:
+Process each proposal returned by the subagent:
 
 #### Confidence-Based Triage
 
@@ -146,22 +176,21 @@ After user approval (or for auto-applied items):
 
 ## Integration Points
 
-### With plan-deeper
+### With plan
 
-When plan-deeper converges (Step 5-7 in plan-deeper), run simplify-review as a final pass before completion criteria. The simplifier acts as a counterbalance to the Critic's tendency to add robustness.
+`/plan` Phase 4 Step 6 spawns `plan-simplifier` **directly via the Agent tool** (not through this skill) in parallel with the adversarial Explore subagent. This skill's manual `/simplify-review plan` path produces the same effect for ad-hoc review.
 
-Suggested integration in CLAUDE.md:
-```
-After plan-deeper converges → /simplify-review plan → then proceed to Completion Criteria
-```
+### With impl
+
+`/impl` Step 4.5 (diff ≥ 20 files or ≥ 500 lines) spawns `code-simplifier` **directly via the Agent tool** (not through this skill). This skill's manual `/simplify-review code` path covers on-demand review outside the automated threshold.
 
 ### With subagent-review
 
-Simplify-review is complementary, not a replacement. subagent-review checks spec compliance and code quality; simplify-review specifically targets unnecessary complexity.
+Simplify-review is complementary, not a replacement. `subagent-review` checks spec compliance and code quality; `simplify-review` specifically targets unnecessary complexity.
 
 Run order when both apply:
 ```
-Implementation → /simplify-review code → /subagent-review → next task
+Implementation → simplify-review (code-simplifier) → /subagent-review → next task
 ```
 
 ### With task completion
@@ -170,7 +199,7 @@ For the final verification gate, simplify-review can run as part of the pre-comp
 
 ## Simplification Heuristics
 
-The SubAgent evaluates against these patterns. They're encoded in the prompt templates but documented here for reference.
+The subagent evaluates against these patterns. They're encoded in the agent system prompts but documented here for reference.
 
 ### Plan-Level Over-Engineering Signals
 
@@ -192,11 +221,17 @@ The SubAgent evaluates against these patterns. They're encoded in the prompt tem
 
 ## Design Decisions
 
-**Why a fresh SubAgent (not inline review):**
-The main session has followed the entire design journey. It knows *why* each decision was made, which makes it blind to unnecessary complexity — every piece feels justified in context. A fresh SubAgent sees only the artifact and naturally asks "is this needed?" without the sunk-cost bias.
+**Why a fresh subagent (not inline review):**
+The main session has followed the entire design journey. It knows *why* each decision was made, which makes it blind to unnecessary complexity — every piece feels justified in context. A fresh subagent sees only the artifact and naturally asks "is this needed?" without the sunk-cost bias.
 
-**Why opus for plan review, code-reviewer agent for code:**
-Plan simplification runs as a single-shot structural analysis where detection quality matters more than latency — opus reduces missed over-engineering signals, mirroring plan-deeper's Round 1 rationale. Code simplification needs to read actual files and understand implementation patterns, which the code-reviewer agent type (already defaults to opus) is equipped for.
+**Why dedicated `plan-simplifier` / `code-simplifier` subagents (not a generic `Plan` or `code-reviewer` agent):**
+Earlier versions of this skill dispatched a generic subagent with a placeholder-filled prompt template loaded from `references/`. That two-step indirection was unreliable when invoked in parallel with other Agent calls — the Skill tool merely loads skill content into context without spawning the subagent, so "parallel simplify-review" effectively degraded to serial or skipped. First-class agent definitions (`plan-simplifier.md` / `code-simplifier.md`) spawn directly via the Agent tool, guaranteeing true parallel execution from `/plan`.
+
+**Why two separate agents (plan vs code):**
+Input shape (plan text vs git diff) and evaluation focus (structure vs implementation) differ enough that merging them into one agent with a mode switch would bloat the system prompt without benefit. The split mirrors the `code-reviewer` / `refactoring-specialist` convention.
+
+**Why opus for both agents:**
+Detection quality matters more than latency. Over-engineering signals are subtle and easy to miss at smaller model sizes.
 
 **Why confidence-based triage instead of binary PASS/FAIL:**
 Simplification is inherently subjective. Some proposals are obvious wins (dead code), others are judgment calls (fewer abstractions). The confidence system lets the main session auto-apply safe changes while escalating trade-offs to the user.

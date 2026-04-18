@@ -2,7 +2,7 @@
 name: dart-reviewer
 description: Dart / Flutter specialist. Use for code changes touching .dart files. Focuses on null safety, Flutter widget rebuild minimization, state management choices, async / Future / Stream cleanup, and platform channel error handling. Auto-dispatched by /subagent-review when Dart files are detected.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Dart / Flutter Reviewer

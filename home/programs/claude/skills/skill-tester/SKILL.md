@@ -87,7 +87,7 @@ First, determine if the skill requires conversation context:
 - Skills that depend on prior tool usage or established state
 
 **Context-independent skills** (simple tests sufficient):
-- Skills that operate on explicit input (e.g., `tmux-sender`, `ast-grep`)
+- Skills that operate on explicit input (e.g., `ast-grep`)
 - Skills that fetch external data (e.g., `gemini-research`, `gws-docs`)
 - Skills with self-contained workflows
 
@@ -329,23 +329,6 @@ If issues were found and user approves fixes:
 3. **Repeat** until all tests pass or user is satisfied with results.
 
 ## Examples
-
-### Example: Testing tmux-sender skill
-
-```
-User: "Test the tmux-sender skill"
-[Analysis, test design with 4 scenarios, user approval]
-[Creates team, spawns tester agents, tests execute]
-
-Results:
-✅ Tests 1-3: Passed
-❌ Test 4: Failed - Should ask for clarification when pane is ambiguous
-
-Recommendations:
-1. Add error handling in workflow step 2 to ask user for pane specification when ambiguous
-
-[Cleanup: shutdown agents, delete team]
-```
 
 ## Validation Checklist
 

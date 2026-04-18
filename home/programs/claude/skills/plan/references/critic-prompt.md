@@ -1,6 +1,6 @@
 # Critic Prompt Template
 
-This file contains the prompt template used by plan-deeper to construct each round's Critic Subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
+This file contains the prompt template used by `/plan` Phase 4 to construct each round's Critic Subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
 
 ## Template
 
@@ -112,7 +112,7 @@ Reasoning: [1-2 sentences explaining why the plan needs more iteration or is rea
 ```
 Task:
   subagent_type: "Plan"
-  model: "sonnet"
+  model: "opus"
   prompt: |
     [Full template text above]
 
@@ -126,7 +126,7 @@ Task:
 ```
 Task:
   subagent_type: "Plan"
-  model: "sonnet"
+  model: "opus"
   prompt: |
     [Full template text above]
 

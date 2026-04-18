@@ -1,25 +1,14 @@
 ---
 name: skill-improver
-description: Improves existing Claude Code skill definitions by evaluating them against official best practices. Use when users want to improve, refine, review, or optimize a skill's quality, description, structure, or workflow. Triggers include "improve this skill", "review skill quality", "make this skill better", "スキルを改善して", "スキルの品質を上げて", "スキルをレビューして", or when skill definitions need refinement.
+description: Improves existing Claude Code skill definitions through an empirical iteration loop — dispatching fresh subagents against frozen scenarios to measure description-body drift, unclear points, and tool-use patterns, then applies one-theme patches until the skill converges. Use when users want to improve, refine, review, or optimize a skill's quality, description, structure, or workflow based on actual subagent behavior rather than static review alone. Triggers include "improve this skill", "review skill quality", "make this skill better", "スキルを改善して", "スキルの品質を上げて", "スキルをレビューして", or when skill definitions need refinement based on empirical scenario evaluation.
 argument-hint: "[skill-name]"
 ---
 
 # Skill Improver
 
-Systematically improve Claude Code skills by evaluating them against official best practices from Claude Code documentation and the Agent Skills open standard.
+Improve a Claude Code skill through an empirical iteration loop. A fresh subagent executes the skill against frozen scenarios with a `[critical]`-tagged requirements checklist; its self-report and the caller-side tool-use metrics drive a one-theme patch per iteration until the skill converges.
 
-## Overview
-
-This skill helps refine existing skill definitions through a structured evaluation and improvement process. It references authoritative sources to ensure skills follow current best practices for triggering, structure, progressive disclosure, and workflow design.
-
-## Authoritative Sources
-
-This skill consults two authoritative sources for every improvement session:
-
-1. **Claude Code Skills Documentation**: https://code.claude.com/docs/en/skills
-2. **Agent Skills Specification**: https://agentskills.io/specification
-
-These sources are fetched via WebFetch at the start of each session to ensure latest best practices are applied. If WebFetch fails, fallback to [references/specification-summary.md](references/specification-summary.md).
+The writer cannot review their own prompt objectively — this skill dispatches bias-free executors and measures, rather than reading and scoring.
 
 ## Quick Start
 
@@ -27,246 +16,228 @@ These sources are fetched via WebFetch at the start of each session to ensure la
 /skill-improver [skill-name]
 ```
 
-If no skill name is provided, you'll be prompted to select from available skills.
+If no skill name is provided, you're prompted to select from available skills under `~/.claude/skills/` or `.claude/skills/`.
+
+## Guards
+
+Two guards can route the workflow to **structural mode** (see `references/static-review.md` "Full Structural Fallback") instead of empirical iteration. They fire at different points in the workflow.
+
+### Guard 1: Recursion (pre-flight, evaluated on the resolved target)
+
+Fires **before Step 3 (Scenario Design)**, on whichever invocation path resolves first:
+- at entry if `$ARGUMENTS == "skill-improver"`, OR
+- immediately after Step 1 if the user selected `skill-improver` from the interactive list.
+
+The target is skill-improver itself. Dispatching a subagent that runs skill-improver on a third target would recurse indefinitely. Switch to structural mode and tell the user: "Self-application detected — running structural review of skill-improver instead of recursive empirical evaluation."
+
+### Guard 2: Agent tool dispatch unavailable (runtime, at the first dispatch attempt in Step 4)
+
+This guard fires **at exactly one point in the workflow**: the first `Agent` tool call in Step 4. It cannot fire earlier (nested-as-subagent auto-detection is not supported; dispatch failure is the only signal) and it must not fire later (a mid-iteration dispatch failure is a different condition — retry the single dispatch; do not switch modes mid-run).
+
+When that first Step 4 dispatch returns an unavailable / permission / tool-missing error, abort empirical iteration, switch to structural mode, and tell the user: "Empirical evaluation skipped: Agent tool dispatch unavailable. Reporting structural review only."
+
+See `references/troubleshooting.md` if empirical mode misbehaves in nested contexts.
 
 ## Workflow
 
-### Step 1: Fetch Latest Best Practices
+### Step 1: Identify target
 
-**Always start by fetching the authoritative sources:**
-
-```bash
-# Fetch Claude Code documentation
-WebFetch https://code.claude.com/docs/en/skills
-
-# Fetch Agent Skills specification
-WebFetch https://agentskills.io/specification
-```
-
-Parse these sources to extract:
-- Frontmatter requirements and constraints
-- Description best practices and trigger phrase patterns
-- Progressive disclosure guidelines
-- Workflow design patterns
-- Common anti-patterns to avoid
-
-**If WebFetch fails:**
-- Read [references/specification-summary.md](references/specification-summary.md) as fallback
-- Note to user that fallback was used and latest online docs may have updates
-
-### Step 2: Identify Target Skill
-
-**If $ARGUMENTS is provided:**
-- Use it as the target skill name
-- Verify the skill exists at `~/.claude/skills/$ARGUMENTS/` or `.claude/skills/$ARGUMENTS/`
-
-**If no arguments:**
-1. List available skills:
-   ```bash
-   # Personal skills
-   ls -1 ~/.claude/skills/
-
-   # Project skills (if in a project with .claude/skills/)
-   ls -1 .claude/skills/
-   ```
-
-2. Present list to user and ask which to improve
-
-**Validation:**
-- Confirm the skill directory exists
-- Verify SKILL.md is present
-- If not found, report error and stop
-
-### Step 3: Understand User's Needs
-
-Ask the user about their improvement goals:
-
-```
-What would you like to improve about this skill?
-
-Options:
-- Triggering accuracy (skill doesn't activate when expected, or activates incorrectly)
-- Description clarity (hard to understand when to use it)
-- Content organization (verbose, hard to navigate, or unclear structure)
-- Workflow design (steps unclear or confusing)
-- Progressive disclosure (everything in SKILL.md, or references poorly organized)
-- General quality review (evaluate everything)
-- Specific issue: [user describes]
-```
-
-**Listen for:**
-- Specific pain points (e.g., "it never triggers when I ask about PDFs")
-- General concerns (e.g., "it feels too verbose")
-- No specific issue (treat as general quality review)
-
-**Record their response** to focus the evaluation and prioritize improvements.
-
-### Step 4: Analyze Current Skill
-
-**Read the skill files:**
+If `$ARGUMENTS` is provided, use it. Otherwise list available skills:
 
 ```bash
-# Main skill file
-Read ~/.claude/skills/[skill-name]/SKILL.md
-
-# Supporting files (if they exist)
-ls -la ~/.claude/skills/[skill-name]/
-Read [any references/, scripts/, assets/ files]
+ls -1 ~/.claude/skills/
+ls -1 .claude/skills/   # if in a project
 ```
 
-**Load evaluation framework:**
+Verify the skill directory and SKILL.md exist. Stop with an error if not found.
 
-Read [references/evaluation-checklist.md](references/evaluation-checklist.md) to get the complete evaluation criteria.
+After the target is resolved, re-evaluate Guard 1 (recursion) if it was not already tripped at entry. If the user selected `skill-improver` interactively, switch to structural mode now.
 
-**Perform systematic evaluation:**
+### Step 2: Iteration 0 — Static Integrity Check
 
-For each of the 6 dimensions in the checklist:
-1. Frontmatter Quality
-2. Content Quality
-3. Progressive Disclosure
-4. Workflow Design
-5. Structure and Organization
-6. Invocation Control
+Two sub-steps, no subagent dispatch yet.
 
-Score 1-5 based on the criteria. Document specific issues found.
+**(a) WebFetch latest skill spec.** Fetch both:
+- `https://code.claude.com/docs/en/skills` (Claude Code skills documentation)
+- `https://agentskills.io/specification` (Agent Skills open specification)
 
-**Focus on user's stated needs:**
-- If user mentioned specific issues, pay extra attention to those dimensions
-- If general review, evaluate all dimensions equally
-- Prioritize issues by impact (Critical > High > Medium > Low)
+Parse: frontmatter rules, required / optional fields, description best practices, progressive disclosure guidelines, anti-patterns. Running this every session keeps the evaluation aligned with the current standard.
 
-### Step 5: Present Improvement Plan
+If WebFetch fails (network, 404, rate limit): fall back to `references/specification-summary.md` and tell the user that cached spec is in use.
 
-**Format the report clearly:**
+**(b) Static integrity check.** Using the fetched (or cached) spec as the source of truth, verify against the target skill:
+- **Description ↔ body alignment**: each description claim has a body section that delivers it; body has no unadvertised hidden capability
+- **Frontmatter format**: `name` / `description` / optional fields match current spec
+- **File-reference link integrity**: every `references/*.md` in SKILL.md exists; no orphans
+
+Detailed procedure: `references/static-review.md` "Iteration 0 Minimal".
+
+Apply any fixes before Step 3. Entering empirical iteration against a drifted skill produces false-positive accuracy scores (the dispatched subagent reinterprets the skill via its description).
+
+### Step 3: Scenario Design
+
+Work with the user to design 2-3 evaluation scenarios with a frozen requirements checklist.
+
+- 1 median scenario + 1-2 edge scenarios
+- 3-7 requirements per scenario
+- At least 1 `[critical]` tag per scenario (success = all `[critical]` items ○)
+- Freeze after user agreement — do not edit during the iteration loop
+
+Claude proposes first; the user edits / confirms / rejects; then freeze.
+
+Full guidance: `references/scenario-and-contract.md` "Scenario Design".
+
+### Step 4: Dispatch fresh subagent (per scenario)
+
+For each frozen scenario, dispatch a fresh subagent via the `Agent` tool (`subagent_type: "general-purpose"` by default). Multiple scenarios run in parallel — issue all Agent tool calls in a single message.
+
+Each subagent receives the launch contract from `references/scenario-and-contract.md` "Subagent Launch Contract":
+- The target skill (body text or absolute path to Read)
+- The scenario setup paragraph
+- The frozen requirements checklist
+- The standard report structure
+- The **dry-run convention** (return artifacts and commands; do not execute side effects)
+
+Never reuse a subagent across iterations — prior iterations' patches bias its self-report.
+
+### Step 5: Dual-axis evaluation
+
+For each returned report, capture both axes:
+
+**Qualitative (from self-report):**
+- Unclear points (list)
+- Discretionary choices (list) — spots where the skill left decisions to the subagent
+- Retry count (how often the subagent redid the same judgment)
+
+**Quantitative (from Agent tool usage metadata):**
+- Success / failure (binary — all `[critical]` ○ = ○, otherwise ×)
+- Accuracy % (ratio of requirements met: ○ = 1, partial = 0.5, × = 0)
+- `tool_uses` (Read / Grep included, no exclusions)
+- `duration_ms`
+
+**Metrics N/A**: for Q&A-style or documentation-style skills where `tool_uses` / `duration_ms` are uninformative, degrade to qualitative-only mode (see `references/troubleshooting.md`). Drop the two metric columns from the report; convergence keys on unclear-points count and requirement satisfaction.
+
+### Step 6: Diagnose + 1-theme patch
+
+Identify the single highest-impact unclear point or discretionary gap. Select ONE patch theme from `references/improvement-patterns.md`.
+
+**One iteration, one theme.** Related micro-fixes inside the same theme are fine; unrelated fixes wait for the next iteration. Batching unrelated patches destroys the ability to attribute which fix caused which metric change.
+
+Apply the patch to the target skill's files.
+
+### Step 7: Re-dispatch fresh subagent
+
+Repeat Step 4 with **new** subagent instances. Same scenarios, same frozen checklist. Collect the new dual-axis evaluation.
+
+### Step 8: Convergence check
+
+After each iteration, check stop conditions.
+
+**Converged** when TWO CONSECUTIVE iterations satisfy all:
+- Zero new unclear points (no ambiguity that wasn't already present)
+- Accuracy delta ≤ +3 percentage points (saturation)
+- `tool_uses` variance within ±10% of the prior iteration
+- `duration_ms` variance within ±15% of the prior iteration
+
+These are guide values; eyeball them when metrics are noisy.
+
+On convergence, generate a **hold-out scenario** per `references/scenario-and-contract.md` "Hold-out Scenario Generation" (shift one dimension of one frozen scenario by one degree). Run hold-out ONCE. Compare its accuracy to the **average accuracy of the last 2 frozen-scenario iterations** (single source of truth — see `scenario-and-contract.md` "Hold-out judgement"). If the hold-out accuracy drops ≤ 15pt from that baseline, CONVERGED. If > 15pt drop, allow one additional iteration targeting the hold-out's unclear points, then re-test ONCE. Never run hold-out more than twice.
+
+**Diverged** when 3 iterations produce no reduction in unclear points → the skill's design itself is flawed. Stop patching; recommend structural rewrite to the user.
+
+**Resource cutoff**: if iteration cost no longer justifies the quality gain, stop at the current score. Report it to the user as a colloquial "good enough" cutoff (e.g., "shipping at ~80 points" using the source skill's informal phrasing — this is not a formal 100-point scoring scale).
+
+## Iteration Report Format
+
+Present at each iteration:
 
 ```
-## Skill Evaluation: [skill-name]
+## Iteration N
 
-### Score Summary
-- Frontmatter Quality: [X/5]
-- Content Quality: [X/5]
-- Progressive Disclosure: [X/5]
-- Workflow Design: [X/5]
-- Structure and Organization: [X/5]
-- Invocation Control: [X/5]
-**Total: [X/30]**
+### Change from previous iteration
+- <one-line patch theme>
 
-### Assessment
-[Excellent (26-30) / Good (21-25) / Functional (16-20) / Needs Improvement (11-15) / Major Issues (6-10)]
+### Results (per scenario)
+| Scenario | Pass/Fail | Accuracy | steps | duration | retries |
+|---|---|---|---|---|---|
+| A | ○ | 90% | 4 | 20s | 0 |
+| B | × | 60% | 9 | 41s | 2 |
 
-### Issues Found
+### New unclear points
+- <scenario B>: [critical] item 3 × — <one-line reason>    # always list [critical] failure first
+- <scenario B>: <other unclear point>
+- <scenario A>: (none new)
 
-#### Critical (fix immediately)
-1. [Issue description with file:line reference]
+### New discretionary gaps
+- <scenario B>: <what the subagent had to choose on its own>
 
-#### High (address soon)
-1. [Issue description with file:line reference]
+### Next patch theme
+- <one-line plan>
 
-#### Medium (improve when convenient)
-1. [Issue description with file:line reference]
-
-### Recommended Improvements
-
-#### Improvement 1: [Clear title]
-**Priority:** [Critical/High/Medium/Low]
-**Issue:** [What's wrong]
-**Impact:** [Why it matters]
-
-**Before:**
-```yaml or markdown
-[current problematic content]
+(Convergence: X consecutive clean / Y iterations until stop)
 ```
 
-**After:**
-```yaml or markdown
-[improved content]
-```
+## Evaluation Axes
 
-**Rationale:** [Why this is better, citing best practices]
+| Axis | Source | Meaning |
+|---|---|---|
+| Pass / Fail | Requirement satisfaction (binary) | Minimum bar: all `[critical]` ○ |
+| Accuracy | Weighted requirement ratio | Partial-success level |
+| Steps (`tool_uses`) | Agent usage metadata | Instruction-efficiency signal |
+| Duration (`duration_ms`) | Agent usage metadata | Cognitive load proxy |
+| Retries | Self-report | Ambiguity signal (same decision redone) |
+| Unclear points | Self-report (bulleted) | Qualitative improvement material |
+| Discretionary gaps | Self-report (bulleted) | Hidden-spec surface |
 
-[Repeat for each improvement]
-```
+Weight qualitative (unclear points, discretionary gaps) **over** quantitative. Chasing duration alone strips the skill too thin.
 
-**Ask user which improvements to apply:**
-- All improvements
-- Specific improvements (let them choose)
-- Skip (just wanted the evaluation)
+`tool_uses` cross-scenario variance interpretation: if one scenario shows 3-5× more tool calls than siblings, the skill is likely over-reliant on references descent (subagent is traversing reference files hunting for guidance). Add an inline minimal example or a "when to read references" hint to the SKILL.md body.
 
-### Step 6: Apply Improvements
+## Convergence Criteria (guide values)
 
-**After user approval:**
+- Consecutive clean iterations: 2 (3 for critical skills)
+- Accuracy delta: ≤ +3 percentage points
+- Steps variance: ±10%
+- Duration variance: ±15%
+- Hold-out accuracy drop: ≤ 15 percentage points
 
-For each approved improvement:
+Numbers are guide values from empirical-prompt-tuning; eyeball when metrics are noisy or when N/A.
 
-1. **Make the edits:**
-   ```bash
-   Edit ~/.claude/skills/[skill-name]/SKILL.md
-   # or create/edit supporting files as needed
-   ```
+## Red Flags (rationalizations to refuse)
 
-2. **Create supporting files if recommended:**
-   - If progressive disclosure suggests splitting content, create `references/` files
-   - If workflow needs scripts, create `scripts/` directory
-   - Always reference new files from SKILL.md
+| Rationalization | Actual state |
+|---|---|
+| "I can reread my own prompt — same effect" | Cannot objectify text you just wrote. Dispatch a fresh subagent. |
+| "One scenario is enough" | One scenario overfits. Minimum 2, prefer 3. |
+| "Zero unclear points once — done" | Could be luck. Require 2 consecutive. |
+| "Squash multiple unclear points in one patch" | Lose attribution. One theme per iteration. |
+| "Split each micro-fix into its own iteration" | Opposite trap. Related fixes bundle fine; unrelated split. |
+| "Metrics look good — ignore qualitative feedback" | Time shrinkage can mean over-thinning. Qualitative first. |
+| "Faster to rewrite than iterate" | Valid after 3 stuck iterations. Before that, it's an escape. |
+| "Reuse the same subagent to save cost" | Subagent has learned. Always fresh. |
+| "Change the scenario if it keeps failing" | Invalidates cross-iteration comparison. Frozen means frozen. |
+| "Skip hold-out — we already converged" | Hold-out catches overfitting to the frozen set. Do not skip. |
+| "Defer to the skill author's judgment on unclear points I found" | You are the evaluator. Report everything observable. |
 
-3. **Preserve existing choices:**
-   - Keep language (Japanese/English) as-is
-   - Maintain author's voice and intent
-   - Don't change more than necessary
+## Self-application
 
-**After all improvements applied:**
+`/skill-improver skill-improver` routes to structural mode via the Recursion Guard. Empirical evaluation of skill-improver on itself would dispatch a subagent that runs skill-improver on a third target, which recurses indefinitely. Structural mode via `references/static-review.md` is the correct path for reviewing skill-improver itself.
 
-```
-✅ Improvements applied to [skill-name]
+## Tips
 
-Changes made:
-- [List of edits]
-
-Next steps:
-1. Test the improved skill: /[skill-name] [test-prompt]
-2. Validate with skill-tester: /skill-tester [skill-name]
-3. Compare triggering accuracy with before/after prompts
-
-Would you like me to run skill-tester to validate the changes?
-```
-
-**If user wants validation:**
-- Offer to invoke `/skill-tester [skill-name]` to verify improvements
-- Focus tests on the areas that were improved (e.g., if description was updated, test triggering)
-
-## Evaluation Framework
-
-See [references/evaluation-checklist.md](references/evaluation-checklist.md) for the complete evaluation criteria across 6 dimensions:
-
-1. **Frontmatter Quality**: name format, description comprehensiveness, trigger phrases
-2. **Content Quality**: Conciseness, clarity, formatting, time-sensitivity
-3. **Progressive Disclosure**: SKILL.md as navigation, reference file organization
-4. **Workflow Design**: Numbered steps, decision points, error handling, feedback loops
-5. **Structure and Organization**: Quick start, logical flow, supporting resources
-6. **Invocation Control**: Appropriate frontmatter settings for the use case
-
-Each dimension is scored 1-5, with specific criteria for each score level.
-
-## Tips for Effective Improvements
-
-See [references/tips.md](references/tips.md) for prioritization strategies, high-impact areas, and best practices for communicating improvements.
-
-## Common Improvement Patterns
-
-See [references/improvement-patterns.md](references/improvement-patterns.md) for concrete before/after examples of the most frequent improvements:
-
-- Vague → Specific description
-- Missing progressive disclosure
-- Over-explained content
-- Unclear workflow
-- Missing trigger phrases
+- Respect existing language, voice, and scope of the target skill. Patch narrowly.
+- Cite the rationale when explaining a patch ("subagent retried the same decision 3 times — tighten the instruction").
+- Always run hold-out after convergence. The convergence signal without hold-out is fit-to-scenario.
 
 ## Related Skills
 
-- **skill-tester**: Validate improvements by testing the skill's triggering and functionality
-- **gemini-research**: Research latest skill authoring trends (if desired)
-- **skill-creator**: For creating new skills from scratch
+- **skill-tester**: validates trigger / activation (does `description` match the user's prompt?). Complementary — run it before skill-improver to fix triggering, then skill-improver for content quality.
+- **skill-creator**: for creating new skills from scratch. skill-improver assumes a pre-existing skill.
 
-## Troubleshooting
+## References
 
-See [references/troubleshooting.md](references/troubleshooting.md) for common issues (WebFetch failures, skill not found, disagreements with evaluation).
+- [references/static-review.md](references/static-review.md) — Iteration 0 Minimal + Full Structural Fallback (invoked when Guard 1 or Guard 2 routes to structural mode)
+- [references/scenario-and-contract.md](references/scenario-and-contract.md) — Scenario design rules, subagent launch contract, dry-run convention, hold-out generation
+- [references/improvement-patterns.md](references/improvement-patterns.md) — Step 6 patch catalog (select one theme per iteration)
+- [references/specification-summary.md](references/specification-summary.md) — Step 2 WebFetch fallback (cached skill standard summary)
+- [references/troubleshooting.md](references/troubleshooting.md) — Agent dispatch failure, metrics N/A, frozen-scenario mid-run mistakes

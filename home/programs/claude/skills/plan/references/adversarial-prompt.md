@@ -1,6 +1,6 @@
 # Adversarial Falsification Prompt Template
 
-This file contains the prompt template used by plan-deeper's Step 5 (Adversarial Falsification Round) to construct the Explore subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
+This file contains the prompt template used by `/plan` Phase 4 Step 5 (Adversarial Falsification Round) to construct the Explore subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
 
 ## Template
 

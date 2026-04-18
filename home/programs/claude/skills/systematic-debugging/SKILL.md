@@ -27,7 +27,7 @@ before proceeding to the next.
 
 CLAUDE.md Bug Fixes rules remain authoritative. This skill adds procedural
 detail (the 4-phase process). Apply "present alternatives (workaround vs
-root-cause)" after Phase 1 completion. plan-deeper covers plan-mode
+root-cause)" after Phase 1 completion. /plan covers plan-mode
 investigation; this skill's unique value is implementation-phase debugging.
 
 ## The Four Phases

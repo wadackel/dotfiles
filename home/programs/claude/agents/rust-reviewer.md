@@ -2,7 +2,7 @@
 name: rust-reviewer
 description: Rust language specialist. Use for code changes touching .rs files. Focuses on ownership / borrow correctness, unsafe justification, Send/Sync boundaries, lifetime annotations, error propagation via Result, and async runtime patterns. Auto-dispatched by /subagent-review when Rust files are detected.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Rust Reviewer

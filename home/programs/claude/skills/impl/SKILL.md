@@ -35,7 +35,7 @@ If the marker is expired (mtime > 24h, blocked by `plan-gate.ts`), the user is t
    2. `TaskUpdate` to `in_progress` and record `metadata.baseline_sha` (current `git rev-parse HEAD`).
    3. **Implement** following the plan's "Files to Change" and "Patterns to Mirror" exactly. Match naming, error handling, and conventions captured during Phase 2 EXPLORE.
    4. **Run acceptance criteria verification** commands. Capture **raw output verbatim** in `metadata.evidence` (do not paraphrase or summarize). The final gate (`/verification-loop` + `/santa-loop`) consumes this evidence.
-   5. **Diff size check** with `git diff --stat`. If diff ≥ 20 files OR ≥ 500 lines, invoke `/simplify-review code` via the Skill tool. Apply HIGH-confidence simplifications, surface MEDIUM/LOW to the user.
+   5. **Diff size check** with `git diff --stat`. If diff ≥ 20 files OR ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Pass changed files + `git diff <baseline_sha>..HEAD` + the project CLAUDE.md path inline in the prompt. Apply HIGH-confidence simplifications, surface MEDIUM/LOW to the user.
    6. **Subagent review** by invoking `/subagent-review` via the Skill tool — runs spec compliance check, then code quality check.
    7. `TaskUpdate` to `completed` only when all acceptance criteria verifications pass and `/subagent-review` does not surface critical issues.
 5. After all implementation tasks complete, the final `Run /verification-loop and /santa-loop` task automatically unblocks. Execute in order:
@@ -70,7 +70,7 @@ If during `/impl` the user wants to revise the plan:
 2. On confirmation:
    - **Keep** all `completed` tasks (including their `metadata.evidence`)
    - **Delete** all `pending` and `in_progress` tasks
-   - Re-invoke `/plan` with the existing completed-task summary list passed as context to `task-planner` so the new decomposition does not duplicate completed work
+   - Re-invoke `/plan`; the main session decomposes using the existing completed-task summary list already in its context so the new decomposition does not duplicate completed work
 3. Resume `/impl` after the new tasks are created.
 
 ## Recovery after compaction
@@ -90,11 +90,11 @@ After all tasks are `completed` and before `/verification-loop` and `/santa-loop
 3. Flag any (a) plan items not implemented, (b) implementation items not in the plan, (c) misinterpreted items.
 4. Report the comparison to the user before invoking `/santa-loop` (via the final gate task).
 
-## When to invoke /simplify-review code
+## When to invoke the code-simplifier subagent
 
 | Condition | Action |
 |---|---|
-| Diff ≥ 20 files OR ≥ 500 lines for the current task | Invoke `/simplify-review code` |
+| Diff ≥ 20 files OR ≥ 500 lines for the current task | Spawn `code-simplifier` via the Agent tool |
 | Diff smaller | Skip — `/subagent-review` covers basic simplification |
 | User explicitly says "skip simplify" | Skip with note |
 
@@ -126,4 +126,6 @@ The "Run /verification-loop and /santa-loop" task created by `/plan` Phase 5 (Pa
 
 **Why /subagent-review per task instead of at the end**: Issues surface immediately when the offending change is fresh in context. End-of-batch review forces re-context-loading and often misses which task introduced the issue.
 
-**Why the diff-size threshold for /simplify-review code**: Small diffs are unlikely to introduce defensive complexity worth a fresh-eyes review. Large diffs accumulate it.
+**Why the diff-size threshold for the code-simplifier subagent**: Small diffs are unlikely to introduce defensive complexity worth a fresh-eyes review. Large diffs accumulate it.
+
+**Why Agent dispatch (not skill loading)**: The `code-simplifier` subagent must actually execute to produce proposals. Loading the simplify-review skill definition into context alone does not spawn the reviewer. Direct Agent dispatch keeps behavior deterministic and matches the same pattern used by `/plan` Phase 4 Step 6 for `plan-simplifier`.

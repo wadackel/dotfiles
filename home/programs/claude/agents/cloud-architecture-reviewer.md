@@ -2,7 +2,7 @@
 name: cloud-architecture-reviewer
 description: Cloud / IaC specialist. Use for code changes touching Terraform (.tf, *.tfvars), Kubernetes manifests, Helm charts, Dockerfile, docker-compose.yml, serverless.yml, or GitHub Actions workflows. Focuses on least-privilege IAM, secrets management, resource limits, availability, cost optimization, and CI/CD security (SHA-pinned actions, OIDC). Auto-dispatched by /subagent-review when infrastructure files are detected.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Cloud Architecture Reviewer

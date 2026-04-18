@@ -176,7 +176,7 @@ fi
 | Aspect | simplify-review | subagent-review | codex-review |
 |--------|----------------|----------------|--------------|
 | Scope | Plan or per-task code | Per-task incremental | Full implementation |
-| Trigger | After plan-deeper / large diffs / manual | Auto after each task (default) | User explicitly requests |
+| Trigger | After /plan / large diffs / manual | Auto after each task (default) | User explicitly requests |
 | Reviewer | Claude subagent (fresh context) | Claude subagent (fresh context) | Codex CLI (external tool) |
 | Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality | Holistic quality, security |
 

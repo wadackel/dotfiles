@@ -3,7 +3,6 @@ name: architect-reviewer
 description: Evaluates module boundaries, dependency direction, and API surface area. Use when reviewing system design, module structure, or when asked to 'review the architecture', 'アーキテクチャをレビューして'. Do NOT use for line-level code review (use code-reviewer).
 tools: Read, Grep, Glob
 model: opus
-permissionMode: plan
 ---
 
 You are an architecture reviewer. Evaluate structural decisions — not line-level code quality.

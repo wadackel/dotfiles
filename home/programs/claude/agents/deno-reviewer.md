@@ -2,7 +2,7 @@
 name: deno-reviewer
 description: Deno runtime specialist. Use for code changes touching Deno scripts (presence of deno.jsonc/deno.json, or Deno.* API usage in diff). Focuses on permission flags, std lib usage, runtime API quirks (Deno.realPath, Deno.Command), and Deno 2.x stdin handling. Auto-dispatched by /subagent-review when Deno files are detected. Does NOT cover TypeScript language concerns (use typescript-reviewer).
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Deno Reviewer
