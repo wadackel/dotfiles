@@ -19,14 +19,13 @@ When a script involves state management, parsing, or conditional logic, prefer D
 
 ### Feature Design Flow
 
-When designing new features in plan mode, follow this order:
-1. Research existing code and libraries with `/gemini-research` (as needed)
-2. Create a design plan based on research findings
-3. Critique and refine with `/plan-deeper`
+Run `/plan <要求>` — a single fused skill that does research / draft / adversarial critique / task decomposition internally. `/plan` Phase 1 auto-detects `trivial` and short-circuits to a minimal plan + single task. Follow `/plan` with `/impl` to execute the task list.
 
-### Static Analysis in Plan Mode
+CC builtin plan mode is no longer used. The `/plan` skill + `plan-gate.ts` PreToolUse hook enforce design-first without depending on plan mode's gating (which had reliability issues).
 
-For lint error or type error fix tasks, run `pnpm lint:script` / `tsc` during plan mode to confirm actual errors before deciding the fix approach. Theorizing without real error output leads to wasted fixes on non-existent issues.
+### Static Analysis During /plan
+
+For lint error or type error fix tasks, run `pnpm lint:script` / `tsc` during `/plan` Phase 2 EXPLORE to confirm actual errors before deciding the fix approach. Theorizing without real error output leads to wasted fixes on non-existent issues.
 
 ### Git Workflow
 
@@ -92,13 +91,15 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
 - **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
 - **Approval tracking with `PostToolUse`**: `PermissionRequest` only records that a dialog was shown (cannot distinguish approval/denial). To track actually executed (approved) commands, combine with a `PostToolUse` hook. Exclude high-frequency tools (Read/Glob/Grep) via matcher to reduce overhead
-- **task-planner gate**: `task-planner-gate.ts` gates ExitPlanMode via PreToolUse. When blocked, create a marker with `touch /tmp/claude-task-planner-ready-{session_id}` then retry ExitPlanMode
+- **plan-gate**: `plan-gate.ts` gates `Edit|Write|MultiEdit` via PreToolUse. Blocks edits to files under cwd unless a valid cwd-hash marker (`~/.claude/plans/.active-<hash>`, mtime < 24h) is present. `/plan` creates the marker at Phase 6. Infra files (`~/dotfiles/home/programs/claude/{CLAUDE.md,settings.json,scripts/**}`) are always allowed via an infra path allowlist (bootstrap safety). Missing fields (`file_path` / `cwd`) fail-open. Both bash (`realpath "$PWD" | shasum -a 256 | cut -c1-16`) and TS (`crypto.subtle.digest` on `Deno.realPath()`) must canonicalize before hashing. Manual `touch` bypass is a rationalization red flag — always run `/plan` instead
 
 ### codex-review Skill Special Rule
 
 **Absolute rule**: When `/codex-review` is triggered, always complete the full Code Review Loop (never skip midway). See codex-review skill's SKILL.md for the detailed flow.
 
 **Default review**: Unless the user explicitly requests codex-review, `/subagent-review` runs as the default review after each implementation task completion.
+
+**`/santa-loop` is the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use (runs a single Codex CLI reviewer). `/santa-loop` handles dual-reviewer adversarial verification at the final gate (Claude opus + codex, both must PASS, max 3 fix rounds). Do not confuse them — `/codex-review` is for ad-hoc second opinion, `/santa-loop` is the end-of-implementation quality/completeness dual gate.
 
 ### General
 
@@ -114,53 +115,41 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - "Just this once is fine" → There are no exceptions. Execute as written
   - "No need to verify" → Confidence is not a substitute for verification
   - "The plan says X but Y is better" → Plan deviation requires user approval
+  - "/plan は typo fix には重すぎる" → `/plan` Phase 1 で trivial と判定され 1-phase に折りたたまれるので重くない。skip しようとするのは赤信号
+  - "infra allowlist を悪用して /plan を毎回 skip" → infra allowlist は infra 自体 (CLAUDE.md / settings.json / scripts/) の編集時のみ通る。通常の feature 実装には適用されない
 
-#### Plan Mode
+#### /plan Workflow
 
-- **Question triage before AskUserQuestion**: In plan mode drafting (Phase 1-3), before calling AskUserQuestion, triage each unclear point into one of three categories and ask ONLY category 1:
+- **Question triage before AskUserQuestion**: In `/plan` Phase 1-4, before calling AskUserQuestion, triage each unclear point into one of three categories and ask ONLY category 1:
   1. **Ask now (user-only knowledge)**: goals, hidden constraints, deadlines, preferences, domain terminology, trade-offs requiring user judgment
-  2. **Document as assumption (analyzable later)**: implementation patterns, abstraction level, library choice when codebase signal is weak — write `Assumption: X` in the plan body and let `/plan-deeper` Critic / Adversarial Falsification validate
+  2. **Document as assumption (analyzable later)**: implementation patterns, abstraction level, library choice when codebase signal is weak — write `Assumption: X` in the plan body and let Phase 4 Critic / Adversarial Falsification validate
   3. **Self-resolve via code (discoverable)**: existing function presence, current behavior, file structure — use Grep/Read/Explore agent, never AskUserQuestion
-  - Goal: apply the same Self-resolvable/Needs-user-input/Reject classification that `/plan-deeper` Step 3 uses, but at the initial drafting stage — eliminates duplicate interviews and shortens Phase 1-3
-- **Run `/plan-deeper` before ExitPlanMode**: After creating a plan in plan mode, run `/plan-deeper` via the Skill tool before calling ExitPlanMode. May skip ONLY when ALL of these conditions are met:
-  - Target is a single file with a few lines of changes (typo fix, config value change, simple addition)
-  - No design decisions or multiple implementation approaches exist
-  - User explicitly says "no plan-deeper needed", "just implement it", etc.
-- **Run `/simplify-review` when plan-deeper was not run**: Run `/simplify-review plan` before ExitPlanMode ONLY when `/plan-deeper` was NOT run in this session. Detection: check whether the plan file contains a `### Simplify Review` entry in the Deepening Log — if present, plan-deeper Step 6 already ran it. Same skip conditions as plan-deeper apply (single file, few lines, no design decisions, user explicitly skips)
+  - Goal: apply the same Self-resolvable/Needs-user-input/Reject classification that Phase 4 Step 3 uses, but at the initial drafting stage
+- **Phase 1 Requirement Clarification (small+)**: non-trivial 要求には `skills/plan/references/requirement-checklist.md` の 8 観点 walk を必ず適用。Step 1 (Clear vs NotClear grep-able signal) → Step 2 (triage: Ask/Assume/Self-resolve via 上記 3-category)。Ask 項目を impact 順 batch で **Phase 1 時点**で AskUserQuestion (single-pass、再走しない、max 4) — Phase 2 Explore に正しい scope を与えるため **下記 Consolidated interview の exception として扱う**。5 件以上は上位 4 質問 + 残り (切り捨て分) は plan 本文に `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic` として記録し Phase 4 Critic で再検出を必須化 (tentative default は作らない)。0 件なら AskUserQuestion skip。trivial は対象外
+- **Consolidated interview**: `/plan` Phase 4 accumulates needs-user-input items from Phase 2/4 Steps and asks them once at Phase 4 末尾 (Step 7). Do not interview per-step. **Exception**: Phase 1 Requirement Clarification の Ask は Phase 1 時点で実行 (上記参照) — 1 plan あたり blocking 最大 2 回 (Phase 1 + Phase 4 Step 7)
 - **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
   1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
   2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect
   3. **Entry points and preconditions**: From which states/locations/environments can this be invoked? List all valid combinations and verify the design handles each
-- **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to implementation phase after confirmation
-- **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during plan mode before ExitPlanMode. Let the user assess the scale of the problem with real data before approval
-- **Definition of Done**: `/plan-deeper` auto-executes the verification plan design and agreement flow — it designs observable completion conditions that Claude can autonomously verify, then confirms alignment with the user. Baseline activities (tests, lint) are executed within each implementation task's acceptance criteria; `/completion-audit` runs once as the final gate task. When skipping plan-deeper, manually include observable completion conditions in the plan
-- **Required checks before ExitPlanMode**: For plans involving bug investigation/fixes, explicitly include:
+- **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to `/impl` after confirmation
+- **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during `/plan` before handing off to `/impl`. Let the user assess the scale of the problem with real data before approval
+- **Definition of Done**: `/plan` Phase 4 Step 8 auto-executes the verification plan design and agreement flow — it designs observable completion conditions that Claude can autonomously verify, then confirms alignment with the user. Baseline activities (tests, lint) are executed within each implementation task's acceptance criteria; the final gate task runs `/verification-loop` (deterministic checks) → `/santa-loop` (dual-reviewer; rubric embeds Completion Criteria)
+- **Required checks before handing off to /impl**: For plans involving bug investigation/fixes, explicitly include:
   - "Which command/log/measurement confirms this fix works"
   - "Considered whether this fix approach could be wrong, and the evidence that rules it out"
 
-#### Plan Execution (after ExitPlanMode)
+#### /impl Workflow
 
-- **Convert plan to tasks**: After ExitPlanMode, extract steps from the plan file and register each as an individual task via TaskCreate
-  - **Leverage task-planner agent**: For plans that decompose into 3+ tasks, pass the plan file to the `task-planner` subagent to generate structured task decomposition. Use its output for TaskCreate
-  - **Three elements of task descriptions**: Each task description must include: (1) target files to modify, (2) expected behavior after change, (3) verification method (command + expected output)
-  - **Separation of concerns**: Separate different concerns (e.g., adding an agent vs. modifying CLAUDE.md) into distinct tasks. Group files sharing the same concern (module + tests) into a single task
-  - **Verification within implementation tasks**: Each implementation task includes acceptance criteria with verification commands and expected output (recoverable from tasks after compaction). No separate Task N-V verification tasks — verification is performed inline during the task and raw evidence (command output) is recorded for the final completion audit
-  - Task granularity: one task per numbered plan step or verifiable unit. Do not create separate tasks for sub-bullets
-  - Implementation task descriptions must include acceptance criteria with verification commands and expected output, sufficient for both autonomous inline verification during the task and subagent spec review afterward
-  - **Completion audit as final gate task**: Always create a dedicated final task named "Run /completion-audit" that is blockedBy all implementation tasks. This task collects implementation summaries and raw verification evidence from all completed tasks, then dispatches the completion-auditor to audit sufficiency against the plan's purpose and Completion Criteria. This structural separation ensures the completion audit is visible in TaskList and cannot be silently skipped
-  - May skip task creation ONLY when the user explicitly says to skip, or the plan has no numbered steps (e.g., a single direct instruction)
-- **Faithful step execution**: Do not skip, rephrase, or reorder plan steps. Execute commands, file paths, and verification procedures exactly as written in the plan
-- **Progress tracking**: Update each task to in_progress when starting (record current HEAD SHA in task metadata as baseline_sha), completed when done. If a step is skipped, state the reason explicitly
-- **Verification within task completion**: Before marking any implementation task as completed, execute the verification commands specified in the task's acceptance criteria and confirm expected output. Record raw evidence (exact commands run, full output) — do not paraphrase or summarize. This evidence is collected by the final `/completion-audit` gate
-- **Simplify review for large diffs**: For tasks with large changes (20+ files or 500+ lines), run `/simplify-review code` before `/subagent-review` to identify over-engineering. Skip for small changes or when user explicitly skips
-- **Subagent review after task completion**: Run `/subagent-review` after marking each implementation task completed. See the skill's SKILL.md for skip conditions and detailed flow
-- **Recovery after compaction**: If context compression occurs, check TaskList for incomplete tasks, re-read the plan file, then resume work
-- **Handling plan deviations**: If you discover a problem with the plan during implementation:
-  1. State what the problem is and why the plan cannot be followed
-  2. Propose alternatives
-  3. Get user approval before deviating
-  - Implicit plan changes are prohibited (do not silently change the plan because "this way is better")
-- **Plan compliance check on completion**: After all tasks are done, re-read the plan file and compare implemented results against plan items one by one. Check for omissions, extras, or misinterpretations
+After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, verification-loop + santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
+
+Key invariants enforced by `/impl`:
+- Faithful step execution (no skip/rephrase/reorder)
+- Raw evidence recording (verbatim command + output in `metadata.evidence`)
+- `/subagent-review` after every implementation task. subagent-review auto-dispatches 10 domain-specific reviewers (typescript / deno / react / a11y / database / cloud-architecture / go / rust / dart / nix) by file extension + content heuristic, and `security-auditor` by security heuristic
+- `/simplify-review code` when diff ≥ 20 files OR ≥ 500 lines
+- Re-plan keeps `completed` tasks, deletes `pending`/`in_progress` only
+- Final gate task is `Run /verification-loop and /santa-loop` with `blockedBy` all impls. `/verification-loop` returns READY → `/santa-loop` is invoked → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/santa-loop`'s "Completeness vs Completion Criteria" rubric criterion covers what `/completion-audit` used to check
+- `/completion-audit` is deprecated for the default flow; re-invoke manually only when stricter evidence-sufficiency audit is specifically required
 
 #### Implementation and Verification
 
@@ -169,7 +158,7 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 - **End-to-end behavioral verification**: After implementation, confirm changes actually work. "Code was written" does not mean "it works". Scripts → execute and check output, hooks → reproduce trigger conditions and verify intervention behavior, config changes → verify in the environment where settings are applied. See `completion-audit/references/behavioral-verification.md` for details
 - **Verification observability**: Confirm that the changed behavior itself is observable by the test tool. When tests cannot detect the change (e.g., spinner in-place updates are not captured by stdout capture, CSS visual changes are not detectable by unit tests), explicitly state the observation limitations and choose appropriate verification methods (manual confirmation, screenshot comparison, etc.)
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
-- **No completion claims without audit**: Before claiming all work is complete, the final `/completion-audit` must pass. Individual task completion requires executing acceptance criteria verifications and recording raw evidence
+- **No completion claims without audit**: Before claiming all work is complete, the final `/verification-loop` must return READY and `/santa-loop` must return NICE. Individual task completion requires executing acceptance criteria verifications and recording raw evidence
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
   - Load `/agent-browser` and use agent-browser to open the target page
   - Take screenshots and compare layout, sizing, and spacing against Figma designs or reference pages (existing pages with the same pattern)

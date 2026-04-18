@@ -6,6 +6,11 @@ argument-hint: "[max-rounds]"
 
 # Plan Deeper
 
+> **DEPRECATED** (since 2026-04-18) for normal feature work.
+> Use `/plan` which embeds this logic in Phase 4.
+> This skill is kept only for standalone critique of externally-provided plans.
+> `/plan` uses its own duplicated copies at `~/.claude/skills/plan/references/`.
+
 Iteratively improves plan quality in Plan mode. Each round spawns a fresh Critic Subagent to critique the plan from an independent, bias-free perspective. Issues requiring user domain knowledge are resolved through interviews. After convergence, an Adversarial Falsification round independently verifies the plan's factual claims against actual code. Finally, establishes a Definition of Done pipeline with the user to enable autonomous execution.
 
 **Plan mode only.** Focused exclusively on plan refinement — does not perform implementation.

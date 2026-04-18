@@ -5,6 +5,15 @@ description: "Mandatory completion audit gate. Run this skill ONCE as the final 
 
 # Completion Audit
 
+> **Note (DEPRECATED for default flow, since 2026-04-18)**: `/impl` no longer invokes `/completion-audit` by default. `/santa-loop` is the new final gate — its "Completeness vs Completion Criteria" criterion covers requirement coverage via dual-reviewer adversarial verification.
+>
+> Re-invoke this skill manually when:
+> - Stricter evidence-sufficiency audit is specifically required (compliance / pre-prod ship / high-stakes release)
+> - `/santa-loop` result feels insufficient on requirement coverage
+> - References under `references/` (e.g., `behavioral-verification.md`) are needed for santa-loop rubric construction
+>
+> For the default flow, this skill's body below is retained for manual invocation only.
+
 ## Overview
 
 A completion claim without audit is a lie, not an optimization.

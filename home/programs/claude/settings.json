@@ -503,7 +503,7 @@
       "Write(~/.ssh/*_rsa)",
       "Write(~/.ssh/id_*)"
     ],
-    "defaultMode": "plan",
+    "defaultMode": "auto",
     "additionalDirectories": [
       "~/.claude",
       "~/dotfiles",
@@ -522,11 +522,11 @@
         ]
       },
       {
-        "matcher": "ExitPlanMode",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/scripts/task-planner-gate.ts"
+            "command": "~/.claude/scripts/plan-gate.ts"
           }
         ]
       }
@@ -616,9 +616,9 @@
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true,
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "useAutoModeDuringPlan": true,
+  "skipAutoPermissionPrompt": true,
   "voiceEnabled": true,
-  "teammateMode": "in-process",
-  "skipAutoPermissionPrompt": true
+  "teammateMode": "in-process"
 }
