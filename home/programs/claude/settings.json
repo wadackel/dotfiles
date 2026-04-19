@@ -62,6 +62,7 @@
       "Bash(chown *)",
       "Bash(claude *)",
       "Bash(claude-memo.ts*)",
+      "Bash(*claude-pane-status*)",
       "Bash(clippy *)",
       "Bash(cloc *)",
       "Bash(cmake *)",
@@ -569,6 +570,10 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-notify.ts send Glass"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts Notification"
           }
         ]
       }
@@ -585,6 +590,10 @@
             "type": "command",
             "command": "~/.claude/scripts/claude-memo.ts",
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts Stop"
           }
         ]
       }
@@ -592,13 +601,111 @@
     "UserPromptSubmit": [
       {
         "matcher": "",
-        "hooks": []
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts SessionStart"
+          }
+        ]
       }
     ],
     "SessionEnd": [
       {
         "matcher": "",
-        "hooks": []
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts SessionEnd"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts StopFailure"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PermissionDenied"
+          }
+        ]
+      }
+    ],
+    "CwdChanged": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts CwdChanged"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts SubagentStart"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts SubagentStop"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts WorktreeCreate"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts WorktreeRemove"
+          }
+        ]
       }
     ]
   },

@@ -1,6 +1,6 @@
 ---
 name: impl
-description: Executes the plan task by task. Per task — implement, verify acceptance criteria, run simplify-review if large, run subagent-review, mark complete. Final gate invokes /verification-loop then /santa-loop. Use after /plan completes. Triggers include /impl / 実行して / 実装開始 / 作業を進めて / implement the plan.
+description: Executes the plan task by task. Per task — implement, verify acceptance criteria, run simplify-review if large, run subagent-review, mark complete. Final gate invokes /completion-audit then /santa-loop. Use after /plan completes. Triggers include /impl / 実行して / 実装開始 / 作業を進めて / implement the plan.
 ---
 
 # /impl
@@ -34,13 +34,13 @@ If the marker is expired (mtime > 24h, blocked by `plan-gate.ts`), the user is t
    1. `TaskGet` to retrieve full description (target files / expected behavior / verification).
    2. `TaskUpdate` to `in_progress` and record `metadata.baseline_sha` (current `git rev-parse HEAD`).
    3. **Implement** following the plan's "Files to Change" and "Patterns to Mirror" exactly. Match naming, error handling, and conventions captured during Phase 2 EXPLORE.
-   4. **Run acceptance criteria verification** commands. Capture **raw output verbatim** in `metadata.evidence` (do not paraphrase or summarize). The final gate (`/verification-loop` + `/santa-loop`) consumes this evidence.
+   4. **Run acceptance criteria verification** commands. Capture **raw output verbatim** in `metadata.evidence` (do not paraphrase or summarize). The final gate (`/completion-audit` + `/santa-loop`) consumes this evidence.
    5. **Diff size check** with `git diff --stat`. If diff ≥ 20 files OR ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Pass changed files + `git diff <baseline_sha>..HEAD` + the project CLAUDE.md path inline in the prompt. Apply HIGH-confidence simplifications, surface MEDIUM/LOW to the user.
    6. **Subagent review** by invoking `/subagent-review` via the Skill tool — runs spec compliance check, then code quality check.
    7. `TaskUpdate` to `completed` only when all acceptance criteria verifications pass and `/subagent-review` does not surface critical issues.
-5. After all implementation tasks complete, the final `Run /verification-loop and /santa-loop` task automatically unblocks. Execute in order:
-   1. Invoke `/verification-loop`. If verdict is **NOT READY**, fix the surfaced issues and re-run `/verification-loop` until **READY**.
-   2. Invoke `/santa-loop` with the plan file path as its argument. The skill embeds the plan's Completion Criteria into its rubric.
+5. After all implementation tasks complete, the final `Run /completion-audit and /santa-loop` task automatically unblocks. Execute in order:
+   1. Invoke `/completion-audit`. If verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run `/completion-audit` (max 3 tries by /completion-audit's own loop). If 3 consecutive FAILs (its internal loop exhausted), leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, surface the unresolved gap analysis to the user (mirrors santa-loop NAUGHTY escalation handling).
+   2. On **VERIFIED PASS**, invoke `/santa-loop` with the plan file path as its argument. The orchestrator captures `/completion-audit`'s verdict + per-criterion summary and embeds it as the `Audit Verdict Input` for `/santa-loop`'s reviewers.
    3. If santa-loop verdict is **NICE** → mark the gate task completed, emit the final report.
    4. If santa-loop verdict is **NAUGHTY (escalated after 3 rounds)** → leave the task `in_progress`, append `[BLOCKED: santa-loop escalated]` to the task description, surface the unresolved critical issues to the user.
 6. Emit a final report: changed files / tests added / deviations / santa-loop verdict + reviewer agreement / next-step suggestions.
@@ -84,7 +84,7 @@ If context compaction occurs mid-`/impl`:
 
 ## Plan compliance check on completion
 
-After all tasks are `completed` and before `/verification-loop` and `/santa-loop`:
+After all tasks are `completed` and before `/completion-audit` and `/santa-loop`:
 1. Re-`Read` the plan file's "Files to Change" and "Completion Criteria" sections.
 2. Compare against actual `git diff --stat` of the implementation.
 3. Flag any (a) plan items not implemented, (b) implementation items not in the plan, (c) misinterpreted items.
@@ -104,15 +104,15 @@ Apply HIGH-confidence simplifications automatically (subtractive only, behavior-
 
 After every implementation task completion (default review). For explicit `/codex-review` requests, follow the codex-review special rule from `~/.claude/CLAUDE.md` — never partial.
 
-## Final gate: /verification-loop → /santa-loop
+## Final gate: /completion-audit → /santa-loop
 
-The "Run /verification-loop and /santa-loop" task created by `/plan` Phase 5 (Pass 2) is `blockedBy` all implementation tasks. It auto-unblocks once all complete.
+The "Run /completion-audit and /santa-loop" task created by `/plan` Phase 5 (Pass 2) is `blockedBy` all implementation tasks. It auto-unblocks once all complete.
 
 **Execution order is mandatory**:
-1. `/verification-loop` first — deterministic gate (build, typecheck, lint, tests). Must return **READY** before continuing
-2. `/santa-loop` second — dual-reviewer (Reviewer A: Claude code-reviewer/opus, Reviewer B: codex (claude-second fallback)). The skill embeds the plan's Completion Criteria into its rubric so requirement coverage is verified alongside code quality. Must return **NICE** (both reviewers PASS) to close the gate
+1. `/completion-audit` first — evidence-sufficiency audit (no re-execution; reads per-task `metadata.evidence` against the plan's Completion Criteria). Must return **VERIFIED PASS** before continuing. On 3 consecutive FAILs (its internal loop exhausted), append `[BLOCKED: completion-audit escalated]` and surface to the user
+2. `/santa-loop` second — dual-reviewer (Reviewer A: Claude code-reviewer/opus, Reviewer B: codex (claude-second fallback)). The orchestrator embeds the audit verdict + per-criterion summary as `Audit Verdict Input` so reviewers focus on code/design quality without re-judging completeness. Must return **NICE** (both reviewers PASS) to close the gate
 
-`/completion-audit` is NOT invoked by default anymore — `/santa-loop`'s "Completeness vs Completion Criteria" criterion covers the same ground with dual-reviewer adversarial verification. Re-invoke `/completion-audit` manually only if stricter evidence-sufficiency audit is specifically required (see that skill's deprecation notice).
+`/verification-loop` is opt-in and invoked manually outside `/impl` (e.g., `/verify` before opening a PR, or as a standalone post-`/impl` step) when deterministic re-execution is genuinely required. It is not part of the `/impl` flow because per-task verification already covers re-execution and empirical analysis showed the gate-time re-run caught zero issues per-task missed (5/5 plans).
 
 ## Design decisions
 
@@ -129,3 +129,5 @@ The "Run /verification-loop and /santa-loop" task created by `/plan` Phase 5 (Pa
 **Why the diff-size threshold for the code-simplifier subagent**: Small diffs are unlikely to introduce defensive complexity worth a fresh-eyes review. Large diffs accumulate it.
 
 **Why Agent dispatch (not skill loading)**: The `code-simplifier` subagent must actually execute to produce proposals. Loading the simplify-review skill definition into context alone does not spawn the reviewer. Direct Agent dispatch keeps behavior deterministic and matches the same pattern used by `/plan` Phase 4 Step 6 for `plan-simplifier`.
+
+**Why /completion-audit is the default gate (not /verification-loop)**: per-task verification already covers re-execution; the gate's value is evidence audit + adversarial review, not redundant re-execution. Default re-execution duplicated cost without catching new issues empirically (5 plans audited, 0 catches). `/verification-loop` remains opt-in for cases that genuinely require deterministic re-execution.

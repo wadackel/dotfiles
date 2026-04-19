@@ -1,0 +1,348 @@
+#!/usr/bin/env -S deno run --allow-env=TMUX_PANE --allow-run=tmux
+
+// Bridges Claude Code hook events → tmux pane options (SSOT for the popup picker).
+// Invoked as: claude-pane-status.ts <EventName>   (unknown events → no-op exit 0)
+
+// --- Types ---
+
+type HookData = Record<string, unknown> & {
+  hook_event_name?: string;
+  session_id?: string;
+  cwd?: string;
+  message?: string;
+  prompt?: string;
+};
+
+export type Op =
+  | { kind: "set"; key: string; value: string }
+  | { kind: "unset"; key: string };
+
+export interface PaneState {
+  subagentsCount: number;
+  pendingTeardown: boolean;
+}
+
+// --- Constants ---
+
+// Every @pane_* option the script may write. Used to drain state on teardown.
+export const ALL_PANE_OPTIONS = [
+  "@pane_agent",
+  "@pane_status",
+  "@pane_session_id",
+  "@pane_started_at",
+  "@pane_cwd",
+  "@pane_worktree_branch",
+  "@pane_worktree_path",
+  "@pane_subagents_count",
+  "@pane_pending_teardown",
+  "@pane_prompt",
+  "@pane_wait_reason",
+  "@pane_attention",
+] as const;
+
+// Options cleared at SessionStart so stale values from a previous session on the
+// same pane do not bleed into the new one.
+const STALE_AT_SESSION_START = [
+  "@pane_started_at",
+  "@pane_subagents_count",
+  "@pane_pending_teardown",
+  "@pane_worktree_branch",
+  "@pane_worktree_path",
+  "@pane_prompt",
+  "@pane_wait_reason",
+  "@pane_attention",
+] as const;
+
+const PROMPT_MAX_CHARS = 40;
+
+// --- Pure helpers (exported for tests) ---
+
+export function maskPrompt(raw: unknown): string {
+  if (typeof raw !== "string" || raw.length === 0) return "";
+  // Collapse TAB / CR / LF and runs of whitespace so the value is safe to pass
+  // through tmux TAB-delimited formats and fits on a single picker row.
+  const flat = raw.replace(/[\t\r\n]+/g, " ").replace(/ {2,}/g, " ").trim();
+  if (flat.length <= PROMPT_MAX_CHARS) return flat;
+  return flat.slice(0, PROMPT_MAX_CHARS) + "…";
+}
+
+export function formatElapsed(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return "-";
+  const s = Math.floor(sec);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h`;
+}
+
+export function parseCount(raw: string | undefined | null): number {
+  if (raw === undefined || raw === null) return 0;
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return n;
+}
+
+function str(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
+// Re-assert the pane belongs to a live Claude session. Called at the head of
+// every event except drain paths. session_id-guarded so non-Claude events
+// (e.g. stray CwdChanged without a session) never create phantom Claude panes.
+export function selfHealOps(data: HookData): Op[] {
+  const sid = str(data.session_id);
+  if (!sid) return [];
+  const ops: Op[] = [
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: sid },
+  ];
+  const cwd = str(data.cwd);
+  if (cwd) ops.push({ kind: "set", key: "@pane_cwd", value: cwd });
+  return ops;
+}
+
+// --- Event → Op mapping (pure, exported for tests) ---
+
+export function eventToOps(
+  event: string,
+  data: HookData,
+  state: PaneState,
+): Op[] {
+  // Drain paths: full teardown. Short-circuit before self-heal so the teardown
+  // is not followed by self-heal reinstating @pane_agent.
+  if (event === "SessionEnd" && state.subagentsCount === 0) {
+    return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
+  }
+  if (
+    event === "SubagentStop" &&
+    Math.max(0, state.subagentsCount - 1) === 0 &&
+    state.pendingTeardown
+  ) {
+    return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
+  }
+
+  const body: Op[] = (() => {
+    switch (event) {
+      case "SessionStart": {
+        // agent / session_id / cwd are set by selfHealOps below.
+        const ops: Op[] = STALE_AT_SESSION_START.map((key) => ({
+          kind: "unset" as const,
+          key,
+        }));
+        ops.push({ kind: "set", key: "@pane_status", value: "idle" });
+        return ops;
+      }
+
+      case "SessionEnd": {
+        // drain case (count === 0) handled above
+        return [{ kind: "set", key: "@pane_pending_teardown", value: "1" }];
+      }
+
+      case "UserPromptSubmit": {
+        const prompt = maskPrompt(data.prompt);
+        const ops: Op[] = [
+          { kind: "set", key: "@pane_status", value: "running" },
+          {
+            kind: "set",
+            key: "@pane_started_at",
+            value: String(Math.floor(Date.now() / 1000)),
+          },
+          { kind: "unset", key: "@pane_attention" },
+        ];
+        if (prompt) {
+          ops.push({ kind: "set", key: "@pane_prompt", value: prompt });
+        } else ops.push({ kind: "unset", key: "@pane_prompt" });
+        return ops;
+      }
+
+      case "Stop": {
+        if (state.subagentsCount > 0) return []; // pending subagents: defer
+        return [{ kind: "set", key: "@pane_status", value: "idle" }];
+      }
+
+      case "StopFailure": {
+        const reason = maskPrompt(data.message) || "error";
+        return [
+          { kind: "set", key: "@pane_status", value: "error" },
+          { kind: "set", key: "@pane_wait_reason", value: reason },
+        ];
+      }
+
+      case "Notification": {
+        const reason = maskPrompt(data.message) || "notification";
+        return [
+          { kind: "set", key: "@pane_status", value: "waiting" },
+          { kind: "set", key: "@pane_wait_reason", value: reason },
+          { kind: "set", key: "@pane_attention", value: "notification" },
+        ];
+      }
+
+      case "PermissionDenied": {
+        return [
+          { kind: "set", key: "@pane_status", value: "waiting" },
+          {
+            kind: "set",
+            key: "@pane_wait_reason",
+            value: "permission-denied",
+          },
+        ];
+      }
+
+      case "CwdChanged": {
+        const cwd = str(data.cwd);
+        return cwd ? [{ kind: "set", key: "@pane_cwd", value: cwd }] : [];
+      }
+
+      case "SubagentStart": {
+        return [
+          {
+            kind: "set",
+            key: "@pane_subagents_count",
+            value: String(state.subagentsCount + 1),
+          },
+        ];
+      }
+
+      case "SubagentStop": {
+        // drain case (next === 0 && pendingTeardown) handled above
+        const next = Math.max(0, state.subagentsCount - 1);
+        return [
+          { kind: "set", key: "@pane_subagents_count", value: String(next) },
+        ];
+      }
+
+      case "WorktreeCreate": {
+        const branch = str(data.branch) || str(data.worktree_branch);
+        const path = str(data.path) || str(data.worktree_path);
+        const ops: Op[] = [];
+        if (branch) {
+          ops.push({ kind: "set", key: "@pane_worktree_branch", value: branch });
+        }
+        if (path) {
+          ops.push({ kind: "set", key: "@pane_worktree_path", value: path });
+        }
+        return ops;
+      }
+
+      case "WorktreeRemove": {
+        return [
+          { kind: "unset", key: "@pane_worktree_branch" },
+          { kind: "unset", key: "@pane_worktree_path" },
+        ];
+      }
+
+      default:
+        return [];
+    }
+  })();
+
+  // Empty body = unknown event or defer case (e.g. Stop with live subagents).
+  // Skip self-heal so a defer/unknown call stays a true no-op.
+  if (body.length === 0) return [];
+
+  return [...selfHealOps(data), ...body];
+}
+
+// --- tmux I/O ---
+
+async function tmuxRun(args: string[]): Promise<{ code: number; stderr: string }> {
+  const proc = new Deno.Command("tmux", {
+    args,
+    stdin: "null",
+    stdout: "null",
+    stderr: "piped",
+  });
+  const { code, stderr } = await proc.output();
+  return { code, stderr: new TextDecoder().decode(stderr).trim() };
+}
+
+async function readPaneState(pane: string): Promise<PaneState> {
+  // `tmux show -pv <option>` exits non-zero with empty stderr when the option
+  // is unset — that's the normal "default" path and must stay silent.
+  // Non-zero exit WITH non-empty stderr signals a real tmux failure (pane gone,
+  // server down) worth logging so the failure is not silently masked.
+  const runShow = async (key: string) => {
+    const { code, stdout, stderr } = await new Deno.Command("tmux", {
+      args: ["show", "-t", pane, "-pv", key],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    const decoder = new TextDecoder();
+    const errText = decoder.decode(stderr).trim();
+    if (code !== 0 && errText.length > 0) {
+      console.error(`claude-pane-status: tmux show -pv ${key} failed: ${errText}`);
+    }
+    return decoder.decode(stdout);
+  };
+  const [countStdout, teardownStdout] = await Promise.all([
+    runShow("@pane_subagents_count"),
+    runShow("@pane_pending_teardown"),
+  ]);
+  return {
+    subagentsCount: parseCount(countStdout),
+    pendingTeardown: teardownStdout.trim() === "1",
+  };
+}
+
+async function applyOp(pane: string, op: Op): Promise<void> {
+  const args = op.kind === "set"
+    ? ["set", "-t", pane, "-p", op.key, op.value]
+    : ["set", "-t", pane, "-p", "-u", op.key];
+  const { code, stderr } = await tmuxRun(args);
+  if (code !== 0) {
+    console.error(`claude-pane-status: tmux set failed (${op.kind} ${op.key}): ${stderr}`);
+  }
+}
+
+// --- Main ---
+
+async function main(): Promise<void> {
+  const event = Deno.args[0] ?? "";
+  if (!event) return; // no event specified — no-op
+
+  const tmuxPane = Deno.env.get("TMUX_PANE");
+  if (!tmuxPane) return; // not invoked inside a tmux pane — no-op
+  // Guard against a caller that sets TMUX_PANE to e.g. "-L" or ";cmd" —
+  // Deno.Command uses argv (no shell), but tmux itself would parse a
+  // leading "-" value as an option, so restrict to the pane-id shape.
+  if (!/^%\d+$/.test(tmuxPane)) return;
+
+  const raw = await new Response(Deno.stdin.readable).text();
+  let hookData: HookData = {};
+  if (raw.trim().length > 0) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      // Narrow: plain object (not array, not primitive) → treat as hook data.
+      // `str()` accessors downstream handle all field type-narrowing from unknown.
+      if (
+        parsed !== null &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        hookData = parsed as Record<string, unknown>;
+      }
+    } catch {
+      console.error("claude-pane-status: failed to parse stdin JSON");
+      return;
+    }
+  }
+
+  const stdinEvent = str(hookData.hook_event_name);
+  if (stdinEvent && stdinEvent !== event) {
+    console.error(
+      `claude-pane-status: argv event (${event}) != stdin event (${stdinEvent}); using argv`,
+    );
+  }
+
+  const state = await readPaneState(tmuxPane);
+  const ops = eventToOps(event, hookData, state);
+  if (ops.length === 0) return; // unknown event or no-op case
+
+  for (const op of ops) {
+    await applyOp(tmuxPane, op);
+  }
+}
+
+if (import.meta.main) {
+  await main();
+}

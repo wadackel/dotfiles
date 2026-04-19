@@ -99,12 +99,13 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 **Default review**: Unless the user explicitly requests codex-review, `/subagent-review` runs as the default review after each implementation task completion.
 
-**`/santa-loop` is the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use (runs a single Codex CLI reviewer). `/santa-loop` handles dual-reviewer adversarial verification at the final gate (Claude opus + codex, both must PASS, max 3 fix rounds). Do not confuse them — `/codex-review` is for ad-hoc second opinion, `/santa-loop` is the end-of-implementation quality/completeness dual gate.
+**`/completion-audit` + `/santa-loop` together are the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use. The default final gate is `/completion-audit` (evidence-sufficiency audit) → `/santa-loop` (dual-reviewer code/design quality; Claude opus + codex, both must PASS, max 3 fix rounds). `/santa-loop` consumes the audit verdict as `Audit Verdict Input` and does NOT re-judge completeness.
 
 ### General
 
 - `AskUserQuestion` `options` limited to 4 per question (more causes ValidationError)
 - When receiving correction instructions from the user, consider appending to `~/.claude/CLAUDE.md` if the instruction is general-purpose, with user approval before appending
+- **User 判断を求める提示ではトレードオフの軸を言語化**: 選択肢・提案・比較を user に提示して判断を求めるとき、Pros/Cons 列挙だけで終わらせず「どの軸 (何 vs 何) でトレードオフが生じているか」を 1 文で明示する。文言は状況に応じ柔軟に選ぶ (例:「rule 遵守を優先するかで決まる」「肝は X か Y かです」「軸は X vs Y に集約されます」)。定型フォーマットを強制しない
 
 #### Rule Compliance
 
@@ -133,14 +134,14 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   3. **Entry points and preconditions**: From which states/locations/environments can this be invoked? List all valid combinations and verify the design handles each
 - **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to `/impl` after confirmation
 - **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during `/plan` before handing off to `/impl`. Let the user assess the scale of the problem with real data before approval
-- **Definition of Done**: `/plan` Phase 4 Step 8 auto-executes the verification plan design and agreement flow — it designs observable completion conditions that Claude can autonomously verify, then confirms alignment with the user. Baseline activities (tests, lint) are executed within each implementation task's acceptance criteria; the final gate task runs `/verification-loop` (deterministic checks) → `/santa-loop` (dual-reviewer; rubric embeds Completion Criteria)
+- **Definition of Done**: `/plan` Phase 4 Step 8 auto-executes the verification plan design and agreement flow — it designs observable completion conditions that Claude can autonomously verify, then confirms alignment with the user. Baseline activities (tests, lint) are executed within each implementation task's acceptance criteria; the final gate task runs `/completion-audit` (evidence audit) → `/santa-loop` (dual-reviewer; receives audit verdict as `Audit Verdict Input`). `/verification-loop` is opt-in and invoked manually (e.g., `/verify` before opening a PR); it is not part of the `/impl` final gate orchestration
 - **Required checks before handing off to /impl**: For plans involving bug investigation/fixes, explicitly include:
   - "Which command/log/measurement confirms this fix works"
   - "Considered whether this fix approach could be wrong, and the evidence that rules it out"
 
 #### /impl Workflow
 
-After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, verification-loop + santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
+After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, completion-audit + santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
 
 Key invariants enforced by `/impl`:
 - Faithful step execution (no skip/rephrase/reorder)
@@ -148,8 +149,7 @@ Key invariants enforced by `/impl`:
 - `/subagent-review` after every implementation task. subagent-review auto-dispatches 10 domain-specific reviewers (typescript / deno / react / a11y / database / cloud-architecture / go / rust / dart / nix) by file extension + content heuristic, and `security-auditor` by security heuristic
 - `/simplify-review code` when diff ≥ 20 files OR ≥ 500 lines
 - Re-plan keeps `completed` tasks, deletes `pending`/`in_progress` only
-- Final gate task is `Run /verification-loop and /santa-loop` with `blockedBy` all impls. `/verification-loop` returns READY → `/santa-loop` is invoked → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/santa-loop`'s "Completeness vs Completion Criteria" rubric criterion covers what `/completion-audit` used to check
-- `/completion-audit` is deprecated for the default flow; re-invoke manually only when stricter evidence-sufficiency audit is specifically required
+- Final gate task is `Run /completion-audit and /santa-loop` with `blockedBy` all impls. `/completion-audit` returns VERIFIED PASS → `/santa-loop` is invoked with the audit verdict embedded as `Audit Verdict Input` → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/verification-loop` is opt-in and invoked manually outside the final gate (e.g., `/verify` before opening a PR) when deterministic re-execution of build/typecheck/lint/tests is genuinely required
 
 #### Implementation and Verification
 
@@ -158,7 +158,7 @@ Key invariants enforced by `/impl`:
 - **End-to-end behavioral verification**: After implementation, confirm changes actually work. "Code was written" does not mean "it works". Scripts → execute and check output, hooks → reproduce trigger conditions and verify intervention behavior, config changes → verify in the environment where settings are applied. See `completion-audit/references/behavioral-verification.md` for details
 - **Verification observability**: Confirm that the changed behavior itself is observable by the test tool. When tests cannot detect the change (e.g., spinner in-place updates are not captured by stdout capture, CSS visual changes are not detectable by unit tests), explicitly state the observation limitations and choose appropriate verification methods (manual confirmation, screenshot comparison, etc.)
 - **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
-- **No completion claims without audit**: Before claiming all work is complete, the final `/verification-loop` must return READY and `/santa-loop` must return NICE. Individual task completion requires executing acceptance criteria verifications and recording raw evidence
+- **No completion claims without audit**: Before claiming all work is complete, the final `/completion-audit` must return VERIFIED PASS and `/santa-loop` must return NICE. Individual task completion requires executing acceptance criteria verifications and recording raw evidence
 - **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
   - Load `/agent-browser` and use agent-browser to open the target page
   - Take screenshots and compare layout, sizing, and spacing against Figma designs or reference pages (existing pages with the same pattern)

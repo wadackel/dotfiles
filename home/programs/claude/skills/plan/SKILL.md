@@ -85,6 +85,29 @@ And trace **5 execution paths**:
 4. Contracts (APIs / interfaces)
 5. Patterns (architectural)
 
+### Empirical analysis (existing-behavior revisions)
+
+When the plan modifies existing behavior, codebase-only exploration is insufficient — "specified to do X" and "actually useful as X in practice" are different questions. Augment Phase 2 with empirical evidence of how the target currently behaves.
+
+- **Trigger (OR logic)** — apply when any of the following hold AND the Exempt conditions below do not apply:
+  - `## Files to Change` contains at least one `UPDATE` action **on a behavior-bearing target** (source code, executable scripts, config that changes runtime, skill/hook logic). Pure docs/comment/metadata-only UPDATEs do NOT trigger on this rule alone
+  - Task description contains existing-behavior-revision keywords (bug-fix / refactor / 仕様変更 / perf 改善 / CLI 出力変更 / semantics change)
+- **Exempt** — skip the empirical subagent when ANY of the following hold (exemption is unconditional — it overrides triggers):
+  - Files to Change is CREATE-only AND the new code does not depend on existing runtime behavior (pure new-feature addition), OR
+  - All UPDATEs target documentation / comments / metadata only (README, CHANGELOG, comments within code, non-runtime config) — even if a keyword trigger matches, there is no runtime behavior to observe, so empirical analysis is moot, OR
+  - complexity is `trivial` (short-circuit path)
+- **Action** — when triggered, **repurpose one of the existing "up to 3 Explore subagents" slots** for an empirical mandate (total still 3 agents; no user-resource increase). The empirical subagent's mandate MUST instruct it to collect behavioral evidence using a two-tier strategy:
+  - **Tier 1 — historical signals** from codebase-external records (use only those relevant to the target; full enumeration is not required):
+    - `~/.claude/plans/*.md` and `~/.claude/plans/*.log.md` (past plan bodies + Deepening Logs — evolution of similar decisions)
+    - `~/.claude/projects/**/subagents/*.jsonl` (past subagent transcripts — grep for the target skill/command name)
+    - `~/.claude/retrospective-ledger.jsonl` (cross-session rule/instinct ledger)
+    - `git log` / `git log -p` / `git log -- <target-file>` (commit history of the target)
+  - **Tier 2 — direct current-behavior observation** (required when Tier 1 is absent or inconclusive for the target): actually run / invoke / exercise the target and capture real output. Examples: execute the CLI and record stdout/stderr/exit, trigger the hook manually and observe the intervention, read the current config and record its effective values. This is the fallback when no historical record exists, and also the ground truth that validates or contradicts Tier 1 findings.
+  - After gathering, the subagent contrasts "what the spec says" vs "what actually happens" (frequency / effect / failure mode), explicitly noting whether each claim is backed by Tier 1 history, Tier 2 observation, or both.
+- **Output** — the empirical subagent contributes one row to the Unified Discovery Table with `Category = Empirical Behavior` (existing `Category | File:Lines | Pattern | Key Snippet` schema unchanged). Details that do not fit in a single row go into Risks / Open Questions in Phase 3.
+
+Why this matters: relying on codebase-only exploration is how plans anchor on "the rule fires as documented" and miss "…but catches 0 issues in practice". Empirical analysis surfaces that gap before Phase 3 DRAFT commits to a design.
+
 Consolidate findings into a **Unified Discovery Table** (`Category | File:Lines | Pattern | Key Snippet`) consumed by Phase 3.
 
 ## Phase 3 — DRAFT (non-trivial only)
@@ -292,7 +315,7 @@ Design observable Completion Criteria:
   - When unclear: default to `[orchestrator-only]` (fail-safe — over-running is cheaper than false FAIL)
   - **Fail-fast validation**: Before finalizing the plan, scan `### Autonomous Verification` for untagged items (items not starting with `[file-state]`, `[orchestrator-only]`, or `[outcome]` prefix). If any found, **reject the plan** and prompt the author to tag them. `/santa-loop` Step 3 has NO safety net — tag is the contract, violation is caught here. Exemption: trivial and small complexity plans are exempt (tagging overhead isn't justified for plans with <3 verification items); medium/large/xl plans are required to tag every item
 - **Requires User Confirmation**: items with a genuine blocking capability (fresh GUI login, subjective judgment, etc.) — format: `- <condition> — 理由: <blocker>` (the `理由:` token follows the plan body language; English plan bodies use `Reason:` instead)
-- **Baseline**: tests / lint per task, `/verification-loop` + `/santa-loop` once at final gate
+- **Baseline**: tests / lint per task, `/completion-audit` + `/santa-loop` once at final gate (`/verification-loop` opt-in when deterministic re-execution is required)
 
 Example tagged Completion Criteria:
 
@@ -308,7 +331,7 @@ Example tagged Completion Criteria:
 - [outcome] `/santa-loop` returns NICE
 ```
 
-Append `## Completion Criteria` section to the plan body (English, consumed by `/plan` Phase 5 and `/santa-loop`'s rubric at the final gate; `completion-audit` can also consume it when manually invoked for a stricter audit).
+Append `## Completion Criteria` section to the plan body (English, consumed by `/plan` Phase 5, `/completion-audit` (default final gate), and `/santa-loop` (via `Audit Verdict Input` from `/completion-audit`)).
 
 ## Phase 5 — DECOMPOSE
 
@@ -323,13 +346,13 @@ for each implementation task in the decomposition:
     implTaskIds.push(id)
 ```
 
-Pass 2 — create the final verification + santa-loop gate task with blockers:
+Pass 2 — create the final completion-audit + santa-loop gate task with blockers:
 ```
 gateId = TaskCreate(
-    subject: "Run /verification-loop and /santa-loop",
+    subject: "Run /completion-audit and /santa-loop",
     description: "Final gate. Execute in order:
-      1. Invoke /verification-loop — must return READY (fix + re-run if NOT READY).
-      2. Invoke /santa-loop with plan file path — must return NICE (dual-reviewer verdict).
+      1. Invoke /completion-audit — must return VERIFIED PASS (fix evidence gaps + re-run on VERIFIED FAIL, max 3 tries by its internal loop).
+      2. Invoke /santa-loop with plan file path and the audit verdict embedded as Audit Verdict Input — must return NICE (dual-reviewer verdict). /santa-loop does NOT re-judge completeness.
       Target: no additional files; verification-only.
       Expected behavior: /santa-loop emits 'SANTA VERDICT: NICE' and Reviewer A + Reviewer B both PASS.
       Verification: verbatim output captured in metadata.evidence.",
@@ -383,7 +406,7 @@ Emit the **full plan body inline** so the user can approve without opening the f
 
 - File: <plan path>
 - Complexity: <trivial/small/medium/large/xl>
-- Tasks: <count> (+ /verification-loop + /santa-loop gate)
+- Tasks: <count> (+ /completion-audit + /santa-loop gate)
 - Gate: active until <24h from now>
 
 Run `/impl` when you approve.

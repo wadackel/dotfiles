@@ -10,7 +10,7 @@ History: these rules were previously embodied by the `task-planner` subagent (`~
 2. **Verification within implementation tasks**: Each implementation task includes its own acceptance criteria with verification commands. Do not split verification out into standalone tasks among the implementation tasks — the only verification-only task allowed is the mandatory final gate in rule 5.
 3. **Separation of concerns**: Different concerns go in separate tasks. Files sharing the same concern go in one task.
 4. **Three elements of task descriptions**: Every task description must contain (1) target files to modify, (2) expected behavior after change, (3) acceptance criteria (verification commands + expected output).
-5. **Final gate task**: Always include a final gate task titled `Run /verification-loop and /santa-loop`, `blockedBy` all implementation tasks. `/verification-loop` runs first (deterministic build/typecheck/lint/test gate), then `/santa-loop` runs (dual-reviewer adversarial verification). `/completion-audit` is NOT the default final gate — it is deprecated for the standard flow and invoked manually only when stricter evidence-sufficiency audit is specifically required.
+5. **Final gate task**: Always include a final gate task titled `Run /completion-audit and /santa-loop`, `blockedBy` all implementation tasks. `/completion-audit` runs first (evidence-sufficiency audit reading per-task `metadata.evidence` against the plan's Completion Criteria — no re-execution), then `/santa-loop` runs (dual-reviewer code/design quality review, receives the audit verdict as `Audit Verdict Input` and does NOT re-judge completeness). `/verification-loop` is opt-in and invoked manually (e.g., `/verify` before opening a PR) when deterministic re-execution of build/typecheck/lint/tests is genuinely required; it is **not** orchestrated by the final gate task.
 
 ## Acceptance Criteria by Change Type
 
@@ -31,8 +31,7 @@ See `~/.claude/skills/completion-audit/references/behavioral-verification.md` fo
 
 ## Anti-patterns
 
-- Creating separate verification tasks among the implementation tasks (per-task verification is embedded in that task's acceptance criteria). The one exception is the final `Run /verification-loop and /santa-loop` gate task, which is required by rule 5.
+- Creating separate verification tasks among the implementation tasks (per-task verification is embedded in that task's acceptance criteria). The one exception is the final `Run /completion-audit and /santa-loop` gate task, which is required by rule 5.
 - Verification tasks that only say "confirm" without specific commands.
 - Missing dependencies (tasks that cannot execute without a prerequisite task must declare `blockedBy`).
-- Missing final gate task (`Run /verification-loop and /santa-loop` must exist and block on all implementation tasks).
-- Using `/completion-audit` as the default final gate (it is deprecated for the standard flow — use `/verification-loop` + `/santa-loop` instead).
+- Missing final gate task (`Run /completion-audit and /santa-loop` must exist and block on all implementation tasks).

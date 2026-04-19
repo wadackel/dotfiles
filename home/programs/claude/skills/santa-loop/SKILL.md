@@ -1,6 +1,6 @@
 ---
 name: santa-loop
-description: "Adversarial dual-reviewer convergence loop. Two independent reviewers (Claude Opus + Codex CLI) must both return NICE before declaring the change complete. NAUGHTY → fix all flagged issues → fresh re-review (max 3 rounds). Use as the final gate after all implementation tasks complete (replaces /completion-audit by default). Triggers include /santa-loop / dual review / 最終レビュー / sanity check / dual-reviewer."
+description: "Adversarial dual-reviewer convergence loop. Two independent reviewers (Claude Opus + Codex CLI) must both return NICE before declaring the change complete. NAUGHTY → fix all flagged issues → fresh re-review (max 3 rounds). Use as the final gate after /completion-audit returns VERIFIED PASS, invoked from /impl. Triggers include /santa-loop / dual review / 最終レビュー / sanity check / dual-reviewer."
 argument-hint: "[plan-file-path | scope-spec]"
 ---
 
@@ -12,8 +12,8 @@ Adversarial dual-review convergence loop. Two independent reviewers — differen
 
 ## When to Use
 
-- **Default**: as the final gate task in `/impl` (replaces `/completion-audit` for default flow). The "Run /verification-loop and /santa-loop" task created by `/plan` Phase 5 invokes this skill after `/verification-loop` returns READY.
-- **Manual**: user explicitly asks for adversarial review, "santa loop", "dual review", "最終レビュー", or wants a stricter pre-ship check than `/codex-review` provides.
+- **Default (only supported path)**: as the final gate task in `/impl`, invoked after `/completion-audit` returns VERIFIED PASS. The "Run /completion-audit and /santa-loop" task created by `/plan` Phase 5 orchestrates this sequence, embedding the audit verdict as `Audit Verdict Input`.
+- **Manual trigger**: when the user says "santa loop", "dual review", "最終レビュー", or similar, invoke `/impl`'s final gate (which runs `/completion-audit` → `/santa-loop`) — or run `/completion-audit` first so its verdict is in the session context when `/santa-loop` starts. Standalone `/santa-loop` with no prior `/completion-audit` aborts (see Prerequisites / Layer 2).
 
 Do NOT use for:
 - Mid-task review (use `/subagent-review` per task instead)
@@ -22,23 +22,18 @@ Do NOT use for:
 
 ## Prerequisites
 
-`/santa-loop` expects the prior `/verification-loop` to have returned READY (deterministic checks pass). When invoked from `/impl`, the orchestrator enforces this order.
+`/santa-loop` expects `/completion-audit` to have returned `VERIFIED PASS`, with its verdict + per-criterion summary available as `Audit Verdict Input`. When invoked from `/impl`, the orchestrator runs `/completion-audit` first and embeds its verdict.
 
-When invoked manually:
-- Reads plan file from `~/.claude/plans/.active-<cwd-hash>` if present (plan path embedded inside)
-- Falls back to `$ARGUMENTS` (path or scope description)
-- Falls back to uncommitted-changes scope if neither is available
+Manual standalone `/santa-loop` without `Audit Verdict Input` is **unsupported** — santa-loop aborts with the single-line error in Layer 2 "Absent → unsupported error". Run `/completion-audit` first, or invoke both via `/impl`.
 
 ## Workflow
 
 ### Step 1: Identify Scope
 
-1. Resolve plan file path (active marker → `$ARGUMENTS` → none)
-2. Resolve baseline:
-   - If plan exists and `/impl` task `metadata.baseline_sha` is reachable, use `git diff <baseline_sha>..HEAD`
-   - Otherwise use `git diff HEAD` (uncommitted changes)
-3. Capture changed files: `git diff --name-only <baseline>..HEAD`
-4. Read each changed file in full so the rubric can be tailored to file types
+1. Resolve plan file path (active marker → `$ARGUMENTS`). A plan file is required — if neither source yields one, the invocation is a manual standalone and aborts per Layer 2 "Absent → unsupported error" (no `Audit Verdict Input` can be supplied without a plan context).
+2. Resolve baseline: use `git diff <baseline_sha>..HEAD` if the `/impl` task's `metadata.baseline_sha` is reachable; otherwise `git diff HEAD` covers the plan's uncommitted changes.
+3. Capture changed files: `git diff --name-only <baseline>..HEAD`.
+4. Read each changed file in full so the rubric can be tailored to file types.
 
 ### Step 2: Build Rubric
 
@@ -49,17 +44,25 @@ Construct the rubric in three layers:
 | Criterion | Pass condition |
 |---|---|
 | Correctness | Logic is sound, no bugs, edge cases handled (cite file:line for any concern) |
-| Completeness vs Completion Criteria | Every item in plan's `## Completion Criteria` section is addressed (cite which task / which lines satisfy each item) |
 | Security | No hardcoded secrets, no injection vectors, OWASP-relevant patterns absent in changed code |
 | Error handling | Errors handled explicitly, no silent swallowing |
 | Internal consistency | No TECHNICAL contradictions across files / sections (contracts / types / cross-references). Style / naming / formatting differences are OUT OF SCOPE for this criterion — if noted, put them in `suggestions`, NOT `critical_issues` |
 | No regressions | Changes don't break existing behavior reachable from changed code |
 
-**Layer 2 — Completion Criteria embed**
+Completeness vs the plan's Completion Criteria is **delegated to `/completion-audit`** (the default flow's preceding gate). santa-loop trusts the audit verdict and does not re-judge requirement coverage — see Layer 2.
 
-Read the plan file's `## Completion Criteria` section verbatim and append it to the prompt under `{plan_completion_criteria}`. The reviewer must verify each item is addressed, NOT just code quality.
+**Layer 2 — Audit Verdict Input embed**
 
-If no plan file is available, set `{plan_completion_criteria}` to `(no plan file in scope — verify only against general rubric)` and proceed.
+The orchestrator (`/impl`) runs `/completion-audit` first, captures its `VERIFIED PASS` verdict + per-criterion summary, and embeds it verbatim into the reviewer prompt under `{audit_verdict_input}`. The reviewer treats this as authoritative and focuses solely on code/design quality — completeness is already audited.
+
+**Absent → unsupported error**: if `{audit_verdict_input}` is empty (manual `/santa-loop` invoked without a prior `/completion-audit` run), santa-loop emits a single-line error and aborts:
+
+```
+santa-loop: Audit Verdict Input is required. Run /completion-audit first,
+            or invoke both via /impl (which orchestrates the sequence).
+```
+
+Manual standalone `/santa-loop` is unsupported by design — the rare-path defensive runtime branching is intentionally omitted in favor of explicit refusal.
 
 **Layer 3 — File-type dynamic criteria**
 
@@ -86,7 +89,7 @@ Some Completion Criteria items require host access the reviewer's sandbox cannot
 
 Explicit tag: plan's Completion Criteria item has `[orchestrator-only]` prefix — this is the **sole signal**. Tags are mandatory per `/plan` Phase 4 Step 8; untagged items should never reach santa-loop. If encountered (bypassed /plan), emit a hard error and abort: `santa-loop: untagged Autonomous Verification items detected. Re-invoke /plan to add tags.`
 
-When no plan file exists at all (manual `/santa-loop` invocation), fall back to conservative default: treat ALL commands in the diff / scope as `[file-state]` (reviewer self-verifies). This is safer than auto-classifying as orchestrator-only which could run untrusted commands.
+A missing plan file is a symptom of missing `Audit Verdict Input` (no plan → no `/completion-audit` verdict to embed) and is caught by the single Layer 2 abort predicate. santa-loop aborts at Step 1 before reaching this step; there is no planless fallback.
 
 **Embed format** (insert into reviewer prompt as new "Verified Evidence" section):
 
@@ -120,7 +123,7 @@ Rationale: without this step, Round 2+ reviews in sandbox-limited reviewers (e.g
 Build the prompt from `references/reviewer-prompt.md` template, filling:
 - Task specification (from plan's Context / Overview or ad-hoc input)
 - Rubric (from Step 2, three layers merged)
-- Completion Criteria (verbatim from plan)
+- Audit Verdict Input (from `/completion-audit` — verbatim verdict + per-criterion summary)
 - Intentional Conventions section (verbatim if present)
 - Verified Evidence block (from Orchestrator Evidence Embedding above, if applicable)
 - Diff and changed file list
@@ -133,7 +136,7 @@ The same prompt string is used for both Reviewer A and Reviewer B in Step 4.
 
 1. **Context isolation** — neither reviewer sees the other's assessment
 2. **Identical rubric** — both receive the same evaluation criteria
-3. **Same inputs** — both receive task spec + Completion Criteria + diff + file paths
+3. **Same inputs** — both receive task spec + Audit Verdict Input + diff + file paths
 4. **Structured output** — each returns a typed JSON verdict (see `references/reviewer-prompt.md`)
 
 Both reviewers MUST be launched **in parallel** — issue both tool calls in the SAME message. Sequential launching loses the speed benefit and risks context bleed.
@@ -257,10 +260,7 @@ Reviewer B (<model used>):   PASS
 Rounds:                      <N>/3
 Suggestions deferred:        <count>
 
-Plan Completion Criteria coverage:
-- ✅ <criterion 1>
-- ✅ <criterion 2>
-...
+Audit verdict (from /completion-audit, passthrough): VERIFIED PASS
 
 Result: READY for completion. Push is the user's decision (santa-loop does not push).
 ```
@@ -295,18 +295,18 @@ When invoked from `/impl`, the orchestrator uses the final verdict to mark the g
 | External CLI unavailable | codex not installed | Fallback to claude-second with explicit warning when diversity is lost |
 | Malformed JSON output | Reviewer returns prose instead of JSON | One re-prompt with stricter reminder; second failure → treat as FAIL with "malformed output" critical issue |
 | Context bleed between rounds | Reviewer remembers prior round | ALWAYS spawn fresh Agent / fresh CLI invocation per round; never use Continue / resume / session reuse |
-| Reviewer sandbox mismatch | Reviewer cannot re-run a verification command (e.g., Codex without Nix daemon access) and marks Completeness as FAIL | Step 3 embeds orchestrator-verified evidence verbatim into reviewer prompt; reviewer accepts without re-running |
+| Reviewer sandbox mismatch | Reviewer cannot re-run an `[orchestrator-only]` verification command (e.g., Codex without Nix daemon access) and marks a rubric criterion FAIL for environmental reasons | Step 3 embeds orchestrator-verified evidence verbatim into reviewer prompt; reviewer accepts without re-running |
 | Interpretive dispute drain | Reviewer puts style/naming preferences into `critical_issues` causing rounds to burn on non-technical disputes | Step 2 "Internal consistency" criterion explicitly scopes to technical-only; reviewer-prompt.md strengthens "style → suggestions" rule |
 
 ## Integration Points
 
 | Skill | Relationship |
 |---|---|
-| `/impl` | Invokes `/santa-loop` as the final gate task (after `/verification-loop` returns READY) |
-| `/verification-loop` | Runs BEFORE `/santa-loop`. `/santa-loop` does not duplicate deterministic checks — it focuses on semantic correctness + completion criteria coverage |
+| `/impl` | Invokes `/santa-loop` as the final gate task (after `/completion-audit` returns VERIFIED PASS). The orchestrator embeds the audit verdict as Audit Verdict Input |
+| `/completion-audit` | Default-flow predecessor. Owns evidence-sufficiency audit; santa-loop receives its verdict as Audit Verdict Input and trusts it. Strict role separation — santa-loop does not re-judge completeness |
+| `/verification-loop` | Opt-in deterministic re-execution gate. Independent of santa-loop in the default flow; users may invoke verification-loop separately when re-running build/typecheck/lint/tests is genuinely required |
 | `/codex-review` | Lightweight single-external review for opt-in mid-task use. `/santa-loop` is the heavyweight dual-reviewer for the final gate. The two coexist with distinct purposes |
 | `/subagent-review` | Per-task review during `/impl`. `/santa-loop` is end-of-implementation review, not per-task |
-| `/completion-audit` | Deprecated for default flow. `/santa-loop`'s "Completeness vs Completion Criteria" criterion covers the same ground. Re-invoke `/completion-audit` manually only when stricter evidence-sufficiency audit is specifically required |
 
 ## Design Decisions
 
@@ -316,7 +316,7 @@ When invoked from `/impl`, the orchestrator uses the final verdict to mark the g
 
 **Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision (different from ECC's santa-loop). NICE just unblocks the final task and surfaces the report.
 
-**Why the rubric embeds Completion Criteria**: this skill replaces `/completion-audit` for the default flow. Without this criterion, code-quality dual review would miss requirement coverage gaps.
+**Why Completeness is delegated to /completion-audit (accepting the SPOF trade-off)**: completion-audit owns evidence-audit; santa-loop owns code/design quality. Re-judging completeness duplicates reasoning. Trade-off: completion-audit false-PASS propagates to santa-loop unchecked, mitigated only by completion-auditor's anti-curation rule (raw output enforcement). Net trade: clarity + cost saving > rare unchecked false-PASS.
 
 **Why max 3 rounds**: empirically the convergence rate after round 3 is too low to justify continued automation. Beyond that, the issue is usually a design gap, not a code gap — escalate to the user.
 
