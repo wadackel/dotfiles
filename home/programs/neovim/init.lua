@@ -520,6 +520,7 @@ vim.api.nvim_create_user_command("MoOpen", function(opts)
   if opts.args ~= "" then
     vim.list_extend(args, { "--target", opts.args })
   end
+  table.insert(args, "--open")
   table.insert(args, file)
   mo_run(args)
 end, { nargs = "?" })
