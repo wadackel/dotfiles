@@ -19,7 +19,7 @@ When a script involves state management, parsing, or conditional logic, prefer D
 
 ### Feature Design Flow
 
-Run `/plan <要求>` — a single fused skill that does research / draft / adversarial critique / task decomposition internally. `/plan` Phase 1 auto-detects `trivial` and short-circuits to a minimal plan + single task. Follow `/plan` with `/impl` to execute the task list.
+Run `/plan <request>` — a single fused skill that does research / draft / adversarial critique / task decomposition internally. `/plan` Phase 1 auto-detects `trivial` and short-circuits to a minimal plan + single task. Follow `/plan` with `/impl` to execute the task list.
 
 CC builtin plan mode is no longer used. The `/plan` skill + `plan-gate.ts` PreToolUse hook enforce design-first without depending on plan mode's gating (which had reliability issues).
 
@@ -115,8 +115,8 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   - "Just this once is fine" → There are no exceptions. Execute as written
   - "No need to verify" → Confidence is not a substitute for verification
   - "The plan says X but Y is better" → Plan deviation requires user approval
-  - "/plan は typo fix には重すぎる" → `/plan` Phase 1 で trivial と判定され 1-phase に折りたたまれるので重くない。skip しようとするのは赤信号
-  - "infra allowlist を悪用して /plan を毎回 skip" → infra allowlist は infra 自体 (CLAUDE.md / settings.json / scripts/) の編集時のみ通る。通常の feature 実装には適用されない
+  - "/plan is too heavy for a typo fix" → `/plan` Phase 1 detects `trivial` and collapses to a 1-phase minimal plan, so it is not heavy. Trying to skip is a red flag
+  - "Abuse the infra allowlist to skip /plan every time" → the infra allowlist applies only to edits of infra itself (CLAUDE.md / settings.json / scripts/). It does not apply to normal feature implementation
 
 #### /plan Workflow
 
@@ -125,8 +125,8 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
   2. **Document as assumption (analyzable later)**: implementation patterns, abstraction level, library choice when codebase signal is weak — write `Assumption: X` in the plan body and let Phase 4 Critic / Adversarial Falsification validate
   3. **Self-resolve via code (discoverable)**: existing function presence, current behavior, file structure — use Grep/Read/Explore agent, never AskUserQuestion
   - Goal: apply the same Self-resolvable/Needs-user-input/Reject classification that Phase 4 Step 3 uses, but at the initial drafting stage
-- **Phase 1 Requirement Clarification (small+)**: non-trivial 要求には `skills/plan/references/requirement-checklist.md` の 8 観点 walk を必ず適用。Step 1 (Clear vs NotClear grep-able signal) → Step 2 (triage: Ask/Assume/Self-resolve via 上記 3-category)。Ask 項目を impact 順 batch で **Phase 1 時点**で AskUserQuestion (single-pass、再走しない、max 4) — Phase 2 Explore に正しい scope を与えるため **下記 Consolidated interview の exception として扱う**。5 件以上は上位 4 質問 + 残り (切り捨て分) は plan 本文に `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic` として記録し Phase 4 Critic で再検出を必須化 (tentative default は作らない)。0 件なら AskUserQuestion skip。trivial は対象外
-- **Consolidated interview**: `/plan` Phase 4 accumulates needs-user-input items from Phase 2/4 Steps and asks them once at Phase 4 末尾 (Step 7). Do not interview per-step. **Exception**: Phase 1 Requirement Clarification の Ask は Phase 1 時点で実行 (上記参照) — 1 plan あたり blocking 最大 2 回 (Phase 1 + Phase 4 Step 7)
+- **Phase 1 Requirement Clarification (small+)**: For non-trivial requests, always apply the 8-observation walk in `skills/plan/references/requirement-checklist.md`. Step 1 (Clear vs NotClear grep-able signal) → Step 2 (triage: Ask/Assume/Self-resolve via the 3-category rule above). Batch Ask items by impact priority and call AskUserQuestion **at Phase 1** (single-pass, no re-walk, max 4) — this is treated as the **exception to the Consolidated interview rule below** so Phase 2 Explore receives the correct scope. With 5+ items, ask the top 4 and record the remainder in the plan body as `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic`, requiring Phase 4 Critic to re-detect them (do not invent tentative defaults). With 0 items, skip AskUserQuestion. Trivial requests are exempt
+- **Consolidated interview**: `/plan` Phase 4 accumulates needs-user-input items from Phase 2/4 Steps and asks them once at the end of Phase 4 (Step 7). Do not interview per-step. **Exception**: the Phase 1 Requirement Clarification Ask runs at Phase 1 (see above) — at most 2 blocking interviews per plan (Phase 1 + Phase 4 Step 7)
 - **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
   1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
   2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect

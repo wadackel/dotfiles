@@ -41,28 +41,28 @@ Estimate complexity via keyword heuristic + lightweight codebase probe (Grep/Glo
 | **large** | cross-cutting change, new architectural piece | 10+ files, 500+ lines |
 | **xl** | multiple subsystems / architectural shift | propose splitting to user |
 
-**Trivial short-circuit**: when complexity is `trivial`, skip Phases 2–4 and jump directly to Phase 5 with a minimal plan body (Context + Files to Change + Verification only, 1 task). Requirement Clarification and Ambiguity Gate も skip。
+**Trivial short-circuit**: when complexity is `trivial`, skip Phases 2–4 and jump directly to Phase 5 with a minimal plan body (Context + Files to Change + Verification only, 1 task). Requirement Clarification and Ambiguity Gate are also skipped.
 
 ### Requirement Clarification (small+)
 
-non-trivial 要求 (`small` / `medium` / `large` のいずれか、xl は Phase 1 で splitting 提案するため対象外) に対して、Phase 2 以降へ進む前に **8 観点 walk** で曖昧性を体系的に検出する。詳細仕様は `references/requirement-checklist.md` 参照。
+For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because Phase 1 proposes splitting), systematically detect ambiguity with the **8-observation walk** before entering Phase 2. Detailed spec: `references/requirement-checklist.md`.
 
-**2 段階 Walk 概要**:
-1. **Step 1 — Gate**: 各観点 (Why / What / Who / When / Where / How / Success / Failure) に対し grep-able な Clear signals で `Clear` / `NotClear` を binary 判定
-2. **Step 2 — Triage (NotClear のみ)**: CLAUDE.md `/plan Workflow` "Question triage before AskUserQuestion" 節の 3-category (Ask / Assume / Self-resolve) を再利用。How は default Always Assume
+**2-step walk overview**:
+1. **Step 1 — Gate**: For each observation (Why / What / Who / When / Where / How / Success / Failure), make a binary `Clear` / `NotClear` decision based on grep-able Clear signals
+2. **Step 2 — Triage (NotClear only)**: Reuse the 3-category rule (Ask / Assume / Self-resolve) from the CLAUDE.md `/plan Workflow` "Question triage before AskUserQuestion" section. `How` defaults to Always Assume
 
-**Ask 項目 batch 規則** (single-pass walk、再走はしない):
-- Ask = 0: AskUserQuestion skip、plan 本文 `## Overview` 直前に `Requirement Clarification: all 8 observations auto-resolved (...)` を記載
-- Ask 1-4: 全件を 1 回の AskUserQuestion に batch、冒頭に "以下を自己解決しました:" block を併記
-- Ask ≥ 5: impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition) 順で上位 4 を質問、残りは `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic` として plan 本文に記録し Phase 4 Critic で再検出を必須化
+**Ask-item batch rules** (single-pass walk, no re-walk):
+- Ask = 0: skip AskUserQuestion; record `Requirement Clarification: all 8 observations auto-resolved (...)` in the plan body just before `## Overview`
+- Ask 1-4: batch all items into a single AskUserQuestion call; prepend a `"以下を自己解決しました:"` block listing the auto-resolved items
+- Ask ≥ 5: ask the top 4 by impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition); record the remainder in the plan body as `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic` and require Phase 4 Critic to re-detect them
 
-### Ambiguity Gate (checklist 対象外の exception)
+### Ambiguity Gate (exception outside the checklist)
 
-本 Gate は checklist で拾えない **解釈不能ケース専用** の補完 safety net:
-- 要求文の restate 自体が失敗するケース (意味解釈不能 / 矛盾 / 情報量不足で 1 文にまとめられない)
-- 要求文が 1 語 / 2 語のみで 8 観点のいずれの signal も得られないケース
+This gate is a complementary safety net **only for cases the checklist cannot catch**:
+- The request statement itself cannot be restated (uninterpretable / contradictory / insufficient information to summarize in one sentence)
+- The request is only 1–2 words and yields no signal across any of the 8 observations
 
-Gate 発動時は checklist walk は実行せず、AskUserQuestion で要求文を再取得してから walk を開始する。Question triage rule (`~/.claude/CLAUDE.md`) に従う。
+When the gate fires, do not run the checklist walk; first re-acquire the request statement via AskUserQuestion, then start the walk. Follow the Question triage rule (`~/.claude/CLAUDE.md`).
 
 ## Phase 2 — EXPLORE (non-trivial only)
 
@@ -278,8 +278,8 @@ Agent({
 
 HIGH confidence simplifications auto-apply (subtractive only, no behavior change). MEDIUM/LOW proposals go to the Consolidated Interview Queue.
 
-### Step 7 — Consolidated Interview (Phase 4 末の 1 回)
-**All needs-user-input items from Phase 2 Explore unknowns and Phase 4 Steps 3/5/6 are combined into a single `AskUserQuestion` call** (max 4 questions per call; if more, split into the minimum number of calls needed but never interview within a single Step). Phase 1 Requirement Clarification と Ambiguity Gate は **Phase 1 時点で即時 AskUserQuestion** を実行するため Step 7 の queue には乗らない (1 plan あたり blocking 最大 2 回: Phase 1 + Phase 4 Step 7)。
+### Step 7 — Consolidated Interview (one call at the end of Phase 4)
+**All needs-user-input items from Phase 2 Explore unknowns and Phase 4 Steps 3/5/6 are combined into a single `AskUserQuestion` call** (max 4 questions per call; if more, split into the minimum number of calls needed but never interview within a single Step). Phase 1 Requirement Clarification and the Ambiguity Gate run AskUserQuestion immediately at Phase 1, so they do not enter the Step 7 queue (at most 2 blocking interviews per plan: Phase 1 + Phase 4 Step 7).
 
 This eliminates the 3-4 sequential blocking waits the older design caused. Present a `以下を自己解決しました:` block before the questions so the user can flag any disagreement.
 
@@ -291,7 +291,7 @@ Design observable Completion Criteria:
   - `[outcome]` — circular items like "/santa-loop returns NICE" — derived from this review's verdict, not a prerequisite
   - When unclear: default to `[orchestrator-only]` (fail-safe — over-running is cheaper than false FAIL)
   - **Fail-fast validation**: Before finalizing the plan, scan `### Autonomous Verification` for untagged items (items not starting with `[file-state]`, `[orchestrator-only]`, or `[outcome]` prefix). If any found, **reject the plan** and prompt the author to tag them. `/santa-loop` Step 3 has NO safety net — tag is the contract, violation is caught here. Exemption: trivial and small complexity plans are exempt (tagging overhead isn't justified for plans with <3 verification items); medium/large/xl plans are required to tag every item
-- **Requires User Confirmation**: items with a genuine blocking capability (fresh GUI login, subjective judgment, etc.) — format: `- <condition> — 理由: <blocker>`
+- **Requires User Confirmation**: items with a genuine blocking capability (fresh GUI login, subjective judgment, etc.) — format: `- <condition> — 理由: <blocker>` (the `理由:` token follows the plan body language; English plan bodies use `Reason:` instead)
 - **Baseline**: tests / lint per task, `/verification-loop` + `/santa-loop` once at final gate
 
 Example tagged Completion Criteria:
@@ -337,7 +337,7 @@ gateId = TaskCreate(
 TaskUpdate(gateId, addBlockedBy: implTaskIds)
 ```
 
--- Why: Pass 1 の前は impl task の ID が未確定なので `blockedBy` を設定できない。TaskCreate → TaskUpdate の 2-pass で解決。
+-- Why: Before Pass 1, the impl task IDs are not yet assigned, so `blockedBy` cannot be set. The TaskCreate → TaskUpdate 2-pass resolves this.
 
 Each task description must contain the **three elements**:
 1. **target files** (exact paths)

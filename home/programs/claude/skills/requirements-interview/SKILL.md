@@ -22,22 +22,39 @@ The workflow has five phases. Each phase builds on the previous one, but the pro
 
 ### Phase 0: Setup
 
-Run immediately when the skill activates — **before the user provides any requirements.** Even if `$ARGUMENTS` contains requirements, hold them for Phase 1 and run Setup first.
+Run immediately when the skill activates — **before the user provides any requirements.** Even if `$ARGUMENTS` contains requirements, hold them for Phase 1 and resolve Setup first.
 
-Use `AskUserQuestion` to ask the following two questions simultaneously:
+Setup has two dimensions. For each one, **triage before blocking-asking** — the goal is at most **one** `AskUserQuestion` call in Phase 0, and often zero.
 
-1. **Deliverable type.** What form should the output take? (e.g., GitHub Issue, Markdown spec, PRD, ADR, etc.)
+**Dimension 1 — Deliverable type.** What form should the output take? (GitHub Issue, Markdown spec, PRD, ADR, etc.)
 
-2. **Detail level.** How deep should the deliverable go?
+- **Infer** when the user utterance / `$ARGUMENTS` names it explicitly ("Issueにまとめて" → GitHub Issue, "PRDを書いて" → PRD, "ADRにして" → ADR, "仕様書を書いて" → Markdown spec, "バグレポートを書いて" → Bug Issue).
+- **Ask** only if the utterance is genuinely silent on format (e.g., "要件を整理して" alone).
 
-   | Preset | Description | Typical use |
-   |--------|-------------|-------------|
-   | `implementation` | Enough for an engineer (or Claude) to implement without further questions. Includes root cause analysis, code references, acceptance criteria | GitHub Issues, bug reports, implementation tasks |
-   | `decision` | Enough to evaluate trade-offs and make a go/no-go decision. Focuses on options, pros/cons, constraints | ADRs, design proposals, RFC |
-   | `stakeholder` | Enough for a non-technical stakeholder to understand scope, motivation, and impact | PRDs, project briefs, executive summaries |
-   | `custom` | User defines their own criteria | Anything else |
+**Dimension 2 — Detail level.**
 
-   Ask: "どの粒度で整理しますか？" and present these as options.
+| Preset | Description | Typical use |
+|--------|-------------|-------------|
+| `implementation` | Enough for an engineer (or Claude) to implement without further questions. Includes root cause analysis, code references, acceptance criteria | GitHub Issues, bug reports, implementation tasks |
+| `decision` | Enough to evaluate trade-offs and make a go/no-go decision. Focuses on options, pros/cons, constraints | ADRs, design proposals, RFC |
+| `stakeholder` | Enough for a non-technical stakeholder to understand scope, motivation, and impact | PRDs, project briefs, executive summaries |
+| `custom` | User defines their own criteria | Anything else |
+
+- **Infer** via convention mapping from Dimension 1:
+  - Issue / bug report → `implementation`
+  - ADR / design proposal / RFC → `decision`
+  - PRD / project brief → `stakeholder`
+  - Markdown spec / generic spec / unnamed → `implementation`
+  - Override when the utterance contradicts the default, e.g., "ざっくり方針だけ" → `decision`.
+- **Ask** only when Dimension 1 was also ambiguous, or when the utterance explicitly signals a non-default depth.
+
+**Decision rule.**
+
+1. If BOTH dimensions are inferable → **skip `AskUserQuestion`**. Record the inferred values as an "Assumptions (Setup)" note at the top of the Phase 4 deliverable, so the user can override on review.
+2. If ONE dimension is inferable → ask only the other in a single `AskUserQuestion` call.
+3. If NEITHER is inferable → ask both in a single `AskUserQuestion` call (two questions, one call).
+
+Never split Setup across multiple turns. When asking, phrase it in a way that lets the user also override the inferred value: "Deliverable = GitHub Issue と推定しました。違えば選択してください。Detail level はどうしますか？"
 
 ### Phase 1: Establish context
 
@@ -78,7 +95,7 @@ Use `AskUserQuestion` to resolve ambiguities. Follow these principles:
 
 **Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch.
 
-**Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and note it as an assumption in the deliverable.
+**Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and note it as an assumption in the deliverable (see the Assumptions / Open questions distinction in Phase 4 below).
 
 ### Phase 4: Produce the deliverable
 
@@ -92,6 +109,15 @@ With all ambiguities resolved, create the deliverable in the agreed format.
 - Include the "why" behind decisions — it helps future readers judge if the decision still applies
 - Reference specific code, files, or systems when relevant
 - Link related items (other Issues, docs, etc.)
+
+**Assumptions vs Open questions (use both, but distinguish).** Every unresolved detail falls into exactly one of these buckets:
+
+| Bucket | When to use | Owner of next action | Resolution path |
+|---|---|---|---|
+| **Assumptions** | A value is missing, and a reasonable default / inference was chosen. The deliverable proceeds as if this value is correct. | Reader (reviewer / implementer) is asked to confirm or override. | "Correct me if wrong" — silent acceptance = accepted. |
+| **Open questions** | A value is missing, and no reasonable default exists. The deliverable **cannot** proceed until someone answers (data, stakeholder, measurement). | Specific human / team / observation. | Explicit answer must be supplied before the next phase. |
+
+Heuristic: if you filled in a value and flagged it as "please confirm", it is an **Assumption**. If you left the value blank because filling it in would be a guess that could mislead, it is an **Open question**. Setup inferences (deliverable type, detail level) are always Assumptions — never Open questions — because Phase 0's triage rule chose them deterministically.
 
 **Self-check before output:** Re-read the deliverable and ask: "Could someone unfamiliar with this conversation understand and act on this?" If any part relies on context only present in the conversation, make it explicit in the deliverable.
 

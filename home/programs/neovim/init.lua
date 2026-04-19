@@ -1608,6 +1608,7 @@ require("lazy").setup({
       },
       opts = {
         hijack_netrw = true,
+        delete_to_trash = false,
         icon = {
           provider = "nvim_web_devicons",
         },
