@@ -47,14 +47,47 @@ Estimate complexity via keyword heuristic + lightweight codebase probe (Grep/Glo
 
 For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because Phase 1 proposes splitting), systematically detect ambiguity with the **8-observation walk** before entering Phase 2. Detailed spec: `references/requirement-checklist.md`.
 
-**2-step walk overview**:
-1. **Step 1 — Gate**: For each observation (Why / What / Who / When / Where / How / Success / Failure), make a binary `Clear` / `NotClear` decision based on grep-able Clear signals
-2. **Step 2 — Triage (NotClear only)**: Reuse the 3-category rule (Ask / Assume / Self-resolve) from the CLAUDE.md `/plan Workflow` "Question triage before AskUserQuestion" section. `How` defaults to Always Assume
+**Multi-round walk overview**: runs as a Round loop (fixed max 3 rounds for all non-trivial complexity; `trivial` and `xl` remain exempt). Each round executes Steps A–F below, then either converges or advances to Round N+1.
 
-**Ask-item batch rules** (single-pass walk, no re-walk):
-- Ask = 0: skip AskUserQuestion; record `Requirement Clarification: all 8 observations auto-resolved (...)` in the plan body just before `## Overview`
-- Ask 1-4: batch all items into a single AskUserQuestion call; prepend a `"以下を自己解決しました:"` block listing the auto-resolved items
-- Ask ≥ 5: ask the top 4 by impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition); record the remainder in the plan body as `Assumption (deferred from Phase 1 Ask truncation): <observation>: unresolved — requires user confirmation in Phase 4 Critic` and require Phase 4 Critic to re-detect them
+**Round 上限**:
+
+| complexity | Round 上限 | 備考 |
+|---|---|---|
+| trivial | 0 (RC skip) | 現状維持 |
+| small / medium / large | 3 | 全 non-trivial で固定 (User override で早期脱出可) |
+| xl | 0 (Phase 1 で split 提案) | 現状維持 |
+
+**Round N (1..3) の Step A–F**:
+- **Step A — Walk**: Round 1 は 8 観察 walk (Why / What / Who / When / Where / How / Success / Failure)。Round 2+ は前 round 回答を反映して再 walk (新 NotClear・曖昧化点を検出)
+- **Step B — Triage**: Step 1 Gate (Clear/NotClear binary) → Step 2 Triage (Ask / Assume / Self-resolve、3-category rule を CLAUDE.md から再利用、`How` は Always Assume default)。**Clear 判定時は要求文中の exact token を引用して Round 収束記録に残す必須** (類推ベースの Clear 禁止、NotClear として扱う)
+- **Step C — Self-resolve probe**: Round 内で Self-resolve 項目を解決試行。Phase 1 では Explore subagent は起動せず軽量 Grep/Read のみ (Phase 2 との責務分離)。probe 不能時の fallback は observation 依存 — Self-resolve default 観点 (What / When — codebase 探索で解決可能性が高い) は **Phase 2 EXPLORE に委譲**、Ask default 観点 (Why / Where / Success / Failure — user-only knowledge 必要) は **Ask に昇格**。requirement-checklist.md の各観点 "Default triage (NotClear)" 行を一次情報として参照
+- **Step D — 再 Ask trigger 検出** (Round 2+ のみ): 4 category
+  - (i) 前 round Ask 回答の Other (自由記述) に疑問文型 (`?`, 「どうすれば」等) が含まれる
+  - (ii) 前 round 回答に曖昧語 (「どちらでも」「まだ決めきれ」「任せる」「後で」「未定」「まあ」「とりあえず」等) または Other 空文字/空白のみ
+  - (iii) 前 round で tentative Assumption にした項目が Round N 再 walk で still NotClear
+  - (iv) 前 round deferred Ask (5+ truncation) が残っている
+  - **Escalate 条件**: 同じ trigger 項目が Round N と Round N-1 で連続検出された場合、Ask 発行せず `unresolved after N rounds: <item>` を plan 本文に記録して収束 (Phase 2 へ)
+  - trigger 0 件 → 収束
+- **Step E — Ask 発行**: 通常 Ask 質問 (**最大 3** — override 質問が 4 slot 中 1 を消費するため実質 real 質問 max 3/round)。最後に override 質問 1 つを必ず追加:
+  - question: 「このまま Phase 2 EXPLORE に進みますか？追加で確認したい点があれば『追加確認』を選んでください。」
+  - options: ["このまま Phase 2 へ進む", "追加確認が必要"]
+  - real 質問が 4 件以上必要な round は上位 3 + override で発行し、残りは次 round に繰り越し
+- **Step F — 回答処理**:
+  - override = "Phase 2 へ進む" → 他 real 質問の回答は最終決定として plan 本文に記録。回答内に曖昧語や逆質問が含まれていても Round N+1 の trigger 扱いせず、`Assumption: <observation>: <value> (user-overridden, flagged for Phase 4 Critic re-validation)` として記録し Phase 4 Critic に委任 (User 明示的 override を尊重)
+  - override = "追加確認が必要" かつ Round < 3 → Round N+1 へ
+  - Round == 3 → Ask 回答反映後に強制 Phase 2 (`Requirement Clarification: max rounds reached` を plan 本文に記録)
+  - Ask 回答が空文字 / 空白のみ → 該当項目を trigger (ii) 扱いで次 round の Ask 候補に戻す (Escalate 条件適用あり)。ただし override = "Phase 2 へ進む" が同時に選ばれていた場合は trigger (ii) 判定を skip し、空文字回答も上記の `user-overridden` Assumption として記録 (override 優先、User 意図の明示的尊重)
+
+**Round 収束条件** (Phase 4 Step 4 Convergence check と同型):
+- User override "Phase 2 へ進む"
+- 再 Ask trigger 0 件
+- 同じ trigger が連続 round で repeat → Escalate (Ask 発行せず Phase 2 へ、`unresolved after N rounds` 記録)
+- Max rounds (3) reached
+
+**Ask-item batch rules** (各 Round 内で適用):
+- Ask = 0: Step E で override 質問のみ発行 (User override による脱出口を必ず残す)、または Round 2+ の trigger 判定が 0 件なら AskUserQuestion 自体 skip して収束
+- Ask 1-3: 全件 + override で 1 回の AskUserQuestion call (合計 max 4 questions)
+- Ask ≥ 4: Impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition) で上位 3 件 + override、残りは次 round 先頭に繰り越し (3 round 超で残ったら `unresolved after N rounds` 記録)
 
 ### Ambiguity Gate (exception outside the checklist)
 
@@ -302,7 +335,7 @@ Agent({
 HIGH confidence simplifications auto-apply (subtractive only, no behavior change). MEDIUM/LOW proposals go to the Consolidated Interview Queue.
 
 ### Step 7 — Consolidated Interview (one call at the end of Phase 4)
-**All needs-user-input items from Phase 2 Explore unknowns and Phase 4 Steps 3/5/6 are combined into a single `AskUserQuestion` call** (max 4 questions per call; if more, split into the minimum number of calls needed but never interview within a single Step). Phase 1 Requirement Clarification and the Ambiguity Gate run AskUserQuestion immediately at Phase 1, so they do not enter the Step 7 queue (at most 2 blocking interviews per plan: Phase 1 + Phase 4 Step 7).
+**All needs-user-input items from Phase 2 Explore unknowns and Phase 4 Steps 3/5/6 are combined into a single `AskUserQuestion` call** (max 4 questions per call; if more, split into the minimum number of calls needed but never interview within a single Step). Phase 1 Requirement Clarification and the Ambiguity Gate run AskUserQuestion as a multi-round cycle at Phase 1 (up to 3 AskUserQuestion calls per cycle, fixed 3 for non-trivial), so they do not enter the Step 7 queue (at most 2 interview cycles per plan: Phase 1 cycle + Phase 4 Step 7 single call; worst case 4 blocking AskUserQuestion calls, or 5 if the Ambiguity Gate fires its own request-reacquisition Ask before Round 1).
 
 This eliminates the 3-4 sequential blocking waits the older design caused. Present a `以下を自己解決しました:` block before the questions so the user can flag any disagreement.
 

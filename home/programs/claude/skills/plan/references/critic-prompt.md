@@ -105,6 +105,20 @@ Reasoning: [1-2 sentences explaining why the plan needs more iteration or is rea
 
 ---
 
+## Phase 1 unresolved items detection (Phase 4 Round 1 Critic mandate)
+
+Phase 1 Requirement Clarification multi-round は escalate (same-trigger repeats) または max rounds reached で未解消項目を残したまま Phase 2 へ進むことがある。この場合 plan 本文には以下 2 種のマーカーが残る — Round 1 Critic は **plan 全文を読み、これらのマーカーを必ず検出して critique に surface する義務がある**:
+
+1. **`unresolved after N rounds: <item>`** (または `Assumption (unresolved after 3 rounds): ...`) — Phase 1 Round loop で解消不能だった項目。Round 1 Critic は **必ず Critical Issue [USER] として surface する** (「この observation は Phase 1 で解消不能、Phase 4 Step 7 Consolidated Interview で確定が必要」と critique 出力)。plan 本文に記録された理由 (same-trigger escalate / max rounds) を critique に引用する
+
+2. **`Assumption: <observation>: <value> (user-overridden, flagged for Phase 4 Critic re-validation)`** — User 明示的 override で Phase 1 を抜けた項目。Round 1 Critic は以下で振り分ける:
+   - codebase signal で検証可能 → **Improvement Suggestion [TECH]** として扱い、検証結果を提示
+   - User judgment 要 (主観 / 好み / 未開示の domain 知識) → **Critical Issue [USER]** として Phase 4 Step 7 Consolidated Interview 候補に戻す
+
+これらマーカーの検出漏れは Round 1 Critic の失格条件。該当マーカーが 0 件なら critique 出力で `Phase 1 unresolved markers: none detected` と明記すること。
+
+---
+
 ## Usage Examples
 
 ### Round 1 Prompt Construction
