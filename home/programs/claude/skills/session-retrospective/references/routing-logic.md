@@ -2,15 +2,29 @@
 
 This document provides the complete decision tree for routing session learnings to the appropriate target: project CLAUDE.md, global ~/.claude/CLAUDE.md, or skill proposals.
 
+## Mechanism-Signature Pre-routing
+
+Before running the Enforcement Layer Ladder below, run the 4-question pre-routing in [mechanism-signature.md](mechanism-signature.md). That heuristic narrows the starting Rung so Phase 3 Pair Design does not default to Rung 4 (CLAUDE.md) by reflex.
+
+The Ladder still runs after pre-routing to confirm the choice. Pre-routing only decides **where to start**; the Ladder decides **where to land**.
+
+**Archetype bias** (from [learning-categories.md](learning-categories.md)):
+
+- Behavioral correction → Rung 1 (hook) or Rung 2 (permissions)
+- Workflow candidate → Rung 3 (skill)
+- Discovered fact → Rung 4 (claude_md), only if strengthened bar passes
+
+This is a starting hint, not a verdict. The Ladder overrides when mechanism-signature signals otherwise.
+
 ## Enforcement Layer Ladder
 
 For each learning, walk down this ladder and stop at the **first rung that applies**. Higher rungs rely less on Claude's judgment and enforce the rule more strongly.
 
 **Meaning of rung numbers**: Rung 1 is the strongest (deterministic enforcement by the harness). Rung 4 is the weakest (depends on Claude reading and voluntarily following a written rule). "Escalate" always means "decrease the rung number" (e.g., Rung 4 → Rung 3).
 
-**Rung 0: SKILL CANDIDATE PRECEDENCE** (evaluated in Phase 2.5, NOT in the Phase 2 Root Cause Check)
-  If the Phase 2.5 Skill Opportunity Scan flags the learning as a skill candidate, Phase 3 jumps straight to Rung 3 as the final routing (skipping Rungs 1-2). This precedence preserves the anti-bias mechanism from the previous Decision Tree: evaluating skill candidates before CLAUDE.md prevents the "path of least resistance" bias toward CLAUDE.md.
-  **Phase 2's Recurrence Check only evaluates Rungs 1-4**, because the Phase 2.5 skill-candidate flag is not yet available when Phase 2 runs.
+**Rung 0: SKILL CANDIDATE PRECEDENCE** (set by Phase 2 Extract & Drill archetype = Workflow candidate, consumed in Phase 3 Pair Design)
+  If Phase 2 classified the learning as a Workflow candidate (via the Signals 1-6 in `skill-opportunity-detection.md`), Phase 3 Pair Design starts at Rung 3 as the default target (skipping Rungs 1-2). This precedence preserves the anti-bias mechanism: evaluating skill candidates before CLAUDE.md prevents the "path of least resistance" bias toward CLAUDE.md.
+  Other archetypes (Behavioral correction / Discovered fact) enter Phase 3 without the Rung 0 flag and walk the ladder from the mechanism-signature pre-routing starting rung.
 
 **Rung 1: DETERMINISTIC ENFORCEMENT (Hook / Policy)**
   When to use: the behavior is deterministic and the harness can enforce it without Claude's cooperation.
@@ -34,9 +48,19 @@ For each learning, walk down this ladder and stop at the **first rung that appli
 
   Always ask "is there a nearby existing skill?" first. If so, prefer description fix or reference deepening to avoid proliferating skills.
 
+  **Mandatory TDD Gate**: every Rung 3 proposal (new creation, reference deepening, description fix) must first pass [skill-tdd-gate.md](skill-tdd-gate.md)'s RED test (reproduce the failure from transcript evidence without the proposed skill). If RED is not reproducible, demote to Rung 4 or discard. This prevents skill proposals that look reasonable on paper but would never have fired in the first place.
+
 **Rung 4: CLAUDE.md ADDITION**
   When to use: only when Rungs 0-3 do not apply. This layer depends on Claude reading and obeying a written rule — the weakest form of prevention.
   A proposal landing on Rung 4 MUST include one line per rejected rung explaining why Rungs 0-3 do not apply.
+
+  **Rung 4 acceptance bar (strengthened)** — the proposal MUST satisfy BOTH conditions below:
+
+  1. **(a) Past-session evidence — mandatory**: cite at least one concrete past-session event (turn number, verbatim quote, or file:line) where this line would have prevented the misbehavior. Hypothetical "if someone ever does X" does not count. Without past-session evidence, Rung 4 is unjustified — discard the proposal.
+
+  2. **(b) Expiry OR redundancy check — either one**:
+     - **(b1) Expiry condition**: a one-sentence trigger for when this line can be removed ("remove when the skill's description adds the phrase X", "remove when library Y reaches version Z"). Prevents CLAUDE.md from accreting rules that outlive their cause.
+     - **(b2) Redundancy check**: confirm by grep that no existing CLAUDE.md line, instinct at confidence ≥0.7, or skill body already covers the same rule. If coverage exists and did not prevent the recurrence, escalate to the layer that failed (description fix, reference deepening, or hook) rather than adding a second written rule.
 
   Sub-routing inside Rung 4 (Project-Specific vs Universal, Team vs Personal) uses the existing rules below (see "Rules for Determining Project-Specific vs Universal"). Those rules are unchanged by this ladder.
 
@@ -284,12 +308,10 @@ Before finalizing routing decisions, verify:
 - [ ] Proposal is concise (one line for CLAUDE.md entries)
 - [ ] Placement in target file is specified (after which section)
 
-## Routing Summary Table
+## Routing Summary Table (3-archetype, v3)
 
-| Learning Category | Default Target | Skill Route Possible? | Skill Condition |
-|-------------------|----------------|----------------------|-----------------|
-| Missing Context | Project/Global/Personal CLAUDE.md | Yes, if discovery revealed a multi-step workflow | Condition A or D |
-| Corrected Approaches | Global/Project/Personal CLAUDE.md | Yes, if correction described a multi-step process | Condition B |
-| Repeated Workflows | New Skill | Always | Condition E (+ A, C, D if applicable) |
-| Tool/Library Knowledge | CLAUDE.md or Skill Modification | Yes, for existing skill enhancement | Skill Modification |
-| Preference Patterns | Global CLAUDE.md | Rarely | Only if preference implies a workflow |
+| Archetype | Default Target (Rung) | Skill Route Possible? | Skill Condition |
+|-----------|-----------------------|----------------------|-----------------|
+| Behavioral correction | Rung 1 (hook / bash-policy) or Rung 2 (permissions) | Only if the correction names a multi-step procedure | Condition B + must pass skill-tdd-gate RED |
+| Workflow candidate | Rung 3 (skill creation / description fix / reference deepening) | Always (that is the archetype's definition) | Condition A / C / D / E / Signal 6 + skill-tdd-gate RED |
+| Discovered fact | Rung 4 (CLAUDE.md) — only if strengthened bar passes | Rarely; typically reference-deepening on an existing skill | When the fact is structural and the skill would be permanent |

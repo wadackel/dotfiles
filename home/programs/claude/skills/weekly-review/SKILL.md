@@ -83,13 +83,20 @@ Generate 4 subsections in Japanese:
 
 - Start from **all items** in previous week's "来週やること" (carry over even if not seen in daily notes)
 - Supplement with this week's To-Do items
+- Granularity: task-level (one bullet per planned task). The milestone rollup rules from `1.今週やったこと` do NOT apply here
 - **Merge mode**: respect existing content, add only new items; deduplicate against carryover items
 
 #### `1.今週やったこと`
 
 - Group completed To-Do `[x]` items and Memo achievements by project label
 - Project labels: use repo names (`P&L`, `dotfiles`, `concierge-app`, etc.) or `Misc`
-- **Merge mode**: preserve existing manual entries; deduplicate (keep the more detailed version)
+- **Granularity — human-readable milestone level**:
+  - **Target 5-10 bullets per project, hard cap 10**. If exceeding, roll up related items
+  - **Roll up multi-step workstreams into 1-2 milestone bullets**. "A / B / C を個別実装" ではなく「〇〇機能一式を実装（A / B / C）」のように一段抽象化
+  - **Do NOT emit standalone bullets for**: individual RPC names, file paths, PR numbers, commit SHAs, API endpoint names. Embed them as parenthetical details under a milestone bullet only when necessary for disambiguation
+  - **Sparse projects (1-2 daily mentions only)**: keep to 1-2 bullets; consider merging into `Misc` rather than padding
+  - **Rationale**: daily notes often contain Claude Code の自動要約で情報密度が高いため、そのまま箇条書き化すると細粒度になりすぎる。「その週に何をしたか」を人間が 30 秒で把握できる粒度に集約する
+- **Merge mode**: preserve existing manual entries unless they violate the granularity rules above (in which case roll them up first); after rollup, deduplicate (keep the more detailed version)
 
 #### `2.来週やること`
 
@@ -104,13 +111,18 @@ Generate 4 subsections in Japanese:
       - FE スキル面接コンテンツの見直し・再設計
   ```
 - Carry over sub-item structure from To-Do where available
+- Granularity: task-level (one bullet per planned task). The milestone rollup rules from `1.今週やったこと` do NOT apply here
 - **Merge mode**: respect existing content, add only new items
 
 #### `3.感想`
 
-- Emotion trend (only days with recorded values), notable events, overall tone (3-5 bullets)
+- **3-6 bullets total**, structured as:
+  1. Lead bullet: emotion trend (only days with recorded values, e.g., `Mon 6 → Tue 8 → Wed 5 → Thu 7`). If all recorded values are 0 (= not recorded), skip this bullet and compensate by adding one more topic bullet so the total still lands in the 3-6 range
+  2. 1-4 middle bullets: notable events / pivotal topics of the week (meetings, milestones, decisions, collaborations)
+  3. Trailing bullet: overall tone / carry-forward reflection
+- Each event / project mention goes into **one bullet only** — do NOT spread one topic across multiple bullets
 - Write in first-person conversational Japanese
-- **Merge mode**: preserve existing reflections, add new insights from daily notes
+- **Merge mode**: preserve existing reflections, add new insights from daily notes. When existing entries exceed 6 bullets, consolidate down to the structure above during merge
 
 ### Step 5: Fix History & Reading Dates (Conditional)
 
@@ -155,3 +167,11 @@ Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated
 - Bullet points only, no prose paragraphs
 - Feelings section uses first-person conversational Japanese
 - Missing or sparse Sat/Sun notes are normal (especially when running on Friday)
+
+### Granularity
+
+Weekly notes are read by a human scanning "what happened this week" in 30 seconds. Daily notes contain high-density Claude Code auto-summaries (Stop hook `claude-memo.ts`) that inflate detail when aggregated verbatim — always roll up before emitting.
+
+- Milestone-level rules for `1.今週やったこと` and `3.感想`: see Step 4's per-subsection guidance (single source of truth)
+- `0.今週やること` / `2.来週やること` stay task-level (one bullet per planned task) — milestone rollup does NOT apply
+- When rolling up: prefer "〇〇機能一式を実装（A / B / C）" over three separate bullets listing A, B, C

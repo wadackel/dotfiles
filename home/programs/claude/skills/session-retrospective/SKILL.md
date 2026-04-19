@@ -1,23 +1,28 @@
 ---
 name: session-retrospective
-description: Review the current session to extract learnings and propose improvements to CLAUDE.md files and skills. Run at the end of a session or when asked to reflect on what was learned. Routes project-specific learnings to the project CLAUDE.md, universal patterns to the global ~/.claude/CLAUDE.md, and repeated workflows to skill creation/modification proposals. Triggers include "retrospective", "session retro", "振り返って", "何を学んだ？", "セッションの学び", "what did we learn?", "improve from this session".
+description: Review the current session to extract learnings, verify prior proposals' outcomes, and propose behavior-change pairs with auto-verifiable outcomes. Closes the feedback loop between past proposals and next-session behavior. Routes proposals to hook / permissions / skill / CLAUDE.md via Mechanism-Signature + Enforcement Ladder. Triggers include "retrospective", "session retro", "振り返って", "何を学んだ？", "セッションの学び", "what did we learn?", "improve from this session".
 ---
 
 # Session Retrospective
 
-Review the current session to extract learnings and propose improvements to CLAUDE.md files and skills, making Claude more autonomous with each session.
+Review the current session to extract learnings and propose improvements with verifiable outcomes. Writes proposals into a durable ledger (`~/.claude/retrospective-ledger.jsonl`) that the NEXT session's Phase 1 reads back to auto-check whether past proposals actually changed behavior.
 
-## Overview
+## Architecture summary
 
-This skill analyzes the conversation history to identify learnings that should be codified into:
-- **Project CLAUDE.md** — Project-specific patterns, commands, and conventions (team-shared, checked into git)
-- **Project-local personal CLAUDE.md** (`~/.claude/projects/<hash>/CLAUDE.md`) — Project-specific patterns that are personal (not shared with team via git)
-- **Global ~/.claude/CLAUDE.md** — Universal coding styles, Claude behaviors, and cross-project patterns
-- **Skills** — Multi-step workflows worth automating (the most valuable output)
+Earlier versions of this skill emitted proposals into a one-way pipe (CLAUDE.md line → shipped → never measured). v3 closes the loop:
 
-Skill proposals are the highest-value output of a retrospective. A single well-designed skill saves more future time than a dozen CLAUDE.md entries. Actively hunt for skill opportunities — do not default to CLAUDE.md when a skill would be more appropriate.
+```
+ledger ← (Phase 1 verifies prior proposals: prevented/recurred/noise) ←─┐
+  ↓                                                                      │
+Phase 1 → Phase 2 Extract & Drill → Phase 3 Pair Design → Phase 4 Present & Track
+           (3 archetypes)           (Behavior-Change Pair)                  ↓
+                                                                       ledger appended
+                                                                         (next session: loop)
+```
 
-Unlike `/revise-claude-md` which focuses on missing context, this skill provides broader analysis including corrected approaches, skill opportunity detection, and skill improvement opportunities.
+**Unit of work** is a **Behavior-Change Pair**, not a "proposal document". Each Pair has: observable Before, observable Target After, chosen Enforcement layer, machine-runnable Verification plan, Expiry condition. See [references/behavior-change-pair.md](references/behavior-change-pair.md).
+
+**Source of truth** is the ledger. The `retrospective-ledger.ts` CLI (at `~/.claude/skills/instinct-learner/scripts/retrospective-ledger.ts`) is the only way to mutate it.
 
 ## Quick Start
 
@@ -25,362 +30,153 @@ Unlike `/revise-claude-md` which focuses on missing context, this skill provides
 /session-retrospective
 ```
 
-No arguments needed. The skill analyzes the current session context automatically.
+No arguments. The skill reads the current session transcript automatically.
 
 ## Workflow
 
-### Phase 1: Analyze Session
+### Phase 1: Outcome Verification
 
-Gather full session data and reflect on it:
+Read the ledger and auto-verify prior proposals against the current session's observable state. Updates outcomes and confidence scores.
 
-1. **Extract full transcript history** (includes content lost to compaction):
-   **Note**: Run from the monorepo root. The script uses `Deno.cwd()` to locate the transcript directory, so running from a sub-package directory will fail to find files.
-   ```bash
-   cd $(git rev-parse --show-toplevel)
-   ~/.claude/skills/session-retrospective/extract-session-history.ts
-   ```
-   Read the file path printed to stdout using the Read tool.
-
-2. **Build an evidence list** by extracting concrete observations from the transcript. **Do not summarize into categories yet.** For each potential learning, record:
-
-   - **What happened**: 1 sentence summary
-   - **Evidence**: direct quote from transcript (1-3 lines) OR turn number OR file path with line number
-
-   Record "at turn 42 the user said 'no, use Y instead' (quote)" — not an abstract "user prefers Y". Abstract summarization happens in Phase 2 while referencing the evidence list.
-
-   While building the list, scan the session as a whole through these lenses (original checklist retained):
-   - Tasks performed and their outcomes
-   - Errors encountered and how they were resolved
-   - Questions asked to the user (signals missing context)
-   - User corrections to Claude's approach
-   - Repeated patterns of work
-   - Tool usage patterns (see Tool Usage Summary section)
-   - Compact boundaries (indicate phase transitions within the session)
-
-3. **Git activity** (if in a git repository):
-   ```bash
-   git log --oneline -20
-   git diff --stat HEAD~5..HEAD
-   ```
-
-4. **Current context files**:
-   - Read project CLAUDE.md (if exists)
-   - Read project-local personal CLAUDE.md: `~/.claude/projects/<hash>/CLAUDE.md` (if exists)
-   - Read global ~/.claude/CLAUDE.md
-   - List existing skills in ~/.claude/skills/
-
-5. **Load existing instincts (for Phase 2 Recurrence Check)**:
-   ```bash
-   ~/.claude/skills/instinct-learner/scripts/instincts.ts list --min-confidence 0
-   ```
-   Reference the stdout directly (do not write to an intermediate file). The output is two lines per instinct (id/confidence/domain line + rule body line), so Phase 2's Recurrence Check scans both lines visually.
-
-### Phase 2: Categorize & Diagnose
-
-Classify each learning into categories, then diagnose why it occurred and where it could have been prevented. See [references/learning-categories.md](references/learning-categories.md) for detailed definitions and examples.
-
-**Summary of categories:**
-
-1. **Missing Context** — Information Claude needed but did not have
-   - Example: "This project uses pnpm, not npm"
-   - Example: "Always run nix flake check before darwin-rebuild"
-
-2. **Corrected Approaches** — User corrections to Claude's behavior
-   - Example: "User prefers Japanese commit messages"
-   - Example: "Use `gh` for GitHub URLs, not WebFetch"
-
-3. **Repeated Workflows** — Multi-step procedures performed multiple times
-   - Example: "Check CI → read logs → fix → push → wait (repeated 3 times)"
-   - Example: "Every nix change: edit → nix flake check → darwin-rebuild switch"
-
-4. **Tool/Library Knowledge** — Discoveries about specific tools or APIs
-   - Example: "ast-grep requires stopBy: end for relational rules"
-   - Example: "Chrome DevTools MCP snapshot should be taken before interaction"
-
-5. **Preference Patterns** — User style or preference observations
-   - Example: "User prefers concise output, dislikes verbose explanations"
-   - Example: "User wants draft PRs with English descriptions"
-
-**Root Cause & Recurrence Check (always run after categorization):**
-
-Answer three questions for each learning. The answers flow directly into Phase 2.5's scan, Phase 3's routing, and Phase 4's proposal drafting.
-
-1. **Why did this happen?** Pick exactly one:
-   - (a) Claude did not know the fact → **knowledge gap**
-   - (b) Claude knew but did not apply it → **judgment/trigger gap**
-   - (c) The environment allowed the mistake → **enforcement gap**
-
-2. **Which layer could have stopped it earliest?** Pick one Rung from the Enforcement Ladder (`references/routing-logic.md`), **choosing only from Rungs 1-4**. Do NOT evaluate Rung 0 (Skill candidate) at this step — skill-candidate judgment is Phase 2.5's job and is merged into the final routing in Phase 3. If you pick Rung 4 (CLAUDE.md), you must write one line per rejected rung explaining why Rungs 1-3 do not apply.
-
-3. **Has this recurred across sessions?** Visually scan the instinct list loaded in Phase 1 Step 5 (from the stdout of `instincts.ts list`) for matching rules. If a match exists, record the id and confidence. A repeated match is evidence that the previous layer choice was too weak → **lower the Rung number by one (escalate to stronger enforcement)**. Boundary handling:
-   - Recurrence at Rung 1 → no escalation available; re-examine the Rung 1 implementation itself (tighten the bash-policy rule, strengthen the hook script's conditions)
-   - Recurrence at Rung 4 → escalate to Rung 3 (skill / description fix / reference deepening)
-
-**Notes**:
-- Do not introduce a separate `Phase 2.1` sub-heading. This Root Cause & Recurrence Check lives inside Phase 2 as an in-line diagnosis step, preserving the existing Phase 2.5 / 2.6 numbering.
-- **Step 2 evaluates only Rungs 1-4**: Rung 0 is deliberately deferred to Phase 2.5 so that Phase 2 → Phase 2.5 → Phase 3 remains linear. At Phase 2 time, the skill-candidate flag is not yet known.
-- **Escalation direction**: Lower Rung number = stronger enforcement. "Escalate" always means "decrease the Rung number".
-
-### Phase 2.5: Skill Opportunity Scan
-
-After categorizing learnings, perform a dedicated scan for skill opportunities across ALL categories — not just "Repeated Workflows". See [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md) for the full detection framework.
-
-**For every learning in every category**, apply these quick checks:
-
-1. **The /invoke test**: "Would the user type `/skill-name` for this?"
-2. **The orchestration test**: "Does this involve 3+ steps with tool chaining?"
-3. **The teaching test**: "Did the user describe a multi-step process?"
-4. **The cross-session test**: "Did the user signal this is a recurring task?"
-5. **The ecosystem test**: "Does this resemble an existing skill's structure?"
-6. **The systematization test**: "Did this session consume external knowledge AND encode it into a reusable tool? (Requires 2+ indicators from Signal 6 in skill-opportunity-detection.md)"
-
-If ANY check passes, flag the learning as a skill candidate and carry it forward to Phase 3 routing with a skill proposal bias.
-
-**Explicit requirement**: Consider at least one skill proposal per retrospective. If no learnings pass the checks above, document why in the results ("No skill opportunities detected because: [reason]"). This forces active evaluation rather than passive defaulting to CLAUDE.md.
-
-**Scan existing skills for modification opportunities**:
-```bash
-ls ~/.claude/skills/
-```
-For each skill that was used or relevant to the session, check:
-- Was the skill missing information that was discovered during the session?
-- Did the workflow deviate from what the skill prescribed?
-- Would a new reference file improve the skill?
-
-**Prevention-Layer Failure Analysis** (for the "Corrected Approaches" category):
-
-When a user correction occurs, walk the Enforcement Ladder from the top and ask "which layer could have stopped this earliest?". Route the proposal to the failed layer, not the surface symptom:
-
-- **Rung 1 (Hook / bash-policy)**: Could a Bash-command pattern match have blocked this? → propose a `bash-policy.yaml` rule. For non-Bash behavior, propose a new hook script.
-- **Rung 2 (Permissions)**: Should the tool invocation have been denied? → propose a `permissions.deny` entry.
-- **Rung 3 (Skill description)**: Did a relevant skill exist but fail to auto-load because of missing trigger phrases? → propose a skill description fix.
-- **Rung 3 (Skill content)**: Did the skill load but lack sufficient guidance? → propose reference deepening.
-- **Rung 4 (CLAUDE.md)**: Only when none of the above applies.
-
-**Route the proposal to the failed layer, not to the symptom.** A description gap must not be flattened into a CLAUDE.md line addition.
-
-#### Generalization Check
-
-For each identified learning, also ask:
-> "Is this specific to a narrow context (tool X, environment Y, one-off situation Z),
-> or does it reflect a **broader methodological/behavioral principle**?"
-
-- **If broader principle exists**: Document the **general principle** as the primary entry.
-  Include the specific instance as a concrete example, not as the title/framing.
-  Route to `~/.claude/CLAUDE.md` with the general principle.
-
-- **If genuinely narrow**: Keep specific, but flag it:
-  "Does this narrow symptom suggest a general principle that was missed?"
-
-**Anti-pattern to avoid (from real sessions):**
-- ✗ Extracted: "non-interactive environment debugging tip" (env-specific framing)
-- ✓ Should extract: "investigation plans must include direct observation means" (general principle)
-  with "non-interactive env" as one concrete example
-
-- ✗ Extracted: "git diff in shallow clone returns incorrect results" (tool-specific fact)
-- ✓ Should extract: "verify output value correctness, not just error absence" (general principle)
-  with "git diff returned 16 packages instead of expected 3" as a concrete example
-
-**Artifact Pipeline Check**: Beyond generalizing facts, also ask:
-> "Did this session produce a reusable artifact? If so, is the *artifact-creation pipeline* itself generalizable across domains?"
-
-If yes, recommend the appropriate mechanism using this routing:
-
-```
-Is the methodology a repeatable workflow the user would invoke by name?
-  YES → Skill (standard). Use skill-creator to build it.
-  NO → Is it background knowledge that should always be available?
-    YES → Skill (user-invocable: false, Reference content).
-    NO → Does it need constrained tool access (read-only analysis)?
-      YES → Custom Agent (agents/*.md). Use context: fork + agent: from skills.
-      NO → Does it augment an existing skill's evaluation criteria?
-        YES → Reference file in existing skill's references/.
-        NO → Skill (standard) as default. Most flexible option.
-```
-
-Default to Skill (standard) when uncertain — it matches the user's preference for skill-based workflows.
-
-**Example:**
-- Artifact: Evaluation agent derived from Anthropic PDF (specific instance)
-- Pipeline: "Methodology document → extract criteria → create evaluation tool" (generalizable)
-- Recommended: Skill (standard) — e.g., `/review-accessibility [url]`
-- Alternative: Custom Agent if read-only constraint is needed
-
-### Phase 2.6: Instinct Extraction
-
-For learnings categorized as **Corrected Approaches** and **Repeated Workflows** in Phase 2:
-
-Re-consult the instinct list loaded in Phase 1 Step 5 before deciding `add` vs `reinforce` for each learning.
-
-1. Register learnings that passed the Generalization Check as instincts
-2. Execute automatically without confirmation (as part of the retrospective)
-3. Include instincts that reach the promotion threshold (confidence >= 0.7) in Phase 4 CLAUDE.md proposals
+**Step 1 — Extract transcript** (same as prior version):
 
 ```bash
-# Add new instinct (for each learning)
-~/.claude/skills/instinct-learner/scripts/instincts.ts add \
-  --rule "generalized rule statement" \
-  --domain "verification|workflow|code-style|debugging|git" \
+cd $(git rev-parse --show-toplevel)
+~/.claude/skills/session-retrospective/extract-session-history.ts
+```
+
+Captures the stdout path (something like `/tmp/claude-session-history-NNNN.md`).
+
+**Step 2 — Run verify**:
+
+```bash
+~/.claude/skills/instinct-learner/scripts/retrospective-ledger.ts verify \
+  --transcript /tmp/claude-session-history-NNNN.md \
   --session "$(cat /tmp/claude-session-id 2>/dev/null || echo unknown)"
-
-# Reinforce if matching existing instinct
-~/.claude/skills/instinct-learner/scripts/instincts.ts reinforce <id>
-
-# Check promotion candidates for Phase 4 proposals
-~/.claude/skills/instinct-learner/scripts/instincts.ts promote
 ```
 
-**Note**: Learnings in the Missing Context and Tool/Library Knowledge categories are routed directly to CLAUDE.md proposals (not instincts), as these are factual information that does not need confidence accumulation across sessions.
+This iterates every active entry that has a proposal and applies the verification plan. See [references/outcome-verification.md](references/outcome-verification.md) for grammar and delta rules.
 
-### Phase 3: Route Proposals
+**Step 3 — Surface recurrences**: the CLI output lists each entry's result. Entries returning `recurred` are **escalation signals for Phase 2**:
 
-Merge the Rung 1-4 selected in Phase 2's Root Cause Check with the skill-candidate flag produced by Phase 2.5's Skill Opportunity Scan to determine the final routing. See [references/routing-logic.md](references/routing-logic.md) for the full Enforcement Layer Ladder and detailed sub-routing criteria.
+- The proposal did NOT work. The current enforcement layer is too weak.
+- Feed into Phase 3 Pair Design as a "revise existing Pair" candidate — typically by escalating one Rung down (stronger enforcement) per the boundary rules in `routing-logic.md`.
 
-**Final rung decision logic**:
+**Step 4 — Summarize**: note counts of prevented / recurred / not-applicable + 5-session noise-prune candidates (confidence delta < 0 via streak).
 
-1. If Phase 2.5 flagged the learning as a skill candidate → final rung is **Rung 3** (Rung 0 precedence fires).
-2. Otherwise → use the Rung 1-4 chosen in Phase 2's Root Cause & Recurrence Check.
+### Phase 2: Extract & Drill
 
-**Ladder quick reference** (smaller rung number = stronger enforcement):
+Build an evidence list from the transcript. For each potential learning, record:
 
-- **Rung 1**: Hook / bash-policy (deterministic enforcement, no Claude judgment required)
-- **Rung 2**: Permissions (structural tool-access restriction)
-- **Rung 3**: Skill creation / description fix / reference deepening
-  - Sub-priority: description fix → reference deepening → new skill creation
-  - Detailed skill-proposal criteria (`/invoke` litmus, Conditions A-E, weak-justification exclusion) live in `references/routing-logic.md` under "Rules for Skill Proposals"
-- **Rung 4**: CLAUDE.md (weakest layer; Rung 1-3 rejection rationale required)
-  - Rung 4 internal sub-routing (Project-Specific vs Universal, Team vs Personal) lives in `references/routing-logic.md` under "Rules for Determining Project-Specific vs Universal"
+- **What happened**: 1-sentence summary
+- **Evidence**: direct quote or turn number + file:line anchor
+- **Archetype** (from [references/learning-categories.md](references/learning-categories.md)): Behavioral correction | Workflow candidate | Discovered fact
+- **5-whys chain** (from [references/five-whys-drill.md](references/five-whys-drill.md)): `Symptom → Why1 → Why2 → ... → Root Cause` until stop condition (systemic / process / environment). Skip for Preference-like learnings.
+- **Scope-Agnostic verdict** (from [references/scope-agnostic-gate.md](references/scope-agnostic-gate.md)): keep-principle / keep-instance / discard. Two counter-examples required.
 
-**Skill opportunity identification criteria** (used by Phase 2.5 to decide whether to set the skill-candidate flag):
+While scanning the transcript, apply these lenses:
 
-- Complex workflow (4+ steps with tool orchestration)
-- User-taught multi-step process
-- Cross-session repetition signal
-- Tool orchestration pattern
-- Knowledge systematization (external doc → reusable tool)
+- Tasks and their outcomes
+- Errors and their resolutions
+- Questions the user asked claude (signals missing context)
+- User corrections to claude's approach
+- Repeated patterns (intra-session)
+- Tool-usage patterns
+- Compact boundaries (phase transitions)
 
-### Phase 4: Draft Proposals
+**Cross-session recurrence signal** (from Phase 1): if a recurred entry's topic appears in this session's evidence, note `RECURRENCE` on the learning so Phase 3 Pair Design revises the existing Pair rather than creating a new one.
 
-For each routed learning, draft a concrete proposal:
+### Phase 3: Pair Design
 
-**Falsification Gate (run BEFORE the Abstraction Test):**
+For each learning that survived Phase 2, construct a **Behavior-Change Pair** per [references/behavior-change-pair.md](references/behavior-change-pair.md):
 
-For each proposal, write all three of the following. **Abstract hypotheticals are not allowed**:
+1. **Before** / **Target After** in observable terms
+2. **Enforcement layer** via `Mechanism-Signature` 4-question pre-routing ([references/mechanism-signature.md](references/mechanism-signature.md)) + Enforcement Ladder ([references/routing-logic.md](references/routing-logic.md))
+3. **Verification plan** in the JSON grammar from [references/outcome-verification.md](references/outcome-verification.md)
+4. **Expiry condition** (trigger to remove) or `none`
 
-1. **Two concrete counter-examples**: scenarios where following this rule would be wrong or wasteful. Each counter-example must cite a direct transcript quote, a file path, or a specific observed past-session event. Hypotheticals like "if X is ever needed in the future" do not count as counter-examples.
-2. **One failure mode**: a concrete way this proposal could actively harm a future session (over-triggering, masking a real bug, locking in a premature decision).
-3. **Escape hatch**: one sentence describing the condition under which Claude should ignore this rule.
+**Gates that MUST run** per Pair:
 
-If you cannot write all three with concrete citations, the proposal is underspecified — sharpen it or discard it. Vague proposals that pass because no one could think of counter-examples are the single biggest source of CLAUDE.md bloat.
+- If Enforcement = skill: pass [references/skill-tdd-gate.md](references/skill-tdd-gate.md) RED test. No reproducible RED → demote to claude_md (if the strengthened Rung 4 bar passes) or Rejection Log.
+- If Enforcement = claude_md: pass the strengthened Rung 4 acceptance bar in `routing-logic.md` — (a) past-session concrete evidence AND ((b) expiry OR (c) redundancy check).
+- Scope-Agnostic verdict from Phase 2 must be keep-principle or keep-instance. discard → Rejection Log.
 
-**Before finalizing each proposal, apply the Abstraction Test:**
+**RECURRENCE handling**: if a learning is flagged as RECURRENCE from Phase 1, the Pair targets the SAME rule but at a stronger enforcement Rung (Rung N → Rung N-1). Per routing-logic.md boundary handling.
 
-> "If I replaced the specific tool/context with a different one, would this rule still be useful?"
+### Phase 4: Present & Track
 
-- YES → The proposal is at the right abstraction level
-- NO → Extract the underlying principle. The specific instance becomes an example, not the rule
-
-**Anti-patterns (from real sessions):**
-- ✗ "In shallow clone, use refs/pull/N/merge instead of 2-dot git diff" → tool-specific fact
-- ✓ "Output value verification: check value correctness, not just error absence" → general principle
-- ✗ "Set execSync maxBuffer to 10MB" → one-off fix
-- ✓ "Evidence over analysis: trust concrete evidence over reasoning when they conflict" → behavioral principle
-
-**CLAUDE.md additions:**
-- Format: One line per concept (consistent with `/revise-claude-md`)
-- Show exact placement (after which section heading)
-- Use diff format for clarity
-- Example:
-  ```diff
-  ## Development Commands
-  + nix flake check - Validate Nix syntax before applying changes
-  ```
-
-**New skill proposals** (use template from [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md)):
-- Proposed name and invocation example
-- When to use (trigger scenario)
-- **Why-not-CLAUDE.md justification** (mandatory — why this needs to be a skill)
-- Workflow outline (numbered steps with tools used)
-- Parameters (what would be parameterized)
-- Similar existing skill (for calibration)
-- Estimated complexity (Simple / Medium / Complex)
-
-A skill proposal without a why-not-CLAUDE.md justification is incomplete.
-
-**Skill modification proposals:**
-- Show before/after diff of changes
-- Explain rationale for the modification
-- Example:
-  ```diff
-  ## Quick Start
-
-  - curl -s https://api.example.com/health
-  + curl -sf https://api.example.com/health - Add -f flag to fail on HTTP errors
-  ```
-
-### Phase 5: Present and Apply
-
-Present all proposals grouped by target:
+Present all Pairs grouped by target, plus the Rejection Log and the prior-proposal status transition report.
 
 ```
 ## Session Retrospective Results
 
-### Project CLAUDE.md Proposals (N items)
-[numbered proposals with diffs]
+### Prior-proposal status transitions (from Phase 1)
+| Entry | Before | After | Δconfidence |
+|---|---|---|---|
+| inst-XXXX | 0.55 | 0.60 | +0.05 prevented |
+| inst-YYYY | 0.70 | 0.50 | -0.20 recurred → escalation proposal below |
 
-### Project-local Personal CLAUDE.md Proposals (N items)
-[numbered proposals with diffs]
+### New Behavior-Change Pairs
 
-### Global CLAUDE.md Proposals (N items)
-[numbered proposals with diffs]
+#### Hook / bash-policy (Rung 1A) — N Pairs
+[numbered Pairs with diff]
 
-### Skill Proposals (N items)
-[new skills and modifications]
+#### Hook script (Rung 1B) — N Pairs
+[numbered Pairs]
+
+#### Permissions (Rung 2) — N Pairs
+[numbered Pairs]
+
+#### Skill creation / description fix / reference deepening (Rung 3) — N Pairs
+[numbered Pairs]
+
+#### CLAUDE.md addition (Rung 4) — N Pairs
+[numbered Pairs with required Rung 4 bar fields]
+
+### Rejected Proposals (N items)
+- <label> — rejected: <reason: Scope-Agnostic Gate discard | Skill-TDD Gate no reproducible RED | Rung 4 missing past-session evidence | Rung 4 redundant with existing line X | etc.>
 
 ---
 Which proposals would you like to apply?
 (all / specific numbers like 1,3,5 / none)
 ```
 
-**After user approval:**
-- Apply CLAUDE.md changes with Edit tool
-- Create new skills (use skill-creator toolchain or direct file creation)
-- Apply skill modifications with Edit tool
-- Report what was applied
+**After user approval**:
 
-## Guidelines
+1. Apply the concrete changes (edit files, create skills, add hook rules, etc.) via Edit / Write tools.
+2. For EACH accepted Pair, call `retrospective-ledger.ts` to record the Pair in the ledger:
+   - `retrospective-ledger.ts add --rule "<Target After in one sentence>" --domain "<archetype>" --session "<current session id>"`
+   - If the add matched an existing entry (similarity match), the entry is reinforced; otherwise a new entry is created.
+   - Then `retrospective-ledger.ts record-proposal <id> --layer <hook|permissions|skill|claude_md> --target <path> --plan '<verification_plan JSON>' --expiry "<expiry sentence or empty>" --session "<session id>"`
+3. For RECURRENCE-derived Pairs (escalation), record-proposal attaches a NEW proposal to the SAME existing entry (id from Phase 1's recurrence list).
+4. Emit a final summary: X Pairs shipped, Y rejected, Z recurred+escalated.
 
-### What NOT to Propose
+## What NOT to propose
 
-- Information Claude already knows (well-known concepts, standard library usage)
-- Temporary or one-off decisions that don't generalize
-- Information already present in the target CLAUDE.md or skill
-- Overly specific instructions that reduce flexibility
+- Information claude already knows (standard library usage, well-known commands)
+- One-off session-local preferences ("concise for this one response")
+- Facts already covered by an existing active ledger entry at confidence ≥ 0.5 (redundancy)
+- Learnings whose Verification plan cannot be written — unverifiable proposals do not enter the ledger
 
-### Proposal Quality
+## Related gates / skills
 
-- Each proposal should be actionable (specific text to add, not vague suggestions)
-- Each proposal should justify its token cost (high signal-to-noise ratio)
-- Prefer additions that prevent future mistakes over documenting facts
-- Keep proposals concise — one line per concept for CLAUDE.md entries
+- [references/five-whys-drill.md](references/five-whys-drill.md) — 5-whys iterative drill (Phase 2)
+- [references/scope-agnostic-gate.md](references/scope-agnostic-gate.md) — substitution test + counter-examples (Phase 2)
+- [references/mechanism-signature.md](references/mechanism-signature.md) — 4-question pre-routing (Phase 3)
+- [references/skill-tdd-gate.md](references/skill-tdd-gate.md) — RED/GREEN/REFACTOR (Phase 3, skill candidates)
+- [references/routing-logic.md](references/routing-logic.md) — Enforcement Ladder + Rung 4 strengthened bar (Phase 3)
+- [references/behavior-change-pair.md](references/behavior-change-pair.md) — Pair template + archetype → enforcement bias (Phase 3)
+- [references/outcome-verification.md](references/outcome-verification.md) — Verification plan grammar + confidence delta (Phase 1)
+- [references/learning-categories.md](references/learning-categories.md) — 3 archetypes (Phase 2)
+- [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md) — Signals 1-6 for skill candidates (Phase 2)
+- `/cross-session-analysis` — 100+ session analysis via Gemini (separate scope; ledger remains local to this skill)
 
-### Respecting Existing Content
+## Design decisions
 
-- Read existing CLAUDE.md files before proposing additions
-- Do not duplicate existing entries
-- Match the style and language of the existing file (Japanese or English)
-- Place additions in the appropriate section (do not append everything at the end)
+**Why 4 phases instead of 5**: the prior Phase 2.5 (Skill Opportunity Scan) and Phase 2.6 (Instinct Extraction) were orthogonal cuts through the same evidence. Merged into Phase 2 (Extract & Drill) since the 3-archetype classification delivers both outcomes with one pass.
 
-### Language Matching
+**Why the ledger is the source of truth**: prior design had proposals → CLAUDE.md lines → never measured. Ledger makes proposals first-class objects with verification plans, outcomes history, and confidence. instinct-learner was folded in because it was the same ledger concept at a lower abstraction.
 
-When proposing CLAUDE.md additions:
-- Detect the primary language of the target file
-- Write proposals in that language
-- For mixed-language files, match the language of the relevant section
+**Why verification_plan is mandatory**: a proposal that cannot be auto-verified cannot close the feedback loop. It ships but the skill cannot tell whether it worked. Unmeasurable proposals were the single largest source of CLAUDE.md bloat.
 
-## Related Skills
-
-- **/revise-claude-md** — Focused CLAUDE.md updates based on missing context (narrower scope)
-- **skill-improver** — Evaluates and improves existing skill quality
-- **skill-creator** — Creates new skills from scratch
-- **skill-tester** — Validates skill behavior after modifications
+**Why confidence is outcome-driven**: the prior reinforce-on-reoccurrence signal (+0.1 per duplicate) counted rediscovery of the same rule, not evidence that the rule changed behavior. Outcome-driven confidence (prevented +0.05, recurred -0.2) measures what we actually care about.

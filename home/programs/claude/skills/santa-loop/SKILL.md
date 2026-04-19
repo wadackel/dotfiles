@@ -161,7 +161,7 @@ CODEX_OK=$(command -v codex >/dev/null 2>&1 && echo yes || echo no)
 Invoke via bash (Claude Code's Bash tool default — do not rely on the user's interactive shell). The single-quoted heredoc delimiter used below is deliberately distinctive to avoid collision with prompt content and suppresses `$` / backtick / `${...}` expansion so the prompt is piped literally.
 
 ```bash
-codex exec --sandbox read-only -m gpt-5.4 -C "$(pwd)" - << 'SANTA_REVIEWER_B_PROMPT_EOF'
+codex exec --sandbox read-only -C "$(pwd)" - << 'SANTA_REVIEWER_B_PROMPT_EOF'
 <full reviewer prompt: same content as Reviewer A>
 SANTA_REVIEWER_B_PROMPT_EOF
 ```

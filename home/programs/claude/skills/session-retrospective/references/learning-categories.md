@@ -1,231 +1,112 @@
-# Learning Categories
+# Learning Archetypes
 
-This document provides detailed definitions, identification heuristics, and examples for each of the five learning categories used in session retrospectives.
+3 archetypes used by Phase 2 Extract & Drill to classify each learning. Each archetype biases toward a particular Enforcement layer when Phase 3 Pair Design routes the proposal.
 
-## 1. Missing Context
+The prior 5-category taxonomy (Missing Context / Corrected Approaches / Repeated Workflows / Tool Knowledge / Preference Patterns) was retired because categorization was not directly actionable — two of the five were near-duplicates (Missing Context ≈ Tool Knowledge, Corrected Approaches ≈ Preference Patterns at different intensities) and the routing step had to re-derive the archetype on the fly. The 3 archetypes map directly to enforcement layers.
 
-**Definition:** Information that Claude needed but did not have access to during the session.
+## The 3 archetypes
 
-**Identification signals:**
-- Claude asked the user for clarification
-- Claude made an incorrect assumption that the user corrected
-- Claude tried a command that failed due to missing knowledge
-- Claude had to read multiple files to discover basic project facts
+### 1. Behavioral correction
 
-**Examples:**
-
-**Project-specific:**
-- "This repository uses pnpm workspaces, not npm"
-- "Always run `nix flake check` before `darwin-rebuild switch`"
-- "The API server runs on port 3001, not 3000"
-- "Tests must be run with `npm run test:unit`, not `npm test`"
-
-**Universal:**
-- "Use `gh` CLI for GitHub URLs instead of WebFetch (private repos)"
-- "Always use Explore subagent for codebase exploration, not direct Grep"
-- "Check git status before proposing commits"
-
-**Tool-specific:**
-- "Chrome DevTools MCP requires take_snapshot before element interaction"
-- "ast-grep relational rules require stopBy: end parameter"
-- "gemini-research should be invoked for library recommendations"
-
-## 2. Corrected Approaches
-
-**Definition:** Cases where the user explicitly corrected Claude's behavior, approach, or output.
+**Definition:** user explicitly corrected an action claude took, or claude repeated a misbehavior that the user had already corrected before.
 
 **Identification signals:**
-- User said "No, do it this way instead"
-- User corrected the format, style, or structure of output
-- User specified a tool or method Claude should have used
-- User pointed out a better alternative after Claude finished
+- User said "no, do X instead" / "use Y not Z" / "don't do X"
+- Claude did action X, user followed up with "use Y next time"
+- Session transcript shows claude doing X at turn N AFTER user correction at turn M<N for the same behavior
 
 **Examples:**
+- User corrected `npm install` → `pnpm install` three turns later claude used npm again
+- User said "commit messages in Japanese", claude pushed with English message
+- User said "use `Edit` tool, not `sed` via Bash", claude ran sed
 
-**Behavioral corrections:**
-- "Commit messages should be in Japanese, not English"
-- "Use Edit tool for file modifications, not sed via Bash"
-- "Don't use placeholder values — ask the user for real values"
-- "Run validation before packaging, not after"
+**Routing bias:** hook or permissions (Rung 1 / 2). Deterministic misbehavior with a named correct form — enforcement at 100% reliability beats 50-80% skill triggering or ~always-ignored written rule.
 
-**Technical corrections:**
-- "Use `darwin-rebuild switch --flake .#private`, not just `.`"
-- "Import paths should use @ alias, not relative paths"
-- "Use TypeScript strict mode, not loose typing"
+**Absorbs**: the prior "Corrected Approaches" category in full, plus the **weak** end of "Preference Patterns" (repeated style corrections). Non-repeated single-instance preferences ("I prefer concise explanations for this one question") are NOT Behavioral corrections — they are session-local and do not enter the ledger.
 
-**Skill routing corrections (special sub-pattern):**
-When the correction is "use skill X for this task", do NOT default to adding a CLAUDE.md rule.
-Instead, diagnose WHY the skill wasn't auto-loaded:
-- Skill description missing trigger phrases for this scenario → Fix description (skill modification)
-- Skill exists but Claude judged it unnecessary → May need CLAUDE.md guardrail
-- Skill doesn't exist for this workflow → May need new skill proposal
-See Phase 2.5 "Auto-loading failure analysis" for the full diagnostic flow.
+### 2. Workflow candidate
 
-**Output format corrections:**
-- "Show diffs before applying changes, not after"
-- "Group proposals by target file, not by category"
-- "Use concise one-line format, not verbose paragraphs"
-
-## 3. Repeated Workflows
-
-**Definition:** Multi-step procedures that were performed more than once during the session.
-
-**Qualification criteria (any one sufficient):**
-- Occurred 2+ times in the session (classic repetition)
-- Complex single occurrence: 4+ steps with tool orchestration and parameterization
-- User explicitly described as a recurring cross-session task
-- User taught a multi-step process through corrections
-
-**All also require:**
-- Involves 3+ distinct steps
-- Steps follow a consistent order
-- Could be generalized with parameters
+**Definition:** claude executed (or the user described) a multi-step procedure that passes the `/invoke` litmus test — the user would realistically type `/name` to trigger it in future sessions.
 
 **Identification signals:**
-- Claude executed the same sequence of commands multiple times
-- User asked Claude to "do that again" or "run the same steps"
-- Pattern of: read file → modify → validate → apply occurred repeatedly
+- 3+ ordered tool calls that share a goal (e.g., "check CI → read logs → find failure → fix → push")
+- User taught a procedure with 3+ sequential steps
+- Cross-session repetition signals in the user's language ("I always", "every time", "毎回")
+- Signal 6 from `skill-opportunity-detection.md`: external knowledge systematization
 
 **Examples:**
+- Repeated 5-step CI-fix loop across 3 distinct failures in one session
+- User said "when fixing PR feedback, always: check diff → read comments → apply fixes → push → reply"
+- Session consumed a design doc and the user asked to "turn this into a reviewer"
 
-**Development workflows:**
-- "Edit Nix file → run nix flake check → run darwin-rebuild switch"
-- "Make code change → run tests → fix failures → run tests again"
-- "Check CI status → read logs → identify failure → fix → push → wait"
+**Routing bias:** skill (Rung 3). Must pass `skill-tdd-gate.md` RED test (reproduce "agent without skill" failure from evidence). Failure → demote to Behavioral correction (if the missing step is single-shot) or Discovered fact (if it is pure documentation).
 
-**Skill workflows:**
-- "Initialize skill → edit SKILL.md → create references → validate → package"
-- "Read file → analyze → propose changes → show diff → apply with approval"
+**Absorbs**: the prior "Repeated Workflows" category in full.
 
-**Tool usage patterns:**
-- "List sessions → select session → read output → send message"
-- "Search with Glob → refine with Grep → read matching files"
+### 3. Discovered fact
 
-**When NOT to propose a skill:**
-- Less than 3 steps (too trivial)
-- Highly context-specific (not generalizable to other inputs)
-- Already covered by an existing skill
-- No tool orchestration or conditional logic (would be a one-liner in CLAUDE.md)
-- Fails the /invoke litmus test ("Would the user type `/skill-name` for this?")
-
-Note: Single occurrence alone is NOT a disqualifier. A complex 6-step workflow done once is a stronger skill candidate than a trivial 2-step action done 3 times.
-
-## 4. Tool/Library Knowledge
-
-**Definition:** Discoveries about how specific tools, libraries, or APIs work.
+**Definition:** session revealed a fact about a tool, environment, library, or convention that claude did not know. Not a behavior misaligned with user preference — a piece of knowledge gap.
 
 **Identification signals:**
-- Claude learned a new command flag or option
-- Claude discovered a tool-specific requirement or constraint
-- Claude found a workaround for a tool limitation
-- User explained how a particular tool should be used
+- Claude asked the user for info the user clarified (e.g., "which flake output?")
+- Claude hit a failure mode it could not diagnose without new info (e.g., shallow-clone diff returns wrong count)
+- User pointed out a tool quirk or version-specific behavior
 
 **Examples:**
+- `git diff origin/main...HEAD` in shallow clone returns meaningless count
+- `deno run -e` does not exist — use `deno eval`
+- Chrome DevTools MCP requires `take_snapshot` before element interaction
+- This repo uses `.#private` / `.#work` as flake outputs (project-specific fact)
 
-**Command-line tools:**
-- "`nix fmt` uses treefmt and nixfmt for Nix files"
-- "`gh pr create` requires `--body` flag for multi-line descriptions"
-- "`git diff --stat` shows file change statistics without full diff"
+**Routing bias:** claude_md (Rung 4) — **if the strengthened Rung 4 bar passes**. Facts cannot be enforced, only documented. Key check: does mechanism-signature Q1-Q3 pass instead? If yes (e.g., "tool X is broken, block it") the archetype is really a Behavioral correction with enforcement, not a Discovered fact.
 
-**Library/Framework patterns:**
-- "React hooks must be called at the top level, not in conditionals"
-- "Next.js 15 requires 'use client' directive for client components"
-- "TypeScript requires explicit return types for exported functions"
+**Absorbs**: the prior "Missing Context" and "Tool Knowledge" categories in full.
 
-**API specifics:**
-- "Gemini CLI supports --output-format json for structured output"
-- "skill-creator init_skill.py takes --path for output directory"
-- "Chrome DevTools MCP list_pages shows all available browser pages"
-
-**Tool limitations:**
-- "WebFetch fails for authenticated URLs — use specialized tools instead"
-- "Bash `find` is slower than Glob for file pattern matching"
-- "`nix flake check` doesn't validate all darwin-rebuild issues"
-
-## 5. Preference Patterns
-
-**Definition:** User style preferences, conventions, or behavioral expectations observed during the session.
-
-**Identification signals:**
-- User consistently corrected the same aspect across multiple outputs
-- User explicitly stated a preference ("I prefer X")
-- User showed preference through approvals/rejections
-- Pattern emerged from multiple similar corrections
-
-**Examples:**
-
-**Communication style:**
-- "User prefers concise responses, dislikes verbose explanations"
-- "User wants technical details, not simplified analogies"
-- "User prefers Japanese for user-facing text, English for code"
-
-**Code style:**
-- "User prefers functional programming patterns over classes"
-- "User wants explicit error handling, no silent failures"
-- "User prefers named exports over default exports"
-
-**Workflow preferences:**
-- "User wants to see all proposals before any are applied"
-- "User prefers draft PRs with WIP prefix"
-- "User wants validation before every destructive operation"
-
-**Tool preferences:**
-- "User prefers Explore subagent over direct searches"
-- "User wants skill-tester validation for all new skills"
-- "User prefers gh CLI over GitHub web interface"
-
-**When NOT to record as preference:**
-- Single instance (not a pattern)
-- Project-specific requirement (not a general preference)
-- Industry standard practice (Claude should already know)
-
-## How to Identify Each Category
-
-Use this decision tree when analyzing a learning:
+## Decision tree (Phase 2 classification)
 
 ```
-Did Claude lack information it needed?
-  YES → Missing Context
+For each evidence-list entry:
+  Did user correct or redirect claude on a specific action?
+    YES → Behavioral correction
+    NO ↓
 
-Did the user correct Claude's approach or output?
-  YES → Corrected Approaches
+  Is the learning a multi-step procedure (3+ ordered steps, /invoke passes)?
+    YES → Workflow candidate
+    NO ↓
 
-Was a multi-step workflow observed (repeated OR complex single occurrence)?
-  YES → Repeated Workflows
+  Is the learning a fact (tool / environment / convention) claude did not have?
+    YES → Discovered fact
+    NO ↓
 
-Did Claude learn something new about a tool/library?
-  YES → Tool/Library Knowledge
-
-Did a user preference pattern emerge?
-  YES → Preference Patterns
-
-None of the above?
-  → May not be worth recording (one-off or too specific)
+  None of the above → DROP (likely session-local, not worth recording)
 ```
 
-After applying the category decision tree above, also check:
+Ambiguous case — learning fits more than one archetype:
 
-```
-Was a multi-step workflow observed (regardless of category)?
-  YES → Flag as potential skill candidate (see routing-logic.md)
-```
+- **Behavioral correction + Workflow candidate**: usually Behavioral correction. A correction that names 3 steps could become a skill, but 100% enforcement via hook or permissions usually delivers the target behavior more reliably than a skill's 50-80% triggering.
+- **Behavioral correction + Discovered fact**: pick Behavioral correction if there is a clearly preferred action; pick Discovered fact if the learning is purely factual (no named correct action).
+- **Workflow candidate + Discovered fact**: pick Workflow candidate — turning the fact into an invocable procedure is higher-leverage.
 
-This cross-category check ensures skill opportunities are detected even when learnings are categorized as Missing Context or Corrected Approaches.
+When truly unclear, default to **Behavioral correction** — it maps to the strongest enforcement layer (hook/permissions) and cuts through the CLAUDE.md bias.
 
-## Edge Cases
+## Migration map (5 category → 3 archetype)
 
-**Learning fits multiple categories:**
-- Choose the most specific category
-- Example: "User corrected Claude to use Explore subagent" → Corrected Approaches (more specific than Missing Context)
+For backfilling or re-classifying legacy ledger entries:
 
-**Uncertain if it's a pattern or one-off:**
-- Default to requiring 2+ occurrences for patterns
-- Single corrections → Corrected Approaches (not Preference Patterns)
+| Old category | New archetype | Note |
+|---|---|---|
+| Missing Context | Discovered fact | Pure knowledge gap |
+| Tool Knowledge | Discovered fact | Tool-specific fact |
+| Corrected Approaches | Behavioral correction | Direct map |
+| Preference Patterns (repeated ≥2x) | Behavioral correction | Stable preference = behavioral rule |
+| Preference Patterns (one-shot) | DROP | Session-local, not ledger-worthy |
+| Repeated Workflows | Workflow candidate | Direct map |
 
-**Distinction between Missing Context and Corrected Approaches:**
-- Missing Context: Claude didn't know
-- Corrected Approaches: Claude knew but chose wrong approach
+Legacy entries already in the ledger are NOT automatically re-classified — they continue under their old categorization fields until natural reinforcement / decay cycles them. See `retrospective-ledger.jsonl` for the current 40 entries.
 
-**Distinction between Repeated Workflows and Tool Knowledge:**
-- Repeated Workflows: Multi-step procedures
-- Tool Knowledge: Single tool facts or flags
+## Anti-patterns
+
+- **Over-assigning Workflow candidate**: every 2-step sequence is NOT a workflow. Requires 3+ steps AND /invoke litmus passes AND skill-TDD gate RED is reproducible.
+- **Calling a bug a Discovered fact**: bugs are not knowledge gaps. If the learning is "claude did X wrong", it is Behavioral correction, not Discovered fact.
+- **Splitting one evidence entry into two archetypes**: pick one. If genuinely both, see the ambiguity rules above.
+- **Recording session-local preferences as Behavioral correction**: if the user said "for this one response, be concise", it is NOT a behavioral rule. Drop.

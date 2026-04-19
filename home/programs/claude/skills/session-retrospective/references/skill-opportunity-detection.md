@@ -2,6 +2,16 @@
 
 This document provides heuristics, litmus tests, and calibration examples for identifying session learnings that should become skill proposals rather than CLAUDE.md entries.
 
+## Archetype mapping
+
+This detection framework maps directly to the 3 archetypes from [learning-categories.md](learning-categories.md):
+
+- **Workflow candidate** archetype fires Signals 1-5 (multi-step, user-taught, cross-session, tool orchestration, structural similarity to existing skills)
+- **Behavioral correction** archetype is usually better served by hook/permissions, NOT skill — only consider skill when the correction names a multi-step procedure
+- **Discovered fact** archetype is rarely skill material — facts go to claude_md with expiry or to reference deepening of an existing skill
+
+When Phase 2 archetype classification is Workflow candidate, the signals below determine **which kind** of skill intervention (new skill vs description fix vs reference deepening).
+
 ## The /invoke Litmus Test
 
 The single most important question for any learning:
@@ -196,6 +206,16 @@ that a CLAUDE.md line cannot capture]
 ```
 
 A proposal without a **Why a skill (not CLAUDE.md)** justification is incomplete. If you cannot articulate why CLAUDE.md is insufficient, it should be a CLAUDE.md entry.
+
+### Mandatory TDD Gate
+
+Every skill candidate — new creation, reference deepening, or description fix — must pass [skill-tdd-gate.md](skill-tdd-gate.md) before landing at Rung 3:
+
+- **RED**: reconstruct "agent without this skill" failure from transcript evidence. If not reproducible, the proposal is speculation — demote to Rung 4 or discard.
+- **GREEN**: minimum content addressing the specific RED failure.
+- **REFACTOR**: overlap scan against existing skills (≥60% coverage → prefer description fix / reference deepening), loophole scan, drift check.
+
+**Absence of a reproducible RED is a weak justification on its own**, regardless of how strong the other signals are. Add "no reproducible RED from transcript evidence" to the weak-justification list below.
 
 ### Strong justifications:
 - "This is a 6-step workflow — a CLAUDE.md line can't capture the sequencing and conditional logic"

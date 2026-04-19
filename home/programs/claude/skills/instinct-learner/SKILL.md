@@ -1,115 +1,58 @@
 ---
 name: instinct-learner
-description: Extracts atomic behavioral rules (instincts) from session learnings with confidence scoring. Integrates with session-retrospective Phase 2.6 to accumulate learnings across sessions. Instincts with high confidence (0.7+) are promoted to CLAUDE.md. Triggers include "instinct-learner", "instinct を抽出", "学びを蓄積", "extract instincts".
+description: Deprecated pointer. The instinct ledger is now the retrospective ledger, managed via retrospective-ledger.ts and driven by /session-retrospective. This skill only redirects the legacy trigger phrases ("instinct を抽出", "学びを蓄積", "extract instincts") to the new entry point.
 ---
 
-# Instinct Learner
+# Instinct Learner (deprecated)
 
-Accumulates session learnings as atomic "instincts" (one-line rules + confidence scores), and promotes them to CLAUDE.md once sufficient confidence is reached.
+This skill has been integrated into `/session-retrospective` v3. The atomic "instinct" concept has been subsumed into the outcome-tracking **retrospective ledger**, and the CLI has moved.
 
-## Overview
+If you invoked this skill expecting the previous v2 behavior, please use the replacements below.
 
-session-retrospective extracts learnings -> instinct-learner accumulates them as atomic rules -> confidence accumulates -> promoted to CLAUDE.md
+## Replacements
 
-```
-Session A: "Didn't verify output count" → instinct created (confidence: 0.5)
-Session B: "Didn't verify test result values" → same instinct reinforced (confidence: 0.6)
-Session C: User corrects with "check the count" → reinforce +0.2 (confidence: 0.8)
-→ confidence 0.7+ → CLAUDE.md promotion candidate
-```
+**CLI path change**:
 
-## When to Use
+- Old: `~/.claude/skills/instinct-learner/scripts/instincts.ts`
+- New: `~/.claude/skills/instinct-learner/scripts/retrospective-ledger.ts`
 
-- Automatically called from `/session-retrospective` Phase 2.6
-- Manually invoked as `/instinct-learner` (for instinct management)
+**Ledger file change**:
 
-## Instinct Format
+- Old: `~/.claude/instincts.jsonl`
+- New: `~/.claude/retrospective-ledger.jsonl` (migrated via `migrate.ts`; source renamed to `instincts.jsonl.bak`)
 
-Storage: `~/.claude/instincts.jsonl` (one instinct per line, JSON Lines)
+**Subcommand map** (all backward-compatible):
 
-```json
-{
-  "id": "inst-001",
-  "rule": "Verify output value correctness (not just error absence)",
-  "status": "active",
-  "confidence": 0.5,
-  "domain": "verification",
-  "source_sessions": ["session-abc"],
-  "created": "2026-03-19",
-  "last_reinforced": "2026-03-19",
-  "promoted_at": null,
-  "claude_md_section": null
-}
-```
-
-## Confidence Scoring
-
-| Event | Confidence Change |
+| Old invocation | New invocation |
 |---|---|
-| Initial creation | 0.5 |
-| Re-observed in a different session | +0.1 |
-| Confirmed by user correction | +0.2 (strongest signal) |
-| No reinforcement for 5+ sessions | -0.1 |
+| `instincts.ts add --rule "..." --domain "..." --session "..."` | `retrospective-ledger.ts add --rule "..." --domain "..." --session "..."` |
+| `instincts.ts reinforce <id>` | `retrospective-ledger.ts reinforce <id>` |
+| `instincts.ts list` | `retrospective-ledger.ts list` |
+| `instincts.ts prune` | `retrospective-ledger.ts prune` |
+| `instincts.ts promote` | `retrospective-ledger.ts promote` |
+| `instincts.ts mark-promoted <id> <section>` | `retrospective-ledger.ts mark-promoted <id> <section>` |
+| (new) | `retrospective-ledger.ts record-proposal <id> --layer <L> --target <path> --plan '<JSON>'` |
+| (new) | `retrospective-ledger.ts verify --transcript <path> [--dry-run]` |
 
-| Threshold | Action |
-|---|---|
-| 0.3 or below | Auto-prune (active status only) |
-| 0.7 or above | CLAUDE.md promotion candidate |
-| 0.9 | Upper limit |
+All existing subcommands behave identically. The new subcommands (`record-proposal`, `verify`) are what make the ledger closed-loop — Phase 1 of `/session-retrospective` v3 uses them to check whether past proposals actually changed behavior.
 
-## Lifecycle States
+## Redirect guidance
 
-- **active**: Default. Accumulating
-- **promoted**: Promoted to CLAUDE.md. Exempt from pruning
-- **pruned**: Deleted
+When asked to "extract instincts" or "instinct を抽出" or "学びを蓄積":
 
-## CLI Commands
+1. If the user wants the full self-improvement flow (extract from this session, propose changes, track outcomes) → run `/session-retrospective` instead. The retrospective handles instinct creation as part of Phase 4 Present & Track.
 
-```bash
-# Add new instinct
-instincts.ts add --rule "Rule text" --domain "verification" --session "session-id"
+2. If the user wants to add / list / reinforce a specific ledger entry directly → use the `retrospective-ledger.ts` CLI (see the subcommand map above).
 
-# Reinforce existing instinct
-instincts.ts reinforce <id>
+3. If the user is asking about the ledger itself (contents, confidence scores, promotion candidates) → `retrospective-ledger.ts list` / `promote`.
 
-# List instincts
-instincts.ts list [--min-confidence 0.5]
+## Why the change
 
-# Prune low-confidence instincts
-instincts.ts prune
+The v2 instinct-learner modeled each rule as a rule-only entry — no link to the proposals derived from it, no record of whether those proposals prevented future misbehavior. The v3 ledger extends each entry with `proposals[]` and `outcomes[]` so that `/session-retrospective` v3 Phase 1 can auto-verify and feed recurrence back into Phase 2 as escalation signals. The CLI rename reflects that the file is no longer just instincts — it is the retrospective source of truth.
 
-# Show promotion candidates
-instincts.ts promote
-```
-
-## Domains
-
-Instinct classification:
-- `verification` -- rules about verification
-- `workflow` -- rules about work processes
-- `code-style` -- coding style
-- `debugging` -- debugging techniques
-- `git` -- Git operations
-- `tool-usage` -- tool usage
-- `communication` -- communication with users
-
-## Integration with session-retrospective
-
-Called during Phase 2.6 (Instinct Extraction):
-
-1. Target learnings from the **Corrected Approaches** and **Repeated Workflows** categories
-2. Register learnings that pass the Generalization Check via `instincts.ts add`
-3. If similar to an existing instinct, reinforce via `instincts.ts reinforce`
-4. **Missing Context** and **Tool Knowledge** are routed to direct CLAUDE.md proposals, not instincts
-
-## Promotion to CLAUDE.md
-
-Instincts with confidence 0.7+ are included in `/session-retrospective` Phase 4 CLAUDE.md proposals. After user approval:
-1. Added to CLAUDE.md as a one-line rule
-2. Instinct status updated to `promoted`
-3. `promoted_at` and `claude_md_section` recorded
+See `~/.claude/skills/session-retrospective/SKILL.md` for the full v3 architecture.
 
 ## Related
 
-- **session-retrospective** -- calls instinct-learner in Phase 2.6
-- **cross-session-analysis** -- cross-session analysis (larger scale)
+- `/session-retrospective` — primary entry point
+- `/cross-session-analysis` — 100+ session Gemini-based analysis (unrelated to ledger)
