@@ -7,6 +7,8 @@ import {
   appendSubagent,
   count,
   eventToOps,
+  extractToolError,
+  extractToolSubject,
   formatElapsed,
   maskPrompt,
   type PaneState,
@@ -904,4 +906,386 @@ Deno.test("resume: SubagentStop drain with status=waiting still returns ALL_PANE
   // resume op (which includes `set @pane_status running`) must be absent
   const anySet = ops.some((o) => o.kind === "set");
   assertEquals(anySet, false);
+});
+
+// --- extractToolSubject ---
+
+Deno.test("extractToolSubject: non-object tool_input → empty", () => {
+  assertEquals(extractToolSubject("Bash", null), "");
+  assertEquals(extractToolSubject("Bash", undefined), "");
+  assertEquals(extractToolSubject("Bash", "string"), "");
+  assertEquals(extractToolSubject("Bash", []), "");
+});
+
+Deno.test("extractToolSubject: Bash takes command", () => {
+  assertEquals(
+    extractToolSubject("Bash", { command: "pnpm test" }),
+    "pnpm test",
+  );
+});
+
+Deno.test("extractToolSubject: Bash truncates at 24 chars with ellipsis", () => {
+  const out = extractToolSubject("Bash", {
+    command: "x".repeat(30),
+  });
+  assertEquals(out.length, 25); // 24 x + single '…'
+  assertStringIncludes(out, "…");
+});
+
+Deno.test("extractToolSubject: Bash collapses TAB/CR/LF to space", () => {
+  assertEquals(
+    extractToolSubject("Bash", { command: "echo\tfoo\nbar" }),
+    "echo foo bar",
+  );
+});
+
+Deno.test("extractToolSubject: Edit-family returns empty (delegates to @pane_last_edit_file)", () => {
+  assertEquals(
+    extractToolSubject("Edit", { file_path: "/x/y.ts" }),
+    "",
+  );
+  assertEquals(
+    extractToolSubject("Write", { file_path: "/x/y.ts" }),
+    "",
+  );
+  assertEquals(
+    extractToolSubject("MultiEdit", { file_path: "/x/y.ts" }),
+    "",
+  );
+});
+
+Deno.test("extractToolSubject: Read extracts basename from file_path", () => {
+  assertEquals(
+    extractToolSubject("Read", { file_path: "/a/b/c.md" }),
+    "c.md",
+  );
+  assertEquals(extractToolSubject("Read", { file_path: "plain.txt" }), "plain.txt");
+  assertEquals(extractToolSubject("Read", { file_path: "" }), "");
+});
+
+Deno.test("extractToolSubject: Grep takes pattern", () => {
+  assertEquals(
+    extractToolSubject("Grep", { pattern: "foo.*bar" }),
+    "foo.*bar",
+  );
+});
+
+Deno.test("extractToolSubject: Glob takes pattern", () => {
+  assertEquals(
+    extractToolSubject("Glob", { pattern: "**/*.ts" }),
+    "**/*.ts",
+  );
+});
+
+Deno.test("extractToolSubject: WebFetch extracts host from url", () => {
+  assertEquals(
+    extractToolSubject("WebFetch", { url: "https://example.com/path?q=1" }),
+    "example.com",
+  );
+});
+
+Deno.test("extractToolSubject: WebFetch invalid url → empty", () => {
+  assertEquals(
+    extractToolSubject("WebFetch", { url: "not a url" }),
+    "",
+  );
+});
+
+Deno.test("extractToolSubject: Task joins subagent_type / description with /", () => {
+  assertEquals(
+    extractToolSubject("Task", {
+      subagent_type: "qa-planner",
+      description: "test the foo",
+    }),
+    "qa-planner/test the foo",
+  );
+});
+
+Deno.test("extractToolSubject: Task with only subagent_type", () => {
+  assertEquals(
+    extractToolSubject("Task", { subagent_type: "Explore" }),
+    "Explore",
+  );
+});
+
+Deno.test("extractToolSubject: Task with only description", () => {
+  assertEquals(
+    extractToolSubject("Task", { description: "research X" }),
+    "research X",
+  );
+});
+
+Deno.test("extractToolSubject: Skill takes skill name", () => {
+  assertEquals(
+    extractToolSubject("Skill", { skill: "plan" }),
+    "plan",
+  );
+});
+
+Deno.test("extractToolSubject: MCP extracts server from tool_name", () => {
+  assertEquals(
+    extractToolSubject("mcp__claude_ai_Gmail__search_threads", {}),
+    "mcp: claude_ai_Gmail",
+  );
+});
+
+Deno.test("extractToolSubject: malformed MCP tool_name (no third segment) → empty", () => {
+  assertEquals(extractToolSubject("mcp__only", {}), "");
+});
+
+Deno.test("extractToolSubject: unknown tool → empty", () => {
+  assertEquals(extractToolSubject("UnknownTool", { foo: "bar" }), "");
+});
+
+// --- extractToolError ---
+
+Deno.test("extractToolError: undefined / null → empty", () => {
+  assertEquals(extractToolError(undefined), "");
+  assertEquals(extractToolError(null), "");
+});
+
+Deno.test("extractToolError: success object (Bash) → empty", () => {
+  assertEquals(
+    extractToolError({
+      stdout: "ok",
+      stderr: "",
+      interrupted: false,
+      isImage: false,
+      noOutputExpected: false,
+    }),
+    "",
+  );
+});
+
+Deno.test("extractToolError: success object (Edit) → empty", () => {
+  assertEquals(
+    extractToolError({
+      type: "update",
+      filePath: "/x/y.ts",
+      content: "...",
+      structuredPatch: [],
+      originalFile: null,
+    }),
+    "",
+  );
+});
+
+Deno.test("extractToolError: Bash failure string strips 'Error: ' prefix", () => {
+  assertEquals(
+    extractToolError("Error: Exit code 2\nerr-to-stderr"),
+    "Exit code 2 err-to-stderr",
+  );
+});
+
+Deno.test("extractToolError: Edit failure string strips 'Error: ' prefix", () => {
+  assertEquals(
+    extractToolError("Error: String to replace not found in file."),
+    "String to replace not found in file.",
+  );
+});
+
+Deno.test("extractToolError: long failure string truncated to 40 chars with ellipsis", () => {
+  const raw = "Error: " + "x".repeat(60);
+  const out = extractToolError(raw);
+  assertEquals(out.length, 41); // 40 x + single '…'
+  assertStringIncludes(out, "…");
+});
+
+Deno.test("extractToolError: object with interrupted=true → 'interrupted'", () => {
+  assertEquals(
+    extractToolError({
+      stdout: "partial",
+      stderr: "",
+      interrupted: true,
+      isImage: false,
+      noOutputExpected: false,
+    }),
+    "interrupted",
+  );
+});
+
+Deno.test("extractToolError: empty string → empty", () => {
+  assertEquals(extractToolError(""), "");
+});
+
+Deno.test("extractToolError: array → empty (defensive)", () => {
+  assertEquals(extractToolError([1, 2, 3]), "");
+});
+
+Deno.test("extractToolError: strips ESC/NUL/BEL control bytes (terminal-escape injection defense)", () => {
+  // A Bash command like `echo $'\x1b[2J'` produces failure output containing
+  // the raw ESC byte. Without stripping, picker rendering would execute the
+  // escape sequence (clear screen, title change, etc).
+  const raw = "Error: \x1b[2Jmalicious\x07text\x00here";
+  const out = extractToolError(raw);
+  assertEquals(out.includes("\x1b"), false, "ESC must be stripped");
+  assertEquals(out.includes("\x07"), false, "BEL must be stripped");
+  assertEquals(out.includes("\x00"), false, "NUL must be stripped");
+});
+
+Deno.test("extractToolSubject: strips control bytes (terminal-escape injection defense)", () => {
+  const out = extractToolSubject("Bash", {
+    command: "echo \x1b[2Jfoo\x07",
+  });
+  assertEquals(out.includes("\x1b"), false);
+  assertEquals(out.includes("\x07"), false);
+});
+
+// --- PreToolUse subject set/unset ---
+
+Deno.test("eventToOps: PreToolUse (Bash) sets @pane_current_tool_subject", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash", tool_input: { command: "pnpm test" } },
+    emptyState,
+  );
+  const subject = ops.find((o) => o.key === "@pane_current_tool_subject");
+  assertEquals(subject?.kind === "set" ? subject.value : "", "pnpm test");
+});
+
+Deno.test("eventToOps: PreToolUse (Edit) unsets @pane_current_tool_subject (Edit-family empty)", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Edit",
+      tool_input: { file_path: "/x/y.ts" },
+    },
+    emptyState,
+  );
+  const subject = ops.find((o) => o.key === "@pane_current_tool_subject");
+  assertEquals(subject?.kind, "unset");
+});
+
+Deno.test("eventToOps: PreToolUse with no tool_input unsets @pane_current_tool_subject", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    emptyState,
+  );
+  const subject = ops.find((o) => o.key === "@pane_current_tool_subject");
+  assertEquals(subject?.kind, "unset");
+});
+
+// --- PostToolUse subject + error set/unset ---
+
+Deno.test("eventToOps: PostToolUse (Bash) sets last_tool_subject, unsets last_tool_error on success", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "pnpm test" },
+      tool_response: { stdout: "ok", stderr: "", interrupted: false },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
+  );
+  const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
+  assertEquals(subject?.kind === "set" ? subject.value : "", "pnpm test");
+  const error = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(error?.kind, "unset");
+});
+
+Deno.test("eventToOps: PostToolUse (Bash failure) sets last_tool_error from string response", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "false" },
+      tool_response: "Error: Exit code 1",
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
+  );
+  const error = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(error?.kind === "set" ? error.value : "", "Exit code 1");
+});
+
+Deno.test("eventToOps: PostToolUse (Edit-family) unsets last_tool_subject (delegates to last_edit_file)", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Edit",
+      tool_input: { file_path: "/x/y.ts" },
+      tool_response: { type: "update", filePath: "/x/y.ts", content: "..." },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
+  );
+  const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
+  assertEquals(subject?.kind, "unset");
+  // last_edit_file is still set via existing path
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/x/y.ts");
+});
+
+Deno.test("eventToOps: PostToolUse matching current tool also unsets @pane_current_tool_subject", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "echo ok" },
+      tool_response: { stdout: "ok", stderr: "", interrupted: false },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
+  );
+  const currentSubject = ops.find(
+    (o) => o.key === "@pane_current_tool_subject",
+  );
+  assertEquals(currentSubject?.kind, "unset");
+});
+
+Deno.test("eventToOps: PostToolUse NOT matching current tool leaves @pane_current_tool_subject untouched", () => {
+  // parallel-tool case: Pre(Bash) → Pre(Edit) → Post(Bash). state.currentTool
+  // is "Edit" (last-wins from Pre(Edit)), so Post(Bash) must not unset Edit's
+  // subject.
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "echo ok" },
+      tool_response: { stdout: "ok", stderr: "", interrupted: false },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
+  );
+  const currentSubjectOps = ops.filter(
+    (o) => o.key === "@pane_current_tool_subject",
+  );
+  assertEquals(currentSubjectOps.length, 0);
+});
+
+// --- SessionStart / SessionEnd drain includes new options ---
+
+Deno.test("eventToOps: SessionStart unsets new 3 options (current/last subject + last error)", () => {
+  const ops = eventToOps(
+    "SessionStart",
+    { session_id: "s-new" },
+    emptyState,
+  );
+  const unsetKeys = ops.filter((o) => o.kind === "unset").map((o) => o.key);
+  assertEquals(unsetKeys.includes("@pane_current_tool_subject"), true);
+  assertEquals(unsetKeys.includes("@pane_last_tool_subject"), true);
+  assertEquals(unsetKeys.includes("@pane_last_tool_error"), true);
+});
+
+Deno.test("eventToOps: SessionEnd drain includes new 3 options", () => {
+  const ops = eventToOps("SessionEnd", { session_id: "s1" }, {
+    subagents: "",
+    pendingTeardown: false,
+    currentTool: "",
+    status: "",
+  });
+  const keys = ops.map((o) => o.key);
+  assertEquals(keys.includes("@pane_current_tool_subject"), true);
+  assertEquals(keys.includes("@pane_last_tool_subject"), true);
+  assertEquals(keys.includes("@pane_last_tool_error"), true);
+  // All new options drained via unset
+  const newOptsOps = ops.filter((o) =>
+    o.key === "@pane_current_tool_subject" ||
+    o.key === "@pane_last_tool_subject" ||
+    o.key === "@pane_last_tool_error"
+  );
+  assertEquals(newOptsOps.every((o) => o.kind === "unset"), true);
 });

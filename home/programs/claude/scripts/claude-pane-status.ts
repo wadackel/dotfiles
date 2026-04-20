@@ -11,6 +11,9 @@ type HookData = Record<string, unknown> & {
   cwd?: string;
   message?: string;
   prompt?: string;
+  tool_name?: string;
+  tool_input?: unknown;
+  tool_response?: unknown;
 };
 
 export type Op =
@@ -43,6 +46,9 @@ export const ALL_PANE_OPTIONS = [
   "@pane_last_tool",
   "@pane_last_edit_file",
   "@pane_last_activity_at",
+  "@pane_current_tool_subject",
+  "@pane_last_tool_subject",
+  "@pane_last_tool_error",
 ] as const;
 
 // Options cleared at SessionStart so stale values from a previous session on the
@@ -59,19 +65,104 @@ const STALE_AT_SESSION_START = [
   "@pane_last_tool",
   "@pane_last_edit_file",
   "@pane_last_activity_at",
+  "@pane_current_tool_subject",
+  "@pane_last_tool_subject",
+  "@pane_last_tool_error",
 ] as const;
 
 const PROMPT_MAX_CHARS = 40;
+const TOOL_SUBJECT_MAX_CHARS = 24;
+const TOOL_ERROR_MAX_CHARS = 40;
 
 // --- Pure helpers (exported for tests) ---
 
 export function maskPrompt(raw: unknown): string {
   if (typeof raw !== "string" || raw.length === 0) return "";
-  // Collapse TAB / CR / LF and runs of whitespace so the value is safe to pass
-  // through tmux TAB-delimited formats and fits on a single picker row.
-  const flat = raw.replace(/[\t\r\n]+/g, " ").replace(/ {2,}/g, " ").trim();
+  // Strip all C0/C1 control bytes (incl. ESC/NUL/BEL) then collapse runs of
+  // whitespace. Control-char stripping blocks terminal-escape injection when
+  // the picker renders the option value — a crafted prompt containing e.g.
+  // $'\x1b[2J' would otherwise clear the picker user's screen.
+  const flat = raw.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/ {2,}/g, " ").trim();
   if (flat.length <= PROMPT_MAX_CHARS) return flat;
   return flat.slice(0, PROMPT_MAX_CHARS) + "…";
+}
+
+// Sanitize + truncate for tool subject / error. Strips all C0/C1 control
+// bytes (ESC/NUL/BEL/TAB/CR/LF/etc) to a single space before slicing, which
+// (a) keeps the value safe for tmux list-panes -F output and (b) prevents
+// terminal-escape injection when the picker renders the option value.
+// Unlike maskPrompt this does NOT collapse multi-space runs, so Bash command
+// "echo  foo" keeps its double space. Separate from maskPrompt because the
+// two inputs are semantically different (structured tool_input fields vs
+// free-form user prompt).
+function truncate(raw: string, max: number): string {
+  const clean = raw.replace(/[\x00-\x1f\x7f]+/g, " ");
+  return clean.length > max ? clean.slice(0, max) + "…" : clean;
+}
+
+// Per-tool subject extractors. Edit/Write/MultiEdit are intentionally absent:
+// they fall through to the "unknown tool" default (empty string), which lets
+// the existing @pane_last_edit_file + `file` segment continue to render the
+// Edit target instead of duplicating it here.
+const SUBJECT_EXTRACTORS: Record<string, (ti: Record<string, unknown>) => string> = {
+  Bash: (ti) => str(ti.command),
+  Read: (ti) => str(ti.file_path).split("/").pop() ?? "",
+  Grep: (ti) => str(ti.pattern),
+  Glob: (ti) => str(ti.pattern),
+  WebFetch: (ti) => {
+    try {
+      return new URL(str(ti.url)).host;
+    } catch {
+      return "";
+    }
+  },
+  Task: (ti) => {
+    const type = str(ti.subagent_type);
+    const desc = str(ti.description);
+    return type && desc ? `${type}/${desc}` : type || desc;
+  },
+  Skill: (ti) => str(ti.skill),
+};
+
+export function extractToolSubject(
+  toolName: string,
+  toolInput: unknown,
+): string {
+  if (!toolInput || typeof toolInput !== "object" || Array.isArray(toolInput)) {
+    return "";
+  }
+  const ti = toolInput as Record<string, unknown>;
+  const fn = SUBJECT_EXTRACTORS[toolName];
+  let result = "";
+  if (fn) {
+    result = fn(ti);
+  } else if (toolName.startsWith("mcp__")) {
+    // MCP tool_name: mcp__<server>__<tool> → show "mcp: <server>"
+    const parts = toolName.split("__");
+    if (parts.length >= 3) result = `mcp: ${parts[1]}`;
+  }
+  return truncate(result, TOOL_SUBJECT_MAX_CHARS);
+}
+
+// Empirically-derived (see plan log.md "Empirical observation"):
+// - success: tool_response is a structured object ({stdout,...} / {filePath,...})
+// - failure: tool_response is a plain STRING prefixed with "Error: "
+// - interrupted Bash (Ctrl+C) can surface as object with interrupted=true
+// Fields like is_error / exit_code / error are NOT in the object form — they
+// live at the tool_result content-block level, not in tool_response itself.
+export function extractToolError(toolResponse: unknown): string {
+  if (typeof toolResponse === "string" && toolResponse.length > 0) {
+    return truncate(toolResponse.replace(/^Error:\s*/, ""), TOOL_ERROR_MAX_CHARS);
+  }
+  if (
+    toolResponse &&
+    typeof toolResponse === "object" &&
+    !Array.isArray(toolResponse)
+  ) {
+    const tr = toolResponse as Record<string, unknown>;
+    if (tr.interrupted === true) return truncate("interrupted", TOOL_ERROR_MAX_CHARS);
+  }
+  return "";
 }
 
 export function formatElapsed(sec: number): string {
@@ -250,10 +341,21 @@ export function eventToOps(
       case "PreToolUse": {
         const toolName = str(data.tool_name);
         if (!toolName) return [];
-        return [
+        const subject = extractToolSubject(toolName, data.tool_input);
+        const ops: Op[] = [
           ...resumeOpsIfStuck(state),
           { kind: "set", key: "@pane_current_tool", value: toolName },
         ];
+        if (subject) {
+          ops.push({
+            kind: "set",
+            key: "@pane_current_tool_subject",
+            value: subject,
+          });
+        } else {
+          ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
+        }
+        return ops;
       }
 
       case "PostToolUse": {
@@ -283,8 +385,37 @@ export function eventToOps(
         if (!toolName) return ops;
         if (toolName === state.currentTool) {
           ops.push({ kind: "unset", key: "@pane_current_tool" });
+          ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
         }
         ops.push({ kind: "set", key: "@pane_last_tool", value: toolName });
+
+        // Subject: Edit-family returns "" so last_tool_subject is unset and the
+        // existing @pane_last_edit_file + `file` segment continues to show
+        // the target path. Other tools get their subject from tool_input.
+        const lastSubject = extractToolSubject(toolName, data.tool_input);
+        if (lastSubject) {
+          ops.push({
+            kind: "set",
+            key: "@pane_last_tool_subject",
+            value: lastSubject,
+          });
+        } else {
+          ops.push({ kind: "unset", key: "@pane_last_tool_subject" });
+        }
+
+        // Error: string-shape tool_response signals failure ("Error: ..." prefix).
+        // Success responses are objects with no dedicated error field.
+        const errorText = extractToolError(data.tool_response);
+        if (errorText) {
+          ops.push({
+            kind: "set",
+            key: "@pane_last_tool_error",
+            value: errorText,
+          });
+        } else {
+          ops.push({ kind: "unset", key: "@pane_last_tool_error" });
+        }
+
         if (
           toolName === "Edit" || toolName === "Write" ||
           toolName === "MultiEdit"
@@ -294,10 +425,11 @@ export function eventToOps(
           if (ti && typeof ti === "object" && !Array.isArray(ti)) {
             const fp = (ti as Record<string, unknown>).file_path;
             if (typeof fp === "string" && fp.length > 0) {
-              // Strip TAB/CR/LF to keep the value safe for tmux list-panes -F
-              // output (\n would split the row; TAB could collide with delimiter
-              // formats). The picker reads this raw then applies basename().
-              filePath = fp.replace(/[\t\r\n]/g, " ");
+              // Strip C0/C1 control bytes to keep the value safe for tmux
+              // list-panes -F output (NL would split the row, TAB could
+              // collide with delimiter formats, ESC could inject terminal
+              // escapes when picker renders). Picker applies basename().
+              filePath = fp.replace(/[\x00-\x1f\x7f]/g, " ");
             }
           }
           if (filePath) {

@@ -15,12 +15,13 @@ import {
   statusShort,
   summaryOf,
   TMUX_FORMAT,
+  toolSegmentText,
   truncateAnsiLine,
 } from "./picker.tsx";
 
-Deno.test("TMUX_FORMAT contains 17 US-separated field tokens", () => {
+Deno.test("TMUX_FORMAT contains 20 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 17);
+  assertEquals(fields.length, 20);
 });
 
 Deno.test("parseRow: full row with all fields present", () => {
@@ -42,6 +43,9 @@ Deno.test("parseRow: full row with all fields present", () => {
     "Edit",
     "/x/y/file.ts",
     "1700001234",
+    "pnpm test",
+    "picker.tsx",
+    "Exit code 1",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -62,12 +66,15 @@ Deno.test("parseRow: full row with all fields present", () => {
     lastTool: "Edit",
     lastEditFile: "/x/y/file.ts",
     lastActivityAtSec: 1700001234,
+    currentToolSubject: "pnpm test",
+    lastToolSubject: "picker.tsx",
+    lastToolError: "Exit code 1",
   };
   assertEquals(row, expected);
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(17).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
+  const line = Array(20).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
     .join("\x1f");
   const row = parseRow(line);
   assertEquals(row?.agent, "");
@@ -81,24 +88,27 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   assertEquals(row?.lastTool, "");
   assertEquals(row?.lastEditFile, "");
   assertEquals(row?.lastActivityAtSec, null);
+  assertEquals(row?.currentToolSubject, "");
+  assertEquals(row?.lastToolSubject, "");
+  assertEquals(row?.lastToolError, "");
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = Array(17).fill("").map((v, i) =>
+  const line = Array(20).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = Array(17).fill("").map((v, i) =>
+  const line = Array(20).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
-  const line = Array(17).fill("").map((v, i) =>
+  const line = Array(20).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
@@ -107,11 +117,11 @@ Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => 
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
-  // 16 fields (one short) → null
-  const sixteen = Array(16).fill("x").join("\x1f");
-  assertEquals(parseRow(sixteen), null);
-  // 17 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(17).fill("").join("\x1f");
+  // 19 fields (one short) → null
+  const nineteen = Array(19).fill("x").join("\x1f");
+  assertEquals(parseRow(nineteen), null);
+  // 20 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
+  const emptyId = Array(20).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 
@@ -300,6 +310,9 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     lastTool: "",
     lastEditFile: "",
     lastActivityAtSec: null,
+    currentToolSubject: "",
+    lastToolSubject: "",
+    lastToolError: "",
     ...overrides,
   };
 }
@@ -542,4 +555,95 @@ Deno.test("readTaskProgress: non-json files ignored", async () => {
     const result = await readTaskProgress(sessionId);
     assertEquals(result, { done: 0, total: 1 });
   });
+});
+
+// --- toolSegmentText ---
+
+Deno.test("toolSegmentText: no tool → empty string", () => {
+  assertEquals(toolSegmentText(mkRow()), "");
+});
+
+Deno.test("toolSegmentText: currentTool without subject → tool name only", () => {
+  assertEquals(
+    toolSegmentText(mkRow({ currentTool: "Bash" })),
+    "Bash",
+  );
+});
+
+Deno.test("toolSegmentText: currentTool with subject → `tool: subject`", () => {
+  assertEquals(
+    toolSegmentText(
+      mkRow({ currentTool: "Bash", currentToolSubject: "pnpm test" }),
+    ),
+    "Bash: pnpm test",
+  );
+});
+
+Deno.test("toolSegmentText: lastTool without subject → `last: tool`", () => {
+  assertEquals(
+    toolSegmentText(mkRow({ lastTool: "Edit" })),
+    "last: Edit",
+  );
+});
+
+Deno.test("toolSegmentText: lastTool with subject → `last: tool: subject`", () => {
+  assertEquals(
+    toolSegmentText(
+      mkRow({ lastTool: "Grep", lastToolSubject: "foo.*bar" }),
+    ),
+    "last: Grep: foo.*bar",
+  );
+});
+
+Deno.test("toolSegmentText: lastTool with error (no subject) appends ` ✖ <error>`", () => {
+  assertEquals(
+    toolSegmentText(
+      mkRow({ lastTool: "Bash", lastToolError: "Exit code 1" }),
+    ),
+    "last: Bash ✖ Exit code 1",
+  );
+});
+
+Deno.test("toolSegmentText: lastTool with subject + error → `last: tool: subject ✖ error`", () => {
+  assertEquals(
+    toolSegmentText(
+      mkRow({
+        lastTool: "Bash",
+        lastToolSubject: "pnpm test",
+        lastToolError: "Exit code 1",
+      }),
+    ),
+    "last: Bash: pnpm test ✖ Exit code 1",
+  );
+});
+
+Deno.test("toolSegmentText: currentTool takes precedence over lastTool", () => {
+  assertEquals(
+    toolSegmentText(
+      mkRow({
+        currentTool: "Grep",
+        currentToolSubject: "TODO",
+        lastTool: "Bash",
+        lastToolSubject: "pnpm test",
+        lastToolError: "Exit code 1",
+      }),
+    ),
+    "Grep: TODO",
+  );
+});
+
+Deno.test("toolSegmentText: Edit-family with empty lastToolSubject (delegates to file segment)", () => {
+  // SUBJECT_EXTRACTORS returns "" for Edit/Write/MultiEdit, so lastToolSubject
+  // is empty and the tool segment renders without the basename. The independent
+  // `file` segment (populated from @pane_last_edit_file) shows the target path.
+  assertEquals(
+    toolSegmentText(
+      mkRow({
+        lastTool: "Edit",
+        lastToolSubject: "",
+        lastEditFile: "/x/y/picker.tsx",
+      }),
+    ),
+    "last: Edit",
+  );
 });

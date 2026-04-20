@@ -30,6 +30,9 @@ export interface PaneRow {
   lastTool: string;
   lastEditFile: string;
   lastActivityAtSec: number | null;
+  currentToolSubject: string;
+  lastToolSubject: string;
+  lastToolError: string;
 }
 
 export interface TaskProgress {
@@ -61,7 +64,7 @@ export const STATUS_META = {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-// Field count = 17; parseRow's malformed-check below must match.
+// Field count = 20; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -78,7 +81,10 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_session_id}\x1f" +
   "#{@pane_last_tool}\x1f" +
   "#{@pane_last_edit_file}\x1f" +
-  "#{@pane_last_activity_at}";
+  "#{@pane_last_activity_at}\x1f" +
+  "#{@pane_current_tool_subject}\x1f" +
+  "#{@pane_last_tool_subject}\x1f" +
+  "#{@pane_last_tool_error}";
 
 const NUMERIC = /^\d+$/;
 
@@ -91,10 +97,10 @@ function normalizeStatus(raw: string): PaneStatus {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 17 fields or empty pane_id).
+// Returns null when the line is malformed (< 20 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 17) return null;
+  if (fields.length < 20) return null;
   const [
     paneId,
     target,
@@ -113,6 +119,9 @@ export function parseRow(line: string): PaneRow | null {
     lastTool,
     lastEditFile,
     lastActivityAt,
+    currentToolSubject,
+    lastToolSubject,
+    lastToolError,
   ] = fields;
   if (!paneId) return null;
   return {
@@ -133,6 +142,9 @@ export function parseRow(line: string): PaneRow | null {
     lastTool,
     lastEditFile,
     lastActivityAtSec: parseIntOrNull(lastActivityAt),
+    currentToolSubject,
+    lastToolSubject,
+    lastToolError,
   };
 }
 
@@ -251,6 +263,24 @@ export function summaryOf(row: PaneRow): string {
     : row.prompt;
   const trimmed = src.slice(0, 40);
   return trimmed || "·";
+}
+
+// Row-2 tool segment text: "<tool>[: <subject>]" while running, or
+// "last: <tool>[: <subject>][ ✗ <error>]" after completion. Returns "" when
+// no tool has run (caller skips pushing the segment).
+export function toolSegmentText(row: PaneRow): string {
+  if (row.currentTool) {
+    return row.currentToolSubject
+      ? `${row.currentTool}: ${row.currentToolSubject}`
+      : row.currentTool;
+  }
+  if (row.lastTool) {
+    const base = row.lastToolSubject
+      ? `last: ${row.lastTool}: ${row.lastToolSubject}`
+      : `last: ${row.lastTool}`;
+    return row.lastToolError ? `${base} ✖ ${row.lastToolError}` : base;
+  }
+  return "";
 }
 
 // Parse @pane_subagents pipe-sep "Type:id|Type:id" list into entries.
@@ -474,13 +504,9 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   // slot outside this budget.
   const segs: Row2Seg[] = [];
   if (row.currentTool) {
-    segs.push({ key: "tool", text: row.currentTool, color: "cyan" });
+    segs.push({ key: "tool", text: toolSegmentText(row), color: "cyan" });
   } else if (row.lastTool) {
-    segs.push({
-      key: "tool",
-      text: `last: ${row.lastTool}`,
-      color: "gray",
-    });
+    segs.push({ key: "tool", text: toolSegmentText(row), color: "gray" });
   }
   if (subagents.length > 0) {
     segs.push({
