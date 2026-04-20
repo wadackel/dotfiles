@@ -1,11 +1,11 @@
 ---
 name: impl
-description: Executes the plan task by task. Per task — implement, verify acceptance criteria, run simplify-review if large, run the Unified Lightweight Review Gate (default; opt-in /subagent-review on [strict-review] tag), mark complete. Final gate invokes /completion-audit → Security Sweep → /santa-loop. Use after /plan completes. Triggers include /impl / 実行して / 実装開始 / 作業を進めて / implement the plan.
+description: Executes the plan task by task. Per task — implement, verify acceptance criteria, optionally run simplify-review on large diffs, mark complete. Final gate is /completion-audit → /subagent-review. /santa-loop is opt-in (user-invoked only, not part of the default flow). Use after /plan completes. Triggers include /impl / 実行して / 実装開始 / 作業を進めて / implement the plan.
 ---
 
 # /impl
 
-Executes the plan produced by `/plan` task by task. Single source of truth for the per-task loop, deviation handling, simplify-review threshold, subagent-review timing, plan compliance check, and recovery after compaction.
+Executes the plan produced by `/plan` task by task. Single source of truth for the per-task loop, deviation handling, simplify-review threshold, final-gate orchestration, plan compliance check, and recovery after compaction.
 
 ## Quick Start
 
@@ -34,17 +34,15 @@ If the marker is expired (mtime > 24h, blocked by `plan-gate.ts`), the user is t
    1. `TaskGet` to retrieve full description (target files / expected behavior / verification).
    2. `TaskUpdate` to `in_progress` and record `metadata.baseline_sha` (current `git rev-parse HEAD`).
    3. **Implement** following the plan's "Files to Change" and "Patterns to Mirror" exactly. Match naming, error handling, and conventions captured during Phase 2 EXPLORE.
-   4. **Run acceptance criteria verification** commands. Capture **raw output verbatim** in `metadata.evidence` (do not paraphrase or summarize). The final gate (`/completion-audit` + `/santa-loop`) consumes this evidence.
+   4. **Run acceptance criteria verification** commands. Capture **raw output verbatim** in `metadata.evidence` (do not paraphrase or summarize). The final gate (`/completion-audit` + `/subagent-review`) consumes this evidence.
    5. **Diff size check** with `git diff --stat`. If diff ≥ 20 files OR ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Pass changed files + `git diff <baseline_sha>..HEAD` + the project CLAUDE.md path inline in the prompt. Apply HIGH-confidence simplifications, surface MEDIUM/LOW to the user.
-   6. **Unified Lightweight Review Gate** — default per-task review. See the dedicated section below for skip conditions and dispatch spec. Strict two-stage `/subagent-review` is opt-in (user explicit invoke or task description carries `[strict-review]` tag).
-   7. `TaskUpdate` to `completed` only when all acceptance criteria verifications pass and the Unified Lightweight Review Gate (or opt-in `/subagent-review`) does not surface blocking issues.
-5. After all implementation tasks complete, the final `Run /completion-audit and /santa-loop` task automatically unblocks. Execute in order:
-   1. Invoke `/completion-audit`. If verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run `/completion-audit` (max 3 tries by /completion-audit's own loop). If 3 consecutive FAILs (its internal loop exhausted), leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, surface the unresolved gap analysis to the user (mirrors santa-loop NAUGHTY escalation handling).
-   2. On **VERIFIED PASS**, run **Security Sweep**: against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`) evaluate the triggers in `~/.claude/skills/subagent-review/references/security-trigger-heuristic.md`. If any trigger fires, dispatch one fresh `security-auditor` agent via the Agent tool with the aggregated changed files and full diff. Fix any MUST_FIX issues before continuing; record verdict + raw findings in the gate task's `metadata.evidence`. If no trigger fires, record `Security Sweep: no trigger` and proceed. Max 2 retry rounds; 2 consecutive FAILs → append `[BLOCKED: security sweep escalated]` and surface to user.
-   3. On Security Sweep PASS (or skip), invoke `/santa-loop` with the plan file path as its argument. The orchestrator captures `/completion-audit`'s verdict + per-criterion summary and embeds it as the `Audit Verdict Input` for `/santa-loop`'s reviewers.
-   4. If santa-loop verdict is **NICE** → mark the gate task completed, emit the final report.
-   5. If santa-loop verdict is **NAUGHTY (escalated after 3 rounds)** → leave the task `in_progress`, append `[BLOCKED: santa-loop escalated]` to the task description, surface the unresolved critical issues to the user.
-6. Emit a final report: changed files / tests added / deviations / santa-loop verdict + reviewer agreement / next-step suggestions.
+   6. `TaskUpdate` to `completed` once all acceptance criteria verifications pass. No per-task review gate — quality and security are adjudicated at the final gate.
+5. After all implementation tasks complete, the final `Run /completion-audit and /subagent-review` task automatically unblocks. Execute in order:
+   1. Invoke `/completion-audit`. If verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run `/completion-audit` (max 3 tries by /completion-audit's own loop). If 3 consecutive FAILs (its internal loop exhausted), leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, surface the unresolved gap analysis to the user.
+   2. On **VERIFIED PASS**, invoke `/subagent-review` against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`). `/subagent-review` runs Spec Compliance → Code Quality → single Domain specialist → Security heuristic internally; the Security step replaces the former standalone Security Sweep. Must return PASS (no MUST_FIX open) to close the gate.
+   3. If `/subagent-review` returns **PASS** → mark the gate task completed, emit the final report.
+   4. If `/subagent-review` returns **FAIL** after its internal retry exhausts (3 rounds per stage) → leave the task `in_progress`, append `[BLOCKED: subagent-review escalated]` to the task description, surface the unresolved MUST_FIX issues to the user.
+6. Emit a final report: changed files / tests added / deviations / subagent-review verdict / next-step suggestions. `/santa-loop` is not part of the default flow — run it manually when additional dual-reviewer (Claude + Codex) convergence is desired before PR.
 
 ## Three elements rule (enforced per task description)
 
@@ -85,11 +83,11 @@ If context compaction occurs mid-`/impl`:
 
 ## Plan compliance check on completion
 
-After all tasks are `completed` and before `/completion-audit` and `/santa-loop`:
+After all tasks are `completed` and before `/completion-audit` + `/subagent-review`:
 1. Re-`Read` the plan file's "Files to Change" and "Completion Criteria" sections.
 2. Compare against actual `git diff --stat` of the implementation.
 3. Flag any (a) plan items not implemented, (b) implementation items not in the plan, (c) misinterpreted items.
-4. Report the comparison to the user before invoking `/santa-loop` (via the final gate task).
+4. Report the comparison to the user before invoking the final gate task.
 
 ## When to invoke the code-simplifier subagent
 
@@ -101,98 +99,23 @@ After all tasks are `completed` and before `/completion-audit` and `/santa-loop`
 
 Apply HIGH-confidence simplifications automatically (subtractive only, behavior-preserving). Surface MEDIUM/LOW to the user before changes.
 
-## Unified Lightweight Review Gate (default per-task review)
-
-Replaces the two-stage `/subagent-review` (Spec sequential→ Quality) + multi-parallel Domain + per-task Security heuristic that used to run as the default per-task review. Multi-parallel Domain is gone from both the default path and the opt-in strict path; Security moves to the final gate Security Sweep. `/santa-loop` Layer 3 rubric backstops the dropped Domain observations at final-gate time.
-
-### Skip conditions (any one suffices)
-
-- (a) `diff --stat` shows < 10 changed lines AND ≤ 2 changed files (typo / trivial)
-- (b) All changed files are docs / markdown files (`.md`, `.txt`, `README*`, or files whose only changes are within commented lines of other filetypes — but detecting comment-only diffs reliably is out of scope for the first iteration; default to file-type gating)
-- (c) Verification-only task (test execution / lint only, no code change)
-- (d) User has explicitly said "skip review" for this task
-- (e) Task description carries a `[review-exempt]` tag
-
-Record the triggering condition in `metadata.evidence` when skipping.
-
-### Dispatch (fire)
-
-When no skip condition applies:
-
-1. **Unified reviewer** — dispatch 1 fresh `code-reviewer` subagent with `model: "opus"`, using the prompt template at `~/.claude/skills/subagent-review/references/unified-review-prompt.md` filled with:
-   - `{task_description}` — task spec
-   - `{plan_section}` — relevant plan section
-   - `{git_diff}` — `git diff <baseline_sha>..HEAD`
-   - `{file_paths}` — changed file list
-   - `{claude_md_path}` — `~/.claude/CLAUDE.md`
-
-   The reviewer returns one combined VERDICT covering Spec Compliance (MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE) + Code Quality (MUST_FIX / SHOULD_FIX / NIT).
-
-2. **Conditional single Domain reviewer** — dispatch **at most one** domain-specialist agent based on the first match from this priority list:
-
-   | Priority | Match | Agent |
-   |---|---|---|
-   | 1 | `.rs` file in diff | `rust-reviewer` |
-   | 2 | `.go` file in diff | `go-reviewer` |
-   | 3 | `.dart` file in diff | `dart-reviewer` |
-   | 4 | `.nix` file in diff | `nix-reviewer` |
-   | 5 | `.tsx` / `.jsx` file in diff | `typescript-reviewer` (React / a11y is covered by `/santa-loop` Layer 3 at final gate) |
-   | 6 | `.ts` / `.mts` / `.cts` file in diff | `typescript-reviewer` |
-   | 7 | `.sql` / `migrations/` / `schema.*` in diff | `database-reviewer` (schema migration safety reinforced at `/santa-loop` Layer 3) |
-   | 8 | `Deno.` API reference in diff OR `jsr:` / `npm:` specifier added in diff OR `deno.jsonc` / `deno.json` itself modified in diff | `deno-reviewer` |
-   | 9 | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` | `cloud-architecture-reviewer` |
-   | 10 | `.css` / `.scss` / `.html` in diff AND no higher-priority match | `a11y-reviewer` |
-
-   Only the **first** matching agent runs. No multi-dispatch. This priority list is identical to the opt-in strict path's single-domain dispatch in `/subagent-review` Step 6, so both paths behave identically at the Domain dispatch step (only the preceding review steps differ: Unified single-pass vs Spec → Quality sequential).
-
-3. **No Security dispatch at per-task level** — moved to the final gate Security Sweep (see below).
-
-### Gate verdict composition
-
-When both the unified reviewer and a domain reviewer are dispatched, merge their outputs into a single gate verdict:
-
-- Gate verdict = **PASS** only when (a) unified reviewer VERDICT is PASS **and** (b) the domain reviewer has no MUST_FIX-equivalent issue (i.e., its VERDICT is PASS)
-- Gate verdict = **FAIL** if either reviewer returns FAIL
-- On retry, re-dispatch **only** the failing reviewer(s) with a fresh agent instance. A PASSed reviewer is not re-run (anchoring bias, wasted cost)
-- SHOULD_FIX / NIT items from either reviewer never block the gate — surface to the user as non-blocking notes
-
-When only the unified reviewer runs (no domain match), the unified reviewer's VERDICT is the gate verdict.
-
-### Malformed reviewer output
-
-Applies uniformly to **all reviewer subagents invoked from `/impl`** — the unified reviewer, any conditional Domain specialist, and the final-gate `security-auditor` at the Security Sweep step.
-
-A reviewer that fails to emit the mandated `VERDICT: PASS|FAIL` line (or returns malformed / un-parseable structure) is treated as FAIL with the synthetic critical issue `Reviewer returned malformed output`. One re-prompt with a stricter format reminder is allowed before counting the round; if the second attempt is still malformed, that reviewer counts as FAIL for the round and its synthetic critical issue is surfaced to the user along with any other findings. Mirrors `/subagent-review` Step 3 behavior.
-
-### Retry
-
-- Gate verdict PASS → proceed
-- Gate verdict FAIL → fix flagged issues, re-dispatch the failing reviewer(s) with **fresh** subagent(s) (max **2** rounds)
-- 2 consecutive FAILs → update task description with `[BLOCKED: unified review 2x failed]`, report issues to user
-
-### Opt-in strict review
-
-Per-task strict review via `/subagent-review` runs when:
-
-- Task description carries `[strict-review]` tag, OR
-- User explicitly invokes `/subagent-review` for the task
-
-The opt-in strict flow is: Spec compliance → Code quality → **priority-ordered single** Domain specialist → Security heuristic. This is the current `/subagent-review` contract (see that skill's SKILL.md for details). Note that this differs from the prior pre-plan behavior, which dispatched multiple Domain specialists in parallel; the opt-in path inherits the same single-specialist demotion as the unified gate (rationale: multi-parallel Domain was a primary cost driver, and `/santa-loop` Layer 3 covers the dropped observations at the final gate regardless of which per-task path was taken).
-
 ## When to invoke /subagent-review
 
-Opt-in only. The default per-task review is the **Unified Lightweight Review Gate** above. `/subagent-review` runs its strict two-stage flow when a task carries `[strict-review]` or the user invokes it explicitly. For `/codex-review` requests, follow the codex-review special rule from `~/.claude/CLAUDE.md` — never partial.
+`/subagent-review` is the second (and quality/security) step of the final gate — it runs automatically once `/completion-audit` returns VERIFIED PASS. The user can also invoke it manually on demand for a standalone review pass. There is no per-task review gate; per-task cost is kept to acceptance-criteria verification only.
 
-## Final gate: /completion-audit → Security Sweep → /santa-loop
+For `/codex-review` requests, follow the codex-review special rule from `~/.claude/CLAUDE.md` — never partial.
 
-The "Run /completion-audit and /santa-loop" task created by `/plan` Phase 5 (Pass 2) is `blockedBy` all implementation tasks. It auto-unblocks once all complete.
+## Final gate: /completion-audit → /subagent-review
+
+The "Run /completion-audit and /subagent-review" task created by `/plan` Phase 5 (Pass 2) is `blockedBy` all implementation tasks. It auto-unblocks once all complete.
 
 **Execution order is mandatory**:
-1. `/completion-audit` first — evidence-sufficiency audit (no re-execution; reads per-task `metadata.evidence` against the plan's Completion Criteria). Must return **VERIFIED PASS** before continuing. On 3 consecutive FAILs (its internal loop exhausted), append `[BLOCKED: completion-audit escalated]` and surface to the user
-2. **Security Sweep** — single `security-auditor` agent against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`), gated by the triggers in `~/.claude/skills/subagent-review/references/security-trigger-heuristic.md`. Replaces the per-task security heuristic to avoid repeated dispatch across tasks. Fix any MUST_FIX before advancing; max 2 retry rounds. On pass or no trigger, proceed. On 2 consecutive FAILs, append `[BLOCKED: security sweep escalated]` and surface
-3. `/santa-loop` third — dual-reviewer (Reviewer A: Claude code-reviewer/opus, Reviewer B: codex (claude-second fallback)). The orchestrator embeds the audit verdict + per-criterion summary as `Audit Verdict Input` so reviewers focus on code/design quality without re-judging completeness. `/santa-loop` Layer 3 rubric covers file-type-specific observations (React / a11y for `.tsx`, schema / migration / N+1 for `.sql`) that were dropped from the per-task Domain dispatch. Must return **NICE** (both reviewers PASS) to close the gate
+1. `/completion-audit` first — evidence-sufficiency audit (no re-execution; reads per-task `metadata.evidence` against the plan's Completion Criteria). Must return **VERIFIED PASS** before continuing. On 3 consecutive FAILs (its internal loop exhausted), append `[BLOCKED: completion-audit escalated]` and surface to the user.
+2. `/subagent-review` second — runs against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`). Executes Spec Compliance → Code Quality → single Domain specialist (priority-ordered) → Security heuristic internally. The Security step uses `~/.claude/skills/subagent-review/references/security-trigger-heuristic.md` and dispatches `security-auditor` only when a trigger fires. Must return **PASS** (no open MUST_FIX) to close the gate. On internal retry exhaustion (3 rounds per stage), append `[BLOCKED: subagent-review escalated]` and surface.
 
-`/verification-loop` is opt-in and invoked manually outside `/impl` (e.g., `/verify` before opening a PR, or as a standalone post-`/impl` step) when deterministic re-execution is genuinely required. It is not part of the `/impl` flow because per-task verification already covers re-execution and empirical analysis showed the gate-time re-run caught zero issues per-task missed (5/5 plans).
+`/santa-loop` is **not** part of the default final gate. Invoke it manually when additional dual-reviewer (Claude + Codex) convergence is desired — for example before opening a PR on high-risk changes. `/santa-loop` requires `/completion-audit` to have returned VERIFIED PASS first (see its SKILL.md Prerequisites).
+
+`/verification-loop` is opt-in and invoked manually outside `/impl` (e.g., `/verify` before opening a PR) when deterministic re-execution is genuinely required. It is not part of the `/impl` flow because per-task acceptance verification already covers re-execution.
 
 ## Design decisions
 
@@ -204,14 +127,14 @@ The "Run /completion-audit and /santa-loop" task created by `/plan` Phase 5 (Pas
 
 **Why incremental re-plan keeps completed tasks**: Deleting completed tasks would erase the audit trail and force re-execution. Keeping them lets `/impl` resume from the correct state with full history.
 
-**Why /subagent-review per task instead of at the end**: Issues surface immediately when the offending change is fresh in context. End-of-batch review forces re-context-loading and often misses which task introduced the issue.
+**Why no per-task review gate**: the prior Unified Lightweight Review Gate (single unified reviewer + conditional Domain) spawned 1–2 fresh subagents per task and drove wall-time + token cost upward for limited marginal value; most findings were re-surfaced by `/subagent-review` at the final gate anyway. Removing per-task review keeps the per-task loop to implementation + acceptance verification only. Quality and security are adjudicated once, against the aggregated diff, at the final gate.
 
-**Why the diff-size threshold for the code-simplifier subagent**: Small diffs are unlikely to introduce defensive complexity worth a fresh-eyes review. Large diffs accumulate it.
+**Why the diff-size threshold for the code-simplifier subagent**: Small diffs are unlikely to introduce defensive complexity worth a fresh-eyes review. Large diffs accumulate it. This is the only per-task subagent dispatch that remains, and it is threshold-gated.
 
 **Why Agent dispatch (not skill loading)**: The `code-simplifier` subagent must actually execute to produce proposals. Loading the simplify-review skill definition into context alone does not spawn the reviewer. Direct Agent dispatch keeps behavior deterministic and matches the same pattern used by `/plan` Phase 4 Step 6 for `plan-simplifier`.
 
-**Why /completion-audit is the default gate (not /verification-loop)**: per-task verification already covers re-execution; the gate's value is evidence audit + adversarial review, not redundant re-execution. Default re-execution duplicated cost without catching new issues empirically (5 plans audited, 0 catches). `/verification-loop` remains opt-in for cases that genuinely require deterministic re-execution.
+**Why /completion-audit is the default gate (not /verification-loop)**: per-task verification already covers re-execution; the gate's value is evidence audit + adversarial review, not redundant re-execution. Default re-execution duplicated cost without catching new issues empirically. `/verification-loop` remains opt-in for cases that genuinely require deterministic re-execution.
 
-**Why unified lightweight review as the default per-task review**: the prior 2-stage `/subagent-review` (Spec sequential→ Quality) + parallel Domain dispatch + Security heuristic spawned 4-7 fresh subagents per task and drove wall-time + token cost through the roof. Consolidating to a single unified pass (Spec + Quality merged) + at most one Domain agent + skip conditions for trivial / docs-only / verification-only tasks cuts per-task subagent count to 0-2 while keeping the early-feedback value. Strict review remains available opt-in via `[strict-review]` tag or explicit `/subagent-review` invocation.
+**Why /subagent-review (not /santa-loop) as the default final-gate review**: `/santa-loop` spawns two independent reviewers (Claude Opus + Codex CLI) and iterates until both return NICE. It is powerful but token-heavy — the dual-model convergence loop was the single largest cost component of the old `/impl` flow. `/subagent-review` covers spec compliance, code quality, domain specialization, and security heuristic in one sequential pass against the aggregated diff and converges faster. `/santa-loop` stays available as a user-invoked opt-in step for high-assurance reviews (e.g., pre-PR on security-critical changes).
 
-**Why security dispatch moved to the final gate Security Sweep**: running the security heuristic per task dispatched the `security-auditor` repeatedly on overlapping diffs. At the final gate the heuristic runs once against the aggregated diff, eliminating the per-task repetition cost. The Security Sweep remains **heuristic-gated** — if the security-trigger-heuristic does not match the aggregated diff, no `security-auditor` is dispatched and the step records `Security Sweep: no trigger`. Residual risk: the heuristic can miss security-relevant changes whose signatures are outside its trigger set (path / content / config patterns). For high-assurance reviews, the user can force coverage by tagging the relevant task with `[strict-review]` (which runs per-task security heuristic on the opt-in path) or by invoking `/subagent-review` manually. Unconditional dispatch of `security-auditor` on every final gate would solve this but incurs cost on changes that carry no security signal; the first-iteration default prioritizes cost reduction and leaves full coverage as opt-in.
+**Why Security Sweep is absorbed into /subagent-review**: the prior Security Sweep was a separate orchestration step that duplicated the heuristic check already owned by `/subagent-review` Step 7. Collapsing them removes one orchestration layer without changing detection coverage — the same `security-trigger-heuristic.md` fires `security-auditor` when triggers match the aggregated diff. Residual risk (heuristic false negatives on exotic security signals) is unchanged from the prior design; users can force full coverage by invoking `security-auditor` directly or running `/santa-loop` manually.

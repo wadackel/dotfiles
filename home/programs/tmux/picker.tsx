@@ -33,10 +33,13 @@ export interface TaskProgress {
   total: number;
 }
 
-// Row-1 column widths for the list picker. Tuned so repo + " · " + branch
-// stays close to the previous 24-col slash-joined label (25 col total).
-const REPO_WIDTH = 12;
-const BRANCH_WIDTH = 10;
+// Row-1 repo/branch column width caps for the dynamic layout. App computes
+// per-render repoMax / branchMax by scanning visible rows and clamps to these
+// upper bounds so a single long branch cannot starve the summary slot.
+const REPO_CAP = 16;
+const BRANCH_CAP = 28;
+// Minimum visible summary width the layout must preserve after repo + branch.
+const MIN_SUMMARY = 15;
 
 // Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
 // the preview capture (capturePane) re-run at this interval so the popup
@@ -161,22 +164,18 @@ export function summaryOf(row: PaneRow): string {
   return trimmed || "·";
 }
 
-// Row-2 tool segment text: "<tool>[: <subject>]" while running, or
-// "last: <tool>[: <subject>][ ✗ <error>]" after completion. Returns "" when
-// no tool has run (caller skips pushing the segment).
+// Row-2 tool segment text: "<tool>[: <subject>][ ✖ <error>]". Same text for
+// current and last tools — the caller distinguishes them by color (cyan for
+// current, gray for last). Returns "" when no tool has run (caller skips).
 export function toolSegmentText(row: PaneRow): string {
-  if (row.currentTool) {
-    return row.currentToolSubject
-      ? `${row.currentTool}: ${row.currentToolSubject}`
-      : row.currentTool;
+  const tool = row.currentTool || row.lastTool;
+  if (!tool) return "";
+  const subject = row.currentTool ? row.currentToolSubject : row.lastToolSubject;
+  const base = subject ? `${tool}: ${subject}` : tool;
+  if (!row.currentTool && row.lastToolError) {
+    return `${base} ✖ ${row.lastToolError}`;
   }
-  if (row.lastTool) {
-    const base = row.lastToolSubject
-      ? `last: ${row.lastTool}: ${row.lastToolSubject}`
-      : `last: ${row.lastTool}`;
-    return row.lastToolError ? `${base} ✖ ${row.lastToolError}` : base;
-  }
-  return "";
+  return base;
 }
 
 // Parse @pane_subagents pipe-sep "Type:id|Type:id" list into entries.
@@ -194,24 +193,21 @@ export function parseSubagents(raw: string): SubagentEntry[] {
   });
 }
 
-// Render subagent list as a tree, grouping entries by type (auto-numbered per type).
-// Empty input returns "·" placeholder. Single type → "└ Type #1 #2"; multiple types
-// use ├/└ connectors across type groups.
+// Render subagent list grouped by type with ×N count (e.g. "Explore ×2, Plan").
+// Single occurrences render bare type name; identical types aggregate into ×N.
+// Empty input returns "·" placeholder. In-segment separator is ", " to
+// distinguish from the outer Row2 separator " · ".
 export function renderSubagentTree(entries: SubagentEntry[]): string {
   if (entries.length === 0) return "·";
   const counts = new Map<string, number>();
-  const numbered = entries.map((e) => {
-    const n = (counts.get(e.type) ?? 0) + 1;
-    counts.set(e.type, n);
-    return `${e.type} #${n}`;
-  });
-  if (numbered.length === 1) return `└ ${numbered[0]}`;
-  return numbered
-    .map((
-      label,
-      i,
-    ) => (i === numbered.length - 1 ? `└ ${label}` : `├ ${label}`))
-    .join(" ");
+  const order: string[] = [];
+  for (const e of entries) {
+    if (!counts.has(e.type)) order.push(e.type);
+    counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
+  }
+  return order
+    .map((t) => (counts.get(t)! > 1 ? `${t} ×${counts.get(t)}` : t))
+    .join(", ");
 }
 
 // ---- tmux I/O (impure) ----
@@ -298,13 +294,13 @@ export async function readTaskProgress(
   return total === 0 ? null : { done, total };
 }
 
-async function fetchPanes(selfPaneId: string): Promise<PaneRow[]> {
+async function fetchPanes(): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
   const rows: PaneRow[] = [];
   for (const line of stdout.split("\n")) {
     if (!line) continue;
     const row = parseRow(line);
-    if (row && row.paneId !== selfPaneId && row.agent === "claude") {
+    if (row && row.agent === "claude") {
       rows.push(row);
     }
   }
@@ -361,6 +357,8 @@ interface PaneRowLineProps {
   selected: boolean;
   taskProgress: TaskProgress | null;
   listWidth: number;
+  repoMax: number;
+  branchMax: number;
 }
 
 // Row-2 segment (colored text). Built in priority order; when the cumulative
@@ -374,7 +372,15 @@ interface Row2Seg {
 const ROW2_SEP = " · ";
 
 const PaneRowLine: React.FC<PaneRowLineProps> = (
-  { row, now, selected, taskProgress, listWidth }: PaneRowLineProps,
+  {
+    row,
+    now,
+    selected,
+    taskProgress,
+    listWidth,
+    repoMax,
+    branchMax,
+  }: PaneRowLineProps,
 ) => {
   const color = statusColor(row.status);
   const pointer = selected ? "❯ " : "  ";
@@ -388,8 +394,8 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
     row.cwd || row.currentPath,
     row.worktreeBranch,
   );
-  const repoCol = repo.slice(0, REPO_WIDTH).padEnd(REPO_WIDTH);
-  const branchCol = branchName.slice(0, BRANCH_WIDTH).padEnd(BRANCH_WIDTH);
+  const repoCol = repo.slice(0, repoMax).padEnd(repoMax);
+  const branchCol = branchName.slice(0, branchMax).padEnd(branchMax);
   const separator = repo && branchName ? " · " : "   ";
   const summary = summaryOf(row);
   const subagents = parseSubagents(row.subagents);
@@ -433,10 +439,10 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
     });
   }
 
-  // Budget = listWidth minus 4-space indent minus a small margin before target.
+  // Budget = listWidth minus 2-space indent minus a small margin before target.
   // Always keep at least the top-priority segment even if it exceeds budget —
   // an overrun is preferable to rendering nothing.
-  const budget = Math.max(0, listWidth - 4 - 2);
+  const budget = Math.max(0, listWidth - 2 - 2);
   let totalLen = segs.length > 0 ? segs[0].text.length : 0;
   for (let i = 1; i < segs.length; i++) {
     totalLen += ROW2_SEP.length + segs[i].text.length;
@@ -461,7 +467,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       </Box>
       {/* Line 2: indent + priority-ordered segments + target (right-align) */}
       <Box>
-        <Text>{"    "}</Text>
+        <Text>{"  "}</Text>
         {segs.map((s, i) => (
           <React.Fragment key={s.key}>
             {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
@@ -533,11 +539,9 @@ function Preview(
 
 function App({
   initialRows,
-  selfPaneId,
   onSelect,
 }: {
   initialRows: PaneRow[];
-  selfPaneId: string;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
@@ -561,7 +565,7 @@ function App({
     // no out-of-order overwrite, and errors do not break the loop.
     const tick = async () => {
       try {
-        const r = await fetchPanes(selfPaneId);
+        const r = await fetchPanes();
         if (cancelled) return;
         setRows(r);
         // Fetch task progress for every Claude pane in parallel. Failures are
@@ -584,7 +588,7 @@ function App({
       cancelled = true;
       if (timerId !== undefined) clearTimeout(timerId);
     };
-  }, [selfPaneId]);
+  }, []);
 
   const foundIdx = rows.findIndex((r: PaneRow) => r.paneId === selectedPaneId);
   const index = foundIdx >= 0 ? foundIdx : 0;
@@ -623,6 +627,26 @@ function App({
   const previewWidth = Math.max(20, totalCols - listWidth - 1);
   const bodyHeight = Math.max(5, totalRows - 2);
 
+  // Dynamic repo/branch column widths: scan visible rows, clamp to caps, and
+  // shrink branch first if the combined width would starve the summary slot.
+  // Row 1 fixed-width cost before summary: pointer(2) + "icon "(2) + status5(5)
+  // + elapsed5(5) + " · "(3) + " "(1) = 18 cols.
+  const rowsParts = rows.map((r: PaneRow) =>
+    cwdBranchParts(r.cwd || r.currentPath, r.worktreeBranch)
+  );
+  const columnBudget = Math.max(0, listWidth - 18 - MIN_SUMMARY);
+  const repoMax = Math.min(
+    REPO_CAP,
+    Math.max(4, ...rowsParts.map((p: { repo: string }) => p.repo.length)),
+  );
+  let branchMax = Math.min(
+    BRANCH_CAP,
+    Math.max(4, ...rowsParts.map((p: { branch: string }) => p.branch.length)),
+  );
+  if (repoMax + branchMax > columnBudget) {
+    branchMax = Math.max(4, columnBudget - repoMax);
+  }
+
   return (
     <Box flexDirection="column" width={totalCols} height={totalRows}>
       <Box marginBottom={1}>
@@ -641,6 +665,8 @@ function App({
               selected={i === index}
               taskProgress={taskProgressMap.get(row.paneId) ?? null}
               listWidth={listWidth}
+              repoMax={repoMax}
+              branchMax={branchMax}
             />
           ))}
         </Box>
@@ -665,18 +691,12 @@ async function main(): Promise<void> {
     console.error("picker.tsx must run inside tmux");
     Deno.exit(2);
   }
-  // TMUX_PANE is set in regular panes but NOT in `display-popup -E` subprocesses.
-  // Fall back to empty so fetchPanes does not exclude an arbitrary pane —
-  // popups themselves are not enumerated by `tmux list-panes -a`, so nothing
-  // spurious leaks in. (fetchPanes additionally filters to @pane_agent=claude.)
-  const selfPaneId = Deno.env.get("TMUX_PANE") ?? "";
-  const rows = await fetchPanes(selfPaneId);
+  const rows = await fetchPanes();
 
   const result: { value: PaneRow | null } = { value: null };
   const { waitUntilExit } = render(
     <App
       initialRows={rows}
-      selfPaneId={selfPaneId}
       onSelect={(r) => {
         result.value = r;
       }}

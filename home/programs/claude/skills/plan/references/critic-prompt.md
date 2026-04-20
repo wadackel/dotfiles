@@ -3,7 +3,7 @@
 Prompt template for `/plan` Phase 4 Critic Subagent. Replace `{placeholders}` before use.
 
 ```
-You are an adversarial plan critic. Your role is to find weaknesses in the plan, not to praise it. Be genuinely critical — a plan with zero issues is suspicious.
+You are an adversarial plan critic. Your job is to find weaknesses the authors may not see. Focus on **intent drift, risky assumptions, hidden scope gaps, and over-engineering** — not format compliance. A plan with zero issues is suspicious.
 
 ## Inputs
 
@@ -13,34 +13,46 @@ You are an adversarial plan critic. Your role is to find weaknesses in the plan,
 
 ## Evaluation Dimensions
 
-Evaluate the plan on each dimension. For each, provide:
-- **Assessment**: 1-2 sentence evaluation
-- **Issues**: Specific problems found (empty list if none)
-- **Suggestion**: Concrete improvement for each issue (empty if none)
+For each dimension, report:
+- **Assessment**: 1–2 sentences
+- **Issues**: numbered list, or "None"
+- **Suggestion**: a concrete correction per issue (omit when Issues is None)
+
+Prioritize signals of:
+- **Intent drift** — the plan solves a different problem from the user's request, or its Success criteria miss the user's actual outcome
+- **Risky assumption** — a load-bearing assumption the plan does not verify, especially one that would silently fail in production
+- **Hidden scope gap** — a part of the work (edge case, boundary, failure path, user the plan does not name) that the plan implicitly depends on but never addresses
+- **Over-engineering** — complexity, abstraction, or defensive code added without a concrete caller or failure mode driving it
 
 ### 1. Assumption Validity
-What is the plan assuming? Are those assumptions verified or just hoped for?
-Look for: unverified technical feasibility, assumed API/library behavior, assumed codebase patterns that may not exist, implicit dependencies.
+
+What is the plan taking as given? Which assumptions would cause the plan to fail silently if wrong?
+Focus on: unverified technical feasibility, assumed API/library behavior, assumed codebase patterns that may not exist, implicit dependencies, claims about existing behavior that the plan has not empirically observed.
 
 ### 2. Failure Modes
-What could go wrong? What happens when things fail?
-Look for: missing error handling, race conditions, partial failure states, data loss scenarios, recovery gaps, unhandled edge cases.
 
-### 3. Alternative Approaches
-Is this the simplest viable approach? Are there better options?
-Look for: over-complicated solutions where simpler ones exist, missed standard library features, fighting the framework instead of using it, reinventing existing patterns.
+What could go wrong, and what happens when it does?
+Focus on: missing error handling where failure is plausible, race conditions on shared state, partial failure states, data loss scenarios, recovery gaps, edge cases the plan narrates but does not handle.
 
-### 4. Scope Appropriateness
-Is the plan over-engineering or under-scoping?
-Look for: YAGNI violations (building what's not needed), missing critical functionality, gold-plating, doing more than what was requested, insufficient definition of done, missing verification steps that match the scope of changes.
+### 3. Alternative Approaches (simplicity bias)
+
+Is this the simplest viable approach? Could a shorter path reach the same Success criteria?
+Focus on: over-complicated solutions where simpler ones exist, missed standard library / framework features, fighting the framework instead of using it, reinventing existing utilities, abstractions introduced before a second caller exists.
+
+### 4. Scope Appropriateness (intent drift + hidden scope gap)
+
+Does the plan solve the user's actual problem, no more and no less?
+Focus on: YAGNI violations (building speculative features), missing critical functionality implied by the request, gold-plating, doing more than what was requested, insufficient Definition of Done, missing verification that would observe the behavior the plan changes. Also check whether `### Unresolved Items` in the plan's Phase 1 subsections actually matter for Success — items left unresolved without a defensible `next:` plan are hidden scope gaps.
 
 ### 5. Implementation Specificity
-Is this concrete enough to implement without ambiguity?
-Look for: vague steps like "handle errors appropriately", missing file paths, unspecified data formats, unclear step sequencing, ambiguous variable/function naming.
+
+Is the plan concrete enough that the implementer would not diverge from user intent?
+Focus on: vague steps like "handle errors appropriately", missing file paths, unspecified data formats, unclear step sequencing, ambiguous variable/function naming, verification commands without expected outputs. Ambiguity here is how intent drift enters at implementation time.
 
 ### 6. Codebase Alignment
+
 Does this match existing patterns and reuse existing utilities?
-Look for: reinventing existing helpers, breaking established conventions, inconsistent naming/structure, missed opportunities to reuse shared code.
+Focus on: reinventing existing helpers, breaking established conventions, inconsistent naming/structure, missed opportunities to reuse shared code, misreading the existing pattern the plan claims to mirror.
 
 ## Output Format
 
@@ -90,22 +102,36 @@ Respond in this exact structure:
 ### Verdict
 [ITERATE | CONVERGED]
 
-Reasoning: [1-2 sentences explaining why the plan needs more iteration or is ready]
+Reasoning: [1–2 sentences explaining why the plan needs more iteration or is ready]
 ```
 
 ---
 
-## Phase 1 unresolved items detection (Phase 4 Round 1 Critic mandate)
+## Phase 1 handoff detection (Round 1 Critic mandate)
 
-Phase 1 Requirement Clarification multi-round は escalate (same-trigger repeats) または max rounds reached で未解消項目を残したまま Phase 2 へ進むことがある。この場合 plan 本文には以下 2 種のマーカーが残る — Round 1 Critic は **plan 全文を読み、これらのマーカーを必ず検出して critique に surface する義務がある**:
+Phase 1 Requirement Clarification emits three structured subsections under the plan body (before `## Overview`): `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Round 1 Critic **must parse these subsections by structure, not by phrase match**, and surface their contents as critique inputs.
 
-1. **`unresolved after N rounds: <item>`** (または `Assumption (unresolved after 3 rounds): ...`) — Phase 1 Round loop で解消不能だった項目。Round 1 Critic は **必ず Critical Issue [USER] として surface する** (「この observation は Phase 1 で解消不能、Phase 4 Step 7 Consolidated Interview で確定が必要」と critique 出力)。plan 本文に記録された理由 (same-trigger escalate / max rounds) を critique に引用する
+### `### Unresolved Items` — semantic parse
 
-2. **`Assumption: <observation>: <value> (user-overridden, flagged for Phase 4 Critic re-validation)`** — User 明示的 override で Phase 1 を抜けた項目。Round 1 Critic は以下で振り分ける:
-   - codebase signal で検証可能 → **Improvement Suggestion [TECH]** として扱い、検証結果を提示
-   - User judgment 要 (主観 / 好み / 未開示の domain 知識) → **Critical Issue [USER]** として Phase 4 Step 7 Consolidated Interview 候補に戻す
+Each entry in `### Unresolved Items` has three fields: `item`, `reason`, `next`. Round 1 Critic must:
 
-これらマーカーの検出漏れは Round 1 Critic の失格条件。該当マーカーが 0 件なら critique 出力で `Phase 1 unresolved markers: none detected` と明記すること。
+1. Enumerate every entry in the subsection.
+2. For each entry, surface a **Critical Issue [USER]** labeled with the `item` value, quoting the `reason` (why it was left unresolved) and the `next` field (where it is expected to be resolved — typically `Phase 4 Step 7 Consolidated Interview`).
+3. If `next` does **not** point to a concrete downstream resolution step (e.g., left blank, or vague like "later"), treat it as a hidden scope gap and surface that in Scope Appropriateness as well.
+
+Failing to enumerate `### Unresolved Items` entries is a disqualifying omission. If the subsection is **absent from the plan**, or present with body `(none)`, record the line `Phase 1 unresolved items: none detected` in the critique output.
+
+### `### Assumptions` — user-override flag
+
+Each entry in `### Assumptions` has `observation`, `value`, `reason`, and optionally `user-overridden: true`. Round 1 Critic must:
+
+1. Scan all entries for the `user-overridden: true` flag.
+2. For each user-overridden entry:
+   - If the value can be verified from the codebase (file / pattern / config lookup), treat it as an **Improvement Suggestion [TECH]** and report the verification result alongside the original value.
+   - If the value depends on user judgment (subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the Phase 4 Step 7 Consolidated Interview queue.
+3. Non-overridden assumptions are still valid critique targets under dimension 1 (Assumption Validity) if they look load-bearing and unverified — but they are not mandatory surfaces.
+
+Do **not** match on `Assumption: ... (user-overridden, flagged for Phase 4 Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.
 
 ---
 

@@ -56,6 +56,16 @@ Performed by the main session (the implementer):
 [git diff --name-only output]
 ```
 
+**Verifier tag handling (mandatory when the plan uses `/plan` tags):**
+
+Each Completion Criteria item is tagged by `/plan` Phase 4 Step 8 with one of:
+
+- `[file-state]` — verifiable by Read / Grep / Glob
+- `[orchestrator-only]` — required host access the auditor's sandbox may lack; main session pre-runs and embeds verbatim output in evidence
+- `[outcome]` — **circular by design**, references post-audit state (e.g., `/subagent-review returns PASS`). Evaluated AFTER `/completion-audit` returns PASS, so no evidence exists at audit time
+
+When building the evidence document, preserve these tags verbatim from the plan. The auditor prompt (Step 2) must explicitly instruct the subagent to EXCLUDE `[outcome]`-tagged items from the verdict — otherwise the audit deadlocks (auditor demands evidence for `[outcome]` items that by design cannot exist yet, forcing a FAIL verdict, which blocks running the thing the `[outcome]` item references).
+
 ### Step 2: Spawn Completion Auditor
 
 Dispatch a fresh `completion-auditor` subagent via the Agent tool:
@@ -63,10 +73,29 @@ Dispatch a fresh `completion-auditor` subagent via the Agent tool:
 ```
 Agent tool:
   subagent_type: "completion-auditor"
-  prompt: [include the evidence document from Step 1]
+  prompt: [include the evidence document from Step 1 + the Audit Protocol Clarification below]
+```
+
+**Audit Protocol Clarification (mandatory — prepend to every auditor dispatch):**
+
+```
+## Audit Protocol Clarification
+
+1. `[outcome]`-tagged Completion Criteria items are CIRCULAR BY DESIGN — they describe post-audit
+   state (e.g., `/subagent-review returns PASS`) that only becomes true AFTER this audit returns PASS.
+   Do NOT demand evidence for `[outcome]` items. Exclude them from the verdict determination
+   (treat as NOT GATING). If you require evidence for an `[outcome]` item, the workflow deadlocks.
+
+2. `[orchestrator-only]` items waived by explicit user decision (documented in evidence as
+   "USER WAIVED" or equivalent) count as satisfied via the "Requires User Confirmation"
+   alternative pathway. Treat as BLOCKED BY USER (legitimate skip), not as MISSING EVIDENCE.
+
+3. Evaluate only `[file-state]` and non-waived `[orchestrator-only]` items for PASS/FAIL. All
+   other items (outcome, user-waived) are excluded from the verdict.
 ```
 
 **Pass to the auditor:**
+- The Audit Protocol Clarification above (verbatim)
 - The complete evidence document from Step 1
 
 **Do NOT pass:** full implementation history, your own assessment of quality, or results from prior audit attempts.

@@ -248,9 +248,12 @@ async function callClaude(condensed: string): Promise<LLMResult | null> {
     "出力は要約のみ。説明や前置きは不要です。";
 
   try {
-    // Build env without CLAUDECODE to avoid nested session guard
+    // CLAUDECODE: avoid nested session guard.
+    // TMUX_PANE: prevent subprocess Claude Code hooks from writing to the PARENT
+    // pane's @pane_* options (otherwise picker shows stale "run" status).
+    const EXCLUDE = new Set(["CLAUDECODE", "TMUX_PANE"]);
     const env = Object.fromEntries(
-      Object.entries(Deno.env.toObject()).filter(([k]) => k !== "CLAUDECODE"),
+      Object.entries(Deno.env.toObject()).filter(([k]) => !EXCLUDE.has(k)),
     );
 
     const cmd = new Deno.Command("claude", {

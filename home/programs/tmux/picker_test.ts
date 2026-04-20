@@ -414,29 +414,29 @@ Deno.test("renderSubagentTree: empty → middle dot", () => {
   assertEquals(renderSubagentTree([]), "·");
 });
 
-Deno.test("renderSubagentTree: single entry → └ with number", () => {
+Deno.test("renderSubagentTree: single entry → type name only", () => {
   assertEquals(
     renderSubagentTree([{ type: "Explore", id: "a1" }]),
-    "└ Explore #1",
+    "Explore",
   );
 });
 
-Deno.test("renderSubagentTree: multiple entries → tree connectors", () => {
+Deno.test("renderSubagentTree: multiple types → comma-separated", () => {
   const result = renderSubagentTree([
     { type: "Explore", id: "a1" },
     { type: "Plan", id: "b2" },
     { type: "Researcher", id: "c3" },
   ]);
-  assertEquals(result, "├ Explore #1 ├ Plan #1 └ Researcher #1");
+  assertEquals(result, "Explore, Plan, Researcher");
 });
 
-Deno.test("renderSubagentTree: same type auto-numbers per type", () => {
+Deno.test("renderSubagentTree: same type aggregates with ×N", () => {
   const result = renderSubagentTree([
     { type: "Explore", id: "a1" },
     { type: "Explore", id: "b2" },
     { type: "Plan", id: "c3" },
   ]);
-  assertEquals(result, "├ Explore #1 ├ Explore #2 └ Plan #1");
+  assertEquals(result, "Explore ×2, Plan");
 });
 
 // --- basename ---
@@ -579,19 +579,19 @@ Deno.test("toolSegmentText: currentTool with subject → `tool: subject`", () =>
   );
 });
 
-Deno.test("toolSegmentText: lastTool without subject → `last: tool`", () => {
+Deno.test("toolSegmentText: lastTool without subject → bare tool name", () => {
   assertEquals(
     toolSegmentText(mkRow({ lastTool: "Edit" })),
-    "last: Edit",
+    "Edit",
   );
 });
 
-Deno.test("toolSegmentText: lastTool with subject → `last: tool: subject`", () => {
+Deno.test("toolSegmentText: lastTool with subject → `tool: subject`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({ lastTool: "Grep", lastToolSubject: "foo.*bar" }),
     ),
-    "last: Grep: foo.*bar",
+    "Grep: foo.*bar",
   );
 });
 
@@ -600,11 +600,11 @@ Deno.test("toolSegmentText: lastTool with error (no subject) appends ` ✖ <erro
     toolSegmentText(
       mkRow({ lastTool: "Bash", lastToolError: "Exit code 1" }),
     ),
-    "last: Bash ✖ Exit code 1",
+    "Bash ✖ Exit code 1",
   );
 });
 
-Deno.test("toolSegmentText: lastTool with subject + error → `last: tool: subject ✖ error`", () => {
+Deno.test("toolSegmentText: lastTool with subject + error → `tool: subject ✖ error`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({
@@ -613,7 +613,7 @@ Deno.test("toolSegmentText: lastTool with subject + error → `last: tool: subje
         lastToolError: "Exit code 1",
       }),
     ),
-    "last: Bash: pnpm test ✖ Exit code 1",
+    "Bash: pnpm test ✖ Exit code 1",
   );
 });
 
@@ -644,6 +644,6 @@ Deno.test("toolSegmentText: Edit-family with empty lastToolSubject (delegates to
         lastEditFile: "/x/y/picker.tsx",
       }),
     ),
-    "last: Edit",
+    "Edit",
   );
 });

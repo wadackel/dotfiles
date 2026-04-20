@@ -1,29 +1,26 @@
 ---
 name: subagent-review
-description: "Opt-in strict two-stage subagent review (spec compliance → code quality → priority-ordered single domain specialist → security heuristic). The default per-task review is /impl's Unified Lightweight Review Gate; this skill runs only when a task carries [strict-review] or the user invokes it explicitly. Also fires on 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
+description: "Final-gate review skill for /impl — runs Spec Compliance → Code Quality → priority-ordered single Domain specialist → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
 ---
 
 # Subagent Review
 
-Two-stage review using fresh-context subagents to counter long-context quality degradation. Each stage spawns an independent `code-reviewer` subagent that reads actual code — not the main session's summary.
+Fresh-context subagent review that adjudicates spec compliance and code quality at the `/impl` final gate. Each stage spawns an independent `code-reviewer` subagent that reads actual code — not the main session's summary.
 
 **Core principle:** Fresh context per review. Do Not Trust the Report.
 
 ## When to Use
 
-**Opt-in only.** The default per-task review is `/impl`'s Unified Lightweight Review Gate (single unified subagent, skip conditions, max 2 rounds). This strict two-stage review runs only when:
-
-- **Task tag**: Task description carries `[strict-review]` — `/impl` dispatches this skill instead of the unified gate for that task
-- **Manual invocation**: User invokes `/subagent-review` or uses trigger phrases ('subagent review', 'タスクレビュー', 'サブエージェントレビュー')
-- **Ad-hoc**: Pass task description as `$ARGUMENTS`, or provide when prompted
+- **Final gate (default)**: `/impl` invokes this skill automatically after `/completion-audit` returns VERIFIED PASS. The aggregated diff from the first task's `baseline_sha` to `HEAD` is the review target.
+- **Manual invocation**: User invokes `/subagent-review` or uses trigger phrases ('subagent review', 'タスクレビュー', 'サブエージェントレビュー') — for example to re-run the review after fixing findings, or to review a branch outside the `/impl` flow.
+- **Ad-hoc**: Pass task description or scope as `$ARGUMENTS`, or provide when prompted.
 
 ## Skip Conditions
 
 Skip when:
-- Verification-only tasks (test execution, lint, `nix flake check` — no code changes)
-- Plan explicitly marks a task as review-exempt
-- User says "no subagent review"
-- Task creation was skipped (single-file, few-line changes like typo fixes)
+- No code changed (aggregated diff is empty).
+- Invocation target is docs-only (`.md` / `.txt` only).
+- User explicitly says "no subagent review".
 
 ## Workflow
 
@@ -84,7 +81,7 @@ Same handling as Step 3:
 
 ### Step 6: Domain-Specific Reviewer Dispatch (priority-ordered, max 1 agent)
 
-Only after Code Quality passes. Dispatch **at most one** language / domain specialist. Earlier designs ran multiple specialists in parallel (e.g., `.tsx` → typescript + react + a11y); that multiplied subagent cost without clearly compounding value. In this opt-in strict path we dispatch the highest-priority single match; broader domain coverage is handled by `/santa-loop` Layer 3 rubric at the final gate.
+Only after Code Quality passes. Dispatch **at most one** language / domain specialist. Earlier designs ran multiple specialists in parallel (e.g., `.tsx` → typescript + react + a11y); that multiplied subagent cost without clearly compounding value. This skill dispatches the highest-priority single match to keep cost bounded.
 
 #### Priority (first match wins)
 
@@ -133,9 +130,9 @@ The specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT:
 - FAIL if `VERDICT: FAIL` on a MUST_FIX issue
 - On FAIL: fix the MUST_FIX items, then re-dispatch the same specialist with a fresh agent instance (max 3 rounds)
 
-### Step 7: Security Dispatch Heuristic (opt-in only — default **MOVED** to final gate)
+### Step 7: Security Dispatch Heuristic
 
-**MOVED**: In the default `/impl` flow the security heuristic runs once at the final gate's **Security Sweep** (after `/completion-audit` VERIFIED PASS, before `/santa-loop`). Per-task security dispatch only fires when this skill is invoked via the opt-in path (`[strict-review]` tag or manual invocation). See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
+Evaluated after Code Quality / Domain steps complete. Replaces the former separate Security Sweep step in `/impl`'s final gate by absorbing the heuristic directly into this skill. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
 
 #### Summary of triggers
 
@@ -178,13 +175,13 @@ fi
 
 | Aspect | simplify-review | subagent-review | codex-review |
 |--------|----------------|----------------|--------------|
-| Scope | Plan or per-task code | Per-task incremental (opt-in) | Full implementation |
-| Trigger | After /plan / large diffs / manual | Opt-in: task tag `[strict-review]` or manual invoke | User explicitly requests |
+| Scope | Plan or per-task code | Aggregated diff at final gate | Full implementation |
+| Trigger | After /plan / large diffs / manual | `/impl` final gate (after /completion-audit) or manual invoke | User explicitly requests |
 | Reviewer | Claude subagent (fresh context) | Claude subagent (fresh context) | Codex CLI (external tool) |
-| Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality (opt-in strict review) | Holistic quality, security |
+| Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality, domain, security | Holistic quality, security |
 
-Normal flow: `task → unified lightweight review (default per-task review in /impl) → next task → ... → final gate (/completion-audit → Security Sweep → /santa-loop) → done`
+Normal flow: `task → acceptance verification → next task → ... → final gate (/completion-audit → /subagent-review) → done`
 
-Opt-in strict review replaces the unified lightweight review on a single task: `task with [strict-review] → subagent-review → next task`.
+Optional opt-in: `/santa-loop` (user-invoked dual Claude + Codex convergence) after the gate passes, for high-assurance reviews.
 
-With codex-review: `... → all tasks done → codex-review (additional)`
+With codex-review: `... → gate passes → codex-review (additional user-invoked step)`

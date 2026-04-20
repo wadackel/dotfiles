@@ -49,7 +49,7 @@
 - When behavior changes and relevant tests already exist, add or update tests as part of the change unless the user explicitly says not to.
 - For Web UI changes, verify with `/agent-browser`: check screenshots/layout, console errors, and responsive behavior.
 - Trust concrete evidence over analysis or documentation when they disagree.
-- When running through `/impl`, do not claim completion until `/completion-audit` and `/santa-loop` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/santa-loop/SKILL.md`.
+- When running through `/impl`, do not claim completion until `/completion-audit` and `/subagent-review` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/subagent-review/SKILL.md`. `/santa-loop` is opt-in and only runs when the user invokes it explicitly.
 
 ### Bug Fixes
 

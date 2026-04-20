@@ -202,9 +202,10 @@ Deno.test("S1: empty list (agent filter excludes non-claude)", async () => {
 });
 
 // S6: When @pane_current_tool is empty but @pane_last_tool is set, row 2
-// should render `last: <tool>` — the primary fallback that replaces the
-// bare-blink "empty row 2 after PostToolUse" failure mode.
-Deno.test("S6: last-tool fallback renders `last: Edit`", async () => {
+// should render the bare tool name (gray color distinguishes past from
+// current; the prior `last: ` prefix was removed). Primary fallback against
+// the "empty row 2 after PostToolUse" failure mode.
+Deno.test("S6: last-tool fallback renders bare tool name (no `last: ` prefix)", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -214,7 +215,11 @@ Deno.test("S6: last-tool fallback renders `last: Edit`", async () => {
     });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
-    assertStringIncludes(out, "last: Edit");
+    assertStringIncludes(out, "Edit");
+    assertFalse(
+      out.includes("last: "),
+      `removed prefix 'last: ' leaked into render:\n${out}`,
+    );
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {
@@ -340,14 +345,47 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
     });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
-    // Highest-priority (tool-slot via last:) must remain.
-    assertStringIncludes(out, "last: MultiEditLongNameXYZ");
+    // Highest-priority (tool-slot, bare tool name — prefix removed) must remain.
+    assertStringIncludes(out, "MultiEditLongNameXYZ");
+    assertFalse(
+      out.includes("last: "),
+      `removed prefix 'last: ' leaked into render:\n${out}`,
+    );
     // Lowest-priority (idle) should have been dropped. The specific "idle 42s"
     // / "idle 43s" literal must not appear in the rendered row.
     assertFalse(
       out.includes("idle 42s") || out.includes("idle 43s"),
       `narrow width did not drop idle segment:\n${out}`,
     );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S11: Regression for the self-exclusion bug. Before the fix, fetchPanes
+// excluded any row whose paneId matched Deno.env.get("TMUX_PANE"), which
+// caused the pane that launched prefix+w to silently drop out of the list.
+// spawnPicker({ selfPane }) injects TMUX_PANE=<claude-pane-id> into the
+// picker's child env via `tmux new-window -e`, reproducing the interactive
+// key-binding path where tmux propagates the originating pane id.
+Deno.test("S11: self-launching Claude pane remains visible", async () => {
+  await setupServer();
+  try {
+    const paneA = await createClaudePane({
+      status: "running",
+      prompt: "row-self-A",
+    });
+    await createClaudePane({ status: "running", prompt: "row-B" });
+    await createClaudePane({ status: "running", prompt: "row-C" });
+    await createClaudePane({ status: "running", prompt: "row-D" });
+    const picker = await spawnPicker({ selfPane: paneA });
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "row-self-A");
+    assertStringIncludes(out, "row-B");
+    assertStringIncludes(out, "row-C");
+    assertStringIncludes(out, "row-D");
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {

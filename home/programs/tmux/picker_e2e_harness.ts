@@ -172,7 +172,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
 //
 // When picker exits, the window auto-closes (tmux default remain-on-exit=off),
 // which is what waitForExit relies on.
-export async function spawnPicker(): Promise<string> {
+export async function spawnPicker(
+  opts: { selfPane?: string } = {},
+): Promise<string> {
   // URL.pathname is percent-encoded; decode so paths containing spaces or
   // non-ASCII characters reach tmux/sh as a real filesystem path.
   const pickerPath = decodeURIComponent(
@@ -181,6 +183,17 @@ export async function spawnPicker(): Promise<string> {
   if (pickerPath.includes("'")) {
     throw new Error(`picker path contains single quote, unsafe for sh -c: ${pickerPath}`);
   }
+  // `tmux new-window -e K=V` sets K in the child's env. Used to simulate the
+  // interactive popup path where TMUX_PANE reaches picker despite being
+  // launched from another pane — the exact condition that triggered the
+  // self-exclusion bug before this regression test existed.
+  const envArgs: string[] = [];
+  if (opts.selfPane !== undefined) {
+    if (!/^%\d+$/.test(opts.selfPane)) {
+      throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);
+    }
+    envArgs.push("-e", `TMUX_PANE=${opts.selfPane}`);
+  }
   await tmuxRun([
     "new-window",
     "-d",
@@ -188,6 +201,7 @@ export async function spawnPicker(): Promise<string> {
     SESSION,
     "-n",
     PICKER_WINDOW_NAME,
+    ...envArgs,
     `'${pickerPath}'`,
   ]);
   const target = `${SESSION}:${PICKER_WINDOW_NAME}`;

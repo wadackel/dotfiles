@@ -1,6 +1,6 @@
 ---
 name: verification-loop
-description: "Opt-in project-aware deterministic verification gate. Detects the project type (Nix flake, Deno, Node, Python) and runs build / typecheck / lint / test / security scan / diff-review. Outputs a READY / NOT READY verdict. Not invoked by the default /impl final gate (that default is /completion-audit → /santa-loop). Invoke explicitly when deterministic re-execution is genuinely required. Triggers include /verification-loop / /verify / verification gate / pre-PR check / 検証ループ."
+description: "Opt-in project-aware deterministic verification gate. Detects the project type (Nix flake, Deno, Node, Python) and runs build / typecheck / lint / test / security scan / diff-review. Outputs a READY / NOT READY verdict. Not invoked by the default /impl final gate (that default is /completion-audit → /subagent-review). Invoke explicitly when deterministic re-execution is genuinely required. Triggers include /verification-loop / /verify / verification gate / pre-PR check / 検証ループ."
 ---
 
 # Verification Loop
