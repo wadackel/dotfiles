@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
-  cwdBranchLabel,
+  cwdBranchParts,
   formatElapsed,
   type PaneRow,
   parseRow,
@@ -352,29 +352,32 @@ Deno.test("summaryOf: truncates to 40 chars", () => {
   assertEquals(summaryOf(mkRow({ prompt: long })).length, 40);
 });
 
-// --- cwdBranchLabel ---
+// --- cwdBranchParts ---
 
-Deno.test("cwdBranchLabel: cwd + branch → slash-joined", () => {
+Deno.test("cwdBranchParts: cwd + branch → both fields populated", () => {
   assertEquals(
-    cwdBranchLabel("/Users/wadackel/dotfiles", "main"),
-    "dotfiles/main",
+    cwdBranchParts("/Users/wadackel/dotfiles", "main"),
+    { repo: "dotfiles", branch: "main" },
   );
 });
 
-Deno.test("cwdBranchLabel: cwd only → basename", () => {
-  assertEquals(cwdBranchLabel("/Users/wadackel/dotfiles", ""), "dotfiles");
+Deno.test("cwdBranchParts: cwd only → branch empty", () => {
+  assertEquals(
+    cwdBranchParts("/Users/wadackel/dotfiles", ""),
+    { repo: "dotfiles", branch: "" },
+  );
 });
 
-Deno.test("cwdBranchLabel: branch only → branch", () => {
-  assertEquals(cwdBranchLabel("", "main"), "main");
+Deno.test("cwdBranchParts: branch only → repo empty", () => {
+  assertEquals(cwdBranchParts("", "main"), { repo: "", branch: "main" });
 });
 
-Deno.test("cwdBranchLabel: both empty → middle dot", () => {
-  assertEquals(cwdBranchLabel("", ""), "·");
+Deno.test("cwdBranchParts: both empty → middle dot in repo, branch empty", () => {
+  assertEquals(cwdBranchParts("", ""), { repo: "·", branch: "" });
 });
 
-Deno.test("cwdBranchLabel: root path → /", () => {
-  assertEquals(cwdBranchLabel("/", "main"), "//main");
+Deno.test("cwdBranchParts: root path basename is /", () => {
+  assertEquals(cwdBranchParts("/", "main"), { repo: "/", branch: "main" });
 });
 
 // --- parseSubagents ---

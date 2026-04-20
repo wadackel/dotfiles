@@ -28,6 +28,17 @@ export interface PaneRow {
   currentTool: string;
 }
 
+// Row-1 column widths for the list picker. Tuned so repo + " · " + branch
+// stays close to the previous 24-col slash-joined label (25 col total).
+const REPO_WIDTH = 12;
+const BRANCH_WIDTH = 10;
+
+// Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
+// the preview capture (capturePane) re-run at this interval so the popup
+// reflects pane status / prompt / subagents / elapsed time / preview without
+// manual interaction.
+const TICK_INTERVAL_MS = 2000;
+
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).
 export const STATUS_META = {
   running: { color: "green", short: "run", icon: "●" },
@@ -197,14 +208,17 @@ function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
-// Build cwd/branch slash-join display, e.g. "dotfiles/main". When one side is
-// empty, returns just the other side; when both are empty, returns "·".
-export function cwdBranchLabel(cwd: string, branch: string): string {
-  const base = basename(cwd) || "";
-  if (base && branch) return `${base}/${branch}`;
-  if (base) return base;
-  if (branch) return branch;
-  return "·";
+// Split cwd/branch into separate columns for the row renderer. Both fields are
+// emitted independently so the renderer can place a dim middle-dot separator
+// between them and align each column with padEnd. When both are empty, repo
+// carries the "·" placeholder so the row is never blank.
+export function cwdBranchParts(
+  cwd: string,
+  branch: string,
+): { repo: string; branch: string } {
+  const base = basename(cwd);
+  if (!base && !branch) return { repo: "·", branch: "" };
+  return { repo: base, branch };
 }
 
 // summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。
@@ -360,24 +374,33 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   const pointer = selected ? "❯" : " ";
   const icon = statusIcon(row.status);
   const statusText = statusShort(row.status);
-  const status4 = statusText.slice(0, 4).padEnd(4);
-  const elapsed = formatElapsed(row.startedAtSec, now).padEnd(4);
-  const label = cwdBranchLabel(row.cwd || row.currentPath, row.worktreeBranch);
-  const label24 = label.slice(0, 24).padEnd(24);
+  // Trailing space in each padded column produces inter-column gaps without
+  // extra spacer <Text> nodes.
+  const status5 = statusText.slice(0, 4).padEnd(5);
+  const elapsed5 = formatElapsed(row.startedAtSec, now).padEnd(5);
+  const { repo, branch: branchName } = cwdBranchParts(
+    row.cwd || row.currentPath,
+    row.worktreeBranch,
+  );
+  const repoCol = repo.slice(0, REPO_WIDTH).padEnd(REPO_WIDTH);
+  const branchCol = branchName.slice(0, BRANCH_WIDTH).padEnd(BRANCH_WIDTH);
+  const separator = repo && branchName ? " · " : "   ";
   const summary = summaryOf(row);
   const subagents = parseSubagents(row.subagents);
   const tree = renderSubagentTree(subagents);
   const toolDisplay = row.currentTool || "";
   return (
     <Box flexDirection="column">
-      {/* Line 1: marker + icon + status + elapsed + cwd/branch + summary */}
+      {/* Line 1: marker + icon + status + elapsed + repo · branch + summary */}
       <Box>
         <Text color={selected ? "magenta" : "gray"}>{pointer}</Text>
-        <Text color={color}>{icon}</Text>
-        <Text color={color}>{status4}</Text>
-        <Text color="gray">{elapsed}</Text>
-        <Text color="blue">{label24}</Text>
-        <Text>{summary}</Text>
+        <Text color={color}>{icon + " "}</Text>
+        <Text color={color}>{status5}</Text>
+        <Text color="gray">{elapsed5}</Text>
+        <Text color="blue">{repoCol}</Text>
+        <Text color="gray" dimColor>{separator}</Text>
+        <Text color="cyan">{branchCol}</Text>
+        <Text>{" " + summary}</Text>
       </Box>
       {/* Line 2: indent + subagent tree + current_tool + target (right-align) */}
       <Box>
@@ -413,18 +436,27 @@ function Preview(
   const [content, setContent] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
+    let timerId: number | undefined;
     // Border consumes 1 col on each side (2 total); account for it when clamping lines.
     const innerCols = Math.max(10, width - 4);
     const innerRows = Math.max(3, height - 3);
-    capturePane(target)
-      .then((text) => {
+    // Self-rescheduling setTimeout (not setInterval) guarantees at most one
+    // in-flight capturePane per target and prevents out-of-order completions
+    // from overwriting fresher content.
+    const tick = async () => {
+      try {
+        const text = await capturePane(target);
         if (!cancelled) setContent(clampPreview(text, innerCols, innerRows));
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         if (!cancelled) setContent(`(preview failed: ${String(e)})`);
-      });
+      } finally {
+        if (!cancelled) timerId = setTimeout(tick, TICK_INTERVAL_MS);
+      }
+    };
+    tick();
     return () => {
       cancelled = true;
+      if (timerId !== undefined) clearTimeout(timerId);
     };
   }, [target, width, height]);
   return (
@@ -446,18 +478,49 @@ function Preview(
 }
 
 function App({
-  rows,
+  initialRows,
+  selfPaneId,
   onSelect,
 }: {
-  rows: PaneRow[];
+  initialRows: PaneRow[];
+  selfPaneId: string;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
-  const [index, setIndex] = useState(0);
-  // Elapsed is computed once at mount — the picker is a one-shot popup, no
-  // auto-tick re-render to avoid terminal flicker.
+  const [rows, setRows] = useState(initialRows);
+  const [selectedPaneId, setSelectedPaneId] = useState(
+    initialRows[0]?.paneId ?? "",
+  );
+  // `now` re-reads Date.now() on every render; the periodic setRows below
+  // triggers a re-render every TICK_INTERVAL_MS, so elapsed time advances
+  // naturally without a dedicated tick state.
   const now = Math.floor(Date.now() / 1000);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timerId: number | undefined;
+    // Self-rescheduling setTimeout chain: at most one fetchPanes in-flight,
+    // no out-of-order overwrite, and errors do not break the loop.
+    const tick = async () => {
+      try {
+        const r = await fetchPanes(selfPaneId);
+        if (!cancelled) setRows(r);
+      } catch (e) {
+        console.error("picker: fetchPanes tick failed:", e);
+      } finally {
+        if (!cancelled) timerId = setTimeout(tick, TICK_INTERVAL_MS);
+      }
+    };
+    timerId = setTimeout(tick, TICK_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timerId !== undefined) clearTimeout(timerId);
+    };
+  }, [selfPaneId]);
+
+  const foundIdx = rows.findIndex((r: PaneRow) => r.paneId === selectedPaneId);
+  const index = foundIdx >= 0 ? foundIdx : 0;
 
   useInput((input, key) => {
     if (key.escape || input === "q") {
@@ -471,10 +534,14 @@ function App({
       return;
     }
     if (key.upArrow || input === "k") {
-      setIndex((i: number) => Math.max(0, i - 1));
+      const nextIdx = Math.max(0, index - 1);
+      const nextId = rows[nextIdx]?.paneId;
+      if (nextId !== undefined) setSelectedPaneId(nextId);
     }
     if (key.downArrow || input === "j") {
-      setIndex((i: number) => Math.min(rows.length - 1, i + 1));
+      const nextIdx = Math.min(rows.length - 1, index + 1);
+      const nextId = rows[nextIdx]?.paneId;
+      if (nextId !== undefined) setSelectedPaneId(nextId);
     }
   });
 
@@ -497,7 +564,7 @@ function App({
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={listWidth}>
-          {rows.map((row, i) => (
+          {rows.map((row: PaneRow, i: number) => (
             <PaneRowLine
               key={row.paneId}
               row={row}
@@ -537,7 +604,8 @@ async function main(): Promise<void> {
   const result: { value: PaneRow | null } = { value: null };
   const { waitUntilExit } = render(
     <App
-      rows={rows}
+      initialRows={rows}
+      selfPaneId={selfPaneId}
       onSelect={(r) => {
         result.value = r;
       }}
