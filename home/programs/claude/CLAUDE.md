@@ -1,237 +1,110 @@
 ## Development Guide
 
-### Agent Guidelines
+### Core Principles
 
-Always prioritize simplicity over correctness. YAGNI, KISS, DRY. No backward-compatibility shims or fallback paths unless they come for free without increasing cyclomatic complexity.
+- Prioritize simplicity. Prefer YAGNI, KISS, and DRY over speculative flexibility.
+- Do not add backward-compatibility shims or fallback paths unless they are effectively free.
+- For parsing work, prefer dedicated parser libraries over regex when quoting or escaping edge cases matter.
+- Discover facts from code and the environment before asking the user. Ask only for user-only knowledge, constraints, or tradeoff decisions.
+- When presenting choices to the user, state the tradeoff axis in one sentence instead of listing pros/cons without framing.
+- Follow rules as written. "This is too small to follow the process" and "verification can be skipped" are rationalization red flags.
 
-Exception: For parsing (shell commands, ASTs, etc.), prefer dedicated parser libraries over regular expressions. Regex is fragile against quoting and escape edge cases.
+### Tooling Defaults
 
-### CLI Tool Preferences
+- Use `fd` for file search.
+- Use `rg` for content search.
+- Prefer Deno/TypeScript over Bash when a script needs parsing, state management, or branching logic.
+- Short one-off command chains are fine in Bash.
 
-- Use `fd` instead of `find` for file search
-- Use `rg` instead of `grep` for content search (prefer the dedicated `Grep` tool when available)
+### Workflow Entrypoints
 
-### Scripting Language Choice
+- Use `/plan <request>` as the default design-first entrypoint for implementation work. It supports trivial requests with a minimal path, so do not skip it just because the task looks small.
+- Use `/impl` after `/plan` to execute the task list faithfully. `/impl` details live in `skills/impl/SKILL.md`.
+- When QA-style verification is requested, load `/qa-planner` before planning. See `skills/qa-planner/SKILL.md`.
+- For browser interaction or UI verification, load `/agent-browser` before planning. See `skills/agent-browser/SKILL.md`.
+- For debugging or bug-fix work, load `/systematic-debugging`. See `skills/systematic-debugging/SKILL.md`.
+- When a Google Docs URL must be read, use `/gdocs-to-md`. See `skills/gdocs-to-md/SKILL.md`.
+- When a GitHub repository URL must be inspected as code, use `/repo-dive`. See `skills/repo-dive/SKILL.md`.
+- When `/codex-review` is explicitly requested, complete its full review loop; do not stop midway.
 
-When a script involves state management, parsing, or conditional logic, prefer Deno/TypeScript over Bash.
-- Short 1-2 command chains → Bash is fine
-- File processing, JSON parsing, error handling needed → Deno/TypeScript
+### Planning And Execution
 
-### Feature Design Flow
+- `/plan` is the design-first entrypoint. Keep `CLAUDE.md` high-level; detailed plan mechanics belong in `skills/plan/SKILL.md`.
+- During planning, resolve code-discoverable questions yourself and record reasonable assumptions when a default is safe.
+- Ask the user only for goals, hidden constraints, deadlines, terminology, or tradeoffs that materially change the plan.
+- `/impl` is the execution source of truth once a plan exists. Follow task order, verification requirements, and final-gate rules from `skills/impl/SKILL.md`.
+- Infra path allowances exist only to edit Claude infra itself. Do not use them as a shortcut to bypass `/plan` for normal implementation work.
 
-Run `/plan <request>` — a single fused skill that does research / draft / adversarial critique / task decomposition internally. `/plan` Phase 1 auto-detects `trivial` and short-circuits to a minimal plan + single task. Follow `/plan` with `/impl` to execute the task list.
+### Question Triage
 
-CC builtin plan mode is no longer used. The `/plan` skill + `plan-gate.ts` PreToolUse hook enforce design-first without depending on plan mode's gating (which had reliability issues).
+- Ask now: user-only knowledge such as goals, hidden constraints, deadlines, preferences, or tradeoffs requiring judgment.
+- Document as an assumption: when a reasonable default is safe and can be validated later.
+- Self-resolve via code or environment: existing behavior, file structure, current implementation, or other discoverable facts.
 
-### Static Analysis During /plan
+### Verification
 
-For lint error or type error fix tasks, run `pnpm lint:script` / `tsc` during `/plan` Phase 2 EXPLORE to confirm actual errors before deciding the fix approach. Theorizing without real error output leads to wasted fixes on non-existent issues.
+- Capture the pre-change baseline before editing: current output, config values, screenshots, or other observable state.
+- Verify changed behavior after implementation. "Code changed" is not evidence that the change works.
+- Choose a verification method that can actually observe the behavior you changed. When tests cannot observe it, use a better method and state the limitation.
+- When behavior changes and relevant tests already exist, add or update tests as part of the change unless the user explicitly says not to.
+- For Web UI changes, verify with `/agent-browser`: check screenshots/layout, console errors, and responsive behavior.
+- Trust concrete evidence over analysis or documentation when they disagree.
+- When running through `/impl`, do not claim completion until `/completion-audit` and `/santa-loop` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/santa-loop/SKILL.md`.
 
-### Git Workflow
+### Bug Fixes
 
-#### Safe Staging
+- For bug-fix work, `CLAUDE.md` Bug Fixes rules are authoritative; `/systematic-debugging` adds procedure on top of them.
+- Include direct observation in the plan and investigation: logs, repro commands, measurements, or other evidence that shows the symptom and where it occurs.
+- Treat the proposed fix as a hypothesis that must be falsified. Consider why it could be wrong and gather evidence that rules alternatives out before committing to it.
+- When both a minimal workaround and a root-cause fix exist, present both options and prefer the root-cause fix when it retires known debt safely.
+- Use the baseline -> implement -> re-measure -> compare -> conclude loop for bug fixes and other behavior revisions.
 
-Before using `git add -A` or `git add .`, run `git status --porcelain` to verify no unintended files (.env, credentials*, *.pem, secrets*, etc.) are included. If sensitive files may be present, use `git add <file>` individually.
+### Git And Shell Hard Rules
 
-#### Git Command Execution Rules
+- Before `git add -A` or `git add .`, run `git status --porcelain` and confirm no sensitive or unintended files are included.
+- Do not use `git -C <path>`. Change directories and run `git` from the target repo instead.
+- When creating an unrelated fix branch, branch from the intended base branch, then verify with `git diff <base-branch>...HEAD`.
+- If Bash quoting behavior is uncertain, especially with `$'...'` inside pipes, wrap the command in `bash -c`.
+- Disable history expansion with `set +H &&` before commands containing literal `!` inside double quotes.
+- In `just` recipes, shell variables are `$var`, not `$$var`.
+- Avoid BSD `sed` for bulk replacements involving special characters such as `!`, `$`, or backticks.
+- Start long-running background processes with the tool's background mode rather than shell `&` chaining.
+- If Private Use Area glyphs are needed in generated files, emit them at runtime with `printf` instead of embedding them directly.
 
-Do not use `git -C <path>`. It does not match `permissions.allow` patterns (e.g., `Bash(git diff *)`) and triggers permission prompts every time. Instead, run git commands directly in the working directory. For other directories, use `cd <path> && git <subcommand>`. **This rule is auto-enforced by `bash-policy.ts` — violating commands are blocked before execution.**
+### External Resource Handling
 
-#### Branch Creation for Independent PRs
+- GitHub Issue and PR URLs may be private. Use `gh` to retrieve their data.
+- GitHub repository code should be inspected locally via `/repo-dive`, not via WebFetch or `gh api`.
+- Google Docs content should be converted with `/gdocs-to-md` before use.
+- For Obsidian notes, use `/obsidian-cli` rather than direct file access when iCloud path behavior is unreliable.
 
-When creating a separate PR for fixes unrelated to current work:
+### Design Principles
 
-1. **Always branch from master (or the target base branch)**:
-   `git switch master && git pull origin master && git switch -c fix/...`
-   Branching from the current feature branch contaminates the PR with that branch's diff.
-2. **Verify diff before PR creation**:
-   `git diff master...HEAD` to confirm only intended changes are included.
+- Single responsibility is context-dependent. Internal side effects are acceptable; prefer purity at public boundaries.
+- Group three or more related arguments into an object.
+- Prefer function composition over inheritance.
+- Abstract common patterns early only when the abstraction is genuinely shared; use Rule of Three for domain-specific patterns.
+- Use descriptive names for exports and concise names for local variables.
 
-### Shell-Specific Syntax in Bash Tool
+### Coding Conventions
 
-`$'...'` (ANSI-C quoting) may not be interpreted correctly inside pipes in the Bash tool's shell environment. Wrap commands containing bash-specific syntax in `bash -c '...'` to verify behavior.
+#### GitHub Actions Security
 
-**`!` history expansion**: `!` inside double quotes (e.g., `![[file#heading]]`) triggers history expansion, escaping to `\!`. Disable with `set +H &&` before the command: `set +H && obsidian create ...`
+- Pin GitHub Actions to full commit SHAs, not version tags.
 
-**just (justfile) shell variables**: `just` recipes run with `sh` by default. Shell variable references use `$var` (not `$$var`). `just` does NOT require double-dollar escaping — `$$` in a justfile is interpreted by `sh` as the PID, not as an escaped `$`.
+#### CSS/Layout
 
-**Bulk text replacement with special characters**: macOS BSD `sed` silently fails or corrupts patterns containing `!`, `$`, backticks. For bulk file replacement, use `fd -x python3 -c "import pathlib; ..."` instead of `sed`.
+- When using `transform: scale()` inside a flex container, also set `flex-shrink: 0`.
+- Browser default `max-width: 100%` can create double constraints with transforms; also apply `max-w-none` when needed.
 
-### Background Processes in Bash Tool
+#### Deno Scripts
 
-Launch long-running processes (dev servers, etc.) with `run_in_background: true` instead of chaining with `&` or `;`. Verify startup in a separate Bash call with `sleep N && curl ...`. Putting `cmd &` + subsequent commands in a single Bash call breaks argument parsing.
+- Read stdin with `new Response(Deno.stdin.readable).text()` on Deno 2.x.
+- Use `deno eval` for inline execution; `deno run -e` does not exist.
+- Get a script directory with `new URL(".", import.meta.url).pathname`.
+- When diagnosing `Deno.Command` failures, pipe and inspect `stderr`.
 
-### Write/Edit Tool Unicode Limitation
+#### File Organization
 
-Write/Edit tools may drop Unicode Private Use Area (PUA) characters (Nerd Font icons, etc.). To include PUA characters in files, generate them at runtime with `printf '\uXXXX'` / `printf '\U000XXXXX'` instead of embedding directly.
-
-### QA Verification
-
-When QA-perspective verification is requested (e.g., "QA観点で確認", "動作確認して", "merge前に確認", dependency update review), load `/qa-planner` via the `Skill` tool.
-**Load before planning even in plan mode** (skill contains test design techniques and risk-based prioritization that improve plan quality):
-
-- **`/qa-planner`**: Systematic test case design with risk-based prioritization. Works in both plan mode (test plan output) and implementation mode (test execution)
-- If browser verification is also needed, additionally load `/agent-browser`
-
-### Browser Automation
-
-For tasks involving browser interaction, load `/agent-browser` via the `Skill` tool (parameter name: `skill`).
-**Load before planning even in plan mode** (skill contains SPA data extraction patterns and verification constraints that improve plan quality):
-
-- **`/agent-browser`**: Required when using agent-browser CLI. Includes SPA data extraction priorities and constraints
-
-### Obsidian Notes
-
-When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` tool and use the `obsidian` CLI. Direct file access (Read/Grep/Glob) may fail due to iCloud sync path resolution issues.
-
-### Claude Code Hooks Notes
-
-- **PreToolUse matcher limitation**: `Task` tools (`TaskCreate`, `TaskUpdate`, etc.) and `Skill` tool are NOT matchable (verified on real device 2026-03-19). `ExitPlanMode` IS matchable (verified 2026-03-20). Output `{"decision":"block","reason":"..."}` to stdout to block + deliver message
-- **To intercept before skill execution, use `UserPromptSubmit`**: Detect `/skill-name` in the stdin JSON `prompt` field. Example: `jq -e '.prompt | test("^/skill-name")' >/dev/null 2>&1`
-- **JSON escaping in hook commands**: Avoid `bash -c '...'` wrapping. Write commands directly in JSON strings and escape with `\"` (avoids single-quote nesting issues)
-- **Blocking with `UserPromptSubmit`**: Prefer outputting `{"decision":"block","reason":"..."}` to stdout + exit 0 over exit 2 — this communicates the reason to Claude
-- **Approval tracking with `PostToolUse`**: `PermissionRequest` only records that a dialog was shown (cannot distinguish approval/denial). To track actually executed (approved) commands, combine with a `PostToolUse` hook. Exclude high-frequency tools (Read/Glob/Grep) via matcher to reduce overhead
-- **plan-gate**: `plan-gate.ts` gates `Edit|Write|MultiEdit` via PreToolUse. Blocks edits to files under cwd unless a valid cwd-hash marker (`~/.claude/plans/.active-<hash>`, mtime < 24h) is present. `/plan` creates the marker at Phase 6. Infra files (`~/dotfiles/home/programs/claude/{CLAUDE.md,settings.json,scripts/**}`) are always allowed via an infra path allowlist (bootstrap safety). Missing fields (`file_path` / `cwd`) fail-open. Both bash (`realpath "$PWD" | shasum -a 256 | cut -c1-16`) and TS (`crypto.subtle.digest` on `Deno.realPath()`) must canonicalize before hashing. Manual `touch` bypass is a rationalization red flag — always run `/plan` instead
-
-### codex-review Skill Special Rule
-
-**Absolute rule**: When `/codex-review` is triggered, always complete the full Code Review Loop (never skip midway). See codex-review skill's SKILL.md for the detailed flow.
-
-**Default review**: Unless the user explicitly requests codex-review, the `/impl` unified lightweight review runs as the default per-task review. `/subagent-review` is opt-in — it fires only when the task description carries `[strict-review]` or the user explicitly invokes it.
-
-**`/completion-audit` + Security Sweep + `/santa-loop` together are the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use. The default final gate is `/completion-audit` (evidence-sufficiency audit) → **Security Sweep** (one `security-auditor` pass on the aggregated diff, heuristic-gated) → `/santa-loop` (dual-reviewer code/design quality; Claude opus + codex, both must PASS, max 3 fix rounds). `/santa-loop` consumes the audit verdict as `Audit Verdict Input` and does NOT re-judge completeness.
-
-### General
-
-- `AskUserQuestion` `options` limited to 4 per question (more causes ValidationError)
-- When receiving correction instructions from the user, consider appending to `~/.claude/CLAUDE.md` if the instruction is general-purpose, with user approval before appending
-- **User 判断を求める提示ではトレードオフの軸を言語化**: 選択肢・提案・比較を user に提示して判断を求めるとき、Pros/Cons 列挙だけで終わらせず「どの軸 (何 vs 何) でトレードオフが生じているか」を 1 文で明示する。文言は状況に応じ柔軟に選ぶ (例:「rule 遵守を優先するかで決まる」「肝は X か Y かです」「軸は X vs Y に集約されます」)。定型フォーマットを強制しない
-
-#### Rule Compliance
-
-- **Following the letter of the rules IS following the spirit**: "I'm following the spirit of the rules" is a classic rationalization. Execute rules exactly as written
-- **These thought patterns are rationalization red flags** — if you catch yourself thinking any of these, STOP and re-read the relevant rule:
-  - "This is simple enough to skip the process" → The process applies to simple tasks too
-  - "I'm in a hurry, so I'll skip this" → Following the process avoids rework and is faster
-  - "Just this once is fine" → There are no exceptions. Execute as written
-  - "No need to verify" → Confidence is not a substitute for verification
-  - "The plan says X but Y is better" → Plan deviation requires user approval
-  - "/plan is too heavy for a typo fix" → `/plan` Phase 1 detects `trivial` and collapses to a 1-phase minimal plan, so it is not heavy. Trying to skip is a red flag
-  - "Abuse the infra allowlist to skip /plan every time" → the infra allowlist applies only to edits of infra itself (CLAUDE.md / settings.json / scripts/). It does not apply to normal feature implementation
-
-#### /plan Workflow
-
-- **Question triage before AskUserQuestion**: In `/plan` Phase 1-4, before calling AskUserQuestion, triage each unclear point into one of three categories and ask ONLY category 1:
-  1. **Ask now (user-only knowledge)**: goals, hidden constraints, deadlines, preferences, domain terminology, trade-offs requiring user judgment
-  2. **Document as assumption (analyzable later)**: implementation patterns, abstraction level, library choice when codebase signal is weak — write `Assumption: X` in the plan body and let Phase 4 Critic / Adversarial Falsification validate
-  3. **Self-resolve via code (discoverable)**: existing function presence, current behavior, file structure — use Grep/Read/Explore agent, never AskUserQuestion
-  - Goal: apply the same Self-resolvable/Needs-user-input/Reject classification that Phase 4 Step 3 uses, but at the initial drafting stage
-- **Phase 1 Requirement Clarification (small+)**: For non-trivial requests, always apply the 8-observation walk in `skills/plan/references/requirement-checklist.md`. Runs as a multi-round loop (max 3 rounds fixed for non-trivial; `trivial` / `xl` exempt) with per-round Self-resolve probe (lightweight `rg` / `fd` / `Read` only; no Explore subagent) and a User override option ("proceed to Phase 2") in every round's Ask. Each Round executes Step A Walk → B Triage → C Self-resolve probe → D re-Ask trigger detect (Round 2+) → E Ask → F answer processing. Clear-signal judgment requires **exact token citation** from the request (no inference-based Clear — inference falls to NotClear). Convergence conditions: User override, trigger 0 (no ambiguous / re-question / still-NotClear signals from prior round), same-trigger-repeats escalate (records `unresolved after N rounds: <item>` in plan body), or max rounds (3) reached. Override consumes 1 of 4 AskUserQuestion option slots, so effective real-question cap per round is 3. Ask ≥ 4 items carry over to the next round (trigger iv). Trivial / xl requests are exempt
-- **Consolidated interview**: `/plan` Phase 4 accumulates needs-user-input items from Phase 2/4 Steps and asks them once at the end of Phase 4 (Step 7). Do not interview per-step. **Exception**: the Phase 1 Requirement Clarification cycle runs at Phase 1 (see above) — at most 2 interview cycles per plan (Phase 1 cycle up to 3 AskUserQuestion calls + Phase 4 Step 7 single call; worst case 4 blocking AskUserQuestion calls, or 5 if the Ambiguity Gate fires its own request-reacquisition Ask before Round 1). The prior "at most 2 blocking interviews" invariant is explicitly weakened in exchange for requirement-clarification depth — the user selected "intent alignment" as a higher priority than "minimize blocking calls"
-- **Exhaustive enumeration before design commitment**: Plans tend to anchor on the most typical scenario and miss boundary conditions. Before finalizing a design, explicitly enumerate:
-  1. **Implicit state**: What already exists before the operation runs? (e.g., current process, open connections, occupied slots — operations on a collection often forget the "current" item)
-  2. **Existing implementations**: What does the codebase already provide? Search for traits, helpers, and patterns before proposing new code paths for the same category of side effect
-  3. **Entry points and preconditions**: From which states/locations/environments can this be invoked? List all valid combinations and verify the design handles each
-- **When concrete implementation code review is needed**: Include the full implementation code in the plan for user review, then transition to `/impl` after confirmation
-- **Data processing tool plans**: For log analysis/aggregation tool improvements, present Before/After using real files during `/plan` before handing off to `/impl`. Let the user assess the scale of the problem with real data before approval
-- **Definition of Done**: `/plan` Phase 4 Step 8 auto-executes the verification plan design and agreement flow — it designs observable completion conditions that Claude can autonomously verify, then confirms alignment with the user. Baseline activities (tests, lint) are executed within each implementation task's acceptance criteria; the final gate task runs `/completion-audit` (evidence audit) → `/santa-loop` (dual-reviewer; receives audit verdict as `Audit Verdict Input`). `/verification-loop` is opt-in and invoked manually (e.g., `/verify` before opening a PR); it is not part of the `/impl` final gate orchestration
-- **Required checks before handing off to /impl**: For plans involving bug investigation/fixes, explicitly include:
-  - "Which command/log/measurement confirms this fix works"
-  - "Considered whether this fix approach could be wrong, and the evidence that rules it out"
-
-#### /impl Workflow
-
-After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, completion-audit → Security Sweep → santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
-
-Key invariants enforced by `/impl`:
-- Faithful step execution (no skip/rephrase/reorder)
-- Raw evidence recording (verbatim command + output in `metadata.evidence`)
-- Per-task default: unified lightweight review (single fresh `code-reviewer` subagent with `model: "opus"`, max 2 round retry) with skip conditions for trivial (< 10 lines AND ≤ 2 files) / docs-only / verification-only tasks. Domain dispatch is limited to at most 1 priority-ordered specialist; broader file-type observations (React / a11y for `.tsx`, schema / migration / N+1 for `.sql`) are covered by `/santa-loop` Layer 3 at the final gate. Security is consolidated at the final gate Security Sweep (one `security-auditor` pass on aggregated changed files before `/santa-loop`). Opt-in escape hatch: task description `[strict-review]` tag or explicit `/subagent-review` invocation runs the strict path — Spec → Code quality → priority-ordered **single** Domain specialist → Security heuristic. (Note: Domain has been demoted to a single specialist on the strict path as well; the previous multi-parallel Domain dispatch is gone from both paths. `/santa-loop` Layer 3 backstops the dropped observations at the final gate.)
-- `/simplify-review code` when diff ≥ 20 files OR ≥ 500 lines
-- Re-plan keeps `completed` tasks, deletes `pending`/`in_progress` only
-- Final gate task is `Run /completion-audit and /santa-loop` with `blockedBy` all impls. Execution order: `/completion-audit` VERIFIED PASS → **Security Sweep** (one `security-auditor` pass on the aggregated diff, gated by `subagent-review/references/security-trigger-heuristic.md`; max 2 retry rounds) → `/santa-loop` invoked with the audit verdict embedded as `Audit Verdict Input` → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/verification-loop` is opt-in and invoked manually outside the final gate (e.g., `/verify` before opening a PR) when deterministic re-execution of build/typecheck/lint/tests is genuinely required
-
-#### Implementation and Verification
-
-- **UI consistency check**: When modifying display format of one command/view, compare with other commands that show similar data (e.g., list vs. interactive selection). Proactively identify and resolve style inconsistencies (brackets, separators, column ordering) before user review
-- **Baseline capture (pre-implementation state recording)**: Before making changes, record the current behavior of the target. For CLI: command output, for config: current values, for UI: screenshots. "Unknown pre-change state" means verification is impossible
-- **End-to-end behavioral verification**: After implementation, confirm changes actually work. "Code was written" does not mean "it works". Scripts → execute and check output, hooks → reproduce trigger conditions and verify intervention behavior, config changes → verify in the environment where settings are applied. See `completion-audit/references/behavioral-verification.md` for details
-- **Verification observability**: Confirm that the changed behavior itself is observable by the test tool. When tests cannot detect the change (e.g., spinner in-place updates are not captured by stdout capture, CSS visual changes are not detectable by unit tests), explicitly state the observation limitations and choose appropriate verification methods (manual confirmation, screenshot comparison, etc.)
-- **Post-implementation verification**: Always verify after implementation. For scripts, execute them. Include change detection tests (intentionally modify → re-run → confirm detection → revert). Claude proactively verifies without waiting for user confirmation
-- **No completion claims without audit**: Before claiming all work is complete, the final `/completion-audit` must return VERIFIED PASS and `/santa-loop` must return NICE. Individual task completion requires executing acceptance criteria verifications and recording raw evidence
-- **UI visual verification**: When implementing changes that affect Web UI (HTML/CSS/JSX/components/styles, etc.), autonomously execute browser verification without waiting for user instruction. "It renders" alone does not count as verification complete
-  - Load `/agent-browser` and use agent-browser to open the target page
-  - Take screenshots and compare layout, sizing, and spacing against Figma designs or reference pages (existing pages with the same pattern)
-  - Check for browser console errors
-  - Perform responsive checks (viewport changes) and interaction verification as needed
-- **Tests**: When test files exist, include expected value updates and new test cases for behavior changes in both the plan and implementation. Include tests in the work plan unless the user explicitly says "no test plan needed"
-- **Temporary verification files (test-*.mjs, verify-*.sh, etc.)**: Not for committing. Exclude during git add and suggest .gitignore additions as needed
-- **Establish measurement baseline → implement → re-measure → compare → conclude**: Follow this cycle for all improvement work, not just performance optimization. The definition of done is "demonstrated the effect with before/after numbers", not "made the fix"
-- **Performance optimization**: Do not pre-commit to a fixed optimization list before baseline measurement. Treat items as candidates, measure first, then select based on data. "Likely faster" is not a substitute for "measured faster"
-- **External library output verification**: Do not trust assumed data structures from external libraries based solely on reading source code or docs. When the implementation depends on the shape of external tool output (JSON schema, file paths, etc.), generate or obtain real sample data during planning phase to verify assumptions before implementation
-- **Output value verification**: When verifying new feature output (CI logs, script results), check value correctness — not just error absence. Before inspecting actual output, define what correct output looks like. Divergence signals a bug even without errors (e.g., expected ~3 items, got 16)
-- **Evidence over analysis**: When any analysis — yours, a subagent's, or documentation — conflicts with concrete evidence (actual output, user observations, reproducible behavior), trust the evidence. Investigate the discrepancy rather than rationalizing it
-
-#### Bug Fixes
-
-- **Investigation approach**: Always verify these two points:
-  1. **Direct observation means included in the plan** — Include means to directly observe facts: log output, debug commands, measurement confirmation. In non-interactive environments, set up debug logging first with `exec >> /tmp/<name>.log 2>&1`
-  2. **Fix approach has been falsified** — Do not adopt unverified assumptions as the fix approach
-- **Present alternatives**: When both a minimal workaround and a root-cause fix exist, present both options. For areas with TODO comments or technical debt, prioritize the option that resolves the debt
-- **Reproduction conditions**: Treat user-provided reproduction conditions ("occurs during X") as hypotheses. Plans must explicitly separate "facts", "analysis", and "estimates (not confirmed)", and must not adopt unconfirmed assumptions as the fix approach
-- **Detailed process**: For step-by-step debugging methodology, load the `/systematic-debugging` skill
-
-#### Code Review Reception
-
-Applies to human code review feedback (PR reviews, direct user feedback, etc.). Does NOT apply to codex-review's automated review loop.
-
-- **Technical evaluation first**: When receiving review feedback, verify technical correctness before implementing. Do not implement before verifying
-- **No performative agreement**: Skip platitudes like "Great point!" or "Absolutely right!". Respond with technical substance or direct fixes
-- **Clarify all unknowns before starting**: If multi-item feedback has unclear items, do not implement only the clear items first — clarify all unknowns before starting (items may have dependencies). For async reviews (PR comments, etc.) where immediate clarification is not possible, state assumptions explicitly before proceeding
-- **Pushback when warranted**: If review feedback is inappropriate for the existing codebase, violates YAGNI, or contradicts the user's design decisions, push back with technical reasoning
-
-### Google Docs URL Handling
-
-When a Google Docs URL (`https://docs.google.com/document/d/...`) is provided and its content needs to be referenced or read, use the `/gdocs-to-md` skill to convert the document to Markdown and load it into context. WebFetch cannot retrieve structured Google Docs content, so conversion via gws Docs API is required.
-
-### GitHub URL Handling
-
-GitHub Issue and Pull Request URLs provided by the user are often from private repositories and cannot be accessed directly. As a rule, use the `gh` CLI to retrieve information from GitHub URLs provided by the user.
-
-When a GitHub repository URL is provided and code investigation, analysis, comparison, or reference is needed, use the `/repo-dive` skill to clone locally and explore with native file tools (Read, Grep, Glob, Agent). Do not use WebFetch or `gh api` for code retrieval as they are slow and incomplete.
-
-## Design Principles
-
-- Single responsibility is context-dependent. Allow side effects in internal implementations; prefer pure functions for public APIs
-- Group 3+ arguments into an object
-- Abstract common patterns early; apply Rule of Three for domain-specific ones
-- Prefer function composition over inheritance. Avoid excessive abstraction
-- Use descriptive names for exports, concise names for locals
-
-### GitHub Actions Security
-
-- Pin all actions to full commit SHA, not version tags (e.g., `uses: actions/checkout@de0fac2e...` not `uses: actions/checkout@v6`). Verify SHA with `gh api repos/{owner}/{repo}/git/ref/tags/{tag} --jq '.object.sha'`
-
-## Coding Conventions
-
-### CSS/Layout Best Practices
-
-**flexbox and transform interaction:**
-- When using `transform: scale()` inside a flex container, set `flex-shrink: 0` (Tailwind: `shrink-0`) to prevent flex-based shrinking
-- Browser default `max-width: 100%` also causes double constraints when combined with transform; also apply `max-w-none`
-- Example: When scaling an image with transform → `class="shrink-0 max-w-none max-h-none"`
-
-### Deno Scripts
-
-- Read stdin with `new Response(Deno.stdin.readable).text()` (Deno 2.x). No permission flags needed
-- Inline code execution uses `deno eval`. `deno run -e` does not exist
-- Get the script's own directory: `new URL(".", import.meta.url).pathname` (useful for co-locating config files)
-- When diagnosing subprocess failures with `Deno.Command`, use `stderr: "piped"` not `stderr: "null"`, and log stderr content when exit code is non-zero
-
-### File Organization
-
-- Arrange code in dependency order (readable bottom-to-top)
-    - Constants, type definitions, and helper functions first
-    - Main logic and exports that use them last
-- Structure files so dependencies are understood by reading from the bottom up
-- Avoid circular references
+- Arrange files in dependency order so helper definitions appear before the logic that uses them.
+- Avoid circular references.
