@@ -605,12 +605,12 @@ function App({
       return;
     }
     if (key.upArrow || input === "k") {
-      const nextIdx = Math.max(0, index - 1);
+      const nextIdx = index === 0 ? rows.length - 1 : index - 1;
       const nextId = rows[nextIdx]?.paneId;
       if (nextId !== undefined) setSelectedPaneId(nextId);
     }
     if (key.downArrow || input === "j") {
-      const nextIdx = Math.min(rows.length - 1, index + 1);
+      const nextIdx = index === rows.length - 1 ? 0 : index + 1;
       const nextId = rows[nextIdx]?.paneId;
       if (nextId !== undefined) setSelectedPaneId(nextId);
     }

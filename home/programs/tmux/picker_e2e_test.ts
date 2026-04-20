@@ -392,3 +392,36 @@ Deno.test("S11: self-launching Claude pane remains visible", async () => {
     await teardown();
   }
 });
+
+// S12: navigation wraps at boundaries. picker.tsx:607-616 wraps Up at the
+// first row to the last, and Down at the last row to the first. Verify both
+// directions within a single 2-pane scenario to keep picker-verify's 30 s
+// budget comfortable.
+Deno.test("S12: navigation wraps at boundaries", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a-xxx" });
+    await createClaudePane({ status: "running", prompt: "row-b-yyy" });
+    const picker = await spawnPicker();
+
+    const selectedIncludes = (marker: string) => (out: string) => {
+      const line = out.split("\n").find((l) => l.includes("❯"));
+      return line?.includes(marker) ?? false;
+    };
+
+    // Initial selection is the first row (row-a). Press Up → should wrap
+    // to the last row (row-b).
+    await waitFor(picker, selectedIncludes("row-a-xxx"));
+    await sendKey(picker, "Up");
+    await waitFor(picker, selectedIncludes("row-b-yyy"));
+
+    // Now on the last row. Press Down → should wrap back to the first.
+    await sendKey(picker, "Down");
+    await waitFor(picker, selectedIncludes("row-a-xxx"));
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
