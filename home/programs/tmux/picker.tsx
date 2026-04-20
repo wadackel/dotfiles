@@ -26,6 +26,15 @@ export interface PaneRow {
   prompt: string;
   waitReason: string;
   currentTool: string;
+  sessionId: string;
+  lastTool: string;
+  lastEditFile: string;
+  lastActivityAtSec: number | null;
+}
+
+export interface TaskProgress {
+  done: number;
+  total: number;
 }
 
 // Row-1 column widths for the list picker. Tuned so repo + " · " + branch
@@ -52,6 +61,7 @@ export const STATUS_META = {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
+// Field count = 17; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -64,7 +74,11 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_subagents}\x1f" +
   "#{@pane_prompt}\x1f" +
   "#{@pane_wait_reason}\x1f" +
-  "#{@pane_current_tool}";
+  "#{@pane_current_tool}\x1f" +
+  "#{@pane_session_id}\x1f" +
+  "#{@pane_last_tool}\x1f" +
+  "#{@pane_last_edit_file}\x1f" +
+  "#{@pane_last_activity_at}";
 
 const NUMERIC = /^\d+$/;
 
@@ -77,10 +91,10 @@ function normalizeStatus(raw: string): PaneStatus {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 13 fields or empty pane_id).
+// Returns null when the line is malformed (< 17 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 13) return null;
+  if (fields.length < 17) return null;
   const [
     paneId,
     target,
@@ -95,6 +109,10 @@ export function parseRow(line: string): PaneRow | null {
     prompt,
     waitReason,
     currentTool,
+    sessionId,
+    lastTool,
+    lastEditFile,
+    lastActivityAt,
   ] = fields;
   if (!paneId) return null;
   return {
@@ -111,6 +129,10 @@ export function parseRow(line: string): PaneRow | null {
     prompt,
     waitReason,
     currentTool,
+    sessionId,
+    lastTool,
+    lastEditFile,
+    lastActivityAtSec: parseIntOrNull(lastActivityAt),
   };
 }
 
@@ -200,7 +222,7 @@ export function truncateAnsiLine(line: string, maxCols: number): string {
 }
 
 // Basename of a path ("/" → "/", "" → "", "/a/b/c" → "c").
-function basename(path: string): string {
+export function basename(path: string): string {
   if (!path) return "";
   const trimmed = path.replace(/\/+$/, "");
   if (!trimmed) return "/";
@@ -304,6 +326,52 @@ async function gitBranch(cwd: string): Promise<string> {
   }
 }
 
+// Allowed shape for a session id when used as a filesystem path segment.
+// Claude Code session ids are UUIDs, and team-scoped tasks use name-like
+// identifiers; in both cases they fit within this conservative allowlist.
+// Rejecting anything else closes the `sessionId = "../something"` directory
+// traversal class of issue at the picker boundary.
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+// Read `~/.claude/tasks/<sessionId>/*.json` and aggregate completed/total counts.
+// Returns null when the dir is missing, empty, or every file fails to parse —
+// in which case the picker simply omits the task-progress segment. No cache:
+// dir-mtime cache is unsafe because an in-place status flip on an existing
+// task file does not bump dir mtime. Empirical task counts are ≤ ~13 per
+// session so the 2s tick budget is unaffected.
+export async function readTaskProgress(
+  sessionId: string,
+): Promise<TaskProgress | null> {
+  if (!SESSION_ID_RE.test(sessionId)) return null;
+  const home = Deno.env.get("HOME");
+  if (!home) return null;
+  const dir = `${home}/.claude/tasks/${sessionId}`;
+  let done = 0;
+  let total = 0;
+  try {
+    for await (const e of Deno.readDir(dir)) {
+      if (!e.isFile || !e.name.endsWith(".json")) continue;
+      try {
+        const raw: unknown = JSON.parse(
+          await Deno.readTextFile(`${dir}/${e.name}`),
+        );
+        if (
+          raw !== null && typeof raw === "object" && "status" in raw &&
+          typeof (raw as { status: unknown }).status === "string"
+        ) {
+          total++;
+          if ((raw as { status: string }).status === "completed") done++;
+        }
+      } catch {
+        // skip malformed — tolerates concurrent /impl writes
+      }
+    }
+  } catch {
+    return null; // dir missing
+  }
+  return total === 0 ? null : { done, total };
+}
+
 async function fetchPanes(selfPaneId: string): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
   const rows: PaneRow[] = [];
@@ -365,10 +433,23 @@ interface PaneRowLineProps {
   row: PaneRow;
   now: number;
   selected: boolean;
+  taskProgress: TaskProgress | null;
+  listWidth: number;
 }
 
+// Row-2 segment (colored dim-or-accent text). Built in priority order; when the
+// cumulative width exceeds budget, trim from the end (lowest priority first).
+interface Row2Seg {
+  key: string;
+  text: string;
+  color: string;
+  dim: boolean;
+}
+
+const ROW2_SEP = " · ";
+
 const PaneRowLine: React.FC<PaneRowLineProps> = (
-  { row, now, selected }: PaneRowLineProps,
+  { row, now, selected, taskProgress, listWidth }: PaneRowLineProps,
 ) => {
   const color = statusColor(row.status);
   const pointer = selected ? "❯" : " ";
@@ -387,8 +468,68 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   const separator = repo && branchName ? " · " : "   ";
   const summary = summaryOf(row);
   const subagents = parseSubagents(row.subagents);
-  const tree = renderSubagentTree(subagents);
-  const toolDisplay = row.currentTool || "";
+
+  // Build row-2 segments in priority order (higher priority first). The
+  // cumulative width is compared against `budget` and low-priority segments
+  // are dropped from the tail if over. target sits in flexGrow-pushed right
+  // slot outside this budget.
+  const segs: Row2Seg[] = [];
+  if (row.currentTool) {
+    segs.push({ key: "tool", text: row.currentTool, color: "cyan", dim: false });
+  } else if (row.lastTool) {
+    segs.push({
+      key: "tool",
+      text: `last: ${row.lastTool}`,
+      color: "gray",
+      dim: true,
+    });
+  }
+  if (subagents.length > 0) {
+    segs.push({
+      key: "tree",
+      text: renderSubagentTree(subagents),
+      color: "gray",
+      dim: true,
+    });
+  }
+  if (row.lastEditFile) {
+    segs.push({
+      key: "file",
+      text: basename(row.lastEditFile),
+      color: "gray",
+      dim: true,
+    });
+  }
+  if (taskProgress) {
+    segs.push({
+      key: "progress",
+      text: `${taskProgress.done}/${taskProgress.total}`,
+      color: "gray",
+      dim: true,
+    });
+  }
+  if (row.status === "idle" && row.lastActivityAtSec !== null) {
+    segs.push({
+      key: "idle",
+      text: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
+      color: "gray",
+      dim: true,
+    });
+  }
+
+  // Budget = listWidth minus 4-space indent minus a small margin before target.
+  // Always keep at least the top-priority segment even if it exceeds budget —
+  // an overrun is preferable to rendering nothing.
+  const budget = Math.max(0, listWidth - 4 - 2);
+  let totalLen = segs.length > 0 ? segs[0].text.length : 0;
+  for (let i = 1; i < segs.length; i++) {
+    totalLen += ROW2_SEP.length + segs[i].text.length;
+  }
+  while (segs.length > 1 && totalLen > budget) {
+    const dropped = segs.pop()!;
+    totalLen -= ROW2_SEP.length + dropped.text.length;
+  }
+
   return (
     <Box flexDirection="column">
       {/* Line 1: marker + icon + status + elapsed + repo · branch + summary */}
@@ -402,18 +543,15 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
         <Text color="cyan">{branchCol}</Text>
         <Text>{" " + summary}</Text>
       </Box>
-      {/* Line 2: indent + subagent tree + current_tool + target (right-align) */}
+      {/* Line 2: indent + priority-ordered segments + target (right-align) */}
       <Box>
         <Text>{"    "}</Text>
-        <Text color="gray" dimColor>{tree}</Text>
-        {toolDisplay
-          ? (
-            <>
-              <Text color="gray" dimColor>·</Text>
-              <Text color="cyan">{toolDisplay}</Text>
-            </>
-          )
-          : null}
+        {segs.map((s, i) => (
+          <React.Fragment key={s.key}>
+            {i > 0 ? <Text color="gray" dimColor>{ROW2_SEP}</Text> : null}
+            <Text color={s.color} dimColor={s.dim}>{s.text}</Text>
+          </React.Fragment>
+        ))}
         <Box flexGrow={1} />
         <Text color="gray" dimColor>{row.target}</Text>
       </Box>
@@ -489,6 +627,9 @@ function App({
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [rows, setRows] = useState(initialRows);
+  const [taskProgressMap, setTaskProgressMap] = useState<
+    Map<string, TaskProgress | null>
+  >(new Map());
   const [selectedPaneId, setSelectedPaneId] = useState(
     initialRows[0]?.paneId ?? "",
   );
@@ -505,7 +646,17 @@ function App({
     const tick = async () => {
       try {
         const r = await fetchPanes(selfPaneId);
-        if (!cancelled) setRows(r);
+        if (cancelled) return;
+        setRows(r);
+        // Fetch task progress for every Claude pane in parallel. Failures are
+        // isolated (readTaskProgress swallows them) so one bad session dir does
+        // not block the whole tick.
+        const entries = await Promise.all(
+          r.map(async (row) =>
+            [row.paneId, await readTaskProgress(row.sessionId)] as const
+          ),
+        );
+        if (!cancelled) setTaskProgressMap(new Map(entries));
       } catch (e) {
         console.error("picker: fetchPanes tick failed:", e);
       } finally {
@@ -570,6 +721,8 @@ function App({
               row={row}
               now={now}
               selected={i === index}
+              taskProgress={taskProgressMap.get(row.paneId) ?? null}
+              listWidth={listWidth}
             />
           ))}
         </Box>

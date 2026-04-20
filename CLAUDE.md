@@ -230,6 +230,10 @@ This repository includes comprehensive Claude Code configuration:
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
+### picker-verify (tmux picker e2e)
+
+After changing `home/programs/tmux/picker.tsx`, `home/programs/tmux/picker_e2e_harness.ts`, or `home/programs/tmux/picker_e2e_test.ts`, run `.claude/skills/picker-verify/picker-verify.ts` (or invoke the `/picker-verify` skill). It spins up an isolated `tmux -L picker-e2e-$PID` server, runs the 6 e2e scenarios (warm path ~3 s, 30 s budget), and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck picker into the sandbox. Do not claim picker changes are complete while `ok: false`.
+
 ### Project Directory Encoding Rules
 
 Directory names under `~/.claude/projects/` are encoded from the project path: strip the leading `/`, add `-` as a prefix, and replace both `/` and `.` with `-`.

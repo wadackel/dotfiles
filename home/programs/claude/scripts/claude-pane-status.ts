@@ -39,6 +39,9 @@ export const ALL_PANE_OPTIONS = [
   "@pane_prompt",
   "@pane_wait_reason",
   "@pane_current_tool",
+  "@pane_last_tool",
+  "@pane_last_edit_file",
+  "@pane_last_activity_at",
 ] as const;
 
 // Options cleared at SessionStart so stale values from a previous session on the
@@ -52,6 +55,9 @@ const STALE_AT_SESSION_START = [
   "@pane_prompt",
   "@pane_wait_reason",
   "@pane_current_tool",
+  "@pane_last_tool",
+  "@pane_last_edit_file",
+  "@pane_last_activity_at",
 ] as const;
 
 const PROMPT_MAX_CHARS = 40;
@@ -160,6 +166,13 @@ export function eventToOps(
           key,
         }));
         ops.push({ kind: "set", key: "@pane_status", value: "idle" });
+        // Seed activity_at so a fresh session shows `idle Ns` in the picker row 2
+        // from the moment it starts (otherwise brand-new idle panes display nothing).
+        ops.push({
+          kind: "set",
+          key: "@pane_last_activity_at",
+          value: String(Math.floor(Date.now() / 1000)),
+        });
         return ops;
       }
 
@@ -170,13 +183,11 @@ export function eventToOps(
 
       case "UserPromptSubmit": {
         const prompt = maskPrompt(data.prompt);
+        const now = String(Math.floor(Date.now() / 1000));
         const ops: Op[] = [
           { kind: "set", key: "@pane_status", value: "running" },
-          {
-            kind: "set",
-            key: "@pane_started_at",
-            value: String(Math.floor(Date.now() / 1000)),
-          },
+          { kind: "set", key: "@pane_started_at", value: now },
+          { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (prompt) {
           ops.push({ kind: "set", key: "@pane_prompt", value: prompt });
@@ -228,9 +239,63 @@ export function eventToOps(
       }
 
       case "PostToolUse": {
-        // last-wins semantics: unset unconditionally on PostToolUse. Parallel
-        // tool races may briefly show no tool; session drain cleans stale state.
-        return [{ kind: "unset", key: "@pane_current_tool" }];
+        // Move @pane_current_tool → @pane_last_tool so row 2 always shows either
+        // an in-flight tool or the most recently completed one.
+        //
+        // Concurrent-tool handling: @pane_current_tool is last-wins on PreToolUse,
+        // so under parallel invocations it holds whichever tool's Pre fired most
+        // recently. Only unset current_tool when payload tool_name matches the
+        // recorded value — otherwise a different tool is still running and its
+        // display must not be cleared.
+        //
+        // Degraded client (missing tool_name): update activity_at only, leave
+        // last_tool / last_edit_file / current_tool untouched. Attributing the
+        // completion by guessing (via state.currentTool) would mis-label which
+        // tool actually finished when the client runs parallel tools.
+        //
+        // last_edit_file freshness: always clear or set on every PostToolUse
+        // where tool_name is present, so row 2 never carries a stale basename
+        // into a non-edit tool's display.
+        const toolName = str(data.tool_name);
+        const now = String(Math.floor(Date.now() / 1000));
+        const ops: Op[] = [
+          { kind: "set", key: "@pane_last_activity_at", value: now },
+        ];
+        if (!toolName) return ops;
+        if (toolName === state.currentTool) {
+          ops.push({ kind: "unset", key: "@pane_current_tool" });
+        }
+        ops.push({ kind: "set", key: "@pane_last_tool", value: toolName });
+        if (
+          toolName === "Edit" || toolName === "Write" ||
+          toolName === "MultiEdit"
+        ) {
+          let filePath = "";
+          const ti = data.tool_input;
+          if (ti && typeof ti === "object" && !Array.isArray(ti)) {
+            const fp = (ti as Record<string, unknown>).file_path;
+            if (typeof fp === "string" && fp.length > 0) {
+              // Strip TAB/CR/LF to keep the value safe for tmux list-panes -F
+              // output (\n would split the row; TAB could collide with delimiter
+              // formats). The picker reads this raw then applies basename().
+              filePath = fp.replace(/[\t\r\n]/g, " ");
+            }
+          }
+          if (filePath) {
+            ops.push({
+              kind: "set",
+              key: "@pane_last_edit_file",
+              value: filePath,
+            });
+          } else {
+            ops.push({ kind: "unset", key: "@pane_last_edit_file" });
+          }
+        } else {
+          // Non-edit tool finished — clear any stale basename so row 2 does
+          // not show misleading file metadata next to an unrelated tool.
+          ops.push({ kind: "unset", key: "@pane_last_edit_file" });
+        }
+        return ops;
       }
 
       case "SubagentStart": {

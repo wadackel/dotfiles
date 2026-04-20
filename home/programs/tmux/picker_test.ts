@@ -1,11 +1,13 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  basename,
   cwdBranchParts,
   formatElapsed,
   type PaneRow,
   parseRow,
   parseSubagents,
   parseTarget,
+  readTaskProgress,
   renderSubagentTree,
   sanitizeAnsi,
   statusColor,
@@ -16,9 +18,9 @@ import {
   truncateAnsiLine,
 } from "./picker.tsx";
 
-Deno.test("TMUX_FORMAT contains 13 US-separated field tokens", () => {
+Deno.test("TMUX_FORMAT contains 17 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 13);
+  assertEquals(fields.length, 17);
 });
 
 Deno.test("parseRow: full row with all fields present", () => {
@@ -36,6 +38,10 @@ Deno.test("parseRow: full row with all fields present", () => {
     "hello world",
     "permission-denied",
     "Bash",
+    "sess-abc",
+    "Edit",
+    "/x/y/file.ts",
+    "1700001234",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -52,26 +58,17 @@ Deno.test("parseRow: full row with all fields present", () => {
     prompt: "hello world",
     waitReason: "permission-denied",
     currentTool: "Bash",
+    sessionId: "sess-abc",
+    lastTool: "Edit",
+    lastEditFile: "/x/y/file.ts",
+    lastActivityAtSec: 1700001234,
   };
   assertEquals(row, expected);
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = [
-    "%1",
-    "0:0.0",
-    "zsh",
-    "/home/me",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ].join("\x1f");
+  const line = Array(17).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
+    .join("\x1f");
   const row = parseRow(line);
   assertEquals(row?.agent, "");
   assertEquals(row?.status, "");
@@ -80,53 +77,41 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   assertEquals(row?.currentTool, "");
   assertEquals(row?.worktreeBranch, "");
   assertEquals(row?.currentPath, "/home/me");
+  assertEquals(row?.sessionId, "");
+  assertEquals(row?.lastTool, "");
+  assertEquals(row?.lastEditFile, "");
+  assertEquals(row?.lastActivityAtSec, null);
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = [
-    "%1",
-    "0:0.0",
-    "zsh",
-    "",
-    "",
-    "bogus",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ]
-    .join("\x1f");
+  const line = Array(17).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
+  ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = [
-    "%1",
-    "0:0.0",
-    "zsh",
-    "",
-    "",
-    "idle",
-    "nope",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ]
-    .join("\x1f");
+  const line = Array(17).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
+  ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
+});
+
+Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
+  const line = Array(17).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 16 ? "nope" : v
+  ).join("\x1f");
+  assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
-  // 13 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(13).fill("").join("\x1f");
+  // 16 fields (one short) → null
+  const sixteen = Array(16).fill("x").join("\x1f");
+  assertEquals(parseRow(sixteen), null);
+  // 17 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
+  const emptyId = Array(17).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 
@@ -311,6 +296,10 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     prompt: "",
     waitReason: "",
     currentTool: "",
+    sessionId: "",
+    lastTool: "",
+    lastEditFile: "",
+    lastActivityAtSec: null,
     ...overrides,
   };
 }
@@ -435,4 +424,122 @@ Deno.test("renderSubagentTree: same type auto-numbers per type", () => {
     { type: "Plan", id: "c3" },
   ]);
   assertEquals(result, "├ Explore #1 ├ Explore #2 └ Plan #1");
+});
+
+// --- basename ---
+
+Deno.test("basename: typical path returns final segment", () => {
+  assertEquals(basename("/a/b/file.ts"), "file.ts");
+});
+
+Deno.test("basename: trailing slash stripped", () => {
+  assertEquals(basename("/a/b/c/"), "c");
+});
+
+Deno.test("basename: empty string returns empty", () => {
+  assertEquals(basename(""), "");
+});
+
+Deno.test("basename: root slash returns root", () => {
+  assertEquals(basename("/"), "/");
+});
+
+Deno.test("basename: no slash returns entire string", () => {
+  assertEquals(basename("bare.txt"), "bare.txt");
+});
+
+// --- readTaskProgress ---
+
+async function withTempHome<T>(
+  fn: (homeDir: string) => Promise<T>,
+): Promise<T> {
+  const tmpHome = await Deno.makeTempDir({ prefix: "picker-test-home-" });
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", tmpHome);
+  try {
+    return await fn(tmpHome);
+  } finally {
+    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
+    else Deno.env.delete("HOME");
+    await Deno.remove(tmpHome, { recursive: true });
+  }
+}
+
+Deno.test("readTaskProgress: empty sessionId → null", async () => {
+  assertEquals(await readTaskProgress(""), null);
+});
+
+Deno.test("readTaskProgress: sessionId with path-traversal chars → null", async () => {
+  assertEquals(await readTaskProgress("../etc"), null);
+  assertEquals(await readTaskProgress("./."), null);
+  assertEquals(await readTaskProgress("foo/bar"), null);
+  assertEquals(await readTaskProgress(".."), null);
+});
+
+Deno.test("readTaskProgress: missing dir → null", async () => {
+  await withTempHome(async () => {
+    const result = await readTaskProgress("nonexistent-session");
+    assertEquals(result, null);
+  });
+});
+
+Deno.test("readTaskProgress: aggregates completed/total counts", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "sess-A";
+    const dir = `${home}/.claude/tasks/${sessionId}`;
+    await Deno.mkdir(dir, { recursive: true });
+    await Deno.writeTextFile(
+      `${dir}/1.json`,
+      JSON.stringify({ id: "1", status: "completed" }),
+    );
+    await Deno.writeTextFile(
+      `${dir}/2.json`,
+      JSON.stringify({ id: "2", status: "completed" }),
+    );
+    await Deno.writeTextFile(
+      `${dir}/3.json`,
+      JSON.stringify({ id: "3", status: "in_progress" }),
+    );
+    const result = await readTaskProgress(sessionId);
+    assertEquals(result, { done: 2, total: 3 });
+  });
+});
+
+Deno.test("readTaskProgress: empty dir → null", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "sess-empty";
+    await Deno.mkdir(`${home}/.claude/tasks/${sessionId}`, { recursive: true });
+    const result = await readTaskProgress(sessionId);
+    assertEquals(result, null);
+  });
+});
+
+Deno.test("readTaskProgress: skips malformed json", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "sess-broken";
+    const dir = `${home}/.claude/tasks/${sessionId}`;
+    await Deno.mkdir(dir, { recursive: true });
+    await Deno.writeTextFile(
+      `${dir}/1.json`,
+      JSON.stringify({ status: "completed" }),
+    );
+    await Deno.writeTextFile(`${dir}/2.json`, "{bogus");
+    const result = await readTaskProgress(sessionId);
+    assertEquals(result, { done: 1, total: 1 });
+  });
+});
+
+Deno.test("readTaskProgress: non-json files ignored", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "sess-mixed";
+    const dir = `${home}/.claude/tasks/${sessionId}`;
+    await Deno.mkdir(dir, { recursive: true });
+    await Deno.writeTextFile(
+      `${dir}/1.json`,
+      JSON.stringify({ status: "pending" }),
+    );
+    await Deno.writeTextFile(`${dir}/README.md`, "# notes");
+    const result = await readTaskProgress(sessionId);
+    assertEquals(result, { done: 0, total: 1 });
+  });
 });

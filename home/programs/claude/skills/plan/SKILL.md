@@ -59,27 +59,14 @@ For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because P
 | small / medium / large | 3 | 全 non-trivial で固定 (User override で早期脱出可) |
 | xl | 0 (Phase 1 で split 提案) | 現状維持 |
 
-**Round N (1..3) の Step A–F**:
-- **Step A — Walk**: Round 1 は 8 観察 walk (Why / What / Who / When / Where / How / Success / Failure)。Round 2+ は前 round 回答を反映して再 walk (新 NotClear・曖昧化点を検出)。**要求文中に ambiguous qualifier (主観形容詞 / 程度副詞 / 曖昧技術語) が含まれる場合、他の Clear signal と併存しても該当観察 (主に What / Success) を NotClear に強制降格** — 詳細 anchor list は `references/requirement-checklist.md` Step 1 Gate 参照
-- **Step B — Triage**: Step 1 Gate (Clear/NotClear binary) → Step 2 Triage (Ask / Assume / Self-resolve、3-category rule を CLAUDE.md から再利用、`How` は Always Assume default)。**Clear 判定時は要求文中の exact token を引用して Round 収束記録に残す必須** (類推ベースの Clear 禁止、NotClear として扱う)
-- **Step C — Self-resolve probe**: Round 内で Self-resolve 項目を解決試行。Phase 1 では Explore subagent は起動せず軽量 Grep/Read のみ (Phase 2 との責務分離)。probe 不能時の fallback は observation 依存 — Self-resolve default 観点 (What / When — codebase 探索で解決可能性が高い) は **Phase 2 EXPLORE に委譲**、Ask default 観点 (Why / Where / Success / Failure — user-only knowledge 必要) は **Ask に昇格**。requirement-checklist.md の各観点 "Default triage (NotClear)" 行を一次情報として参照。**Step A で ambiguous qualifier により NotClear 降格された項目は通常 Ask ではなく Calibration Probe として生成** — Claude が 3 個の concrete candidate (observable condition or threshold value, whichever applies) を研究/推測し (Recommended) tag 付き top + Other で preview 提示する (合計 4 options = 3 candidates + Other、CLAUDE.md "AskUserQuestion options limited to 4" 上限内)。詳細: `references/requirement-checklist.md` Step 2 Triage
-- **Step D — 再 Ask trigger 検出** (Round 2+ のみ): 4 category
-  - (i) 前 round Ask 回答の Other (自由記述) に疑問文型 (`?`, 「どうすれば」等) が含まれる
-  - (ii) 前 round 回答に曖昧語 (「どちらでも」「まだ決めきれ」「任せる」「後で」「未定」「まあ」「とりあえず」等) または Other 空文字/空白のみ
-  - (iii) 前 round で tentative Assumption にした項目が Round N 再 walk で still NotClear
-  - (iv) 前 round deferred Ask (5+ truncation) が残っている
-  - **Escalate 条件**: 同じ trigger 項目が Round N と Round N-1 で連続検出された場合、Ask 発行せず `unresolved after N rounds: <item>` を plan 本文に記録して収束 (Phase 2 へ)
-  - trigger 0 件 → 収束
-- **Step E — Ask 発行**: 通常 Ask 質問 (**最大 3** — override 質問が 4 slot 中 1 を消費するため実質 real 質問 max 3/round)。最後に override 質問 1 つを必ず追加:
-  - question: 「このまま Phase 2 EXPLORE に進みますか？追加で確認したい点があれば『追加確認』を選んでください。」
-  - options: ["このまま Phase 2 へ進む", "追加確認が必要"]
-  - real 質問が 4 件以上必要な round は上位 3 + override で発行し、残りは次 round に繰り越し
-  - **Round 1 のみ Divergence Probing**: 通常 Ask batch call とは別の AskUserQuestion call として Divergence Probing を発行。**抽出候補数による case-split**: 0 candidates → skip、1 candidate → disposition single-select form、2-4 candidates → multiSelect form (Step F で per-candidate 正規化 — 選択 = scope-in、非選択 = 対象外)。**要求文中に参考実装 URL が与えられている場合は必須発行** (delta 分析 mandate、2-4 candidates multiSelect form 強制)。Round 1 で AskUserQuestion が最大 2 call 発生することを許容 — Phase 1 cycle 全体の 3 call 上限 (`~/.claude/CLAUDE.md` の `Phase 1 cycle up to 3 AskUserQuestion calls per cycle`) 枠内で Round 2/3 と併せて消費。Divergence 回答は通常 Ask 回答と同じく Step F で処理され、回答中の曖昧語 / 逆質問 / 空文字は Round 2+ の Step D trigger (i)(ii) と同じ扱いで再 Ask 候補となる。詳細: `references/requirement-checklist.md` の `## Divergence Probing` 節
-- **Step F — 回答処理**:
-  - override = "Phase 2 へ進む" → 他 real 質問の回答は最終決定として plan 本文に記録。回答内に曖昧語や逆質問が含まれていても Round N+1 の trigger 扱いせず、`Assumption: <observation>: <value> (user-overridden, flagged for Phase 4 Critic re-validation)` として記録し Phase 4 Critic に委任 (User 明示的 override を尊重)
-  - override = "追加確認が必要" かつ Round < 3 → Round N+1 へ
-  - Round == 3 → Ask 回答反映後に強制 Phase 2 (`Requirement Clarification: max rounds reached` を plan 本文に記録)
-  - Ask 回答が空文字 / 空白のみ → 該当項目を trigger (ii) 扱いで次 round の Ask 候補に戻す (Escalate 条件適用あり)。ただし override = "Phase 2 へ進む" が同時に選ばれていた場合は trigger (ii) 判定を skip し、空文字回答も上記の `user-overridden` Assumption として記録 (override 優先、User 意図の明示的尊重)
+**Round N (1..3) の Step A–F** (Round loop / Escalate / 収束判定の source of truth は本 SKILL.md。`references/requirement-checklist.md` は 8 観察 walk の signals / Step 2 Triage / Calibration Probe 詳細を owns):
+
+- **Step A Walk**: Round 1 は 8 観察 walk (Why / What / Who / When / Where / How / Success / Failure)、Round 2+ は前 round 回答を反映した再 walk。要求文中に ambiguous qualifier が含まれる場合、該当観察 (主に What / Success) は Clear signal 併存でも NotClear に強制降格
+- **Step B Triage**: Clear/NotClear 判定 → Ask / Assume / Self-resolve (3-category rule、`How` は Always Assume)。Clear 判定には要求文中の exact token 引用必須 (類推ベースは NotClear 扱い)
+- **Step C Self-resolve probe**: 軽量 Grep/Read のみで probe (Explore subagent は Phase 2 へ)。不能時は観察依存で fallback — Self-resolve default (What / When) は Phase 2 EXPLORE へ委譲、Ask default (Why / Where / Success / Failure) は Ask 昇格。ambiguous qualifier 由来の NotClear は通常 Ask ではなく Calibration Probe (3 candidates + Other)
+- **Step D 再 Ask trigger 検出** (Round 2+): (i) 前 round Other の疑問文型、(ii) 曖昧語 / 空文字、(iii) tentative Assumption が再 walk で still NotClear、(iv) 前 round deferred Ask 残存。**2 種の Escalate 経路**: (a) 同 trigger の連続検出 → 短形式 `unresolved after N rounds: <item>` 記録 → Phase 2 遷移、(b) Ask overflow / 3-call budget overflow → 長形式 `Assumption (unresolved after N rounds): <observation>: unresolved — requires user confirmation in Phase 4 Step 7 Consolidated Interview` 記録 → Phase 4 Critic / Step 7 委任。trigger 0 件 → 収束
+- **Step E Ask 発行**: 通常質問 max 3 + override 質問 1 (「このまま Phase 2 へ進む」/「追加確認が必要」)、4 件以上は次 round 繰り越し。Round 1 のみ Divergence Probing を別 AskUserQuestion call で発行 (0 candidates skip / 1 candidate single-select / 2-4 multiSelect、参考実装 URL 与えられている場合は必須)
+- **Step F 回答処理**: override="Phase 2 へ進む" → 他回答を最終決定として記録 (曖昧語混在時も `Assumption: ... (user-overridden, flagged for Phase 4 Critic re-validation)`)、override="追加確認" かつ Round<3 → Round N+1、Round==3 → 強制 Phase 2 (`max rounds reached` 記録)、Ask 回答空文字 → trigger (ii) で次 round 候補 (override 優先時は user-overridden Assumption)
 
 **Round 収束条件** (Phase 4 Step 4 Convergence check と同型):
 - User override "Phase 2 へ進む"
@@ -90,7 +77,7 @@ For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because P
 **Ask-item batch rules** (各 Round 内で適用):
 - Ask = 0: Step E で override 質問のみ発行 (User override による脱出口を必ず残す)、または Round 2+ の trigger 判定が 0 件なら AskUserQuestion 自体 skip して収束
 - Ask 1-3: 全件 + override で 1 回の AskUserQuestion call (合計 max 4 questions)
-- Ask ≥ 4: Impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition) で上位 3 件 + override、残りは次 round 先頭に繰り越し (3 round 超で残ったら `unresolved after N rounds` 記録)
+- Ask ≥ 4: Impact priority (cost-if-wrong: Outcome > Boundary > Context > Definition) で上位 3 件 + override、残りは次 round 先頭に繰り越し (3 round 超で残ったら Step D(b) の **長形式 `Assumption (unresolved after N rounds): <observation>: unresolved — requires user confirmation in Phase 4 Step 7 Consolidated Interview`** で記録し Phase 4 Step 7 委任 — overflow は長形式が canonical)
 
 ### Ambiguity Gate (exception outside the checklist)
 
@@ -125,13 +112,8 @@ And trace **5 execution paths**:
 
 When the plan modifies existing behavior, codebase-only exploration is insufficient — "specified to do X" and "actually useful as X in practice" are different questions. Augment Phase 2 with empirical evidence of how the target currently behaves.
 
-- **Trigger (OR logic)** — apply when any of the following hold AND the Exempt conditions below do not apply:
-  - `## Files to Change` contains at least one `UPDATE` action **on a behavior-bearing target** (source code, executable scripts, config that changes runtime, skill/hook logic). Pure docs/comment/metadata-only UPDATEs do NOT trigger on this rule alone
-  - Task description contains existing-behavior-revision keywords (bug-fix / refactor / 仕様変更 / perf 改善 / CLI 出力変更 / semantics change)
-- **Exempt** — skip the empirical subagent when ANY of the following hold (exemption is unconditional — it overrides triggers):
-  - Files to Change is CREATE-only AND the new code does not depend on existing runtime behavior (pure new-feature addition), OR
-  - All UPDATEs target documentation / comments / metadata only (README, CHANGELOG, comments within code, non-runtime config) — even if a keyword trigger matches, there is no runtime behavior to observe, so empirical analysis is moot, OR
-  - complexity is `trivial` (short-circuit path)
+- **Trigger (OR)**: `## Files to Change` has an UPDATE on a behavior-bearing target (source / executable / runtime config / skill/hook logic), OR the task contains existing-behavior-revision keywords (bug-fix / refactor / 仕様変更 / perf / CLI 出力 / semantics change)
+- **Exempt** (unconditional, overrides triggers): (a) CREATE-only with no dependency on existing runtime behavior, OR (b) all UPDATEs target docs / comments / metadata only (no runtime behavior to observe), OR (c) complexity is `trivial`
 - **Action** — when triggered, **repurpose one of the existing "up to 3 Explore subagents" slots** for an empirical mandate (total still 3 agents; no user-resource increase). The empirical subagent's mandate MUST instruct it to collect behavioral evidence using a two-tier strategy:
   - **Tier 1 — historical signals** from codebase-external records (use only those relevant to the target; full enumeration is not required):
     - `~/.claude/plans/*.md` and `~/.claude/plans/*.log.md` (past plan bodies + Deepening Logs — evolution of similar decisions)
@@ -196,84 +178,22 @@ Pick whichever sub-elements are useful for THIS task. Do not pad — empty visua
 For `small` complexity: include "Change at a glance" + Per-file change matrix only.
 For `medium+`: include all sub-elements that apply.
 
-#### Overview templates
+#### Overview template hints
 
-**Workflow (Before → After)**:
-```
-Before:
-  user → A → B → C → result
-
-After:
-  user → A → [new gate] → B → C
-                ↓ (block)
-              error
-```
-
-**File layout (affected only)**:
-```
-src/
-├── auth/
-│   ├── session.ts          # UPDATE: add token refresh
-│   └── token-refresh.ts    # CREATE
-└── middleware/
-    └── auth.ts             # UPDATE: wire refresh into middleware
-```
-
-**Per-file change matrix**:
-| Path | Action | What changes |
-|---|---|---|
-| `src/auth/token-refresh.ts` | CREATE | New refresh logic with 5min TTL buffer |
-| `src/auth/session.ts` | UPDATE | Call `refreshIfNeeded()` before token use |
-| `src/middleware/auth.ts` | UPDATE | Inject refresher into request context |
-
-**Key decisions**:
-- Refresh TTL buffer = 5 min — balances API call frequency vs token expiry race
-- Use existing `axios` interceptor pattern instead of new wrapper — Mirror `src/api/retry.ts:42`
-- No background refresh — refresh on-demand only, simpler and avoids state sync
+- **Workflow**: ASCII `Before:` / `After:` blocks showing arrows + branch points (e.g. `user → A → [new gate] → B` with `↓ (block) → error` branch)
+- **File layout**: ASCII tree of affected paths with inline `# UPDATE:` / `# CREATE:` annotations, omit unchanged siblings
+- **Per-file matrix**: 3-column markdown table `Path | Action | What changes` with action ∈ {CREATE, UPDATE, DELETE}
+- **Key decisions**: 3-5 bullets in `<decision> — <why>` one-line form
 
 ### Intentional Conventions section spec
 
-Add this section when the plan touches conventions (naming, formatting, file layout) that a fresh reviewer might flag as inconsistent without knowing they are deliberate.
+Add this section when the plan touches conventions (naming, formatting, file layout) a fresh reviewer might flag as inconsistent without knowing they are deliberate. Surfaces user-decided style choices so `/santa-loop` reviewers don't waste rounds re-flagging them.
 
-Purpose: surface user-decided style choices up front so `/santa-loop` reviewers do NOT waste rounds flagging items already decided.
+Each convention entry needs 3 minimal fields under `### <Convention name>`: `- **Convention**: <rule>`, `- **Scope**: <paths/sections>`, `- **Do not flag**: <explicit reviewer guidance>`. Free-form prose is allowed but not required. Abuse (burying bugs as "convention") is caught by Phase 4 Critic / Adversarial / Simplify passes.
 
-**Required fields per convention** (minimal 3 fields):
+**When to include**: rename / naming changes where the new name appears alongside siblings using a different convention, user-chosen non-canonical form, or any style a fresh reviewer might reasonably flag. **When to skip**: pure internal-logic changes, 100% canonical conventions, no style disputes. Do not pad.
 
-```markdown
-## Intentional Conventions
-
-### <Convention name>
-- **Convention**: <rule statement>
-- **Scope**: <where it applies — file paths, sections>
-- **Do not flag**: <explicit guidance to reviewers>
-```
-
-Free-form prose (rationale, canonical form comparison, etc.) is allowed but NOT required. The author is trusted to write honest conventions. Abuse (burying correctness bugs under "convention") is caught by Phase 4 Critic / Adversarial Falsification / Simplify Review passes that audit the plan as a whole.
-
-Example:
-
-```markdown
-## Intentional Conventions
-
-### Reviewer list shorthand in CLAUDE.md reviewer list line
-- **Convention**: Use shorthand reviewer names (`typescript / deno / react / a11y / ...`) in the reviewer list
-- **Scope**: `home/programs/claude/CLAUDE.md` the single line listing domain-specific reviewers
-- **Do not flag**: mismatch between `a11y` (shorthand) and `a11y-reviewer` (canonical filename) — all entries in that list are intentionally shorthand
-```
-
-**When to include:**
-- Task includes rename / naming changes where the new name appears in lists of siblings using a different convention
-- User has explicitly chosen a non-canonical form
-- Plan mentions a style that a fresh reviewer might reasonably flag as inconsistent
-
-**When to skip:**
-- Pure internal-logic changes with no naming exposure
-- Task follows 100% canonical conventions
-- No style disputes expected
-
-Do not pad. Empty Intentional Conventions sections hurt more than omission.
-
-`/santa-loop` reviewers are instructed (via `~/.claude/skills/santa-loop/references/reviewer-prompt.md`) to read this section and not flag documented items. This is the only defense layer — no orchestrator post-processing, no auto-dismiss, no warning UI. If a reviewer flags a documented item anyway, it surfaces as a normal NAUGHTY finding; the user sees it alongside other findings and decides (dismiss / accept / amend plan).
+`/santa-loop` reviewers are instructed (via `~/.claude/skills/santa-loop/references/reviewer-prompt.md`) to read this section and not flag documented items. Single defense layer — if a reviewer flags a documented item anyway, it surfaces as a normal NAUGHTY finding for the user to dismiss / accept / amend.
 
 Keep the plan body lean (target ~120-150 lines, excluding Deepening Log). Move per-round critique history to `<plan>.log.md`.
 
@@ -344,12 +264,12 @@ This eliminates the 3-4 sequential blocking waits the older design caused. Prese
 
 ### Step 8 — Definition of Done pipeline
 Design observable Completion Criteria:
-- **Autonomous Verification**: commands + EXPECT outputs. Prefix each item with a verifier-scope tag (**required for medium+ complexity plans**):
-  - `[file-state]` — any reviewer verifies via Read / Grep / Glob (frontmatter match, rg residue check, test -f existence)
-  - `[orchestrator-only]` — requires host access the reviewer sandbox may lack (nix flake check, docker, external API, sudo). `/santa-loop` Step 3 pre-runs these and embeds verbatim evidence into reviewer prompts
-  - `[outcome]` — circular items like "/santa-loop returns NICE" — derived from this review's verdict, not a prerequisite
-  - When unclear: default to `[orchestrator-only]` (fail-safe — over-running is cheaper than false FAIL)
-  - **Fail-fast validation**: Before finalizing the plan, scan `### Autonomous Verification` for untagged items (items not starting with `[file-state]`, `[orchestrator-only]`, or `[outcome]` prefix). If any found, **reject the plan** and prompt the author to tag them. `/santa-loop` Step 3 has NO safety net — tag is the contract, violation is caught here. Exemption: trivial and small complexity plans are exempt (tagging overhead isn't justified for plans with <3 verification items); medium/large/xl plans are required to tag every item
+- **Autonomous Verification**: commands + EXPECT outputs. Tag each item (required for medium+):
+  - `[file-state]` — verifiable by Read / Grep / Glob (frontmatter, rg residue, test -f)
+  - `[orchestrator-only]` — needs host access a reviewer may lack (nix flake check, docker, sudo). `/santa-loop` Step 3 pre-runs and embeds evidence
+  - `[outcome]` — circular (e.g. "/santa-loop returns NICE"), derived from this review's verdict
+  - When unclear, default to `[orchestrator-only]` (over-running is cheaper than a false FAIL)
+  - **Fail-fast**: untagged items in `### Autonomous Verification` reject the plan — `/santa-loop` Step 3 has no safety net. Exemption: trivial / small plans (tagging overhead unjustified for <3 items); medium/large/xl must tag every item
 - **Requires User Confirmation**: items with a genuine blocking capability (fresh GUI login, subjective judgment, etc.) — format: `- <condition> — 理由: <blocker>` (the `理由:` token follows the plan body language; English plan bodies use `Reason:` instead)
 - **Baseline**: tests / lint per task, `/completion-audit` + `/santa-loop` once at final gate (`/verification-loop` opt-in when deterministic re-execution is required)
 
@@ -371,7 +291,39 @@ Append `## Completion Criteria` section to the plan body (English, consumed by `
 
 ## Phase 5 — DECOMPOSE
 
-Main session decomposes the plan directly — no subagent dispatch. Consult `references/task-decomposition.md` for decomposition rules, the acceptance-criteria-by-change-type table, and anti-patterns. The main session already has the plan content in context from Phase 3/4, so a fresh subagent read would be redundant.
+Main session decomposes the plan directly — no subagent dispatch. The main session already has the plan content in context from Phase 3/4, so a fresh subagent read would be redundant.
+
+### Decomposition Rules
+
+1. **1 task = 1 verifiable unit**: Granularity where completion can be confirmed independently.
+2. **Verification within implementation tasks**: Each implementation task includes its own acceptance criteria with verification commands. Do not split verification out into standalone tasks — the only verification-only task allowed is the mandatory final gate in rule 5.
+3. **Separation of concerns**: Different concerns go in separate tasks. Files sharing the same concern go in one task.
+4. **Three elements of task descriptions**: Every task description must contain (1) target files to modify, (2) expected behavior after change, (3) acceptance criteria (verification commands + expected output).
+5. **Final gate task**: Always include a final gate task titled `Run /completion-audit and /santa-loop`, `blockedBy` all implementation tasks. `/completion-audit` runs first (evidence-sufficiency audit reading per-task `metadata.evidence` against the plan's Completion Criteria — no re-execution), then `/santa-loop` runs (dual-reviewer, receives the audit verdict as `Audit Verdict Input`). `/verification-loop` is opt-in and invoked manually when deterministic re-execution is genuinely required.
+
+### Acceptance Criteria by Change Type
+
+Analyze the changes in the plan and embed appropriate acceptance criteria within each implementation task description:
+
+| Change Type | Acceptance criteria to include |
+|---|---|
+| CLI script | Execute the script and confirm output matches expected values |
+| Hook script | Reproduce the hook trigger condition and confirm intervention works |
+| Web UI | Open the page with `/agent-browser`, take screenshots; check layout, console errors, responsiveness |
+| Nix config | Confirm settings applied after `darwin-rebuild` |
+| Skill/agent addition | Verify with skill-tester trigger test or manual invocation |
+| Improvement task | Record a Before baseline and compare with After numerically |
+
+`code-simplifier` dispatch is NOT a decomposition concern — `/impl` auto-spawns it per implementation task when that task's diff ≥ 20 files OR ≥ 500 lines. Do not create a standalone simplifier task here.
+
+See `~/.claude/skills/completion-audit/references/behavioral-verification.md` for the detailed per-change-type verification template.
+
+### Anti-patterns
+
+- Creating separate verification tasks among implementation tasks (per-task verification is embedded in that task's acceptance criteria). The one exception is the final gate task required by rule 5.
+- Verification tasks that only say "confirm" without specific commands.
+- Missing `blockedBy` declarations for prerequisite dependencies.
+- Missing final gate task.
 
 ### 2-pass TaskCreate (required)
 
@@ -429,17 +381,15 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3, agent-substituted>' > "$HOME/.claud
 
 ### Output to user
 
-Emit the **full plan body inline** so the user can approve without opening the file. Format:
+Emit the **full plan body inline** so the user can approve without opening the file, followed by a metadata block:
 
 ```
 ## Plan
-
-<paste the entire plan file body here, verbatim — agent reads ~/.claude/plans/<plan>.md and inlines it>
+<full plan body, verbatim>
 
 ---
 
 ## Plan ready
-
 - File: <plan path>
 - Complexity: <trivial/small/medium/large/xl>
 - Tasks: <count> (+ /completion-audit + /santa-loop gate)
@@ -448,42 +398,17 @@ Emit the **full plan body inline** so the user can approve without opening the f
 Run `/impl` when you approve.
 ```
 
-**xl fallback**: when complexity is `xl` (plan body > ~600 lines), skip the inline body and show only the section headings as a TOC, instructing the user to open the file:
-
-```
-## Plan (xl — too large to inline)
-
-Sections:
-- ## Context
-- ## Approach
-- ## NOT Building
-- ## Mandatory Reading
-- ## Patterns to Mirror
-- ## Files to Change
-- ## Task Outline
-- ## Verification Commands
-- ## Definition of Done
-- ## Risks + Open Questions
-
-File: <plan path> — open to review.
-
----
-
-## Plan ready
-...
-```
-
--- Why: with only the metadata + decisions summary, the user cannot decide to approve without opening the plan file. Inlining the body collapses the review loop into one screen. xl plans are the only scale where inlining hurts more than helps.
+**xl fallback** (plan > ~600 lines): replace the full-body block with a TOC of `##`-level section headings + plan path, keep the metadata block. Inlining xl plans hurts more than helps; everything smaller benefits from single-screen review.
 
 ## Integration with existing skills
 
-- `plan-simplifier` subagent is spawned in Phase 4 Step 6 via the Agent tool (parallel with Step 5's Explore). The `/simplify-review plan` skill shares the same reviewer and is available for manual ad-hoc use outside `/plan`.
+- `plan-simplifier` subagent: dispatched in Phase 4 Step 6 (details there). `/simplify-review plan` exposes the same reviewer for manual ad-hoc use.
 - `/qa-planner`, `/agent-browser` load-before-planning rules from CLAUDE.md still apply — load them in Phase 1 or Phase 2 if the task requires.
 - `/obsidian-cli` applies when the plan involves vault work.
 
 ## Design decisions
 
-**Why fused instead of chained**: the user rejected multi-command chaining (`/design → /deepen → /decompose`). A single command eliminates intermediate hand-off overhead and guarantees decomposition always happens (the historic hook-dependent failure mode — decomposition was previously handled by a `task-planner` subagent dispatched via an `ExitPlanMode` hook that fired unreliably; the subagent was later inlined into Phase 5 to eliminate dispatch overhead).
+**Why fused instead of chained**: multi-command chaining (`/design → /deepen → /decompose`) was rejected. A single command eliminates hand-off overhead and guarantees decomposition always happens (prior hook-based dispatch was unreliable; Phase 5 is now inlined).
 
 **Why PreToolUse gate instead of UserPromptSubmit redirect**: a blocking hook on `Edit|Write|MultiEdit` enforces design-first even when CC plan mode fails. Bootstrap risk (editing the gate itself) is handled by the infra-path allowlist in `plan-gate.ts`.
 

@@ -1,25 +1,15 @@
 # Critic Prompt Template
 
-This file contains the prompt template used by `/plan` Phase 4 to construct each round's Critic Subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
-
-## Template
-
----
+Prompt template for `/plan` Phase 4 Critic Subagent. Replace `{placeholders}` before use.
 
 ```
 You are an adversarial plan critic. Your role is to find weaknesses in the plan, not to praise it. Be genuinely critical — a plan with zero issues is suspicious.
 
-## Plan Under Review
+## Inputs
 
-{plan_content}
-
-## Project Context
-
-{project_context}
-
-## Prior Rounds
-
-{deepening_log_or_"This is the first round."}
+- **Plan Under Review**: `{plan_content}`
+- **Project Context**: `{project_context}`
+- **Prior Rounds**: `{deepening_log_or_"This is the first round."}`
 
 ## Evaluation Dimensions
 

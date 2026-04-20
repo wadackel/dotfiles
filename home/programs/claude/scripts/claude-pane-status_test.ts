@@ -297,6 +297,44 @@ Deno.test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", ()
   assertEquals(toolOp?.kind, "unset");
 });
 
+Deno.test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when payload tool_name differs", () => {
+  // Pre(A)→current=A, Pre(B)→current=B, Post(A): tool_name='A' != state.currentTool='B'.
+  // current_tool must stay 'B' because B is still running.
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "ToolA" },
+    { subagents: "", pendingTeardown: false, currentTool: "ToolB" },
+  );
+  const currentOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(currentOp, undefined, "current_tool must not be touched when a parallel tool is still running");
+  const lastOp = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastOp?.kind === "set" ? lastOp.value : "", "ToolA");
+});
+
+Deno.test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", () => {
+  // Non-edit tool completion must clear any stale basename so row 2 never
+  // shows `last: Bash · old-file.ts` after a prior Edit.
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind, "unset");
+});
+
+Deno.test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_last_edit_file", () => {
+  // Edit-family tool without a usable file_path must also clear the stale
+  // basename rather than leaving a previous Edit's value on display.
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind, "unset");
+});
+
 Deno.test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", () => {
   const preOps = eventToOps(
     "PreToolUse",
@@ -308,11 +346,175 @@ Deno.test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", (
 
   const postOps = eventToOps(
     "PostToolUse",
-    { session_id: "s1" },
+    { session_id: "s1", tool_name: "Edit" },
     { subagents: "", pendingTeardown: false, currentTool: "Edit" },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
   assertEquals(postToolOp?.kind, "unset");
+});
+
+Deno.test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + stores raw file_path + activity_at", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Edit",
+      tool_input: { file_path: "/x/y.ts" },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(currentUnset?.kind, "unset");
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Edit");
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/x/y.ts");
+  const activity = ops.find((o) => o.key === "@pane_last_activity_at");
+  assertEquals(activity?.kind, "set");
+  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+});
+
+Deno.test("eventToOps: PostToolUse (Write) stores file_path", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Write",
+      tool_input: { file_path: "/a/b/new.md" },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Write" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/new.md");
+});
+
+Deno.test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "MultiEdit",
+      tool_input: { file_path: "/a/b/multi.ts" },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "MultiEdit" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/multi.ts");
+});
+
+Deno.test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_file", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+  );
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind, "unset");
+});
+
+Deno.test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no last_*)", () => {
+  // Degraded payload: only activity_at is updated — last_tool / last_edit_file
+  // / current_tool are left untouched because attributing the completion via
+  // state.currentTool would mis-label when parallel tools are in flight.
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  assertEquals(
+    ops.filter((o) => o.key === "@pane_last_tool").length,
+    0,
+    "last_tool must not be set via ambiguous fallback",
+  );
+  assertEquals(
+    ops.filter((o) => o.key === "@pane_last_edit_file").length,
+    0,
+  );
+  assertEquals(
+    ops.filter((o) => o.key === "@pane_current_tool").length,
+    0,
+  );
+  const activity = ops.find((o) => o.key === "@pane_last_activity_at");
+  assertEquals(activity?.kind, "set");
+});
+
+Deno.test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Edit",
+      tool_input: { file_path: "/x/y\n.ts\twith\rctrl" },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(
+    lastFile?.kind === "set" ? lastFile.value : "",
+    "/x/y .ts with ctrl",
+  );
+});
+
+Deno.test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_edit_file", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Edit",
+      tool_input: { file_path: 42 },
+    },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
+  assertEquals(lastFile?.kind, "unset");
+});
+
+Deno.test("eventToOps: UserPromptSubmit sets @pane_last_activity_at", () => {
+  const ops = eventToOps(
+    "UserPromptSubmit",
+    { session_id: "s1", prompt: "hello" },
+    emptyState,
+  );
+  const activity = ops.find((o) => o.key === "@pane_last_activity_at");
+  assertEquals(activity?.kind, "set");
+  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+});
+
+Deno.test("eventToOps: SessionStart sets @pane_last_activity_at (fresh-session idle seed)", () => {
+  const ops = eventToOps(
+    "SessionStart",
+    { session_id: "s-new" },
+    emptyState,
+  );
+  const activity = ops.find((o) =>
+    o.kind === "set" && o.key === "@pane_last_activity_at"
+  );
+  assertEquals(activity?.kind, "set");
+  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+});
+
+Deno.test("eventToOps: SessionStart clears new last_* options (stale-session cleanup)", () => {
+  const ops = eventToOps(
+    "SessionStart",
+    { session_id: "s-new" },
+    emptyState,
+  );
+  const unsetKeys = ops.filter((o) => o.kind === "unset").map((o) => o.key);
+  assertEquals(unsetKeys.includes("@pane_last_tool"), true);
+  assertEquals(unsetKeys.includes("@pane_last_edit_file"), true);
+  // last_activity_at is set (seeded) at SessionStart, not unset — it is
+  // semantically established by the stale clear passing through then the
+  // seed `set` below. Order in the returned array: unsets first, then sets.
+});
+
+Deno.test("eventToOps: SessionEnd drain includes new last_* options", () => {
+  const ops = eventToOps("SessionEnd", {}, emptyState);
+  const keys = ops.map((o) => o.key);
+  assertEquals(keys.includes("@pane_last_tool"), true);
+  assertEquals(keys.includes("@pane_last_edit_file"), true);
+  assertEquals(keys.includes("@pane_last_activity_at"), true);
 });
 
 // --- SubagentStart / SubagentStop (list encoding) ---

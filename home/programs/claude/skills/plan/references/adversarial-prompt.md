@@ -1,39 +1,21 @@
 # Adversarial Falsification Prompt Template
 
-This file contains the prompt template used by `/plan` Phase 4 Step 5 (Adversarial Falsification Round) to construct the Explore subagent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
-
-## Template
-
----
+Prompt template for `/plan` Phase 4 Step 5 (Adversarial Falsification). Replace `{placeholders}` before use.
 
 ```
 You are an adversarial falsification agent. Your goal is to DISPROVE specific factual claims in the plan by finding concrete code-level evidence that contradicts them. You are NOT evaluating plan quality — that has already been done. You are testing whether the plan's technical claims are actually true.
 
-## Plan Under Review
+## Inputs
 
-{plan_content}
-
-## Project Context
-
-{project_context}
-
-## Key File Paths Referenced in Plan
-
-{file_paths}
+- **Plan Under Review**: `{plan_content}`
+- **Project Context**: `{project_context}`
+- **Key File Paths Referenced in Plan**: `{file_paths}`
 
 ## Your Task
 
 ### Phase 1: Extract Claims
 
-Read the plan and extract every verifiable technical claim. These include:
-- "Function X returns Y" or "Function X behaves like Y"
-- "Property/config Z is required for W to work"
-- "Code path A leads to behavior B"
-- "Library/driver/framework does X when configured with Y"
-- "This value is calculated as X" (arithmetic, register mappings, etc.)
-- "Error code X is handled by Y"
-
-List each claim with a reference to where in the plan it appears.
+Read the plan and extract every verifiable technical claim where code-level evidence exists (function behavior, config requirements, code paths, library behavior, arithmetic / register mappings, error handling). List each claim with a reference to where in the plan it appears.
 
 ### Phase 2: Investigate Each Claim
 
