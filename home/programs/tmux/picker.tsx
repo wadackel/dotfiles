@@ -231,7 +231,7 @@ export function basename(path: string): string {
 }
 
 // Split cwd/branch into separate columns for the row renderer. Both fields are
-// emitted independently so the renderer can place a dim middle-dot separator
+// emitted independently so the renderer can place a middle-dot separator
 // between them and align each column with padEnd. When both are empty, repo
 // carries the "·" placeholder so the row is never blank.
 export function cwdBranchParts(
@@ -437,13 +437,12 @@ interface PaneRowLineProps {
   listWidth: number;
 }
 
-// Row-2 segment (colored dim-or-accent text). Built in priority order; when the
-// cumulative width exceeds budget, trim from the end (lowest priority first).
+// Row-2 segment (colored text). Built in priority order; when the cumulative
+// width exceeds budget, trim from the end (lowest priority first).
 interface Row2Seg {
   key: string;
   text: string;
   color: string;
-  dim: boolean;
 }
 
 const ROW2_SEP = " · ";
@@ -452,7 +451,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   { row, now, selected, taskProgress, listWidth }: PaneRowLineProps,
 ) => {
   const color = statusColor(row.status);
-  const pointer = selected ? "❯" : " ";
+  const pointer = selected ? "❯ " : "  ";
   const icon = statusIcon(row.status);
   const statusText = statusShort(row.status);
   // Trailing space in each padded column produces inter-column gaps without
@@ -475,13 +474,12 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   // slot outside this budget.
   const segs: Row2Seg[] = [];
   if (row.currentTool) {
-    segs.push({ key: "tool", text: row.currentTool, color: "cyan", dim: false });
+    segs.push({ key: "tool", text: row.currentTool, color: "cyan" });
   } else if (row.lastTool) {
     segs.push({
       key: "tool",
       text: `last: ${row.lastTool}`,
       color: "gray",
-      dim: true,
     });
   }
   if (subagents.length > 0) {
@@ -489,7 +487,6 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "tree",
       text: renderSubagentTree(subagents),
       color: "gray",
-      dim: true,
     });
   }
   if (row.lastEditFile) {
@@ -497,7 +494,6 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "file",
       text: basename(row.lastEditFile),
       color: "gray",
-      dim: true,
     });
   }
   if (taskProgress) {
@@ -505,7 +501,6 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "progress",
       text: `${taskProgress.done}/${taskProgress.total}`,
       color: "gray",
-      dim: true,
     });
   }
   if (row.status === "idle" && row.lastActivityAtSec !== null) {
@@ -513,7 +508,6 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "idle",
       text: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
       color: "gray",
-      dim: true,
     });
   }
 
@@ -539,7 +533,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
         <Text color={color}>{status5}</Text>
         <Text color="gray">{elapsed5}</Text>
         <Text color="blue">{repoCol}</Text>
-        <Text color="gray" dimColor>{separator}</Text>
+        <Text color="gray">{separator}</Text>
         <Text color="cyan">{branchCol}</Text>
         <Text>{" " + summary}</Text>
       </Box>
@@ -548,12 +542,12 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
         <Text>{"    "}</Text>
         {segs.map((s, i) => (
           <React.Fragment key={s.key}>
-            {i > 0 ? <Text color="gray" dimColor>{ROW2_SEP}</Text> : null}
-            <Text color={s.color} dimColor={s.dim}>{s.text}</Text>
+            {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
+            <Text color={s.color}>{s.text}</Text>
           </React.Fragment>
         ))}
         <Box flexGrow={1} />
-        <Text color="gray" dimColor>{row.target}</Text>
+        <Text color="gray">{row.target}</Text>
       </Box>
     </Box>
   );
@@ -711,7 +705,9 @@ function App({
     <Box flexDirection="column" width={totalCols} height={totalRows}>
       <Box marginBottom={1}>
         <Text color="cyan">Select pane</Text>
-        <Text color="gray">[Enter: jump / Esc or q: cancel / ↑↓ jk: move]</Text>
+        <Box marginLeft={2}>
+          <Text color="gray">[Enter: jump / Esc or q: cancel / ↑↓ jk: move]</Text>
+        </Box>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={listWidth}>
