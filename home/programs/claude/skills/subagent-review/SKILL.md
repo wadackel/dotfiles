@@ -1,6 +1,6 @@
 ---
 name: subagent-review
-description: "Two-stage subagent review (spec compliance → code quality) after completing an implementation task. Auto-triggers after each implementation task in plan execution, or when asked to 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
+description: "Opt-in strict two-stage subagent review (spec compliance → code quality → priority-ordered single domain specialist → security heuristic). The default per-task review is /impl's Unified Lightweight Review Gate; this skill runs only when a task carries [strict-review] or the user invokes it explicitly. Also fires on 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
 ---
 
 # Subagent Review
@@ -11,8 +11,10 @@ Two-stage review using fresh-context subagents to counter long-context quality d
 
 ## When to Use
 
-- **Automatic**: After each implementation task completes during Plan Execution (default mandatory)
-- **Manual**: When invoked with `/subagent-review` or equivalent trigger phrases
+**Opt-in only.** The default per-task review is `/impl`'s Unified Lightweight Review Gate (single unified subagent, skip conditions, max 2 rounds). This strict two-stage review runs only when:
+
+- **Task tag**: Task description carries `[strict-review]` — `/impl` dispatches this skill instead of the unified gate for that task
+- **Manual invocation**: User invokes `/subagent-review` or uses trigger phrases ('subagent review', 'タスクレビュー', 'サブエージェントレビュー')
 - **Ad-hoc**: Pass task description as `$ARGUMENTS`, or provide when prompted
 
 ## Skip Conditions
@@ -80,26 +82,26 @@ Same handling as Step 3:
 | `VERDICT: FAIL` | Fix MUST_FIX issues → re-review with fresh subagent |
 | 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review quality 3x failed]`, report to user |
 
-### Step 6: Domain-Specific Reviewer Dispatch (NEW)
+### Step 6: Domain-Specific Reviewer Dispatch (priority-ordered, max 1 agent)
 
-Only after Code Quality passes. Dispatch language / domain specialist agents in **parallel** (same-message tool calls) based on diff content.
+Only after Code Quality passes. Dispatch **at most one** language / domain specialist. Earlier designs ran multiple specialists in parallel (e.g., `.tsx` → typescript + react + a11y); that multiplied subagent cost without clearly compounding value. In this opt-in strict path we dispatch the highest-priority single match; broader domain coverage is handled by `/santa-loop` Layer 3 rubric at the final gate.
 
-#### Dispatch table
+#### Priority (first match wins)
 
-| Trigger | Agent |
-|---|---|
-| Diff contains `.ts`, `.tsx`, `.mts`, `.cts` files | `typescript-reviewer` |
-| `deno.jsonc`/`deno.json` in repo root OR diff contains `Deno.` API | `deno-reviewer` |
-| Diff contains `.jsx`/`.tsx` OR `from "react"` / `from "react-dom"` | `react-reviewer` |
-| Diff contains `.css`/`.scss`/`.html` OR JSX markup in `.tsx`/`.jsx` | `a11y-reviewer` |
-| Diff contains `.sql`, `migrations/*`, `schema.*` (sql/prisma/Drizzle), or `INSERT INTO`/`CREATE TABLE`/`SELECT.*FROM` in app code | `database-reviewer` |
-| Diff contains `.tf`, `*.tfvars`, k8s yaml, Helm chart, `Dockerfile`, `docker-compose.yml`, `serverless.yml`, `.github/workflows/*.yml` | `cloud-architecture-reviewer` |
-| Diff contains `.go` files | `go-reviewer` |
-| Diff contains `.rs` files | `rust-reviewer` |
-| Diff contains `.dart` files | `dart-reviewer` |
-| Diff contains `.nix` files | `nix-reviewer` |
+| Priority | Match | Agent |
+|---|---|---|
+| 1 | `.rs` file in diff | `rust-reviewer` |
+| 2 | `.go` file in diff | `go-reviewer` |
+| 3 | `.dart` file in diff | `dart-reviewer` |
+| 4 | `.nix` file in diff | `nix-reviewer` |
+| 5 | `.tsx` / `.jsx` file in diff | `typescript-reviewer` (React / a11y covered at `/santa-loop` Layer 3) |
+| 6 | `.ts` / `.mts` / `.cts` file in diff | `typescript-reviewer` |
+| 7 | `.sql` / `migrations/` / `schema.*` (sql / prisma / Drizzle) in diff, or `INSERT INTO` / `UPDATE … SET` / `DELETE FROM` / `CREATE TABLE` in app code | `database-reviewer` (migration safety reinforced at `/santa-loop` Layer 3) |
+| 8 | `Deno.` API reference in diff OR `jsr:` / `npm:` specifier added in diff OR `deno.jsonc` / `deno.json` itself modified in diff | `deno-reviewer` |
+| 9 | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` | `cloud-architecture-reviewer` |
+| 10 | `.css` / `.scss` / `.html` in diff AND no higher-priority match | `a11y-reviewer` |
 
-Multiple agents may be dispatched for a single task (e.g., `.tsx` triggers typescript-reviewer + react-reviewer + a11y-reviewer simultaneously). Launch them all in the SAME message to maximize parallelism.
+Only the **first** matching agent runs. No multi-dispatch.
 
 #### Detection implementation
 
@@ -107,32 +109,33 @@ Multiple agents may be dispatched for a single task (e.g., `.tsx` triggers types
 DIFF_FILES=$(git diff --name-only "${BASELINE_SHA}..HEAD")
 DIFF_HUNKS=$(git diff "${BASELINE_SHA}..HEAD")
 
-declare -a AGENTS=()
-printf '%s\n' "$DIFF_FILES" | rg -q '\.(ts|tsx|mts|cts)$' && AGENTS+=(typescript-reviewer)
-{ test -f deno.jsonc -o -f deno.json; } || printf '%s' "$DIFF_HUNKS" | rg -q '\bDeno\.' && AGENTS+=(deno-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.(jsx|tsx)$' || printf '%s' "$DIFF_HUNKS" | rg -q 'from "react(-dom)?"' && AGENTS+=(react-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.(css|scss|html)$|\.(jsx|tsx)$' && AGENTS+=(a11y-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.sql$|migrations/|schema\.(sql|prisma|ts)$' || printf '%s' "$DIFF_HUNKS" | rg -qi '(INSERT INTO|UPDATE .* SET|DELETE FROM|SELECT .* FROM|CREATE TABLE)' && AGENTS+=(database-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.ya?ml$|serverless\.ya?ml$|\.github/workflows/.*\.ya?ml$' && AGENTS+=(cloud-architecture-reviewer)
-# k8s yaml heuristic: rg for apiVersion + kind in same file — omitted here, match by path pattern or directory convention locally
-printf '%s\n' "$DIFF_FILES" | rg -q '\.go$' && AGENTS+=(go-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.rs$' && AGENTS+=(rust-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.dart$' && AGENTS+=(dart-reviewer)
-printf '%s\n' "$DIFF_FILES" | rg -q '\.nix$' && AGENTS+=(nix-reviewer)
+AGENT=""
+if   printf '%s\n' "$DIFF_FILES" | rg -q '\.rs$';   then AGENT=rust-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.go$';   then AGENT=go-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.dart$'; then AGENT=dart-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.nix$';  then AGENT=nix-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(jsx|tsx)$'; then AGENT=typescript-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(ts|mts|cts)$'; then AGENT=typescript-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.sql$|migrations/|schema\.(sql|prisma|ts)$' \
+     || printf '%s' "$DIFF_HUNKS" | rg -qi '(INSERT INTO|UPDATE .* SET|DELETE FROM|CREATE TABLE)'; then AGENT=database-reviewer
+elif printf '%s' "$DIFF_HUNKS" | rg -q '^\+.*(\bDeno\.|["'\'']jsr:|["'\'']npm:)' \
+     || printf '%s\n' "$DIFF_FILES" | rg -q 'deno\.(json|jsonc)$'; then AGENT=deno-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.ya?ml$|serverless\.ya?ml$|\.github/workflows/.*\.ya?ml$'; then AGENT=cloud-architecture-reviewer
+elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(css|scss|html)$'; then AGENT=a11y-reviewer
+fi
 
-# Dedupe and launch each via the Agent tool in the SAME message
+# If AGENT is set, launch it once via the Agent tool
 ```
 
 #### Handling results
 
-Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT. Merge findings from all specialists:
-- Dedupe by first-80-chars normalized issue text to avoid double-reporting
-- FAIL if ANY specialist returns `VERDICT: FAIL` on a MUST_FIX issue
-- On FAIL: fix the MUST_FIX items, then re-dispatch ONLY the failing specialist(s) with fresh agent instances (max 3 rounds)
+The specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT:
+- FAIL if `VERDICT: FAIL` on a MUST_FIX issue
+- On FAIL: fix the MUST_FIX items, then re-dispatch the same specialist with a fresh agent instance (max 3 rounds)
 
-### Step 7: Security Dispatch Heuristic (NEW)
+### Step 7: Security Dispatch Heuristic (opt-in only — default **MOVED** to final gate)
 
-Only after Step 6 passes. Runs a heuristic check to decide whether the security-auditor agent should be dispatched. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
+**MOVED**: In the default `/impl` flow the security heuristic runs once at the final gate's **Security Sweep** (after `/completion-audit` VERIFIED PASS, before `/santa-loop`). Per-task security dispatch only fires when this skill is invoked via the opt-in path (`[strict-review]` tag or manual invocation). See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
 
 #### Summary of triggers
 
@@ -175,10 +178,13 @@ fi
 
 | Aspect | simplify-review | subagent-review | codex-review |
 |--------|----------------|----------------|--------------|
-| Scope | Plan or per-task code | Per-task incremental | Full implementation |
-| Trigger | After /plan / large diffs / manual | Auto after each task (default) | User explicitly requests |
+| Scope | Plan or per-task code | Per-task incremental (opt-in) | Full implementation |
+| Trigger | After /plan / large diffs / manual | Opt-in: task tag `[strict-review]` or manual invoke | User explicitly requests |
 | Reviewer | Claude subagent (fresh context) | Claude subagent (fresh context) | Codex CLI (external tool) |
-| Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality | Holistic quality, security |
+| Purpose | Over-engineering detection, YAGNI | Spec compliance, code quality (opt-in strict review) | Holistic quality, security |
 
-Normal flow: `task → simplify-review (large diffs) → subagent-review → next task → ... → done`
+Normal flow: `task → unified lightweight review (default per-task review in /impl) → next task → ... → final gate (/completion-audit → Security Sweep → /santa-loop) → done`
+
+Opt-in strict review replaces the unified lightweight review on a single task: `task with [strict-review] → subagent-review → next task`.
+
 With codex-review: `... → all tasks done → codex-review (additional)`

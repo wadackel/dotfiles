@@ -5,6 +5,7 @@ import {
 import {
   ALL_PANE_OPTIONS,
   appendSubagent,
+  buildLogRecord,
   count,
   eventToOps,
   extractToolError,
@@ -13,6 +14,7 @@ import {
   maskPrompt,
   type PaneState,
   removeSubagent,
+  type RunContext,
   selfHealOps,
 } from "./claude-pane-status.ts";
 
@@ -1288,4 +1290,109 @@ Deno.test("eventToOps: SessionEnd drain includes new 3 options", () => {
     o.key === "@pane_last_tool_error"
   );
   assertEquals(newOptsOps.every((o) => o.kind === "unset"), true);
+});
+
+// --- buildLogRecord (observability JSONL) ---
+
+function baseCtx(): RunContext {
+  return {
+    argv_event: "SessionStart",
+    stdin_event: null,
+    session_id: null,
+    tmux_pane: null,
+    cwd: null,
+    pre_state: null,
+    ops: [],
+    apply_results: [],
+    early_exit: null,
+    stdin_event_mismatch: false,
+  };
+}
+
+const FIXED_NOW = new Date("2026-04-20T12:34:56.789Z");
+
+Deno.test("buildLogRecord: minimal early-exit (no-event) is fully null-safe", () => {
+  const ctx = baseCtx();
+  ctx.argv_event = "";
+  ctx.early_exit = "no-event";
+  const rec = buildLogRecord(ctx, FIXED_NOW, 4242);
+  assertEquals(rec.ts, "2026-04-20T12:34:56.789Z");
+  assertEquals(rec.pid, 4242);
+  assertEquals(rec.argv_event, "");
+  assertEquals(rec.stdin_event, null);
+  assertEquals(rec.session_id, null);
+  assertEquals(rec.tmux_pane, null);
+  assertEquals(rec.cwd, null);
+  assertEquals(rec.pre_state, null);
+  assertEquals(rec.ops, []);
+  assertEquals(rec.apply_results, []);
+  assertEquals(rec.early_exit, "no-event");
+  assertEquals(rec.stdin_event_mismatch, false);
+});
+
+Deno.test("buildLogRecord: ops are stripped of value (PII safety)", () => {
+  const ctx = baseCtx();
+  ctx.argv_event = "UserPromptSubmit";
+  ctx.tmux_pane = "%42";
+  ctx.session_id = "sess-abc";
+  ctx.ops = [
+    { kind: "set", key: "@pane_prompt", value: "secret prompt content" },
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "unset", key: "@pane_wait_reason" },
+  ];
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  assertEquals(rec.ops.length, 3);
+  for (const op of rec.ops) {
+    assertEquals(Object.hasOwn(op, "value"), false);
+  }
+  assertEquals(rec.ops[0], { kind: "set", key: "@pane_prompt" });
+  assertEquals(rec.ops[2], { kind: "unset", key: "@pane_wait_reason" });
+});
+
+Deno.test("buildLogRecord: apply_results pass through verbatim incl. stderr", () => {
+  const ctx = baseCtx();
+  ctx.apply_results = [
+    { key: "@pane_agent", code: 0 },
+    { key: "@pane_status", code: 1, stderr: "can't find pane: %99" },
+  ];
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  assertEquals(rec.apply_results, [
+    { key: "@pane_agent", code: 0 },
+    { key: "@pane_status", code: 1, stderr: "can't find pane: %99" },
+  ]);
+});
+
+Deno.test("buildLogRecord: pre_state and stdin_event_mismatch preserved", () => {
+  const ctx = baseCtx();
+  ctx.argv_event = "PreToolUse";
+  ctx.stdin_event = "PostToolUse";
+  ctx.stdin_event_mismatch = true;
+  const state: PaneState = {
+    subagents: "Explore:a1",
+    pendingTeardown: false,
+    currentTool: "Bash",
+    status: "running",
+  };
+  ctx.pre_state = state;
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  assertEquals(rec.stdin_event, "PostToolUse");
+  assertEquals(rec.stdin_event_mismatch, true);
+  assertEquals(rec.pre_state, state);
+});
+
+Deno.test("buildLogRecord: output is JSON-serializable (no cycles/undefined)", () => {
+  const ctx = baseCtx();
+  ctx.argv_event = "Stop";
+  ctx.tmux_pane = "%7";
+  ctx.session_id = "sid";
+  ctx.cwd = "/tmp";
+  ctx.ops = [{ kind: "set", key: "@pane_status", value: "idle" }];
+  ctx.apply_results = [{ key: "@pane_status", code: 0 }];
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  const line = JSON.stringify(rec);
+  const parsed: unknown = JSON.parse(line);
+  assertEquals(
+    (parsed as { tmux_pane: string }).tmux_pane,
+    "%7",
+  );
 });

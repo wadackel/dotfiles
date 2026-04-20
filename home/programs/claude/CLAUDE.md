@@ -97,9 +97,9 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 **Absolute rule**: When `/codex-review` is triggered, always complete the full Code Review Loop (never skip midway). See codex-review skill's SKILL.md for the detailed flow.
 
-**Default review**: Unless the user explicitly requests codex-review, `/subagent-review` runs as the default review after each implementation task completion.
+**Default review**: Unless the user explicitly requests codex-review, the `/impl` unified lightweight review runs as the default per-task review. `/subagent-review` is opt-in — it fires only when the task description carries `[strict-review]` or the user explicitly invokes it.
 
-**`/completion-audit` + `/santa-loop` together are the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use. The default final gate is `/completion-audit` (evidence-sufficiency audit) → `/santa-loop` (dual-reviewer code/design quality; Claude opus + codex, both must PASS, max 3 fix rounds). `/santa-loop` consumes the audit verdict as `Audit Verdict Input` and does NOT re-judge completeness.
+**`/completion-audit` + Security Sweep + `/santa-loop` together are the final gate, not `/codex-review`**: `/codex-review` is a single-external lightweight review for opt-in mid-task use. The default final gate is `/completion-audit` (evidence-sufficiency audit) → **Security Sweep** (one `security-auditor` pass on the aggregated diff, heuristic-gated) → `/santa-loop` (dual-reviewer code/design quality; Claude opus + codex, both must PASS, max 3 fix rounds). `/santa-loop` consumes the audit verdict as `Audit Verdict Input` and does NOT re-judge completeness.
 
 ### General
 
@@ -141,15 +141,15 @@ When reading or writing Obsidian notes, load `/obsidian-cli` via the `Skill` too
 
 #### /impl Workflow
 
-After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, completion-audit + santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
+After `/plan` completes, invoke `/impl` to process the task list. Per-task rules (verification within task completion, simplify-review threshold, subagent-review timing, deviation handling, plan compliance check, recovery after compaction, three-elements task description, baseline_sha metadata, completion-audit → Security Sweep → santa-loop as final gate) are documented in `~/.claude/skills/impl/SKILL.md` — single source of truth.
 
 Key invariants enforced by `/impl`:
 - Faithful step execution (no skip/rephrase/reorder)
 - Raw evidence recording (verbatim command + output in `metadata.evidence`)
-- `/subagent-review` after every implementation task. subagent-review auto-dispatches 10 domain-specific reviewers (typescript / deno / react / a11y / database / cloud-architecture / go / rust / dart / nix) by file extension + content heuristic, and `security-auditor` by security heuristic
+- Per-task default: unified lightweight review (single fresh `code-reviewer` subagent with `model: "opus"`, max 2 round retry) with skip conditions for trivial (< 10 lines AND ≤ 2 files) / docs-only / verification-only tasks. Domain dispatch is limited to at most 1 priority-ordered specialist; broader file-type observations (React / a11y for `.tsx`, schema / migration / N+1 for `.sql`) are covered by `/santa-loop` Layer 3 at the final gate. Security is consolidated at the final gate Security Sweep (one `security-auditor` pass on aggregated changed files before `/santa-loop`). Opt-in escape hatch: task description `[strict-review]` tag or explicit `/subagent-review` invocation runs the strict path — Spec → Code quality → priority-ordered **single** Domain specialist → Security heuristic. (Note: Domain has been demoted to a single specialist on the strict path as well; the previous multi-parallel Domain dispatch is gone from both paths. `/santa-loop` Layer 3 backstops the dropped observations at the final gate.)
 - `/simplify-review code` when diff ≥ 20 files OR ≥ 500 lines
 - Re-plan keeps `completed` tasks, deletes `pending`/`in_progress` only
-- Final gate task is `Run /completion-audit and /santa-loop` with `blockedBy` all impls. `/completion-audit` returns VERIFIED PASS → `/santa-loop` is invoked with the audit verdict embedded as `Audit Verdict Input` → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/verification-loop` is opt-in and invoked manually outside the final gate (e.g., `/verify` before opening a PR) when deterministic re-execution of build/typecheck/lint/tests is genuinely required
+- Final gate task is `Run /completion-audit and /santa-loop` with `blockedBy` all impls. Execution order: `/completion-audit` VERIFIED PASS → **Security Sweep** (one `security-auditor` pass on the aggregated diff, gated by `subagent-review/references/security-trigger-heuristic.md`; max 2 retry rounds) → `/santa-loop` invoked with the audit verdict embedded as `Audit Verdict Input` → must return NICE (dual-reviewer: Claude opus + codex (claude-second fallback)). `/verification-loop` is opt-in and invoked manually outside the final gate (e.g., `/verify` before opening a PR) when deterministic re-execution of build/typecheck/lint/tests is genuinely required
 
 #### Implementation and Verification
 

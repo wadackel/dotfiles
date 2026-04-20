@@ -1,7 +1,13 @@
-#!/usr/bin/env -S deno run --allow-env=TMUX_PANE --allow-run=tmux
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMUX_PANE --allow-run=tmux
 
 // Bridges Claude Code hook events → tmux pane options (SSOT for the popup picker).
 // Invoked as: claude-pane-status.ts <EventName>   (unknown events → no-op exit 0)
+//
+// Observability: every invocation appends one JSONL record to
+// $HOME/.claude/logs/claude-pane-status.log so invisible-in-picker cases can be
+// diagnosed after the fact (which event fired, early-exit reason, tmux set
+// results per op). Log I/O errors are swallowed — hook must never break the
+// session when the log destination is unavailable.
 
 // --- Types ---
 
@@ -508,6 +514,104 @@ export function eventToOps(
   return [...selfHealOps(data), ...body];
 }
 
+// --- Observability (JSONL log) ---
+
+export interface ApplyResult {
+  key: string;
+  code: number;
+  stderr?: string;
+}
+
+export type EarlyExit =
+  | "no-event"
+  | "no-tmux-pane"
+  | "invalid-pane-id"
+  | "json-parse-error"
+  | "no-ops"
+  | null;
+
+export interface RunContext {
+  argv_event: string;
+  stdin_event: string | null;
+  session_id: string | null;
+  tmux_pane: string | null;
+  cwd: string | null;
+  pre_state: PaneState | null;
+  ops: Op[];
+  apply_results: ApplyResult[];
+  early_exit: EarlyExit;
+  stdin_event_mismatch: boolean;
+}
+
+export interface LogRecord {
+  ts: string;
+  pid: number;
+  argv_event: string;
+  stdin_event: string | null;
+  session_id: string | null;
+  tmux_pane: string | null;
+  cwd: string | null;
+  pre_state: PaneState | null;
+  ops: Array<{ kind: "set" | "unset"; key: string }>;
+  apply_results: ApplyResult[];
+  early_exit: EarlyExit;
+  stdin_event_mismatch: boolean;
+}
+
+// Pure, for test. Values in `ops` are intentionally dropped — @pane_prompt and
+// subject fields can carry user prompt content we don't want persisted in logs.
+export function buildLogRecord(
+  ctx: RunContext,
+  now: Date,
+  pid: number,
+): LogRecord {
+  return {
+    ts: now.toISOString(),
+    pid,
+    argv_event: ctx.argv_event,
+    stdin_event: ctx.stdin_event,
+    session_id: ctx.session_id,
+    tmux_pane: ctx.tmux_pane,
+    cwd: ctx.cwd,
+    pre_state: ctx.pre_state,
+    ops: ctx.ops.map((o) => ({ kind: o.kind, key: o.key })),
+    apply_results: ctx.apply_results,
+    early_exit: ctx.early_exit,
+    stdin_event_mismatch: ctx.stdin_event_mismatch,
+  };
+}
+
+const LOG_MAX_BYTES = 10 * 1024 * 1024;
+
+function logPath(): string | null {
+  const home = Deno.env.get("HOME");
+  if (!home) return null;
+  return `${home}/.claude/logs/claude-pane-status.log`;
+}
+
+async function writeLogRecord(record: LogRecord): Promise<void> {
+  const path = logPath();
+  if (!path) return;
+  const dir = path.substring(0, path.lastIndexOf("/"));
+  try {
+    await Deno.mkdir(dir, { recursive: true });
+    // Rotate: when file exceeds cap, move current → .old (drops the older .old)
+    // so a single prior segment is retained for debugging.
+    try {
+      const stat = await Deno.stat(path);
+      if (stat.size > LOG_MAX_BYTES) {
+        await Deno.rename(path, `${path}.old`);
+      }
+    } catch {
+      // no existing file — append will create it
+    }
+    const line = JSON.stringify(record) + "\n";
+    await Deno.writeTextFile(path, line, { append: true });
+  } catch {
+    // Log destination unavailable — hook must not fail because of this.
+  }
+}
+
 // --- tmux I/O ---
 
 async function tmuxRun(
@@ -561,7 +665,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
   };
 }
 
-async function applyOp(pane: string, op: Op): Promise<void> {
+async function applyOp(pane: string, op: Op): Promise<ApplyResult> {
   const args = op.kind === "set"
     ? ["set", "-t", pane, "-p", op.key, op.value]
     : ["set", "-t", pane, "-p", "-u", op.key];
@@ -570,55 +674,91 @@ async function applyOp(pane: string, op: Op): Promise<void> {
     console.error(
       `claude-pane-status: tmux set failed (${op.kind} ${op.key}): ${stderr}`,
     );
+    return { key: op.key, code, stderr };
   }
+  return { key: op.key, code };
 }
 
 // --- Main ---
 
 async function main(): Promise<void> {
-  const event = Deno.args[0] ?? "";
-  if (!event) return; // no event specified — no-op
+  const ctx: RunContext = {
+    argv_event: Deno.args[0] ?? "",
+    stdin_event: null,
+    session_id: null,
+    tmux_pane: null,
+    cwd: null,
+    pre_state: null,
+    ops: [],
+    apply_results: [],
+    early_exit: null,
+    stdin_event_mismatch: false,
+  };
 
-  const tmuxPane = Deno.env.get("TMUX_PANE");
-  if (!tmuxPane) return; // not invoked inside a tmux pane — no-op
-  // Guard against a caller that sets TMUX_PANE to e.g. "-L" or ";cmd" —
-  // Deno.Command uses argv (no shell), but tmux itself would parse a
-  // leading "-" value as an option, so restrict to the pane-id shape.
-  if (!/^%\d+$/.test(tmuxPane)) return;
-
-  const raw = await new Response(Deno.stdin.readable).text();
-  let hookData: HookData = {};
-  if (raw.trim().length > 0) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      // Narrow: plain object (not array, not primitive) → treat as hook data.
-      // `str()` accessors downstream handle all field type-narrowing from unknown.
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        !Array.isArray(parsed)
-      ) {
-        hookData = parsed as Record<string, unknown>;
-      }
-    } catch {
-      console.error("claude-pane-status: failed to parse stdin JSON");
+  try {
+    if (!ctx.argv_event) {
+      ctx.early_exit = "no-event";
       return;
     }
-  }
 
-  const stdinEvent = str(hookData.hook_event_name);
-  if (stdinEvent && stdinEvent !== event) {
-    console.error(
-      `claude-pane-status: argv event (${event}) != stdin event (${stdinEvent}); using argv`,
-    );
-  }
+    const tmuxPane = Deno.env.get("TMUX_PANE");
+    if (!tmuxPane) {
+      ctx.early_exit = "no-tmux-pane";
+      return;
+    }
+    ctx.tmux_pane = tmuxPane;
+    // Guard against a caller that sets TMUX_PANE to e.g. "-L" or ";cmd" —
+    // Deno.Command uses argv (no shell), but tmux itself would parse a
+    // leading "-" value as an option, so restrict to the pane-id shape.
+    if (!/^%\d+$/.test(tmuxPane)) {
+      ctx.early_exit = "invalid-pane-id";
+      return;
+    }
 
-  const state = await readPaneState(tmuxPane);
-  const ops = eventToOps(event, hookData, state);
-  if (ops.length === 0) return; // unknown event or no-op case
+    const raw = await new Response(Deno.stdin.readable).text();
+    let hookData: HookData = {};
+    if (raw.trim().length > 0) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+          parsed !== null &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed)
+        ) {
+          hookData = parsed as Record<string, unknown>;
+        }
+      } catch {
+        console.error("claude-pane-status: failed to parse stdin JSON");
+        ctx.early_exit = "json-parse-error";
+        return;
+      }
+    }
 
-  for (const op of ops) {
-    await applyOp(tmuxPane, op);
+    const stdinEvent = str(hookData.hook_event_name);
+    ctx.stdin_event = stdinEvent || null;
+    ctx.session_id = str(hookData.session_id) || null;
+    ctx.cwd = str(hookData.cwd) || null;
+    if (stdinEvent && stdinEvent !== ctx.argv_event) {
+      ctx.stdin_event_mismatch = true;
+      console.error(
+        `claude-pane-status: argv event (${ctx.argv_event}) != stdin event (${stdinEvent}); using argv`,
+      );
+    }
+
+    const state = await readPaneState(tmuxPane);
+    ctx.pre_state = state;
+    const ops = eventToOps(ctx.argv_event, hookData, state);
+    ctx.ops = ops;
+    if (ops.length === 0) {
+      ctx.early_exit = "no-ops";
+      return;
+    }
+
+    for (const op of ops) {
+      ctx.apply_results.push(await applyOp(tmuxPane, op));
+    }
+  } finally {
+    await writeLogRecord(buildLogRecord(ctx, new Date(), Deno.pid));
   }
 }
 

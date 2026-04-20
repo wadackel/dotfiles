@@ -1,6 +1,6 @@
 ---
 name: santa-loop
-description: "Adversarial dual-reviewer convergence loop. Two independent reviewers (Claude Opus + Codex CLI) must both return NICE before declaring the change complete. NAUGHTY → fix all flagged issues → fresh re-review (max 3 rounds). Use as the final gate after /completion-audit returns VERIFIED PASS, invoked from /impl. Triggers include /santa-loop / dual review / 最終レビュー / sanity check / dual-reviewer."
+description: "Adversarial dual-reviewer convergence loop. Two independent reviewers (Claude Opus + Codex CLI) must both return NICE before declaring the change complete. NAUGHTY → fix all flagged issues → fresh re-review (max 3 rounds). Runs as the last step of /impl's final gate, after /completion-audit returns VERIFIED PASS and the Security Sweep (security-auditor on aggregated diff, heuristic-gated) passes. Triggers include /santa-loop / dual review / 最終レビュー / sanity check / dual-reviewer."
 argument-hint: "[plan-file-path | scope-spec]"
 ---
 
@@ -12,8 +12,8 @@ Adversarial dual-review convergence loop. Two independent reviewers — differen
 
 ## When to Use
 
-- **Default (only supported path)**: as the final gate task in `/impl`, invoked after `/completion-audit` returns VERIFIED PASS. The "Run /completion-audit and /santa-loop" task created by `/plan` Phase 5 orchestrates this sequence, embedding the audit verdict as `Audit Verdict Input`.
-- **Manual trigger**: when the user says "santa loop", "dual review", "最終レビュー", or similar, invoke `/impl`'s final gate (which runs `/completion-audit` → `/santa-loop`) — or run `/completion-audit` first so its verdict is in the session context when `/santa-loop` starts. Standalone `/santa-loop` with no prior `/completion-audit` aborts (see Prerequisites / Layer 2).
+- **Default (only supported path)**: as the final step of `/impl`'s final gate. The `/impl` final gate runs `/completion-audit` → **Security Sweep** (heuristic-gated `security-auditor` on aggregated diff) → `/santa-loop`. The "Run /completion-audit and /santa-loop" gate task created by `/plan` Phase 5 orchestrates this sequence, embedding the audit verdict as `Audit Verdict Input`. (The task label retains its original name for backward-compatibility with existing plans; Security Sweep is an inline step within the same task, not a separate task.)
+- **Manual trigger**: when the user says "santa loop", "dual review", "最終レビュー", or similar, invoke `/impl`'s final gate (which runs `/completion-audit` → Security Sweep → `/santa-loop`) — or run `/completion-audit` first so its verdict is in the session context when `/santa-loop` starts. Standalone `/santa-loop` with no prior `/completion-audit` aborts (see Prerequisites / Layer 2).
 
 Do NOT use for:
 - Mid-task review (use `/subagent-review` per task instead)
@@ -71,11 +71,14 @@ Append based on detected file types in the diff:
 | Detected | Append criterion |
 |---|---|
 | `.ts`, `.tsx`, `.mts` | `Type safety: no any leaks, exhaustive switches, no unsafe assertions` |
-| `.sql`, `migrations/*` | `Migration safety: NOT NULL adds backfill, no destructive operations without lock plan, parameterized queries` |
+| `.tsx`, `.jsx` | `React patterns: hook rules (no conditional hooks), dependency arrays complete, effect cleanup paths handled, no stale closures` + `Accessibility: aria-* attributes correct, semantic HTML, keyboard navigation reachable, color contrast for added styles` |
+| `.sql`, `migrations/*` | `Migration safety: NOT NULL adds backfill, no destructive operations without lock plan, parameterized queries, index coverage for new columns, no N+1 patterns in query call sites` |
 | `.tf`, `*.tfvars`, k8s yaml | `Infrastructure safety: least-privilege IAM, no wildcard role, resource limits set` |
 | `.go` | `Concurrency safety: no goroutine leaks, context propagation correct` |
 | `.rs` | `Memory safety: unsafe usage justified, Send + Sync boundaries respected` |
 | `.nix` | `Profile correctness: profile-specific switches (private vs work) consistent` |
+
+The expanded `.tsx`/`.jsx` and `.sql` rows pick up the React / a11y / migration safety observations that were dropped from the per-task Domain dispatch when `/impl` moved to the Unified Lightweight Review Gate. At the final gate santa-loop is the backstop for these dimensions.
 
 ### Step 3: Build Reviewer Prompt
 
@@ -306,7 +309,7 @@ When invoked from `/impl`, the orchestrator uses the final verdict to mark the g
 | `/completion-audit` | Default-flow predecessor. Owns evidence-sufficiency audit; santa-loop receives its verdict as Audit Verdict Input and trusts it. Strict role separation — santa-loop does not re-judge completeness |
 | `/verification-loop` | Opt-in deterministic re-execution gate. Independent of santa-loop in the default flow; users may invoke verification-loop separately when re-running build/typecheck/lint/tests is genuinely required |
 | `/codex-review` | Lightweight single-external review for opt-in mid-task use. `/santa-loop` is the heavyweight dual-reviewer for the final gate. The two coexist with distinct purposes |
-| `/subagent-review` | Per-task review during `/impl`. `/santa-loop` is end-of-implementation review, not per-task |
+| `/subagent-review` | Per-task opt-in strict review (task tag `[strict-review]` or explicit user invoke). The default per-task review is `/impl`'s unified lightweight review; `/santa-loop` remains the end-of-implementation gate regardless |
 
 ## Design Decisions
 

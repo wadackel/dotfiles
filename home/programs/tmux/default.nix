@@ -21,6 +21,12 @@
   # Tmux window picker (prefix+w: ink + React on Deno)
   home.file.".local/bin/picker.tsx".source = dotfiles.linkHere ./. "picker.tsx";
 
+  # Shared SSOT module imported by both picker.tsx and picker-doctor.ts
+  home.file.".local/bin/pane_row.ts".source = dotfiles.linkHere ./. "pane_row.ts";
+
+  # Picker diagnostic CLI (manual: when a Claude Code pane fails to appear)
+  home.file.".local/bin/picker-doctor.ts".source = dotfiles.linkHere ./. "picker-doctor.ts";
+
   # Dev layout script
   home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "dev-layout.sh";
 }
