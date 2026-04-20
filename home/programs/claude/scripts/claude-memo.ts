@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,claude
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,gemini
 
 // --- Types ---
 
@@ -237,7 +237,7 @@ function parseLLMOutput(raw: string): LLMResult | null {
   return { summary, details };
 }
 
-async function callClaude(condensed: string): Promise<LLMResult | null> {
+async function callGemini(condensed: string): Promise<LLMResult | null> {
   const prompt =
     "以下はClaude Codeセッションの要約データです。" +
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
@@ -248,43 +248,28 @@ async function callClaude(condensed: string): Promise<LLMResult | null> {
     "出力は要約のみ。説明や前置きは不要です。";
 
   try {
-    // CLAUDECODE: avoid nested session guard.
-    // TMUX_PANE: prevent subprocess Claude Code hooks from writing to the PARENT
-    // pane's @pane_* options (otherwise picker shows stale "run" status).
-    const EXCLUDE = new Set(["CLAUDECODE", "TMUX_PANE"]);
-    const env = Object.fromEntries(
-      Object.entries(Deno.env.toObject()).filter(([k]) => !EXCLUDE.has(k)),
-    );
-
-    const cmd = new Deno.Command("claude", {
-      args: [
-        "-p",
-        "--model", "haiku",
-        "--output-format", "text",
-        "--no-session-persistence",
-        prompt,
-      ],
-      env,
+    const cmd = new Deno.Command("gemini", {
+      args: ["-m", "gemini-2.5-flash", "-o", "text"],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
     });
     const proc = cmd.spawn();
     const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(condensed));
+    await writer.write(new TextEncoder().encode(`${prompt}\n\n${condensed}`));
     await writer.close();
 
     const { code, stdout, stderr } = await proc.output();
     if (code !== 0) {
       const errMsg = new TextDecoder().decode(stderr).trim().slice(0, 200);
-      await log(`CLAUDE ERROR: exit=${code} ${errMsg}`);
+      await log(`GEMINI ERROR: exit=${code} ${errMsg}`);
       return null;
     }
 
     const raw = new TextDecoder().decode(stdout);
     return parseLLMOutput(raw);
   } catch (e) {
-    await log(`CLAUDE ERROR: ${e}`);
+    await log(`GEMINI ERROR: ${e}`);
     return null;
   }
 }
@@ -454,9 +439,9 @@ async function main(): Promise<void> {
   saveDebounceState(sessionShort, userCount);
 
   const condensed = buildLLMInput(entries);
-  await log(`LLM: calling claude haiku (userCount=${userCount}, condensed=${condensed.length} chars)`);
+  await log(`LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`);
 
-  const llmResult = await callClaude(condensed);
+  const llmResult = await callGemini(condensed);
   if (!llmResult) {
     await log("LLM: no result, keeping heuristic entry");
     return;

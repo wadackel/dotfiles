@@ -1620,8 +1620,29 @@ require("lazy").setup({
           ["<Tab>"] = "toggle_preview",
           ["ss"] = "vsplit",
           ["sv"] = "split",
+          ["<Space>mo"] = "mo_open",
         },
       },
+      config = function(_, opts)
+        require("eda").setup(opts)
+        local action = require("eda.action")
+        local builtin = require("eda.action.builtin")
+        action.register("mo_open", function(ctx)
+          local target = builtin._get_target_nodes(ctx)
+          if #target.nodes == 0 then
+            return
+          end
+          local args = { "--open" }
+          for _, node in ipairs(target.nodes) do
+            table.insert(args, node.path)
+          end
+          mo_run(args)
+          if target.origin == "marks" then
+            builtin._clear_marks(ctx.store)
+            ctx.buffer:render(ctx.store)
+          end
+        end, { desc = "Open target nodes with mo (marks > cursor)" })
+      end,
     },
 
     -- {

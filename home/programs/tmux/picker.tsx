@@ -45,7 +45,7 @@ const MIN_SUMMARY = 15;
 // the preview capture (capturePane) re-run at this interval so the popup
 // reflects pane status / prompt / subagents / elapsed time / preview without
 // manual interaction.
-const TICK_INTERVAL_MS = 2000;
+const TICK_INTERVAL_MS = 1000;
 
 // Elapsed seconds → "Ns" / "Nm" / "Nh" / "·" (middle dot placeholder).
 // Mirrors bash format_elapsed in tmux-window-picker.sh:40-56.
@@ -260,7 +260,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // in which case the picker simply omits the task-progress segment. No cache:
 // dir-mtime cache is unsafe because an in-place status flip on an existing
 // task file does not bump dir mtime. Empirical task counts are ≤ ~13 per
-// session so the 2s tick budget is unaffected.
+// session so the 1s tick budget is unaffected.
 export async function readTaskProgress(
   sessionId: string,
 ): Promise<TaskProgress | null> {
