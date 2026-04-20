@@ -4,10 +4,13 @@ import {
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   ALL_PANE_OPTIONS,
+  appendSubagent,
+  count,
   eventToOps,
   formatElapsed,
   maskPrompt,
-  parseCount,
+  type PaneState,
+  removeSubagent,
   selfHealOps,
 } from "./claude-pane-status.ts";
 
@@ -69,31 +72,76 @@ Deno.test("formatElapsed: >=3600 → Nh", () => {
   assertEquals(formatElapsed(7200), "2h");
 });
 
-// --- parseCount ---
+// --- subagent list helpers ---
 
-Deno.test("parseCount: empty / whitespace → 0", () => {
-  assertEquals(parseCount(""), 0);
-  assertEquals(parseCount("   "), 0);
-  assertEquals(parseCount(undefined), 0);
-  assertEquals(parseCount(null), 0);
+Deno.test("appendSubagent: to empty list", () => {
+  assertEquals(appendSubagent("", "Explore", "a1"), "Explore:a1");
 });
 
-Deno.test("parseCount: non-numeric → 0", () => {
-  assertEquals(parseCount("abc"), 0);
+Deno.test("appendSubagent: to non-empty list", () => {
+  assertEquals(
+    appendSubagent("Explore:a1", "Plan", "b2"),
+    "Explore:a1|Plan:b2",
+  );
 });
 
-Deno.test("parseCount: negative normalized to 0", () => {
-  assertEquals(parseCount("-3"), 0);
+Deno.test("appendSubagent: sanitizes '|' and ':' in type / id", () => {
+  // '|' and ':' are reserved list delimiters → replaced with '-'
+  assertEquals(appendSubagent("", "Ex|plore", "a:1"), "Ex-plore:a-1");
 });
 
-Deno.test("parseCount: valid number", () => {
-  assertEquals(parseCount("3"), 3);
-  assertEquals(parseCount(" 5 "), 5);
+Deno.test("removeSubagent: removes first matching id", () => {
+  assertEquals(
+    removeSubagent("Explore:a1|Plan:b2", "a1"),
+    "Plan:b2",
+  );
+});
+
+Deno.test("removeSubagent: removes middle entry preserving order", () => {
+  assertEquals(
+    removeSubagent("A:1|B:2|C:3", "2"),
+    "A:1|C:3",
+  );
+});
+
+Deno.test("removeSubagent: last entry → empty string", () => {
+  assertEquals(removeSubagent("Explore:a1", "a1"), "");
+});
+
+Deno.test("removeSubagent: id not found → list unchanged", () => {
+  assertEquals(
+    removeSubagent("Explore:a1|Plan:b2", "nope"),
+    "Explore:a1|Plan:b2",
+  );
+});
+
+Deno.test("removeSubagent: empty list → empty string", () => {
+  assertEquals(removeSubagent("", "anything"), "");
+});
+
+Deno.test("count: empty → 0", () => {
+  assertEquals(count(""), 0);
+});
+
+Deno.test("count: single entry → 1", () => {
+  assertEquals(count("Explore:a1"), 1);
+});
+
+Deno.test("count: multiple entries → N", () => {
+  assertEquals(count("A:1|B:2|C:3"), 3);
 });
 
 // --- eventToOps ---
 
-const emptyState = { subagentsCount: 0, pendingTeardown: false };
+const emptyState: PaneState = {
+  subagents: "",
+  pendingTeardown: false,
+  currentTool: "",
+};
+
+function stateWithSubagents(list: string): PaneState {
+  return { subagents: list, pendingTeardown: false, currentTool: "" };
+}
 
 Deno.test("eventToOps: SessionStart sets agent / status / session_id / cwd + unsets stale", () => {
   const ops = eventToOps(
@@ -101,17 +149,26 @@ Deno.test("eventToOps: SessionStart sets agent / status / session_id / cwd + uns
     { session_id: "sess-1", cwd: "/tmp/x" },
     emptyState,
   );
-  // stale unsets + 4 sets
   const unsets = ops.filter((o) => o.kind === "unset").map((o) => o.key);
   const sets = ops.filter((o) => o.kind === "set");
   assertStringIncludes(unsets.join(","), "@pane_prompt");
-  assertStringIncludes(unsets.join(","), "@pane_attention");
-  assertEquals(sets.find((s) => s.kind === "set" && s.key === "@pane_agent")?.value, "claude");
-  assertEquals(sets.find((s) => s.kind === "set" && s.key === "@pane_status")?.value, "idle");
-  assertEquals(sets.find((s) => s.kind === "set" && s.key === "@pane_cwd")?.value, "/tmp/x");
+  assertStringIncludes(unsets.join(","), "@pane_current_tool");
+  assertStringIncludes(unsets.join(","), "@pane_subagents");
+  assertEquals(
+    sets.find((s) => s.kind === "set" && s.key === "@pane_agent")?.value,
+    "claude",
+  );
+  assertEquals(
+    sets.find((s) => s.kind === "set" && s.key === "@pane_status")?.value,
+    "idle",
+  );
+  assertEquals(
+    sets.find((s) => s.kind === "set" && s.key === "@pane_cwd")?.value,
+    "/tmp/x",
+  );
 });
 
-Deno.test("eventToOps: SessionStart clears @pane_started_at (prevent elapsed bleed from prior session)", () => {
+Deno.test("eventToOps: SessionStart clears @pane_started_at (prevent elapsed bleed)", () => {
   const ops = eventToOps(
     "SessionStart",
     { session_id: "sess-new" },
@@ -121,17 +178,19 @@ Deno.test("eventToOps: SessionStart clears @pane_started_at (prevent elapsed ble
   assertEquals(startedAtOp?.kind, "unset");
 });
 
-Deno.test("eventToOps: SessionEnd with count 0 → unset all @pane_*", () => {
+Deno.test("eventToOps: SessionEnd with no subagents → unset all @pane_*", () => {
   const ops = eventToOps("SessionEnd", {}, emptyState);
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
+  // drain completeness: new pane options must be unset too
+  const keys = ops.map((o) => o.key);
+  assertEquals(keys.includes("@pane_current_tool"), true);
+  assertEquals(keys.includes("@pane_subagents"), true);
 });
 
 Deno.test("eventToOps: SessionEnd with live subagents → pending teardown", () => {
-  const ops = eventToOps("SessionEnd", {}, {
-    subagentsCount: 2,
-    pendingTeardown: false,
-  });
+  const ops = eventToOps("SessionEnd", {}, stateWithSubagents("A:1|B:2"));
+  // No session_id → self-heal is empty, body has 1 op
   assertEquals(ops, [{
     kind: "set",
     key: "@pane_pending_teardown",
@@ -146,9 +205,13 @@ Deno.test("eventToOps: UserPromptSubmit masks prompt + sets running", () => {
     { prompt: longPrompt },
     emptyState,
   );
-  const statusOp = ops.find((o) => o.kind === "set" && o.key === "@pane_status");
+  const statusOp = ops.find((o) =>
+    o.kind === "set" && o.key === "@pane_status"
+  );
   assertEquals(statusOp?.kind === "set" ? statusOp.value : "", "running");
-  const promptOp = ops.find((o) => o.kind === "set" && o.key === "@pane_prompt");
+  const promptOp = ops.find((o) =>
+    o.kind === "set" && o.key === "@pane_prompt"
+  );
   const maskedValue = promptOp?.kind === "set" ? promptOp.value : "";
   assertEquals(maskedValue.length, 41); // 40 chars + ellipsis
 });
@@ -159,32 +222,25 @@ Deno.test("eventToOps: UserPromptSubmit with empty prompt → unset @pane_prompt
   assertEquals(promptOp?.kind, "unset");
 });
 
-Deno.test("eventToOps: Stop with count 0 → idle", () => {
+Deno.test("eventToOps: Stop with no subagents → idle", () => {
   const ops = eventToOps("Stop", {}, emptyState);
   assertEquals(ops, [{ kind: "set", key: "@pane_status", value: "idle" }]);
 });
 
 Deno.test("eventToOps: Stop with live subagents → defer (empty)", () => {
-  const ops = eventToOps("Stop", {}, {
-    subagentsCount: 1,
-    pendingTeardown: false,
-  });
+  const ops = eventToOps("Stop", {}, stateWithSubagents("Explore:x1"));
   assertEquals(ops, []);
 });
 
 Deno.test("eventToOps: StopFailure → error + wait_reason", () => {
   const ops = eventToOps("StopFailure", { message: "boom" }, emptyState);
-  assertEquals(
-    ops.find((o) => o.key === "@pane_status" && o.kind === "set")?.kind === "set"
-      ? (ops.find((o) => o.key === "@pane_status") as { value: string }).value
-      : "",
-    "error",
-  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "error");
   const reason = ops.find((o) => o.key === "@pane_wait_reason");
   assertEquals(reason?.kind === "set" ? reason.value : "", "boom");
 });
 
-Deno.test("eventToOps: Notification → waiting + attention", () => {
+Deno.test("eventToOps: Notification → waiting + wait_reason (no @pane_attention)", () => {
   const ops = eventToOps(
     "Notification",
     { message: "please approve" },
@@ -192,8 +248,10 @@ Deno.test("eventToOps: Notification → waiting + attention", () => {
   );
   const status = ops.find((o) => o.key === "@pane_status");
   assertEquals(status?.kind === "set" ? status.value : "", "waiting");
-  const attn = ops.find((o) => o.key === "@pane_attention");
-  assertEquals(attn?.kind === "set" ? attn.value : "", "notification");
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "please approve");
+  // @pane_attention was removed — must not appear
+  assertEquals(ops.some((o) => o.key === "@pane_attention"), false);
 });
 
 Deno.test("eventToOps: PermissionDenied → waiting + permission-denied", () => {
@@ -212,44 +270,122 @@ Deno.test("eventToOps: CwdChanged without cwd → no-op", () => {
   assertEquals(ops, []);
 });
 
-Deno.test("eventToOps: SubagentStart increments counter", () => {
-  const ops = eventToOps("SubagentStart", {}, {
-    subagentsCount: 3,
-    pendingTeardown: false,
-  });
-  assertEquals(ops, [{
-    kind: "set",
-    key: "@pane_subagents_count",
-    value: "4",
-  }]);
+// --- PreToolUse / PostToolUse ---
+
+Deno.test("eventToOps: PreToolUse with tool_name → set @pane_current_tool", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    emptyState,
+  );
+  const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "Bash");
 });
 
-Deno.test("eventToOps: SubagentStop decrements; floors at 0", () => {
-  const from1 = eventToOps("SubagentStop", {}, {
-    subagentsCount: 1,
-    pendingTeardown: false,
-  });
-  assertEquals(from1, [{
-    kind: "set",
-    key: "@pane_subagents_count",
-    value: "0",
-  }]);
-  const from0 = eventToOps("SubagentStop", {}, {
-    subagentsCount: 0,
-    pendingTeardown: false,
-  });
-  assertEquals(from0, [{
-    kind: "set",
-    key: "@pane_subagents_count",
-    value: "0",
-  }]);
+Deno.test("eventToOps: PreToolUse without tool_name → no-op", () => {
+  const ops = eventToOps("PreToolUse", { session_id: "s1" }, emptyState);
+  assertEquals(ops, []);
 });
 
-Deno.test("eventToOps: SubagentStop drains pending teardown when count hits 0", () => {
-  const ops = eventToOps("SubagentStop", {}, {
-    subagentsCount: 1,
-    pendingTeardown: true,
-  });
+Deno.test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+  );
+  const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(toolOp?.kind, "unset");
+});
+
+Deno.test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", () => {
+  const preOps = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Edit" },
+    emptyState,
+  );
+  const preToolOp = preOps.find((o) => o.key === "@pane_current_tool");
+  assertEquals(preToolOp?.kind === "set" ? preToolOp.value : "", "Edit");
+
+  const postOps = eventToOps(
+    "PostToolUse",
+    { session_id: "s1" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+  );
+  const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
+  assertEquals(postToolOp?.kind, "unset");
+});
+
+// --- SubagentStart / SubagentStop (list encoding) ---
+
+Deno.test("eventToOps: SubagentStart appends Type:id to list", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Explore", agent_id: "a1" },
+    emptyState,
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Explore:a1");
+});
+
+Deno.test("eventToOps: SubagentStart fallback type = 'subagent' when missing", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_id: "x" },
+    emptyState,
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "subagent:x");
+});
+
+Deno.test("eventToOps: SubagentStart appends to existing list", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Plan", agent_id: "b2" },
+    stateWithSubagents("Explore:a1"),
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(
+    listOp?.kind === "set" ? listOp.value : "",
+    "Explore:a1|Plan:b2",
+  );
+});
+
+Deno.test("eventToOps: SubagentStart sanitizes '|' in agent_type", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Bad|Type", agent_id: "x" },
+    emptyState,
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Bad-Type:x");
+});
+
+Deno.test("eventToOps: SubagentStop removes matching id from list", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWithSubagents("Explore:a1|Plan:b2"),
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Plan:b2");
+});
+
+Deno.test("eventToOps: SubagentStop last remaining → unset @pane_subagents", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWithSubagents("Explore:a1"),
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind, "unset");
+});
+
+Deno.test("eventToOps: SubagentStop drains pending teardown when list becomes empty", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "" },
+  );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
 });
@@ -257,18 +393,21 @@ Deno.test("eventToOps: SubagentStop drains pending teardown when count hits 0", 
 Deno.test("eventToOps: WorktreeCreate with branch + path", () => {
   const ops = eventToOps(
     "WorktreeCreate",
-    { branch: "feat/foo", path: "/tmp/wt" },
+    { branch: "feat/foo", path: "/tmp/wt", session_id: "s1" },
     emptyState,
   );
-  assertEquals(ops.length, 2);
   const br = ops.find((o) => o.key === "@pane_worktree_branch");
   assertEquals(br?.kind === "set" ? br.value : "", "feat/foo");
+  const pa = ops.find((o) => o.key === "@pane_worktree_path");
+  assertEquals(pa?.kind === "set" ? pa.value : "", "/tmp/wt");
 });
 
 Deno.test("eventToOps: WorktreeRemove unsets both worktree keys", () => {
-  const ops = eventToOps("WorktreeRemove", {}, emptyState);
-  assertEquals(ops.length, 2);
-  assertEquals(ops.every((o) => o.kind === "unset"), true);
+  const ops = eventToOps("WorktreeRemove", { session_id: "s1" }, emptyState);
+  const br = ops.find((o) => o.key === "@pane_worktree_branch");
+  assertEquals(br?.kind, "unset");
+  const pa = ops.find((o) => o.key === "@pane_worktree_path");
+  assertEquals(pa?.kind, "unset");
 });
 
 Deno.test("eventToOps: unknown event → no-op", () => {
@@ -282,7 +421,11 @@ Deno.test("selfHealOps: with session_id returns agent + session_id (+ cwd)", () 
   const ops = selfHealOps({ session_id: "sess-1", cwd: "/tmp/x" });
   assertEquals(ops.length, 3);
   assertEquals(ops[0], { kind: "set", key: "@pane_agent", value: "claude" });
-  assertEquals(ops[1], { kind: "set", key: "@pane_session_id", value: "sess-1" });
+  assertEquals(ops[1], {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "sess-1",
+  });
   assertEquals(ops[2], { kind: "set", key: "@pane_cwd", value: "/tmp/x" });
 });
 
@@ -290,7 +433,11 @@ Deno.test("selfHealOps: with session_id only (no cwd) returns agent + session_id
   const ops = selfHealOps({ session_id: "sess-2" });
   assertEquals(ops.length, 2);
   assertEquals(ops[0], { kind: "set", key: "@pane_agent", value: "claude" });
-  assertEquals(ops[1], { kind: "set", key: "@pane_session_id", value: "sess-2" });
+  assertEquals(ops[1], {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "sess-2",
+  });
 });
 
 Deno.test("selfHealOps: without session_id returns empty", () => {
@@ -308,16 +455,20 @@ Deno.test("eventToOps: UserPromptSubmit with session_id prefixes self-heal ops",
   );
   // self-heal 3 ops (agent + session_id + cwd) come first
   assertEquals(ops[0], { kind: "set", key: "@pane_agent", value: "claude" });
-  assertEquals(ops[1], { kind: "set", key: "@pane_session_id", value: "sess-3" });
+  assertEquals(ops[1], {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "sess-3",
+  });
   assertEquals(ops[2], { kind: "set", key: "@pane_cwd", value: "/work" });
-  // body ops follow (status=running is in the body)
-  const statusOp = ops.find((o) => o.kind === "set" && o.key === "@pane_status");
+  const statusOp = ops.find((o) =>
+    o.kind === "set" && o.key === "@pane_status"
+  );
   assertEquals(statusOp?.kind === "set" ? statusOp.value : "", "running");
 });
 
 Deno.test("eventToOps: CwdChanged without session_id does NOT set @pane_agent (phantom prevention)", () => {
   const ops = eventToOps("CwdChanged", { cwd: "/new" }, emptyState);
-  // body sets @pane_cwd; self-heal is skipped because session_id is absent
   assertEquals(
     ops.some((o) => o.kind === "set" && o.key === "@pane_agent"),
     false,
@@ -326,23 +477,21 @@ Deno.test("eventToOps: CwdChanged without session_id does NOT set @pane_agent (p
     ops.some((o) => o.kind === "set" && o.key === "@pane_session_id"),
     false,
   );
-  // body still emits @pane_cwd set
   const cwdOp = ops.find((o) => o.kind === "set" && o.key === "@pane_cwd");
   assertEquals(cwdOp?.kind === "set" ? cwdOp.value : "", "/new");
 });
 
-Deno.test("eventToOps: SessionEnd drain (count 0) does NOT include self-heal", () => {
+Deno.test("eventToOps: SessionEnd drain (no subagents) does NOT include self-heal", () => {
   const ops = eventToOps("SessionEnd", { session_id: "sess-4" }, emptyState);
-  // drain: all unsets, no set ops at all (self-heal skipped)
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
 });
 
-Deno.test("eventToOps: SubagentStop drain (next=0 + pendingTeardown) does NOT include self-heal", () => {
+Deno.test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
   const ops = eventToOps(
     "SubagentStop",
-    { session_id: "sess-5" },
-    { subagentsCount: 1, pendingTeardown: true },
+    { session_id: "sess-5", agent_id: "a1" },
+    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "" },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -352,8 +501,7 @@ Deno.test("eventToOps: Stop with live subagents (defer) stays empty — self-hea
   const ops = eventToOps(
     "Stop",
     { session_id: "sess-6" },
-    { subagentsCount: 2, pendingTeardown: false },
+    stateWithSubagents("A:1|B:2"),
   );
-  // body is [] for defer → eventToOps short-circuits without self-heal
   assertEquals(ops, []);
 });

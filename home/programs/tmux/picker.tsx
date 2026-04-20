@@ -6,14 +6,7 @@
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
 import React, { useEffect, useState } from "npm:react@18.3.1";
-import {
-  Box,
-  render,
-  Text,
-  useApp,
-  useInput,
-  useStdout,
-} from "npm:ink@5.2.1";
+import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@5.2.1";
 
 // ---- Types ----
 
@@ -29,10 +22,10 @@ export interface PaneRow {
   startedAtSec: number | null;
   cwd: string;
   worktreeBranch: string;
-  subagentsCount: number;
+  subagents: string;
   prompt: string;
   waitReason: string;
-  attention: string;
+  currentTool: string;
 }
 
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).
@@ -48,8 +41,7 @@ export const STATUS_META = {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-export const TMUX_FORMAT =
-  "#{pane_id}\x1f" +
+export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
   "#{pane_current_path}\x1f" +
@@ -58,10 +50,10 @@ export const TMUX_FORMAT =
   "#{@pane_started_at}\x1f" +
   "#{@pane_cwd}\x1f" +
   "#{@pane_worktree_branch}\x1f" +
-  "#{@pane_subagents_count}\x1f" +
+  "#{@pane_subagents}\x1f" +
   "#{@pane_prompt}\x1f" +
   "#{@pane_wait_reason}\x1f" +
-  "#{@pane_attention}";
+  "#{@pane_current_tool}";
 
 const NUMERIC = /^\d+$/;
 
@@ -88,10 +80,10 @@ export function parseRow(line: string): PaneRow | null {
     startedAt,
     cwd,
     worktreeBranch,
-    subsCount,
+    subagents,
     prompt,
     waitReason,
-    attention,
+    currentTool,
   ] = fields;
   if (!paneId) return null;
   return {
@@ -104,10 +96,10 @@ export function parseRow(line: string): PaneRow | null {
     startedAtSec: parseIntOrNull(startedAt),
     cwd,
     worktreeBranch,
-    subagentsCount: parseIntOrNull(subsCount) ?? 0,
+    subagents,
     prompt,
     waitReason,
-    attention,
+    currentTool,
   };
 }
 
@@ -205,6 +197,16 @@ function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
+// Build cwd/branch slash-join display, e.g. "dotfiles/main". When one side is
+// empty, returns just the other side; when both are empty, returns "·".
+export function cwdBranchLabel(cwd: string, branch: string): string {
+  const base = basename(cwd) || "";
+  if (base && branch) return `${base}/${branch}`;
+  if (base) return base;
+  if (branch) return branch;
+  return "·";
+}
+
 // summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。
 // どちらも空なら "·"。Mirrors bash tmux-window-picker.sh:118-125.
 export function summaryOf(row: PaneRow): string {
@@ -215,9 +217,46 @@ export function summaryOf(row: PaneRow): string {
   return trimmed || "·";
 }
 
+// Parse @pane_subagents pipe-sep "Type:id|Type:id" list into entries.
+// Empty list → empty array. Malformed segments (no ':') treated as type only.
+export interface SubagentEntry {
+  type: string;
+  id: string;
+}
+export function parseSubagents(raw: string): SubagentEntry[] {
+  if (!raw) return [];
+  return raw.split("|").filter(Boolean).map((seg) => {
+    const colonIdx = seg.indexOf(":");
+    if (colonIdx === -1) return { type: seg, id: "" };
+    return { type: seg.slice(0, colonIdx), id: seg.slice(colonIdx + 1) };
+  });
+}
+
+// Render subagent list as a tree, grouping entries by type (auto-numbered per type).
+// Empty input returns "·" placeholder. Single type → "└ Type #1 #2"; multiple types
+// use ├/└ connectors across type groups.
+export function renderSubagentTree(entries: SubagentEntry[]): string {
+  if (entries.length === 0) return "·";
+  const counts = new Map<string, number>();
+  const numbered = entries.map((e) => {
+    const n = (counts.get(e.type) ?? 0) + 1;
+    counts.set(e.type, n);
+    return `${e.type} #${n}`;
+  });
+  if (numbered.length === 1) return `└ ${numbered[0]}`;
+  return numbered
+    .map((
+      label,
+      i,
+    ) => (i === numbered.length - 1 ? `└ ${label}` : `├ ${label}`))
+    .join(" ");
+}
+
 // ---- tmux I/O (impure) ----
 
-async function tmuxRun(args: string[]): Promise<{ stdout: string; code: number }> {
+async function tmuxRun(
+  args: string[],
+): Promise<{ stdout: string; code: number }> {
   const proc = new Deno.Command("tmux", {
     args,
     stdin: "null",
@@ -277,10 +316,6 @@ async function capturePane(target: string): Promise<string> {
   return sanitizeAnsi(stdout);
 }
 
-async function clearAttention(paneId: string): Promise<void> {
-  await tmuxRun(["set", "-t", paneId, "-p", "-u", "@pane_attention"]);
-}
-
 // Parse a tmux target `session:window.pane` into its components.
 // Correctly handles session names containing `.` by splitting on the FIRST
 // `:` for session and the LAST `.` for the window/pane boundary. Mirrors the
@@ -315,40 +350,52 @@ interface PaneRowLineProps {
   selected: boolean;
 }
 
-function PaneRowLine({ row, now, selected }: PaneRowLineProps) {
+const PaneRowLine: React.FC<PaneRowLineProps> = (
+  { row, now, selected }: PaneRowLineProps,
+) => {
   const color = statusColor(row.status);
-  const pointer = selected ? "»" : " ";
-  const attentionMark = row.attention === "notification" ? "!" : " ";
+  const pointer = selected ? "❯" : " ";
   // Claude panes have an @pane_status icon; non-Claude panes keep a space for
   // alignment and fall back to pane_current_command for the status column.
   const icon = row.status ? statusIcon(row.status) : " ";
-  const subsCell = row.subagentsCount > 0
-    ? String(row.subagentsCount).padStart(2)
-    : "  ";
   const statusText = row.status ? statusShort(row.status) : row.currentCommand;
   const status4 = statusText.slice(0, 4).padEnd(4);
-  const cwdSource = row.cwd || row.currentPath;
-  const cwdBase = (basename(cwdSource) || "·").slice(0, 16).padEnd(16);
-  const branch = (row.worktreeBranch || "·").slice(0, 14).padEnd(14);
   const elapsed = formatElapsed(row.startedAtSec, now).padEnd(4);
+  const label = cwdBranchLabel(row.cwd || row.currentPath, row.worktreeBranch);
+  const label24 = label.slice(0, 24).padEnd(24);
   const summary = summaryOf(row);
+  const subagents = parseSubagents(row.subagents);
+  const tree = renderSubagentTree(subagents);
+  const toolDisplay = row.currentTool || "";
   return (
-    <Box>
-      <Text color={selected ? "magenta" : "gray"}>{pointer} </Text>
-      <Text color={row.attention === "notification" ? "magenta" : "gray"}>
-        {attentionMark}
-      </Text>
-      <Text color={color}>{icon}</Text>
-      <Text color="cyan" dimColor>{subsCell}</Text>
-      <Text color={color}> {status4}</Text>
-      <Text color="blue"> {cwdBase}</Text>
-      <Text color="yellow"> {branch}</Text>
-      <Text color="gray"> {elapsed}</Text>
-      <Text> {summary}</Text>
-      <Text color="gray" dimColor>{" "}{row.target}</Text>
+    <Box flexDirection="column">
+      {/* Line 1: marker + icon + status + elapsed + cwd/branch + summary */}
+      <Box>
+        <Text color={selected ? "magenta" : "gray"}>{pointer}</Text>
+        <Text color={color}>{icon}</Text>
+        <Text color={color}>{status4}</Text>
+        <Text color="gray">{elapsed}</Text>
+        <Text color="blue">{label24}</Text>
+        <Text>{summary}</Text>
+      </Box>
+      {/* Line 2: indent + subagent tree + current_tool + target (right-align) */}
+      <Box>
+        <Text>{"    "}</Text>
+        <Text color="gray" dimColor>{tree}</Text>
+        {toolDisplay
+          ? (
+            <>
+              <Text color="gray" dimColor>·</Text>
+              <Text color="cyan">{toolDisplay}</Text>
+            </>
+          )
+          : null}
+        <Box flexGrow={1} />
+        <Text color="gray" dimColor>{row.target}</Text>
+      </Box>
     </Box>
   );
-}
+};
 
 // Keep preview bounded so it never pushes the list column to zero width and
 // never exceeds the popup height. Truncate each line to the column width and
@@ -444,15 +491,18 @@ function App({
   return (
     <Box flexDirection="column" width={totalCols} height={totalRows}>
       <Box marginBottom={1}>
-        <Text color="cyan">Select pane </Text>
+        <Text color="cyan">Select pane</Text>
         <Text color="gray">[Enter: jump / Esc or q: cancel / ↑↓ jk: move]</Text>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={listWidth}>
           {rows.map((row, i) => (
-            <Box key={row.paneId}>
-              <PaneRowLine row={row} now={now} selected={i === index} />
-            </Box>
+            <PaneRowLine
+              key={row.paneId}
+              row={row}
+              now={now}
+              selected={i === index}
+            />
           ))}
         </Box>
         {current && (
@@ -484,13 +534,17 @@ async function main(): Promise<void> {
 
   const result: { value: PaneRow | null } = { value: null };
   const { waitUntilExit } = render(
-    <App rows={rows} onSelect={(r) => { result.value = r; }} />,
+    <App
+      rows={rows}
+      onSelect={(r) => {
+        result.value = r;
+      }}
+    />,
   );
   await waitUntilExit();
 
   const picked = result.value;
   if (!picked) return;
-  await clearAttention(picked.paneId);
   await jumpTo(picked.target);
 }
 

@@ -18,8 +18,9 @@ export type Op =
   | { kind: "unset"; key: string };
 
 export interface PaneState {
-  subagentsCount: number;
+  subagents: string; // pipe-sep "Type:id|Type:id" list; "" = none
   pendingTeardown: boolean;
+  currentTool: string;
 }
 
 // --- Constants ---
@@ -33,24 +34,24 @@ export const ALL_PANE_OPTIONS = [
   "@pane_cwd",
   "@pane_worktree_branch",
   "@pane_worktree_path",
-  "@pane_subagents_count",
+  "@pane_subagents",
   "@pane_pending_teardown",
   "@pane_prompt",
   "@pane_wait_reason",
-  "@pane_attention",
+  "@pane_current_tool",
 ] as const;
 
 // Options cleared at SessionStart so stale values from a previous session on the
 // same pane do not bleed into the new one.
 const STALE_AT_SESSION_START = [
   "@pane_started_at",
-  "@pane_subagents_count",
+  "@pane_subagents",
   "@pane_pending_teardown",
   "@pane_worktree_branch",
   "@pane_worktree_path",
   "@pane_prompt",
   "@pane_wait_reason",
-  "@pane_attention",
+  "@pane_current_tool",
 ] as const;
 
 const PROMPT_MAX_CHARS = 40;
@@ -74,11 +75,41 @@ export function formatElapsed(sec: number): string {
   return `${Math.floor(s / 3600)}h`;
 }
 
-export function parseCount(raw: string | undefined | null): number {
-  if (raw === undefined || raw === null) return 0;
-  const n = Number.parseInt(raw.trim(), 10);
-  if (!Number.isFinite(n) || n < 0) return 0;
-  return n;
+// `|` and `:` are reserved by the list encoding, so strip them from caller-
+// supplied values to keep the list parsable. Input comes from Claude Code hook
+// data, not user free-text, so collision is rare — defensive only.
+function sanitizeListToken(raw: string): string {
+  return raw.replace(/[|:]/g, "-");
+}
+
+// Append "Type:id" to a pipe-sep list. Returns the new list string.
+export function appendSubagent(list: string, type: string, id: string): string {
+  const t = sanitizeListToken(type);
+  const i = sanitizeListToken(id);
+  const entry = `${t}:${i}`;
+  return list ? `${list}|${entry}` : entry;
+}
+
+// Remove the first entry matching id from a pipe-sep list.
+export function removeSubagent(list: string, id: string): string {
+  if (!list) return "";
+  const target = sanitizeListToken(id);
+  const entries = list.split("|");
+  const filtered: string[] = [];
+  let removed = false;
+  for (const e of entries) {
+    if (!removed && e.endsWith(`:${target}`)) {
+      removed = true;
+      continue;
+    }
+    filtered.push(e);
+  }
+  return filtered.join("|");
+}
+
+// Count entries in a pipe-sep list. Empty list = 0.
+export function count(list: string): number {
+  return list ? list.split("|").filter(Boolean).length : 0;
 }
 
 function str(v: unknown): string {
@@ -109,12 +140,12 @@ export function eventToOps(
 ): Op[] {
   // Drain paths: full teardown. Short-circuit before self-heal so the teardown
   // is not followed by self-heal reinstating @pane_agent.
-  if (event === "SessionEnd" && state.subagentsCount === 0) {
+  if (event === "SessionEnd" && count(state.subagents) === 0) {
     return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
   }
   if (
     event === "SubagentStop" &&
-    Math.max(0, state.subagentsCount - 1) === 0 &&
+    count(removeSubagent(state.subagents, str(data.agent_id))) === 0 &&
     state.pendingTeardown
   ) {
     return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
@@ -146,7 +177,6 @@ export function eventToOps(
             key: "@pane_started_at",
             value: String(Math.floor(Date.now() / 1000)),
           },
-          { kind: "unset", key: "@pane_attention" },
         ];
         if (prompt) {
           ops.push({ kind: "set", key: "@pane_prompt", value: prompt });
@@ -155,7 +185,7 @@ export function eventToOps(
       }
 
       case "Stop": {
-        if (state.subagentsCount > 0) return []; // pending subagents: defer
+        if (count(state.subagents) > 0) return []; // pending subagents: defer
         return [{ kind: "set", key: "@pane_status", value: "idle" }];
       }
 
@@ -172,7 +202,6 @@ export function eventToOps(
         return [
           { kind: "set", key: "@pane_status", value: "waiting" },
           { kind: "set", key: "@pane_wait_reason", value: reason },
-          { kind: "set", key: "@pane_attention", value: "notification" },
         ];
       }
 
@@ -192,22 +221,36 @@ export function eventToOps(
         return cwd ? [{ kind: "set", key: "@pane_cwd", value: cwd }] : [];
       }
 
+      case "PreToolUse": {
+        const toolName = str(data.tool_name);
+        if (!toolName) return [];
+        return [{ kind: "set", key: "@pane_current_tool", value: toolName }];
+      }
+
+      case "PostToolUse": {
+        // last-wins semantics: unset unconditionally on PostToolUse. Parallel
+        // tool races may briefly show no tool; session drain cleans stale state.
+        return [{ kind: "unset", key: "@pane_current_tool" }];
+      }
+
       case "SubagentStart": {
-        return [
-          {
-            kind: "set",
-            key: "@pane_subagents_count",
-            value: String(state.subagentsCount + 1),
-          },
-        ];
+        // Hook stdin field names (verified via /tmp/claude-pane-hook.log dump):
+        // `agent_id` (snake_case) and `agent_type` — NOT `subagent_*`.
+        const type = str(data.agent_type) || "subagent";
+        const id = str(data.agent_id) ||
+          crypto.randomUUID().slice(0, 8);
+        const next = appendSubagent(state.subagents, type, id);
+        return [{ kind: "set", key: "@pane_subagents", value: next }];
       }
 
       case "SubagentStop": {
-        // drain case (next === 0 && pendingTeardown) handled above
-        const next = Math.max(0, state.subagentsCount - 1);
-        return [
-          { kind: "set", key: "@pane_subagents_count", value: String(next) },
-        ];
+        // drain case (count(next) === 0 && pendingTeardown) handled above
+        const id = str(data.agent_id);
+        const next = removeSubagent(state.subagents, id);
+        if (next === "") {
+          return [{ kind: "unset", key: "@pane_subagents" }];
+        }
+        return [{ kind: "set", key: "@pane_subagents", value: next }];
       }
 
       case "WorktreeCreate": {
@@ -215,7 +258,11 @@ export function eventToOps(
         const path = str(data.path) || str(data.worktree_path);
         const ops: Op[] = [];
         if (branch) {
-          ops.push({ kind: "set", key: "@pane_worktree_branch", value: branch });
+          ops.push({
+            kind: "set",
+            key: "@pane_worktree_branch",
+            value: branch,
+          });
         }
         if (path) {
           ops.push({ kind: "set", key: "@pane_worktree_path", value: path });
@@ -244,7 +291,9 @@ export function eventToOps(
 
 // --- tmux I/O ---
 
-async function tmuxRun(args: string[]): Promise<{ code: number; stderr: string }> {
+async function tmuxRun(
+  args: string[],
+): Promise<{ code: number; stderr: string }> {
   const proc = new Deno.Command("tmux", {
     args,
     stdin: "null",
@@ -270,17 +319,24 @@ async function readPaneState(pane: string): Promise<PaneState> {
     const decoder = new TextDecoder();
     const errText = decoder.decode(stderr).trim();
     if (code !== 0 && errText.length > 0) {
-      console.error(`claude-pane-status: tmux show -pv ${key} failed: ${errText}`);
+      console.error(
+        `claude-pane-status: tmux show -pv ${key} failed: ${errText}`,
+      );
     }
     return decoder.decode(stdout);
   };
-  const [countStdout, teardownStdout] = await Promise.all([
-    runShow("@pane_subagents_count"),
-    runShow("@pane_pending_teardown"),
-  ]);
+  const [subagentsStdout, teardownStdout, currentToolStdout] = await Promise
+    .all(
+      [
+        runShow("@pane_subagents"),
+        runShow("@pane_pending_teardown"),
+        runShow("@pane_current_tool"),
+      ],
+    );
   return {
-    subagentsCount: parseCount(countStdout),
+    subagents: subagentsStdout.trim(),
     pendingTeardown: teardownStdout.trim() === "1",
+    currentTool: currentToolStdout.trim(),
   };
 }
 
@@ -290,7 +346,9 @@ async function applyOp(pane: string, op: Op): Promise<void> {
     : ["set", "-t", pane, "-p", "-u", op.key];
   const { code, stderr } = await tmuxRun(args);
   if (code !== 0) {
-    console.error(`claude-pane-status: tmux set failed (${op.kind} ${op.key}): ${stderr}`);
+    console.error(
+      `claude-pane-status: tmux set failed (${op.kind} ${op.key}): ${stderr}`,
+    );
   }
 }
 

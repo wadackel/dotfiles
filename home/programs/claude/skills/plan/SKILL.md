@@ -45,6 +45,8 @@ Estimate complexity via keyword heuristic + lightweight codebase probe (Grep/Glo
 
 ### Requirement Clarification (small+)
 
+**Invariant (auto mode regardless)**: `/plan` operates identically under auto mode and plan mode. The skill does NOT detect auto mode or reduce Ask frequency. The auto-mode "minimize interruptions" directive does not apply here — invoking `/plan` is the explicit user opt-in to the Ask flow, and Phase 1 Requirement Clarification is the primary value of that opt-in.
+
 For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because Phase 1 proposes splitting), systematically detect ambiguity with the **8-observation walk** before entering Phase 2. Detailed spec: `references/requirement-checklist.md`.
 
 **Multi-round walk overview**: runs as a Round loop (fixed max 3 rounds for all non-trivial complexity; `trivial` and `xl` remain exempt). Each round executes Steps A–F below, then either converges or advances to Round N+1.
@@ -58,9 +60,9 @@ For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because P
 | xl | 0 (Phase 1 で split 提案) | 現状維持 |
 
 **Round N (1..3) の Step A–F**:
-- **Step A — Walk**: Round 1 は 8 観察 walk (Why / What / Who / When / Where / How / Success / Failure)。Round 2+ は前 round 回答を反映して再 walk (新 NotClear・曖昧化点を検出)
+- **Step A — Walk**: Round 1 は 8 観察 walk (Why / What / Who / When / Where / How / Success / Failure)。Round 2+ は前 round 回答を反映して再 walk (新 NotClear・曖昧化点を検出)。**要求文中に ambiguous qualifier (主観形容詞 / 程度副詞 / 曖昧技術語) が含まれる場合、他の Clear signal と併存しても該当観察 (主に What / Success) を NotClear に強制降格** — 詳細 anchor list は `references/requirement-checklist.md` Step 1 Gate 参照
 - **Step B — Triage**: Step 1 Gate (Clear/NotClear binary) → Step 2 Triage (Ask / Assume / Self-resolve、3-category rule を CLAUDE.md から再利用、`How` は Always Assume default)。**Clear 判定時は要求文中の exact token を引用して Round 収束記録に残す必須** (類推ベースの Clear 禁止、NotClear として扱う)
-- **Step C — Self-resolve probe**: Round 内で Self-resolve 項目を解決試行。Phase 1 では Explore subagent は起動せず軽量 Grep/Read のみ (Phase 2 との責務分離)。probe 不能時の fallback は observation 依存 — Self-resolve default 観点 (What / When — codebase 探索で解決可能性が高い) は **Phase 2 EXPLORE に委譲**、Ask default 観点 (Why / Where / Success / Failure — user-only knowledge 必要) は **Ask に昇格**。requirement-checklist.md の各観点 "Default triage (NotClear)" 行を一次情報として参照
+- **Step C — Self-resolve probe**: Round 内で Self-resolve 項目を解決試行。Phase 1 では Explore subagent は起動せず軽量 Grep/Read のみ (Phase 2 との責務分離)。probe 不能時の fallback は observation 依存 — Self-resolve default 観点 (What / When — codebase 探索で解決可能性が高い) は **Phase 2 EXPLORE に委譲**、Ask default 観点 (Why / Where / Success / Failure — user-only knowledge 必要) は **Ask に昇格**。requirement-checklist.md の各観点 "Default triage (NotClear)" 行を一次情報として参照。**Step A で ambiguous qualifier により NotClear 降格された項目は通常 Ask ではなく Calibration Probe として生成** — Claude が 3 個の concrete candidate (observable condition or threshold value, whichever applies) を研究/推測し (Recommended) tag 付き top + Other で preview 提示する (合計 4 options = 3 candidates + Other、CLAUDE.md "AskUserQuestion options limited to 4" 上限内)。詳細: `references/requirement-checklist.md` Step 2 Triage
 - **Step D — 再 Ask trigger 検出** (Round 2+ のみ): 4 category
   - (i) 前 round Ask 回答の Other (自由記述) に疑問文型 (`?`, 「どうすれば」等) が含まれる
   - (ii) 前 round 回答に曖昧語 (「どちらでも」「まだ決めきれ」「任せる」「後で」「未定」「まあ」「とりあえず」等) または Other 空文字/空白のみ
@@ -72,6 +74,7 @@ For non-trivial requests (`small` / `medium` / `large`; `xl` is exempt because P
   - question: 「このまま Phase 2 EXPLORE に進みますか？追加で確認したい点があれば『追加確認』を選んでください。」
   - options: ["このまま Phase 2 へ進む", "追加確認が必要"]
   - real 質問が 4 件以上必要な round は上位 3 + override で発行し、残りは次 round に繰り越し
+  - **Round 1 のみ Divergence Probing**: 通常 Ask batch call とは別の AskUserQuestion call として Divergence Probing を発行。**抽出候補数による case-split**: 0 candidates → skip、1 candidate → disposition single-select form、2-4 candidates → multiSelect form (Step F で per-candidate 正規化 — 選択 = scope-in、非選択 = 対象外)。**要求文中に参考実装 URL が与えられている場合は必須発行** (delta 分析 mandate、2-4 candidates multiSelect form 強制)。Round 1 で AskUserQuestion が最大 2 call 発生することを許容 — Phase 1 cycle 全体の 3 call 上限 (`~/.claude/CLAUDE.md` の `Phase 1 cycle up to 3 AskUserQuestion calls per cycle`) 枠内で Round 2/3 と併せて消費。Divergence 回答は通常 Ask 回答と同じく Step F で処理され、回答中の曖昧語 / 逆質問 / 空文字は Round 2+ の Step D trigger (i)(ii) と同じ扱いで再 Ask 候補となる。詳細: `references/requirement-checklist.md` の `## Divergence Probing` 節
 - **Step F — 回答処理**:
   - override = "Phase 2 へ進む" → 他 real 質問の回答は最終決定として plan 本文に記録。回答内に曖昧語や逆質問が含まれていても Round N+1 の trigger 扱いせず、`Assumption: <observation>: <value> (user-overridden, flagged for Phase 4 Critic re-validation)` として記録し Phase 4 Critic に委任 (User 明示的 override を尊重)
   - override = "追加確認が必要" かつ Round < 3 → Round N+1 へ

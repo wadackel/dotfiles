@@ -531,6 +531,15 @@
             "command": "~/.claude/scripts/plan-gate.ts"
           }
         ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PreToolUse"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
@@ -559,6 +568,15 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/permission-logger.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PostToolUse"
           }
         ]
       }

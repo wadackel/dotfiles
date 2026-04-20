@@ -1,9 +1,12 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  cwdBranchLabel,
   formatElapsed,
   type PaneRow,
   parseRow,
+  parseSubagents,
   parseTarget,
+  renderSubagentTree,
   sanitizeAnsi,
   statusColor,
   statusIcon,
@@ -29,10 +32,10 @@ Deno.test("parseRow: full row with all fields present", () => {
     "1700000000",
     "/Users/wadackel/dotfiles",
     "main",
-    "3",
+    "Explore:a1|Plan:b2",
     "hello world",
     "permission-denied",
-    "notification",
+    "Bash",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -45,15 +48,15 @@ Deno.test("parseRow: full row with all fields present", () => {
     startedAtSec: 1700000000,
     cwd: "/Users/wadackel/dotfiles",
     worktreeBranch: "main",
-    subagentsCount: 3,
+    subagents: "Explore:a1|Plan:b2",
     prompt: "hello world",
     waitReason: "permission-denied",
-    attention: "notification",
+    currentTool: "Bash",
   };
   assertEquals(row, expected);
 });
 
-Deno.test("parseRow: empty @pane_* fields stay as empty strings / null / 0", () => {
+Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   const line = [
     "%1",
     "0:0.0",
@@ -73,19 +76,48 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null / 0", () 
   assertEquals(row?.agent, "");
   assertEquals(row?.status, "");
   assertEquals(row?.startedAtSec, null);
-  assertEquals(row?.subagentsCount, 0);
+  assertEquals(row?.subagents, "");
+  assertEquals(row?.currentTool, "");
   assertEquals(row?.worktreeBranch, "");
   assertEquals(row?.currentPath, "/home/me");
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = ["%1", "0:0.0", "zsh", "", "", "bogus", "", "", "", "", "", "", ""]
+  const line = [
+    "%1",
+    "0:0.0",
+    "zsh",
+    "",
+    "",
+    "bogus",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]
     .join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = ["%1", "0:0.0", "zsh", "", "", "idle", "nope", "", "", "", "", "", ""]
+  const line = [
+    "%1",
+    "0:0.0",
+    "zsh",
+    "",
+    "",
+    "idle",
+    "nope",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]
     .join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
@@ -140,8 +172,7 @@ Deno.test("sanitizeAnsi: SGR (color) passes through unchanged", () => {
 
 Deno.test("sanitizeAnsi: cursor-move / erase CSI removed", () => {
   // \x1b[2J = clear screen, \x1b[H = cursor home, \x1b[10;5H = move cursor
-  const dirty =
-    "\x1b[2J\x1b[Hhello\x1b[31m red\x1b[0m\x1b[10;5Hworld\x1b[K";
+  const dirty = "\x1b[2J\x1b[Hhello\x1b[31m red\x1b[0m\x1b[10;5Hworld\x1b[K";
   const clean = sanitizeAnsi(dirty);
   assertEquals(clean, "hello\x1b[31m red\x1b[0mworld");
 });
@@ -196,7 +227,10 @@ Deno.test("sanitizeAnsi: CSI with < = > parameter bytes stripped (ECMA-48)", () 
   // SGR with ? param still preserved
   assertEquals(sanitizeAnsi("\x1b[?25h"), "");
   // SGR proper unchanged
-  assertEquals(sanitizeAnsi("\x1b[38;5;196mfg\x1b[m"), "\x1b[38;5;196mfg\x1b[m");
+  assertEquals(
+    sanitizeAnsi("\x1b[38;5;196mfg\x1b[m"),
+    "\x1b[38;5;196mfg\x1b[m",
+  );
 });
 
 Deno.test("truncateAnsiLine: plain text truncated by printable char count", () => {
@@ -273,10 +307,10 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     startedAtSec: null,
     cwd: "",
     worktreeBranch: "",
-    subagentsCount: 0,
+    subagents: "",
     prompt: "",
     waitReason: "",
-    attention: "",
+    currentTool: "",
     ...overrides,
   };
 }
@@ -316,4 +350,86 @@ Deno.test("summaryOf: empty fallback → middle dot", () => {
 Deno.test("summaryOf: truncates to 40 chars", () => {
   const long = "a".repeat(80);
   assertEquals(summaryOf(mkRow({ prompt: long })).length, 40);
+});
+
+// --- cwdBranchLabel ---
+
+Deno.test("cwdBranchLabel: cwd + branch → slash-joined", () => {
+  assertEquals(
+    cwdBranchLabel("/Users/wadackel/dotfiles", "main"),
+    "dotfiles/main",
+  );
+});
+
+Deno.test("cwdBranchLabel: cwd only → basename", () => {
+  assertEquals(cwdBranchLabel("/Users/wadackel/dotfiles", ""), "dotfiles");
+});
+
+Deno.test("cwdBranchLabel: branch only → branch", () => {
+  assertEquals(cwdBranchLabel("", "main"), "main");
+});
+
+Deno.test("cwdBranchLabel: both empty → middle dot", () => {
+  assertEquals(cwdBranchLabel("", ""), "·");
+});
+
+Deno.test("cwdBranchLabel: root path → /", () => {
+  assertEquals(cwdBranchLabel("/", "main"), "//main");
+});
+
+// --- parseSubagents ---
+
+Deno.test("parseSubagents: empty → empty array", () => {
+  assertEquals(parseSubagents(""), []);
+});
+
+Deno.test("parseSubagents: single entry", () => {
+  assertEquals(parseSubagents("Explore:a1"), [{ type: "Explore", id: "a1" }]);
+});
+
+Deno.test("parseSubagents: multiple entries", () => {
+  assertEquals(parseSubagents("Explore:a1|Plan:b2|Explore:c3"), [
+    { type: "Explore", id: "a1" },
+    { type: "Plan", id: "b2" },
+    { type: "Explore", id: "c3" },
+  ]);
+});
+
+Deno.test("parseSubagents: malformed segment without colon → type only", () => {
+  assertEquals(parseSubagents("bogus"), [{ type: "bogus", id: "" }]);
+});
+
+Deno.test("parseSubagents: trailing pipe filtered", () => {
+  assertEquals(parseSubagents("A:1|"), [{ type: "A", id: "1" }]);
+});
+
+// --- renderSubagentTree ---
+
+Deno.test("renderSubagentTree: empty → middle dot", () => {
+  assertEquals(renderSubagentTree([]), "·");
+});
+
+Deno.test("renderSubagentTree: single entry → └ with number", () => {
+  assertEquals(
+    renderSubagentTree([{ type: "Explore", id: "a1" }]),
+    "└ Explore #1",
+  );
+});
+
+Deno.test("renderSubagentTree: multiple entries → tree connectors", () => {
+  const result = renderSubagentTree([
+    { type: "Explore", id: "a1" },
+    { type: "Plan", id: "b2" },
+    { type: "Researcher", id: "c3" },
+  ]);
+  assertEquals(result, "├ Explore #1 ├ Plan #1 └ Researcher #1");
+});
+
+Deno.test("renderSubagentTree: same type auto-numbers per type", () => {
+  const result = renderSubagentTree([
+    { type: "Explore", id: "a1" },
+    { type: "Explore", id: "b2" },
+    { type: "Plan", id: "c3" },
+  ]);
+  assertEquals(result, "├ Explore #1 ├ Explore #2 └ Plan #1");
 });
