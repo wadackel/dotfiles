@@ -137,10 +137,20 @@ const emptyState: PaneState = {
   subagents: "",
   pendingTeardown: false,
   currentTool: "",
+  status: "",
 };
 
 function stateWithSubagents(list: string): PaneState {
-  return { subagents: list, pendingTeardown: false, currentTool: "" };
+  return {
+    subagents: list,
+    pendingTeardown: false,
+    currentTool: "",
+    status: "",
+  };
+}
+
+function stateWith(overrides: Partial<PaneState>): PaneState {
+  return { ...emptyState, ...overrides };
 }
 
 Deno.test("eventToOps: SessionStart sets agent / status / session_id / cwd + unsets stale", () => {
@@ -291,7 +301,7 @@ Deno.test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", ()
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
   );
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(toolOp?.kind, "unset");
@@ -303,7 +313,7 @@ Deno.test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when pa
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "ToolA" },
-    { subagents: "", pendingTeardown: false, currentTool: "ToolB" },
+    { subagents: "", pendingTeardown: false, currentTool: "ToolB", status: "" },
   );
   const currentOp = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(currentOp, undefined, "current_tool must not be touched when a parallel tool is still running");
@@ -317,7 +327,7 @@ Deno.test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", ()
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -329,7 +339,7 @@ Deno.test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Edit" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -347,7 +357,7 @@ Deno.test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", (
   const postOps = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Edit" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
   assertEquals(postToolOp?.kind, "unset");
@@ -361,7 +371,7 @@ Deno.test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + sto
       tool_name: "Edit",
       tool_input: { file_path: "/x/y.ts" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(currentUnset?.kind, "unset");
@@ -382,7 +392,7 @@ Deno.test("eventToOps: PostToolUse (Write) stores file_path", () => {
       tool_name: "Write",
       tool_input: { file_path: "/a/b/new.md" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Write" },
+    { subagents: "", pendingTeardown: false, currentTool: "Write", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/new.md");
@@ -396,7 +406,7 @@ Deno.test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
       tool_name: "MultiEdit",
       tool_input: { file_path: "/a/b/multi.ts" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "MultiEdit" },
+    { subagents: "", pendingTeardown: false, currentTool: "MultiEdit", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/multi.ts");
@@ -406,7 +416,7 @@ Deno.test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_fi
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash" },
+    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "" },
   );
   const lastTool = ops.find((o) => o.key === "@pane_last_tool");
   assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
@@ -421,7 +431,7 @@ Deno.test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no 
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   assertEquals(
     ops.filter((o) => o.key === "@pane_last_tool").length,
@@ -448,7 +458,7 @@ Deno.test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () =
       tool_name: "Edit",
       tool_input: { file_path: "/x/y\n.ts\twith\rctrl" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(
@@ -465,7 +475,7 @@ Deno.test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_
       tool_name: "Edit",
       tool_input: { file_path: 42 },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit" },
+    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "" },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -586,7 +596,7 @@ Deno.test("eventToOps: SubagentStop drains pending teardown when list becomes em
   const ops = eventToOps(
     "SubagentStop",
     { session_id: "s1", agent_id: "a1" },
-    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "" },
+    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "", status: "" },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -693,7 +703,7 @@ Deno.test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
   const ops = eventToOps(
     "SubagentStop",
     { session_id: "sess-5", agent_id: "a1" },
-    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "" },
+    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "", status: "" },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -706,4 +716,192 @@ Deno.test("eventToOps: Stop with live subagents (defer) stays empty — self-hea
     stateWithSubagents("A:1|B:2"),
   );
   assertEquals(ops, []);
+});
+
+// --- resumeOpsIfStuck: waiting/error → running recovery on activity events ---
+// Each event × each status exercises the helper from a different call site.
+
+function hasResumeOps(ops: { kind: string; key: string; value?: string }[]): boolean {
+  const setRunning = ops.some(
+    (o) => o.kind === "set" && o.key === "@pane_status" &&
+      (o as { value: string }).value === "running",
+  );
+  const unsetReason = ops.some(
+    (o) => o.kind === "unset" && o.key === "@pane_wait_reason",
+  );
+  return setRunning && unsetReason;
+}
+
+Deno.test("resume: PreToolUse with status=waiting → flips to running + clears wait_reason", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "waiting" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+  const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "Bash");
+});
+
+Deno.test("resume: PreToolUse with status=error → flips to running", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "error" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: PreToolUse with status=running → no resume ops (no-op)", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "running" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+  // still sets current_tool
+  const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "Bash");
+});
+
+Deno.test("resume: PreToolUse with status=idle → no resume ops", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "idle" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: PostToolUse with status=waiting → flips to running", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "waiting", currentTool: "Bash" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: PostToolUse with status=error → flips to running", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "error", currentTool: "Bash" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: PostToolUse with status=running → no resume ops", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "running", currentTool: "Bash" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: PostToolUse with status=idle → no resume ops", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", tool_name: "Bash" },
+    stateWith({ status: "idle", currentTool: "Bash" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: SubagentStart with status=waiting → flips to running + appends subagent", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Explore", agent_id: "a1" },
+    stateWith({ status: "waiting" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Explore:a1");
+});
+
+Deno.test("resume: SubagentStart with status=error → flips to running", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Explore", agent_id: "a1" },
+    stateWith({ status: "error" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: SubagentStart with status=running → no resume ops", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Explore", agent_id: "a1" },
+    stateWith({ status: "running" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: SubagentStart with status=idle → no resume ops", () => {
+  const ops = eventToOps(
+    "SubagentStart",
+    { session_id: "s1", agent_type: "Explore", agent_id: "a1" },
+    stateWith({ status: "idle" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: SubagentStop (non-drain) with status=waiting → flips to running", () => {
+  // Non-drain: pendingTeardown=false, list still has another entry after removal
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWith({ subagents: "Explore:a1|Plan:b2", status: "waiting" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Plan:b2");
+});
+
+Deno.test("resume: SubagentStop (non-drain) with status=error → flips to running", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWith({ subagents: "Explore:a1|Plan:b2", status: "error" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: SubagentStop (non-drain) with status=running → no resume ops", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWith({ subagents: "Explore:a1|Plan:b2", status: "running" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: SubagentStop (non-drain) with status=idle → no resume ops", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    stateWith({ subagents: "Explore:a1|Plan:b2", status: "idle" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: SubagentStop drain with status=waiting still returns ALL_PANE_OPTIONS unset only (no resume leakage)", () => {
+  // drain path (pendingTeardown=true + last subagent) short-circuits before
+  // the switch body, so resume op must NOT be prepended.
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s1", agent_id: "a1" },
+    {
+      subagents: "Explore:a1",
+      pendingTeardown: true,
+      currentTool: "",
+      status: "waiting",
+    },
+  );
+  assertEquals(ops.length, ALL_PANE_OPTIONS.length);
+  assertEquals(ops.every((o) => o.kind === "unset"), true);
+  // resume op (which includes `set @pane_status running`) must be absent
+  const anySet = ops.some((o) => o.kind === "set");
+  assertEquals(anySet, false);
 });

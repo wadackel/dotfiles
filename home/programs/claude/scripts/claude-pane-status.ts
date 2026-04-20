@@ -21,6 +21,7 @@ export interface PaneState {
   subagents: string; // pipe-sep "Type:id|Type:id" list; "" = none
   pendingTeardown: boolean;
   currentTool: string;
+  status: string;
 }
 
 // --- Constants ---
@@ -120,6 +121,20 @@ export function count(list: string): number {
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
+}
+
+// Flip @pane_status back to running when activity resumes from a stuck
+// waiting/error state. No dedicated "permission approved" / "notification
+// dismissed" hook exists, so activity-bearing events (PreToolUse, PostToolUse,
+// SubagentStart, SubagentStop) are the only signal that Claude has resumed
+// work. @pane_wait_reason is cleared so row 1 summary stops showing the stale
+// reason.
+export function resumeOpsIfStuck(state: PaneState): Op[] {
+  if (state.status !== "waiting" && state.status !== "error") return [];
+  return [
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "unset", key: "@pane_wait_reason" },
+  ];
 }
 
 // Re-assert the pane belongs to a live Claude session. Called at the head of
@@ -235,7 +250,10 @@ export function eventToOps(
       case "PreToolUse": {
         const toolName = str(data.tool_name);
         if (!toolName) return [];
-        return [{ kind: "set", key: "@pane_current_tool", value: toolName }];
+        return [
+          ...resumeOpsIfStuck(state),
+          { kind: "set", key: "@pane_current_tool", value: toolName },
+        ];
       }
 
       case "PostToolUse": {
@@ -259,6 +277,7 @@ export function eventToOps(
         const toolName = str(data.tool_name);
         const now = String(Math.floor(Date.now() / 1000));
         const ops: Op[] = [
+          ...resumeOpsIfStuck(state),
           { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (!toolName) return ops;
@@ -305,17 +324,20 @@ export function eventToOps(
         const id = str(data.agent_id) ||
           crypto.randomUUID().slice(0, 8);
         const next = appendSubagent(state.subagents, type, id);
-        return [{ kind: "set", key: "@pane_subagents", value: next }];
+        return [
+          ...resumeOpsIfStuck(state),
+          { kind: "set", key: "@pane_subagents", value: next },
+        ];
       }
 
       case "SubagentStop": {
         // drain case (count(next) === 0 && pendingTeardown) handled above
         const id = str(data.agent_id);
         const next = removeSubagent(state.subagents, id);
-        if (next === "") {
-          return [{ kind: "unset", key: "@pane_subagents" }];
-        }
-        return [{ kind: "set", key: "@pane_subagents", value: next }];
+        const subagentOp: Op = next === ""
+          ? { kind: "unset", key: "@pane_subagents" }
+          : { kind: "set", key: "@pane_subagents", value: next };
+        return [...resumeOpsIfStuck(state), subagentOp];
       }
 
       case "WorktreeCreate": {
@@ -390,18 +412,20 @@ async function readPaneState(pane: string): Promise<PaneState> {
     }
     return decoder.decode(stdout);
   };
-  const [subagentsStdout, teardownStdout, currentToolStdout] = await Promise
-    .all(
+  const [subagentsStdout, teardownStdout, currentToolStdout, statusStdout] =
+    await Promise.all(
       [
         runShow("@pane_subagents"),
         runShow("@pane_pending_teardown"),
         runShow("@pane_current_tool"),
+        runShow("@pane_status"),
       ],
     );
   return {
     subagents: subagentsStdout.trim(),
     pendingTeardown: teardownStdout.trim() === "1",
     currentTool: currentToolStdout.trim(),
+    status: statusStdout.trim(),
   };
 }
 
