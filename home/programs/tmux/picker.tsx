@@ -296,10 +296,13 @@ async function fetchPanes(selfPaneId: string): Promise<PaneRow[]> {
   for (const line of stdout.split("\n")) {
     if (!line) continue;
     const row = parseRow(line);
-    if (row && row.paneId !== selfPaneId) rows.push(row);
+    if (row && row.paneId !== selfPaneId && row.agent === "claude") {
+      rows.push(row);
+    }
   }
-  // Fill in missing worktreeBranch from the pane's cwd (or pane_current_path
-  // for non-Claude panes) in parallel.
+  // Fill in missing worktreeBranch from the pane's cwd (falling back to
+  // pane_current_path when @pane_cwd is unset, e.g. when the latest hook event
+  // for a Claude pane carried no cwd payload) in parallel.
   await Promise.all(
     rows.map(async (row) => {
       if (!row.worktreeBranch) {
@@ -355,10 +358,8 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
 ) => {
   const color = statusColor(row.status);
   const pointer = selected ? "❯" : " ";
-  // Claude panes have an @pane_status icon; non-Claude panes keep a space for
-  // alignment and fall back to pane_current_command for the status column.
-  const icon = row.status ? statusIcon(row.status) : " ";
-  const statusText = row.status ? statusShort(row.status) : row.currentCommand;
+  const icon = statusIcon(row.status);
+  const statusText = statusShort(row.status);
   const status4 = statusText.slice(0, 4).padEnd(4);
   const elapsed = formatElapsed(row.startedAtSec, now).padEnd(4);
   const label = cwdBranchLabel(row.cwd || row.currentPath, row.worktreeBranch);
@@ -527,8 +528,9 @@ async function main(): Promise<void> {
     Deno.exit(2);
   }
   // TMUX_PANE is set in regular panes but NOT in `display-popup -E` subprocesses.
-  // Fall back to empty so fetchPanes lists every pane — popups themselves are
-  // not enumerated by `tmux list-panes -a`, so nothing spurious leaks in.
+  // Fall back to empty so fetchPanes does not exclude an arbitrary pane —
+  // popups themselves are not enumerated by `tmux list-panes -a`, so nothing
+  // spurious leaks in. (fetchPanes additionally filters to @pane_agent=claude.)
   const selfPaneId = Deno.env.get("TMUX_PANE") ?? "";
   const rows = await fetchPanes(selfPaneId);
 
