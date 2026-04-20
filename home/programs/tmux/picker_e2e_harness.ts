@@ -42,6 +42,7 @@ export interface PaneOpts {
   lastEditFile?: string;
   lastActivityAtSec?: number;
   sessionId?: string;
+  subagents?: string;
 }
 
 export interface ServerOpts {
@@ -156,6 +157,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.sessionId !== undefined) {
     pairs.push(["@pane_session_id", opts.sessionId]);
+  }
+  if (opts.subagents !== undefined) {
+    pairs.push(["@pane_subagents", opts.subagents]);
   }
 
   for (const [key, val] of pairs) {

@@ -371,6 +371,19 @@ interface Row2Seg {
 
 const ROW2_SEP = " · ";
 
+// Row-2 segment icons (Nerd Font Material Design). Prefixed to each segment's
+// text so the render budget (counts text.length) accounts for the glyph width
+// without splitting into a separate Text node. Supplementary-plane codepoints
+// report .length = 2 but render as 1 cell; the overcount is absorbed by the
+// conservative drop policy in PaneRowLine.
+const ROW2_ICONS = {
+  tool: "󰒓", // nf-md-cog
+  tree: "󱙺", // nf-md-graph-outline
+  file: "󰈔", // nf-md-file-document-outline
+  progress: "󰄱", // nf-md-checkbox-multiple-marked-outline
+  idle: "󰏤", // nf-md-sleep
+} as const;
+
 const PaneRowLine: React.FC<PaneRowLineProps> = (
   {
     row,
@@ -406,35 +419,43 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   // slot outside this budget.
   const segs: Row2Seg[] = [];
   if (row.currentTool) {
-    segs.push({ key: "tool", text: toolSegmentText(row), color: "cyan" });
+    segs.push({
+      key: "tool",
+      text: `${ROW2_ICONS.tool} ${toolSegmentText(row)}`,
+      color: "cyan",
+    });
   } else if (row.lastTool) {
-    segs.push({ key: "tool", text: toolSegmentText(row), color: "gray" });
+    segs.push({
+      key: "tool",
+      text: `${ROW2_ICONS.tool} ${toolSegmentText(row)}`,
+      color: "gray",
+    });
   }
   if (subagents.length > 0) {
     segs.push({
       key: "tree",
-      text: renderSubagentTree(subagents),
+      text: `${ROW2_ICONS.tree} ${renderSubagentTree(subagents)}`,
       color: "gray",
     });
   }
   if (row.lastEditFile) {
     segs.push({
       key: "file",
-      text: basename(row.lastEditFile),
+      text: `${ROW2_ICONS.file} ${basename(row.lastEditFile)}`,
       color: "gray",
     });
   }
   if (taskProgress) {
     segs.push({
       key: "progress",
-      text: `${taskProgress.done}/${taskProgress.total}`,
+      text: `${ROW2_ICONS.progress} ${taskProgress.done}/${taskProgress.total}`,
       color: "gray",
     });
   }
   if (row.status === "idle" && row.lastActivityAtSec !== null) {
     segs.push({
       key: "idle",
-      text: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
+      text: `${ROW2_ICONS.idle} idle ${formatElapsed(row.lastActivityAtSec, now)}`,
       color: "gray",
     });
   }
@@ -656,7 +677,7 @@ function App({
         </Box>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
-        <Box flexDirection="column" width={listWidth}>
+        <Box flexDirection="column" width={listWidth} gap={1}>
           {rows.map((row: PaneRow, i: number) => (
             <PaneRowLine
               key={row.paneId}

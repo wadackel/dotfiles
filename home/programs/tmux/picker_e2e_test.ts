@@ -425,3 +425,64 @@ Deno.test("S12: navigation wraps at boundaries", async () => {
     await teardown();
   }
 });
+
+// S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under the
+// default 80-col width, tool / file / tree segments all fit. The actual Unicode
+// code points come from picker.tsx:ROW2_ICONS — we assert by literal glyph so a
+// regression that changes the constants (or drops the prefix) fails here.
+Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "row-icons",
+      currentTool: "Edit",
+      lastEditFile: "/a/b/icon-test.ts",
+      subagents: "Explore:x1",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    // tool icon (nf-md-cog) — prefixed to currentTool segment
+    assertStringIncludes(out, "󰒓");
+    // tree icon (nf-md-graph-outline) — prefixed to subagents segment
+    assertStringIncludes(out, "󱙺");
+    // file icon (nf-md-file-document-outline) — prefixed to lastEditFile segment
+    assertStringIncludes(out, "󰈔");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S14: Priority drop symmetry. S10 covers text-level drop (tool survives, idle
+// dropped). S14 covers the same scenario at the icon layer — the tool icon
+// must remain visible while the idle icon must NOT leak into the render. Guards
+// against regressions where icons are emitted outside the budget-drop path.
+Deno.test("S14: narrow width drops low-priority icon along with its segment", async () => {
+  await setupServer({ cols: 60, rows: 20 });
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    await createClaudePane({
+      status: "idle",
+      prompt: "promptxxxxxxxxxxxxxxxx",
+      lastTool: "MultiEditLongNameXYZ",
+      lastEditFile: "/a/b/c/verylongfilename-for-overflow.tsx",
+      lastActivityAtSec: nowSec - 42,
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    // Highest-priority tool segment (and its icon) must survive the budget drop.
+    assertStringIncludes(out, "󰒓");
+    // Lowest-priority idle icon must drop together with its segment. Asserting
+    // the icon (not the "idle Ns" text) is the new guarantee S14 adds on top of S10.
+    assertFalse(
+      out.includes("󰏤"),
+      `narrow width did not drop idle icon with its segment:\n${out}`,
+    );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
