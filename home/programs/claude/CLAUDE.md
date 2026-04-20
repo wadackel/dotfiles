@@ -92,11 +92,6 @@
 
 - Pin GitHub Actions to full commit SHAs, not version tags.
 
-#### CSS/Layout
-
-- When using `transform: scale()` inside a flex container, also set `flex-shrink: 0`.
-- Browser default `max-width: 100%` can create double constraints with transforms; also apply `max-w-none` when needed.
-
 #### Deno Scripts
 
 - Read stdin with `new Response(Deno.stdin.readable).text()` on Deno 2.x.
