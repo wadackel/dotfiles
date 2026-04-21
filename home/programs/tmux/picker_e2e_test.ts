@@ -116,7 +116,10 @@ Deno.test("S4: enter selects target window+pane", async () => {
   try {
     // paneA is the initial selection (index 0); paneB is the jump target.
     await createClaudePane({ status: "running", prompt: "row-a" });
-    const paneB = await createClaudePane({ status: "running", prompt: "row-b" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
     const picker = await spawnPicker();
 
     // Move selection to paneB row.
@@ -135,7 +138,11 @@ Deno.test("S4: enter selects target window+pane", async () => {
     const windowActive = (
       await tmux(["display-message", "-t", paneB, "-p", "#{window_active}"])
     ).trim();
-    assertEquals(paneActive, "1", "paneB should be the active pane of its window");
+    assertEquals(
+      paneActive,
+      "1",
+      "paneB should be the active pane of its window",
+    );
     assertEquals(
       windowActive,
       "1",
@@ -426,12 +433,16 @@ Deno.test("S12: navigation wraps at boundaries", async () => {
   }
 });
 
-// S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under the
-// default 80-col width, tool / file / tree segments all fit. The actual Unicode
-// code points come from picker.tsx:ROW2_ICONS — we assert by literal glyph so a
-// regression that changes the constants (or drops the prefix) fails here.
+// S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under a
+// 100-col width (listWidth=60) the new budget `listWidth - 2 - row.target.length`
+// still leaves room for tool / tree / file segments to all fit. The actual
+// Unicode code points come from picker.tsx:ROW2_ICONS — we assert by literal
+// glyph so a regression that changes the constants (or drops the prefix) fails
+// here. The default 80-col path had just enough budget under the old
+// `listWidth - 4` formula but now lies on the drop threshold, which is why
+// the scenario pins cols=100 explicitly.
 Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
-  await setupServer();
+  await setupServer({ cols: 100, rows: 20 });
   try {
     await createClaudePane({
       status: "running",
@@ -480,6 +491,81 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
       out.includes("󰏤"),
       `narrow width did not drop idle icon with its segment:\n${out}`,
     );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S15: regression — the top-priority tool segment must not be Ink-hard-clipped
+// when the Row 2 line would overflow listWidth. Previously picker.tsx used
+// `listWidth - 2 - 2` for budget, ignoring row.target's actual width. Under a
+// narrow listWidth and a long tool name, the line overflowed by 1–2 cells and
+// Ink silently clipped the tail (symptom: "Bash" → "Bas"). The fix reserves
+// row.target.length in the budget AND pre-truncates the top segment at a code
+// point boundary, so the rendered output never contains a half-surrogate or a
+// mid-word Ink clip artifact.
+Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-clip", async () => {
+  // cols=60 → listWidth=40. target "test:W.P" ≈ 8. New budget ≈ 30.
+  // Tool name chosen to exceed the new budget so the truncate guard fires,
+  // which is exactly the condition that used to leak through to Ink.
+  await setupServer({ cols: 60, rows: 20 });
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "tool-truncation-regression",
+      currentTool: "BashToolXYZWriteTailChunkABCDEF",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    // The prefix of the tool name must remain visible — the guard drops the
+    // tail, never the head.
+    assertStringIncludes(out, "BashToolXYZ");
+    // Icon is a single supplementary-plane codepoint — it must not be split
+    // by the truncate guard (Array.from iterates by code point).
+    assertStringIncludes(out, "󰒓");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S16: regression — when a Row-2 segment has room to spare, its tail must not
+// be silently clipped by Ink. Ink 5.2.1 in flex-row layout eats 1 cell from
+// the first <Text> whose content is "<supplementary-plane icon> <ASCII body>"
+// whenever a sibling <Text> follows (reproduced with ink_repro*.tsx, observed
+// as "TaskOutput" → "TaskOutpu" in the live picker). The fix emits icon and
+// body as two sibling <Text> nodes; this scenario pins the fix by asserting
+// the full "TaskOutput" literal survives even when both tool and file
+// segments coexist with plenty of listWidth slack.
+Deno.test("S16: tool segment with icon + sibling file segment renders full tool name", async () => {
+  // cols=100 → listWidth=60. tool seg (12 cells) + " · " (3) + file seg
+  // (24 cells) = 39 cells; budget = 60 - 2 - target.length ≈ 50. No
+  // truncation path is expected to fire — pure layout regression check.
+  await setupServer({ cols: 100, rows: 20 });
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "taskoutput-sibling-regression",
+      currentTool: "TaskOutput",
+      lastEditFile: "/a/b/TemplateItemsEditor.ts",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    // Full tool name must survive. The bug surfaced as the literal
+    // "TaskOutpu" (missing final "t") preceding a non-"t" character such as
+    // a space or separator.
+    assertStringIncludes(out, "TaskOutput");
+    assertFalse(
+      /TaskOutpu[^t]/.test(out),
+      `"TaskOutput" was clipped to "TaskOutpu":\n${out}`,
+    );
+    // Both Nerd Font icons must remain — the fix must not drop the icon
+    // while extracting it into a sibling Text node.
+    assertStringIncludes(out, "󰒓");
+    assertStringIncludes(out, "󰈔");
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {

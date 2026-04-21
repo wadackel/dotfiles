@@ -62,6 +62,17 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
 
    After receiving this information, proceed with Step 3 (Design Test Cases).
 
+7. **Load the specialized skill for the target type before Step 3** (idempotent — always call, do not rely on "already loaded" introspection):
+
+   | Type | Required skill call |
+   |------|---------------------|
+   | WebApp | `Skill(skill: "agent-browser")` |
+   | Electron app | `Skill(skill: "agent-browser")` then load electron specialized skill via `agent-browser skills get electron` |
+   | Slack automation | `Skill(skill: "agent-browser")` then `agent-browser skills get slack` |
+   | API Server / CLI Tool / Background Service / Library | No additional skill load required |
+
+   Loading at classification time (not just before execution) ensures default flags and workflow patterns are present while designing tests in Step 3.
+
 ### Step 3: Design Test Cases
 
 #### Risk-Based Prioritization
@@ -113,11 +124,22 @@ Category coverage checklist:
 
 ### Step 4: Execute Tests (Mode B only)
 
+#### Pre-flight (mandatory on every Step 4 entry)
+
+For WebApp / Electron / Slack targets, call `Skill(skill: "agent-browser")` at the start of Step 4 even if Step 2 already loaded it. Re-loading is idempotent and cheap — do NOT attempt to detect "already loaded"; that detection is unreliable across compaction boundaries.
+
+Loading the skill brings agent-browser's Default Flags into context. The two defaults that must apply to every browser invocation below:
+
+- **`--auto-connect`**: attaches to the user's existing Chrome (reuses auth cookies / localStorage). Required for any authenticated local SaaS / dev / staging URL. Omit only when the user explicitly asks for a fresh headless context (then pair with `--headed` or `--session-name`).
+- **Tab-safe open**: prefer `agent-browser --auto-connect tab new <url>` over bare `agent-browser open <url>` to avoid overwriting pinned or unrelated tabs. First-time daemon connection may still use `agent-browser --auto-connect open <url>`.
+
+If auto-connect fails (Chrome not running / remote debugging disabled), stop and ask the user to enable `chrome://inspect/#remote-debugging`. Do not silently fall back to a fresh headless context — authenticated targets will land on the login page.
+
 #### Tool Selection
 
 | Type | Approach |
 |------|----------|
-| WebApp | Use **agent-browser** CLI for browser automation (open, fill, click, snapshot, screenshot, console/network checks) |
+| WebApp | `agent-browser --auto-connect tab new <url>` for browser automation (open, fill, click, snapshot, screenshot, console/network checks). See Pre-flight above for default flags. |
 | API Server | Use `curl -s -w "\n%{http_code}"` to capture response body and status code |
 | CLI Tool | Execute commands directly via `Bash`, verify stdout, stderr, and exit codes |
 | Background Service | Combine `curl` (trigger/check endpoints) + log inspection |

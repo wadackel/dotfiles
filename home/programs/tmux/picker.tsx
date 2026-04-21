@@ -20,13 +20,7 @@ import {
   STATUS_META,
   TMUX_FORMAT,
 } from "./pane_row.ts";
-export {
-  type PaneRow,
-  type PaneStatus,
-  parseRow,
-  STATUS_META,
-  TMUX_FORMAT,
-};
+export { type PaneRow, type PaneStatus, parseRow, STATUS_META, TMUX_FORMAT };
 
 export interface TaskProgress {
   done: number;
@@ -170,7 +164,9 @@ export function summaryOf(row: PaneRow): string {
 export function toolSegmentText(row: PaneRow): string {
   const tool = row.currentTool || row.lastTool;
   if (!tool) return "";
-  const subject = row.currentTool ? row.currentToolSubject : row.lastToolSubject;
+  const subject = row.currentTool
+    ? row.currentToolSubject
+    : row.lastToolSubject;
   const base = subject ? `${tool}: ${subject}` : tool;
   if (!row.currentTool && row.lastToolError) {
     return `${base} ✖ ${row.lastToolError}`;
@@ -361,21 +357,25 @@ interface PaneRowLineProps {
   branchMax: number;
 }
 
-// Row-2 segment (colored text). Built in priority order; when the cumulative
-// width exceeds budget, trim from the end (lowest priority first).
+// Row-2 segment (icon + body, colored together). Built in priority order; when
+// the cumulative cell width exceeds budget, trim from the end (lowest priority
+// first). `icon` and `body` stay separate so the renderer can emit the icon as
+// its own <Text> sibling — Ink 5.2.1 silently clips the tail of a <Text> whose
+// content is "<supplementary-plane icon> <body>" when a sibling Text follows,
+// even with plenty of container slack (reproduced with ink_repro*.tsx).
 interface Row2Seg {
   key: string;
-  text: string;
+  icon: string;
+  body: string;
   color: string;
 }
 
 const ROW2_SEP = " · ";
 
-// Row-2 segment icons (Nerd Font Material Design). Prefixed to each segment's
-// text so the render budget (counts text.length) accounts for the glyph width
-// without splitting into a separate Text node. Supplementary-plane codepoints
-// report .length = 2 but render as 1 cell; the overcount is absorbed by the
-// conservative drop policy in PaneRowLine.
+// Row-2 segment icons (Nerd Font Material Design). Supplementary-plane code
+// points; each renders as 1 cell in CaskaydiaCove Nerd Font Mono. Kept separate
+// from body text in Row2Seg so the renderer can emit icon + body as two sibling
+// <Text> nodes (see Row2Seg comment above for the Ink clip rationale).
 const ROW2_ICONS = {
   tool: "󰒓", // nf-md-cog
   tree: "󱙺", // nf-md-graph-outline
@@ -414,63 +414,86 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   const subagents = parseSubagents(row.subagents);
 
   // Build row-2 segments in priority order (higher priority first). The
-  // cumulative width is compared against `budget` and low-priority segments
-  // are dropped from the tail if over. target sits in flexGrow-pushed right
-  // slot outside this budget.
+  // cumulative cell width is compared against `budget` and low-priority
+  // segments are dropped from the tail if over. target sits in flexGrow-pushed
+  // right slot outside this budget.
   const segs: Row2Seg[] = [];
   if (row.currentTool) {
     segs.push({
       key: "tool",
-      text: `${ROW2_ICONS.tool} ${toolSegmentText(row)}`,
+      icon: ROW2_ICONS.tool,
+      body: toolSegmentText(row),
       color: "cyan",
     });
   } else if (row.lastTool) {
     segs.push({
       key: "tool",
-      text: `${ROW2_ICONS.tool} ${toolSegmentText(row)}`,
+      icon: ROW2_ICONS.tool,
+      body: toolSegmentText(row),
       color: "gray",
     });
   }
   if (subagents.length > 0) {
     segs.push({
       key: "tree",
-      text: `${ROW2_ICONS.tree} ${renderSubagentTree(subagents)}`,
+      icon: ROW2_ICONS.tree,
+      body: renderSubagentTree(subagents),
       color: "gray",
     });
   }
   if (row.lastEditFile) {
     segs.push({
       key: "file",
-      text: `${ROW2_ICONS.file} ${basename(row.lastEditFile)}`,
+      icon: ROW2_ICONS.file,
+      body: basename(row.lastEditFile),
       color: "gray",
     });
   }
   if (taskProgress) {
     segs.push({
       key: "progress",
-      text: `${ROW2_ICONS.progress} ${taskProgress.done}/${taskProgress.total}`,
+      icon: ROW2_ICONS.progress,
+      body: `${taskProgress.done}/${taskProgress.total}`,
       color: "gray",
     });
   }
   if (row.status === "idle" && row.lastActivityAtSec !== null) {
     segs.push({
       key: "idle",
-      text: `${ROW2_ICONS.idle} idle ${formatElapsed(row.lastActivityAtSec, now)}`,
+      icon: ROW2_ICONS.idle,
+      body: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
       color: "gray",
     });
   }
 
-  // Budget = listWidth minus 2-space indent minus a small margin before target.
-  // Always keep at least the top-priority segment even if it exceeds budget —
-  // an overrun is preferable to rendering nothing.
-  const budget = Math.max(0, listWidth - 2 - 2);
-  let totalLen = segs.length > 0 ? segs[0].text.length : 0;
+  // Cell width = icon(1) + space(1) + body code points. Accurate while icons
+  // stay supplementary-plane (1 cell) and bodies stay ASCII-heavy. CJK bodies
+  // would undercount, but upstream TOOL_SUBJECT_MAX_CHARS=24 bounds that risk.
+  const SEG_PREFIX_CELLS = 2;
+  const segCells = (s: Row2Seg): number =>
+    SEG_PREFIX_CELLS + Array.from(s.body).length;
+
+  // Budget = listWidth minus 2-space indent minus the flex-pushed row.target
+  // on the right. Target is ASCII (tmux "session:W.P"), so target.length
+  // equals its cell width.
+  const budget = Math.max(0, listWidth - 2 - row.target.length);
+  let totalCells = segs.length > 0 ? segCells(segs[0]) : 0;
   for (let i = 1; i < segs.length; i++) {
-    totalLen += ROW2_SEP.length + segs[i].text.length;
+    totalCells += ROW2_SEP.length + segCells(segs[i]);
   }
-  while (segs.length > 1 && totalLen > budget) {
+  while (segs.length > 1 && totalCells > budget) {
     const dropped = segs.pop()!;
-    totalLen -= ROW2_SEP.length + dropped.text.length;
+    totalCells -= ROW2_SEP.length + segCells(dropped);
+  }
+  // Top-priority segment survives the drop loop but may still exceed budget
+  // when alone. Without this guard Ink would wrap the overflow onto the next
+  // row, pushing following panes off-screen. Truncate body at a code-point
+  // boundary (icon preserved); cell-safe while body is supplementary-plane
+  // icon–free ASCII.
+  if (segs.length > 0 && segCells(segs[0]) > budget) {
+    const maxBodyCells = Math.max(0, budget - SEG_PREFIX_CELLS);
+    const cps = Array.from(segs[0].body);
+    segs[0] = { ...segs[0], body: cps.slice(0, maxBodyCells).join("") };
   }
 
   return (
@@ -486,13 +509,19 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
         <Text color="cyan">{branchCol}</Text>
         <Text>{" " + summary}</Text>
       </Box>
-      {/* Line 2: indent + priority-ordered segments + target (right-align) */}
+      {
+        /* Line 2: indent + priority-ordered segments + target (right-align).
+          Each segment emits icon and body as TWO <Text> siblings; combining
+          them into one <Text> triggers an Ink 5.2.1 flex-layout bug that eats
+          the tail character when a sibling Text follows. */
+      }
       <Box>
         <Text>{"  "}</Text>
         {segs.map((s, i) => (
           <React.Fragment key={s.key}>
             {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
-            <Text color={s.color}>{s.text}</Text>
+            <Text color={s.color}>{s.icon}</Text>
+            <Text color={s.color}>{" " + s.body}</Text>
           </React.Fragment>
         ))}
         <Box flexGrow={1} />
@@ -673,7 +702,9 @@ function App({
       <Box marginBottom={1}>
         <Text color="cyan">Select pane</Text>
         <Box marginLeft={2}>
-          <Text color="gray">[Enter: jump / Esc or q: cancel / ↑↓ jk: move]</Text>
+          <Text color="gray">
+            [Enter: jump / Esc or q: cancel / ↑↓ jk: move]
+          </Text>
         </Box>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>

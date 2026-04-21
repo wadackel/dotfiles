@@ -31,6 +31,12 @@ export interface PaneState {
   pendingTeardown: boolean;
   currentTool: string;
   status: string;
+  // true when the main agent has already Stop'd but subagents were still
+  // running at that moment. Consumed by SubagentStop to transition status to
+  // idle once the last subagent drains; cleared by UserPromptSubmit and
+  // SessionStart. Separates main-agent lifecycle from subagent activity so
+  // status no longer conflates the two.
+  mainStopped: boolean;
 }
 
 // --- Constants ---
@@ -55,6 +61,7 @@ export const ALL_PANE_OPTIONS = [
   "@pane_current_tool_subject",
   "@pane_last_tool_subject",
   "@pane_last_tool_error",
+  "@pane_main_stopped",
 ] as const;
 
 // Options cleared at SessionStart so stale values from a previous session on the
@@ -74,6 +81,7 @@ const STALE_AT_SESSION_START = [
   "@pane_current_tool_subject",
   "@pane_last_tool_subject",
   "@pane_last_tool_error",
+  "@pane_main_stopped",
 ] as const;
 
 const PROMPT_MAX_CHARS = 40;
@@ -220,11 +228,15 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
-// Flip @pane_status back to running when activity resumes from a stuck
-// waiting/error state. No dedicated "permission approved" / "notification
-// dismissed" hook exists, so activity-bearing events (PreToolUse, PostToolUse,
-// SubagentStart, SubagentStop) are the only signal that Claude has resumed
-// work. @pane_wait_reason is cleared so row 1 summary stops showing the stale
+// Flip @pane_status back to running when main-agent activity resumes from a
+// stuck waiting/error state. Callers must restrict invocation to events that
+// are attributable to the main agent:
+//   - PreToolUse / PostToolUse: only when state.subagents === "" (otherwise the
+//     tool event may belong to a running subagent, not main).
+//   - SubagentStart / SubagentStop: never — subagent activity cannot be proxied
+//     as main-agent resume.
+// UserPromptSubmit already sets status directly and does not go through this
+// helper. @pane_wait_reason is cleared so row 1 summary stops showing the stale
 // reason.
 export function resumeOpsIfStuck(state: PaneState): Op[] {
   if (state.status !== "waiting" && state.status !== "error") return [];
@@ -300,6 +312,9 @@ export function eventToOps(
           { kind: "set", key: "@pane_status", value: "running" },
           { kind: "set", key: "@pane_started_at", value: now },
           { kind: "set", key: "@pane_last_activity_at", value: now },
+          // New main invocation — clear any pending main-stopped marker so
+          // the next SubagentStop does not spuriously flip us to idle.
+          { kind: "unset", key: "@pane_main_stopped" },
         ];
         if (prompt) {
           ops.push({ kind: "set", key: "@pane_prompt", value: prompt });
@@ -308,8 +323,19 @@ export function eventToOps(
       }
 
       case "Stop": {
-        if (count(state.subagents) > 0) return []; // pending subagents: defer
-        return [{ kind: "set", key: "@pane_status", value: "idle" }];
+        if (count(state.subagents) > 0) {
+          // Main stopped but subagents are still running. Status must stay
+          // `running` so the pane does not falsely report idle. Mark
+          // main_stopped=1 so the last SubagentStop can transition to idle.
+          return [{ kind: "set", key: "@pane_main_stopped", value: "1" }];
+        }
+        return [
+          { kind: "set", key: "@pane_status", value: "idle" },
+          // Defensive: in the normal running→Stop path main_stopped is already
+          // unset, but explicitly unset so a stale `1` from an earlier race
+          // never survives into the next session.
+          { kind: "unset", key: "@pane_main_stopped" },
+        ];
       }
 
       case "StopFailure": {
@@ -348,8 +374,11 @@ export function eventToOps(
         const toolName = str(data.tool_name);
         if (!toolName) return [];
         const subject = extractToolSubject(toolName, data.tool_input);
+        // Resume only when no subagent is running — otherwise the tool event
+        // is not reliably attributable to the main agent.
+        const resume = state.subagents === "" ? resumeOpsIfStuck(state) : [];
         const ops: Op[] = [
-          ...resumeOpsIfStuck(state),
+          ...resume,
           { kind: "set", key: "@pane_current_tool", value: toolName },
         ];
         if (subject) {
@@ -384,8 +413,10 @@ export function eventToOps(
         // into a non-edit tool's display.
         const toolName = str(data.tool_name);
         const now = String(Math.floor(Date.now() / 1000));
+        // Resume only when no subagent is running — matches PreToolUse policy.
+        const resume = state.subagents === "" ? resumeOpsIfStuck(state) : [];
         const ops: Op[] = [
-          ...resumeOpsIfStuck(state),
+          ...resume,
           { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (!toolName) return ops;
@@ -458,24 +489,33 @@ export function eventToOps(
       case "SubagentStart": {
         // Hook stdin field names (verified via /tmp/claude-pane-hook.log dump):
         // `agent_id` (snake_case) and `agent_type` — NOT `subagent_*`.
+        // Subagent activity is never main-attributable, so no resume op here.
         const type = str(data.agent_type) || "subagent";
         const id = str(data.agent_id) ||
           crypto.randomUUID().slice(0, 8);
         const next = appendSubagent(state.subagents, type, id);
-        return [
-          ...resumeOpsIfStuck(state),
-          { kind: "set", key: "@pane_subagents", value: next },
-        ];
+        return [{ kind: "set", key: "@pane_subagents", value: next }];
       }
 
       case "SubagentStop": {
-        // drain case (count(next) === 0 && pendingTeardown) handled above
+        // drain case (count(next) === 0 && pendingTeardown) handled above.
+        // Subagent activity is never main-attributable — no resume op.
         const id = str(data.agent_id);
         const next = removeSubagent(state.subagents, id);
         const subagentOp: Op = next === ""
           ? { kind: "unset", key: "@pane_subagents" }
           : { kind: "set", key: "@pane_subagents", value: next };
-        return [...resumeOpsIfStuck(state), subagentOp];
+        // If main had Stop'd earlier and this is the last subagent, transition
+        // to idle and clear the main_stopped marker. Drain (pendingTeardown)
+        // already short-circuited above, so it cannot be reached here.
+        if (next === "" && state.mainStopped) {
+          return [
+            subagentOp,
+            { kind: "set", key: "@pane_status", value: "idle" },
+            { kind: "unset", key: "@pane_main_stopped" },
+          ];
+        }
+        return [subagentOp];
       }
 
       case "WorktreeCreate": {
@@ -648,20 +688,25 @@ async function readPaneState(pane: string): Promise<PaneState> {
     }
     return decoder.decode(stdout);
   };
-  const [subagentsStdout, teardownStdout, currentToolStdout, statusStdout] =
-    await Promise.all(
-      [
-        runShow("@pane_subagents"),
-        runShow("@pane_pending_teardown"),
-        runShow("@pane_current_tool"),
-        runShow("@pane_status"),
-      ],
-    );
+  const [
+    subagentsStdout,
+    teardownStdout,
+    currentToolStdout,
+    statusStdout,
+    mainStoppedStdout,
+  ] = await Promise.all([
+    runShow("@pane_subagents"),
+    runShow("@pane_pending_teardown"),
+    runShow("@pane_current_tool"),
+    runShow("@pane_status"),
+    runShow("@pane_main_stopped"),
+  ]);
   return {
     subagents: subagentsStdout.trim(),
     pendingTeardown: teardownStdout.trim() === "1",
     currentTool: currentToolStdout.trim(),
     status: statusStdout.trim(),
+    mainStopped: mainStoppedStdout.trim() === "1",
   };
 }
 
