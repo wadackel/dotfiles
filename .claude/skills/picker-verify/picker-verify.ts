@@ -77,12 +77,18 @@ async function main(): Promise<number> {
   }
 
   const home = Deno.env.get("HOME");
-  // --allow-write is scoped to $HOME/.claude/tasks because S8 needs to seed
-  // a disposable tasks dir there; other scenarios only read filesystem.
-  const writeScope = home ? `--allow-write=${home}/.claude/tasks` : "--allow-write";
+  // --allow-write scopes: $HOME/.claude/tasks for S8's disposable tasks dir,
+  // /tmp for the harness-compiled .claude-wrapped stub directory.
+  // --allow-run includes `cc` so the harness can compile its
+  // `.claude-wrapped` stub (see picker_e2e_harness.ts:LIVE_BIN_*) — Darwin
+  // rejects copies of Apple-signed binaries, making compile the only path
+  // that makes tmux's #{pane_current_command} match `.claude-wrapped`.
+  const writeScope = home
+    ? `--allow-write=${home}/.claude/tasks,/tmp`
+    : "--allow-write";
   const test = await runDeno([
     "test",
-    "--allow-run=tmux",
+    "--allow-run=tmux,cc",
     "--allow-env",
     "--allow-read",
     writeScope,

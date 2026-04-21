@@ -290,13 +290,34 @@ export async function readTaskProgress(
   return total === 0 ? null : { done, total };
 }
 
+// Live cc entry-point set matched against tmux `pane_current_command`
+// (kernel p_comm basename, ≤16 bytes). Stale panes whose cc process has
+// exited fall back to the login shell (e.g. `zsh`) and are rejected here.
+//
+// NOT the same semantics as picker-doctor.ts:isClaudeCommand which scans
+// full ps command-line substrings to locate descendant processes. That
+// helper is substring+token-based against `ps -o command`; this one is
+// exact-match against a single tmux p_comm basename.
+export const CLAUDE_PANE_COMMANDS: ReadonlySet<string> = new Set([
+  ".claude-wrapped", // nix wrapper (home-manager)
+  "claude", // direct binary
+  "node", // node-runtime invocation fallback
+]);
+
+export function isLiveClaudePaneCommand(cmd: string): boolean {
+  return CLAUDE_PANE_COMMANDS.has(cmd);
+}
+
 async function fetchPanes(): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
   const rows: PaneRow[] = [];
   for (const line of stdout.split("\n")) {
     if (!line) continue;
     const row = parseRow(line);
-    if (row && row.agent === "claude") {
+    if (
+      row && row.agent === "claude" &&
+      isLiveClaudePaneCommand(row.currentCommand)
+    ) {
       rows.push(row);
     }
   }

@@ -23,6 +23,23 @@ const SOCKET = `picker-e2e-${Deno.pid}`;
 const SESSION = "test";
 const PICKER_WINDOW_NAME = "picker";
 const POLL_INTERVAL_MS = 50;
+
+// Per-test-run scratch directory holding a compiled `.claude-wrapped` stub
+// used by createClaudePane({ liveCommand: true }). Darwin SIP/AMFI blocks
+// executing copies of Apple-signed binaries (e.g. /bin/sleep → SIGKILL 137),
+// and symlinks resolve to the real basename at execve time, so neither the
+// copy-and-rename nor the symlink trick works. Compiling a 3-line C stub
+// with /usr/bin/cc is the one path that reliably makes the kernel's p_comm
+// (and thus tmux's #{pane_current_command}) match `.claude-wrapped`.
+const LIVE_BIN_DIR = `/tmp/picker-e2e-bin-${Deno.pid}`;
+const LIVE_BIN_PATH = `${LIVE_BIN_DIR}/.claude-wrapped`;
+const LIVE_BIN_SOURCE = `#include <stdlib.h>
+#include <unistd.h>
+int main(int argc, char **argv) {
+  sleep(argc > 1 ? atoi(argv[1]) : 99999);
+  return 0;
+}
+`;
 const DEFAULT_TIMEOUT_MS = (() => {
   const raw = Deno.env.get("PICKER_E2E_TIMEOUT_MS");
   if (!raw) return 5000;
@@ -43,6 +60,12 @@ export interface PaneOpts {
   lastActivityAtSec?: number;
   sessionId?: string;
   subagents?: string;
+  // When undefined or true (default), spawn the pane with a live cc
+  // placeholder so `pane_current_command` is `.claude-wrapped` — matching
+  // the picker's liveness filter (picker.tsx:CLAUDE_PANE_COMMANDS).
+  // Set to false to reproduce a stale pane whose cc has exited and the
+  // shell has taken over (pane_current_command becomes the login shell).
+  liveCommand?: boolean;
 }
 
 export interface ServerOpts {
@@ -114,6 +137,37 @@ export async function setupServer(opts: ServerOpts = {}): Promise<void> {
     rows,
   ]);
   await tmuxRun(["has-session", "-t", SESSION]);
+  await ensureLiveBin();
+}
+
+// Compile the `.claude-wrapped` stub used by liveCommand-mode panes. Idempotent
+// across setupServer calls within a single test run: the binary is compiled
+// once per process and cached across Deno.test cases on the same PID.
+async function ensureLiveBin(): Promise<void> {
+  try {
+    const st = await Deno.stat(LIVE_BIN_PATH);
+    if (st.isFile) return;
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+    // not built yet — fall through
+  }
+  await Deno.mkdir(LIVE_BIN_DIR, { recursive: true });
+  const child = new Deno.Command("cc", {
+    args: ["-x", "c", "-o", LIVE_BIN_PATH, "-"],
+    stdin: "piped",
+    stdout: "null",
+    stderr: "piped",
+  }).spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(LIVE_BIN_SOURCE));
+  await writer.close();
+  const { code, stderr } = await child.output();
+  if (code !== 0) {
+    const err = new TextDecoder().decode(stderr).trim();
+    throw new Error(
+      `Failed to compile live .claude-wrapped stub with /usr/bin/cc: ${err}`,
+    );
+  }
 }
 
 // Create a new claude-like pane with the given @pane_* options set. Pane is
@@ -124,17 +178,53 @@ export async function setupServer(opts: ServerOpts = {}): Promise<void> {
 // as empty string for unset options, which matches the fallback paths in
 // parseRow (picker.tsx:75-109).
 export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
-  const paneId = (
-    await tmuxRun([
-      "new-window",
-      "-d",
-      "-t",
-      SESSION,
-      "-P",
-      "-F",
-      "#{pane_id}",
-    ])
-  ).trim();
+  const live = opts.liveCommand !== false;
+  const newWindowArgs = [
+    "new-window",
+    "-d",
+    "-t",
+    SESSION,
+    "-P",
+    "-F",
+    "#{pane_id}",
+  ];
+  if (live) {
+    // Execute the compiled `.claude-wrapped` stub directly so the kernel
+    // sets p_comm (and tmux's #{pane_current_command}) to the basename
+    // `.claude-wrapped`. See LIVE_BIN_* constants for why argv[0] renaming
+    // via `exec -a` or symlinks does not suffice on Darwin.
+    newWindowArgs.push(`${LIVE_BIN_PATH} 99999`);
+  }
+  const paneId = (await tmuxRun(newWindowArgs)).trim();
+
+  if (live) {
+    // Poll briefly so tmux reflects the post-execve p_comm rather than the
+    // pane's initial foreground pgrp (fork'd cc not yet into execve).
+    const deadline = Date.now() + 1000;
+    let observed = "";
+    while (Date.now() < deadline) {
+      observed = (
+        await tmuxRun([
+          "list-panes",
+          "-t",
+          paneId,
+          "-F",
+          "#{pane_current_command}",
+        ])
+      ).trim();
+      if (observed === ".claude-wrapped") break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    if (observed !== ".claude-wrapped") {
+      throw new Error(
+        `createClaudePane liveCommand assertion failed: expected ` +
+          `pane_current_command=".claude-wrapped" but got "${observed}". ` +
+          `The compiled stub at ${LIVE_BIN_PATH} did not produce the ` +
+          `expected p_comm — check /usr/bin/cc availability and macOS ` +
+          `code-sign / AMFI policy on ${LIVE_BIN_DIR}.`,
+      );
+    }
+  }
 
   const agent = opts.agent ?? "claude";
   const pairs: Array<[string, string]> = [["@pane_agent", agent]];
@@ -162,9 +252,11 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
     pairs.push(["@pane_subagents", opts.subagents]);
   }
 
-  for (const [key, val] of pairs) {
-    await tmuxRun(["set-option", "-t", paneId, "-p", key, val]);
-  }
+  await Promise.all(
+    pairs.map(([key, val]) =>
+      tmuxRun(["set-option", "-t", paneId, "-p", key, val])
+    ),
+  );
   return paneId;
 }
 
@@ -278,6 +370,11 @@ export async function waitForExit(
 }
 
 // Kill the isolated server. Best-effort; safe to call multiple times.
+// The compiled LIVE_BIN_DIR stub is intentionally NOT removed here — it is
+// reused across every Deno.test call within the same process (the file is
+// only 33 KB and recompiling per-test would add ~50ms * N overhead). The
+// `/tmp/picker-e2e-bin-$PID` path is claimed by PID so concurrent test runs
+// do not collide; the OS reclaims /tmp on reboot.
 export async function teardown(): Promise<void> {
   await tmuxRunAllowFail(["kill-server"]);
 }

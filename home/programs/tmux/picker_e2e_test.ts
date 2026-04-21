@@ -572,3 +572,35 @@ Deno.test("S16: tool segment with icon + sibling file segment renders full tool 
     await teardown();
   }
 });
+
+// S17: a pane whose @pane_agent is still "claude" but whose foreground
+// process has fallen back to the login shell (cc exited without firing
+// SessionEnd — the stale-pane bug from .wadackel/picker-stale-pane-bug.md)
+// must be filtered out by picker. Reproduced via liveCommand: false, which
+// skips the compiled `.claude-wrapped` stub so pane_current_command defaults
+// to the window's `zsh`.
+Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "alive-marker-ZZZ",
+    });
+    await createClaudePane({
+      status: "idle",
+      prompt: "stale-marker-QQQ",
+      liveCommand: false,
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "alive-marker-ZZZ");
+    assertFalse(
+      out.includes("stale-marker-QQQ"),
+      `stale pane appeared in picker:\n${out}`,
+    );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

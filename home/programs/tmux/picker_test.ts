@@ -3,6 +3,7 @@ import {
   basename,
   cwdBranchParts,
   formatElapsed,
+  isLiveClaudePaneCommand,
   type PaneRow,
   parseRow,
   parseSubagents,
@@ -123,6 +124,18 @@ Deno.test("parseRow: malformed input returns null", () => {
   // 20 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
   const emptyId = Array(20).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
+});
+
+Deno.test("isLiveClaudePaneCommand: accepts live cc entry points", () => {
+  assertEquals(isLiveClaudePaneCommand(".claude-wrapped"), true);
+  assertEquals(isLiveClaudePaneCommand("claude"), true);
+  assertEquals(isLiveClaudePaneCommand("node"), true);
+});
+
+Deno.test("isLiveClaudePaneCommand: rejects non-cc commands", () => {
+  assertEquals(isLiveClaudePaneCommand("zsh"), false);
+  assertEquals(isLiveClaudePaneCommand("bash"), false);
+  assertEquals(isLiveClaudePaneCommand(""), false);
 });
 
 Deno.test("formatElapsed: null → middle dot", () => {
