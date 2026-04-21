@@ -20,7 +20,10 @@ Unless explicitly instructed otherwise, always use `--auto-connect` when opening
 
 ```bash
 agent-browser --auto-connect tab new <url>
+agent-browser --auto-connect tab new <url> --label work   # name the tab for stable later reference
 ```
+
+Tabs use stable string ids (`t1`, `t2`, ...) that remain unchanged when other tabs close, so `tab t2` keeps pointing at the same tab across the session. Pass `--label <name>` at creation time to reference the tab by a memorable name (`tab work`, `tab close work`).
 
 First-time connection (daemon not yet connected) uses `agent-browser --auto-connect open <url>` to establish the connection.
 
@@ -242,12 +245,14 @@ agent-browser wait --download ./output.zip     # Wait for any download to comple
 agent-browser --download-path ./downloads open <url>  # Set default download directory
 
 # Tab management
-agent-browser tab list                         # List all open tabs
-agent-browser tab new                          # Open a blank new tab
-agent-browser tab new https://example.com      # Open URL in a new tab
-agent-browser tab 2                            # Switch to tab by index (0-based)
-agent-browser tab close                        # Close the current tab
-agent-browser tab close 2                      # Close tab by index
+agent-browser tab list                              # List all open tabs (shows stable tab ids t1, t2, ...)
+agent-browser tab new                               # Open a blank new tab
+agent-browser tab new https://example.com           # Open URL in a new tab
+agent-browser tab new https://example.com --label work  # Open URL and name the tab "work"
+agent-browser tab t2                                # Switch by stable tab id (unchanged across opens/closes)
+agent-browser tab work                              # Switch by label
+agent-browser tab close                             # Close the current tab
+agent-browser tab close t2                          # Close by tab id (or by label: `tab close work`)
 
 # Network
 agent-browser network requests                 # Inspect tracked requests
@@ -870,10 +875,11 @@ agent-browser eval -b "$(echo -n 'Array.from(document.querySelectorAll("a")).map
 
 ## Configuration File
 
-Create `agent-browser.json` in the project root for persistent settings:
+Create `agent-browser.json` in the project root for persistent settings. Set `$schema` so editors like VS Code provide autocomplete and validation against the upstream schema:
 
 ```json
 {
+  "$schema": "https://agent-browser.dev/schema.json",
   "headed": true,
   "proxy": "http://localhost:8080",
   "profile": "./browser-data"
@@ -881,6 +887,19 @@ Create `agent-browser.json` in the project root for persistent settings:
 ```
 
 Priority (lowest to highest): `~/.agent-browser/config.json` < `./agent-browser.json` < env vars < CLI flags. Use `--config <path>` or `AGENT_BROWSER_CONFIG` env var for a custom config file (exits with error if missing/invalid). All CLI options map to camelCase keys (e.g., `--executable-path` -> `"executablePath"`). Boolean flags accept `true`/`false` values (e.g., `--headed false` overrides config). Extensions from user and project configs are merged, not replaced.
+
+## Diagnosing Install Issues
+
+Run `agent-browser doctor` first whenever a command fails unexpectedly (`Unknown command`, `Failed to connect`, version mismatches after `agent-browser upgrade`, missing Chrome, stale daemon sockets, etc.). It runs a one-shot diagnosis across env, Chrome, daemons, config, providers, network, and a headless launch test.
+
+```bash
+agent-browser doctor                     # full diagnosis
+agent-browser doctor --offline --quick   # local-only fast check
+agent-browser doctor --fix               # also run destructive repairs (reinstall Chrome, purge old state, ...)
+agent-browser doctor --json              # structured output for programmatic consumption
+```
+
+Stale socket / pid / version sidecar files are auto-cleaned on every run. Destructive actions require `--fix`. Exit code is `0` if all checks pass (warnings OK), `1` otherwise.
 
 ## Anti-patterns
 

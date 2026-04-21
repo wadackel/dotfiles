@@ -166,12 +166,14 @@ agent-browser network requests --filter api    # Filter requests
 ## Tabs and Windows
 
 ```bash
-agent-browser tab                 # List tabs
-agent-browser tab new [url]       # New tab
-agent-browser tab 2               # Switch to tab by index
-agent-browser tab close           # Close current tab
-agent-browser tab close 2         # Close tab by index
-agent-browser window new          # New window
+agent-browser tab                          # List tabs (shows stable ids t1, t2, ...)
+agent-browser tab new [url]                # New tab
+agent-browser tab new [url] --label work   # New tab with a memorable name
+agent-browser tab t2                       # Switch by stable tab id (unchanged across opens/closes)
+agent-browser tab work                     # Switch by label
+agent-browser tab close                    # Close current tab
+agent-browser tab close t2                 # Close by tab id (or label: `tab close work`)
+agent-browser window new                   # New window
 ```
 
 ## Frames
