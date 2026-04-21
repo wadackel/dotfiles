@@ -23,6 +23,7 @@
     just # Handy way to save and run project-specific commands
     mo # Markdown viewer in browser
     pinact # Pin GitHub Actions versions to full commit SHAs
+    rtk # CLI proxy that reduces LLM token consumption
     tokei # Fast code statistics tool
     tig # Text-mode interface for git
     tree-sitter # Incremental parsing library (provides tree-sitter CLI)

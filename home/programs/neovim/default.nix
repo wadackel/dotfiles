@@ -18,7 +18,7 @@
 
     # LSP servers
     astro-language-server
-    gopls
+    (lib.hiPrio gopls) # gotools も bin/modernize を提供するため優先度を上げて衝突回避
     lua-language-server
     terraform-ls
     typos-lsp

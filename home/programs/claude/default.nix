@@ -22,7 +22,11 @@
   # scripts ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
   home.file.".claude/scripts".source = dotfiles.linkHere ./. "scripts";
 
+  # hooks ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
+  home.file.".claude/hooks".source = dotfiles.linkHere ./. "hooks";
+
   # ファイルのシンボリックリンク
   home.file.".claude/CLAUDE.md".source = dotfiles.linkHere ./. "CLAUDE.md";
+  home.file.".claude/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
 }

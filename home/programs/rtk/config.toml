@@ -1,0 +1,11 @@
+# rtk (Rust Token Killer) configuration
+# Reference: https://github.com/rtk-ai/rtk#configuration
+
+[hooks]
+# Commands to skip auto-rewrite (pass through to shell unchanged)
+exclude_commands = []
+
+[tee]
+# Save raw output on failure for debugging
+enabled = true
+mode = "failures"

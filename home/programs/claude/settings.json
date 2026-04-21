@@ -540,6 +540,15 @@
             "command": "~/.claude/scripts/claude-pane-status.ts PreToolUse"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/rtk-rewrite.sh"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
