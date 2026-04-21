@@ -41,7 +41,16 @@ GUI app?
 - **GUI app** → Skip to Step 3 (Homebrew)
 - **CLI tool** → Check nixpkgs: `nix search nixpkgs#<name>`
 
-If not found, try common aliases (e.g., `rg` → `ripgrep`). If still not found, go to Step 2a.
+If not found, try common aliases (e.g., `rg` → `ripgrep`).
+
+**Before concluding "not in nixpkgs", cross-check** when the `nix search` result is ambiguous (CLI errors, substring-only matches, or the output is interrupted/partial). `nix search` can miss exact matches and its default output surfaces substring hits (e.g., `exprtk`, `rtkit`) that obscure the real package. Use one of the following as a second source:
+
+- **search.nixos.org**: `WebFetch https://search.nixos.org/packages?channel=unstable&query=<name>&show=<name>`
+- **nixpkgs pkgs tree**: `gh api /repos/NixOS/nixpkgs/contents/pkgs/by-name/<first-2-chars>/<name>` (e.g., `rt/rtk`) — returns 404 only if truly absent
+
+Only after both fail should you conclude the package is not in nixpkgs. A strong signal that nixpkgs likely has it: the package exists in homebrew-core (`brew info <name>` returns a formula).
+
+If still not found, go to Step 2a.
 
 ### 2. Choose Nix installation method
 

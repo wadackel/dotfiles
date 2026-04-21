@@ -4,6 +4,7 @@ vim/bundle
 vim/swap
 /src
 .archived/
+.wadackel/
 
 # Nix build outputs
 /result
