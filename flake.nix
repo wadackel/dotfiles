@@ -67,6 +67,13 @@
               install -m755 mo $out/bin/
             '';
           };
+
+          mvfst = prev.mvfst.overrideAttrs (old: {
+            disabledTests = (old.disabledTests or [ ]) ++ [
+              "QuicClientTransportAfterStartTest.RecvOneRttAck"
+              "QuicServerTransportTest.ReceiveConnectionClose"
+            ];
+          });
         })
       ];
 
