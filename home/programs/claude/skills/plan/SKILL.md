@@ -272,7 +272,7 @@ Main session decomposes directly — no subagent dispatch. The plan is already i
 2. **Verification within implementation tasks**: each task includes its own acceptance criteria (commands + expected output). The only verification-only task allowed is the final gate in rule 5.
 3. **Separation of concerns**: different concerns → different tasks; files sharing a concern → one task.
 4. **Three elements of task descriptions**: (1) target files, (2) expected behavior after change, (3) acceptance criteria (verification commands + expected output).
-5. **Final gate task**: always include `Run /completion-audit and /subagent-review`, `blockedBy` all implementation tasks. `/completion-audit` runs first (reads per-task `metadata.evidence` against `## Completion Criteria`, no re-execution); then `/subagent-review` runs against the aggregated diff (Spec Compliance → Code Quality → Domain specialist → Security heuristic). `/santa-loop` is opt-in for dual-reviewer convergence and not part of the default gate.
+5. **Final gate task**: always include `Run /completion-audit and /subagent-review`, `blockedBy` all implementation tasks. `/completion-audit` runs first (reads per-task `metadata.evidence` against `## Completion Criteria`, no re-execution); then `/subagent-review` runs against the aggregated diff (Spec Compliance → Code Quality → parallel orthogonal Domain specialists → Security heuristic). `/santa-loop` is opt-in for dual-reviewer convergence and not part of the default gate.
 
 ### Acceptance criteria by change type
 
@@ -315,7 +315,7 @@ gateId = TaskCreate(
     subject: "Run /completion-audit and /subagent-review",
     description: "Final gate. Execute in order:
       1. Invoke /completion-audit — must return VERIFIED PASS (max 3 tries by its internal loop).
-      2. Invoke /subagent-review against the aggregated diff (git diff <first-task baseline_sha>..HEAD) — runs Spec Compliance → Code Quality → Domain specialist → Security heuristic internally. Must return PASS (no open MUST_FIX).
+      2. Invoke /subagent-review against the aggregated diff (git diff <first-task baseline_sha>..HEAD) — runs Spec Compliance → Code Quality → parallel orthogonal Domain specialists → Security heuristic internally. Must return PASS (no open MUST_FIX).
       Target: no additional files; verification-only.
       Expected behavior: /subagent-review emits PASS after all stages.
       Verification: verbatim output captured in metadata.evidence.

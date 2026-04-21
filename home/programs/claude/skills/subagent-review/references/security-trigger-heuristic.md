@@ -1,6 +1,6 @@
 # Security Reviewer Dispatch Heuristic
 
-`/subagent-review` Step 5 reads this file to decide whether to dispatch the `security-auditor` agent.
+`/subagent-review` Step 7 reads this file to decide whether to dispatch the `security-auditor` agent.
 
 The heuristic is intentionally **lenient** (over-trigger is cheap; under-trigger ships a vulnerability). When in doubt, dispatch.
 
@@ -73,7 +73,7 @@ These are sensitive surfaces — an inappropriate `Bash(*)` permission rule or a
 
 ## Dispatch Implementation
 
-`/subagent-review` Step 5 should run a single bash check (Grep tool can also do this):
+`/subagent-review` Step 7 should run a single bash check (Grep tool can also do this):
 
 ```bash
 DISPATCH=0
@@ -118,4 +118,4 @@ Tune in this file, not in the SKILL.md, so the change is localized and reviewabl
 ## Related
 
 - `~/.claude/agents/security-auditor.md` — the dispatched agent
-- `~/.claude/skills/subagent-review/SKILL.md` Step 5 — the orchestrator
+- `~/.claude/skills/subagent-review/SKILL.md` Step 7 — the orchestrator

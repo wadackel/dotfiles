@@ -393,6 +393,12 @@ export interface Row2Seg {
 
 const ROW2_SEP = " · ";
 
+// Row-2 placeholder rendered when no segments are available (fresh session
+// with no tool history / subagents / edits / tasks and no idle activity
+// timestamp). Without this the row collapses to an indent-only blank line
+// that reads as a bug or data-load failure.
+const ROW2_EMPTY_TEXT = "(no activity)";
+
 // Cell width = icon(1) + space(1) + body code points. Module-level so
 // `truncateTopSegBody` can reference it without threading a parameter.
 const SEG_PREFIX_CELLS = 2;
@@ -557,13 +563,15 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       }
       <Box>
         <Text>{"  "}</Text>
-        {segs.map((s, i) => (
-          <React.Fragment key={s.key}>
-            {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
-            <Text color={s.color}>{s.icon}</Text>
-            <Text color={s.color}>{" " + s.body}</Text>
-          </React.Fragment>
-        ))}
+        {segs.length === 0
+          ? <Text color="gray">{ROW2_EMPTY_TEXT}</Text>
+          : segs.map((s, i) => (
+            <React.Fragment key={s.key}>
+              {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
+              <Text color={s.color}>{s.icon}</Text>
+              <Text color={s.color}>{" " + s.body}</Text>
+            </React.Fragment>
+          ))}
         <Box flexGrow={1} />
         <Text color="gray">{row.target}</Text>
       </Box>

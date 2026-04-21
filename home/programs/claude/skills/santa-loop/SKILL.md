@@ -78,7 +78,7 @@ Append based on detected file types in the diff:
 | `.rs` | `Memory safety: unsafe usage justified, Send + Sync boundaries respected` |
 | `.nix` | `Profile correctness: profile-specific switches (private vs work) consistent` |
 
-The expanded `.tsx`/`.jsx` and `.sql` rows pick up React / a11y / migration safety observations that `/subagent-review`'s single-domain-specialist dispatch may not cover. When invoked, santa-loop is the dual-reviewer backstop for these dimensions.
+Layer 3 rows embed the same concerns that `/subagent-review` already dispatches in parallel (typescript / react / a11y / database etc.). santa-loop's value for these dimensions is orthogonal: the rubric becomes the shared contract against which two independent reviewers (Claude Opus + Codex CLI) must converge. This catches disagreements a single-reviewer pass — even a parallel multi-specialist one — cannot surface.
 
 ### Step 3: Build Reviewer Prompt
 

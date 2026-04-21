@@ -1,6 +1,6 @@
 ---
 name: subagent-review
-description: "Final-gate review skill for /impl — runs Spec Compliance → Code Quality → priority-ordered single Domain specialist → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
+description: "Final-gate review skill for /impl — runs Spec Compliance → Code Quality → parallel orthogonal Domain specialists → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
 ---
 
 # Subagent Review
@@ -79,26 +79,28 @@ Same handling as Step 3:
 | `VERDICT: FAIL` | Fix MUST_FIX issues → re-review with fresh subagent |
 | 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review quality 3x failed]`, report to user |
 
-### Step 6: Domain-Specific Reviewer Dispatch (priority-ordered, max 1 agent)
+### Step 6: Domain-Specific Reviewer Dispatch (parallel, orthogonal triggers)
 
-Only after Code Quality passes. Dispatch **at most one** language / domain specialist. Earlier designs ran multiple specialists in parallel (e.g., `.tsx` → typescript + react + a11y); that multiplied subagent cost without clearly compounding value. This skill dispatches the highest-priority single match to keep cost bounded.
+Only after Code Quality passes. Evaluate each specialist's trigger condition independently against the diff, and dispatch **all matches in parallel** in the same assistant turn (multiple Agent tool calls in a single message).
 
-#### Priority (first match wins)
+Each reviewer agent already declares its own Out of Scope delegation in frontmatter (e.g., `typescript-reviewer` delegates React concerns to `react-reviewer` and a11y concerns to `a11y-reviewer`). Because the scopes are orthogonal by design, parallel dispatch does not duplicate findings — it restores coverage that single-match dispatch was losing for stacks like `.tsx` (which legitimately needs typescript + react + a11y observations). The earlier "max 1 agent" design traded accuracy for subagent cost; this version reverses that trade-off because missed React/a11y findings were resurfacing as manual user review burden.
 
-| Priority | Match | Agent |
-|---|---|---|
-| 1 | `.rs` file in diff | `rust-reviewer` |
-| 2 | `.go` file in diff | `go-reviewer` |
-| 3 | `.dart` file in diff | `dart-reviewer` |
-| 4 | `.nix` file in diff | `nix-reviewer` |
-| 5 | `.tsx` / `.jsx` file in diff | `typescript-reviewer` (React / a11y covered at `/santa-loop` Layer 3) |
-| 6 | `.ts` / `.mts` / `.cts` file in diff | `typescript-reviewer` |
-| 7 | `.sql` / `migrations/` / `schema.*` (sql / prisma / Drizzle) in diff, or `INSERT INTO` / `UPDATE … SET` / `DELETE FROM` / `CREATE TABLE` in app code | `database-reviewer` (migration safety reinforced at `/santa-loop` Layer 3) |
-| 8 | `Deno.` API reference in diff OR `jsr:` / `npm:` specifier added in diff OR `deno.jsonc` / `deno.json` itself modified in diff | `deno-reviewer` |
-| 9 | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` | `cloud-architecture-reviewer` |
-| 10 | `.css` / `.scss` / `.html` in diff AND no higher-priority match | `a11y-reviewer` |
+#### Reviewer triggers (independent, all matches fire)
 
-Only the **first** matching agent runs. No multi-dispatch.
+| Agent | Trigger |
+|---|---|
+| `rust-reviewer` | `.rs` file in diff |
+| `go-reviewer` | `.go` file in diff |
+| `dart-reviewer` | `.dart` file in diff |
+| `nix-reviewer` | `.nix` file in diff |
+| `typescript-reviewer` | `.ts` / `.tsx` / `.mts` / `.cts` file in diff |
+| `react-reviewer` | `.jsx` / `.tsx` file in diff OR diff contains `from "react"` / `from "react-dom"` |
+| `a11y-reviewer` | `.css` / `.scss` / `.html` file in diff OR `.jsx` / `.tsx` file in diff (reviewer self-no-ops if no JSX markup present) |
+| `database-reviewer` | `.sql` / `migrations/` / `schema.(sql|prisma|ts)` in diff, OR `INSERT INTO` / `UPDATE … SET` / `DELETE FROM` / `CREATE TABLE` in app code |
+| `deno-reviewer` | `Deno.` API reference in diff OR `jsr:` / `npm:` specifier added in diff OR `deno.jsonc` / `deno.json` itself modified |
+| `cloud-architecture-reviewer` | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` |
+
+All matches dispatch. No priority cutoff, no mutual exclusion.
 
 #### Detection implementation
 
@@ -106,29 +108,30 @@ Only the **first** matching agent runs. No multi-dispatch.
 DIFF_FILES=$(git diff --name-only "${BASELINE_SHA}..HEAD")
 DIFF_HUNKS=$(git diff "${BASELINE_SHA}..HEAD")
 
-AGENT=""
-if   printf '%s\n' "$DIFF_FILES" | rg -q '\.rs$';   then AGENT=rust-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.go$';   then AGENT=go-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.dart$'; then AGENT=dart-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.nix$';  then AGENT=nix-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(jsx|tsx)$'; then AGENT=typescript-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(ts|mts|cts)$'; then AGENT=typescript-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.sql$|migrations/|schema\.(sql|prisma|ts)$' \
-     || printf '%s' "$DIFF_HUNKS" | rg -qi '(INSERT INTO|UPDATE .* SET|DELETE FROM|CREATE TABLE)'; then AGENT=database-reviewer
-elif printf '%s' "$DIFF_HUNKS" | rg -q '^\+.*(\bDeno\.|["'\'']jsr:|["'\'']npm:)' \
-     || printf '%s\n' "$DIFF_FILES" | rg -q 'deno\.(json|jsonc)$'; then AGENT=deno-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.ya?ml$|serverless\.ya?ml$|\.github/workflows/.*\.ya?ml$'; then AGENT=cloud-architecture-reviewer
-elif printf '%s\n' "$DIFF_FILES" | rg -q '\.(css|scss|html)$'; then AGENT=a11y-reviewer
-fi
+AGENTS=()
+printf '%s\n' "$DIFF_FILES" | rg -q '\.rs$'   && AGENTS+=(rust-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.go$'   && AGENTS+=(go-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.dart$' && AGENTS+=(dart-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.nix$'  && AGENTS+=(nix-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.(ts|tsx|mts|cts)$' && AGENTS+=(typescript-reviewer)
+{ printf '%s\n' "$DIFF_FILES" | rg -q '\.(jsx|tsx)$' \
+  || printf '%s' "$DIFF_HUNKS" | rg -q 'from ["'\'']react(-dom)?["'\'']'; } && AGENTS+=(react-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.(css|scss|html|jsx|tsx)$' && AGENTS+=(a11y-reviewer)
+{ printf '%s\n' "$DIFF_FILES" | rg -q '\.sql$|migrations/|schema\.(sql|prisma|ts)$' \
+  || printf '%s' "$DIFF_HUNKS" | rg -qi '(INSERT INTO|UPDATE .* SET|DELETE FROM|CREATE TABLE)'; } && AGENTS+=(database-reviewer)
+{ printf '%s' "$DIFF_HUNKS" | rg -q '^\+.*(\bDeno\.|["'\'']jsr:|["'\'']npm:)' \
+  || printf '%s\n' "$DIFF_FILES" | rg -q 'deno\.(json|jsonc)$'; } && AGENTS+=(deno-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.ya?ml$|serverless\.ya?ml$|\.github/workflows/.*\.ya?ml$' && AGENTS+=(cloud-architecture-reviewer)
 
-# If AGENT is set, launch it once via the Agent tool
+# For each agent in AGENTS, launch via the Agent tool in the SAME assistant turn (parallel tool calls in a single message).
 ```
 
 #### Handling results
 
-The specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT:
-- FAIL if `VERDICT: FAIL` on a MUST_FIX issue
-- On FAIL: fix the MUST_FIX items, then re-dispatch the same specialist with a fresh agent instance (max 3 rounds)
+Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
+- A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX issue.
+- On FAIL: fix the MUST_FIX items, then re-dispatch **only the FAILed specialist(s)** with a fresh agent instance (max 3 rounds per specialist). Specialists that already returned PASS are not re-dispatched.
+- Step 6 as a whole is PASS only when every dispatched specialist returns PASS (or NIT-only) within its 3-round budget.
 
 ### Step 7: Security Dispatch Heuristic
 
@@ -145,7 +148,6 @@ When any trigger fires, dispatch `security-auditor` (existing agent). Same MUST_
 #### Implementation
 
 ```bash
-source "$HOME/.claude/skills/subagent-review/references/security-trigger-heuristic.md"  # conceptual — actual check is inline
 DISPATCH_SECURITY=0
 printf '%s\n' "$DIFF_FILES" | rg -qi 'scripts/|hooks/|auth|session|cookie|credential|secret|token|api/|webhook|oauth|sso|crypto|encrypt|decrypt' && DISPATCH_SECURITY=1
 printf '%s' "$DIFF_HUNKS" | rg -q 'child_process|spawn|execFile|exec\(|eval\(|new Function\(|SELECT .* FROM|INSERT INTO|UPDATE .* SET|DELETE FROM|password|process\.env\.[A-Z_]+|api[_-]?key|secret[_-]?key|access[_-]?token|os/exec|exec\.Command' && DISPATCH_SECURITY=1

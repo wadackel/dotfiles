@@ -604,3 +604,31 @@ Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async (
     await teardown();
   }
 });
+
+// S18: Fresh-session pane with no tool / subagent / edit / task / idle
+// activity produces an empty Row 2 segs array; picker.tsx renders
+// `(no activity)` gray instead of collapsing to an indent-only blank line.
+Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "fresh-session-marker",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "(no activity)");
+    // None of the five row-2 segment icons may render when segs is empty.
+    // ROW2_ICONS = tool 󰒓 / tree 󱙺 / file 󰈔 / progress 󰄱 / idle 󰏤.
+    for (const icon of ["󰒓", "󱙺", "󰈔", "󰄱", "󰏤"]) {
+      assertFalse(
+        out.includes(icon),
+        `row-2 icon ${icon} leaked into empty-state render:\n${out}`,
+      );
+    }
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
