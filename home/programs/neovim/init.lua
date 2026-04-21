@@ -620,7 +620,7 @@ local function lsp_on_attach(_, bufnr)
   end)
   kmap({ "n" }, "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap({ "n" }, "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
-  kmap({ "n" }, "<Leader>a", "<cmd>lua vim.lsp.buf.code_action()<CR>")
+  kmap({ "n" }, "ga", "<cmd>lua vim.lsp.buf.code_action()<CR>")
   kmap({ "n" }, "<Space>wa", "<cmd>lua vim.lsp.buf.add_workspace_folder()<CR>")
   kmap({ "n" }, "<Space>wr", "<cmd>lua vim.lsp.buf.remove_workspace_folder()<CR>")
   kmap({ "n" }, "<Space>wl", "<cmd>lua vim.print(vim.lsp.buf.list_workspace_folders())<CR>")
@@ -3838,7 +3838,7 @@ require("lazy").setup({
       opts = {
         mappings = {
           start = "<Nop>",
-          start_with_preview = "ga",
+          start_with_preview = "gA",
         },
         options = {
           split_pattern = "",
@@ -4307,9 +4307,9 @@ vim.api.nvim_create_user_command("AgentPromptFinish", function()
   vim.notify("Agent prompt copied to clipboard (" .. count .. " comments)", vim.log.levels.INFO)
 end, {})
 
-keymap({ "n", "v" }, "<Space>aa", ":AgentPromptAdd<CR>", { desc = "Agent prompt: add" })
-keymap({ "n" }, "<Space>al", ":AgentPromptList<CR>", { desc = "Agent prompt: list" })
-keymap({ "n" }, "<Space>af", ":AgentPromptFinish<CR>", { desc = "Agent prompt: finish → clipboard" })
+keymap({ "n", "v" }, "<Leader>aa", ":AgentPromptAdd<CR>", { desc = "Agent prompt: add" })
+keymap({ "n" }, "<Leader>al", ":AgentPromptList<CR>", { desc = "Agent prompt: list" })
+keymap({ "n" }, "<Leader>af", ":AgentPromptFinish<CR>", { desc = "Agent prompt: finish → clipboard" })
 
 -- expose for headless tests; access as _G.AP.resolve_file etc.
 AP.resolve_file = ap_resolve_file

@@ -89,6 +89,14 @@ obsidian folders
 # Open a file in Obsidian
 obsidian open path="99_Tracking/Weekly/2026-W10.md"
 
+# Rename a file — routes through the running Obsidian app, so wikilinks
+# pointing to the old name are auto-updated across the vault.
+# `name=` is the new basename without the extension.
+obsidian rename path="00_Inbox/old.md" name="new-basename"
+
+# Move a file to another folder (wikilinks are auto-updated the same way)
+obsidian move path="00_Inbox/old.md" to="02_Notes/"
+
 # Daily note operations
 obsidian daily:read
 obsidian daily:append content="- [ ] New task"
