@@ -93,7 +93,7 @@ Launch up to 3 Explore subagents in parallel (single message). Distinct mandates
 
 1. **Existing patterns**: prevailing conventions the new change must mirror (naming, error handling, config, test layout, dependency style). Record `file:lines` + snippet so Phase 3 can cite them in Patterns to Mirror.
 2. **Execution paths and boundaries the change flows through**: entry points, data flow, state transitions, API / interface contracts, architectural seams. Surface the path from trigger to observable outcome so Phase 3 knows what to change and what to leave alone.
-3. **Existing behavior, constraints, and verification conditions**: how the target currently behaves, what invariants the codebase already enforces, how existing tests verify related behavior. Enough to design Acceptance Criteria and Completion Criteria that actually observe the change.
+3. **Existing behavior, constraints, and verification conditions**: how the target currently behaves, what invariants the codebase already enforces, **which existing tests verify related behavior (record `file:lines` so Phase 3 Test Strategy can cite them)**, and how those tests verify. Enough to design Acceptance Criteria, Completion Criteria, and Test Strategy that actually observe the change.
 
 These replace the older "8 categories + 5 execution paths" checklist. Exploration succeeds when Phase 3 has the evidence to make design decisions — not when a matrix is filled.
 
@@ -115,7 +115,7 @@ Write the initial plan to `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (slug from r
 ### Language policy
 
 - **Body prose** (Context / Approach / Risks / Open Questions / `-- Why: ...` rationales / natural-language narrative): write in the user's configured language (`# Language` in system prompt, derived from `~/.claude/settings.json`).
-- **Section headers** (`## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, `## Completion Criteria`): keep in English. `completion-audit` and Phase 5 locate sections by these literal strings.
+- **Section headers** (`## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, `## Completion Criteria`): keep in English. `completion-audit` and Phase 5 locate sections by these literal strings.
 - **Machine-consumed contents**: `## Completion Criteria` subsections (Autonomous Verification / Requires User Confirmation / Baseline) and Acceptance Criteria lines are English.
 - **Phase 1 subsections** (`### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, `### Unresolved Items`): English subsection names (Phase 4 Critic parses them); field values follow the body-prose rule.
 - File paths, commands, code snippets, `EXPECT:` values: as-is.
@@ -137,6 +137,7 @@ Log file `<plan>.log.md` (Deepening Log) follows the same policy.
 | Task Outline | ✓ | ✓ | ✓ |
 | Verification Commands (with `EXPECT:`) | ✓ | ✓ | ✓ |
 | Definition of Done | ✓ | ✓ | ✓ |
+| Test Strategy | | ✓ | ✓ |
 | Risks + Open Questions | | ✓ | ✓ |
 
 ### Overview section
@@ -165,6 +166,23 @@ Add when the plan touches conventions (naming, formatting, file layout) a fresh 
 Final-gate reviewers (`/subagent-review` by default, `/santa-loop` when invoked manually) read this section and will not re-flag documented items. Abuse is caught by Phase 4 Critic / Adversarial / Simplify passes.
 
 Skip for: pure internal-logic changes, 100% canonical conventions, no style disputes.
+
+### Test Strategy section
+
+Declare what tests the plan adds, updates, or intentionally skips. Required for `small+` when the change is a **behavior change** as defined below.
+
+**Behavior change — any one**:
+- Source / executable / runtime config edit that alters observable output, state transition, or side effect.
+- Markdown file that the Claude Code runtime or a downstream skill actively reads to alter its behavior (skill / hook / prompt / CLAUDE.md). Edits to skill *section headers*, *Critic dimensions*, *Anti-patterns*, or *Phase procedures* count — they change runtime-interpreted behavior even though the carrier is markdown.
+
+**Pure doc change** (Test Strategy may be a one-line `No tests needed`): README prose / code-comment / frontmatter metadata / changelog / non-interpreted markdown that no tooling parses as rules.
+
+Required subsections (when behavior-change):
+- **Existing coverage**: tests already covering the target area — `file:lines` + one-line description of what each test observes. "(none found)" is a valid answer when no prior tests exist.
+- **Tests to add / update**: for each target behavior change, specify (i) what behavior is verified, (ii) test file path (existing or new), (iii) test type (unit / integration / e2e / static-assertion (e.g. `rg` section-presence) / manual-only with reason).
+- **No tests needed (if applicable)**: explicit justification per omission. Accepted reasons — quote one verbatim or state equivalent: "pure doc change (no runtime consumer)", "skill-markdown change verified by `[file-state]` static assertions in Verification Commands", "verified by existing test X at file:lines". Silent omission is rejected by Phase 4 Critic Dimension 7.
+
+Test tasks derived from this section must appear in `## Task Outline` as first-class tasks (not bundled as implicit verification of an implementation task), unless the only verification is static-assertion and is already covered under `## Verification Commands` / `## Completion Criteria`.
 
 Keep the plan body lean (target ~120–150 lines, excluding Deepening Log). Per-round critique history lives in `<plan>.log.md`.
 
@@ -266,6 +284,7 @@ Main session decomposes directly — no subagent dispatch. The plan is already i
 | Nix config | Confirm settings applied after `darwin-rebuild` |
 | Skill/agent addition | skill-tester trigger test or manual invocation |
 | Improvement task | Before baseline → After comparison |
+| Test update / addition | Run the test and confirm it fails without the implementation change and passes with it (red-green verification); for new-feature tests without a prior bug, state the regression the test catches if the implementation regresses |
 
 `code-simplifier` dispatch is `/impl`'s concern (auto-spawned when a task's diff ≥ 20 files or ≥ 500 lines). Do not create a standalone simplifier task.
 
@@ -277,6 +296,7 @@ See `~/.claude/skills/completion-audit/references/behavioral-verification.md` fo
 - "Confirm X" without specific commands.
 - Missing `blockedBy` for prerequisite dependencies.
 - Missing final gate task.
+- Missing `## Test Strategy` section in a `small+` plan that has any behavior-change target (source / skill / hook / prompt / CLAUDE.md rule edit that is runtime-interpreted). Task-outline / test-type / justification credibility are Phase 4 Critic Dimension 7 concerns; this anti-pattern fires only for the unconditional structural absence.
 
 ### 2-pass TaskCreate (required)
 

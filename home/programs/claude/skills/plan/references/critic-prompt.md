@@ -54,6 +54,19 @@ Focus on: vague steps like "handle errors appropriately", missing file paths, un
 Does this match existing patterns and reuse existing utilities?
 Focus on: reinventing existing helpers, breaking established conventions, inconsistent naming/structure, missed opportunities to reuse shared code, misreading the existing pattern the plan claims to mirror.
 
+### 7. Test Coverage
+
+Does the plan design tests that actually observe the behavior it changes? Test omission is intent drift at the verification layer — the plan claims the change is correct but provides no means to observe it.
+
+**MUST-check (in order; do not drop under context pressure):**
+1. For `small+` plans with any behavior-change target, is a `## Test Strategy` section present? A missing section with at least one behavior-change target is a Critical Issue.
+2. If `## Test Strategy` lists `Tests to add / update`, does `## Task Outline` contain matching first-class test tasks? Mismatch is a Critical Issue.
+
+**SHOULD-check:**
+3. Scrutinize Test Strategy content credibility: weak `No tests needed` reasons (e.g. "refactor only" when semantics actually change), mismatched test types (unit for an integration concern), and uncited `Existing coverage` claims are all weak-justification variants. Skill / hook / prompt markdown that the harness interprets counts as behavior change (see SKILL.md `### Test Strategy section`).
+
+**Dimension 7 veto rule**: Any Critical Issue raised under MUST-check 1 or 2 blocks a `CONVERGED` verdict for this round regardless of other dimensions. The Critic must emit `ITERATE`.
+
 ## Output Format
 
 Respond in this exact structure:
@@ -90,6 +103,11 @@ Respond in this exact structure:
 - Issues: [numbered list, or "None"]
 - Suggestion: [for each issue]
 
+#### 7. Test Coverage
+- Assessment: [1-2 sentences]
+- Issues: [numbered list, or "None"]
+- Suggestion: [for each issue]
+
 ### Critical Issues (must fix before implementation)
 [Numbered list. For each issue, classify resolution type:]
 - [TECH] Issues resolvable through technical analysis or codebase investigation
@@ -102,7 +120,7 @@ Respond in this exact structure:
 ### Verdict
 [ITERATE | CONVERGED]
 
-Reasoning: [1–2 sentences explaining why the plan needs more iteration or is ready]
+Reasoning: [1–2 sentences. If any Dimension 7 MUST-check raised a Critical Issue, Verdict MUST be ITERATE.]
 ```
 
 ---

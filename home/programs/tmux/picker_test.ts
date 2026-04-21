@@ -10,6 +10,7 @@ import {
   parseTarget,
   readTaskProgress,
   renderSubagentTree,
+  type Row2Seg,
   sanitizeAnsi,
   statusColor,
   statusIcon,
@@ -18,6 +19,7 @@ import {
   TMUX_FORMAT,
   toolSegmentText,
   truncateAnsiLine,
+  truncateTopSegBody,
 } from "./picker.tsx";
 
 Deno.test("TMUX_FORMAT contains 20 US-separated field tokens", () => {
@@ -583,12 +585,12 @@ Deno.test("toolSegmentText: currentTool without subject → tool name only", () 
   );
 });
 
-Deno.test("toolSegmentText: currentTool with subject → `tool: subject`", () => {
+Deno.test("toolSegmentText: currentTool with subject → `tool(subject)`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({ currentTool: "Bash", currentToolSubject: "pnpm test" }),
     ),
-    "Bash: pnpm test",
+    "Bash(pnpm test)",
   );
 });
 
@@ -599,12 +601,12 @@ Deno.test("toolSegmentText: lastTool without subject → bare tool name", () => 
   );
 });
 
-Deno.test("toolSegmentText: lastTool with subject → `tool: subject`", () => {
+Deno.test("toolSegmentText: lastTool with subject → `tool(subject)`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({ lastTool: "Grep", lastToolSubject: "foo.*bar" }),
     ),
-    "Grep: foo.*bar",
+    "Grep(foo.*bar)",
   );
 });
 
@@ -617,7 +619,7 @@ Deno.test("toolSegmentText: lastTool with error (no subject) appends ` ✖ <erro
   );
 });
 
-Deno.test("toolSegmentText: lastTool with subject + error → `tool: subject ✖ error`", () => {
+Deno.test("toolSegmentText: lastTool with subject + error → `tool(subject) ✖ error`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({
@@ -626,7 +628,7 @@ Deno.test("toolSegmentText: lastTool with subject + error → `tool: subject ✖
         lastToolError: "Exit code 1",
       }),
     ),
-    "Bash: pnpm test ✖ Exit code 1",
+    "Bash(pnpm test) ✖ Exit code 1",
   );
 });
 
@@ -641,7 +643,7 @@ Deno.test("toolSegmentText: currentTool takes precedence over lastTool", () => {
         lastToolError: "Exit code 1",
       }),
     ),
-    "Grep: TODO",
+    "Grep(TODO)",
   );
 });
 
@@ -659,4 +661,48 @@ Deno.test("toolSegmentText: Edit-family with empty lastToolSubject (delegates to
     ),
     "Edit",
   );
+});
+
+// --- truncateTopSegBody ---
+
+function mkSeg(overrides: Partial<Row2Seg> = {}): Row2Seg {
+  return {
+    key: "tool",
+    icon: "󰒓",
+    body: "",
+    color: "cyan",
+    ...overrides,
+  };
+}
+
+Deno.test("truncateTopSegBody: tool seg with `)` terminator → appends `…)` preserving paren", () => {
+  // budget 15 → maxBodyCells 13 → keep first 11 cps + "…)"
+  const seg = mkSeg({ body: "Bash(pnpm test here ok)" });
+  assertEquals(truncateTopSegBody(seg, 15), "Bash(pnpm t…)");
+});
+
+Deno.test("truncateTopSegBody: bare tool name (no paren) → generic slice", () => {
+  // No `)` terminator → fall through to raw code-point slice, no ellipsis.
+  // budget 12 → maxBodyCells 10 → first 10 cps.
+  const seg = mkSeg({ body: "BashToolXYZWriteTailChunk" });
+  assertEquals(truncateTopSegBody(seg, 12), "BashToolXY");
+});
+
+Deno.test("truncateTopSegBody: tool seg with error suffix → generic slice", () => {
+  // Body ends with error text, not `)`, so paren-preservation does not fire.
+  // budget 16 → maxBodyCells 14 → cut inside the error tail, no ellipsis.
+  const seg = mkSeg({ body: "Bash(test) ✖ Exit code 1" });
+  assertEquals(truncateTopSegBody(seg, 16), "Bash(test) ✖ E");
+});
+
+Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", () => {
+  // maxBodyCells >= cps.length → slice returns full body.
+  const seg = mkSeg({ body: "Bash(ok)" });
+  assertEquals(truncateTopSegBody(seg, 100), "Bash(ok)");
+});
+
+Deno.test("truncateTopSegBody: budget too small for `…)` → generic slice fallback", () => {
+  // maxBodyCells < 3 → paren-preservation guard fails, fall back to slice.
+  const seg = mkSeg({ body: "Bash(x)" });
+  assertEquals(truncateTopSegBody(seg, 4), "Ba");
 });

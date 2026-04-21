@@ -158,7 +158,7 @@ export function summaryOf(row: PaneRow): string {
   return trimmed || "·";
 }
 
-// Row-2 tool segment text: "<tool>[: <subject>][ ✖ <error>]". Same text for
+// Row-2 tool segment text: "<tool>[(<subject>)][ ✖ <error>]". Same text for
 // current and last tools — the caller distinguishes them by color (cyan for
 // current, gray for last). Returns "" when no tool has run (caller skips).
 export function toolSegmentText(row: PaneRow): string {
@@ -167,7 +167,7 @@ export function toolSegmentText(row: PaneRow): string {
   const subject = row.currentTool
     ? row.currentToolSubject
     : row.lastToolSubject;
-  const base = subject ? `${tool}: ${subject}` : tool;
+  const base = subject ? `${tool}(${subject})` : tool;
   if (!row.currentTool && row.lastToolError) {
     return `${base} ✖ ${row.lastToolError}`;
   }
@@ -384,7 +384,7 @@ interface PaneRowLineProps {
 // its own <Text> sibling — Ink 5.2.1 silently clips the tail of a <Text> whose
 // content is "<supplementary-plane icon> <body>" when a sibling Text follows,
 // even with plenty of container slack (reproduced with ink_repro*.tsx).
-interface Row2Seg {
+export interface Row2Seg {
   key: string;
   icon: string;
   body: string;
@@ -392,6 +392,28 @@ interface Row2Seg {
 }
 
 const ROW2_SEP = " · ";
+
+// Cell width = icon(1) + space(1) + body code points. Module-level so
+// `truncateTopSegBody` can reference it without threading a parameter.
+const SEG_PREFIX_CELLS = 2;
+
+// Pre-truncate the top-priority row-2 segment when its cells exceed `budget`.
+// Returns the new body string. For tool segments whose body ends with `)`
+// (i.e. "Tool(subject)" with no error suffix), reserve 2 cells and append
+// "…)" so the closing paren survives the cut — otherwise fall back to the
+// generic code-point slice (bare tool names, error suffixes, non-tool keys).
+// Safe to call when the body already fits within the budget — returns the
+// original body unchanged in that case so the paren-preservation branch
+// cannot spuriously append "…)" when no truncation is needed.
+export function truncateTopSegBody(seg: Row2Seg, budget: number): string {
+  const maxBodyCells = Math.max(0, budget - SEG_PREFIX_CELLS);
+  const cps = Array.from(seg.body);
+  if (cps.length <= maxBodyCells) return seg.body;
+  if (seg.key === "tool" && seg.body.endsWith(")") && maxBodyCells >= 3) {
+    return cps.slice(0, maxBodyCells - 2).join("") + "…)";
+  }
+  return cps.slice(0, maxBodyCells).join("");
+}
 
 // Row-2 segment icons (Nerd Font Material Design). Supplementary-plane code
 // points; each renders as 1 cell in CaskaydiaCove Nerd Font Mono. Kept separate
@@ -490,7 +512,6 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   // Cell width = icon(1) + space(1) + body code points. Accurate while icons
   // stay supplementary-plane (1 cell) and bodies stay ASCII-heavy. CJK bodies
   // would undercount, but upstream TOOL_SUBJECT_MAX_CHARS=24 bounds that risk.
-  const SEG_PREFIX_CELLS = 2;
   const segCells = (s: Row2Seg): number =>
     SEG_PREFIX_CELLS + Array.from(s.body).length;
 
@@ -508,13 +529,11 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   }
   // Top-priority segment survives the drop loop but may still exceed budget
   // when alone. Without this guard Ink would wrap the overflow onto the next
-  // row, pushing following panes off-screen. Truncate body at a code-point
-  // boundary (icon preserved); cell-safe while body is supplementary-plane
-  // icon–free ASCII.
+  // row, pushing following panes off-screen. truncateTopSegBody handles
+  // code-point-safe truncation and preserves `)` for tool segments so the
+  // "Tool(subject)" shape keeps its closing paren when width cuts in.
   if (segs.length > 0 && segCells(segs[0]) > budget) {
-    const maxBodyCells = Math.max(0, budget - SEG_PREFIX_CELLS);
-    const cps = Array.from(segs[0].body);
-    segs[0] = { ...segs[0], body: cps.slice(0, maxBodyCells).join("") };
+    segs[0] = { ...segs[0], body: truncateTopSegBody(segs[0], budget) };
   }
 
   return (
