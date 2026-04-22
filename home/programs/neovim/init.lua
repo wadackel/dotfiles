@@ -4266,7 +4266,7 @@ function AP.open_input(file, range)
   vim.bo[AP.input_buf].filetype = "markdown"
   AP.input_ctx = { file = file, range = range }
 
-  local width = math.floor(vim.o.columns * 0.8)
+  local width = math.floor(vim.o.columns * 0.5)
   local height = math.floor(vim.o.lines * 0.5)
   AP.input_win = vim.api.nvim_open_win(AP.input_buf, true, {
     relative = "editor",
