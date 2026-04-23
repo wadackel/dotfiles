@@ -35,6 +35,12 @@ const BRANCH_CAP = 28;
 // Minimum visible summary width the layout must preserve after repo + branch.
 const MIN_SUMMARY = 15;
 
+// Row-1 fixed-width overhead before the summary body:
+//   pointer(2) + "icon "(2) + status5(5) + elapsed5(5) + " · "(3) + "  "(2) = 19
+// Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
+// PaneRowLine's summaryBudget — keep them in sync via this single constant.
+const ROW1_FIXED_OVERHEAD = 19;
+
 // Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
 // the preview capture (capturePane) re-run at this interval so the popup
 // reflects pane status / prompt / subagents / elapsed time / preview without
@@ -150,17 +156,63 @@ export function cwdBranchParts(
 
 // summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。
 // どちらも空なら "·"。Mirrors bash tmux-window-picker.sh:118-125.
+// Width-based truncation is the caller's responsibility (PaneRowLine applies
+// stringCells/truncateToCells against listWidth so CJK prompts do not wrap
+// into a third row).
 export function summaryOf(row: PaneRow): string {
   const src = row.status === "waiting" || row.status === "error"
     ? (row.waitReason || row.prompt)
     : row.prompt;
-  const trimmed = src.slice(0, 40);
-  return trimmed || "·";
+  return src || "·";
+}
+
+// East Asian Wide + Fullwidth ranges (Unicode EAW W + F). Other categories
+// (narrow / ambiguous / neutral) fall back to 1 cell, matching default
+// terminal rendering outside East Asian locales. Called per code point from
+// Array.from iteration so surrogate pairs are already merged.
+const EAST_ASIAN_WIDE_RE =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{2FFFD}]/u;
+
+function charCells(ch: string): number {
+  return EAST_ASIAN_WIDE_RE.test(ch) ? 2 : 1;
+}
+
+// Display cell width of `s` accounting for EAW Wide/Fullwidth code points
+// as 2 cells. Used by PaneRowLine to bound Line 1 summary to the remaining
+// listWidth budget (CJK prompts were overflowing the 40 code-point cap).
+export function stringCells(s: string): number {
+  let total = 0;
+  for (const ch of s) total += charCells(ch);
+  return total;
+}
+
+const ELLIPSIS = "…"; // U+2026, 1 cell. Matches truncateTopSegBody's marker.
+
+// Truncate `s` to at most `cells` display cells, appending "…" on overflow.
+// - cells <= 0 → ""
+// - stringCells(s) <= cells → s unchanged (no ellipsis when the whole string fits)
+// - cells === 1 (or the budget after reserving 1 cell for "…" cannot fit any
+//   leading code point) → just "…"
+// Iterates code points via `for..of` so surrogate pairs are not split.
+export function truncateToCells(s: string, cells: number): string {
+  if (cells <= 0) return "";
+  if (stringCells(s) <= cells) return s;
+  const budget = cells - 1;
+  if (budget <= 0) return ELLIPSIS;
+  let used = 0;
+  let out = "";
+  for (const ch of s) {
+    const w = charCells(ch);
+    if (used + w > budget) break;
+    used += w;
+    out += ch;
+  }
+  return out + ELLIPSIS;
 }
 
 // Row-2 tool segment text: "<tool>[(<subject>)][ ✖ <error>]". Same text for
-// current and last tools — the caller distinguishes them by color (cyan for
-// current, gray for last). Returns "" when no tool has run (caller skips).
+// current and last tools — the caller distinguishes them by color (DOGRUN.sandy
+// for current, DOGRUN.fgDim for last). Returns "" when no tool has run.
 export function toolSegmentText(row: PaneRow): string {
   const tool = row.currentTool || row.lastTool;
   if (!tool) return "";
@@ -433,6 +485,21 @@ const ROW2_ICONS = {
   idle: "󰏤", // nf-md-sleep
 } as const;
 
+// Title bar icon + dogrun-derived palette. See vim-dogrun
+// (github.com/wadackel/vim-dogrun colors/dogrun.vim) — keys name the dogrun
+// highlight role they derive from, not an abstract severity level.
+const TITLE_ICON = "󱚤"; // nf-md-robot-outline, 1 cell
+const DOGRUN = {
+  fg: "#9ea3c0", // Normal — primary text / summary
+  fgDim: "#757aa5", // StatusLine fg — repo label / row2 auxiliary segments
+  muted: "#545c8c", // Comment — separators / low-strength labels
+  dim: "#4b4e6d", // StatusLineNC — preview border / target id / last tool
+  accent: "#929be5", // Function — title / branch / key name / preview title
+  search: "#a6afff", // Search — selected pointer marker
+  sandy: "#a8a384", // Type — current (running) tool segment
+  warn: "#ac8b83", // Keyword — empty-state notice
+} as const;
+
 const PaneRowLine: React.FC<PaneRowLineProps> = (
   {
     row,
@@ -460,6 +527,14 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
   const branchCol = branchName.slice(0, branchMax).padEnd(branchMax);
   const separator = repo && branchName ? " · " : "   ";
   const summary = summaryOf(row);
+  // Truncate so CJK prompts (each char = 2 cells) do not wrap the row into a
+  // third line — the previous 40 code-point cap was width-unaware.
+  // truncateToCells short-circuits when the string already fits.
+  const summaryBudget = Math.max(
+    0,
+    listWidth - ROW1_FIXED_OVERHEAD - repoMax - branchMax,
+  );
+  const renderedSummary = truncateToCells(summary, summaryBudget);
   const subagents = parseSubagents(row.subagents);
 
   // Build row-2 segments in priority order (higher priority first). The
@@ -472,14 +547,14 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "tool",
       icon: ROW2_ICONS.tool,
       body: toolSegmentText(row),
-      color: "cyan",
+      color: DOGRUN.sandy,
     });
   } else if (row.lastTool) {
     segs.push({
       key: "tool",
       icon: ROW2_ICONS.tool,
       body: toolSegmentText(row),
-      color: "gray",
+      color: DOGRUN.fgDim,
     });
   }
   if (subagents.length > 0) {
@@ -487,7 +562,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "tree",
       icon: ROW2_ICONS.tree,
       body: renderSubagentTree(subagents),
-      color: "gray",
+      color: DOGRUN.fgDim,
     });
   }
   if (row.lastEditFile) {
@@ -495,7 +570,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "file",
       icon: ROW2_ICONS.file,
       body: basename(row.lastEditFile),
-      color: "gray",
+      color: DOGRUN.fgDim,
     });
   }
   if (taskProgress) {
@@ -503,7 +578,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "progress",
       icon: ROW2_ICONS.progress,
       body: `${taskProgress.done}/${taskProgress.total}`,
-      color: "gray",
+      color: DOGRUN.fgDim,
     });
   }
   if (row.status === "idle" && row.lastActivityAtSec !== null) {
@@ -511,7 +586,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       key: "idle",
       icon: ROW2_ICONS.idle,
       body: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
-      color: "gray",
+      color: DOGRUN.fgDim,
     });
   }
 
@@ -546,14 +621,14 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
     <Box flexDirection="column">
       {/* Line 1: marker + icon + status + elapsed + repo · branch + summary */}
       <Box>
-        <Text color={selected ? "magenta" : "gray"}>{pointer}</Text>
+        <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
         <Text color={color}>{icon + " "}</Text>
         <Text color={color}>{status5}</Text>
-        <Text color="gray">{elapsed5}</Text>
-        <Text color="blue">{repoCol}</Text>
-        <Text color="gray">{separator}</Text>
-        <Text color="cyan">{branchCol}</Text>
-        <Text>{" " + summary}</Text>
+        <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
+        <Text color={DOGRUN.fgDim}>{repoCol}</Text>
+        <Text color={DOGRUN.muted}>{separator}</Text>
+        <Text color={DOGRUN.accent}>{branchCol}</Text>
+        <Text color={DOGRUN.fg}>{"  " + renderedSummary}</Text>
       </Box>
       {
         /* Line 2: indent + priority-ordered segments + target (right-align).
@@ -564,16 +639,16 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       <Box>
         <Text>{"  "}</Text>
         {segs.length === 0
-          ? <Text color="gray">{ROW2_EMPTY_TEXT}</Text>
+          ? <Text color={DOGRUN.muted}>{ROW2_EMPTY_TEXT}</Text>
           : segs.map((s, i) => (
             <React.Fragment key={s.key}>
-              {i > 0 ? <Text color="gray">{ROW2_SEP}</Text> : null}
+              {i > 0 ? <Text color={DOGRUN.muted}>{ROW2_SEP}</Text> : null}
               <Text color={s.color}>{s.icon}</Text>
               <Text color={s.color}>{" " + s.body}</Text>
             </React.Fragment>
           ))}
         <Box flexGrow={1} />
-        <Text color="gray">{row.target}</Text>
+        <Text color={DOGRUN.muted}>{row.target}</Text>
       </Box>
     </Box>
   );
@@ -626,10 +701,10 @@ function Preview(
       borderRight={false}
       borderTop={false}
       borderBottom={false}
-      borderColor="gray"
+      borderColor={DOGRUN.dim}
       paddingLeft={1}
     >
-      <Text color="cyan">Preview: {target}</Text>
+      <Text color={DOGRUN.accent}>Preview: {target}</Text>
       <Text>{content ?? "(loading...)"}</Text>
     </Box>
   );
@@ -715,7 +790,7 @@ function App({
   });
 
   if (rows.length === 0) {
-    return <Text color="yellow">No panes available.</Text>;
+    return <Text color={DOGRUN.warn}>No panes available.</Text>;
   }
 
   const current = rows[index];
@@ -727,12 +802,13 @@ function App({
 
   // Dynamic repo/branch column widths: scan visible rows, clamp to caps, and
   // shrink branch first if the combined width would starve the summary slot.
-  // Row 1 fixed-width cost before summary: pointer(2) + "icon "(2) + status5(5)
-  // + elapsed5(5) + " · "(3) + " "(1) = 18 cols.
   const rowsParts = rows.map((r: PaneRow) =>
     cwdBranchParts(r.cwd || r.currentPath, r.worktreeBranch)
   );
-  const columnBudget = Math.max(0, listWidth - 18 - MIN_SUMMARY);
+  const columnBudget = Math.max(
+    0,
+    listWidth - ROW1_FIXED_OVERHEAD - MIN_SUMMARY,
+  );
   const repoMax = Math.min(
     REPO_CAP,
     Math.max(4, ...rowsParts.map((p: { repo: string }) => p.repo.length)),
@@ -748,12 +824,17 @@ function App({
   return (
     <Box flexDirection="column" width={totalCols} height={totalRows}>
       <Box marginBottom={1}>
-        <Text color="cyan">Select pane</Text>
-        <Box marginLeft={2}>
-          <Text color="gray">
-            [Enter: jump / Esc or q: cancel / ↑↓ jk: move]
-          </Text>
-        </Box>
+        <Text color={DOGRUN.accent}>{TITLE_ICON + "  "}</Text>
+        <Text color={DOGRUN.accent} bold>Claude Sessions</Text>
+        <Box flexGrow={1} />
+        <Text color={DOGRUN.accent}>Enter</Text>
+        <Text color={DOGRUN.fg}>{" jump  "}</Text>
+        <Text color={DOGRUN.muted}>·</Text>
+        <Text color={DOGRUN.accent}>{"  j/k ↑↓"}</Text>
+        <Text color={DOGRUN.fg}>{" move  "}</Text>
+        <Text color={DOGRUN.muted}>·</Text>
+        <Text color={DOGRUN.accent}>{"  Esc q"}</Text>
+        <Text color={DOGRUN.fg}>{" cancel"}</Text>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={listWidth} gap={1}>

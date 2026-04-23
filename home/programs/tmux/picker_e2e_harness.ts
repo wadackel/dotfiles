@@ -304,7 +304,7 @@ export async function spawnPicker(
   await waitFor(
     target,
     (out) =>
-      out.includes("Select pane") || out.includes("No panes available."),
+      out.includes("Claude Sessions") || out.includes("No panes available."),
   );
   return target;
 }

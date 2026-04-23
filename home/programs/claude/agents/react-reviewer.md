@@ -3,6 +3,7 @@ name: react-reviewer
 description: React framework specialist (React 18/19 + RSC + React Compiler aware). Use for code changes touching .jsx/.tsx files or files importing react/react-dom. Focuses on hook rules, dependency arrays, re-render minimization (compiler-aware), Suspense/error boundaries, Server Components (serialization boundary + 'use client' scope), effect hygiene (derived state, cleanup), React 19 modern patterns (useActionState/useFormStatus/use()/ref-as-prop), and state management choices. Auto-dispatched by /subagent-review when React files are detected. Does NOT cover TypeScript types (use typescript-reviewer) or a11y (use a11y-reviewer).
 tools: Read, Grep, Glob, Bash
 model: opus
+color: cyan
 ---
 
 # React Reviewer

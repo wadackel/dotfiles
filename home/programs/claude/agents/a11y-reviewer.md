@@ -3,6 +3,7 @@ name: a11y-reviewer
 description: Accessibility specialist reviewer. Use for code changes touching .css/.scss/.html or .jsx/.tsx with JSX markup. Based on WCAG 2.2 and WAI-ARIA APG. Focuses on semantic HTML, ARIA correctness, keyboard navigation, color contrast, screen reader support, responsive design, and dynamic content announcements. Auto-dispatched by /subagent-review when matching files are detected. Does NOT cover React component design (use react-reviewer) or TS types (use typescript-reviewer).
 tools: Read, Grep, Glob, Bash
 model: opus
+color: pink
 ---
 
 # Accessibility Reviewer

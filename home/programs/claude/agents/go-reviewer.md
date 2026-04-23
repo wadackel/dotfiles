@@ -3,6 +3,7 @@ name: go-reviewer
 description: Go language specialist. Use for code changes touching .go files. Focuses on interface design, error wrapping, goroutine leaks, context propagation, mutex ordering, and nil map/slice pitfalls. Auto-dispatched by /subagent-review when Go files are detected.
 tools: Read, Grep, Glob, Bash
 model: opus
+color: cyan
 ---
 
 # Go Reviewer

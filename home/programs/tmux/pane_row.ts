@@ -28,12 +28,14 @@ export interface PaneRow {
 }
 
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).
+// Colors are vim-dogrun hex values (see github.com/wadackel/vim-dogrun colors/dogrun.vim):
+// Constant (#73c1a9) / Keyword (#ac8b83) / Comment (#545c8c) / Error (#ff9494) / Normal (#9ea3c0).
 export const STATUS_META = {
-  running: { color: "green", short: "run", icon: "●" },
-  waiting: { color: "yellow", short: "wait", icon: "◐" },
-  idle: { color: "gray", short: "idle", icon: "○" },
-  error: { color: "red", short: "err", icon: "✖" },
-  "": { color: "white", short: "", icon: " " },
+  running: { color: "#73c1a9", short: "run", icon: "●" },
+  waiting: { color: "#ac8b83", short: "wait", icon: "◐" },
+  idle: { color: "#545c8c", short: "idle", icon: "○" },
+  error: { color: "#ff9494", short: "err", icon: "✖" },
+  "": { color: "#9ea3c0", short: "", icon: " " },
 } as const;
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
