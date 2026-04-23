@@ -24,9 +24,9 @@ import {
   truncateTopSegBody,
 } from "./picker.tsx";
 
-Deno.test("TMUX_FORMAT contains 20 US-separated field tokens", () => {
+Deno.test("TMUX_FORMAT contains 21 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 20);
+  assertEquals(fields.length, 21);
 });
 
 Deno.test("parseRow: full row with all fields present", () => {
@@ -51,6 +51,7 @@ Deno.test("parseRow: full row with all fields present", () => {
     "pnpm test",
     "picker.tsx",
     "Exit code 1",
+    "42",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -74,12 +75,13 @@ Deno.test("parseRow: full row with all fields present", () => {
     currentToolSubject: "pnpm test",
     lastToolSubject: "picker.tsx",
     lastToolError: "Exit code 1",
+    contextUsedPct: 42,
   };
   assertEquals(row, expected);
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(20).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
+  const line = Array(21).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
     .join("\x1f");
   const row = parseRow(line);
   assertEquals(row?.agent, "");
@@ -96,37 +98,52 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   assertEquals(row?.currentToolSubject, "");
   assertEquals(row?.lastToolSubject, "");
   assertEquals(row?.lastToolError, "");
+  assertEquals(row?.contextUsedPct, null);
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = Array(20).fill("").map((v, i) =>
+  const line = Array(21).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = Array(20).fill("").map((v, i) =>
+  const line = Array(21).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
-  const line = Array(20).fill("").map((v, i) =>
+  const line = Array(21).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
+Deno.test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
+  const line = Array(21).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 20 ? "nope" : v
+  ).join("\x1f");
+  assertEquals(parseRow(line)?.contextUsedPct, null);
+});
+
+Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
+  const line = Array(21).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 20 ? "75" : v
+  ).join("\x1f");
+  assertEquals(parseRow(line)?.contextUsedPct, 75);
+});
+
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
-  // 19 fields (one short) → null
-  const nineteen = Array(19).fill("x").join("\x1f");
-  assertEquals(parseRow(nineteen), null);
-  // 20 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(20).fill("").join("\x1f");
+  // 20 fields (one short of 21) → null
+  const twenty = Array(20).fill("x").join("\x1f");
+  assertEquals(parseRow(twenty), null);
+  // 21 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
+  const emptyId = Array(21).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 
@@ -330,6 +347,7 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     currentToolSubject: "",
     lastToolSubject: "",
     lastToolError: "",
+    contextUsedPct: null,
     ...overrides,
   };
 }

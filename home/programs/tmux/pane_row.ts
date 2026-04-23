@@ -25,6 +25,7 @@ export interface PaneRow {
   currentToolSubject: string;
   lastToolSubject: string;
   lastToolError: string;
+  contextUsedPct: number | null;
 }
 
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).
@@ -40,7 +41,7 @@ export const STATUS_META = {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-// Field count = 20; parseRow's malformed-check below must match.
+// Field count = 21; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -60,7 +61,8 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_last_activity_at}\x1f" +
   "#{@pane_current_tool_subject}\x1f" +
   "#{@pane_last_tool_subject}\x1f" +
-  "#{@pane_last_tool_error}";
+  "#{@pane_last_tool_error}\x1f" +
+  "#{@pane_context_used_pct}";
 
 const NUMERIC = /^\d+$/;
 
@@ -73,10 +75,10 @@ function normalizeStatus(raw: string): PaneStatus {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 20 fields or empty pane_id).
+// Returns null when the line is malformed (< 21 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 20) return null;
+  if (fields.length < 21) return null;
   const [
     paneId,
     target,
@@ -98,6 +100,7 @@ export function parseRow(line: string): PaneRow | null {
     currentToolSubject,
     lastToolSubject,
     lastToolError,
+    contextUsedPct,
   ] = fields;
   if (!paneId) return null;
   return {
@@ -121,5 +124,6 @@ export function parseRow(line: string): PaneRow | null {
     currentToolSubject,
     lastToolSubject,
     lastToolError,
+    contextUsedPct: parseIntOrNull(contextUsedPct),
   };
 }

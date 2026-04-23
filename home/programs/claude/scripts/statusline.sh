@@ -74,6 +74,14 @@ fi
 if [ -n "$used_pct" ] && [ -n "$ctx_size" ]; then
   used_int=${used_pct%.*}
   : "${used_int:=0}"
+
+  # Publish percentage to tmux pane option for the picker to consume. Best-effort:
+  # `|| true` swallows failures when the pane id became stale mid-flight so the
+  # statusline stdout path below is unaffected.
+  if [ -n "${TMUX_PANE:-}" ]; then
+    tmux set -p -t "$TMUX_PANE" @pane_context_used_pct "$used_int" 2>/dev/null || true
+  fi
+
   used_tokens=$(( ctx_size * used_int / 100 ))
 
   used_fmt=$(fmt_tokens "$used_tokens")

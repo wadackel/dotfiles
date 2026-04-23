@@ -618,14 +618,121 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
     assertStringIncludes(out, "(no activity)");
-    // None of the five row-2 segment icons may render when segs is empty.
-    // ROW2_ICONS = tool 󰒓 / tree 󱙺 / file 󰈔 / progress 󰄱 / idle 󰏤.
-    for (const icon of ["󰒓", "󱙺", "󰈔", "󰄱", "󰏤"]) {
+    // None of the six row-2 segment icons may render when segs is empty.
+    // Token icon (U+F01BC 󰆼) is also checked here — a pane without
+    // contextUsedPct must not render the token segment. The positive
+    // threshold-color path for the token segment is covered by S19.
+    // ROW2_ICONS = tool 󰒓 / tree 󱙺 / file 󰈔 / progress 󰄱 / idle 󰏤 / token 󰆼.
+    for (const icon of ["󰒓", "󱙺", "󰈔", "󰄱", "󰏤", "\u{F01BC}"]) {
       assertFalse(
         out.includes(icon),
         `row-2 icon ${icon} leaked into empty-state render:\n${out}`,
       );
     }
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S19: @pane_context_used_pct renders on row-2 right as
+// "<token icon> NN%" with threshold-based color. Values <50 green (ok),
+// 50–74 yellow (warn), ≥75 red (err). A pane without the option set must
+// not render the token segment at all.
+Deno.test("S19: token usage on row-2 right (icon + percent + color)", async () => {
+  await setupServer({ cols: 120, rows: 20 });
+  try {
+    const paneGreen = await createClaudePane({
+      status: "running",
+      prompt: "row-green",
+    });
+    const paneRed = await createClaudePane({
+      status: "running",
+      prompt: "row-red",
+    });
+    await createClaudePane({
+      status: "running",
+      prompt: "row-notoken",
+    });
+    // Set context-used pane option directly (no createClaudePane knob — Rule
+    // of Three: promote to harness param only when a second test needs it).
+    await tmux(["set", "-p", "-t", paneGreen, "@pane_context_used_pct", "23"]);
+    await tmux(["set", "-p", "-t", paneRed, "@pane_context_used_pct", "80"]);
+
+    const picker = await spawnPicker();
+
+    // 1. Text assertions — both percentages present.
+    const out = await waitFor(
+      picker,
+      (o) => o.includes("23%") && o.includes("80%"),
+    );
+    assertStringIncludes(out, "23%");
+    assertStringIncludes(out, "80%");
+
+    // 2. Icon assertion — nf-md-database appears at least twice (once per
+    // pane with context set). U+F01BC = 󰆼.
+    const iconCount = out.split("\u{F01BC}").length - 1;
+    assertEquals(
+      iconCount >= 2,
+      true,
+      `expected nf-md-database icon ≥2 occurrences, got ${iconCount}:\n${out}`,
+    );
+
+    // 3. No-token row must not render the token segment. Locate the line by
+    // its prompt marker and confirm the icon is absent on that line.
+    const notokenLine = out.split("\n").find((l) => l.includes("row-notoken"));
+    assertEquals(
+      typeof notokenLine,
+      "string",
+      `row-notoken line not found:\n${out}`,
+    );
+    assertFalse(
+      notokenLine!.includes("\u{F01BC}"),
+      `token icon leaked onto pane without contextUsedPct:\n${notokenLine}`,
+    );
+    assertFalse(
+      notokenLine!.includes("%"),
+      `token percent leaked onto pane without contextUsedPct:\n${notokenLine}`,
+    );
+
+    // 4. Color assertion — capture raw (ANSI-preserving) and confirm the
+    // SGR foreground near 23% differs from the one near 80%. This is a
+    // structural distinctness check, not a hex match, since tmux's
+    // 256-color approximation is environment-dependent.
+    const raw = await tmux(["capture-pane", "-p", "-e", "-t", picker]);
+    // Extract the SGR foreground sequence immediately preceding each percent.
+    // Format: ESC [ 38 ; (5;N | 2;R;G;B) m
+    const sgrBefore = (needle: string): string | null => {
+      const idx = raw.indexOf(needle);
+      if (idx < 0) return null;
+      const prefix = raw.slice(Math.max(0, idx - 40), idx);
+      // deno-lint-ignore no-control-regex
+      const m = prefix.match(/\x1b\[38;(?:5;\d+|2;\d+;\d+;\d+)m(?=[^\x1b]*$)/);
+      return m ? m[0] : null;
+    };
+    const sgrGreen = sgrBefore("23%");
+    const sgrRed = sgrBefore("80%");
+    assertEquals(
+      sgrGreen !== null,
+      true,
+      `no SGR foreground found before 23% (raw includes escapes: ${
+        /\x1b/.test(raw)
+      })`,
+    );
+    assertEquals(
+      sgrRed !== null,
+      true,
+      `no SGR foreground found before 80% (raw includes escapes: ${
+        /\x1b/.test(raw)
+      })`,
+    );
+    assertFalse(
+      sgrGreen === sgrRed,
+      `23% and 80% rendered with the same color SGR (${sgrGreen}); ` +
+        `threshold mapping ok→err is not being applied.`,
+    );
+
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {

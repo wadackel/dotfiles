@@ -1045,6 +1045,10 @@ Deno.test("main_stopped: ALL_PANE_OPTIONS includes @pane_main_stopped (drain com
   assertEquals(ALL_PANE_OPTIONS.includes("@pane_main_stopped" as never), true);
 });
 
+Deno.test("context_used_pct: ALL_PANE_OPTIONS includes @pane_context_used_pct (drain completeness)", () => {
+  assertEquals(ALL_PANE_OPTIONS.includes("@pane_context_used_pct" as never), true);
+});
+
 Deno.test("main_stopped: SubagentStop drain path (pendingTeardown=true + last subagent) still ALL_PANE_OPTIONS unset only", () => {
   // Even with mainStopped=true, drain path must short-circuit before the
   // SubagentStop body and emit only the ALL_PANE_OPTIONS unset bulk — not

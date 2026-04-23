@@ -483,6 +483,7 @@ const ROW2_ICONS = {
   file: "󰈔", // nf-md-file-document-outline
   progress: "󰄱", // nf-md-checkbox-multiple-marked-outline
   idle: "󰏤", // nf-md-sleep
+  token: "\u{F01BC}", // nf-md-database — mirrors statusline's nf-fa-database
 } as const;
 
 // Title bar icon + dogrun-derived palette. See vim-dogrun
@@ -490,14 +491,16 @@ const ROW2_ICONS = {
 // highlight role they derive from, not an abstract severity level.
 const TITLE_ICON = "󱚤"; // nf-md-robot-outline, 1 cell
 const DOGRUN = {
-  fg: "#9ea3c0", // Normal — primary text / summary
-  fgDim: "#757aa5", // StatusLine fg — repo label / row2 auxiliary segments
+  fg: "#9ea3c0", // Normal — primary text / summary / repo label
+  fgDim: "#757aa5", // StatusLine fg — row2 auxiliary segments
   muted: "#545c8c", // Comment — separators / low-strength labels
   dim: "#4b4e6d", // StatusLineNC — preview border / target id / last tool
   accent: "#929be5", // Function — title / branch / key name / preview title
   search: "#a6afff", // Search — selected pointer marker
   sandy: "#a8a384", // Type — current (running) tool segment
-  warn: "#ac8b83", // Keyword — empty-state notice
+  warn: "#ac8b83", // Keyword — empty-state notice / token 50-75% threshold
+  ok: "#6ba291", // token <50% threshold — desaturated from STATUS_META.running
+  err: "#d68888", // token ≥75% threshold — desaturated from STATUS_META.error
 } as const;
 
 const PaneRowLine: React.FC<PaneRowLineProps> = (
@@ -597,9 +600,17 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
     SEG_PREFIX_CELLS + Array.from(s.body).length;
 
   // Budget = listWidth minus 2-space indent minus the flex-pushed row.target
-  // on the right. Target is ASCII (tmux "session:W.P"), so target.length
-  // equals its cell width.
-  const budget = Math.max(0, listWidth - 2 - row.target.length);
+  // on the right minus the token slot (icon + space + "NN%" + 2-space gap).
+  // Target is ASCII (tmux "session:W.P"), so target.length equals its cell width.
+  // row.contextUsedPct is sourced from the @pane_context_used_pct tmux option
+  // (written by statusline.sh, read via pane_row.ts's TMUX_FORMAT).
+  const tokenSlotCells = row.contextUsedPct != null
+    ? SEG_PREFIX_CELLS + Array.from(`${row.contextUsedPct}%`).length + 2
+    : 0;
+  const budget = Math.max(
+    0,
+    listWidth - 2 - row.target.length - tokenSlotCells,
+  );
   let totalCells = segs.length > 0 ? segCells(segs[0]) : 0;
   for (let i = 1; i < segs.length; i++) {
     totalCells += ROW2_SEP.length + segCells(segs[i]);
@@ -625,7 +636,7 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
         <Text color={color}>{icon + " "}</Text>
         <Text color={color}>{status5}</Text>
         <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
-        <Text color={DOGRUN.fgDim}>{repoCol}</Text>
+        <Text color={DOGRUN.fg}>{repoCol}</Text>
         <Text color={DOGRUN.muted}>{separator}</Text>
         <Text color={DOGRUN.accent}>{branchCol}</Text>
         <Text color={DOGRUN.fg}>{"  " + renderedSummary}</Text>
@@ -648,6 +659,23 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
             </React.Fragment>
           ))}
         <Box flexGrow={1} />
+        {row.contextUsedPct != null
+          ? (() => {
+            const pct = row.contextUsedPct;
+            const tokenColor = pct < 50
+              ? DOGRUN.ok
+              : pct < 75
+              ? DOGRUN.warn
+              : DOGRUN.err;
+            return (
+              <>
+                <Text color={tokenColor}>{ROW2_ICONS.token}</Text>
+                <Text color={tokenColor}>{` ${pct}%`}</Text>
+                <Text>{"  "}</Text>
+              </>
+            );
+          })()
+          : null}
         <Text color={DOGRUN.muted}>{row.target}</Text>
       </Box>
     </Box>

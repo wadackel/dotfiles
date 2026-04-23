@@ -62,6 +62,7 @@ export const ALL_PANE_OPTIONS = [
   "@pane_last_tool_subject",
   "@pane_last_tool_error",
   "@pane_main_stopped",
+  "@pane_context_used_pct",
 ] as const;
 
 // Options cleared at SessionStart so stale values from a previous session on the
@@ -82,6 +83,7 @@ const STALE_AT_SESSION_START = [
   "@pane_last_tool_subject",
   "@pane_last_tool_error",
   "@pane_main_stopped",
+  "@pane_context_used_pct",
 ] as const;
 
 const PROMPT_MAX_CHARS = 40;
