@@ -495,14 +495,14 @@ end
 -- =============================================================
 -- mo (Markdown viewer)
 -- =============================================================
-local function mo_run(args)
+local function mo_run(args, input)
   if vim.fn.executable("mo") == 0 then
     vim.notify("mo is not installed", vim.log.levels.ERROR)
     return nil
   end
   local cmd = { "mo" }
   vim.list_extend(cmd, args)
-  local result = vim.fn.system(cmd)
+  local result = input and vim.fn.system(cmd, input) or vim.fn.system(cmd)
   if vim.v.shell_error ~= 0 then
     vim.notify("mo: " .. vim.trim(result), vim.log.levels.ERROR)
     return nil
@@ -570,11 +570,15 @@ end, {})
 vim.api.nvim_create_user_command("MoRestart", function()
   mo_run({ "--restart" })
 end, {})
+vim.api.nvim_create_user_command("MoClear", function()
+  mo_run({ "--clear" }, "y\n")
+end, {})
 
 keymap({ "n" }, "<Space>mo", "<cmd>MoOpen<CR>")
 keymap({ "n" }, "<Space>ms", "<cmd>MoStatus<CR>")
 keymap({ "n" }, "<Space>mq", "<cmd>MoShutdown<CR>")
 keymap({ "n" }, "<Space>mb", "<cmd>MoBrowse<CR>")
+keymap({ "n" }, "<Space>mc", "<cmd>MoClear<CR>")
 
 -- =============================================================
 -- Plugins
