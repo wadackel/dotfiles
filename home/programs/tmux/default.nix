@@ -29,4 +29,38 @@
 
   # Dev layout script
   home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "dev-layout.sh";
+
+  # AOT-compile picker.tsx into ~/.local/share/picker-tmux/picker.
+  # The picker is launched by `prefix+w` via display-popup and the React+Ink
+  # module graph evaluation dominates cold startup (~236ms out of ~370ms
+  # measured). Deno's npm cache does not amortize this (cold == warm in
+  # measurement), so only AOT via `deno compile` eliminates the cost.
+  # Hash-skip avoids recompiling when picker.tsx/pane_row.ts are unchanged.
+  home.activation.compilePickerBin = lib.hm.dag.entryAfter [ "writeBoundary" "miseInstall" ] ''
+    SRC="${./.}"
+    OUT="$HOME/.local/share/picker-tmux"
+    BIN="$OUT/picker"
+    STAMP="$OUT/.src-hash"
+    # Hash file contents only (not paths) so the Nix store path of `${./.}`
+    # does not dirty the hash whenever any sibling file in this dir changes.
+    HASH=$(/bin/cat "$SRC/picker.tsx" "$SRC/pane_row.ts" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
+    # home-manager concatenates activation fragments into one shell script,
+    # so `exit` here would abort later fragments. Gate the cold path with an
+    # inverted if/else instead.
+    if [ -x "$BIN" ] && [ -f "$STAMP" ] && [ "$(/bin/cat "$STAMP")" = "$HASH" ]; then
+      :
+    else
+      run /bin/mkdir -p "$OUT"
+      # Compile to a temp path and rename atomically so a mid-compile failure
+      # cannot leave a corrupt binary in place (the stamp would then disagree
+      # with the truncated file, and next activation retries the compile).
+      TMP="$BIN.tmp.$$"
+      run ${config.programs.mise.package}/bin/mise exec -- deno compile \
+        --allow-env --allow-read --allow-run=tmux,git \
+        --output "$TMP" \
+        "$SRC/picker.tsx"
+      run /bin/mv -f "$TMP" "$BIN"
+      run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
+    fi
+  '';
 }

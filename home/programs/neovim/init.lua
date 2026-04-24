@@ -1628,10 +1628,7 @@ require("lazy").setup({
             "zig",
           })
         else
-          vim.notify(
-            "tree-sitter CLI not found; nvim-treesitter parser install skipped",
-            vim.log.levels.ERROR
-          )
+          vim.notify("tree-sitter CLI not found; nvim-treesitter parser install skipped", vim.log.levels.ERROR)
         end
 
         -- 自動ハイライトの有効化
@@ -1719,6 +1716,7 @@ require("lazy").setup({
           ["<Tab>"] = "toggle_preview",
           ["ss"] = "vsplit",
           ["sv"] = "split",
+          ["gM"] = "mark_clear_all",
           ["<Space>mo"] = "mo_open",
         },
       },

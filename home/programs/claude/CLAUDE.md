@@ -78,6 +78,12 @@
 - Google Docs content should be converted with `/gdocs-to-md` before use.
 - For Obsidian notes, use `/obsidian-cli` rather than direct file access when iCloud path behavior is unreliable.
 
+### Language Defaults For Generated Artifacts
+
+- When a skill, CLAUDE.md, or command argument specifies a language default (e.g., `/create-pr` "English by default unless `ja` is explicit", project CLAUDE.md "English-only for commits/docs"), the scope is the entire generated artifact. Do not mix the conversation language into Summary, introduction, or conceptual sections while keeping the rest in the default language.
+- User conversation language never overrides an artifact language default. Switch languages only when the rule explicitly permits it (e.g., `ja` flag passed, CLAUDE.md Language section allows it).
+- Before submitting PR bodies, commit messages, release notes, or other artifacts covered by a language rule, verify the entire body is in the target language in one pass — not per section.
+
 ### Design Principles
 
 - Single responsibility is context-dependent. Internal side effects are acceptable; prefer purity at public boundaries.

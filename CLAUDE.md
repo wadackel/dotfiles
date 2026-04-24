@@ -234,6 +234,17 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 
 After changing `home/programs/tmux/picker.tsx`, `home/programs/tmux/picker_e2e_harness.ts`, or `home/programs/tmux/picker_e2e_test.ts`, run `.claude/skills/picker-verify/picker-verify.ts` (or invoke the `/picker-verify` skill). It spins up an isolated `tmux -L picker-e2e-$PID` server, runs the 6 e2e scenarios (warm path ~3 s, 30 s budget), and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck picker into the sandbox. Do not claim picker changes are complete while `ok: false`.
 
+### Picker binary (prefix+w)
+
+`tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/picker-tmux/picker`, not `deno run picker.tsx`. The binary is produced by `home.activation.compilePickerBin` in `home/programs/tmux/default.nix` via `deno compile` (React+Ink cold-start is ~236ms; AOT is the only way to amortize it for a popup). Hash-skip keys on `shasum -a 256` of `picker.tsx` + `pane_row.ts`.
+
+Implications when editing picker source:
+
+- Running `deno run picker.tsx` or `/picker-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.
+- To make changes visible to `prefix+w`, run `sudo darwin-rebuild switch --flake .#private` — the activation detects the source hash change and recompiles.
+- To iterate without a full rebuild, re-run the compile directly: `mise exec -- deno compile --allow-env --allow-read --allow-run=tmux,git --output ~/.local/share/picker-tmux/picker home/programs/tmux/picker.tsx` (arg set must match the activation).
+- Do not claim picker work is complete based solely on `deno run` or `picker-verify` output — the binary is the thing users invoke.
+
 ### Project Directory Encoding Rules
 
 Directory names under `~/.claude/projects/` are encoded from the project path: strip the leading `/`, add `-` as a prefix, and replace both `/` and `.` with `-`.

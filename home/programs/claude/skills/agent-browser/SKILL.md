@@ -31,8 +31,7 @@ If auto-connect fails (Chrome not running or remote debugging not enabled), stop
 - "Chrome remote debugging is not enabled. Please open `chrome://inspect/#remote-debugging` to enable it."
 
 **When to use other modes instead:**
-- User explicitly requests a fresh/clean browser state → `--headed --session-name {project}` or `--headed` alone
-- User explicitly requests headless mode → omit `--headed`, use `--session-name` only
+- User explicitly requests a fresh/clean browser state → `--session-name {project}`
 
 ## Core Workflow
 
@@ -533,7 +532,7 @@ The `scale` parameter (3rd argument) sets `window.devicePixelRatio` without chan
 ### Visual Browser (Debugging)
 
 ```bash
-agent-browser --headed open https://example.com
+agent-browser open https://example.com
 agent-browser highlight @e1          # Highlight element
 agent-browser inspect                # Open Chrome DevTools for the active page
 agent-browser record start demo.webm # Record session
