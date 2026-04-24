@@ -16,6 +16,10 @@
       url = "github:ryoppippi/nix-claude-code";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    mo-nix = {
+      url = "github:wadackel/mo-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -26,6 +30,7 @@
       nix-darwin,
       treefmt-nix,
       nix-claude-code,
+      mo-nix,
       ...
     }:
     let
@@ -43,6 +48,7 @@
           nix-darwin
           treefmt-nix
           nix-claude-code
+          mo-nix
           ;
       };
 
@@ -51,23 +57,8 @@
 
       overlays = [
         nix-claude-code.overlays.default
+        mo-nix.overlays.default
         (final: prev: {
-          mo = final.stdenv.mkDerivation {
-            pname = "mo";
-            version = "0.18.3";
-            src = final.fetchzip {
-              url = "https://github.com/k1LoW/mo/releases/download/v0.18.3/mo_v0.18.3_darwin_arm64.zip";
-              hash = "sha256-ajQZFyDyplpI078STAIp3X+UDqxamvLSv8S8QPMqW5c=";
-              stripRoot = false;
-            };
-            dontConfigure = true;
-            dontBuild = true;
-            installPhase = ''
-              mkdir -p $out/bin
-              install -m755 mo $out/bin/
-            '';
-          };
-
           mvfst = prev.mvfst.overrideAttrs (old: {
             disabledTests = (old.disabledTests or [ ]) ++ [
               "QuicClientTransportAfterStartTest.RecvOneRttAck"
