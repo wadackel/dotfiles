@@ -63,7 +63,6 @@
     # Formula configuration
     brews = [
       # CLI Tools (version-sensitive - Homebrew tracks releases faster than nixpkgs)
-      "gemini-cli"
       "tree-sitter-cli" # nvim-treesitter main branch requires tree-sitter CLI >=0.26.1
 
       # Python Ecosystem
@@ -87,7 +86,6 @@
       "arc"
       "chromium"
       "claude"
-      "codex"
       "figma"
       "firefox"
       "fuwari"

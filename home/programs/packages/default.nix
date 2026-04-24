@@ -61,6 +61,10 @@
     gnused # GNU implementation of the sed stream editor
     terminal-notifier # Send macOS notifications from the command line
     watchman # File watching service
+
+    # AI Coding Agents
+    codex # OpenAI's lightweight coding agent CLI
+    gemini-cli # Google Gemini AI CLI for the terminal
   ];
 
   # Shell-independent PATH additions
