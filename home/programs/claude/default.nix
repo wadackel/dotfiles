@@ -9,7 +9,7 @@
 
 {
   # Claude Code
-  home.packages = [ inputs.nix-claude-code.packages.${pkgs.system}.default ];
+  home.packages = [ inputs.nix-claude-code.packages.${pkgs.stdenv.hostPlatform.system}.default ];
 
   # Claude Code configuration
   home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
