@@ -1717,6 +1717,7 @@ require("lazy").setup({
           ["ss"] = "vsplit",
           ["sv"] = "split",
           ["gM"] = "mark_clear_all",
+          ["M"] = false,
           ["<Space>mo"] = "mo_open",
         },
       },
