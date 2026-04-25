@@ -292,3 +292,51 @@ fi
 if [ -f ~/.config/tabtab/zsh/__tabtab.zsh ]; then
   zsh-defer source ~/.config/tabtab/zsh/__tabtab.zsh
 fi
+
+
+# ====================================================
+# agent-browser state import (state-import + headless default)
+# ====================================================
+
+ab-state-refresh() {
+  local state_path="$HOME/.agent-browser-state/main.json"
+  local state_dir="${state_path:h}"
+  # Create the dir under a tight umask so first-run TOCTOU between mkdir and
+  # the post-hoc chmod is closed. The chmod stays as defense-in-depth for the
+  # already-existing-dir case.
+  (umask 077 && mkdir -p "$state_dir")
+  chmod 700 "$state_dir"
+
+  # Discover the running Chrome's CDP WebSocket via DevToolsActivePort.
+  # Chrome 127+ returns 404 on /json/version unless Origin is whitelisted,
+  # so HTTP discovery is unreliable; the file-based discovery always works.
+  local active_port_file="$HOME/Library/Application Support/Google/Chrome/DevToolsActivePort"
+  if [[ ! -r "$active_port_file" ]]; then
+    print -u2 "ab-state-refresh: DevToolsActivePort not found at $active_port_file."
+    print -u2 "  Start Chrome with --remote-debugging-port=9222 (or enable it via chrome://inspect/#remote-debugging),"
+    print -u2 "  log in to your target sites, then re-run ab-state-refresh."
+    return 1
+  fi
+  local cdp_port cdp_ws_path
+  cdp_port=$(head -1 "$active_port_file")
+  cdp_ws_path=$(tail -1 "$active_port_file")
+  local ws_url="ws://127.0.0.1:${cdp_port}${cdp_ws_path}"
+
+  agent-browser close >/dev/null 2>&1
+  # The subshell `umask 077` closes the brief window between file creation and
+  # the explicit chmod below.
+  (
+    umask 077
+    agent-browser connect "$ws_url" || exit 1
+    agent-browser state save "$state_path" || exit 1
+  ) || {
+    print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+    return 1
+  }
+  chmod 600 "$state_path"
+
+  printf 'state saved: %s (%s bytes, %s)\n' \
+    "$state_path" \
+    "$(stat -f '%z' "$state_path")" \
+    "$(date)"
+}

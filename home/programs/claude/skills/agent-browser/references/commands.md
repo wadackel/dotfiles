@@ -43,7 +43,7 @@ agent-browser check @e1           # Check checkbox
 agent-browser uncheck @e1         # Uncheck checkbox
 agent-browser select @e1 "value"  # Select dropdown option
 agent-browser select @e1 "a" "b"  # Select multiple options
-agent-browser scroll down 500     # Scroll page (default: down 300px)
+agent-browser scroll down 500     # Scroll page (default: down 300px). Sends keyboard events; on GitHub/Gmail/Linear avoid scroll or use 'pdf' command instead — see SKILL.md "Site keybind conflicts".
 agent-browser scrollintoview @e1  # Scroll element into view (alias: scrollinto)
 agent-browser drag @e1 @e2        # Drag and drop
 agent-browser upload @e1 file.pdf # Upload files

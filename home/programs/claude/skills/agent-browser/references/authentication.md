@@ -21,53 +21,84 @@ Login flows, session persistence, OAuth, 2FA, and authenticated browsing.
 
 ## Import Auth from Your Browser
 
-The fastest way to authenticate is to reuse cookies from a Chrome session you are already logged into.
+This is the **default authentication strategy** in this environment. Cookies + localStorage are exported once from the user's running Chrome into a plaintext JSON file with mode 600, and subsequent agent-browser calls launch independent headless Chrome instances that load this state transparently. The user's live Chrome window is never touched at runtime, eliminating browser-window collisions between human activity and automation.
 
-**Step 1: Start Chrome with remote debugging**
+### Architecture
 
-```bash
-# macOS
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222
-
-# Linux
-google-chrome --remote-debugging-port=9222
-
-# Windows
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+```
+User's Chrome (headed)
+   ↑ CDP WebSocket attach (state save only — one-shot, brief)
+ab-state-refresh  →  ~/.agent-browser-state/main.json (plaintext JSON, mode 600)
+                                                  ↓ (--state "$HOME/.agent-browser-state/main.json" passed explicitly)
+                          agent-browser open <url>  →  independent headless Chrome
+                                                  + --session "claude-$PPID" isolates the daemon to this Claude session
 ```
 
-Log in to your target site(s) in this Chrome window as you normally would.
+### Required environment
 
-> **Security note:** `--remote-debugging-port` exposes full browser control on localhost. Any local process can connect and read cookies, execute JS, etc. Only use on trusted machines and close Chrome when done.
+**No env var is required.** The state file lives at the fixed path `$HOME/.agent-browser-state/main.json`, and skill commands reference it as a literal. Earlier iterations used an `AGENT_BROWSER_STATE_PATH` env var, but it did not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells, so the indirection was removed.
 
-**Step 2: Grab the auth state**
+`AGENT_BROWSER_STATE` (the CLI's hardcoded auto-load env) **must not** be exported in this environment — exporting it makes the daemon navigate to `origins[0]` on the first command and reject any subsequent `--state` flag with `⚠ --state ignored: daemon already running`. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the call that may start the daemon (typically the first call of the session).
 
-```bash
-# Auto-discover the running Chrome and save its cookies + localStorage
-agent-browser --auto-connect state save ./my-auth.json
-```
+No encryption key is involved. The state file matches the de facto convention for developer secrets on macOS (SSH keys, AWS credentials, npm tokens, GitHub tokens) — plaintext, mode 600, in a mode-700 directory. FileVault provides at-rest disk encryption.
 
-**Step 3: Reuse in automation**
+### Step 1: Refresh the state file
 
-```bash
-# Load auth at launch
-agent-browser --state ./my-auth.json open https://app.example.com/dashboard
-
-# Or load into an existing session
-agent-browser state load ./my-auth.json
-agent-browser open https://app.example.com/dashboard
-```
-
-This works for any site, including those with complex OAuth flows, SSO, or 2FA -- as long as Chrome already has valid session cookies.
-
-> **Security note:** State files contain session tokens in plaintext. Add them to `.gitignore`, delete when no longer needed, and set `AGENT_BROWSER_ENCRYPTION_KEY` for encryption at rest. See [Security Best Practices](#security-best-practices).
-
-**Tip:** Combine with `--session-name` so the imported auth auto-persists across restarts:
+Make sure the user's Chrome is running with `--remote-debugging-port=9222` (or the `chrome://inspect/#remote-debugging` toggle is on) **and is logged into the SaaS sites you want to automate**. Then:
 
 ```bash
-agent-browser --session-name myapp state load ./my-auth.json
-# From now on, state is auto-saved/restored for "myapp"
+ab-state-refresh
 ```
+
+This:
+
+1. Creates `~/.agent-browser-state/` with mode 700.
+2. Reads the CDP WebSocket URL from `~/Library/Application Support/Google/Chrome/DevToolsActivePort` and attaches via `agent-browser connect <ws-url>`. Chrome 127+ returns 404 on `/json/version` unless Origin is whitelisted, so HTTP-based discovery (used by plain `--auto-connect`) is unreliable on current Chrome — file-based discovery is the robust path.
+3. Calls `agent-browser state save $HOME/.agent-browser-state/main.json`, which writes plaintext JSON.
+4. Sets the file to mode 600.
+5. Prints the resulting file path, size, and timestamp.
+
+### Step 2: Use agent-browser normally
+
+Pass the state file explicitly via `--state "$HOME/.agent-browser-state/main.json"` on the first call of each Claude session, plus `--session "claude-$PPID"` to use a daemon isolated to this Claude session:
+
+```bash
+# First call: include both flags (the daemon starts here)
+agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" open https://github.com
+
+# Subsequent calls within the same Claude session: --state can be omitted
+agent-browser --session "claude-$PPID" snapshot -i
+agent-browser --session "claude-$PPID" tab new https://app.linear.app
+```
+
+The browser is independent and headless; the user's Chrome window is unaffected. See [session-management.md](session-management.md) for parallel session patterns and [SKILL.md](../SKILL.md) Default Flags for the rationale behind the two flags.
+
+### State expiry and recovery
+
+State files don't have a fixed lifetime — they fail when the SaaS rotates the session token (typically days to weeks). Symptoms:
+
+- `agent-browser snapshot` returns the login page instead of the dashboard.
+- `agent-browser get url` shows `/login` or `/signin` after `open <protected-url>`.
+- `No such file or directory: .../main.json` — the state file was never created or was deleted; run `ab-state-refresh` first.
+
+Recovery is always the same: re-run `ab-state-refresh` against a freshly-logged-in Chrome.
+
+### Sites this approach does not cover
+
+Cookie + localStorage capture is not enough for sites that bind session state to:
+
+- **IndexedDB** (e.g., some chat clients, web SQL apps)
+- **Service Workers** holding auth tokens in memory
+- **Per-device device-trust signals** that re-prompt for 2FA on a "new" headless instance
+
+For those, fall back to a **persistent profile** (next section) — the user-data-dir captures everything and survives across runs.
+
+### Security notes
+
+- The state file is plaintext JSON with mode 600. Same-UID processes can read it; this matches the threat model of every other dev secret on the machine (SSH keys, AWS credentials, npm/GitHub tokens). At-rest protection comes from FileVault.
+- The state directory is mode 700 (`drwx------`), so other local users cannot read the file.
+- `--remote-debugging-port=9222` exposes full browser control on localhost during the brief `state save` window. Only run `ab-state-refresh` on trusted machines.
+- Application-layer encryption was deliberately removed: env-var-derived keys provide no protection against same-UID readers, who can read the env directly. The added complexity (secret-manager lookups, encrypted-file suffix juggling, biometric prompts on shell startup) was not justified by the residual threat surface FileVault already covers.
 
 ## Persistent Profiles
 
@@ -108,13 +139,6 @@ agent-browser close  # state saved to ~/.agent-browser/sessions/
 
 # Next time: state is automatically restored
 agent-browser --session-name twitter open https://twitter.com
-```
-
-Encrypt state at rest:
-
-```bash
-export AGENT_BROWSER_ENCRYPTION_KEY=$(openssl rand -hex 32)
-agent-browser --session-name secure open https://app.example.com
 ```
 
 ## Basic Login Flow

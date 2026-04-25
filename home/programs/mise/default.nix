@@ -14,7 +14,6 @@
     globalConfig = {
       tools = {
         actionlint = "latest";
-        deno = "latest";
         go = "latest";
         node = "lts";
         rust = "nightly";

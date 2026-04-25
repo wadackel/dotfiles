@@ -10,28 +10,76 @@ The CLI uses Chrome/Chromium via CDP directly. Install via `npm i -g agent-brows
 
 ## Default Flags
 
-Unless explicitly instructed otherwise, always use `--auto-connect` when opening a browser:
+This environment runs agent-browser in **state-import + headless** mode by default. Pass two flags on every invocation:
 
-- **`--auto-connect`**: Connects to the user's existing Chrome with remote debugging enabled (`chrome://inspect/#remote-debugging`). Reuses the user's authentication state (cookies, localStorage) directly — no save/restore cycle needed.
-
-### Tab-Safe Navigation (Default)
-
-`agent-browser open <url>` navigates the **active tab**, which can overwrite pinned or unrelated tabs. Always open URLs in a new tab instead:
+- `--session "claude-$PPID"` — use a daemon isolated to this Claude session. `$PPID` in a Bash subshell points at the Claude main process, so all calls within one Claude session (main + any subagents) share the same daemon. Different Claude sessions (separate terminals) get different `$PPID` values and therefore separate daemons, so they cannot interfere with each other.
+- `--state "$HOME/.agent-browser-state/main.json"` — load the plaintext state file produced by `ab-state-refresh`. Required on the **first** call of the session (whichever subcommand starts the daemon). Subsequent calls within the same session can omit it because the daemon already has the state loaded.
 
 ```bash
-agent-browser --auto-connect tab new <url>
-agent-browser --auto-connect tab new <url> --label work   # name the tab for stable later reference
+# First call: include both flags
+agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" tab new <url>
+
+# Subsequent calls within the same Claude session: --state can be omitted
+agent-browser --session "claude-$PPID" snapshot -i
+agent-browser --session "claude-$PPID" click @e1
+agent-browser --session "claude-$PPID" record start <path>
+agent-browser --session "claude-$PPID" screenshot <path>
 ```
 
-Tabs use stable string ids (`t1`, `t2`, ...) that remain unchanged when other tabs close, so `tab t2` keeps pointing at the same tab across the session. Pass `--label <name>` at creation time to reference the tab by a memorable name (`tab work`, `tab close work`).
+The browser is independent and headless; the user's live Chrome window is never touched. **No `--auto-connect` flag** is needed in normal commands.
 
-First-time connection (daemon not yet connected) uses `agent-browser --auto-connect open <url>` to establish the connection.
+### Why these flags
 
-If auto-connect fails (Chrome not running or remote debugging not enabled), stop and inform the user:
-- "Chrome remote debugging is not enabled. Please open `chrome://inspect/#remote-debugging` to enable it."
+agent-browser CLI 0.26 hardcodes an env var name for state auto-load that, if exported, makes the daemon navigate to `origins[0]` on the first command and reject any subsequent `--state` flag with `⚠ --state ignored: daemon already running`. To stay clear of that behavior, **never** export `AGENT_BROWSER_STATE` in this environment, and pass `--state` explicitly on the call that may start the daemon.
 
-**When to use other modes instead:**
-- User explicitly requests a fresh/clean browser state → `--session-name {project}`
+The host's `AGENT_BROWSER_STATE_PATH` env var is intentionally **not** referenced from these flags. Past iterations relied on it, but it does not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells. Using a literal path eliminates that uncertainty.
+
+### Cleanup
+
+Daemon idle timeout is disabled by default (`AGENT_BROWSER_IDLE_TIMEOUT_MS`), so each Claude session's daemon stays up until you `close` it. Close at the end of the workflow:
+
+```bash
+# Normal cleanup at end of workflow
+agent-browser --session "claude-$PPID" close
+
+# Stale socket / pid sidecars from a previous crash
+agent-browser doctor --fix
+```
+
+For richer session management options (named sessions for parallel scraping, state persistence patterns) see [references/session-management.md](references/session-management.md).
+
+### Initial setup (one-time)
+
+Before the first agent-browser call, the user must populate the state file by running the host's `ab-state-refresh` zsh function. This:
+1. Creates `~/.agent-browser-state/` with mode 700.
+2. Connects to the user's running Chrome via the CDP WebSocket discovered from `DevToolsActivePort` (one-shot) and saves cookies + localStorage to the state file with mode 600.
+
+If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`ab-state-refresh\` to import auth state from your Chrome.`
+
+### Sharing one daemon across main + subagents
+
+Within a single Claude session, the main agent and any subagents (Agent tool / Task tool) all see the same `$PPID` (the Claude main process), so they share one `claude-$PPID` daemon. This is intended for `qa-planner` Mode C: Lead and QA Tester both interact with the same authenticated browser. The implication is that **neither side should `close` until the workflow is complete** — `close` tears down the daemon for everyone.
+
+### Tab-Safe Navigation
+
+`agent-browser open <url>` navigates the **active tab** of the headless instance — but since the headless instance is not the user's live Chrome, "active tab" simply means the daemon's current tab. To keep multiple URLs in the same daemon session without overwriting:
+
+```bash
+agent-browser tab new <url>
+agent-browser tab new <url> --label work   # name the tab for stable later reference
+```
+
+Tabs use stable string ids (`t1`, `t2`, ...). Pass `--label <name>` at creation time to reference the tab by a memorable name.
+
+### Escape hatch: `--auto-connect`
+
+`--auto-connect` (CDP attach to the user's live Chrome) is retained for the rare cases where state-import + headless cannot reproduce the target behavior:
+
+- Real-time interaction with the user's logged-in browser (e.g., observing in-flight OAuth popups they trigger manually).
+- Sites whose state lives in IndexedDB / Service Worker / Web SQL that the cookie+localStorage state file does not capture.
+- The `state save` operation itself (used internally by `ab-state-refresh`).
+
+When using `--auto-connect`, expect to share the user's window — coordinate with them to avoid collisions. Prefer state-import for everything else.
 
 ## Core Workflow
 
@@ -126,18 +174,22 @@ This approach uses 4 tool calls instead of 14+. Never go back to the listing pag
 
 ## Handling Authentication
 
-When automating a site that requires login, choose the approach that fits:
+This environment uses **state-import as the default authentication strategy** (see Default Flags). The host's `ab-state-refresh` function captures the user's Chrome auth state once into a plaintext JSON file at `~/.agent-browser-state/main.json` (mode 600), and each command loads it via `--state "$HOME/.agent-browser-state/main.json"` on the first call of the Claude session.
 
-**Option 1: Import auth from the user's browser (fastest for one-off tasks)**
+Other authentication options remain available for special cases:
+
+**Option 1: Persistent Chrome profile (when state file isn't enough)**
+
+If a target site depends on IndexedDB / Service Worker (which the state file does not capture), use a persistent profile:
 
 ```bash
-# Connect to the user's running Chrome (they're already logged in)
-agent-browser --auto-connect state save ./auth.json
-# Use that auth state
-agent-browser --state ./auth.json open https://app.example.com/dashboard
-```
+# First run: login manually
+agent-browser --profile ~/.myapp open https://app.example.com/login
+# ... fill credentials, submit ...
 
-State files contain session tokens in plaintext -- add to `.gitignore` and delete when no longer needed. Set `AGENT_BROWSER_ENCRYPTION_KEY` for encryption at rest.
+# All future runs: already authenticated, full storage preserved
+agent-browser --profile ~/.myapp open https://app.example.com/dashboard
+```
 
 **Option 2: Chrome profile reuse (zero setup)**
 
@@ -220,7 +272,7 @@ agent-browser check @e1               # Check checkbox
 agent-browser press Enter             # Press key
 agent-browser keyboard type "text"    # Type at current focus (no selector)
 agent-browser keyboard inserttext "text"  # Insert without key events
-agent-browser scroll down 500         # Scroll page
+agent-browser scroll down 500         # Scroll page. Sends keyboard events; on GitHub/Gmail/Linear avoid scroll or use 'pdf' — see "Site keybind conflicts" pattern below.
 agent-browser scroll down 500 --selector "div.content"  # Scroll within a specific container
 
 # Get information
@@ -319,6 +371,64 @@ Every session automatically starts a WebSocket stream server on an OS-assigned p
 
 ## Common Patterns
 
+### Site keybind conflicts (mitigation, not guarantee)
+
+`agent-browser scroll <direction> <px>` sends OS keyboard events (PageDown / arrow keys). Sites that bind single-letter shortcuts to navigation — GitHub (the `gd` shortcut goes to the Dashboard, `gh` to Home, `gn` to Notifications), Gmail (`j` / `k` → next/prev message), Linear, Discord — interpret those events as their own shortcuts and silently navigate away mid-action. The CLI cannot tell whether the page navigated; only `get url` or `tab list` reveals the drift.
+
+**No alternative is 100% safe** on these sites. Recommendations in priority order:
+
+1. **Avoid scrolling**. For content capture (summarization, README inspection, repository overview), use `pdf` to write the entire scrollable document to a single file. No scroll, no keybind collision, one artifact.
+2. **`scrollintoview @ref`** (alias `scrollinto`). Targets a snapshot ref; appears to be pure-JS but the internals are not documented in the CLI reference. Treat URL drift the same as `eval scrollTo` if observed.
+3. **`eval window.scrollTo(x, y)`**. Pure JS, no synthetic keyboard events — but the recording session at `~/.claude/projects/-Users-wadackel-dotfiles/70a2d283-...jsonl` (line 296) observed dashboard navigation after `eval scrollTo` followed by a long `wait`. Root cause unknown. **Verify URL with `get url` immediately after.**
+
+#### Sandwich verification with batch
+
+`agent-browser batch` is sequential-only — it cannot branch on intermediate output (see L144 below). Place `get url` and `tab list` inside the batch as **recordings**, then read the batch's combined stdout afterward to decide whether the URL drifted:
+
+```bash
+SESSION="claude-$PPID"
+
+# Sandwich the action between URL/tab probes inside one batch
+agent-browser --session "$SESSION" batch \
+  "tab new https://github.com/owner/repo" \
+  "wait 3000" \
+  "get url" \
+  "tab list" \
+  "scrollintoview @e1" \
+  "wait 500" \
+  "get url" \
+  "tab list"
+
+# Read the stdout above. If the post-action 'get url' is not the expected URL,
+# the page navigated mid-batch — stop and investigate before issuing the next batch.
+```
+
+`get url` reports the active tab's URL; `tab list` reports every tab's URL with stable ids. Use both — `get url` catches navigation in the active tab, `tab list` catches cases where a new tab took focus.
+
+### Content capture: prefer pdf over scroll+screenshot
+
+For "summarize the page" / "what's in this README" / "give me the repo overview" tasks, generate a PDF of the entire scrollable area. PDF capture:
+
+- captures the full document, not just the viewport
+- avoids site-keybind collisions (no scroll required)
+- produces a single artifact you can re-read or attach
+
+Single-call form: `agent-browser --session "claude-$PPID" pdf /tmp/page.pdf` writes the current tab's full document to a PDF.
+
+Recommended sandwich (open + verify URL + capture in one batch):
+
+```bash
+SESSION="claude-$PPID"
+
+agent-browser --session "$SESSION" batch \
+  "tab new https://github.com/owner/repo" \
+  "wait 3000" \
+  "get url" \
+  "pdf /tmp/repo-contents.pdf"
+```
+
+Use `screenshot` only when you specifically need viewport-fit framing or want to capture a particular visual UI state (modal open, hover effect, error overlay). For content-summarization tasks, `pdf` is strictly more reliable.
+
 ### Form Submission
 
 ```bash
@@ -331,7 +441,7 @@ agent-browser batch "fill @e1 \"Jane Doe\"" "fill @e2 \"jane@example.com\"" "sel
 ### Authentication with Auth Vault (Recommended)
 
 ```bash
-# Save credentials once (encrypted with AGENT_BROWSER_ENCRYPTION_KEY)
+# Save credentials once (stored under ~/.agent-browser/ with mode 600)
 # Recommended: pipe password via stdin to avoid shell history exposure
 echo "pass" | agent-browser auth save github --url https://github.com/login --username user --password-stdin
 
@@ -368,10 +478,6 @@ agent-browser close  # State auto-saved to ~/.agent-browser/sessions/
 
 # Next time, state is auto-loaded
 agent-browser --session-name myapp open https://app.example.com/dashboard
-
-# Encrypt state at rest
-export AGENT_BROWSER_ENCRYPTION_KEY=$(openssl rand -hex 32)
-agent-browser --session-name secure open https://app.example.com
 
 # Manage saved states
 agent-browser state list
@@ -480,7 +586,9 @@ agent-browser --session site2 snapshot -i
 agent-browser session list
 ```
 
-### Connect to Existing Chrome
+### Connect to Existing Chrome (escape hatch)
+
+`--auto-connect` is reserved for cases where state-import is insufficient (real-time observation of the user's live browser, IndexedDB-bound sites, the `state save` operation itself):
 
 ```bash
 # Auto-discover running Chrome with remote debugging enabled
@@ -491,7 +599,7 @@ agent-browser --auto-connect snapshot
 agent-browser --cdp 9222 snapshot
 ```
 
-Auto-connect discovers Chrome via `DevToolsActivePort`, common debugging ports (9222, 9229), and falls back to a direct WebSocket connection if HTTP-based CDP discovery fails.
+Auto-connect discovers Chrome via `DevToolsActivePort`, common debugging ports (9222, 9229), and falls back to a direct WebSocket connection if HTTP-based CDP discovery fails. Using this attaches to the user's window — coordinate to avoid collisions.
 
 ### Color Scheme (Dark Mode)
 
@@ -532,12 +640,12 @@ The `scale` parameter (3rd argument) sets `window.devicePixelRatio` without chan
 ### Visual Browser (Debugging)
 
 ```bash
-agent-browser open https://example.com
-agent-browser highlight @e1          # Highlight element
-agent-browser inspect                # Open Chrome DevTools for the active page
-agent-browser record start demo.webm # Record session
-agent-browser profiler start         # Start Chrome DevTools profiling
-agent-browser profiler stop trace.json # Stop and save profile (path optional)
+agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" open https://example.com
+agent-browser --session "claude-$PPID" highlight @e1   # Highlight element (daemon already up — --state not needed once attached)
+agent-browser --session "claude-$PPID" inspect          # Open Chrome DevTools for the active page
+agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" record start demo.webm  # If this is the call that starts the daemon, --state is required
+agent-browser --session "claude-$PPID" profiler start   # Start Chrome DevTools profiling
+agent-browser --session "claude-$PPID" profiler stop trace.json  # Stop and save profile (path optional)
 ```
 
 Use `AGENT_BROWSER_HEADED=1` to enable headed mode via environment variable. Browser extensions work in both headed and headless mode.
@@ -909,6 +1017,10 @@ Stale socket / pid / version sidecar files are auto-cleaned on every run. Destru
 - Do not guess refs -- always snapshot first and use the returned `@eN` references
 - Do not call original `alert`/`confirm` from eval interceptors -- it re-triggers the native dialog and blocks agent-browser
 - Do not use `wait --load networkidle` on ad-heavy or analytics-heavy sites -- it will hang indefinitely; use `wait 2000` or `wait <selector>` instead
+- Do not use `scroll` on sites with single-key keyboard shortcuts (GitHub, Gmail, Linear, Discord) -- it sends keyboard events that collide with site handlers and silently navigate away; use `pdf` for content capture, or `scrollintoview @ref` / `eval window.scrollTo()` followed by `get url` verification
+- Do not skip URL/tab verification between actions during recording -- `get url` or `tab list` inside the same `batch` is the only way to detect silent navigation before the video is reviewed; the recording itself succeeds even when the page drifts
+- Do not assume `eval window.scrollTo()` is keybind-safe -- a long `wait` after `eval scrollTo` was observed to land on the dashboard in one session; verify URL with `get url` immediately after every scroll-like action
+- Do not retry the same failing strategy more than twice -- when scroll+screenshot misfires, switch strategy (use `pdf` for content capture, `scrollintoview @ref` instead of `scroll`, or capture the initial viewport only) instead of repeating the same approach
 
 ## Deep-Dive Documentation
 

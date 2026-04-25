@@ -128,18 +128,17 @@ Category coverage checklist:
 
 For WebApp / Electron / Slack targets, call `Skill(skill: "agent-browser")` at the start of Step 4 even if Step 2 already loaded it. Re-loading is idempotent and cheap — do NOT attempt to detect "already loaded"; that detection is unreliable across compaction boundaries.
 
-Loading the skill brings agent-browser's Default Flags into context. The two defaults that must apply to every browser invocation below:
+Loading the skill brings agent-browser's Default Flags into context. The default that must apply to every browser invocation below:
 
-- **`--auto-connect`**: attaches to the user's existing Chrome (reuses auth cookies / localStorage). Required for any authenticated local SaaS / dev / staging URL. Omit only when the user explicitly asks for a fresh headless context (then pair with `--headed` or `--session-name`).
-- **Tab-safe open**: prefer `agent-browser --auto-connect tab new <url>` over bare `agent-browser open <url>` to avoid overwriting pinned or unrelated tabs. First-time daemon connection may still use `agent-browser --auto-connect open <url>`.
+- **State-import + headless + per-Claude-session daemon**: every `agent-browser` invocation must carry two flags — `--session "claude-$PPID"` (isolates the daemon to this Claude session, so parallel Claude instances cannot kill each other's daemon) and `--state "$HOME/.agent-browser-state/main.json"` on the first call (loads the plaintext state file written by `ab-state-refresh`). Subsequent calls within the same Claude session can omit `--state`. Lead and QA Tester subagents share the same daemon (same `$PPID`) — neither side should `close` until the workflow is complete. The user's live Chrome window is not touched, eliminating window-collision risk during QA execution.
 
-If auto-connect fails (Chrome not running / remote debugging disabled), stop and ask the user to enable `chrome://inspect/#remote-debugging`. Do not silently fall back to a fresh headless context — authenticated targets will land on the login page.
+If a browser command fails with `No such file or directory: .../main.json`, the state file has not been imported yet. Stop and ask the user to run `ab-state-refresh` against a logged-in Chrome (see agent-browser `references/authentication.md`). Do not fall back to attaching the user's live Chrome — that re-introduces the collision risk this default eliminates.
 
 #### Tool Selection
 
 | Type | Approach |
 |------|----------|
-| WebApp | `agent-browser --auto-connect tab new <url>` for browser automation (open, fill, click, snapshot, screenshot, console/network checks). See Pre-flight above for default flags. |
+| WebApp | `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" tab new <url>` for browser automation (open, fill, click, snapshot, screenshot, console/network checks). See Pre-flight above for why both flags are required. |
 | API Server | Use `curl -s -w "\n%{http_code}"` to capture response body and status code |
 | CLI Tool | Execute commands directly via `Bash`, verify stdout, stderr, and exit codes |
 | Background Service | Combine `curl` (trigger/check endpoints) + log inspection |
@@ -158,9 +157,9 @@ If auto-connect fails (Chrome not running / remote debugging disabled), stop and
 Record evidence to prove test execution results. Commands reference `agent-browser` skill.
 
 **Video recording workflow:**
-1. Before executing the first test case: `agent-browser record start /tmp/qa-test-evidence.webm`
+1. Before executing the first test case: `agent-browser --session "claude-$PPID" record start /tmp/qa-test-evidence-$PPID.webm` (the `$PPID` suffix prevents collision when parallel Claude sessions record simultaneously)
 2. Execute all test cases sequentially
-3. After the last test case completes: `agent-browser record stop`
+3. After the last test case completes: `agent-browser --session "claude-$PPID" record stop`
 
 One continuous recording captures the entire session. Do not start/stop per test case.
 
@@ -248,7 +247,7 @@ After structured tests pass, run a brief exploratory session focused on high-ris
 [bugs, concerns, or observations discovered during testing]
 
 ### Evidence
-- **Video**: `/tmp/qa-test-evidence.webm`
+- **Video**: `/tmp/qa-test-evidence-$PPID.webm`
 - **Screenshots**:
   - `/tmp/qa-t1-home.png` - T1: [description]
   - `/tmp/qa-t2-error.png` - T2: [description]

@@ -160,6 +160,43 @@ agent-browser screenshot ./screenshots/step2-after-click.png
 agent-browser record stop
 ```
 
+### 5. Verify URL and Tab State Before and After Recording
+
+The recording itself succeeds even when the page silently navigates mid-flow. Sandwich every action between `get url` and `tab list` probes inside the same `batch` so silent navigation surfaces in the batch output instead of being discovered after reviewing a multi-minute video.
+
+`agent-browser batch` is sequential-only — it cannot branch on intermediate output. The probes inside the batch are **recordings**; you read the batch's combined stdout afterward and decide whether to issue the next batch. If the post-action `get url` does not match the expected URL, stop recording and investigate the cause (keybind collision, expired auth, redirect) before resuming.
+
+Use both probes — `get url` reports the active tab's URL, while `tab list` reveals every tab's URL with stable ids and catches the case where focus has shifted to a different tab.
+
+```bash
+SESSION="claude-$PPID"
+EXPECTED_URL="https://github.com/owner/repo"
+
+agent-browser --session "$SESSION" record start /tmp/qa-test.webm
+
+# Open + verify URL/tab state in one batch
+agent-browser --session "$SESSION" batch \
+  "tab new $EXPECTED_URL" \
+  "wait 3000" \
+  "get url" \
+  "tab list"
+
+# Read the batch output above. Confirm 'get url' == "$EXPECTED_URL"
+# and 'tab list' shows the expected tab as active. If not, stop and investigate.
+
+# Wrap each subsequent action between fresh URL/tab probes
+agent-browser --session "$SESSION" batch \
+  "scrollintoview @e1" \
+  "wait 500" \
+  "get url" \
+  "tab list"
+
+# Read again. URL drift here usually means a site keybind collided
+# with the action — see "Site Keybind Conflicts During Recording" below.
+
+agent-browser --session "$SESSION" record stop
+```
+
 ## Output Format
 
 - Default format: WebM (VP8/VP9 codec)
@@ -171,3 +208,9 @@ agent-browser record stop
 - Recording adds slight overhead to automation
 - Large recordings can consume significant disk space
 - Some headless environments may have codec limitations
+
+### Site Keybind Conflicts During Recording
+
+`agent-browser scroll` sends OS keyboard events that some sites interpret as their own shortcuts — GitHub `gd` jumps to the Dashboard, Gmail `j` / `k` move between messages — and the page navigates mid-recording. The webm file still saves, but the captured content is not what the automation intended.
+
+See SKILL.md "### Site keybind conflicts (mitigation, not guarantee)" for the full mitigation matrix and recommended alternatives (`pdf`, `scrollintoview @ref`, `eval window.scrollTo()` with URL verification).

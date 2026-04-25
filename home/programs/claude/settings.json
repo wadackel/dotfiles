@@ -753,8 +753,8 @@
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
+  "preferredNotifChannel": "terminal_bell",
   "teammateMode": "in-process",
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "preferredNotifChannel": "terminal_bell"
+  "voiceEnabled": true
 }

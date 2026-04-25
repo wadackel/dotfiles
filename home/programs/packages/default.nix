@@ -20,6 +20,7 @@
 
     # Code Analysis & Development Tools
     ast-grep # Fast and polyglot tool for code searching, linting, rewriting
+    deno # Secure JavaScript/TypeScript runtime
     just # Handy way to save and run project-specific commands
     mo # Markdown viewer in browser
     pinact # Pin GitHub Actions versions to full commit SHAs
