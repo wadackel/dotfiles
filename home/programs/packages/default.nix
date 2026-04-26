@@ -64,7 +64,6 @@
     watchman # File watching service
 
     # AI Coding Agents
-    codex # OpenAI's lightweight coding agent CLI
     gemini-cli # Google Gemini AI CLI for the terminal
   ];
 

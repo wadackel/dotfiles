@@ -1,10 +1,10 @@
 ---
 name: codex-cli
-description: Delegates tasks to Codex CLI for code analysis, investigation,
-  second opinions, and general-purpose coding assistance. Also use in plan mode
-  for design validation and architecture second opinions. Triggers: "ask Codex",
-  "Codexに聞いて", "Codexで分析して", "Codexで調べて", "get Codex's opinion",
-  "セカンドオピニオン". Codex analyzes and advises; Claude Code implements.
+description: |
+  Delegates tasks to Codex CLI for code analysis, investigation, second opinions, and general-purpose coding assistance.
+  Also use in plan mode for design validation and architecture second opinions.
+  Triggers: "ask Codex", "Codexに聞いて", "Codexで分析して", "Codexで調べて", "get Codex's opinion", "セカンドオピニオン".
+  Codex analyzes and advises; Claude Code implements.
 ---
 
 # Codex CLI

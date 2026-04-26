@@ -1,6 +1,11 @@
 ---
 name: gemini-research
-description: Research and codebase analysis via Gemini CLI. Use proactively for large codebase exploration, library/framework comparison, error troubleshooting, and best practices research. Also use in plan mode for pre-implementation research. Triggers: "analyze this code", "what's the best library for X?", "how do I fix this error?", "コードを調査して", "ライブラリ比較". Gemini researches; Claude Code implements.
+description: |
+  Research and codebase analysis via Gemini CLI.
+  Use proactively for large codebase exploration, library/framework comparison, error troubleshooting, and best practices research.
+  Also use in plan mode for pre-implementation research.
+  Triggers: "analyze this code", "what's the best library for X?", "how do I fix this error?", "コードを調査して", "ライブラリ比較".
+  Gemini researches; Claude Code implements.
 ---
 
 # Gemini Research

@@ -580,6 +580,241 @@ keymap({ "n" }, "<Space>mq", "<cmd>MoShutdown<CR>")
 keymap({ "n" }, "<Space>mb", "<cmd>MoBrowse<CR>")
 keymap({ "n" }, "<Space>mc", "<cmd>MoClear<CR>")
 
+
+-- =============================================================
+-- Agent Prompt Workflow
+-- =============================================================
+-- Accumulate review / implementation-request notes tied to file+range,
+-- then export as a single `@file#range` Markdown prompt for Claude Code / Codex.
+
+local AP = {
+  comments = {},
+  next_id = 1,
+  input_win = nil,
+  input_buf = nil,
+  input_ctx = nil,
+}
+
+local function ap_format_ref(file, range)
+  if range then
+    return string.format("@%s#%d-%d", file, range[1], range[2])
+  end
+  return "@" .. file
+end
+
+local function ap_resolve_file(bufnr)
+  local bufname = vim.api.nvim_buf_get_name(bufnr)
+
+  -- diffview: only when the buffer itself belongs to the diffview view.
+  -- view:infer_cur_file() ignores bufnr, so we must gate on the bufname.
+  if bufname:match("^diffview://") then
+    local ok, diffview_lib = pcall(require, "diffview.lib")
+    if ok then
+      local view = diffview_lib.get_current_view()
+      if view then
+        local file = view:infer_cur_file()
+        if file and file.path then
+          return file.path
+        end
+      end
+    end
+  end
+
+  if bufname:match("^fugitive://") then
+    local ok2, real = pcall(vim.fn.FugitiveReal, bufname)
+    if ok2 and real ~= "" then
+      return vim.fn.fnamemodify(real, ":.")
+    end
+  end
+
+  if vim.bo[bufnr].buftype ~= "" then
+    return nil
+  end
+  if bufname == "" then
+    return nil
+  end
+  return vim.fn.fnamemodify(bufname, ":.")
+end
+
+function AP.build_prompt()
+  local sections = { "Please address the following:", "" }
+  for _, c in ipairs(AP.comments) do
+    table.insert(sections, "### " .. ap_format_ref(c.file, c.range))
+    table.insert(sections, "")
+    table.insert(sections, c.body)
+    table.insert(sections, "")
+  end
+  return table.concat(sections, "\n")
+end
+
+function AP.open_input(file, range)
+  if AP.input_win and vim.api.nvim_win_is_valid(AP.input_win) then
+    local ctx = AP.input_ctx or { file = "?", range = nil }
+    vim.notify("Returning to existing draft for " .. ap_format_ref(ctx.file, ctx.range), vim.log.levels.WARN)
+    vim.api.nvim_set_current_win(AP.input_win)
+    return
+  end
+
+  AP.input_buf = vim.api.nvim_create_buf(false, true)
+  -- acwrite (not nofile) so BufWriteCmd fires on :w. nofile blocks :w with E382.
+  vim.bo[AP.input_buf].buftype = "acwrite"
+  vim.bo[AP.input_buf].bufhidden = "hide"
+  vim.bo[AP.input_buf].filetype = "markdown"
+  -- :w needs a buffer name. Use a custom URI tied to the buffer id for uniqueness.
+  vim.api.nvim_buf_set_name(AP.input_buf, "agent-prompt://" .. AP.input_buf .. "/" .. ap_format_ref(file, range))
+  AP.input_ctx = { file = file, range = range }
+
+  local width = math.floor(vim.o.columns * 0.5)
+  local height = math.floor(vim.o.lines * 0.5)
+  AP.input_win = vim.api.nvim_open_win(AP.input_buf, true, {
+    relative = "editor",
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    width = width,
+    height = height,
+    border = "rounded",
+    title = ap_format_ref(file, range),
+    title_pos = "center",
+  })
+
+  local bufnr = AP.input_buf
+  vim.api.nvim_create_autocmd("BufWriteCmd", {
+    buffer = bufnr,
+    callback = function()
+      AP.commit_input()
+    end,
+  })
+  vim.keymap.set("i", "<C-s>", function()
+    vim.cmd("stopinsert")
+    AP.commit_input()
+  end, { buffer = bufnr })
+  vim.keymap.set("n", "q", function()
+    AP.cancel_input()
+  end, { buffer = bufnr })
+  vim.keymap.set("n", "<C-c>", function()
+    AP.cancel_input()
+  end, { buffer = bufnr })
+
+  vim.cmd("startinsert")
+end
+
+local function ap_close_input()
+  if AP.input_win and vim.api.nvim_win_is_valid(AP.input_win) then
+    vim.api.nvim_win_close(AP.input_win, true)
+  end
+  -- Explicitly delete the scratch buffer: bufhidden=hide keeps it alive on
+  -- accidental window switches, but normal close/commit paths should free it.
+  if AP.input_buf and vim.api.nvim_buf_is_valid(AP.input_buf) then
+    vim.api.nvim_buf_delete(AP.input_buf, { force = true })
+  end
+  AP.input_win = nil
+  AP.input_buf = nil
+  AP.input_ctx = nil
+end
+
+function AP.commit_input()
+  if not (AP.input_buf and vim.api.nvim_buf_is_valid(AP.input_buf)) then
+    return
+  end
+  if not AP.input_ctx then
+    ap_close_input()
+    return
+  end
+  local lines = vim.api.nvim_buf_get_lines(AP.input_buf, 0, -1, false)
+  while #lines > 0 and lines[#lines]:match("^%s*$") do
+    table.remove(lines)
+  end
+  if #lines == 0 then
+    vim.notify("Empty comment, skipped", vim.log.levels.WARN)
+    ap_close_input()
+    return
+  end
+  local ctx = AP.input_ctx
+  table.insert(AP.comments, {
+    id = AP.next_id,
+    file = ctx.file,
+    range = ctx.range,
+    body = table.concat(lines, "\n"),
+  })
+  AP.next_id = AP.next_id + 1
+  ap_close_input()
+end
+
+function AP.cancel_input()
+  ap_close_input()
+end
+
+vim.api.nvim_create_user_command("AgentPromptAdd", function(opts)
+  local file = ap_resolve_file(0)
+  if not file then
+    vim.notify("Cannot resolve file for this buffer", vim.log.levels.ERROR)
+    return
+  end
+  local range = opts.range > 0 and { opts.line1, opts.line2 } or nil
+  AP.open_input(file, range)
+end, { range = true })
+
+vim.api.nvim_create_user_command("AgentPromptList", function()
+  Snacks.picker.pick({
+    source = "agent_prompt",
+    format = "text",
+    preview = "preview",
+    finder = function()
+      local items = {}
+      for _, c in ipairs(AP.comments) do
+        local short = c.body:gsub("\n", " "):sub(1, 60)
+        table.insert(items, {
+          text = ap_format_ref(c.file, c.range) .. " — " .. short,
+          id = c.id,
+          preview = { text = c.body, ft = "markdown" },
+        })
+      end
+      return items
+    end,
+    actions = {
+      delete_entry = function(picker, item)
+        for i = #AP.comments, 1, -1 do
+          if AP.comments[i].id == item.id then
+            table.remove(AP.comments, i)
+            break
+          end
+        end
+        picker:find()
+      end,
+    },
+    win = {
+      input = {
+        keys = {
+          ["<C-d>"] = { "delete_entry", mode = { "n", "i" } },
+          ["dd"] = { "delete_entry", mode = "n" },
+        },
+      },
+    },
+  })
+end, {})
+
+vim.api.nvim_create_user_command("AgentPromptFinish", function()
+  if #AP.comments == 0 then
+    vim.notify("No agent prompts to finish", vim.log.levels.WARN)
+    return
+  end
+  local count = #AP.comments
+  vim.fn.setreg("+", AP.build_prompt())
+  AP.comments = {}
+  AP.next_id = 1
+  vim.notify("Agent prompt copied to clipboard (" .. count .. " comments)", vim.log.levels.INFO)
+end, {})
+
+keymap({ "n", "v" }, "<Leader>aa", ":AgentPromptAdd<CR>", { desc = "Agent prompt: add" })
+keymap({ "n" }, "<Leader>al", ":AgentPromptList<CR>", { desc = "Agent prompt: list" })
+keymap({ "n" }, "<Leader>af", ":AgentPromptFinish<CR>", { desc = "Agent prompt: finish → clipboard" })
+
+-- expose for headless tests; access as _G.AP.resolve_file etc.
+AP.resolve_file = ap_resolve_file
+AP.format_ref = ap_format_ref
+_G.AP = AP
+
+
 -- =============================================================
 -- Plugins
 -- =============================================================
@@ -4188,228 +4423,3 @@ require("lazy").setup({
     },
   },
 })
-
--- =============================================================
--- Agent Prompt Workflow
--- =============================================================
--- Accumulate review / implementation-request notes tied to file+range,
--- then export as a single `@file#range` Markdown prompt for Claude Code / Codex.
-
-local AP = {
-  comments = {},
-  next_id = 1,
-  input_win = nil,
-  input_buf = nil,
-  input_ctx = nil,
-}
-
-local function ap_format_ref(file, range)
-  if range then
-    return string.format("@%s#%d-%d", file, range[1], range[2])
-  end
-  return "@" .. file
-end
-
-local function ap_resolve_file(bufnr)
-  local bufname = vim.api.nvim_buf_get_name(bufnr)
-
-  -- diffview: only when the buffer itself belongs to the diffview view.
-  -- view:infer_cur_file() ignores bufnr, so we must gate on the bufname.
-  if bufname:match("^diffview://") then
-    local ok, diffview_lib = pcall(require, "diffview.lib")
-    if ok then
-      local view = diffview_lib.get_current_view()
-      if view then
-        local file = view:infer_cur_file()
-        if file and file.path then
-          return file.path
-        end
-      end
-    end
-  end
-
-  if bufname:match("^fugitive://") then
-    local ok2, real = pcall(vim.fn.FugitiveReal, bufname)
-    if ok2 and real ~= "" then
-      return vim.fn.fnamemodify(real, ":.")
-    end
-  end
-
-  if vim.bo[bufnr].buftype ~= "" then
-    return nil
-  end
-  if bufname == "" then
-    return nil
-  end
-  return vim.fn.fnamemodify(bufname, ":.")
-end
-
-function AP.build_prompt()
-  local sections = { "Please address the following:", "" }
-  for _, c in ipairs(AP.comments) do
-    table.insert(sections, "### " .. ap_format_ref(c.file, c.range))
-    table.insert(sections, "")
-    table.insert(sections, c.body)
-    table.insert(sections, "")
-  end
-  return table.concat(sections, "\n")
-end
-
-function AP.open_input(file, range)
-  if AP.input_win and vim.api.nvim_win_is_valid(AP.input_win) then
-    local ctx = AP.input_ctx or { file = "?", range = nil }
-    vim.notify("Returning to existing draft for " .. ap_format_ref(ctx.file, ctx.range), vim.log.levels.WARN)
-    vim.api.nvim_set_current_win(AP.input_win)
-    return
-  end
-
-  AP.input_buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[AP.input_buf].buftype = "nofile"
-  vim.bo[AP.input_buf].bufhidden = "hide"
-  vim.bo[AP.input_buf].filetype = "markdown"
-  AP.input_ctx = { file = file, range = range }
-
-  local width = math.floor(vim.o.columns * 0.5)
-  local height = math.floor(vim.o.lines * 0.5)
-  AP.input_win = vim.api.nvim_open_win(AP.input_buf, true, {
-    relative = "editor",
-    row = math.floor((vim.o.lines - height) / 2),
-    col = math.floor((vim.o.columns - width) / 2),
-    width = width,
-    height = height,
-    border = "rounded",
-    title = ap_format_ref(file, range),
-    title_pos = "center",
-  })
-
-  local bufnr = AP.input_buf
-  vim.keymap.set("n", "<CR>", function()
-    AP.commit_input()
-  end, { buffer = bufnr })
-  vim.keymap.set("i", "<C-s>", function()
-    vim.cmd("stopinsert")
-    AP.commit_input()
-  end, { buffer = bufnr })
-  vim.keymap.set("n", "q", function()
-    AP.cancel_input()
-  end, { buffer = bufnr })
-  vim.keymap.set("n", "<Esc>", function()
-    AP.cancel_input()
-  end, { buffer = bufnr })
-end
-
-local function ap_close_input()
-  if AP.input_win and vim.api.nvim_win_is_valid(AP.input_win) then
-    vim.api.nvim_win_close(AP.input_win, true)
-  end
-  -- Explicitly delete the scratch buffer: bufhidden=hide keeps it alive on
-  -- accidental window switches, but normal close/commit paths should free it.
-  if AP.input_buf and vim.api.nvim_buf_is_valid(AP.input_buf) then
-    vim.api.nvim_buf_delete(AP.input_buf, { force = true })
-  end
-  AP.input_win = nil
-  AP.input_buf = nil
-  AP.input_ctx = nil
-end
-
-function AP.commit_input()
-  if not (AP.input_buf and vim.api.nvim_buf_is_valid(AP.input_buf)) then
-    return
-  end
-  if not AP.input_ctx then
-    ap_close_input()
-    return
-  end
-  local lines = vim.api.nvim_buf_get_lines(AP.input_buf, 0, -1, false)
-  while #lines > 0 and lines[#lines]:match("^%s*$") do
-    table.remove(lines)
-  end
-  if #lines == 0 then
-    vim.notify("Empty comment, skipped", vim.log.levels.WARN)
-    ap_close_input()
-    return
-  end
-  local ctx = AP.input_ctx
-  table.insert(AP.comments, {
-    id = AP.next_id,
-    file = ctx.file,
-    range = ctx.range,
-    body = table.concat(lines, "\n"),
-  })
-  AP.next_id = AP.next_id + 1
-  ap_close_input()
-end
-
-function AP.cancel_input()
-  ap_close_input()
-end
-
-vim.api.nvim_create_user_command("AgentPromptAdd", function(opts)
-  local file = ap_resolve_file(0)
-  if not file then
-    vim.notify("Cannot resolve file for this buffer", vim.log.levels.ERROR)
-    return
-  end
-  local range = opts.range > 0 and { opts.line1, opts.line2 } or nil
-  AP.open_input(file, range)
-end, { range = true })
-
-vim.api.nvim_create_user_command("AgentPromptList", function()
-  Snacks.picker.pick({
-    source = "agent_prompt",
-    format = "text",
-    preview = "preview",
-    finder = function()
-      local items = {}
-      for _, c in ipairs(AP.comments) do
-        local short = c.body:gsub("\n", " "):sub(1, 60)
-        table.insert(items, {
-          text = ap_format_ref(c.file, c.range) .. " — " .. short,
-          id = c.id,
-          preview = { text = c.body, ft = "markdown" },
-        })
-      end
-      return items
-    end,
-    actions = {
-      delete_entry = function(picker, item)
-        for i = #AP.comments, 1, -1 do
-          if AP.comments[i].id == item.id then
-            table.remove(AP.comments, i)
-            break
-          end
-        end
-        picker:find()
-      end,
-    },
-    win = {
-      input = {
-        keys = {
-          ["<C-d>"] = { "delete_entry", mode = { "n", "i" } },
-          ["dd"] = { "delete_entry", mode = "n" },
-        },
-      },
-    },
-  })
-end, {})
-
-vim.api.nvim_create_user_command("AgentPromptFinish", function()
-  if #AP.comments == 0 then
-    vim.notify("No agent prompts to finish", vim.log.levels.WARN)
-    return
-  end
-  local count = #AP.comments
-  vim.fn.setreg("+", AP.build_prompt())
-  AP.comments = {}
-  AP.next_id = 1
-  vim.notify("Agent prompt copied to clipboard (" .. count .. " comments)", vim.log.levels.INFO)
-end, {})
-
-keymap({ "n", "v" }, "<Leader>aa", ":AgentPromptAdd<CR>", { desc = "Agent prompt: add" })
-keymap({ "n" }, "<Leader>al", ":AgentPromptList<CR>", { desc = "Agent prompt: list" })
-keymap({ "n" }, "<Leader>af", ":AgentPromptFinish<CR>", { desc = "Agent prompt: finish → clipboard" })
-
--- expose for headless tests; access as _G.AP.resolve_file etc.
-AP.resolve_file = ap_resolve_file
-AP.format_ref = ap_format_ref
-_G.AP = AP
