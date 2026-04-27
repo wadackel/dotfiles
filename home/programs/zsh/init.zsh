@@ -351,9 +351,9 @@ ab-state-refresh() {
       return 1
     fi
 
-    # Build TSV input for fzf: tabId\torigin\tactive_marker\ttitle.
-    # Filter out internal pages that have no useful localStorage and tabs
-    # whose URL has no extractable origin.
+    # TSV: tabId, origin, display. Padding is computed in jq (not via tabs)
+    # so alignment survives fzf's --with-nth rendering, which strips
+    # delimiter context. Filter out internal pages and URLs without an origin.
     local fzf_input
     fzf_input=$(agent-browser tab list --json 2>/dev/null | jq -r '
       .data.tabs
@@ -361,8 +361,12 @@ ab-state-refresh() {
       | map(select(.url | test("^[a-z][a-z0-9+\\-.]*://[^/]+")))
       | map(. + {origin: (.url | capture("^(?<o>[^/]+://[^/]+)").o)})
       | sort_by([(.active | not), .tabId])
+      | (map(.origin | length) | max // 0) as $w
       | .[]
-      | [.tabId, .origin, (if .active then "*" else " " end), (.title // "" | .[0:80])]
+      | (.origin | length) as $ow
+      | [.tabId, .origin,
+         (.origin + (if $w > $ow then " " * ($w - $ow) else "" end) + "  " +
+          (.title // "" | .[0:80]))]
       | @tsv
     ') || {
       print -u2 "ab-state-refresh: failed to list tabs."
@@ -377,7 +381,7 @@ ab-state-refresh() {
     selected=$(print -r -- "$fzf_input" | \
       fzf --height 40% --reverse --border --multi \
           --delimiter $'\t' \
-          --with-nth=3.. --nth=2.. \
+          --with-nth=3 \
           --header 'Select tabs to refresh (TAB to mark, ESC to cancel)')
 
     # Cancel (ESC or no selection): silent return, main.json untouched.
@@ -386,8 +390,8 @@ ab-state-refresh() {
     fi
 
     local -a sel_tab_ids sel_origins
-    local _t_id _t_origin _t_marker _t_title
-    while IFS=$'\t' read -r _t_id _t_origin _t_marker _t_title; do
+    local _t_id _t_origin _t_display
+    while IFS=$'\t' read -r _t_id _t_origin _t_display; do
       sel_tab_ids+=("$_t_id")
       sel_origins+=("$_t_origin")
     done <<< "$selected"

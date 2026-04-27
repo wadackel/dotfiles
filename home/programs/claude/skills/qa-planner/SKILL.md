@@ -134,6 +134,38 @@ Loading the skill brings agent-browser's Default Flags into context. The default
 
 If a browser command fails with `No such file or directory: .../main.json`, the state file has not been imported yet. Stop and ask the user to run `ab-state-refresh` against a logged-in Chrome (see agent-browser `references/authentication.md`). Do not fall back to attaching the user's live Chrome — that re-introduces the collision risk this default eliminates.
 
+#### Run directory setup (mandatory for every Mode B run)
+
+All QA evidence — recording, screenshots, and the Markdown report — is consolidated under `$PROJECT_ROOT/.wadackel/qa/<run-dir>/`. `.wadackel/` is already covered by the user's global gitignore, so no per-project ignore wiring is needed. Save to `/tmp/` is no longer used.
+
+Resolve `$RUN_DIR` once at Step 4 entry, before any record/screenshot/report command:
+
+```bash
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+# Default SLUG to empty (date-only directory). Override before running this snippet
+# when the verification target is concrete enough to label: take 1-3 main nouns
+# from the target description and kebab-case them
+# (e.g., "ログインフォームの入力バリデーション" → SLUG="login-form-validation").
+# Keep SLUG="" for generic targets like "動作確認" / "テストして" / "QAして" or unclear scope.
+SLUG=""
+RUN_DIR="$PROJECT_ROOT/.wadackel/qa/$(date +%Y-%m-%d_%H-%M)${SLUG:+_$SLUG}"
+mkdir -p "$RUN_DIR/screenshots"
+echo "RUN_DIR=$RUN_DIR"
+```
+
+Resulting layout:
+
+```
+$PROJECT_ROOT/.wadackel/qa/2026-04-27_14-30_login-form-validation/
+├── recording.webm
+├── screenshots/
+│   ├── qa-t1-home.png
+│   └── qa-t2-error.png
+└── report.md
+```
+
+**Mode C — passing $RUN_DIR to subagents**: each Bash tool call gets a fresh shell, so subagents do **not** inherit shell variables from the Lead's shells (unlike `$PPID`, which is auto-inherited from the parent process). The Lead must resolve `$RUN_DIR` to a literal path string and embed it in any `SendMessage` prompt to the QA Tester. The QA Tester re-uses that literal path verbatim — it must not recompute its own `$RUN_DIR` or the recording, screenshots, and report will land in different directories.
+
 #### Tool Selection
 
 | Type | Approach |
@@ -154,21 +186,24 @@ If a browser command fails with `No such file or directory: .../main.json`, the 
 
 #### Evidence Recording (WebApp)
 
-Record evidence to prove test execution results. Commands reference `agent-browser` skill.
+Record evidence to prove test execution results. Commands reference `agent-browser` skill. All paths below are anchored on the `$RUN_DIR` resolved in the Run directory setup block above. Save to `/tmp/` is no longer used.
 
-**Video recording workflow:**
-1. Before executing the first test case: `agent-browser --session "claude-$PPID" record start /tmp/qa-test-evidence-$PPID.webm` (the `$PPID` suffix prevents collision when parallel Claude sessions record simultaneously)
+**Video recording (mandatory for every browser verification, no opt-out):**
+1. Before executing the first test case: `agent-browser --session "claude-$PPID" record start "$RUN_DIR/recording.webm"`
 2. Execute all test cases sequentially
 3. After the last test case completes: `agent-browser --session "claude-$PPID" record stop`
 
-One continuous recording captures the entire session. Do not start/stop per test case.
+One continuous recording captures the entire session. Do not start/stop per test case. If the verification touches a browser, video is recorded — there is no flag to skip it. Parallel Claude sessions are isolated by `$PPID` in the daemon name and by `$RUN_DIR` (different timestamp / different project root), so per-session collision is already prevented without filename suffixes.
 
 **Screenshot rules:**
 - Take a screenshot **after each test action** that produces a visible result
 - Also capture **important intermediate states** (modal open, preview displayed, loading complete)
 - On FAIL: always capture the error state screenshot
 - Naming: `qa-{test-id}-{description}.png` (e.g., `qa-t1-home.png`, `qa-t4-upload-preview.png`)
-- Save to `/tmp/` (temporary files, not committed)
+- Save to `$RUN_DIR/screenshots/`, e.g.:
+  ```bash
+  agent-browser --session "claude-$PPID" screenshot "$RUN_DIR/screenshots/qa-t1-home.png"
+  ```
 
 **WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation -- the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
 
@@ -218,6 +253,8 @@ After structured tests pass, run a brief exploratory session focused on high-ris
 
 **Mode B output:**
 
+Render the QA Verification Results in your chat reply **and** persist the same Markdown body to `$RUN_DIR/report.md` so the report sits alongside the recording and screenshots. The two contents must be identical — write the Markdown once, reuse it in both places.
+
 ```
 ## QA Verification Results
 
@@ -247,14 +284,24 @@ After structured tests pass, run a brief exploratory session focused on high-ris
 [bugs, concerns, or observations discovered during testing]
 
 ### Evidence
-- **Video**: `/tmp/qa-test-evidence-$PPID.webm`
+- **Video**: `$RUN_DIR/recording.webm`
 - **Screenshots**:
-  - `/tmp/qa-t1-home.png` - T1: [description]
-  - `/tmp/qa-t2-error.png` - T2: [description]
+  - `$RUN_DIR/screenshots/qa-t1-home.png` — T1: [description]
+  - `$RUN_DIR/screenshots/qa-t2-error.png` — T2: [description]
   - ...
+- **Report**: `$RUN_DIR/report.md` (this file)
 
 ### Recommendations
 [next steps: fix critical issues, add regression tests, etc.]
+```
+
+To write the same body to disk, use a quoted-delimiter heredoc so `$RUN_DIR` and other shell metacharacters in the report content are preserved literally:
+
+```bash
+cat > "$RUN_DIR/report.md" <<'REPORT_EOF'
+# ... insert the FULL Mode B output template from above, verbatim ...
+# (Summary / Results table / Failed Tests / Issues Found / Evidence / Recommendations)
+REPORT_EOF
 ```
 
 ## Tips
