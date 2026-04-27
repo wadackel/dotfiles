@@ -324,34 +324,81 @@ ab-state-refresh() {
 
   agent-browser close >/dev/null 2>&1
 
-  if (( $# == 0 )); then
-    # No URLs: agent-browser state save captures whatever Page Target is
-    # currently focused in the user's Chrome plus its iframes. To capture
-    # additional origins, pass them as arguments.
-    (
-      umask 077
-      agent-browser connect "$ws_url" || exit 1
-      agent-browser state save "$state_path" || exit 1
-    ) || {
-      print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+  case "${1:-}" in
+  -i)
+    # Interactive: pick from currently-open Chrome tabs via fzf, then save
+    # each picked tab's origin (switch → wait → state save) and merge with jq.
+    # Active tab on exit is the last switched-to tab; user can Cmd+` to restore.
+    if (( $# > 1 )); then
+      print -u2 "ab-state-refresh: cannot combine -i with positional URL arguments"
+      print -u2 "  usage: ab-state-refresh [-i | URL [URL ...]]"
+      return 1
+    fi
+    if ! command -v fzf >/dev/null 2>&1; then
+      print -u2 "ab-state-refresh -i: fzf not found in PATH"
+      return 1
+    fi
+    if ! [[ -t 0 ]]; then
+      print -u2 "ab-state-refresh -i: requires TTY (fzf cannot run on piped stdin)"
+      return 1
+    fi
+
+    # Connect once in the parent shell so `tab list` sees the user's Chrome.
+    # The agent-browser daemon caches the CDP attach across CLI invocations,
+    # so the per-tab subshell below does not need to re-connect.
+    if ! agent-browser connect "$ws_url" >/dev/null 2>&1; then
+      print -u2 "ab-state-refresh: failed to connect to $ws_url."
+      return 1
+    fi
+
+    # Build TSV input for fzf: tabId\torigin\tactive_marker\ttitle.
+    # Filter out internal pages that have no useful localStorage and tabs
+    # whose URL has no extractable origin.
+    local fzf_input
+    fzf_input=$(agent-browser tab list --json 2>/dev/null | jq -r '
+      .data.tabs
+      | map(select(.url | test("^(chrome|about|chrome-extension|devtools):") | not))
+      | map(select(.url | test("^[a-z][a-z0-9+\\-.]*://[^/]+")))
+      | map(. + {origin: (.url | capture("^(?<o>[^/]+://[^/]+)").o)})
+      | sort_by([(.active | not), .tabId])
+      | .[]
+      | [.tabId, .origin, (if .active then "*" else " " end), (.title // "" | .[0:80])]
+      | @tsv
+    ') || {
+      print -u2 "ab-state-refresh: failed to list tabs."
       return 1
     }
-  else
-    # Multi-URL: state save only captures the focused tab + iframes, so open
-    # a new tab per URL, save each to a temp file, then merge origins via jq.
-    # cookies are browser-context-wide so any single save's cookies suffice
-    # (we keep the last). Each `tab new` opens a visible foreground tab — the
-    # user must close them manually after the run.
-    local merge_dir total=$#
+    if [[ -z "$fzf_input" ]]; then
+      print -u2 "ab-state-refresh: no eligible tabs to pick (all internal pages?)."
+      return 1
+    fi
+
+    local selected
+    selected=$(print -r -- "$fzf_input" | \
+      fzf --height 40% --reverse --border --multi \
+          --delimiter $'\t' \
+          --with-nth=3.. --nth=2.. \
+          --header 'Select tabs to refresh (TAB to mark, ESC to cancel)')
+
+    # Cancel (ESC or no selection): silent return, main.json untouched.
+    if [[ -z "$selected" ]]; then
+      return 0
+    fi
+
+    local -a sel_tab_ids sel_origins
+    local _t_id _t_origin _t_marker _t_title
+    while IFS=$'\t' read -r _t_id _t_origin _t_marker _t_title; do
+      sel_tab_ids+=("$_t_id")
+      sel_origins+=("$_t_origin")
+    done <<< "$selected"
+
+    local merge_dir total=${#sel_tab_ids[@]}
     merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
       print -u2 "ab-state-refresh: mktemp failed."
       return 1
     }
-    # Pre-create the state file under tight perms BEFORE the jq redirect below.
-    # `> "$state_path"` is parsed by the parent shell, so the file would
-    # otherwise be created with the parent's umask (typically 022 → mode 644)
-    # and exposed for the duration of jq's write. On first-ever runs the
-    # subsequent chmod 600 closes the window only after secrets are written.
+    # Pre-create main.json with mode 600 before the jq redirect (same TOCTOU
+    # rationale as the URL-arg path above).
     (umask 077 && : > "$state_path") || {
       rm -rf "$merge_dir"
       print -u2 "ab-state-refresh: failed to prepare $state_path."
@@ -359,19 +406,25 @@ ab-state-refresh() {
     }
     (
       umask 077
-      agent-browser connect "$ws_url" || exit 1
-      local idx=0 url
-      for url in "$@"; do
+      local idx=0 tab_id
+      for tab_id in "${sel_tab_ids[@]}"; do
         idx=$((idx + 1))
-        print -u2 "ab-state-refresh: opening tab $idx/$total: $url"
-        # `tab new` already waits for the load event; the extra 2 s gives async
-        # XHR-driven auth state a chance to land in localStorage before save.
-        # `wait --load networkidle` is avoided per agent-browser/SKILL.md (it
-        # hangs on ad-heavy or analytics-heavy sites).
-        agent-browser tab new "$url" || exit 1
+        print -u2 "ab-state-refresh: switching to tab $idx/$total: $tab_id"
+        # `tab tN` switches synchronously (verified empirically). If the user
+        # closed the tab between fzf confirm and now, the switch fails — warn
+        # and skip that tab so the remaining picks still get saved. wait/save
+        # failures further down are treated as fatal (the daemon is broken at
+        # that point) and abort the run via `exit 1`. `wait 2000` mirrors the
+        # URL-arg path: load + async XHR settle.
+        if ! agent-browser tab "$tab_id" >/dev/null 2>&1; then
+          print -u2 "ab-state-refresh: tab $tab_id no longer exists, skipping"
+          continue
+        fi
         agent-browser wait 2000 || exit 1
         agent-browser state save "$merge_dir/state.${idx}.json" || exit 1
       done
+      # If every tab switch failed, the glob below has no matches and jq -s
+      # exits non-zero, which the outer wrapper catches.
       jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}' \
         "$merge_dir"/state.*.json > "$state_path" || exit 1
     ) || {
@@ -380,7 +433,83 @@ ab-state-refresh() {
       return 1
     }
     rm -rf "$merge_dir"
-  fi
+
+    # Diagnostic: warn if any picked origin is absent from the saved state
+    # (typical cause: tab was on chrome-error://, e.g. local dev server down).
+    local saved_origins missing_list
+    saved_origins=$(jq -r '.origins[].origin' "$state_path" 2>/dev/null)
+    local -a missing
+    local _o
+    for _o in "${sel_origins[@]}"; do
+      if ! print -r -- "$saved_origins" | grep -Fxq -- "$_o"; then
+        missing+=("$_o")
+      fi
+    done
+    if (( ${#missing[@]} > 0 )); then
+      missing_list="${(j:, :)missing}"
+      print -u2 "ab-state-refresh: selected origins not saved: $missing_list"
+    fi
+    ;;
+  *)
+    if (( $# == 0 )); then
+      # No URLs: agent-browser state save captures whatever Page Target is
+      # currently focused in the user's Chrome plus its iframes. To capture
+      # additional origins, pass them as arguments.
+      (
+        umask 077
+        agent-browser connect "$ws_url" || exit 1
+        agent-browser state save "$state_path" || exit 1
+      ) || {
+        print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+        return 1
+      }
+    else
+      # Multi-URL: state save only captures the focused tab + iframes, so open
+      # a new tab per URL, save each to a temp file, then merge origins via jq.
+      # cookies are browser-context-wide so any single save's cookies suffice
+      # (we keep the last). Each `tab new` opens a visible foreground tab — the
+      # user must close them manually after the run.
+      local merge_dir total=$#
+      merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
+        print -u2 "ab-state-refresh: mktemp failed."
+        return 1
+      }
+      # Pre-create the state file under tight perms BEFORE the jq redirect below.
+      # `> "$state_path"` is parsed by the parent shell, so the file would
+      # otherwise be created with the parent's umask (typically 022 → mode 644)
+      # and exposed for the duration of jq's write. On first-ever runs the
+      # subsequent chmod 600 closes the window only after secrets are written.
+      (umask 077 && : > "$state_path") || {
+        rm -rf "$merge_dir"
+        print -u2 "ab-state-refresh: failed to prepare $state_path."
+        return 1
+      }
+      (
+        umask 077
+        agent-browser connect "$ws_url" || exit 1
+        local idx=0 url
+        for url in "$@"; do
+          idx=$((idx + 1))
+          print -u2 "ab-state-refresh: opening tab $idx/$total: $url"
+          # `tab new` already waits for the load event; the extra 2 s gives async
+          # XHR-driven auth state a chance to land in localStorage before save.
+          # `wait --load networkidle` is avoided per agent-browser/SKILL.md (it
+          # hangs on ad-heavy or analytics-heavy sites).
+          agent-browser tab new "$url" || exit 1
+          agent-browser wait 2000 || exit 1
+          agent-browser state save "$merge_dir/state.${idx}.json" || exit 1
+        done
+        jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}' \
+          "$merge_dir"/state.*.json > "$state_path" || exit 1
+      ) || {
+        rm -rf "$merge_dir"
+        print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+        return 1
+      }
+      rm -rf "$merge_dir"
+    fi
+    ;;
+  esac
 
   chmod 600 "$state_path"
 

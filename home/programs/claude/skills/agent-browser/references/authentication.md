@@ -69,8 +69,12 @@ This asymmetry is the typical root cause of the "cookies are present but the req
 
 - **Focus the target app's tab in Chrome and run `ab-state-refresh` with no arguments.**
 - **Pass URLs as arguments when multiple origins are needed**: `ab-state-refresh URL1 URL2 ...` opens a new tab per URL, runs `state save` per tab into a temp file, and merges the origins. Note that port is part of the origin per [RFC 6454](https://datatracker.ietf.org/doc/html/rfc6454), so `https://host:3000` and `https://host:3001` are distinct origins and must be passed separately.
+- **Pick from open tabs interactively with `-i`**: `ab-state-refresh -i` opens an fzf list of the currently-open Chrome tabs (internal pages like `chrome://`, `about:`, `chrome-extension://`, `devtools://` are excluded). TAB to multi-select, Enter to confirm, ESC to cancel. The function then switches to each picked tab in turn via `agent-browser tab tN`, waits for state to settle, and runs `state save` per tab into a temp dir before merging via the same `jq -s` pipeline as the multi-URL path. No new tabs are created — picks come from tabs already open. The active tab on exit is the **last switched-to tab** rather than the one focused before the run; use Cmd+\` in Chrome to restore. Mixing `-i` with positional URL arguments is not supported (the function exits with usage error).
 
-Side effect: passing URL arguments opens one visible foreground tab per URL in the user's Chrome. Close them manually after the run — the function deliberately does not auto-close them, since the user's navigation history would otherwise be disturbed.
+Side effects:
+- Passing URL arguments opens one visible foreground tab per URL. Close them manually after the run — the function deliberately does not auto-close them, since the user's navigation history would otherwise be disturbed.
+- The `-i` interactive path does not create new tabs but does change the active tab to whichever was switched to last.
+- If any selected origin (from `-i` or URL args) ends up absent from the saved state — typical cause is a tab that resolved to `chrome-error://chromewebdata/`, e.g., a stopped local dev server — `ab-state-refresh` prints a single `selected origins not saved: …` line to stderr. The other origins are saved normally; re-run after fixing the affected tab.
 
 ### Step 2: Use agent-browser normally
 
