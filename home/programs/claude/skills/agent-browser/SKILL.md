@@ -54,6 +54,8 @@ Before the first agent-browser call, the user must populate the state file by ru
 1. Creates `~/.agent-browser-state/` with mode 700.
 2. Connects to the user's running Chrome via the CDP WebSocket discovered from `DevToolsActivePort` (one-shot) and saves cookies + localStorage to the state file with mode 600.
 
+**Important**: `agent-browser state save` only captures localStorage for the focused tab plus its iframes (single Page Target constraint of CDP attach). Cookies are browser-context-wide, but localStorage is origin-scoped. Focus the target app's tab before running `ab-state-refresh`, or pass URLs as arguments — `ab-state-refresh URL1 URL2 ...` — when multiple origins are needed (see [Step 1 of authentication.md](references/authentication.md#step-1-refresh-the-state-file)).
+
 If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`ab-state-refresh\` to import auth state from your Chrome.`
 
 ### Sharing one daemon across main + subagents

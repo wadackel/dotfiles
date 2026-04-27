@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run=tmux,git
+#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run
 
 // tmux Claude Code session picker (prefix+w).
 // ink + React on Deno. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.

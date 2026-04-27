@@ -242,7 +242,7 @@ Implications when editing picker source:
 
 - Running `deno run picker.tsx` or `/picker-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.
 - To make changes visible to `prefix+w`, run `sudo darwin-rebuild switch --flake .#private` — the activation detects the source hash change and recompiles.
-- To iterate without a full rebuild, re-run the compile directly: `mise exec -- deno compile --allow-env --allow-read --allow-run=tmux,git --output ~/.local/share/picker-tmux/picker home/programs/tmux/picker.tsx` (arg set must match the activation).
+- To iterate without a full rebuild, re-run the compile directly: `deno compile --allow-env --allow-read --allow-run --output ~/.local/share/picker-tmux/picker home/programs/tmux/picker.tsx` (arg set must match the activation).
 - Do not claim picker work is complete based solely on `deno run` or `picker-verify` output — the binary is the thing users invoke.
 
 ### Project Directory Encoding Rules

@@ -323,16 +323,65 @@ ab-state-refresh() {
   local ws_url="ws://127.0.0.1:${cdp_port}${cdp_ws_path}"
 
   agent-browser close >/dev/null 2>&1
-  # The subshell `umask 077` closes the brief window between file creation and
-  # the explicit chmod below.
-  (
-    umask 077
-    agent-browser connect "$ws_url" || exit 1
-    agent-browser state save "$state_path" || exit 1
-  ) || {
-    print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
-    return 1
-  }
+
+  if (( $# == 0 )); then
+    # No URLs: agent-browser state save captures whatever Page Target is
+    # currently focused in the user's Chrome plus its iframes. To capture
+    # additional origins, pass them as arguments.
+    (
+      umask 077
+      agent-browser connect "$ws_url" || exit 1
+      agent-browser state save "$state_path" || exit 1
+    ) || {
+      print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+      return 1
+    }
+  else
+    # Multi-URL: state save only captures the focused tab + iframes, so open
+    # a new tab per URL, save each to a temp file, then merge origins via jq.
+    # cookies are browser-context-wide so any single save's cookies suffice
+    # (we keep the last). Each `tab new` opens a visible foreground tab — the
+    # user must close them manually after the run.
+    local merge_dir total=$#
+    merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
+      print -u2 "ab-state-refresh: mktemp failed."
+      return 1
+    }
+    # Pre-create the state file under tight perms BEFORE the jq redirect below.
+    # `> "$state_path"` is parsed by the parent shell, so the file would
+    # otherwise be created with the parent's umask (typically 022 → mode 644)
+    # and exposed for the duration of jq's write. On first-ever runs the
+    # subsequent chmod 600 closes the window only after secrets are written.
+    (umask 077 && : > "$state_path") || {
+      rm -rf "$merge_dir"
+      print -u2 "ab-state-refresh: failed to prepare $state_path."
+      return 1
+    }
+    (
+      umask 077
+      agent-browser connect "$ws_url" || exit 1
+      local idx=0 url
+      for url in "$@"; do
+        idx=$((idx + 1))
+        print -u2 "ab-state-refresh: opening tab $idx/$total: $url"
+        # `tab new` already waits for the load event; the extra 2 s gives async
+        # XHR-driven auth state a chance to land in localStorage before save.
+        # `wait --load networkidle` is avoided per agent-browser/SKILL.md (it
+        # hangs on ad-heavy or analytics-heavy sites).
+        agent-browser tab new "$url" || exit 1
+        agent-browser wait 2000 || exit 1
+        agent-browser state save "$merge_dir/state.${idx}.json" || exit 1
+      done
+      jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}' \
+        "$merge_dir"/state.*.json > "$state_path" || exit 1
+    ) || {
+      rm -rf "$merge_dir"
+      print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
+      return 1
+    }
+    rm -rf "$merge_dir"
+  fi
+
   chmod 600 "$state_path"
 
   printf 'state saved: %s (%s bytes, %s)\n' \

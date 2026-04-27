@@ -36,7 +36,7 @@
   # measured). Deno's npm cache does not amortize this (cold == warm in
   # measurement), so only AOT via `deno compile` eliminates the cost.
   # Hash-skip avoids recompiling when picker.tsx/pane_row.ts are unchanged.
-  home.activation.compilePickerBin = lib.hm.dag.entryAfter [ "writeBoundary" "miseInstall" ] ''
+  home.activation.compilePickerBin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     SRC="${./.}"
     OUT="$HOME/.local/share/picker-tmux"
     BIN="$OUT/picker"
@@ -55,8 +55,13 @@
       # cannot leave a corrupt binary in place (the stamp would then disagree
       # with the truncated file, and next activation retries the compile).
       TMP="$BIN.tmp.$$"
-      run ${config.programs.mise.package}/bin/mise exec -- deno compile \
-        --allow-env --allow-read --allow-run=tmux,git \
+      # `--allow-run` を裸 (scope 無し) で渡す: Ink が依存する signal-exit は
+      # popup 閉鎖時の SIGHUP ハンドラで `process.kill(process.pid, sig)` を
+      # 呼ぶ。Deno はこれを `--allow-run` 権限で gate するが、partial scope
+      # (`tmux,git` 等) では拒否され runtime prompt が popup に表示される
+      # (denoland/deno#15217)。
+      run ${pkgs.deno}/bin/deno compile \
+        --allow-env --allow-read --allow-run \
         --output "$TMP" \
         "$SRC/picker.tsx"
       run /bin/mv -f "$TMP" "$BIN"

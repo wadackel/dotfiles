@@ -65,6 +65,16 @@
               "QuicServerTransportTest.ReceiveConnectionClose"
             ];
           });
+          # direnv 2.37.1 の checkPhase (zsh test suite) が macOS で
+          # ハングする upstream issue を回避するため doCheck を無効化。
+          direnv = prev.direnv.overrideAttrs (_old: {
+            doCheck = false;
+          });
+          # mise-2026.4.6 の checkPhase (cargo test の依存 crate compile) が
+          # macOS rebuild で長時間応答しなくなるため doCheck を無効化。
+          mise = prev.mise.overrideAttrs (_old: {
+            doCheck = false;
+          });
         })
       ];
 
