@@ -20,6 +20,10 @@
       url = "github:wadackel/mo-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    codex-nix = {
+      url = "github:wadackel/codex-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -31,6 +35,7 @@
       treefmt-nix,
       nix-claude-code,
       mo-nix,
+      codex-nix,
       ...
     }:
     let
@@ -49,6 +54,7 @@
           treefmt-nix
           nix-claude-code
           mo-nix
+          codex-nix
           ;
       };
 
@@ -58,6 +64,7 @@
       overlays = [
         nix-claude-code.overlays.default
         mo-nix.overlays.default
+        codex-nix.overlays.default
         (final: prev: {
           mvfst = prev.mvfst.overrideAttrs (old: {
             disabledTests = (old.disabledTests or [ ]) ++ [

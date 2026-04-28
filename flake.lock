@@ -1,5 +1,25 @@
 {
   "nodes": {
+    "codex-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1777307846,
+        "narHash": "sha256-LvsDblHJJdKg8EeEmdY9+FZmPhJdKCcsQSapWx1P5pE=",
+        "owner": "wadackel",
+        "repo": "codex-nix",
+        "rev": "1982cf7d91384354b644bf7fae25892ce7aa4260",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wadackel",
+        "repo": "codex-nix",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -114,6 +134,7 @@
     },
     "root": {
       "inputs": {
+        "codex-nix": "codex-nix",
         "home-manager": "home-manager",
         "mo-nix": "mo-nix",
         "nix-claude-code": "nix-claude-code",
