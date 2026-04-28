@@ -47,11 +47,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777093896,
-        "narHash": "sha256-BfIZ7ZLtT9eQuwhLrNdSmEPfTqZtb+plbZL9j1+klPU=",
+        "lastModified": 1777319387,
+        "narHash": "sha256-G9E7n2wOKeIDD+QbX0nSpfgf7WNeXEQcPg1A6TfNwg0=",
         "owner": "wadackel",
         "repo": "mo-nix",
-        "rev": "74b4f3c06864945692432d5c1daea68042f90c4d",
+        "rev": "777e6517e53e36f6d5708aa96fb003fdee92f404",
         "type": "github"
       },
       "original": {
