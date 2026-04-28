@@ -47,12 +47,6 @@
       upgrade = false; # Prevent automatic upgrades
     };
 
-    # Global Homebrew settings
-    global = {
-      # brewfile = true; # Temporarily disabled due to formula lookup issue
-      lockfiles = false; # Don't write lockfiles to Nix store
-    };
-
     # Tap configuration
     taps = [
       "wadackel/tap"
