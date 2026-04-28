@@ -746,3 +746,51 @@ Deno.test("S19: token usage on row-2 right (icon + percent + color)", async () =
     await teardown();
   }
 });
+
+// S20: launching pane is initially selected when present in list.
+// tmux.conf's `bind-key w` injects `-e "CC_PICKER_FROM_PANE=#{pane_id}"` into
+// the popup so picker.tsx main() can resolve initialSelectedPaneId from the
+// originating pane id. Reserved TMUX_PANE cannot be reused (tmux clobbers it
+// for the spawned process). Three sub-cases cover the resolution ternary's
+// three branches.
+//
+// S20 ordering note: pa/pb/pc are created sequentially via createClaudePane →
+// tmux assigns ascending window indices → list-panes -a returns them in
+// creation order, so pc is reliably NOT rows[0]. Sub-case B's discriminative
+// power depends on this — if fetchPanes ever sorts rows, this test must be
+// updated to pick a paneId that is provably not rows[0].
+Deno.test("S20: launching pane is initially selected when present in list", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-A" });
+    await createClaudePane({ status: "running", prompt: "row-B" });
+    const pc = await createClaudePane({ status: "running", prompt: "row-C" });
+
+    const selectedIncludes = (marker: string) => (out: string) => {
+      const line = out.split("\n").find((l) => l.includes("❯"));
+      return line?.includes(marker) ?? false;
+    };
+
+    // Sub-case A (baseline / fromPane unset): no selfPane → first row.
+    let picker = await spawnPicker();
+    await waitFor(picker, selectedIncludes("row-A"));
+    await sendKey(picker, "Escape");
+    await waitForExit();
+
+    // Sub-case B (hit / fromPane in rows): selfPane=pc → row-C.
+    picker = await spawnPicker({ selfPane: pc });
+    await waitFor(picker, selectedIncludes("row-C"));
+    await sendKey(picker, "Escape");
+    await waitForExit();
+
+    // Sub-case C (miss / fromPane stale): selfPane points at a non-existent
+    // pane id, exercising the resolution ternary's `rows.some(...)` guard.
+    // Falls back to first row.
+    picker = await spawnPicker({ selfPane: "%999" });
+    await waitFor(picker, selectedIncludes("row-A"));
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

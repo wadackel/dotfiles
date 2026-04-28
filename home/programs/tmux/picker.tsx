@@ -740,9 +740,11 @@ function Preview(
 
 function App({
   initialRows,
+  initialSelectedPaneId,
   onSelect,
 }: {
   initialRows: PaneRow[];
+  initialSelectedPaneId: string;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
@@ -751,9 +753,7 @@ function App({
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
   >(new Map());
-  const [selectedPaneId, setSelectedPaneId] = useState(
-    initialRows[0]?.paneId ?? "",
-  );
+  const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   // `now` re-reads Date.now() on every render; the periodic setRows below
   // triggers a re-render every TICK_INTERVAL_MS, so elapsed time advances
   // naturally without a dedicated tick state.
@@ -902,10 +902,18 @@ async function main(): Promise<void> {
   }
   const rows = await fetchPanes();
 
+  // tmux.conf bind-key w injects CC_PICKER_FROM_PANE=#{pane_id} via display-popup -e; reserved TMUX_PANE is clobbered by tmux at pane spawn.
+  const fromPane = Deno.env.get("CC_PICKER_FROM_PANE") ?? null;
+  const initialSelectedPaneId =
+    fromPane && rows.some((r) => r.paneId === fromPane)
+      ? fromPane
+      : (rows[0]?.paneId ?? "");
+
   const result: { value: PaneRow | null } = { value: null };
   const { waitUntilExit } = render(
     <App
       initialRows={rows}
+      initialSelectedPaneId={initialSelectedPaneId}
       onSelect={(r) => {
         result.value = r;
       }}

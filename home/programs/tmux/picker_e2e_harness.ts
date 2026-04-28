@@ -277,18 +277,21 @@ export async function spawnPicker(
     new URL("./picker.tsx", import.meta.url).pathname,
   );
   if (pickerPath.includes("'")) {
-    throw new Error(`picker path contains single quote, unsafe for sh -c: ${pickerPath}`);
+    throw new Error(
+      `picker path contains single quote, unsafe for sh -c: ${pickerPath}`,
+    );
   }
-  // `tmux new-window -e K=V` sets K in the child's env. Used to simulate the
-  // interactive popup path where TMUX_PANE reaches picker despite being
-  // launched from another pane — the exact condition that triggered the
-  // self-exclusion bug before this regression test existed.
+  // `tmux new-window -e K=V` sets K in the child's env. Mirrors the interactive
+  // popup path where tmux.conf's `bind-key w` injects
+  // `-e "CC_PICKER_FROM_PANE=#{pane_id}"`. Reserved `TMUX_PANE` is unsuitable —
+  // tmux clobbers it with the spawned pane's own id when the process starts,
+  // so the originating-pane id has to ride a non-reserved env var name.
   const envArgs: string[] = [];
   if (opts.selfPane !== undefined) {
     if (!/^%\d+$/.test(opts.selfPane)) {
       throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);
     }
-    envArgs.push("-e", `TMUX_PANE=${opts.selfPane}`);
+    envArgs.push("-e", `CC_PICKER_FROM_PANE=${opts.selfPane}`);
   }
   await tmuxRun([
     "new-window",
