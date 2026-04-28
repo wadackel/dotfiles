@@ -111,6 +111,10 @@ Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
 // In a detached test server switch-client silently fails (no current client), so
 // we only verify the select-window / select-pane side-effects via the tmux
 // #{pane_active} / #{window_active} flags — both set regardless of attached clients.
+//
+// Also exercises the post-idle Enter path: a 2200ms wait (TICK_INTERVAL_MS=1000ms × 2+)
+// lets App + Preview tick chains accumulate before Enter, so the regression
+// catches event-loop drain stalls after jumpTo / Ink unmount.
 Deno.test("S4: enter selects target window+pane", async () => {
   await setupServer();
   try {
@@ -121,6 +125,9 @@ Deno.test("S4: enter selects target window+pane", async () => {
       prompt: "row-b",
     });
     const picker = await spawnPicker();
+
+    // Idle wait so App/Preview ticks accumulate before the Enter exit path.
+    await new Promise((r) => setTimeout(r, 2200));
 
     // Move selection to paneB row.
     await sendKey(picker, "Down");

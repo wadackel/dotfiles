@@ -60,8 +60,19 @@
       # 呼ぶ。Deno はこれを `--allow-run` 権限で gate するが、partial scope
       # (`tmux,git` 等) では拒否され runtime prompt が popup に表示される
       # (denoland/deno#15217)。
+      #
+      # `--no-prompt` 必須: 何らかの未許可 op が runtime に呼ばれた瞬間、
+      # Deno の `TtyPrompter::prompt` 内 `clear_stdin` (runtime/permissions/
+      # prompter.rs) が `loop { tcflush; select(timeout=100ms); ... }` で
+      # 永久ループに突入する (tmux popup 上では stdin に常時データが流れる
+      # ため select が 0 を返さない)。main thread が完全に詰まり JS が動か
+      # ず、ESC/q の byte は届くが useInput が発火しない (Ctrl+C は SIGINT
+      # interrupt → signal-exit → 抜けられる)。`--no-prompt` を付けると
+      # prompt 経路自体が抑止され「未許可なら即 throw」になるので picker
+      # 側の tick try/catch (picker.tsx:781-783) で吸収され継続稼働する。
       run ${pkgs.deno}/bin/deno compile \
         --allow-env --allow-read --allow-run \
+        --no-prompt \
         --output "$TMP" \
         "$SRC/picker.tsx"
       run /bin/mv -f "$TMP" "$BIN"

@@ -800,6 +800,33 @@ Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", (
   assertEquals(truncateTopSegBody(seg, 100), "Bash(ok)");
 });
 
+Deno.test("default.nix passes --no-prompt to deno compile (prevents picker hang from Deno permission prompter)", async () => {
+  // Regression guard. Without --no-prompt, an unauthorized runtime op causes
+  // Deno's TtyPrompter::prompt to call clear_stdin (runtime/permissions/
+  // prompter.rs), which loops on tcflush + select with a 100ms timeout. Inside
+  // a tmux popup, stdin is steadily readable, so select never returns 0 and
+  // the loop never exits. The picker's main thread spins inside this loop,
+  // starving the JS event loop. ESC/q bytes arrive at stdin but useInput
+  // never fires; only SIGINT (Ctrl+C) breaks out via signal-exit. Adding
+  // --no-prompt converts unauthorized ops into thrown errors caught by the
+  // tick try/catch (picker.tsx:781-783), preserving input responsiveness.
+  const url = new URL("./default.nix", import.meta.url);
+  const text = await Deno.readTextFile(url);
+  const m = text.match(
+    /run \$\{pkgs\.deno\}\/bin\/deno compile[\s\S]*?--output/,
+  );
+  if (!m) {
+    throw new Error("Could not locate deno compile invocation in default.nix");
+  }
+  if (!m[0].includes("--no-prompt")) {
+    throw new Error(
+      "Missing --no-prompt in deno compile invocation. Without it, Deno's " +
+        "permission prompter can infinite-loop on tcflush+select inside " +
+        "TtyPrompter::prompt, hanging the picker.",
+    );
+  }
+});
+
 Deno.test("truncateTopSegBody: budget too small for `…)` → generic slice fallback", () => {
   // maxBodyCells < 3 → paren-preservation guard fails, fall back to slice.
   const seg = mkSeg({ body: "Bash(x)" });

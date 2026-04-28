@@ -919,8 +919,13 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await main().catch((e: unknown) => {
+  try {
+    await main();
+    // One-shot CLI: force exit so popup closes deterministically (avoid
+    // event-loop drain stall after jumpTo / Ink unmount).
+    Deno.exit(0);
+  } catch (e) {
     console.error(e);
     Deno.exit(1);
-  });
+  }
 }
