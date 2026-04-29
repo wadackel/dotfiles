@@ -902,7 +902,13 @@ async function main(): Promise<void> {
   }
   const rows = await fetchPanes();
 
-  // tmux.conf bind-key w injects CC_PICKER_FROM_PANE=#{pane_id} via display-popup -e; reserved TMUX_PANE is clobbered by tmux at pane spawn.
+  // tmux.conf bind-key w writes CC_PICKER_FROM_PANE to the session environment via
+  // `set-environment` BEFORE display-popup runs; the popup process inherits the value at spawn.
+  // The earlier `display-popup -e "VAR=#{pane_id}"` form was empirically observed to deliver
+  // a stale pane id (off-by-one against the previous invocation's source pane) — see the
+  // diagnostic samples captured in plan 20260429T1822-picker-cursor-from-pane-fix. Routing the
+  // value through session env, set BEFORE display-popup, sidesteps that quirk.
+  // Reserved TMUX_PANE is unsuitable: tmux overwrites it with the popup's own pane id at spawn.
   const fromPane = Deno.env.get("CC_PICKER_FROM_PANE") ?? null;
   const initialSelectedPaneId =
     fromPane && rows.some((r) => r.paneId === fromPane)

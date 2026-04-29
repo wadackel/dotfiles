@@ -76,6 +76,17 @@ export async function cwdMarkerState(cwd: string): Promise<CwdMarkerState> {
   }
 }
 
+async function hasPendingMarker(hash: string): Promise<boolean> {
+  const home = Deno.env.get("HOME") ?? "";
+  const path = `${home}/.claude/plans/.pending-${hash}`;
+  try {
+    await Deno.stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- Main gate logic (testable) ---
 
 export async function checkGate(input: HookInput): Promise<GateDecision> {
@@ -101,12 +112,22 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     return { kind: "allow", reason: "marker-valid" };
   }
 
-  const reason =
-    state === "expired"
+  let reason: string;
+  if (state === "expired") {
+    reason = [
+      "/plan の cwd marker が 24 時間を経過して期限切れです。",
+      `${filePath} への編集は block されます。`,
+      "`/plan <実装したい内容>` で再実行してください。",
+    ].join("\n");
+  } else {
+    const hash = await cwdHash(cwd);
+    const pendingExists = await hasPendingMarker(hash);
+    reason = pendingExists
       ? [
-          "/plan の cwd marker が 24 時間を経過して期限切れです。",
-          `${filePath} への編集は block されます。`,
-          "`/plan <実装したい内容>` で再実行してください。",
+          "計画は作成されていますが、まだユーザーによって承認されていません。",
+          `cwd 配下の ${filePath} への編集は block されます。`,
+          "`/impl` と打鍵して plan を承認してください。",
+          "（auto mode では bypass されません — ユーザーの明示的な打鍵が必要です）",
         ].join("\n")
       : [
           "このセッションではまだ /plan が実行されていません。",
@@ -114,6 +135,7 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
           "`/plan <実装したい内容>` を先に実行してください。",
           "（trivial な変更でも /plan を通す運用です）",
         ].join("\n");
+  }
 
   return { kind: "block", reason };
 }

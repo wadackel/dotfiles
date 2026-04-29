@@ -15,15 +15,21 @@ Executes the plan produced by `/plan` task by task. Single source of truth for t
 
 ## Prerequisites
 
-`/impl` reads the active plan from the cwd-hash marker that `/plan` Phase 6 created.
+`/impl` reads the active plan from the cwd-hash marker that `/plan` Phase 6 created **and the user explicitly approved**.
 
 ```
-PATH = ~/.claude/plans/.active-<sha256(realpath $PWD) | hex slice 16>
+ACTIVE  = ~/.claude/plans/.active-<sha256(realpath $PWD) | hex slice 16>
+PENDING = ~/.claude/plans/.pending-<...>
 ```
 
-If the marker is absent, `/impl` exits with: `Run /plan first. No active plan for this cwd.`
+Approval gate — check before any work:
 
-If the marker is expired (mtime > 24h, blocked by `plan-gate.ts`), the user is told to re-run `/plan`.
+- **`.active-<hash>` exists** (valid mtime < 24h): read its content (the plan path) and proceed.
+- **`.active-<hash>` absent but `.pending-<hash>` exists**: refuse with `Plan exists but is not yet approved. The user must explicitly type /impl as a top-level prompt to approve. Auto-mode self-invocation does NOT bypass this gate — UserPromptSubmit hook (plan-approval-tracker.ts) is the only mechanism that promotes .pending- → .active-.` Stop processing immediately. Do NOT attempt edits.
+- **Both absent**: refuse with `Run /plan first. No active plan for this cwd.`
+- **`.active-<hash>` expired** (mtime > 24h, also blocked by `plan-gate.ts`): tell the user to re-run `/plan`.
+
+The approval signal is `/impl` typed as the leading slash command of a top-level user prompt. The hook performs `.pending-` → `.active-` promotion on detection. AI invoking the `/impl` Skill via the Skill tool does NOT fire UserPromptSubmit and therefore cannot self-promote.
 
 ## Workflow
 
@@ -138,3 +144,5 @@ The "Run /completion-audit and /subagent-review" task created by `/plan` Phase 5
 **Why /subagent-review (not /santa-loop) as the default final-gate review**: `/santa-loop` spawns two independent reviewers (Claude Opus + Codex CLI) and iterates until both return NICE. It is powerful but token-heavy — the dual-model convergence loop was the single largest cost component of the old `/impl` flow. `/subagent-review` covers spec compliance, code quality, domain specialization, and security heuristic in one sequential pass against the aggregated diff and converges faster. `/santa-loop` stays available as a user-invoked opt-in step for high-assurance reviews (e.g., pre-PR on security-critical changes).
 
 **Why Security Sweep is absorbed into /subagent-review**: the prior Security Sweep was a separate orchestration step that duplicated the heuristic check already owned by `/subagent-review` Step 7. Collapsing them removes one orchestration layer without changing detection coverage — the same `security-trigger-heuristic.md` fires `security-auditor` when triggers match the aggregated diff. Residual risk (heuristic false negatives on exotic security signals) is unchanged from the prior design; users can force full coverage by invoking `security-auditor` directly or running `/santa-loop` manually.
+
+**Why an approval gate beyond plan-gate**: `plan-gate.ts` is a mechanical PreToolUse block on Edit/Write — it stops the symptom (rogue edits) but not the cause (AI self-invoking `/impl` after `/plan` in auto mode). Requiring `.active-<hash>` (created only by user-typed `/impl` via the UserPromptSubmit hook `plan-approval-tracker.ts`) makes the SKILL itself refuse self-invocation gracefully, before any tool calls. The hook + SKILL refusal + plan-gate together form defense-in-depth: SKILL refuses politely, plan-gate blocks unconditionally, and the hook is the only writer that can promote pending → active. Auto-mode self-invocation cannot bypass any of the three layers.

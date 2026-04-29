@@ -379,11 +379,12 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
 });
 
 // S11: Regression for the self-exclusion bug. Before the fix, fetchPanes
-// excluded any row whose paneId matched Deno.env.get("TMUX_PANE"), which
+// excluded any row whose paneId matched the originating-pane env var, which
 // caused the pane that launched prefix+w to silently drop out of the list.
-// spawnPicker({ selfPane }) injects TMUX_PANE=<claude-pane-id> into the
-// picker's child env via `tmux new-window -e`, reproducing the interactive
-// key-binding path where tmux propagates the originating pane id.
+// spawnPicker({ selfPane }) injects CC_PICKER_FROM_PANE=<claude-pane-id> into
+// the picker's child env via `tmux new-window -e`, reproducing the interactive
+// key-binding path (where tmux.conf's `bind-key w` writes the same env name to
+// session env via `set-environment` before `display-popup`).
 Deno.test("S11: self-launching Claude pane remains visible", async () => {
   await setupServer();
   try {
@@ -748,11 +749,15 @@ Deno.test("S19: token usage on row-2 right (icon + percent + color)", async () =
 });
 
 // S20: launching pane is initially selected when present in list.
-// tmux.conf's `bind-key w` injects `-e "CC_PICKER_FROM_PANE=#{pane_id}"` into
-// the popup so picker.tsx main() can resolve initialSelectedPaneId from the
-// originating pane id. Reserved TMUX_PANE cannot be reused (tmux clobbers it
-// for the spawned process). Three sub-cases cover the resolution ternary's
-// three branches.
+// tmux.conf's `bind-key w` writes the originating pane id into the session
+// environment as `CC_PICKER_FROM_PANE` via `set-environment` immediately
+// before `display-popup` runs; the popup inherits the session env at spawn
+// so picker.tsx main() can resolve initialSelectedPaneId from it. Reserved
+// TMUX_PANE cannot be reused (tmux clobbers it for the spawned process).
+// The harness reproduces the same env-name contract by passing
+// `-e CC_PICKER_FROM_PANE=<pane-id>` to `tmux new-window` in spawnPicker()
+// (literal value injection — no tmux format expansion involved on this path).
+// Three sub-cases cover the resolution ternary's three branches.
 //
 // S20 ordering note: pa/pb/pc are created sequentially via createClaudePane →
 // tmux assigns ascending window indices → list-panes -a returns them in
@@ -792,5 +797,85 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
     await waitForExit();
   } finally {
     await teardown();
+  }
+});
+
+// S21: tmux.conf bind-key w writes the source pane id to session env BEFORE
+// display-popup. Static assertion against the conf text — not a runtime test.
+//
+// The two regressions this catches:
+//   (1) `display-popup -e "CC_PICKER_FROM_PANE=#{pane_id}"` form (the original
+//       buggy shape). `#{pane_id}` in the `-e` flag is expanded at run-shell
+//       parse time against a stale context (observed off-by-one against the
+//       prior invocation's source pane in 12/12 diagnostic samples; see plan
+//       20260429T1822-picker-cursor-from-pane-fix).
+//   (2) Pre-capture via `set-option -g @cc-picker-source "#{pane_id}"` followed
+//       by `-e "CC_PICKER_FROM_PANE=#{@cc-picker-source}"`. tmux expands the
+//       `-e` value at parse time, BEFORE the preceding set-option executes,
+//       so `-e` reads the option's PRIOR value — same off-by-one symptom
+//       (verified with diagnostic instrumentation during plan execution).
+//
+// Required pattern:
+//   `set-environment -t "#{session_name}" CC_PICKER_FROM_PANE "#{pane_id}"`
+//   runs before display-popup; the popup inherits session env at spawn.
+//   display-popup MUST NOT carry an explicit `-e CC_PICKER_FROM_PANE=...` flag
+//   (that would re-introduce stale parse-time expansion).
+//
+// The runtime assertion (popup actually opens with the right pane highlighted)
+// stays a manual user check — that is the second tier of the two-stage
+// verification (conf-shape + runtime).
+Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
+  const confPath = new URL("./tmux.conf", import.meta.url).pathname;
+  const conf = await Deno.readTextFile(confPath);
+
+  const bindLines = conf
+    .split("\n")
+    .filter((line) => /^\s*bind-key\s+w\s/.test(line));
+  assertEquals(
+    bindLines.length,
+    1,
+    `expected exactly one 'bind-key w ...' line in tmux.conf, got ${bindLines.length}`,
+  );
+  const bind = bindLines[0];
+
+  // Diagnostic instrumentation must not leak into committed conf.
+  assertFalse(
+    /@cc-picker-debug|cc-picker-debug\.log/.test(bind),
+    `diagnostic instrumentation residue in bind-key w: ${bind}`,
+  );
+
+  // Required: set-environment writes the source pane id to session env. Capture
+  // its index so we can assert it appears BEFORE display-popup (order matters —
+  // the popup must inherit the value at spawn).
+  const setEnvRe =
+    /set-environment\s+-t\s+"#\{session_name\}"\s+CC_PICKER_FROM_PANE\s+"#\{pane_id\}"/;
+  const setEnvMatch = setEnvRe.exec(bind);
+  const popupRe = /display-popup\b/;
+  const popupMatch = popupRe.exec(bind);
+  if (!setEnvMatch || !popupMatch) {
+    throw new Error(
+      `bind-key w must contain both set-environment (CC_PICKER_FROM_PANE = ` +
+        `#{pane_id}) and display-popup. Line: ${bind}`,
+    );
+  }
+  if (setEnvMatch.index >= popupMatch.index) {
+    throw new Error(
+      `set-environment must come BEFORE display-popup so the popup inherits ` +
+        `the session env at spawn. Found set-environment@${setEnvMatch.index}, ` +
+        `display-popup@${popupMatch.index}. Line: ${bind}`,
+    );
+  }
+
+  // Forbidden: any `-e CC_PICKER_FROM_PANE=...` flag on display-popup, regardless
+  // of quoting (no quotes / single quotes / double quotes). All forms reintroduce
+  // the parse-time stale-expansion bug — direct `-e "VAR=#{pane_id}"`, the
+  // set-option/#{@option} pre-capture variant, etc.
+  const hasForbiddenE = /-e\s+["']?CC_PICKER_FROM_PANE=/.test(bind);
+  if (hasForbiddenE) {
+    throw new Error(
+      `display-popup MUST NOT carry a '-e CC_PICKER_FROM_PANE=...' flag (any ` +
+        `quoting form). The session-env transport is the only safe path. ` +
+        `Line: ${bind}`,
+    );
   }
 });

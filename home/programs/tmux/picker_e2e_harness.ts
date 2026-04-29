@@ -281,11 +281,13 @@ export async function spawnPicker(
       `picker path contains single quote, unsafe for sh -c: ${pickerPath}`,
     );
   }
-  // `tmux new-window -e K=V` sets K in the child's env. Mirrors the interactive
-  // popup path where tmux.conf's `bind-key w` injects
-  // `-e "CC_PICKER_FROM_PANE=#{pane_id}"`. Reserved `TMUX_PANE` is unsuitable —
-  // tmux clobbers it with the spawned pane's own id when the process starts,
-  // so the originating-pane id has to ride a non-reserved env var name.
+  // `tmux new-window -e K=V` sets K in the child's env (literal value, no
+  // format expansion). Mirrors the interactive popup path where tmux.conf's
+  // `bind-key w` writes `CC_PICKER_FROM_PANE` to session env via
+  // `set-environment` before `display-popup` (the popup inherits session env
+  // at spawn). Reserved `TMUX_PANE` is unsuitable — tmux clobbers it with
+  // the spawned pane's own id when the process starts, so the originating-
+  // pane id has to ride a non-reserved env var name.
   const envArgs: string[] = [];
   if (opts.selfPane !== undefined) {
     if (!/^%\d+$/.test(opts.selfPane)) {

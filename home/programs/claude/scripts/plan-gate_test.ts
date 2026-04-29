@@ -221,6 +221,37 @@ Deno.test("checkGate #5: marker absent + cwd 内 + infra 外 → block (未実�
   }
 });
 
+Deno.test("checkGate #5b: pending marker exists + active absent + cwd 内 → block (承認待ち message)", async () => {
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  const file = `${cwd}/a.ts`;
+  await Deno.writeTextFile(file, "");
+  const hash = await cwdHash(cwd);
+  const home = Deno.env.get("HOME") ?? "";
+  const pendingPath = `${home}/.claude/plans/.pending-${hash}`;
+  await Deno.mkdir(pendingPath.substring(0, pendingPath.lastIndexOf("/")), { recursive: true });
+  await Deno.writeTextFile(pendingPath, "test-plan-path");
+  try {
+    const input: HookInput = {
+      tool_input: { file_path: file },
+      cwd,
+    };
+    const result = await checkGate(input);
+    assertEquals(result.kind, "block");
+    if (result.kind === "block") {
+      assertStringIncludes(result.reason, "/impl` と打鍵");
+      assertStringIncludes(result.reason, "承認");
+      assertStringIncludes(result.reason, "auto mode では bypass されません");
+    }
+  } finally {
+    try {
+      await Deno.remove(pendingPath);
+    } catch {
+      /* already cleaned */
+    }
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
 Deno.test("checkGate #5: marker expired (mtime > 24h) + cwd 内 → block (期限切れ message)", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   const file = `${cwd}/a.ts`;

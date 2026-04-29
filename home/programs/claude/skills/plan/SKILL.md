@@ -332,20 +332,23 @@ TaskUpdate(gateId, addBlockedBy: implTaskIds)
 - Delete `pending` / `in_progress` tasks only.
 - Re-invoke `/plan`; main session decomposes with the completed-task summaries already in context (avoid duplicate decomposition).
 
-## Phase 6 — ACTIVATE
+## Phase 6 — ACTIVATE PENDING
 
-Touch the cwd-hash marker so `plan-gate.ts` unblocks Edit/Write/MultiEdit for the session.
+Write the cwd-hash **pending** marker so the user can approve the plan by typing `/impl`. The marker is `.pending-<hash>` (NOT `.active-<hash>`). The active marker is created only when the user types `/impl` as a top-level prompt — the `plan-approval-tracker.ts` UserPromptSubmit hook performs the promotion.
 
-**Important**: the `PLAN_FILE_PATH` value below is **template-substituted by the agent at invocation time** using the path decided in Phase 3. This is not a bash variable expansion — the agent writes the literal plan path into the bash command string.
+This two-marker scheme exists because auto mode encourages "execute immediately"; if `/plan` itself created `.active-<hash>`, AI could chain `/plan` → `/impl` in the same turn without user approval. UserPromptSubmit fires only on real user keystrokes (not on AI Skill-tool invocations), so requiring user-typed `/impl` to promote `.pending-` → `.active-` is the only mechanical way to distinguish AI self-invocation from human approval.
+
+**Important**: the `PLAN_FILE_PATH` value below is **template-substituted by the agent at invocation time** using the path decided in Phase 3. This is not a bash variable expansion — the agent writes the literal plan path into the bash command string. The pending marker's content (the plan path) is copied verbatim into the active marker on promotion.
 
 ```bash
 REAL_PWD=$(realpath "$PWD")
 CWD_HASH=$(printf '%s' "$REAL_PWD" | shasum -a 256 | cut -c1-16)
 mkdir -p "$HOME/.claude/plans"
-printf '%s\n' '<PLAN_FILE_PATH from Phase 3, agent-substituted>' > "$HOME/.claude/plans/.active-${CWD_HASH}"
+rm -f "$HOME/.claude/plans/.active-${CWD_HASH}"  # invalidate any prior approval (re-plan case)
+printf '%s\n' '<PLAN_FILE_PATH from Phase 3, agent-substituted>' > "$HOME/.claude/plans/.pending-${CWD_HASH}"
 ```
 
--- Why: cwd-hash is computed from the realpath `$PWD` on both sides (bash `realpath` and TS `Deno.realPath`) so symlink-heavy cwds hash-match. 24h TTL is checked by `plan-gate.ts` only; each `/plan` invocation refreshes mtime.
+-- Why: cwd-hash is computed from the realpath `$PWD` on both sides (bash `realpath` and TS `Deno.realPath`) so symlink-heavy cwds hash-match. 24h TTL is checked by both `plan-gate.ts` (active) and `plan-approval-tracker.ts` (pending); each `/plan` invocation refreshes pending mtime and clears any stale active marker.
 
 ### Output to user
 
@@ -361,9 +364,9 @@ Emit the **full plan body inline** so the user can approve without opening the f
 - File: <plan path>
 - Complexity: <trivial/small/medium/large/xl>
 - Tasks: <count> (+ /completion-audit + /subagent-review gate)
-- Gate: active until <24h from now>
+- Status: PENDING APPROVAL — type `/impl` to approve and execute
 
-Run `/impl` when you approve.
+⚠️ Auto mode does NOT bypass this gate. The user must explicitly type `/impl` as their next top-level prompt; the UserPromptSubmit hook is the only mechanism that promotes `.pending-<hash>` → `.active-<hash>`.
 ```
 
 **xl fallback** (plan > ~600 lines): replace the full-body block with a TOC of `##`-level section headings + plan path, keep the metadata block.
@@ -385,3 +388,5 @@ Run `/impl` when you approve.
 **Why consolidated interview**: interviewing inside each Step would block the user 3–4 times per plan. One queue, one call.
 
 **Why meaning over notation in judgement, strict in contracts**: requirement interpretation is where rigid rules cause brittle behavior (missing token ≠ missing intent). Machine contracts (section headers, verdict enums, gate markers) are strict because downstream parsing depends on them.
+
+**Why explicit user approval after Phase 6**: auto mode encourages "execute immediately" which let AI chain `/plan` → `/impl` in the same turn. UserPromptSubmit hook fires only on real user input (not AI Skill invocations), so requiring user-typed `/impl` to promote `.pending-` → `.active-` is the only mechanical way to distinguish AI self-invocation from human approval. Skill body instructions alone are insufficient against the auto-mode "Execute immediately" directive.
