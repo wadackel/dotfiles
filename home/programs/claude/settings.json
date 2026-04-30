@@ -590,6 +590,17 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PostToolUseFailure"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "",

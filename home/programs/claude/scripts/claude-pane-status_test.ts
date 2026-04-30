@@ -262,32 +262,301 @@ Deno.test("eventToOps: Stop with no subagents also unsets @pane_main_stopped def
   assertEquals(flagOp?.kind, "unset");
 });
 
-Deno.test("eventToOps: StopFailure → error + wait_reason", () => {
-  const ops = eventToOps("StopFailure", { message: "boom" }, emptyState);
+Deno.test("eventToOps: StopFailure with error_type → error + wait_reason=<error_type>", () => {
+  const ops = eventToOps(
+    "StopFailure",
+    { error_type: "rate_limit" },
+    emptyState,
+  );
   const status = ops.find((o) => o.key === "@pane_status");
   assertEquals(status?.kind === "set" ? status.value : "", "error");
   const reason = ops.find((o) => o.key === "@pane_wait_reason");
-  assertEquals(reason?.kind === "set" ? reason.value : "", "boom");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "rate_limit");
 });
 
-Deno.test("eventToOps: Notification → waiting + wait_reason (no @pane_attention)", () => {
+Deno.test("eventToOps: StopFailure without error_type → error + wait_reason='error'", () => {
+  const ops = eventToOps("StopFailure", {}, emptyState);
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "error");
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "error");
+});
+
+Deno.test("eventToOps: StopFailure ignores legacy data.message field", () => {
+  // Pre-existing code read `data.message` but schema does not provide it.
+  // The new code must not regress to picking it up.
+  const ops = eventToOps(
+    "StopFailure",
+    { message: "boom", error_type: "server_error" },
+    emptyState,
+  );
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "server_error");
+});
+
+Deno.test("eventToOps: Notification(permission_prompt) → waiting + 'permission'", () => {
   const ops = eventToOps(
     "Notification",
-    { message: "please approve" },
+    { notification_type: "permission_prompt" },
     emptyState,
   );
   const status = ops.find((o) => o.key === "@pane_status");
   assertEquals(status?.kind === "set" ? status.value : "", "waiting");
   const reason = ops.find((o) => o.key === "@pane_wait_reason");
-  assertEquals(reason?.kind === "set" ? reason.value : "", "please approve");
-  // @pane_attention was removed — must not appear
-  assertEquals(ops.some((o) => o.key === "@pane_attention"), false);
+  assertEquals(reason?.kind === "set" ? reason.value : "", "permission");
+});
+
+Deno.test("eventToOps: Notification(idle_prompt) → waiting + 'idle prompt'", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "idle_prompt" },
+    emptyState,
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "idle prompt");
+});
+
+Deno.test("eventToOps: Notification(elicitation_dialog) → waiting + 'elicitation'", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "elicitation_dialog" },
+    emptyState,
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind === "set" ? reason.value : "", "elicitation");
+});
+
+Deno.test("eventToOps: Notification(elicitation_complete) → unset wait_reason only (status preserved)", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "elicitation_complete" },
+    emptyState,
+  );
+  // No status op — the running/idle decision belongs to the next event.
+  assertEquals(ops.some((o) => o.key === "@pane_status"), false);
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind, "unset");
+});
+
+Deno.test("eventToOps: Notification(elicitation_response) → unset wait_reason only", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "elicitation_response" },
+    emptyState,
+  );
+  assertEquals(ops.some((o) => o.key === "@pane_status"), false);
+  const reason = ops.find((o) => o.key === "@pane_wait_reason");
+  assertEquals(reason?.kind, "unset");
+});
+
+Deno.test("eventToOps: Notification(auth_success) → no-op (status not flipped to waiting)", () => {
+  // Latent bug fixed: the prior implementation read `data.message` (absent
+  // per schema), defaulted wait_reason to "notification", and unconditionally
+  // flipped status to "waiting" — including for auth_success.
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "auth_success", session_id: "s1" },
+    emptyState,
+  );
+  assertEquals(ops, []);
+});
+
+Deno.test("eventToOps: Notification with unknown notification_type → no-op", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "future_event_kind" },
+    emptyState,
+  );
+  assertEquals(ops, []);
+});
+
+Deno.test("eventToOps: Notification ignores legacy data.message field", () => {
+  // Pre-existing code read `data.message` but schema does not provide it.
+  // Without notification_type the handler must produce no ops, regardless of
+  // a stray legacy `message` field.
+  const ops = eventToOps(
+    "Notification",
+    { message: "please approve" },
+    emptyState,
+  );
+  assertEquals(ops, []);
+});
+
+Deno.test("eventToOps: Notification @pane_attention never appears in any branch", () => {
+  for (
+    const nt of [
+      "permission_prompt",
+      "idle_prompt",
+      "elicitation_dialog",
+      "elicitation_complete",
+      "elicitation_response",
+      "auth_success",
+      "future_event_kind",
+    ]
+  ) {
+    const ops = eventToOps(
+      "Notification",
+      { notification_type: nt },
+      emptyState,
+    );
+    assertEquals(
+      ops.some((o) => o.key === "@pane_attention"),
+      false,
+      `@pane_attention must not appear for notification_type=${nt}`,
+    );
+  }
 });
 
 Deno.test("eventToOps: PermissionDenied → waiting + permission-denied", () => {
   const ops = eventToOps("PermissionDenied", {}, emptyState);
   const reason = ops.find((o) => o.key === "@pane_wait_reason");
   assertEquals(reason?.kind === "set" ? reason.value : "", "permission-denied");
+});
+
+// --- PostToolUseFailure ---
+// Schema: tool_name, tool_input, error (string), tool_use_id, agent_id?,
+// agent_type?. Fires for tool failures. Replaces the older inference path
+// in PostToolUse where a string-shape `tool_response` (`"Error: ..."`) was
+// parsed to detect failure.
+
+Deno.test("eventToOps: PostToolUseFailure (Bash) sets last_tool_error from data.error", () => {
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "false" },
+      error: "command failed: exit 1",
+      tool_use_id: "tu1",
+    },
+    stateWith({ currentTool: "Bash", status: "running" }),
+  );
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
+  const lastErr = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(
+    lastErr?.kind === "set" ? lastErr.value : "",
+    "command failed: exit 1",
+  );
+  // current_tool cleared because tool name matches
+  const cur = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(cur?.kind, "unset");
+  // last_activity_at refreshed
+  const act = ops.find((o) => o.key === "@pane_last_activity_at");
+  assertEquals(act?.kind, "set");
+});
+
+Deno.test("eventToOps: PostToolUseFailure with empty error → unsets last_tool_error", () => {
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      tool_name: "Read",
+      tool_input: { file_path: "/x" },
+      error: "",
+    },
+    stateWith({ status: "running" }),
+  );
+  const lastErr = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(lastErr?.kind, "unset");
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Read");
+});
+
+Deno.test("eventToOps: PostToolUseFailure error is truncated", () => {
+  const longError = "x".repeat(200);
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: {},
+      error: longError,
+    },
+    stateWith({ status: "running" }),
+  );
+  const lastErr = ops.find((o) => o.key === "@pane_last_tool_error");
+  const value = lastErr?.kind === "set" ? lastErr.value : "";
+  // Truncated to TOOL_ERROR_MAX_CHARS=40 + ellipsis
+  assertEquals(value.length <= 41, true);
+  assertEquals(value.endsWith("…"), true);
+});
+
+Deno.test("eventToOps: PostToolUseFailure (subagent-origin, agent_id set) → no resume", () => {
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "Explore",
+      tool_name: "Bash",
+      tool_input: {},
+      error: "boom",
+    },
+    stateWith({
+      status: "waiting",
+      subagents: "Explore:a1",
+      currentTool: "Bash",
+    }),
+  );
+  // Resume must NOT fire (subagent attribution)
+  assertEquals(hasResumeOps(ops), false);
+  // last_tool / last_tool_error still update (display is intentionally
+  // last-wins across main and subagent — same as PostToolUse).
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
+  const lastErr = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(lastErr?.kind === "set" ? lastErr.value : "", "boom");
+});
+
+Deno.test("eventToOps: PostToolUseFailure (main-origin) + status=waiting → resume", () => {
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: {},
+      error: "boom",
+    },
+    stateWith({ status: "waiting", currentTool: "Bash" }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("eventToOps: PostToolUseFailure without tool_name updates only activity_at", () => {
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    { session_id: "s1", error: "stray" },
+    stateWith({ status: "running" }),
+  );
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool, undefined);
+  const lastErr = ops.find((o) => o.key === "@pane_last_tool_error");
+  assertEquals(lastErr, undefined);
+  const act = ops.find((o) => o.key === "@pane_last_activity_at");
+  assertEquals(act?.kind, "set");
+});
+
+Deno.test("eventToOps: PostToolUseFailure on non-matching tool keeps current_tool", () => {
+  // Concurrent tools: failure on tool A while tool B is in flight as current.
+  const ops = eventToOps(
+    "PostToolUseFailure",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: {},
+      error: "fail",
+    },
+    stateWith({ currentTool: "Read", status: "running" }),
+  );
+  // current_tool NOT cleared (mismatch)
+  assertEquals(ops.some((o) => o.key === "@pane_current_tool"), false);
+  const lastTool = ops.find((o) => o.key === "@pane_last_tool");
+  assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
 });
 
 Deno.test("eventToOps: CwdChanged with cwd → set @pane_cwd", () => {
@@ -837,31 +1106,64 @@ Deno.test("resume: PostToolUse with status=idle → no resume ops", () => {
   assertEquals(hasResumeOps(ops), false);
 });
 
-// Pre/PostToolUse must NOT resume when subagents are active — events are
-// not attributable to the main agent while a subagent is running, and a
-// blind resume falsely flips waiting→running.
-Deno.test("resume: PreToolUse with status=waiting + active subagent → NO resume", () => {
+// Resume gating is now payload-attribution-based, not state-based:
+//   data.agent_id absent (main-origin)  → resume IF status is waiting/error
+//   data.agent_id present (subagent-origin) → never resume (subagent activity
+//     is not main-attributable, so resume would falsely flip waiting→running)
+// The previous gate (`state.subagents === ""`) over-blocked main resume
+// whenever any subagent was alive — this is the bug the rewrite fixes.
+
+Deno.test("resume: PreToolUse main-origin + status=waiting + active subagent → resume", () => {
+  // Main-origin event = no agent_id in payload. Even with a subagent alive,
+  // the main agent's PreToolUse resumes status from waiting/error.
   const ops = eventToOps(
     "PreToolUse",
     { session_id: "s1", tool_name: "Bash" },
     stateWith({ status: "waiting", subagents: "Explore:a1" }),
   );
-  assertEquals(hasResumeOps(ops), false);
-  // current_tool is still recorded (tool observation is unrelated to resume).
+  assertEquals(hasResumeOps(ops), true);
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "Bash");
 });
 
-Deno.test("resume: PreToolUse with status=error + active subagent → NO resume", () => {
+Deno.test("resume: PreToolUse main-origin + status=error + active subagent → resume", () => {
   const ops = eventToOps(
     "PreToolUse",
     { session_id: "s1", tool_name: "Bash" },
     stateWith({ status: "error", subagents: "Explore:a1" }),
   );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: PreToolUse subagent-origin (agent_id set) + status=waiting → NO resume", () => {
+  // agent_id present = subagent invoked the tool. Resume must not fire.
+  const ops = eventToOps(
+    "PreToolUse",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "Explore",
+      tool_name: "Bash",
+    },
+    stateWith({ status: "waiting", subagents: "Explore:a1" }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+  // current_tool is still recorded (tool display is intentionally last-wins
+  // across main and subagent — see Notes in claude-pane-status.ts).
+  const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+  assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "Bash");
+});
+
+Deno.test("resume: PreToolUse subagent-origin + status=error → NO resume", () => {
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", agent_id: "a1", tool_name: "Bash" },
+    stateWith({ status: "error", subagents: "Explore:a1" }),
+  );
   assertEquals(hasResumeOps(ops), false);
 });
 
-Deno.test("resume: PostToolUse with status=waiting + active subagent → NO resume", () => {
+Deno.test("resume: PostToolUse main-origin + status=waiting + active subagent → resume", () => {
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
@@ -871,13 +1173,44 @@ Deno.test("resume: PostToolUse with status=waiting + active subagent → NO resu
       subagents: "Explore:a1",
     }),
   );
-  assertEquals(hasResumeOps(ops), false);
+  assertEquals(hasResumeOps(ops), true);
 });
 
-Deno.test("resume: PostToolUse with status=error + active subagent → NO resume", () => {
+Deno.test("resume: PostToolUse main-origin + status=error + active subagent → resume", () => {
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
+    stateWith({
+      status: "error",
+      currentTool: "Bash",
+      subagents: "Explore:a1",
+    }),
+  );
+  assertEquals(hasResumeOps(ops), true);
+});
+
+Deno.test("resume: PostToolUse subagent-origin + status=waiting → NO resume", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "Explore",
+      tool_name: "Bash",
+    },
+    stateWith({
+      status: "waiting",
+      currentTool: "Bash",
+      subagents: "Explore:a1",
+    }),
+  );
+  assertEquals(hasResumeOps(ops), false);
+});
+
+Deno.test("resume: PostToolUse subagent-origin + status=error → NO resume", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", agent_id: "a1", tool_name: "Bash" },
     stateWith({
       status: "error",
       currentTool: "Bash",
@@ -1479,6 +1812,7 @@ function baseCtx(): RunContext {
     argv_event: "SessionStart",
     stdin_event: null,
     session_id: null,
+    agent_id: null,
     tmux_pane: null,
     cwd: null,
     pre_state: null,
@@ -1501,6 +1835,7 @@ Deno.test("buildLogRecord: minimal early-exit (no-event) is fully null-safe", ()
   assertEquals(rec.argv_event, "");
   assertEquals(rec.stdin_event, null);
   assertEquals(rec.session_id, null);
+  assertEquals(rec.agent_id, null);
   assertEquals(rec.tmux_pane, null);
   assertEquals(rec.cwd, null);
   assertEquals(rec.pre_state, null);
@@ -1508,6 +1843,24 @@ Deno.test("buildLogRecord: minimal early-exit (no-event) is fully null-safe", ()
   assertEquals(rec.apply_results, []);
   assertEquals(rec.early_exit, "no-event");
   assertEquals(rec.stdin_event_mismatch, false);
+});
+
+Deno.test("buildLogRecord: agent_id captured verbatim for subagent-origin events", () => {
+  // Production verifiability: log inspection (rg agent_id) must be able to
+  // surface the resumeOpsIfStuck attribution invariant from real traffic.
+  const ctx = baseCtx();
+  ctx.argv_event = "PreToolUse";
+  ctx.agent_id = "explore-1234";
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  assertEquals(rec.agent_id, "explore-1234");
+});
+
+Deno.test("buildLogRecord: agent_id null for main-origin events", () => {
+  const ctx = baseCtx();
+  ctx.argv_event = "PreToolUse";
+  // ctx.agent_id stays null (default)
+  const rec = buildLogRecord(ctx, FIXED_NOW, 1);
+  assertEquals(rec.agent_id, null);
 });
 
 Deno.test("buildLogRecord: ops are stripped of value (PII safety)", () => {

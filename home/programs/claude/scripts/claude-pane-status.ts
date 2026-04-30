@@ -15,11 +15,14 @@ type HookData = Record<string, unknown> & {
   hook_event_name?: string;
   session_id?: string;
   cwd?: string;
-  message?: string;
   prompt?: string;
   tool_name?: string;
   tool_input?: unknown;
   tool_response?: unknown;
+  // Notification: discriminator per official schema (no `message` field).
+  notification_type?: string;
+  // StopFailure: discriminator per official schema (no `message` field).
+  error_type?: string;
 };
 
 export type Op =
@@ -233,10 +236,14 @@ function str(v: unknown): string {
 // Flip @pane_status back to running when main-agent activity resumes from a
 // stuck waiting/error state. Callers must restrict invocation to events that
 // are attributable to the main agent:
-//   - PreToolUse / PostToolUse: only when state.subagents === "" (otherwise the
-//     tool event may belong to a running subagent, not main).
-//   - SubagentStart / SubagentStop: never — subagent activity cannot be proxied
-//     as main-agent resume.
+//   - PreToolUse / PostToolUse / PostToolUseFailure: only when the payload's
+//     `agent_id` is absent (subagent-origin events carry it; main-origin
+//     events do not — schema-defined discriminator). The previous
+//     `state.subagents === ""` gate was over-conservative: it blocked main
+//     resume whenever any subagent was alive, even if the current event was
+//     unambiguously main.
+//   - SubagentStart / SubagentStop: never — subagent activity cannot be
+//     proxied as main-agent resume.
 // UserPromptSubmit already sets status directly and does not go through this
 // helper. @pane_wait_reason is cleared so row 1 summary stops showing the stale
 // reason.
@@ -341,7 +348,12 @@ export function eventToOps(
       }
 
       case "StopFailure": {
-        const reason = maskPrompt(data.message) || "error";
+        // Schema: error_type enum (rate_limit | authentication_failed |
+        // billing_error | invalid_request | server_error | max_output_tokens |
+        // unknown). Older code read `data.message` which the schema does not
+        // provide — wait_reason silently degraded to the default "error".
+        const errorType = str(data.error_type);
+        const reason = errorType || "error";
         return [
           { kind: "set", key: "@pane_status", value: "error" },
           { kind: "set", key: "@pane_wait_reason", value: reason },
@@ -349,11 +361,39 @@ export function eventToOps(
       }
 
       case "Notification": {
-        const reason = maskPrompt(data.message) || "notification";
-        return [
-          { kind: "set", key: "@pane_status", value: "waiting" },
-          { kind: "set", key: "@pane_wait_reason", value: reason },
-        ];
+        // Schema: notification_type discriminator. No `message` / `title`
+        // fields. Branches:
+        //   permission_prompt   → waiting / "permission"
+        //   idle_prompt         → waiting / "idle prompt"
+        //   elicitation_dialog  → waiting / "elicitation"
+        //   elicitation_complete | elicitation_response → unset wait_reason
+        //                          (status preserved; resume is the next
+        //                          PreToolUse / Stop's job)
+        //   auth_success        → no-op (must not flip status to waiting)
+        //   unknown / absent    → no-op
+        const nt = str(data.notification_type);
+        switch (nt) {
+          case "permission_prompt":
+            return [
+              { kind: "set", key: "@pane_status", value: "waiting" },
+              { kind: "set", key: "@pane_wait_reason", value: "permission" },
+            ];
+          case "idle_prompt":
+            return [
+              { kind: "set", key: "@pane_status", value: "waiting" },
+              { kind: "set", key: "@pane_wait_reason", value: "idle prompt" },
+            ];
+          case "elicitation_dialog":
+            return [
+              { kind: "set", key: "@pane_status", value: "waiting" },
+              { kind: "set", key: "@pane_wait_reason", value: "elicitation" },
+            ];
+          case "elicitation_complete":
+          case "elicitation_response":
+            return [{ kind: "unset", key: "@pane_wait_reason" }];
+          default:
+            return [];
+        }
       }
 
       case "PermissionDenied": {
@@ -376,9 +416,12 @@ export function eventToOps(
         const toolName = str(data.tool_name);
         if (!toolName) return [];
         const subject = extractToolSubject(toolName, data.tool_input);
-        // Resume only when no subagent is running — otherwise the tool event
-        // is not reliably attributable to the main agent.
-        const resume = state.subagents === "" ? resumeOpsIfStuck(state) : [];
+        // Resume only when this event is main-attributable. Schema: payload
+        // carries `agent_id` only for subagent-origin tool events; main-origin
+        // events have no `agent_id`. Replaces the older `state.subagents===""`
+        // gate which over-blocked main resume whenever any subagent was alive.
+        const isMain = !str(data.agent_id);
+        const resume = isMain ? resumeOpsIfStuck(state) : [];
         const ops: Op[] = [
           ...resume,
           { kind: "set", key: "@pane_current_tool", value: toolName },
@@ -415,8 +458,9 @@ export function eventToOps(
         // into a non-edit tool's display.
         const toolName = str(data.tool_name);
         const now = String(Math.floor(Date.now() / 1000));
-        // Resume only when no subagent is running — matches PreToolUse policy.
-        const resume = state.subagents === "" ? resumeOpsIfStuck(state) : [];
+        // Resume only when main-attributable — matches PreToolUse policy.
+        const isMain = !str(data.agent_id);
+        const resume = isMain ? resumeOpsIfStuck(state) : [];
         const ops: Op[] = [
           ...resume,
           { kind: "set", key: "@pane_last_activity_at", value: now },
@@ -484,6 +528,54 @@ export function eventToOps(
           // Non-edit tool finished — clear any stale basename so row 2 does
           // not show misleading file metadata next to an unrelated tool.
           ops.push({ kind: "unset", key: "@pane_last_edit_file" });
+        }
+        return ops;
+      }
+
+      case "PostToolUseFailure": {
+        // Schema: tool_name + tool_input + error (string) + tool_use_id +
+        //         optional agent_id/agent_type. Fires for tool failures.
+        // Whether this fires INSTEAD of PostToolUse or alongside it is not
+        // documented. The handler is intentionally idempotent against
+        // PostToolUse: same set ops (last_tool / last_tool_error /
+        // last_activity_at / unset current_tool*) so the order/duplication
+        // does not matter for correctness — last write wins.
+        const toolName = str(data.tool_name);
+        const now = String(Math.floor(Date.now() / 1000));
+        const isMain = !str(data.agent_id);
+        const resume = isMain ? resumeOpsIfStuck(state) : [];
+        const ops: Op[] = [
+          ...resume,
+          { kind: "set", key: "@pane_last_activity_at", value: now },
+        ];
+        if (!toolName) return ops;
+        // Mirror PostToolUse current_tool clearing: only unset when the
+        // failed tool name matches the recorded current. With concurrent
+        // tools, an unrelated tool may still be in-flight.
+        if (toolName === state.currentTool) {
+          ops.push({ kind: "unset", key: "@pane_current_tool" });
+          ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
+        }
+        ops.push({ kind: "set", key: "@pane_last_tool", value: toolName });
+        const lastSubject = extractToolSubject(toolName, data.tool_input);
+        if (lastSubject) {
+          ops.push({
+            kind: "set",
+            key: "@pane_last_tool_subject",
+            value: lastSubject,
+          });
+        } else {
+          ops.push({ kind: "unset", key: "@pane_last_tool_subject" });
+        }
+        const errorText = truncate(str(data.error), TOOL_ERROR_MAX_CHARS);
+        if (errorText) {
+          ops.push({
+            kind: "set",
+            key: "@pane_last_tool_error",
+            value: errorText,
+          });
+        } else {
+          ops.push({ kind: "unset", key: "@pane_last_tool_error" });
         }
         return ops;
       }
@@ -576,6 +668,12 @@ export interface RunContext {
   argv_event: string;
   stdin_event: string | null;
   session_id: string | null;
+  // `agent_id` from the hook payload (subagent-origin events only). Recorded
+  // so post-deploy log inspection can verify the schema-stated invariant
+  // ("payload carries agent_id only for subagent events") that the
+  // resumeOpsIfStuck attribution logic relies on. null = main-origin or
+  // pre-payload-parse early exit.
+  agent_id: string | null;
   tmux_pane: string | null;
   cwd: string | null;
   pre_state: PaneState | null;
@@ -591,6 +689,7 @@ export interface LogRecord {
   argv_event: string;
   stdin_event: string | null;
   session_id: string | null;
+  agent_id: string | null;
   tmux_pane: string | null;
   cwd: string | null;
   pre_state: PaneState | null;
@@ -602,6 +701,9 @@ export interface LogRecord {
 
 // Pure, for test. Values in `ops` are intentionally dropped — @pane_prompt and
 // subject fields can carry user prompt content we don't want persisted in logs.
+// `agent_id` is included verbatim because it is a non-PII opaque identifier
+// (subagent UUID prefix); needed to validate the resumeOpsIfStuck attribution
+// invariant from production logs.
 export function buildLogRecord(
   ctx: RunContext,
   now: Date,
@@ -613,6 +715,7 @@ export function buildLogRecord(
     argv_event: ctx.argv_event,
     stdin_event: ctx.stdin_event,
     session_id: ctx.session_id,
+    agent_id: ctx.agent_id,
     tmux_pane: ctx.tmux_pane,
     cwd: ctx.cwd,
     pre_state: ctx.pre_state,
@@ -733,6 +836,7 @@ async function main(): Promise<void> {
     argv_event: Deno.args[0] ?? "",
     stdin_event: null,
     session_id: null,
+    agent_id: null,
     tmux_pane: null,
     cwd: null,
     pre_state: null,
@@ -784,6 +888,7 @@ async function main(): Promise<void> {
     const stdinEvent = str(hookData.hook_event_name);
     ctx.stdin_event = stdinEvent || null;
     ctx.session_id = str(hookData.session_id) || null;
+    ctx.agent_id = str(hookData.agent_id) || null;
     ctx.cwd = str(hookData.cwd) || null;
     if (stdinEvent && stdinEvent !== ctx.argv_event) {
       ctx.stdin_event_mismatch = true;
