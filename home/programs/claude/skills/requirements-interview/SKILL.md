@@ -91,9 +91,9 @@ Use `AskUserQuestion` to resolve ambiguities. Follow these principles:
 
 **Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user.
 
-**Offer your informed opinion.** When research reveals a clear best practice or common pattern, present it as the recommended option. The user can override, but a good default saves time.
+**Always provide a recommended answer.** Every real question in an `AskUserQuestion` call must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase or convert it to an Assumption instead. The user can override, but the AI never delegates judgment by asking with no recommendation.
 
-**Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch.
+**Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
 
 **Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and note it as an assumption in the deliverable (see the Assumptions / Open questions distinction in Phase 4 below).
 

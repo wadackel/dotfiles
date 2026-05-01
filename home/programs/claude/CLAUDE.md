@@ -37,9 +37,9 @@
 
 ### Question Triage
 
-- Ask now: user-only knowledge such as goals, hidden constraints, deadlines, preferences, or tradeoffs requiring judgment.
+- Self-resolve via code or environment first: when a question's answer can be derived from existing behavior, file structure, current implementation, or other discoverable facts, investigate the codebase **instead** of asking. Pre-empting the question is the goal.
+- Ask now: user-only knowledge that the codebase cannot reveal — goals, hidden constraints, deadlines, preferences, or tradeoffs requiring judgment.
 - Document as an assumption: when a reasonable default is safe and can be validated later.
-- Self-resolve via code or environment: existing behavior, file structure, current implementation, or other discoverable facts.
 
 ### Verification
 
