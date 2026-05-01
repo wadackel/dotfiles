@@ -14,10 +14,10 @@ let
   # those at runtime as the user trusts new project directories or dismisses
   # migration prompts.
   managed = {
-    model = "gpt-5.4";
+    model = "gpt-5.5";
     model_reasoning_effort = "high";
     model_reasoning_summary = "detailed";
-    sandbox_mode = "workspace-write";
+    sandbox_mode = "danger-full-access";
     notify = [
       "bash"
       "${config.home.homeDirectory}/.codex/notify.sh"
@@ -28,12 +28,6 @@ let
     features = {
       streamable_shell = true;
       view_image_tool = true;
-    };
-
-    sandbox_workspace_write = {
-      exclude_tmpdir_env_var = false;
-      exclude_slash_tmp = false;
-      network_access = true;
     };
   };
 

@@ -71,3 +71,35 @@ Deno.test("scenario 4: target with markers and identical managed content -> noop
   assertEquals(result.action, "noop");
   assertEquals(next, current);
 });
+
+Deno.test("scenario 5: managed body shrinks (section removed) -> section gone, unmanaged tail preserved", () => {
+  const oldBodyWithSection = [
+    'model = "gpt-5.4"',
+    'sandbox_mode = "workspace-write"',
+    "",
+    "[sandbox_workspace_write]",
+    "network_access = true",
+    "",
+  ].join("\n");
+  const newBodyWithoutSection = [
+    'model = "gpt-5.5"',
+    'sandbox_mode = "danger-full-access"',
+    "",
+  ].join("\n");
+  const current = "# nix-managed:start\n" + oldBodyWithSection +
+    "# nix-managed:end\n" + UNMANAGED_TAIL;
+
+  const { next, result } = spliceContent(current, newBodyWithoutSection);
+
+  assertEquals(result.action, "replaced");
+  // Removed section must be completely gone.
+  assertEquals(next.includes("[sandbox_workspace_write]"), false);
+  assertEquals(next.includes("network_access = true"), false);
+  assertEquals(next.includes('sandbox_mode = "workspace-write"'), false);
+  // New managed body must be present.
+  assertStringIncludes(next, 'model = "gpt-5.5"');
+  assertStringIncludes(next, 'sandbox_mode = "danger-full-access"');
+  // Unmanaged tail must survive verbatim.
+  assertStringIncludes(next, UNMANAGED_TAIL);
+  assertStringIncludes(next, '[projects."/Users/me/foo"]');
+});
