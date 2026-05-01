@@ -486,6 +486,16 @@ const ROW2_ICONS = {
   token: "\u{F01BC}", // nf-md-database — mirrors statusline's nf-fa-database
 } as const;
 
+// Powerline rounded segment endcaps (Nerd Font: nf-pl-left_soft_divider /
+// nf-pl-right_soft_divider). PUA code points are emitted via \u{} escapes per
+// CLAUDE.md's "Private Use Area glyphs at runtime" rule so the source file
+// stays ASCII-only and grep-/diff-friendly. Each endcap renders as 1 cell in
+// CaskaydiaCove Nerd Font Mono and inherits the foreground color of the Text
+// node — matching that color to the adjacent badge backgroundColor produces
+// the pill silhouette without a literal background fill on the endcap itself.
+const PILL_LEFT = "\u{E0B6}";
+const PILL_RIGHT = "\u{E0B4}";
+
 // Title bar icon + dogrun-derived palette. See vim-dogrun
 // (github.com/wadackel/vim-dogrun colors/dogrun.vim) — keys name the dogrun
 // highlight role they derive from, not an abstract severity level.
@@ -754,6 +764,7 @@ function App({
     Map<string, TaskProgress | null>
   >(new Map());
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
+  const [filterEnabled, setFilterEnabled] = useState(false);
   // `now` re-reads Date.now() on every render; the periodic setRows below
   // triggers a re-render every TICK_INTERVAL_MS, so elapsed time advances
   // naturally without a dedicated tick state.
@@ -791,7 +802,17 @@ function App({
     };
   }, []);
 
-  const foundIdx = rows.findIndex((r: PaneRow) => r.paneId === selectedPaneId);
+  // Filter-on-demand: pressing `w` toggles filterEnabled. derivedRows is the
+  // source of truth for everything visible (selection, navigation, layout).
+  // Inline filter — N is small (≤20 panes typical), useMemo would add no value.
+  const derivedRows = filterEnabled
+    ? rows.filter((r: PaneRow) =>
+      r.status === "waiting" || r.status === "idle"
+    )
+    : rows;
+  const foundIdx = derivedRows.findIndex((r: PaneRow) =>
+    r.paneId === selectedPaneId
+  );
   const index = foundIdx >= 0 ? foundIdx : 0;
 
   useInput((input, key) => {
@@ -801,36 +822,56 @@ function App({
       return;
     }
     if (key.return) {
-      onSelect(rows[index] ?? null);
+      onSelect(derivedRows[index] ?? null);
       exit();
       return;
     }
     if (key.upArrow || input === "k") {
-      const nextIdx = index === 0 ? rows.length - 1 : index - 1;
-      const nextId = rows[nextIdx]?.paneId;
+      const nextIdx = index === 0 ? derivedRows.length - 1 : index - 1;
+      const nextId = derivedRows[nextIdx]?.paneId;
       if (nextId !== undefined) setSelectedPaneId(nextId);
     }
     if (key.downArrow || input === "j") {
-      const nextIdx = index === rows.length - 1 ? 0 : index + 1;
-      const nextId = rows[nextIdx]?.paneId;
+      const nextIdx = index === derivedRows.length - 1 ? 0 : index + 1;
+      const nextId = derivedRows[nextIdx]?.paneId;
       if (nextId !== undefined) setSelectedPaneId(nextId);
+    }
+    if (input === "w") {
+      setFilterEnabled((v: boolean) => !v);
+      return;
     }
   });
 
   if (rows.length === 0) {
     return <Text color={DOGRUN.warn}>No panes available.</Text>;
   }
+  if (filterEnabled && derivedRows.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Text color={DOGRUN.warn}>No waiting/idle panes</Text>
+        <Text color={DOGRUN.muted}>Press w to clear filter</Text>
+      </Box>
+    );
+  }
 
-  const current = rows[index];
+  const current = derivedRows[index];
   const totalCols = stdout?.columns ?? 120;
   const totalRows = stdout?.rows ?? 30;
   const listWidth = Math.max(40, Math.floor(totalCols * 0.6));
   const previewWidth = Math.max(20, totalCols - listWidth - 1);
   const bodyHeight = Math.max(5, totalRows - 2);
+  // The baseline title bar (icon + title + Enter / j/k / Esc hints) is ~61
+  // cells, fitting on one line at the popup's typical 80%-of-screen width.
+  // The `w filter/clear` hint and the `[w] wait/idle` badge would push the
+  // total past narrow-tmux widths (cols=60 in S10/S14/S15 fixtures) and force
+  // the title to wrap, which breaks spawnPicker's `Claude Sessions` waitFor.
+  // Suppress both decorations below this threshold; users on narrow widths
+  // can still discover the `w` shortcut from CLAUDE.md / tmux.conf.
+  const showFilterUI = totalCols >= 80;
 
   // Dynamic repo/branch column widths: scan visible rows, clamp to caps, and
   // shrink branch first if the combined width would starve the summary slot.
-  const rowsParts = rows.map((r: PaneRow) =>
+  const rowsParts = derivedRows.map((r: PaneRow) =>
     cwdBranchParts(r.cwd || r.currentPath, r.worktreeBranch)
   );
   const columnBudget = Math.max(
@@ -854,19 +895,42 @@ function App({
       <Box marginBottom={1}>
         <Text color={DOGRUN.accent}>{TITLE_ICON + "  "}</Text>
         <Text color={DOGRUN.accent} bold>Claude Sessions</Text>
+        {showFilterUI && filterEnabled
+          ? (
+            <>
+              <Text>{"  "}</Text>
+              <Text color={DOGRUN.muted}>{PILL_LEFT}</Text>
+              <Text color={DOGRUN.fg} backgroundColor={DOGRUN.muted}>
+                {" wait/idle "}
+              </Text>
+              <Text color={DOGRUN.muted}>{PILL_RIGHT}</Text>
+            </>
+          )
+          : null}
         <Box flexGrow={1} />
         <Text color={DOGRUN.accent}>Enter</Text>
         <Text color={DOGRUN.fg}>{" jump  "}</Text>
         <Text color={DOGRUN.muted}>·</Text>
         <Text color={DOGRUN.accent}>{"  j/k ↑↓"}</Text>
         <Text color={DOGRUN.fg}>{" move  "}</Text>
+        {showFilterUI
+          ? (
+            <>
+              <Text color={DOGRUN.muted}>·</Text>
+              <Text color={DOGRUN.accent}>{"  w"}</Text>
+              <Text color={DOGRUN.fg}>
+                {filterEnabled ? " clear  " : " filter  "}
+              </Text>
+            </>
+          )
+          : null}
         <Text color={DOGRUN.muted}>·</Text>
         <Text color={DOGRUN.accent}>{"  Esc q"}</Text>
         <Text color={DOGRUN.fg}>{" cancel"}</Text>
       </Box>
       <Box flexDirection="row" height={bodyHeight}>
         <Box flexDirection="column" width={listWidth} gap={1}>
-          {rows.map((row: PaneRow, i: number) => (
+          {derivedRows.map((row: PaneRow, i: number) => (
             <PaneRowLine
               key={row.paneId}
               row={row}

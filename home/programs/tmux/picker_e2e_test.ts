@@ -879,3 +879,108 @@ Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async ()
     );
   }
 });
+
+// S22: pressing `w` inside the picker toggles a wait/idle filter. Round-trip
+// the toggle in a single fixture (filter ON → only waiting/idle remain + pill
+// shown → filter OFF → all four statuses back, pill gone). The pill body text
+// `wait/idle` is asserted to confirm the title-bar pill renders; the
+// powerline endcap glyphs (U+E0B6 / U+E0B4) are not asserted directly because
+// terminal capture of PUA code points is rendering-dependent. The dynamic
+// `w  clear` / `w  filter` hint is exercised indirectly by toggling twice.
+//
+// Note: status row text uses `wait`/`idle` without the `/` separator, so
+// `wait/idle` substring matching is unambiguously the title-bar pill.
+Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running" });
+    await createClaudePane({ status: "waiting" });
+    await createClaudePane({ status: "idle" });
+    await createClaudePane({ status: "error" });
+
+    const picker = await spawnPicker();
+    const initial = await captureOutput(picker);
+    assertStringIncludes(initial, "run");
+    assertStringIncludes(initial, "wait");
+    assertStringIncludes(initial, "idle");
+    assertStringIncludes(initial, "err");
+    assertFalse(
+      initial.includes("wait/idle"),
+      `pill unexpectedly present before pressing w:\n${initial}`,
+    );
+
+    // First `w` press: filter ON. Wait until the pill text appears so we know
+    // the re-render landed before sampling the status texts.
+    await sendKey(picker, "w");
+    const filtered = await waitFor(picker, (o) => o.includes("wait/idle"));
+    assertStringIncludes(filtered, "wait");
+    assertStringIncludes(filtered, "idle");
+    assertFalse(
+      filtered.includes("run "),
+      `running status leaked through filter:\n${filtered}`,
+    );
+    assertFalse(
+      filtered.includes("err "),
+      `error status leaked through filter:\n${filtered}`,
+    );
+
+    // Second `w` press: filter OFF. Wait until the pill disappears.
+    await sendKey(picker, "w");
+    const restored = await waitFor(picker, (o) => !o.includes("wait/idle"));
+    assertStringIncludes(restored, "run");
+    assertStringIncludes(restored, "wait");
+    assertStringIncludes(restored, "idle");
+    assertStringIncludes(restored, "err");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S23: filter applied with no waiting/idle panes shows a dedicated empty-state
+// message and `useInput` remains live so a second `w` press clears the filter.
+// The empty-state branch returns a 2-line <Box> rather than the full layout, so
+// this test guards against accidentally killing keyboard input in that branch.
+Deno.test(
+  "S23: filter with zero matches shows hint and stays interactive",
+  async () => {
+    await setupServer();
+    try {
+      await createClaudePane({ status: "running" });
+
+      const picker = await spawnPicker();
+      const initial = await captureOutput(picker);
+      assertStringIncludes(initial, "run");
+
+      await sendKey(picker, "w");
+      const empty = await waitFor(
+        picker,
+        (o) => o.includes("No waiting/idle panes"),
+      );
+      assertStringIncludes(empty, "No waiting/idle panes");
+      assertStringIncludes(empty, "Press w to clear filter");
+
+      // useInput must still be wired up in the empty-state branch — pressing
+      // `w` again should clear the filter and bring the running row back.
+      // Wait for the empty-state message to actually disappear (not for `run`
+      // to appear, which can match unrelated text in the tmux window chrome).
+      await sendKey(picker, "w");
+      const restored = await waitFor(
+        picker,
+        (o) => !o.includes("No waiting/idle panes"),
+      );
+      assertStringIncludes(restored, "run");
+      assertFalse(
+        restored.includes("No waiting/idle panes"),
+        `empty-state message persisted after clearing filter:\n${restored}`,
+      );
+
+      await sendKey(picker, "Escape");
+      await waitForExit();
+    } finally {
+      await teardown();
+    }
+  },
+);
