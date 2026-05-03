@@ -4,6 +4,29 @@
 
 export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 
+// Agents whose sessions the picker surfaces. PaneRow.agent stays `string` because
+// `@pane_agent` is read verbatim from tmux and may legitimately be empty or any
+// other value (a non-claude / non-opencode pane). isLivePaneCommand applies the
+// allowlist; PaneRow.agent is not narrowed at the parser layer.
+export type Agent = "claude" | "opencode";
+
+// Per-agent allowlist of `pane_current_command` values that mark a *live* AI
+// session pane (vs a stale pane whose AI process has exited and dropped back to
+// the login shell). macOS p_comm is capped at 15 chars, so opencode's wrapper
+// surfaces as `.opencode-wrapp` empirically; `.opencode-wrapped` is included
+// defensively in case the cap changes in a future macOS / kernel.
+export function isLivePaneCommand(agent: string, cmd: string): boolean {
+  switch (agent) {
+    case "claude":
+      return cmd === ".claude-wrapped" || cmd === "claude" || cmd === "node";
+    case "opencode":
+      return cmd === ".opencode-wrapp" || cmd === ".opencode-wrapped" ||
+        cmd === "opencode";
+    default:
+      return false;
+  }
+}
+
 export interface PaneRow {
   paneId: string;
   target: string;

@@ -3,7 +3,7 @@ import {
   basename,
   cwdBranchParts,
   formatElapsed,
-  isLiveClaudePaneCommand,
+  isLivePaneCommand,
   type PaneRow,
   parseRow,
   parseSubagents,
@@ -147,16 +147,35 @@ Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(emptyId), null);
 });
 
-Deno.test("isLiveClaudePaneCommand: accepts live cc entry points", () => {
-  assertEquals(isLiveClaudePaneCommand(".claude-wrapped"), true);
-  assertEquals(isLiveClaudePaneCommand("claude"), true);
-  assertEquals(isLiveClaudePaneCommand("node"), true);
+Deno.test("isLivePaneCommand: accepts live claude entry points", () => {
+  assertEquals(isLivePaneCommand("claude", ".claude-wrapped"), true);
+  assertEquals(isLivePaneCommand("claude", "claude"), true);
+  assertEquals(isLivePaneCommand("claude", "node"), true);
 });
 
-Deno.test("isLiveClaudePaneCommand: rejects non-cc commands", () => {
-  assertEquals(isLiveClaudePaneCommand("zsh"), false);
-  assertEquals(isLiveClaudePaneCommand("bash"), false);
-  assertEquals(isLiveClaudePaneCommand(""), false);
+Deno.test("isLivePaneCommand: accepts live opencode entry points", () => {
+  assertEquals(isLivePaneCommand("opencode", ".opencode-wrapp"), true);
+  assertEquals(isLivePaneCommand("opencode", ".opencode-wrapped"), true);
+  assertEquals(isLivePaneCommand("opencode", "opencode"), true);
+});
+
+Deno.test("isLivePaneCommand: cross-agent rejection", () => {
+  // claude pane running opencode binary or vice versa is not a live session
+  assertEquals(isLivePaneCommand("claude", ".opencode-wrapp"), false);
+  assertEquals(isLivePaneCommand("opencode", ".claude-wrapped"), false);
+});
+
+Deno.test("isLivePaneCommand: rejects non-AI commands", () => {
+  assertEquals(isLivePaneCommand("claude", "zsh"), false);
+  assertEquals(isLivePaneCommand("claude", "bash"), false);
+  assertEquals(isLivePaneCommand("opencode", "zsh"), false);
+  assertEquals(isLivePaneCommand("claude", ""), false);
+});
+
+Deno.test("isLivePaneCommand: rejects unknown agent", () => {
+  assertEquals(isLivePaneCommand("shell", ".claude-wrapped"), false);
+  assertEquals(isLivePaneCommand("", ".claude-wrapped"), false);
+  assertEquals(isLivePaneCommand("opencode_v2", ".opencode-wrapp"), false);
 });
 
 Deno.test("formatElapsed: null → middle dot", () => {

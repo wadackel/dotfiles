@@ -14,13 +14,23 @@ import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@5.2.1";
 // pane_row.ts so non-TUI tooling (picker-doctor.ts, tests) can reuse them
 // without dragging in React + Ink at import time.
 import {
+  type Agent,
+  isLivePaneCommand,
   type PaneRow,
   type PaneStatus,
   parseRow,
   STATUS_META,
   TMUX_FORMAT,
 } from "./pane_row.ts";
-export { type PaneRow, type PaneStatus, parseRow, STATUS_META, TMUX_FORMAT };
+export {
+  type Agent,
+  isLivePaneCommand,
+  type PaneRow,
+  type PaneStatus,
+  parseRow,
+  STATUS_META,
+  TMUX_FORMAT,
+};
 
 export interface TaskProgress {
   done: number;
@@ -36,10 +46,13 @@ const BRANCH_CAP = 28;
 const MIN_SUMMARY = 15;
 
 // Row-1 fixed-width overhead before the summary body:
-//   pointer(2) + "icon "(2) + status5(5) + elapsed5(5) + " · "(3) + "  "(2) = 19
+//   pointer(2) + "icon "(2) + "badge "(2) + status5(5) + elapsed5(5) + " · "(3) + "  "(2) = 21
+// `badge ` is the per-agent 1-cell letter (`C` / `O`) + 1-cell space inserted
+// between the status icon and status text so claude vs opencode rows are
+// visually disambiguated in the same list.
 // Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
 // PaneRowLine's summaryBudget — keep them in sync via this single constant.
-const ROW1_FIXED_OVERHEAD = 19;
+const ROW1_FIXED_OVERHEAD = 21;
 
 // Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
 // the preview capture (capturePane) re-run at this interval so the popup
@@ -342,23 +355,11 @@ export async function readTaskProgress(
   return total === 0 ? null : { done, total };
 }
 
-// Live cc entry-point set matched against tmux `pane_current_command`
-// (kernel p_comm basename, ≤16 bytes). Stale panes whose cc process has
-// exited fall back to the login shell (e.g. `zsh`) and are rejected here.
-//
-// NOT the same semantics as picker-doctor.ts:isClaudeCommand which scans
-// full ps command-line substrings to locate descendant processes. That
-// helper is substring+token-based against `ps -o command`; this one is
-// exact-match against a single tmux p_comm basename.
-export const CLAUDE_PANE_COMMANDS: ReadonlySet<string> = new Set([
-  ".claude-wrapped", // nix wrapper (home-manager)
-  "claude", // direct binary
-  "node", // node-runtime invocation fallback
-]);
-
-export function isLiveClaudePaneCommand(cmd: string): boolean {
-  return CLAUDE_PANE_COMMANDS.has(cmd);
-}
+// Per-agent live-pane allowlist + isLivePaneCommand live in pane_row.ts so
+// non-TUI tooling (picker-doctor, tests) can share the SSOT without React/Ink.
+// The matcher is intentionally exact-match against tmux's `pane_current_command`
+// (kernel p_comm basename, ≤15 bytes on macOS) — distinct from
+// picker-doctor.ts:isClaudeCommand which scans full `ps -o command` substrings.
 
 async function fetchPanes(): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
@@ -367,8 +368,8 @@ async function fetchPanes(): Promise<PaneRow[]> {
     if (!line) continue;
     const row = parseRow(line);
     if (
-      row && row.agent === "claude" &&
-      isLiveClaudePaneCommand(row.currentCommand)
+      row && (row.agent === "claude" || row.agent === "opencode") &&
+      isLivePaneCommand(row.agent, row.currentCommand)
     ) {
       rows.push(row);
     }
@@ -640,10 +641,15 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
 
   return (
     <Box flexDirection="column">
-      {/* Line 1: marker + icon + status + elapsed + repo · branch + summary */}
+      {/* Line 1: marker + icon + agent-badge + status + elapsed + repo · branch + summary */}
       <Box>
         <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
         <Text color={color}>{icon + " "}</Text>
+        {/* badge: 1-cell ASCII letter (C/O) + 1-cell trailing space.
+            Inline (no Record/dict) — only 2 agents, Rule-of-Three not met. */}
+        <Text color={row.agent === "opencode" ? "#a6afff" : "#73c1a9"}>
+          {(row.agent === "opencode" ? "O" : "C") + " "}
+        </Text>
         <Text color={color}>{status5}</Text>
         <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
         <Text color={DOGRUN.fg}>{repoCol}</Text>

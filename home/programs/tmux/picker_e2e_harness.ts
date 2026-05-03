@@ -24,15 +24,24 @@ const SESSION = "test";
 const PICKER_WINDOW_NAME = "picker";
 const POLL_INTERVAL_MS = 50;
 
-// Per-test-run scratch directory holding a compiled `.claude-wrapped` stub
-// used by createClaudePane({ liveCommand: true }). Darwin SIP/AMFI blocks
-// executing copies of Apple-signed binaries (e.g. /bin/sleep → SIGKILL 137),
-// and symlinks resolve to the real basename at execve time, so neither the
-// copy-and-rename nor the symlink trick works. Compiling a 3-line C stub
-// with /usr/bin/cc is the one path that reliably makes the kernel's p_comm
-// (and thus tmux's #{pane_current_command}) match `.claude-wrapped`.
+// Per-test-run scratch directory holding compiled stubs used by
+// createClaudePane({ liveCommand: true }). One stub per agent (claude,
+// opencode) so each pane's `pane_current_command` surfaces the value
+// `isLivePaneCommand` expects. Darwin SIP/AMFI blocks executing copies of
+// Apple-signed binaries (e.g. /bin/sleep → SIGKILL 137) and symlinks resolve
+// to the real basename at execve time, so compiling a 3-line C stub with
+// /usr/bin/cc is the one path that reliably makes the kernel's p_comm match
+// the binary's basename. The opencode stub uses the 15-char form
+// `.opencode-wrapp` so MAXCOMLEN truncation is a no-op.
 const LIVE_BIN_DIR = `/tmp/picker-e2e-bin-${Deno.pid}`;
-const LIVE_BIN_PATH = `${LIVE_BIN_DIR}/.claude-wrapped`;
+const LIVE_BIN_PATHS: Record<string, string> = {
+  claude: `${LIVE_BIN_DIR}/.claude-wrapped`,
+  opencode: `${LIVE_BIN_DIR}/.opencode-wrapp`,
+};
+const LIVE_BIN_BASENAMES: Record<string, string> = {
+  claude: ".claude-wrapped",
+  opencode: ".opencode-wrapp",
+};
 const LIVE_BIN_SOURCE = `#include <stdlib.h>
 #include <unistd.h>
 int main(int argc, char **argv) {
@@ -140,33 +149,35 @@ export async function setupServer(opts: ServerOpts = {}): Promise<void> {
   await ensureLiveBin();
 }
 
-// Compile the `.claude-wrapped` stub used by liveCommand-mode panes. Idempotent
-// across setupServer calls within a single test run: the binary is compiled
-// once per process and cached across Deno.test cases on the same PID.
+// Compile per-agent stubs used by liveCommand-mode panes. Idempotent across
+// setupServer calls within a single test run: each binary is compiled once
+// per process and cached across Deno.test cases on the same PID.
 async function ensureLiveBin(): Promise<void> {
-  try {
-    const st = await Deno.stat(LIVE_BIN_PATH);
-    if (st.isFile) return;
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
-    // not built yet — fall through
-  }
   await Deno.mkdir(LIVE_BIN_DIR, { recursive: true });
-  const child = new Deno.Command("cc", {
-    args: ["-x", "c", "-o", LIVE_BIN_PATH, "-"],
-    stdin: "piped",
-    stdout: "null",
-    stderr: "piped",
-  }).spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(LIVE_BIN_SOURCE));
-  await writer.close();
-  const { code, stderr } = await child.output();
-  if (code !== 0) {
-    const err = new TextDecoder().decode(stderr).trim();
-    throw new Error(
-      `Failed to compile live .claude-wrapped stub with /usr/bin/cc: ${err}`,
-    );
+  for (const path of Object.values(LIVE_BIN_PATHS)) {
+    try {
+      const st = await Deno.stat(path);
+      if (st.isFile) continue;
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+      // not built yet — fall through
+    }
+    const child = new Deno.Command("cc", {
+      args: ["-x", "c", "-o", path, "-"],
+      stdin: "piped",
+      stdout: "null",
+      stderr: "piped",
+    }).spawn();
+    const writer = child.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(LIVE_BIN_SOURCE));
+    await writer.close();
+    const { code, stderr } = await child.output();
+    if (code !== 0) {
+      const err = new TextDecoder().decode(stderr).trim();
+      throw new Error(
+        `Failed to compile live stub ${path} with /usr/bin/cc: ${err}`,
+      );
+    }
   }
 }
 
@@ -179,6 +190,14 @@ async function ensureLiveBin(): Promise<void> {
 // parseRow (picker.tsx:75-109).
 export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   const live = opts.liveCommand !== false;
+  const agent = opts.agent ?? "claude";
+  // Pick the per-agent live stub. Unknown agents fall back to the claude
+  // stub so existing scenarios that pass `agent: "shell"` (negative tests)
+  // still spawn a non-shell live pane — `isLivePaneCommand("shell", ...)`
+  // returns false anyway so the picker filters it out.
+  const liveBinPath = LIVE_BIN_PATHS[agent] ?? LIVE_BIN_PATHS["claude"];
+  const liveBinBasename = LIVE_BIN_BASENAMES[agent] ??
+    LIVE_BIN_BASENAMES["claude"];
   const newWindowArgs = [
     "new-window",
     "-d",
@@ -189,17 +208,17 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
     "#{pane_id}",
   ];
   if (live) {
-    // Execute the compiled `.claude-wrapped` stub directly so the kernel
-    // sets p_comm (and tmux's #{pane_current_command}) to the basename
-    // `.claude-wrapped`. See LIVE_BIN_* constants for why argv[0] renaming
-    // via `exec -a` or symlinks does not suffice on Darwin.
-    newWindowArgs.push(`${LIVE_BIN_PATH} 99999`);
+    // Execute the compiled stub directly so the kernel sets p_comm (and
+    // tmux's #{pane_current_command}) to the basename matching the agent.
+    // See LIVE_BIN_* constants for why argv[0] renaming via `exec -a` or
+    // symlinks does not suffice on Darwin.
+    newWindowArgs.push(`${liveBinPath} 99999`);
   }
   const paneId = (await tmuxRun(newWindowArgs)).trim();
 
   if (live) {
     // Poll briefly so tmux reflects the post-execve p_comm rather than the
-    // pane's initial foreground pgrp (fork'd cc not yet into execve).
+    // pane's initial foreground pgrp (fork'd stub not yet into execve).
     const deadline = Date.now() + 1000;
     let observed = "";
     while (Date.now() < deadline) {
@@ -212,21 +231,20 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
           "#{pane_current_command}",
         ])
       ).trim();
-      if (observed === ".claude-wrapped") break;
+      if (observed === liveBinBasename) break;
       await new Promise((r) => setTimeout(r, 25));
     }
-    if (observed !== ".claude-wrapped") {
+    if (observed !== liveBinBasename) {
       throw new Error(
         `createClaudePane liveCommand assertion failed: expected ` +
-          `pane_current_command=".claude-wrapped" but got "${observed}". ` +
-          `The compiled stub at ${LIVE_BIN_PATH} did not produce the ` +
+          `pane_current_command="${liveBinBasename}" but got "${observed}". ` +
+          `The compiled stub at ${liveBinPath} did not produce the ` +
           `expected p_comm — check /usr/bin/cc availability and macOS ` +
           `code-sign / AMFI policy on ${LIVE_BIN_DIR}.`,
       );
     }
   }
 
-  const agent = opts.agent ?? "claude";
   const pairs: Array<[string, string]> = [["@pane_agent", agent]];
   if (opts.status !== undefined) pairs.push(["@pane_status", opts.status]);
   if (opts.waitReason !== undefined) {

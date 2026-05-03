@@ -984,3 +984,89 @@ Deno.test(
     }
   },
 );
+
+// S24: opencode pane is included in the picker output. fetchPanes filter
+// accepts `agent === "claude" || agent === "opencode"` AND
+// isLivePaneCommand(agent, currentCommand) — opencode panes spawn under the
+// `.opencode-wrapp` stub so liveCommand=true selects the right binary.
+Deno.test("S24: opencode pane visible in picker", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "opencode",
+      status: "running",
+      prompt: "opencode-marker-S24",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "opencode-marker-S24");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S25: claude and opencode panes coexist in one list and are visually
+// disambiguated by the row-1 agent badge ("C" for claude, "O" for opencode).
+// The badge is inline at picker.tsx:649-651, between status icon and status5.
+Deno.test("S25: claude+opencode mixed list renders both with badge", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "claude",
+      status: "running",
+      prompt: "claude-marker-S25",
+    });
+    await createClaudePane({
+      agent: "opencode",
+      status: "running",
+      prompt: "opencode-marker-S25",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "claude-marker-S25");
+    assertStringIncludes(out, "opencode-marker-S25");
+    // Both badge letters must render somewhere in the captured output. The
+    // exact glyph palette of the surrounding chrome can include `C`/`O` in
+    // titles or hint text, so we only check for presence here — the visual
+    // alignment to the right pane is verified by the human-confirmation step
+    // in the plan's `## Requires User Confirmation`.
+    assertStringIncludes(out, "C ");
+    assertStringIncludes(out, "O ");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S26: stale opencode pane (no live `.opencode-wrapp` process — fallback to
+// the login shell zsh) must be filtered out, mirroring S17 for opencode.
+Deno.test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "opencode",
+      status: "running",
+      prompt: "alive-oc-marker-S26",
+    });
+    await createClaudePane({
+      agent: "opencode",
+      status: "idle",
+      prompt: "stale-oc-marker-S26",
+      liveCommand: false,
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "alive-oc-marker-S26");
+    assertFalse(
+      out.includes("stale-oc-marker-S26"),
+      `stale opencode pane appeared in picker:\n${out}`,
+    );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

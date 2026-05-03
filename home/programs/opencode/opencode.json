@@ -7,6 +7,15 @@
   "model": "opencode/deepseek-v4-pro",
   "small_model": "opencode/qwen3.5-plus",
 
+  // tmux picker (prefix+w) bridges opencode session events → tmux pane
+  // options. Source lives in dotfiles/home/programs/opencode/plugin.ts;
+  // home-manager symlinks it to ~/.config/opencode/plugin.ts. The path must
+  // be absolute (file:// URL) — opencode 1.14.30 resolves relative `./` paths
+  // against CWD, not opencode.json's directory, and treats them as npm-style
+  // package directories looking for package.json. {env:HOME} is opencode's
+  // own template substitution and is profile-independent.
+  "plugin": ["file://{env:HOME}/.config/opencode/plugin.ts"],
+
   // AGENTS.md は ~/.claude/CLAUDE.md がフォールバック読み込みされるため未設定。
   // RTK ガイドだけ追加で読ませる。{env:HOME} は profile 非依存の置換。
   "instructions": [
