@@ -28,6 +28,7 @@ let
     features = {
       streamable_shell = true;
       view_image_tool = true;
+      external_migration = true;
     };
   };
 
