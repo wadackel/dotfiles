@@ -989,9 +989,11 @@ Deno.test("S24: opencode pane visible in picker", async () => {
 });
 
 // S25: claude and opencode panes coexist in one list and are visually
-// disambiguated by the row-1 agent badge ("C" for claude, "O" for opencode).
-// The badge is inline at picker.tsx:649-651, between status icon and status5.
-Deno.test("S25: claude+opencode mixed list renders both with badge", async () => {
+// disambiguated by the row-1 agent column rendered immediately to the left of
+// the repo column. Each agent's canonical name (`claude`, `opencode`) is
+// padded to 8 cells (length of the longest name) plus a 1-cell separator so
+// the repo column lines up vertically across mixed-agent rows.
+Deno.test("S25: claude+opencode mixed list renders both with agent column", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1008,13 +1010,12 @@ Deno.test("S25: claude+opencode mixed list renders both with badge", async () =>
     const out = await captureOutput(picker);
     assertStringIncludes(out, "claude-marker-S25");
     assertStringIncludes(out, "opencode-marker-S25");
-    // Both badge letters must render somewhere in the captured output. The
-    // exact glyph palette of the surrounding chrome can include `C`/`O` in
-    // titles or hint text, so we only check for presence here — the visual
-    // alignment to the right pane is verified by the human-confirmation step
-    // in the plan's `## Requires User Confirmation`.
-    assertStringIncludes(out, "C ");
-    assertStringIncludes(out, "O ");
+    // Chip body form: " " + agentLabel + " " (chip-width hugs the canonical
+    // name). Hyphenated marker prompts ("claude-marker-S25" etc.) follow
+    // "claude"/"opencode" with "-", not " ", so they cannot collide with the
+    // chip body substring. S28 covers codex; S25 fixture has no codex pane.
+    assertStringIncludes(out, " claude ");
+    assertStringIncludes(out, " opencode ");
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {
@@ -1073,8 +1074,11 @@ Deno.test("S27: codex pane visible in picker", async () => {
 });
 
 // S28: claude, opencode, and codex panes coexist in one list and are visually
-// disambiguated by the row-1 agent badge ("C", "O", and "X").
-Deno.test("S28: claude+opencode+codex mixed list renders all badges", async () => {
+// disambiguated by the row-1 agent column rendering each canonical name
+// (`claude`, `opencode`, `codex`) padded to 8 cells immediately before the
+// repo column. Pads keep the repo column aligned vertically across all 3
+// agent rows.
+Deno.test("S28: claude+opencode+codex mixed list renders all agent columns", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1097,9 +1101,12 @@ Deno.test("S28: claude+opencode+codex mixed list renders all badges", async () =
     assertStringIncludes(out, "claude-marker-S28");
     assertStringIncludes(out, "opencode-marker-S28");
     assertStringIncludes(out, "codex-marker-S28");
-    assertStringIncludes(out, "C ");
-    assertStringIncludes(out, "O ");
-    assertStringIncludes(out, "X ");
+    // Chip body form: " " + agentLabel + " ". Hyphenated marker prompts
+    // ("claude-marker-S28" etc.) follow each agent name with "-", not " ",
+    // so they cannot collide with the chip body substring.
+    assertStringIncludes(out, " claude ");
+    assertStringIncludes(out, " opencode ");
+    assertStringIncludes(out, " codex ");
     await sendKey(picker, "Escape");
     await waitForExit();
   } finally {

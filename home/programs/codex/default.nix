@@ -19,8 +19,14 @@ let
     model_reasoning_summary = "detailed";
     sandbox_mode = "danger-full-access";
     notify = [
-      "bash"
-      "${config.home.homeDirectory}/.codex/notify.sh"
+      "${pkgs.deno}/bin/deno"
+      "run"
+      "--allow-read"
+      "--allow-write"
+      "--allow-env=HOME,TMPDIR,TMUX_PANE"
+      "--allow-run"
+      "${config.home.homeDirectory}/.codex/codex-notify.ts"
+      "send"
     ];
     personality = "pragmatic";
     web_search = "live";
@@ -41,6 +47,18 @@ in
   home.file.".codex/hooks.json".source = ./hooks.json;
   home.file.".codex/codex-pane-status.ts" = {
     source = ./codex-pane-status.ts;
+    executable = true;
+  };
+  home.file.".codex/codex-hook-log.ts" = {
+    source = ./codex-hook-log.ts;
+    executable = true;
+  };
+  home.file.".codex/codex-notify.ts" = {
+    source = ./codex-notify.ts;
+    executable = true;
+  };
+  home.file.".codex/codex-memo.ts" = {
+    source = ./codex-memo.ts;
     executable = true;
   };
 

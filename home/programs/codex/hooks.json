@@ -1,22 +1,108 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" SessionStart'" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" SessionStart'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" SessionStart'"
+          }
+        ]
+      }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" UserPromptSubmit'" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" UserPromptSubmit'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" UserPromptSubmit'"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PreToolUse'" }] }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PreToolUse'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PreToolUse'"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PostToolUse'" }] }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PostToolUse'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PostToolUse'"
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" Stop'" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" Stop'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" Stop'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-memo.ts\" Stop'"
+          }
+        ]
+      }
     ],
     "PermissionRequest": [
-      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PermissionRequest'" }] }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PermissionRequest'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PermissionRequest'"
+          }
+        ]
+      }
     ]
   }
 }

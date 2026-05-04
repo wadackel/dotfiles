@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env=TMUX_PANE --allow-read --allow-run=tmux
+#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux
 
 // Bridges Codex CLI lifecycle hooks to tmux pane options for the popup picker.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
@@ -10,6 +10,7 @@ type HookData = Record<string, unknown> & {
   prompt?: string;
   source?: string;
   tool_name?: string;
+  tool_input?: unknown;
   tool_use_id?: string;
   tool_response?: unknown;
   transcript_path?: string | null;
@@ -57,9 +58,6 @@ export const CLAUDE_ONLY_KEYS = [
   "@pane_main_stopped",
   "@pane_worktree_branch",
   "@pane_worktree_path",
-  "@pane_last_edit_file",
-  "@pane_current_tool_subject",
-  "@pane_last_tool_subject",
 ] as const;
 
 export const RESUME_TRANSIENT_KEYS = [
@@ -73,22 +71,78 @@ const STALE_AT_SESSION_START = ALL_PANE_OPTIONS.filter((key) =>
 );
 
 const PROMPT_MAX_CHARS = 40;
+const TOOL_SUBJECT_MAX_CHARS = 24;
 const TOOL_ERROR_MAX_CHARS = 40;
 const TOKEN_TAIL_BYTES = 64 * 1024;
+const LOG_MAX_LINES = 1000;
+const LOG_FILE = `${
+  Deno.env.get("HOME") ?? "."
+}/.codex/logs/codex-pane-status.log`;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
 function truncate(raw: string, max: number): string {
-  const clean = raw.replace(/[\x00-\x1f\x7f]+/g, " ");
+  const clean = stripControls(raw);
   return clean.length > max ? clean.slice(0, max) + "..." : clean;
+}
+
+function stripControls(raw: string): string {
+  return Array.from(raw, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f ? " " : ch;
+  }).join("");
+}
+
+const SUBJECT_EXTRACTORS: Record<
+  string,
+  (ti: Record<string, unknown>) => string
+> = {
+  Bash: (ti) => str(ti.command),
+  Read: (ti) => str(ti.file_path).split("/").pop() ?? "",
+  Grep: (ti) => str(ti.pattern),
+  Glob: (ti) => str(ti.pattern),
+  WebFetch: (ti) => {
+    try {
+      return new URL(str(ti.url)).host;
+    } catch {
+      return "";
+    }
+  },
+};
+
+export function extractToolSubject(
+  toolName: string,
+  toolInput: unknown,
+): string {
+  if (!toolInput || typeof toolInput !== "object" || Array.isArray(toolInput)) {
+    return "";
+  }
+  const ti = toolInput as Record<string, unknown>;
+  const extractor = SUBJECT_EXTRACTORS[toolName];
+  let subject = extractor ? extractor(ti) : "";
+  if (!subject && toolName.startsWith("mcp__")) {
+    const parts = toolName.split("__");
+    if (parts.length >= 3) subject = `mcp: ${parts[1]}`;
+  }
+  return subject ? truncate(subject, TOOL_SUBJECT_MAX_CHARS) : "";
+}
+
+export function extractEditFile(toolName: string, toolInput: unknown): string {
+  if (toolName !== "Edit" && toolName !== "Write" && toolName !== "MultiEdit") {
+    return "";
+  }
+  if (!toolInput || typeof toolInput !== "object" || Array.isArray(toolInput)) {
+    return "";
+  }
+  const filePath = (toolInput as Record<string, unknown>).file_path;
+  return typeof filePath === "string" ? stripControls(filePath) : "";
 }
 
 export function maskPrompt(raw: unknown): string {
   if (typeof raw !== "string" || raw.length === 0) return "";
-  const flat = raw.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/ {2,}/g, " ")
-    .trim();
+  const flat = stripControls(raw).replace(/ {2,}/g, " ").trim();
   return flat.length > PROMPT_MAX_CHARS
     ? flat.slice(0, PROMPT_MAX_CHARS) + "..."
     : flat;
@@ -226,8 +280,14 @@ export async function eventToOps(
     case "PreToolUse": {
       const toolName = str(data.tool_name);
       if (!toolName) return [];
+      const subject = extractToolSubject(toolName, data.tool_input);
       body.push(...resumeOpsIfStuck(state));
       body.push({ kind: "set", key: "@pane_current_tool", value: toolName });
+      body.push(
+        subject
+          ? { kind: "set", key: "@pane_current_tool_subject", value: subject }
+          : { kind: "unset", key: "@pane_current_tool_subject" },
+      );
       const toolUseId = str(data.tool_use_id);
       if (toolUseId) {
         body.push({
@@ -251,8 +311,21 @@ export async function eventToOps(
       if (toolUseId && toolUseId === state.currentToolUseId) {
         body.push({ kind: "unset", key: "@pane_current_tool" });
         body.push({ kind: "unset", key: "@pane_current_tool_use_id" });
+        body.push({ kind: "unset", key: "@pane_current_tool_subject" });
       }
       body.push({ kind: "set", key: "@pane_last_tool", value: toolName });
+      const subject = extractToolSubject(toolName, data.tool_input);
+      body.push(
+        subject
+          ? { kind: "set", key: "@pane_last_tool_subject", value: subject }
+          : { kind: "unset", key: "@pane_last_tool_subject" },
+      );
+      const editFile = extractEditFile(toolName, data.tool_input);
+      body.push(
+        editFile
+          ? { kind: "set", key: "@pane_last_edit_file", value: editFile }
+          : { kind: "unset", key: "@pane_last_edit_file" },
+      );
       const error = extractToolError(data.tool_response);
       body.push(
         error
@@ -343,17 +416,108 @@ async function applyOp(pane: string, op: Op): Promise<void> {
   }
 }
 
+export interface RunLog {
+  ts: string;
+  argv_event: string;
+  stdin_event: string | null;
+  session_id: string | null;
+  tmux_pane: string | null;
+  cwd: string | null;
+  pre_state: PaneState | null;
+  ops: Array<{ kind: "set" | "unset"; key: string }>;
+  early_exit: string | null;
+  stdin_event_mismatch: boolean;
+}
+
+export function buildRunLog(args: {
+  event: string;
+  data: HookData;
+  pane: string | null;
+  state: PaneState | null;
+  ops: Op[];
+  earlyExit: string | null;
+  stdinEventMismatch: boolean;
+  now?: Date;
+}): RunLog {
+  return {
+    ts: (args.now ?? new Date()).toISOString(),
+    argv_event: args.event,
+    stdin_event: str(args.data.hook_event_name) || null,
+    session_id: str(args.data.session_id) || null,
+    tmux_pane: args.pane,
+    cwd: str(args.data.cwd) || null,
+    pre_state: args.state,
+    ops: args.ops.map((op) => ({ kind: op.kind, key: op.key })),
+    early_exit: args.earlyExit,
+    stdin_event_mismatch: args.stdinEventMismatch,
+  };
+}
+
+async function appendRunLog(record: RunLog): Promise<void> {
+  try {
+    await Deno.mkdir(`${Deno.env.get("HOME") ?? "."}/.codex/logs`, {
+      recursive: true,
+    });
+    try {
+      const content = await Deno.readTextFile(LOG_FILE);
+      const lines = content.split("\n");
+      if (lines.length > LOG_MAX_LINES) {
+        await Deno.writeTextFile(
+          LOG_FILE,
+          lines.slice(-LOG_MAX_LINES).join("\n"),
+        );
+      }
+    } catch {
+      // no log yet
+    }
+    await Deno.writeTextFile(LOG_FILE, JSON.stringify(record) + "\n", {
+      append: true,
+    });
+  } catch {
+    // picker state is more important than diagnostics
+  }
+}
+
 async function main(): Promise<void> {
   const event = Deno.args[0] ?? "";
-  if (!event) return;
+  if (!event) {
+    await appendRunLog(buildRunLog({
+      event,
+      data: {},
+      pane: Deno.env.get("TMUX_PANE") ?? null,
+      state: null,
+      ops: [],
+      earlyExit: "no-event",
+      stdinEventMismatch: false,
+    }));
+    return;
+  }
 
   const pane = Deno.env.get("TMUX_PANE");
   if (!pane) {
     console.error("codex-pane-status: early_exit=no-tmux-pane");
+    await appendRunLog(buildRunLog({
+      event,
+      data: {},
+      pane: null,
+      state: null,
+      ops: [],
+      earlyExit: "no-tmux-pane",
+      stdinEventMismatch: false,
+    }));
     return;
   }
   if (!/^%\d+$/.test(pane)) {
     console.error("codex-pane-status: early_exit=invalid-pane-id");
+    await appendRunLog(buildRunLog({
+      event,
+      data: {},
+      pane,
+      state: null,
+      ops: [],
+      earlyExit: "invalid-pane-id",
+      stdinEventMismatch: false,
+    }));
     return;
   }
 
@@ -367,11 +531,21 @@ async function main(): Promise<void> {
       }
     } catch {
       console.error("codex-pane-status: failed to parse stdin JSON");
+      await appendRunLog(buildRunLog({
+        event,
+        data,
+        pane,
+        state: null,
+        ops: [],
+        earlyExit: "json-parse-error",
+        stdinEventMismatch: false,
+      }));
       return;
     }
   }
 
   const stdinEvent = str(data.hook_event_name);
+  const mismatch = Boolean(stdinEvent && stdinEvent !== event);
   if (stdinEvent && stdinEvent !== event) {
     console.error(
       `codex-pane-status: argv event (${event}) != stdin event (${stdinEvent}); using argv`,
@@ -381,6 +555,15 @@ async function main(): Promise<void> {
   const state = await readPaneState(pane);
   const ops = await eventToOps(event, data, state);
   for (const op of ops) await applyOp(pane, op);
+  await appendRunLog(buildRunLog({
+    event,
+    data,
+    pane,
+    state,
+    ops,
+    earlyExit: ops.length === 0 ? "no-ops" : null,
+    stdinEventMismatch: mismatch,
+  }));
 }
 
 if (import.meta.main) {

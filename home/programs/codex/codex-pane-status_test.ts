@@ -3,9 +3,12 @@ import {
   assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  buildRunLog,
   eventToOps,
+  extractEditFile,
   extractTokenPct,
   extractToolError,
+  extractToolSubject,
   maskPrompt,
   type Op,
   type PaneState,
@@ -113,7 +116,12 @@ Deno.test("eventToOps: UserPromptSubmit empty prompt unsets prompt", async () =>
 Deno.test("eventToOps: PreToolUse resumes waiting and records tool_use_id", async () => {
   const ops = await eventToOps(
     "PreToolUse",
-    { session_id: "s1", tool_name: "Bash", tool_use_id: "u1" },
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u1",
+    },
     state({ status: "waiting" }),
   );
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
@@ -123,6 +131,11 @@ Deno.test("eventToOps: PreToolUse resumes waiting and records tool_use_id", asyn
     kind: "set",
     key: "@pane_current_tool_use_id",
     value: "u1",
+  }));
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_current_tool_subject",
+    value: "deno test",
   }));
 });
 
@@ -177,6 +190,24 @@ Deno.test("eventToOps: PostToolUse records last tool and string Error response",
   }));
 });
 
+Deno.test("eventToOps: PostToolUse records last edit file when payload exposes file_path", async () => {
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Write",
+      tool_use_id: "u1",
+      tool_input: { file_path: "/tmp/project/app.ts", content: "ignored" },
+    },
+    state({ currentToolUseId: "u1" }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_last_edit_file",
+    value: "/tmp/project/app.ts",
+  }));
+});
+
 Deno.test("eventToOps: Stop unsets context pct when transcript miss", async () => {
   const ops = await eventToOps(
     "Stop",
@@ -222,6 +253,48 @@ Deno.test("extractToolError: accepts string Error prefix only", () => {
   assertEquals(extractToolError({ is_error: true }), null);
 });
 
+Deno.test("extractToolSubject: extracts safe compact subjects from known tools and MCP tools", () => {
+  assertEquals(extractToolSubject("Bash", { command: "echo hi" }), "echo hi");
+  assertEquals(
+    extractToolSubject("Read", { file_path: "/tmp/app.ts" }),
+    "app.ts",
+  );
+  assertEquals(
+    extractToolSubject("WebFetch", { url: "https://example.com/a" }),
+    "example.com",
+  );
+  assertEquals(extractToolSubject("mcp__docs__search", {}), "mcp: docs");
+  assertEquals(extractToolSubject("Edit", { file_path: "/tmp/app.ts" }), "");
+});
+
+Deno.test("extractEditFile: extracts edit-family file paths and strips controls", () => {
+  assertEquals(
+    extractEditFile("Write", { file_path: "/tmp/a\nb.ts" }),
+    "/tmp/a b.ts",
+  );
+  assertEquals(extractEditFile("Bash", { file_path: "/tmp/a.ts" }), "");
+});
+
+Deno.test("buildRunLog: records metadata without raw option values", () => {
+  const log = buildRunLog({
+    event: "PostToolUse",
+    data: {
+      hook_event_name: "PostToolUse",
+      session_id: "s1",
+      cwd: "/repo",
+    },
+    pane: "%1",
+    state: state({ status: "running" }),
+    ops: [{ kind: "set", key: "@pane_status", value: "idle" }],
+    earlyExit: null,
+    stdinEventMismatch: false,
+    now: new Date("2026-05-04T00:00:00Z"),
+  });
+  assertEquals(log.ts, "2026-05-04T00:00:00.000Z");
+  assertEquals(log.ops, [{ kind: "set", key: "@pane_status" }]);
+  assertEquals(log.session_id, "s1");
+});
+
 Deno.test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
   const path = new URL("./fixtures/token-ok.jsonl", import.meta.url).pathname;
   assertEquals(await extractTokenPct(path), 25);
@@ -247,8 +320,9 @@ Deno.test("main: no TMUX_PANE exits gracefully and writes no stdout", async () =
   const cmd = new Deno.Command(Deno.execPath(), {
     args: [
       "run",
-      "--allow-env=TMUX_PANE",
+      "--allow-env=HOME,TMUX_PANE",
       "--allow-read",
+      "--allow-write",
       "--allow-run=tmux",
       "home/programs/codex/codex-pane-status.ts",
       "SessionStart",
@@ -273,8 +347,9 @@ Deno.test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async
   const cmd = new Deno.Command(Deno.execPath(), {
     args: [
       "run",
-      "--allow-env=TMUX_PANE",
+      "--allow-env=HOME,TMUX_PANE",
       "--allow-read",
+      "--allow-write",
       "--allow-run=tmux",
       "home/programs/codex/codex-pane-status.ts",
       "SessionStart",

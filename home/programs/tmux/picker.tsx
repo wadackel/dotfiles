@@ -46,13 +46,16 @@ const BRANCH_CAP = 28;
 const MIN_SUMMARY = 15;
 
 // Row-1 fixed-width overhead before the summary body:
-//   pointer(2) + "icon "(2) + "badge "(2) + status5(5) + elapsed5(5) + " · "(3) + "  "(2) = 21
-// `badge ` is the per-agent 1-cell letter (`C` / `O` / `X`) + 1-cell space inserted
-// between the status icon and status text so claude / opencode / codex rows are
-// visually disambiguated in the same list.
+//   pointer(2) + "icon "(2) + status5(5) + elapsed5(5) + agentSlot(13) + " · "(3) + "  "(2) = 32
+// `agentSlot` is fixed at 13 cells = PILL_LEFT(1) + " " + agentLabel +
+// " "(2 + agentLabel.length) + PILL_RIGHT(1) + trailingPad(9 - agentLabel.length).
+// Chip width tracks the canonical name length (claude=10 / opencode=12 /
+// codex=9) so the chip itself hugs the text, while the trailing pad keeps the
+// total slot width constant so repoCol's left edge aligns across rows. Same
+// decorative idiom as the filter chip in the title bar.
 // Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
 // PaneRowLine's summaryBudget — keep them in sync via this single constant.
-const ROW1_FIXED_OVERHEAD = 21;
+const ROW1_FIXED_OVERHEAD = 32;
 
 // Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
 // the preview capture (capturePane) re-run at this interval so the popup
@@ -506,8 +509,10 @@ const TITLE_ICON = "󱚤"; // nf-md-robot-outline, 1 cell
 const DOGRUN = {
   fg: "#9ea3c0", // Normal — primary text / summary / repo label
   fgDim: "#757aa5", // StatusLine fg — row2 auxiliary segments
+  fgChip: "#8085a6", // Delimiter / NormalFloat — agent-chip text (between fgDim and fg)
   muted: "#545c8c", // Comment — separators / low-strength labels
   dim: "#4b4e6d", // StatusLineNC — preview border / target id / last tool
+  bgChip: "#2a2c3f", // ColorColumn / CursorLine — agent-chip fill (terminal-bg adjacent)
   accent: "#929be5", // Function — title / branch / key name / preview title
   search: "#a6afff", // Search — selected pointer marker
   sandy: "#a8a384", // Type — current (running) tool segment
@@ -641,32 +646,33 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
     segs[0] = { ...segs[0], body: truncateTopSegBody(segs[0], budget) };
   }
 
+  // Agent chip: canonical name wrapped in a Powerline-style rounded chip —
+  // same idiom as the filter chip in the title bar. Chip width hugs the
+  // label (claude=10, opencode=12, codex=9 cells); trailing pad fills the
+  // rest of the fixed 13-cell agentSlot so repoCol stays aligned across
+  // mixed-agent rows. Default branch ("claude") is unreachable — fetchPanes
+  // filters row.agent to claude/opencode/codex.
+  const agentLabel = row.agent === "opencode"
+    ? "opencode"
+    : row.agent === "codex"
+    ? "codex"
+    : "claude";
+  const agentTrailingPad = " ".repeat(9 - agentLabel.length);
+
   return (
     <Box flexDirection="column">
-      {/* Line 1: marker + icon + agent-badge + status + elapsed + repo · branch + summary */}
+      {/* Line 1: marker + icon + status + elapsed + agent-chip + repo · branch + summary */}
       <Box>
         <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
         <Text color={color}>{icon + " "}</Text>
-        {
-          /* badge: 1-cell ASCII letter (C/O/X) + 1-cell trailing space.
-            Inline (no Record/dict) — Rule-of-Three met, but kept inline to
-            mirror picker's other inline conditionals. */
-        }
-        <Text
-          color={row.agent === "opencode"
-            ? "#a6afff"
-            : row.agent === "codex"
-            ? DOGRUN.sandy
-            : "#73c1a9"}
-        >
-          {(row.agent === "opencode"
-            ? "O"
-            : row.agent === "codex"
-            ? "X"
-            : "C") + " "}
-        </Text>
         <Text color={color}>{status5}</Text>
         <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
+        <Text color={DOGRUN.bgChip}>{PILL_LEFT}</Text>
+        <Text color={DOGRUN.fgChip} backgroundColor={DOGRUN.bgChip}>
+          {" " + agentLabel + " "}
+        </Text>
+        <Text color={DOGRUN.bgChip}>{PILL_RIGHT}</Text>
+        <Text>{agentTrailingPad}</Text>
         <Text color={DOGRUN.fg}>{repoCol}</Text>
         <Text color={DOGRUN.muted}>{separator}</Text>
         <Text color={DOGRUN.accent}>{branchCol}</Text>
@@ -883,7 +889,7 @@ function App({
   // cells, fitting on one line at the popup's typical 80%-of-screen width.
   // The `w filter/clear` hint and the `[w] wait/idle` badge would push the
   // total past narrow-tmux widths (cols=60 in S10/S14/S15 fixtures) and force
-  // the title to wrap, which breaks spawnPicker's `Claude Sessions` waitFor.
+  // the title to wrap, which breaks spawnPicker's `AI Agents` waitFor.
   // Suppress both decorations below this threshold; users on narrow widths
   // can still discover the `w` shortcut from CLAUDE.md / tmux.conf.
   const showFilterUI = totalCols >= 80;
@@ -913,7 +919,7 @@ function App({
     <Box flexDirection="column" width={totalCols} height={totalRows}>
       <Box marginBottom={1}>
         <Text color={DOGRUN.accent}>{TITLE_ICON + "  "}</Text>
-        <Text color={DOGRUN.accent} bold>Claude Sessions</Text>
+        <Text color={DOGRUN.accent} bold>AI Agents</Text>
         {showFilterUI && filterEnabled
           ? (
             <>

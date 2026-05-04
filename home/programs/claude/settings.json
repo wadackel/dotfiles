@@ -515,6 +515,15 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PreToolUse"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -529,15 +538,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/plan-gate.ts"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts PreToolUse"
           }
         ]
       },
@@ -572,20 +572,20 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write|WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/permission-logger.ts"
-          }
-        ]
-      },
-      {
         "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
         "hooks": [
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts PostToolUse"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/permission-logger.ts"
           }
         ]
       }
@@ -607,11 +607,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/scripts/claude-notify.ts send Glass"
+            "command": "~/.claude/scripts/claude-pane-status.ts Notification"
           },
           {
             "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts Notification"
+            "command": "~/.claude/scripts/claude-notify.ts send Glass"
           }
         ]
       }
@@ -622,16 +622,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts Stop"
+          },
+          {
+            "type": "command",
             "command": "~/.claude/scripts/claude-notify.ts send Hero"
           },
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-memo.ts",
             "async": true
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts Stop"
           }
         ]
       }
@@ -642,11 +642,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/scripts/plan-approval-tracker.ts"
+            "command": "~/.claude/scripts/claude-pane-status.ts UserPromptSubmit"
           },
           {
             "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts UserPromptSubmit"
+            "command": "~/.claude/scripts/plan-approval-tracker.ts"
           }
         ]
       }
