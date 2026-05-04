@@ -1,7 +1,9 @@
-#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux
+#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux,ps
 
 // Bridges Codex CLI lifecycle hooks to tmux pane options for the popup picker.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
+
+import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;
@@ -366,6 +368,21 @@ export async function eventToOps(
   return [...selfHealOps(data), ...body];
 }
 
+async function fetchParent(pid: number): Promise<PsRow | null> {
+  try {
+    const { stdout, code } = await new Deno.Command("ps", {
+      args: ["-p", String(pid), "-o", "ppid=,comm="],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    if (code !== 0) return null;
+    return parsePsLine(new TextDecoder().decode(stdout));
+  } catch {
+    return null;
+  }
+}
+
 async function tmuxRun(
   args: string[],
 ): Promise<{ code: number; stderr: string }> {
@@ -516,6 +533,19 @@ async function main(): Promise<void> {
       state: null,
       ops: [],
       earlyExit: "invalid-pane-id",
+      stdinEventMismatch: false,
+    }));
+    return;
+  }
+
+  if (await isEmbedded(Deno.pid, fetchParent)) {
+    await appendRunLog(buildRunLog({
+      event,
+      data: {},
+      pane,
+      state: null,
+      ops: [],
+      earlyExit: "embedded",
       stdinEventMismatch: false,
     }));
     return;

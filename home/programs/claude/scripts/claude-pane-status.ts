@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMUX_PANE --allow-run=tmux
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMUX_PANE --allow-run=tmux,ps
 
 // Bridges Claude Code hook events → tmux pane options (SSOT for the popup picker).
 // Invoked as: claude-pane-status.ts <EventName>   (unknown events → no-op exit 0)
@@ -8,6 +8,12 @@
 // diagnosed after the fact (which event fired, early-exit reason, tmux set
 // results per op). Log I/O errors are swallowed — hook must never break the
 // session when the log destination is unavailable.
+
+import {
+  isEmbedded,
+  parsePsLine,
+  type PsRow,
+} from "./agent-presence.ts";
 
 // --- Types ---
 
@@ -660,6 +666,7 @@ export type EarlyExit =
   | "no-event"
   | "no-tmux-pane"
   | "invalid-pane-id"
+  | "embedded"
   | "json-parse-error"
   | "no-ops"
   | null;
@@ -754,6 +761,23 @@ async function writeLogRecord(record: LogRecord): Promise<void> {
     await Deno.writeTextFile(path, line, { append: true });
   } catch {
     // Log destination unavailable — hook must not fail because of this.
+  }
+}
+
+// --- Process ancestry ---
+
+async function fetchParent(pid: number): Promise<PsRow | null> {
+  try {
+    const { stdout, code } = await new Deno.Command("ps", {
+      args: ["-p", String(pid), "-o", "ppid=,comm="],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    if (code !== 0) return null;
+    return parsePsLine(new TextDecoder().decode(stdout));
+  } catch {
+    return null;
   }
 }
 
@@ -863,6 +887,11 @@ async function main(): Promise<void> {
     // leading "-" value as an option, so restrict to the pane-id shape.
     if (!/^%\d+$/.test(tmuxPane)) {
       ctx.early_exit = "invalid-pane-id";
+      return;
+    }
+
+    if (await isEmbedded(Deno.pid, fetchParent)) {
+      ctx.early_exit = "embedded";
       return;
     }
 

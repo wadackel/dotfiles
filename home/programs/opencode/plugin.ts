@@ -15,16 +15,40 @@ import {
   type Op,
   type PaneState,
 } from "./plugin_logic.ts";
+import {
+  isEmbedded,
+  parsePsLine,
+  type PsRow,
+} from "./agent-presence.ts";
 
 // Bun is provided by the opencode runtime. Declare here so this file
 // type-checks under tooling that doesn't auto-load @types/bun.
 declare const Bun: {
-  spawnSync: (cmd: string[], opts?: { stdout?: "pipe" | "inherit" }) => {
+  spawnSync: (
+    cmd: string[],
+    opts?: {
+      stdout?: "pipe" | "inherit" | "ignore";
+      stderr?: "pipe" | "inherit" | "ignore";
+    },
+  ) => {
     exitCode: number;
     stdout: Uint8Array;
     stderr: Uint8Array;
   };
 };
+
+function fetchParent(pid: number): Promise<PsRow | null> {
+  try {
+    const result = Bun.spawnSync(
+      ["ps", "-p", String(pid), "-o", "ppid=,comm="],
+      { stdout: "pipe", stderr: "ignore" },
+    );
+    if (result.exitCode !== 0) return Promise.resolve(null);
+    return Promise.resolve(parsePsLine(new TextDecoder().decode(result.stdout)));
+  } catch {
+    return Promise.resolve(null);
+  }
+}
 
 // Validate pane id shape (`%<digits>`) before passing to tmux. opencode runs
 // arbitrary user code; a stray `TMUX_PANE` value of `; rm -rf /` is harmless
@@ -73,9 +97,17 @@ function applyOps(pane: string, ops: Op[]): void {
   }
 }
 
-function dispatch(event: string, data: Record<string, unknown>): void {
+async function dispatch(
+  event: string,
+  data: Record<string, unknown>,
+): Promise<void> {
   const pane = paneIdOrNull();
   if (!pane) return;
+  // Skip pane writes when this opencode is running embedded under another
+  // agent's process tree (e.g. spawned via Claude's /codex-cli skill or a
+  // shell that inherited TMUX_PANE from a wrapping agent). Only the main
+  // session for the pane should drive @pane_* state.
+  if (await isEmbedded(process.pid, fetchParent)) return;
   const state = readPaneState(pane);
   const ops = eventToOps(event, data, state);
   if (ops.length === 0) return;
@@ -109,14 +141,14 @@ export const PaneStatus: Plugin = async (_input) => {
       const sid = (e.properties as Record<string, unknown> | undefined)
         ?.sessionID;
       if (typeof sid === "string") data.sessionID = sid;
-      dispatch(e.type, data);
+      await dispatch(e.type, data);
     },
 
     "chat.message": async (input, output) => {
       // Named hook input shape: { sessionID, agent?, model?, messageID?, ... }
       // Output carries the user message; eventToOps reads either
       // top-level `prompt` (debug) or `output.message.content`.
-      dispatch("chat.message", {
+      await dispatch("chat.message", {
         ...(input as Record<string, unknown>),
         output: output as Record<string, unknown>,
       });
@@ -134,18 +166,18 @@ export const PaneStatus: Plugin = async (_input) => {
             .tool}, expected string|object`,
         );
       }
-      dispatch("tool.execute.before", i);
+      await dispatch("tool.execute.before", i);
     },
 
     "tool.execute.after": async (input, output) => {
-      dispatch("tool.execute.after", {
+      await dispatch("tool.execute.after", {
         ...(input as Record<string, unknown>),
         output: output as Record<string, unknown>,
       });
     },
 
     "permission.ask": async (input) => {
-      dispatch("permission.ask", input as Record<string, unknown>);
+      await dispatch("permission.ask", input as Record<string, unknown>);
     },
   };
 };

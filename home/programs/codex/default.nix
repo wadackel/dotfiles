@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  dotfiles,
   ...
 }:
 
@@ -45,30 +46,20 @@ in
   home.packages = [ pkgs.codex ];
 
   home.file.".codex/hooks.json".source = ./hooks.json;
-  home.file.".codex/codex-pane-status.ts" = {
-    source = ./codex-pane-status.ts;
-    executable = true;
-  };
-  home.file.".codex/codex-hook-log.ts" = {
-    source = ./codex-hook-log.ts;
-    executable = true;
-  };
-  home.file.".codex/codex-notify.ts" = {
-    source = ./codex-notify.ts;
-    executable = true;
-  };
-  home.file.".codex/codex-memo.ts" = {
-    source = ./codex-memo.ts;
-    executable = true;
-  };
-  home.file.".codex/codex-plan-gate.ts" = {
-    source = ./codex-plan-gate.ts;
-    executable = true;
-  };
-  home.file.".codex/codex-impl-approval-tracker.ts" = {
-    source = ./codex-impl-approval-tracker.ts;
-    executable = true;
-  };
+  # codex-pane-status.ts は同階層の `./agent-presence.ts` を import する。
+  # Deno は relative import を URL ベースで解決し symlink の realpath を辿らない
+  # ため、helper を ~/.codex/ 直下に sibling として共置する必要がある。
+  # 実体は home/programs/tmux/agent-presence.ts にあり、worktree 内では
+  # home/programs/codex/agent-presence.ts が in-worktree symlink で指している。
+  # ここではその worktree シンボリックリンクごと out-of-store symlink で公開する。
+  home.file.".codex/codex-pane-status.ts".source = dotfiles.linkHere ./. "codex-pane-status.ts";
+  home.file.".codex/agent-presence.ts".source = dotfiles.linkHere ./. "agent-presence.ts";
+  home.file.".codex/codex-hook-log.ts".source = dotfiles.linkHere ./. "codex-hook-log.ts";
+  home.file.".codex/codex-notify.ts".source = dotfiles.linkHere ./. "codex-notify.ts";
+  home.file.".codex/codex-memo.ts".source = dotfiles.linkHere ./. "codex-memo.ts";
+  home.file.".codex/codex-plan-gate.ts".source = dotfiles.linkHere ./. "codex-plan-gate.ts";
+  home.file.".codex/codex-impl-approval-tracker.ts".source =
+    dotfiles.linkHere ./. "codex-impl-approval-tracker.ts";
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a splice failure means ~/.codex/config.toml is in an unknown state, so
