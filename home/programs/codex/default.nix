@@ -61,6 +61,14 @@ in
     source = ./codex-memo.ts;
     executable = true;
   };
+  home.file.".codex/codex-plan-gate.ts" = {
+    source = ./codex-plan-gate.ts;
+    executable = true;
+  };
+  home.file.".codex/codex-impl-approval-tracker.ts" = {
+    source = ./codex-impl-approval-tracker.ts;
+    executable = true;
+  };
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a splice failure means ~/.codex/config.toml is in an unknown state, so

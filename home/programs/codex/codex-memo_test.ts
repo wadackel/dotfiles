@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   buildLLMInput,
+  buildWorkerArgs,
   escapeObsidianSyntax,
   extractAssistantTexts,
   extractToolSummary,
@@ -9,6 +10,7 @@ import {
   parseLLMOutput,
   resolveRepoName,
   upsertDailyNote,
+  validateHookData,
 } from "./codex-memo.ts";
 
 const entries = [
@@ -158,5 +160,77 @@ Deno.test("escapeObsidianSyntax: matches Claude memo hash escaping", () => {
   assertEquals(
     escapeObsidianSyntax("#tag and issue #123"),
     "＃tag and issue ＃123",
+  );
+});
+
+Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
+  const hookData = {
+    session_id: "019df142-b1b6-7700-ac46-22521b61a981",
+    transcript_path:
+      "/Users/me/.codex/sessions/2026/05/04/rollout-019df142.jsonl",
+    cwd: "/Users/me/dotfiles",
+  };
+  const scriptPath = "/Users/me/.codex/codex-memo.ts";
+  assertEquals(buildWorkerArgs(scriptPath, hookData), [
+    "run",
+    "--allow-read",
+    "--allow-write",
+    "--allow-env=HOME,TMPDIR",
+    "--allow-run=git,gemini",
+    scriptPath,
+    "--worker",
+    JSON.stringify(hookData),
+  ]);
+});
+
+Deno.test("validateHookData: accepts valid HookData and rejects malformed input", () => {
+  // valid: passes through with same shape
+  assertEquals(
+    validateHookData({
+      session_id: "abc",
+      transcript_path: "/path/to/jsonl",
+      cwd: "/Users/me",
+    }),
+    {
+      session_id: "abc",
+      transcript_path: "/path/to/jsonl",
+      cwd: "/Users/me",
+    },
+  );
+
+  // valid: cwd is optional
+  assertEquals(
+    validateHookData({ session_id: "abc", transcript_path: "/p" }),
+    { session_id: "abc", transcript_path: "/p", cwd: undefined },
+  );
+
+  // null
+  assertEquals(validateHookData(null), null);
+
+  // array
+  assertEquals(validateHookData([]), null);
+
+  // wrong session_id type
+  assertEquals(
+    validateHookData({ session_id: 42, transcript_path: "/x" }),
+    null,
+  );
+
+  // empty session_id
+  assertEquals(
+    validateHookData({ session_id: "", transcript_path: "/x" }),
+    null,
+  );
+
+  // null transcript_path
+  assertEquals(
+    validateHookData({ session_id: "x", transcript_path: null }),
+    null,
+  );
+
+  // wrong cwd type
+  assertEquals(
+    validateHookData({ session_id: "x", transcript_path: "/y", cwd: 42 }),
+    null,
   );
 });

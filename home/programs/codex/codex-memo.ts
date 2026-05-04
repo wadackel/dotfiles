@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,gemini
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,gemini,deno
 
 interface TranscriptEnvelope {
   type: string;
@@ -22,7 +22,7 @@ interface LLMResult {
 
 const LOG_FILE = `${Deno.env.get("HOME") ?? "."}/.codex/logs/codex-memo.log`;
 const MAX_LOG_LINES = 1000;
-const GEMINI_TIMEOUT_MS = 2500;
+const GEMINI_TIMEOUT_MS = 15000;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -370,7 +370,8 @@ export function upsertDailyNote(
 async function repoNameFor(cwd: string): Promise<string> {
   try {
     const cmd = new Deno.Command("git", {
-      args: ["-C", cwd, "rev-parse", "--git-common-dir"],
+      cwd,
+      args: ["rev-parse", "--git-common-dir"],
       stdout: "piped",
       stderr: "null",
     });
@@ -386,102 +387,225 @@ async function repoNameFor(cwd: string): Promise<string> {
   return cwd.split("/").at(-1) ?? "unknown";
 }
 
-async function main(): Promise<void> {
-  const stdinData = await new Response(Deno.stdin.readable).text();
-  let hookData: HookData;
-  try {
-    hookData = JSON.parse(stdinData);
-  } catch {
-    await log(`ERROR: failed to parse stdin JSON len=${stdinData.length}`);
-    return;
-  }
+function dailyNotePath(): string {
+  const today = new Date().toLocaleDateString("sv-SE");
+  return `${Deno.env.get("HOME")}/Documents/Main/99_Tracking/Daily/${today}.md`;
+}
 
-  const sessionId = hookData.session_id ?? "";
+function nowTimestamp(): string {
+  return new Date().toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+export function buildWorkerArgs(
+  scriptPath: string,
+  hookData: HookData,
+): string[] {
+  return [
+    "run",
+    "--allow-read",
+    "--allow-write",
+    "--allow-env=HOME,TMPDIR",
+    "--allow-run=git,gemini",
+    scriptPath,
+    "--worker",
+    JSON.stringify(hookData),
+  ];
+}
+
+function spawnWorker(hookData: HookData): void {
+  const scriptPath = new URL(import.meta.url).pathname;
+  const child = new Deno.Command(Deno.execPath(), {
+    args: buildWorkerArgs(scriptPath, hookData),
+    stdin: "null",
+    stdout: "null",
+    stderr: "null",
+  }).spawn();
+  child.status.catch(() => {});
+  child.unref();
+}
+
+export function validateHookData(raw: unknown): HookData | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const sessionId = r.session_id;
+  const transcriptPath = r.transcript_path;
+  const cwd = r.cwd;
+  if (typeof sessionId !== "string" || !sessionId) return null;
+  if (typeof transcriptPath !== "string" || !transcriptPath) return null;
+  if (cwd !== undefined && typeof cwd !== "string") return null;
+  return {
+    session_id: sessionId,
+    transcript_path: transcriptPath,
+    cwd: cwd as string | undefined,
+  };
+}
+
+interface PreparedContext {
+  entries: TranscriptEnvelope[];
+  dailyPath: string;
+  repoName: string;
+  timestamp: string;
+  sessionShort: string;
+  userCount: number;
+}
+
+async function prepareContext(
+  input: HookData,
+  logPrefix: "" | "WORKER ",
+): Promise<PreparedContext | null> {
+  const sessionId = input.session_id ?? "";
   const sessionShort = sessionId.slice(0, 8);
-  const transcriptPath = hookData.transcript_path ?? "";
-  const cwd = hookData.cwd ?? Deno.cwd();
-  await log(`START: session=${sessionShort} transcript=${transcriptPath}`);
+  const transcriptPath = input.transcript_path ?? "";
+  const cwd = input.cwd ?? Deno.cwd();
 
   if (!sessionShort || !transcriptPath) {
-    await log("SKIP: missing session_id or transcript_path");
-    return;
+    await log(`${logPrefix}SKIP: missing session_id or transcript_path`);
+    return null;
   }
 
   let entries: TranscriptEnvelope[];
   try {
     entries = parseTranscript(transcriptPath);
   } catch (e) {
-    await log(`SKIP: cannot parse transcript: ${e}`);
-    return;
+    await log(`${logPrefix}SKIP: cannot parse transcript: ${e}`);
+    return null;
   }
 
-  const today = new Date().toLocaleDateString("sv-SE");
-  const dailyPath = `${
-    Deno.env.get("HOME")
-  }/Documents/Main/99_Tracking/Daily/${today}.md`;
+  const dailyPath = dailyNotePath();
   try {
     await Deno.stat(dailyPath);
   } catch {
-    await log(`SKIP: daily note not found: ${dailyPath}`);
+    await log(`${logPrefix}SKIP: daily note not found: ${dailyPath}`);
+    return null;
+  }
+
+  const repoName = await repoNameFor(cwd);
+  const timestamp = nowTimestamp();
+  const userCount = countUserMessages(entries);
+
+  return {
+    entries,
+    dailyPath,
+    repoName,
+    timestamp,
+    sessionShort,
+    userCount,
+  };
+}
+
+async function mainHook(): Promise<void> {
+  const stdinData = await new Response(Deno.stdin.readable).text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdinData);
+  } catch {
+    await log(`ERROR: failed to parse stdin JSON len=${stdinData.length}`);
+    return;
+  }
+  const hookData = validateHookData(parsed);
+  if (!hookData) {
+    await log("ERROR: invalid hook data");
     return;
   }
 
-  const heuristic = heuristicSummary(entries);
+  await log(
+    `START: session=${
+      (hookData.session_id ?? "").slice(0, 8)
+    } transcript=${hookData.transcript_path}`,
+  );
+
+  const ctx = await prepareContext(hookData, "");
+  if (!ctx) return;
+
+  const heuristic = heuristicSummary(ctx.entries);
   if (!heuristic) {
     await log("SKIP: no summary extractable");
     return;
   }
 
-  const repoName = await repoNameFor(cwd);
-  const timestamp = new Date().toLocaleTimeString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  const dailyContent = Deno.readTextFileSync(dailyPath);
-  const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
-  const userCount = countUserMessages(entries);
-  const runLLM = shouldRunLLM(sessionShort, userCount);
+  const dailyContent = Deno.readTextFileSync(ctx.dailyPath);
+  const hasExistingEntry = dailyContent.includes(`/${ctx.sessionShort})`);
+  const runLLM = shouldRunLLM(ctx.sessionShort, ctx.userCount);
 
   if (!runLLM && hasExistingEntry) {
-    await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
+    await log(`DEBOUNCE: skip (userCount=${ctx.userCount}, entry exists)`);
     return;
   }
 
   const heuristicLines = [
-    `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+    `- ${ctx.timestamp} - \`(${ctx.repoName}/${ctx.sessionShort})\` ${
       escapeObsidianSyntax(heuristic)
     }`,
   ];
-  upsertDailyNote(dailyPath, sessionShort, heuristicLines);
+  upsertDailyNote(ctx.dailyPath, ctx.sessionShort, heuristicLines);
   await log(`HEURISTIC: ${heuristicLines[0]}`);
 
   if (!runLLM) {
-    await log(`DEBOUNCE: skip LLM (userCount=${userCount}, no new messages)`);
+    await log(
+      `DEBOUNCE: skip LLM (userCount=${ctx.userCount}, no new messages)`,
+    );
     return;
   }
-  saveDebounceState(sessionShort, userCount);
 
-  const condensed = buildLLMInput(entries);
+  spawnWorker(hookData);
   await log(
-    `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
+    `WORKER SPAWNED: session=${ctx.sessionShort} userCount=${ctx.userCount}`,
+  );
+}
+
+async function mainWorker(workerInput: HookData): Promise<void> {
+  await log(
+    `WORKER START: session=${(workerInput.session_id ?? "").slice(0, 8)}`,
+  );
+
+  const ctx = await prepareContext(workerInput, "WORKER ");
+  if (!ctx) return;
+
+  const condensed = buildLLMInput(ctx.entries);
+  await log(
+    `WORKER LLM: calling gemini flash (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
   );
   const llmResult = await callGemini(condensed);
   if (!llmResult) {
-    await log("LLM: no result, keeping heuristic entry");
+    await log("WORKER LLM: no result, keeping heuristic entry");
     return;
   }
 
-  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
-    escapeObsidianSyntax(llmResult.summary)
-  }`;
+  const mainLine =
+    `- ${ctx.timestamp} - \`(${ctx.repoName}/${ctx.sessionShort})\` ${
+      escapeObsidianSyntax(llmResult.summary)
+    }`;
   const detailLines = llmResult.details.map((detail) =>
     `    - ${escapeObsidianSyntax(detail)}`
   );
   const llmLines = [mainLine, ...detailLines];
-  upsertDailyNote(dailyPath, sessionShort, llmLines);
-  await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
+  upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
+  await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
+  saveDebounceState(ctx.sessionShort, ctx.userCount);
+}
+
+async function main(): Promise<void> {
+  if (Deno.args[0] === "--worker") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(Deno.args[1] ?? "{}");
+    } catch (e) {
+      await log(`WORKER ERROR: invalid argv JSON: ${e}`);
+      return;
+    }
+    const workerInput = validateHookData(parsed);
+    if (!workerInput) {
+      await log("WORKER ERROR: invalid argv data");
+      return;
+    }
+    await mainWorker(workerInput);
+    return;
+  }
+  await mainHook();
 }
 
 if (import.meta.main) {
