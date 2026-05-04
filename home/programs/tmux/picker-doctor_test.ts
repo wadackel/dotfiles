@@ -1,57 +1,65 @@
-import {
-  assertEquals,
-} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildChildMap,
   type Category,
   classifyPane,
   descendants,
-  findClaudeDescendants,
-  isClaudeCommand,
+  detectAgentCommand,
+  findAgentDescendants,
   parseArgs,
   parsePsOutput,
   type ProcInfo,
 } from "./picker-doctor.ts";
 import type { PaneRow } from "./pane_row.ts";
 
-// --- isClaudeCommand ---
+// --- detectAgentCommand ---
 
-Deno.test("isClaudeCommand: bare 'claude' binary", () => {
-  assertEquals(isClaudeCommand("/Users/u/.nix-profile/bin/claude"), true);
+Deno.test("detectAgentCommand: bare 'claude' binary", () => {
+  assertEquals(
+    detectAgentCommand("/Users/u/.nix-profile/bin/claude"),
+    "claude",
+  );
 });
 
-Deno.test("isClaudeCommand: node claude-code package", () => {
+Deno.test("detectAgentCommand: node claude-code package", () => {
   assertEquals(
-    isClaudeCommand(
+    detectAgentCommand(
       "node /usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js",
     ),
-    true,
+    "claude",
   );
 });
 
-Deno.test("isClaudeCommand: underscore form also detected", () => {
+Deno.test("detectAgentCommand: underscore form also detected", () => {
   assertEquals(
-    isClaudeCommand("/opt/tools/claude_code/run.sh"),
-    true,
+    detectAgentCommand("/opt/tools/claude_code/run.sh"),
+    "claude",
   );
 });
 
-Deno.test("isClaudeCommand: unrelated binary names rejected", () => {
-  assertEquals(isClaudeCommand("zsh"), false);
-  assertEquals(isClaudeCommand("/bin/bash -l"), false);
-  assertEquals(isClaudeCommand("node server.js"), false);
+Deno.test("detectAgentCommand: codex binary and path detected", () => {
+  assertEquals(detectAgentCommand("codex"), "codex");
+  assertEquals(detectAgentCommand("/Users/u/.nix-profile/bin/codex"), "codex");
 });
 
-Deno.test("isClaudeCommand: false positive guard — 'claude' as substring of unrelated word", () => {
+Deno.test("detectAgentCommand: unrelated binary names rejected", () => {
+  assertEquals(detectAgentCommand("zsh"), null);
+  assertEquals(detectAgentCommand("/bin/bash -l"), null);
+  assertEquals(detectAgentCommand("node server.js"), null);
+});
+
+Deno.test("detectAgentCommand: false positive guard — substrings rejected", () => {
   // "claudeish" is not "claude" as a token / path segment
-  assertEquals(isClaudeCommand("/usr/bin/claudeish"), false);
-  assertEquals(isClaudeCommand("claudeish --run"), false);
+  assertEquals(detectAgentCommand("/usr/bin/claudeish"), null);
+  assertEquals(detectAgentCommand("claudeish --run"), null);
+  assertEquals(detectAgentCommand("/usr/bin/codexish"), null);
+  assertEquals(detectAgentCommand("codexish --run"), null);
 });
 
-Deno.test("isClaudeCommand: argument containing 'claude' path triggers", () => {
+Deno.test("detectAgentCommand: argument containing 'claude' path triggers", () => {
   assertEquals(
-    isClaudeCommand("sh -c 'exec /opt/claude/bin/run'"),
-    true,
+    detectAgentCommand("sh -c 'exec /opt/claude/bin/run'"),
+    "claude",
   );
 });
 
@@ -118,24 +126,28 @@ Deno.test("descendants: cycle-safe via visited set", () => {
   assertEquals(d.has(2), true);
 });
 
-// --- findClaudeDescendants ---
+// --- findAgentDescendants ---
 
-Deno.test("findClaudeDescendants: surfaces matching pids in subtree", () => {
+Deno.test("findAgentDescendants: surfaces matching pids in subtree", () => {
   const procs = [
     p(100, 1, "zsh"),
     p(200, 100, "node /opt/claude/cli.js"),
     p(201, 100, "git status"),
+    p(202, 100, "/nix/store/bin/codex"),
     p(300, 200, "rg --json 'foo'"),
   ];
   const map = buildChildMap(procs);
-  const hits = findClaudeDescendants(100, procs, map);
-  assertEquals(hits, [200]);
+  const hits = findAgentDescendants(100, procs, map);
+  assertEquals(hits, [
+    { pid: 200, agent: "claude" },
+    { pid: 202, agent: "codex" },
+  ]);
 });
 
-Deno.test("findClaudeDescendants: empty when subtree has no claude", () => {
+Deno.test("findAgentDescendants: empty when subtree has no agent", () => {
   const procs = [p(100, 1, "zsh"), p(200, 100, "vim")];
   const map = buildChildMap(procs);
-  assertEquals(findClaudeDescendants(100, procs, map), []);
+  assertEquals(findAgentDescendants(100, procs, map), []);
 });
 
 // --- classifyPane ---
@@ -162,34 +174,50 @@ function mkRow(agent: string): PaneRow {
     currentToolSubject: "",
     lastToolSubject: "",
     lastToolError: "",
+    contextUsedPct: null,
   };
 }
 
-Deno.test("classifyPane: agent=claude + descendant=true → OK", () => {
-  assertEquals(classifyPane(mkRow("claude"), true), "OK" as Category);
+Deno.test("classifyPane: agent=claude + descendant=claude → OK", () => {
+  assertEquals(classifyPane(mkRow("claude"), "claude"), "OK" as Category);
 });
 
-Deno.test("classifyPane: agent=unset + descendant=true → SUSPECT_MISSING_FLAG (the invisible case)", () => {
+Deno.test("classifyPane: agent=codex + descendant=codex → OK", () => {
+  assertEquals(classifyPane(mkRow("codex"), "codex"), "OK" as Category);
+});
+
+Deno.test("classifyPane: agent mismatch → SUSPECT_MISSING_FLAG", () => {
   assertEquals(
-    classifyPane(mkRow(""), true),
+    classifyPane(mkRow("claude"), "codex"),
+    "SUSPECT_MISSING_FLAG" as Category,
+  );
+});
+
+Deno.test("classifyPane: agent=unset + descendant detected → SUSPECT_MISSING_FLAG", () => {
+  assertEquals(
+    classifyPane(mkRow(""), "claude"),
     "SUSPECT_MISSING_FLAG" as Category,
   );
   assertEquals(
-    classifyPane(mkRow("shell"), true),
+    classifyPane(mkRow("shell"), "codex"),
     "SUSPECT_MISSING_FLAG" as Category,
   );
 });
 
-Deno.test("classifyPane: agent=claude + descendant=false → STALE_FLAG", () => {
+Deno.test("classifyPane: flagged agent + no descendant → STALE_FLAG", () => {
   assertEquals(
-    classifyPane(mkRow("claude"), false),
+    classifyPane(mkRow("claude"), null),
+    "STALE_FLAG" as Category,
+  );
+  assertEquals(
+    classifyPane(mkRow("codex"), null),
     "STALE_FLAG" as Category,
   );
 });
 
 Deno.test("classifyPane: neither → NORMAL", () => {
-  assertEquals(classifyPane(mkRow(""), false), "NORMAL" as Category);
-  assertEquals(classifyPane(mkRow("shell"), false), "NORMAL" as Category);
+  assertEquals(classifyPane(mkRow(""), null), "NORMAL" as Category);
+  assertEquals(classifyPane(mkRow("shell"), null), "NORMAL" as Category);
 });
 
 // --- parseArgs ---

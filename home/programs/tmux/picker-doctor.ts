@@ -1,28 +1,24 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-run=tmux,ps --allow-read
 
-// Diagnostic snapshot for the tmux Claude Code session picker.
+// Diagnostic snapshot for the tmux AI session picker.
 //
 // Run this when the picker (prefix+w) is missing a pane that has Claude Code
-// running. It enumerates every tmux pane, walks each pane's descendant
+// or Codex running. It enumerates every tmux pane, walks each pane's descendant
 // processes, and classifies whether the pane matches what the picker expects:
 //
-//   OK                    — @pane_agent == "claude" AND claude descendant found
-//   SUSPECT_MISSING_FLAG  — claude descendant found but @pane_agent != "claude"
+//   OK                    — @pane_agent matches the detected agent descendant
+//   SUSPECT_MISSING_FLAG  — detected agent descendant and @pane_agent disagree
 //                           (the invisible-in-picker signature — the picker's
-//                            filter in picker.tsx is `row.agent === "claude"`)
-//   STALE_FLAG            — @pane_agent == "claude" but no claude descendant
+//                            filter requires the right @pane_agent value)
+//   STALE_FLAG            — @pane_agent is claude/codex but no matching descendant
 //                           (teardown failure or orphaned flag)
-//   NORMAL                — neither condition — not a Claude Code pane
+//   NORMAL                — neither condition — not an AI agent pane
 //
 // Intentionally NOT a detection fallback for picker.tsx. If that were the goal
 // we'd widen the picker filter; instead we keep picker's single-predicate SSOT
 // and use this tool to diagnose why the SSOT is out of sync with reality.
 
-import {
-  type PaneRow,
-  parseRow,
-  TMUX_FORMAT,
-} from "./pane_row.ts";
+import { type PaneRow, parseRow, TMUX_FORMAT } from "./pane_row.ts";
 
 // --- Types ---
 
@@ -31,6 +27,8 @@ export type Category =
   | "SUSPECT_MISSING_FLAG"
   | "STALE_FLAG"
   | "NORMAL";
+
+export type DetectedAgent = "claude" | "codex";
 
 export interface ProcInfo {
   pid: number;
@@ -42,24 +40,25 @@ export interface PaneReport {
   row: PaneRow;
   panePid: number;
   category: Category;
-  claudeDescendantPids: number[];
+  agentDescendantPids: Array<{ pid: number; agent: DetectedAgent }>;
 }
 
 // --- Pure helpers (exported for tests) ---
 
-// True when `cmd` (full ps command line) mentions claude as a path component
-// or a bare token. Deliberately substring-based, not shell-lex: we're not
-// interpreting the command, just checking tokens.
-export function isClaudeCommand(cmd: string): boolean {
+// Detect when `cmd` (full ps command line) mentions a supported agent as a path
+// component or bare token. Deliberately token-based, not shell-lex: we're not
+// interpreting the command, just checking path / whitespace segments.
+export function detectAgentCommand(cmd: string): DetectedAgent | null {
   for (const word of cmd.split(/\s+/)) {
     for (const seg of word.split("/")) {
-      if (seg === "claude") return true;
+      if (seg === "claude") return "claude";
       if (seg.includes("claude-code") || seg.includes("claude_code")) {
-        return true;
+        return "claude";
       }
+      if (seg === "codex") return "codex";
     }
   }
-  return false;
+  return null;
 }
 
 // Parse `ps -A -o pid,ppid,command` output. Header line and blank lines are
@@ -109,32 +108,35 @@ export function descendants(
   return out;
 }
 
-// Collect descendant PIDs of `rootPid` whose `command` looks like Claude Code.
-// Returns the PID list (may be empty).
-export function findClaudeDescendants(
+// Collect descendant PIDs of `rootPid` whose `command` looks like a supported
+// agent. Returns the PID+agent list (may be empty).
+export function findAgentDescendants(
   rootPid: number,
   procs: ProcInfo[],
   childMap: Map<number, number[]>,
-): number[] {
+): Array<{ pid: number; agent: DetectedAgent }> {
   const descPids = descendants(rootPid, childMap);
   const byPid = new Map<number, ProcInfo>();
   for (const p of procs) byPid.set(p.pid, p);
-  const hits: number[] = [];
+  const hits: Array<{ pid: number; agent: DetectedAgent }> = [];
   for (const pid of descPids) {
     const proc = byPid.get(pid);
-    if (proc && isClaudeCommand(proc.command)) hits.push(pid);
+    const agent = proc ? detectAgentCommand(proc.command) : null;
+    if (agent) hits.push({ pid, agent });
   }
   return hits;
 }
 
 export function classifyPane(
   row: PaneRow,
-  hasClaudeDescendant: boolean,
+  detectedAgent: DetectedAgent | null,
 ): Category {
-  const flagged = row.agent === "claude";
-  if (flagged && hasClaudeDescendant) return "OK";
-  if (!flagged && hasClaudeDescendant) return "SUSPECT_MISSING_FLAG";
-  if (flagged && !hasClaudeDescendant) return "STALE_FLAG";
+  const flagged = row.agent === "claude" || row.agent === "codex";
+  if (flagged && detectedAgent !== null) {
+    return row.agent === detectedAgent ? "OK" : "SUSPECT_MISSING_FLAG";
+  }
+  if (!flagged && detectedAgent !== null) return "SUSPECT_MISSING_FLAG";
+  if (flagged && detectedAgent === null) return "STALE_FLAG";
   return "NORMAL";
 }
 
@@ -227,11 +229,13 @@ function formatReport(reports: PaneReport[]): string {
   for (const r of reports) {
     const agent = r.row.agent || "-";
     const status = r.row.status || "-";
+    const descendants = r.agentDescendantPids.map((d) => `${d.agent}:${d.pid}`)
+      .join(",");
     let suffix = "";
     if (r.category === "SUSPECT_MISSING_FLAG") {
-      suffix = ` (claude pid=${r.claudeDescendantPids.join(",")})`;
+      suffix = descendants ? ` (agent pid=${descendants})` : "";
     } else if (r.category === "STALE_FLAG") {
-      suffix = " (no claude descendant)";
+      suffix = " (no matching agent descendant)";
     }
     lines.push(
       pad(r.row.paneId, 8) +
@@ -285,16 +289,17 @@ async function main(): Promise<void> {
   ]);
   const childMap = buildChildMap(procs);
   const reports: PaneReport[] = panes.map(({ row, panePid }) => {
-    const claudeDescendantPids = findClaudeDescendants(
+    const agentDescendantPids = findAgentDescendants(
       panePid,
       procs,
       childMap,
     );
+    const detectedAgent = agentDescendantPids[0]?.agent ?? null;
     return {
       row,
       panePid,
-      category: classifyPane(row, claudeDescendantPids.length > 0),
-      claudeDescendantPids,
+      category: classifyPane(row, detectedAgent),
+      agentDescendantPids,
     };
   });
 
@@ -309,7 +314,7 @@ async function main(): Promise<void> {
         status: r.row.status,
         session_id: r.row.sessionId,
         category: r.category,
-        claude_descendant_pids: r.claudeDescendantPids,
+        agent_descendant_pids: r.agentDescendantPids,
       });
       console.log(line);
     }

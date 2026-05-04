@@ -267,50 +267,31 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
 });
 
 // S8: readTaskProgress enumerates ~/.claude/tasks/<sessionId>/*.json.
-// Seed a disposable session dir under $HOME/.claude/tasks (picker inherits
-// $HOME from the tmux/user env). Use Deno.makeTempDir to guarantee a unique
-// basename and eliminate path-traversal risk structurally.
+// Point HOME at a checked-in read-only fixture so this e2e keeps the same
+// permission profile as the rest of the picker tests.
 Deno.test("S8: task progress 2/3 from tasks dir", async () => {
-  const home = Deno.env.get("HOME");
-  if (!home) throw new Error("HOME unset — cannot run S8");
-  const tasksRoot = `${home}/.claude/tasks`;
-  await Deno.mkdir(tasksRoot, { recursive: true });
-  const dir = await Deno.makeTempDir({
-    dir: tasksRoot,
-    prefix: "picker-e2e-test-",
-  });
-  const sessionId = dir.split("/").pop()!;
+  const originalHome = Deno.env.get("HOME");
+  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
+    .pathname;
+  const denoDir = Deno.env.get("DENO_DIR") ??
+    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+  const env: Record<string, string> = { HOME: fixtureHome };
+  if (denoDir) env.DENO_DIR = denoDir;
+  await setupServer();
   try {
-    await Deno.writeTextFile(
-      `${dir}/1.json`,
-      JSON.stringify({ id: "1", status: "completed" }),
-    );
-    await Deno.writeTextFile(
-      `${dir}/2.json`,
-      JSON.stringify({ id: "2", status: "completed" }),
-    );
-    await Deno.writeTextFile(
-      `${dir}/3.json`,
-      JSON.stringify({ id: "3", status: "in_progress" }),
-    );
-    await setupServer();
-    try {
-      await createClaudePane({
-        status: "idle",
-        prompt: "row-progress",
-        lastTool: "Read",
-        sessionId,
-      });
-      const picker = await spawnPicker();
-      const out = await waitFor(picker, (o) => o.includes("2/3"));
-      assertStringIncludes(out, "2/3");
-      await sendKey(picker, "Escape");
-      await waitForExit();
-    } finally {
-      await teardown();
-    }
+    await createClaudePane({
+      status: "idle",
+      prompt: "row-progress",
+      lastTool: "Read",
+      sessionId: "sess-A",
+    });
+    const picker = await spawnPicker({ env });
+    const out = await waitFor(picker, (o) => o.includes("2/3"));
+    assertStringIncludes(out, "2/3");
+    await sendKey(picker, "Escape");
+    await waitForExit();
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await teardown();
   }
 });
 
@@ -1063,6 +1044,91 @@ Deno.test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async
     assertFalse(
       out.includes("stale-oc-marker-S26"),
       `stale opencode pane appeared in picker:\n${out}`,
+    );
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S27: codex pane is included in the picker output. Codex panes spawn under
+// the `.codex-wrapped` stub so liveCommand=true selects the right binary.
+Deno.test("S27: codex pane visible in picker", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "codex",
+      status: "running",
+      prompt: "codex-marker-S27",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "codex-marker-S27");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S28: claude, opencode, and codex panes coexist in one list and are visually
+// disambiguated by the row-1 agent badge ("C", "O", and "X").
+Deno.test("S28: claude+opencode+codex mixed list renders all badges", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "claude",
+      status: "running",
+      prompt: "claude-marker-S28",
+    });
+    await createClaudePane({
+      agent: "opencode",
+      status: "running",
+      prompt: "opencode-marker-S28",
+    });
+    await createClaudePane({
+      agent: "codex",
+      status: "running",
+      prompt: "codex-marker-S28",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "claude-marker-S28");
+    assertStringIncludes(out, "opencode-marker-S28");
+    assertStringIncludes(out, "codex-marker-S28");
+    assertStringIncludes(out, "C ");
+    assertStringIncludes(out, "O ");
+    assertStringIncludes(out, "X ");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S29: stale codex pane (no live `.codex-wrapped` process — fallback to the
+// login shell zsh) must be filtered out, mirroring S17/S26.
+Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "codex",
+      status: "running",
+      prompt: "alive-codex-marker-S29",
+    });
+    await createClaudePane({
+      agent: "codex",
+      status: "idle",
+      prompt: "stale-codex-marker-S29",
+      liveCommand: false,
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+    assertStringIncludes(out, "alive-codex-marker-S29");
+    assertFalse(
+      out.includes("stale-codex-marker-S29"),
+      `stale codex pane appeared in picker:\n${out}`,
     );
     await sendKey(picker, "Escape");
     await waitForExit();

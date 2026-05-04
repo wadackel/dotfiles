@@ -47,8 +47,8 @@ const MIN_SUMMARY = 15;
 
 // Row-1 fixed-width overhead before the summary body:
 //   pointer(2) + "icon "(2) + "badge "(2) + status5(5) + elapsed5(5) + " · "(3) + "  "(2) = 21
-// `badge ` is the per-agent 1-cell letter (`C` / `O`) + 1-cell space inserted
-// between the status icon and status text so claude vs opencode rows are
+// `badge ` is the per-agent 1-cell letter (`C` / `O` / `X`) + 1-cell space inserted
+// between the status icon and status text so claude / opencode / codex rows are
 // visually disambiguated in the same list.
 // Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
 // PaneRowLine's summaryBudget — keep them in sync via this single constant.
@@ -359,7 +359,7 @@ export async function readTaskProgress(
 // non-TUI tooling (picker-doctor, tests) can share the SSOT without React/Ink.
 // The matcher is intentionally exact-match against tmux's `pane_current_command`
 // (kernel p_comm basename, ≤15 bytes on macOS) — distinct from
-// picker-doctor.ts:isClaudeCommand which scans full `ps -o command` substrings.
+// picker-doctor.ts:detectAgentCommand which scans full `ps -o command` substrings.
 
 async function fetchPanes(): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
@@ -368,7 +368,9 @@ async function fetchPanes(): Promise<PaneRow[]> {
     if (!line) continue;
     const row = parseRow(line);
     if (
-      row && (row.agent === "claude" || row.agent === "opencode") &&
+      row &&
+      (row.agent === "claude" || row.agent === "opencode" ||
+        row.agent === "codex") &&
       isLivePaneCommand(row.agent, row.currentCommand)
     ) {
       rows.push(row);
@@ -645,10 +647,23 @@ const PaneRowLine: React.FC<PaneRowLineProps> = (
       <Box>
         <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
         <Text color={color}>{icon + " "}</Text>
-        {/* badge: 1-cell ASCII letter (C/O) + 1-cell trailing space.
-            Inline (no Record/dict) — only 2 agents, Rule-of-Three not met. */}
-        <Text color={row.agent === "opencode" ? "#a6afff" : "#73c1a9"}>
-          {(row.agent === "opencode" ? "O" : "C") + " "}
+        {
+          /* badge: 1-cell ASCII letter (C/O/X) + 1-cell trailing space.
+            Inline (no Record/dict) — Rule-of-Three met, but kept inline to
+            mirror picker's other inline conditionals. */
+        }
+        <Text
+          color={row.agent === "opencode"
+            ? "#a6afff"
+            : row.agent === "codex"
+            ? DOGRUN.sandy
+            : "#73c1a9"}
+        >
+          {(row.agent === "opencode"
+            ? "O"
+            : row.agent === "codex"
+            ? "X"
+            : "C") + " "}
         </Text>
         <Text color={color}>{status5}</Text>
         <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
@@ -812,9 +827,7 @@ function App({
   // source of truth for everything visible (selection, navigation, layout).
   // Inline filter — N is small (≤20 panes typical), useMemo would add no value.
   const derivedRows = filterEnabled
-    ? rows.filter((r: PaneRow) =>
-      r.status === "waiting" || r.status === "idle"
-    )
+    ? rows.filter((r: PaneRow) => r.status === "waiting" || r.status === "idle")
     : rows;
   const foundIdx = derivedRows.findIndex((r: PaneRow) =>
     r.paneId === selectedPaneId

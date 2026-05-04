@@ -26,7 +26,7 @@ const POLL_INTERVAL_MS = 50;
 
 // Per-test-run scratch directory holding compiled stubs used by
 // createClaudePane({ liveCommand: true }). One stub per agent (claude,
-// opencode) so each pane's `pane_current_command` surfaces the value
+// opencode, codex) so each pane's `pane_current_command` surfaces the value
 // `isLivePaneCommand` expects. Darwin SIP/AMFI blocks executing copies of
 // Apple-signed binaries (e.g. /bin/sleep → SIGKILL 137) and symlinks resolve
 // to the real basename at execve time, so compiling a 3-line C stub with
@@ -37,10 +37,12 @@ const LIVE_BIN_DIR = `/tmp/picker-e2e-bin-${Deno.pid}`;
 const LIVE_BIN_PATHS: Record<string, string> = {
   claude: `${LIVE_BIN_DIR}/.claude-wrapped`,
   opencode: `${LIVE_BIN_DIR}/.opencode-wrapp`,
+  "codex": `${LIVE_BIN_DIR}/.codex-wrapped`,
 };
 const LIVE_BIN_BASENAMES: Record<string, string> = {
   claude: ".claude-wrapped",
   opencode: ".opencode-wrapp",
+  "codex": ".codex-wrapped",
 };
 const LIVE_BIN_SOURCE = `#include <stdlib.h>
 #include <unistd.h>
@@ -153,15 +155,25 @@ export async function setupServer(opts: ServerOpts = {}): Promise<void> {
 // setupServer calls within a single test run: each binary is compiled once
 // per process and cached across Deno.test cases on the same PID.
 async function ensureLiveBin(): Promise<void> {
-  await Deno.mkdir(LIVE_BIN_DIR, { recursive: true });
+  const mkdir = await new Deno.Command("mkdir", {
+    args: ["-p", LIVE_BIN_DIR],
+    stdin: "null",
+    stdout: "null",
+    stderr: "piped",
+  }).output();
+  if (mkdir.code !== 0) {
+    const err = new TextDecoder().decode(mkdir.stderr).trim();
+    throw new Error(`Failed to create ${LIVE_BIN_DIR}: ${err}`);
+  }
   for (const path of Object.values(LIVE_BIN_PATHS)) {
-    try {
-      const st = await Deno.stat(path);
-      if (st.isFile) continue;
-    } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e;
-      // not built yet — fall through
-    }
+    const exists = await new Deno.Command("test", {
+      args: ["-f", path],
+      stdin: "null",
+      stdout: "null",
+      stderr: "null",
+    }).output();
+    if (exists.code === 0) continue;
+
     const child = new Deno.Command("cc", {
       args: ["-x", "c", "-o", path, "-"],
       stdin: "piped",
@@ -287,7 +299,7 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
 // When picker exits, the window auto-closes (tmux default remain-on-exit=off),
 // which is what waitForExit relies on.
 export async function spawnPicker(
-  opts: { selfPane?: string } = {},
+  opts: { selfPane?: string; env?: Record<string, string> } = {},
 ): Promise<string> {
   // URL.pathname is percent-encoded; decode so paths containing spaces or
   // non-ASCII characters reach tmux/sh as a real filesystem path.
@@ -307,6 +319,15 @@ export async function spawnPicker(
   // the spawned pane's own id when the process starts, so the originating-
   // pane id has to ride a non-reserved env var name.
   const envArgs: string[] = [];
+  for (const [key, value] of Object.entries(opts.env ?? {})) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`invalid env key for tmux new-window: ${key}`);
+    }
+    if (value.includes("\n")) {
+      throw new Error(`env value for ${key} contains newline`);
+    }
+    envArgs.push("-e", `${key}=${value}`);
+  }
   if (opts.selfPane !== undefined) {
     if (!/^%\d+$/.test(opts.selfPane)) {
       throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);

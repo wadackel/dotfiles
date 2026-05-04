@@ -238,6 +238,8 @@ After changing `home/programs/tmux/picker.tsx`, `home/programs/tmux/picker_e2e_h
 
 `tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/picker-tmux/picker`, not `deno run picker.tsx`. The binary is produced by `home.activation.compilePickerBin` in `home/programs/tmux/default.nix` via `deno compile` (React+Ink cold-start is ~236ms; AOT is the only way to amortize it for a popup). Hash-skip keys on `shasum -a 256` of `picker.tsx` + `pane_row.ts`.
 
+Picker covers three AI agents: `claude` / `opencode` / `codex`. Each agent has its own pane-status writer that emits `@pane_*` tmux options (claude: `claude-pane-status.ts` invoked by Claude Code hooks; opencode: in-process Bun plugin at `home/programs/opencode/plugin.ts`; codex: `home/programs/codex/codex-pane-status.ts` invoked by Codex CLI lifecycle hooks registered in `home/programs/codex/hooks.json`). All three follow the same single-shot script + stdin JSON pattern.
+
 Implications when editing picker source:
 
 - Running `deno run picker.tsx` or `/picker-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.

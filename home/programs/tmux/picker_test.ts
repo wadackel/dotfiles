@@ -81,7 +81,9 @@ Deno.test("parseRow: full row with all fields present", () => {
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(21).fill("").map((v, i) => i === 0 ? "%1" : (i === 3 ? "/home/me" : v))
+  const line = Array(21).fill("").map((v, i) =>
+    i === 0 ? "%1" : (i === 3 ? "/home/me" : v)
+  )
     .join("\x1f");
   const row = parseRow(line);
   assertEquals(row?.agent, "");
@@ -159,16 +161,24 @@ Deno.test("isLivePaneCommand: accepts live opencode entry points", () => {
   assertEquals(isLivePaneCommand("opencode", "opencode"), true);
 });
 
+Deno.test("isLivePaneCommand: accepts live codex entry points", () => {
+  assertEquals(isLivePaneCommand("codex", ".codex-wrapped"), true);
+  assertEquals(isLivePaneCommand("codex", "codex"), true);
+});
+
 Deno.test("isLivePaneCommand: cross-agent rejection", () => {
   // claude pane running opencode binary or vice versa is not a live session
   assertEquals(isLivePaneCommand("claude", ".opencode-wrapp"), false);
   assertEquals(isLivePaneCommand("opencode", ".claude-wrapped"), false);
+  assertEquals(isLivePaneCommand("claude", ".codex-wrapped"), false);
+  assertEquals(isLivePaneCommand("codex", ".claude-wrapped"), false);
 });
 
 Deno.test("isLivePaneCommand: rejects non-AI commands", () => {
   assertEquals(isLivePaneCommand("claude", "zsh"), false);
   assertEquals(isLivePaneCommand("claude", "bash"), false);
   assertEquals(isLivePaneCommand("opencode", "zsh"), false);
+  assertEquals(isLivePaneCommand("codex", "zsh"), false);
   assertEquals(isLivePaneCommand("claude", ""), false);
 });
 
@@ -409,7 +419,8 @@ Deno.test("summaryOf: returns full prompt without length cap", () => {
 });
 
 Deno.test("summaryOf: preserves full CJK prompt (caller truncates by width)", () => {
-  const jp = "提出したPRが他のPRをマージしたらコンフリクトしたので適切に修正したい";
+  const jp =
+    "提出したPRが他のPRをマージしたらコンフリクトしたので適切に修正したい";
   assertEquals(summaryOf(mkRow({ prompt: jp })), jp);
 });
 
@@ -596,18 +607,18 @@ Deno.test("basename: no slash returns entire string", () => {
 
 // --- readTaskProgress ---
 
-async function withTempHome<T>(
+async function withFixtureHome<T>(
   fn: (homeDir: string) => Promise<T>,
 ): Promise<T> {
-  const tmpHome = await Deno.makeTempDir({ prefix: "picker-test-home-" });
+  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
+    .pathname;
   const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", tmpHome);
+  Deno.env.set("HOME", fixtureHome);
   try {
-    return await fn(tmpHome);
+    return await fn(fixtureHome);
   } finally {
     if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
     else Deno.env.delete("HOME");
-    await Deno.remove(tmpHome, { recursive: true });
   }
 }
 
@@ -623,68 +634,39 @@ Deno.test("readTaskProgress: sessionId with path-traversal chars → null", asyn
 });
 
 Deno.test("readTaskProgress: missing dir → null", async () => {
-  await withTempHome(async () => {
+  await withFixtureHome(async () => {
     const result = await readTaskProgress("nonexistent-session");
     assertEquals(result, null);
   });
 });
 
 Deno.test("readTaskProgress: aggregates completed/total counts", async () => {
-  await withTempHome(async (home) => {
+  await withFixtureHome(async () => {
     const sessionId = "sess-A";
-    const dir = `${home}/.claude/tasks/${sessionId}`;
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
-      `${dir}/1.json`,
-      JSON.stringify({ id: "1", status: "completed" }),
-    );
-    await Deno.writeTextFile(
-      `${dir}/2.json`,
-      JSON.stringify({ id: "2", status: "completed" }),
-    );
-    await Deno.writeTextFile(
-      `${dir}/3.json`,
-      JSON.stringify({ id: "3", status: "in_progress" }),
-    );
     const result = await readTaskProgress(sessionId);
     assertEquals(result, { done: 2, total: 3 });
   });
 });
 
 Deno.test("readTaskProgress: empty dir → null", async () => {
-  await withTempHome(async (home) => {
+  await withFixtureHome(async () => {
     const sessionId = "sess-empty";
-    await Deno.mkdir(`${home}/.claude/tasks/${sessionId}`, { recursive: true });
     const result = await readTaskProgress(sessionId);
     assertEquals(result, null);
   });
 });
 
 Deno.test("readTaskProgress: skips malformed json", async () => {
-  await withTempHome(async (home) => {
+  await withFixtureHome(async () => {
     const sessionId = "sess-broken";
-    const dir = `${home}/.claude/tasks/${sessionId}`;
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
-      `${dir}/1.json`,
-      JSON.stringify({ status: "completed" }),
-    );
-    await Deno.writeTextFile(`${dir}/2.json`, "{bogus");
     const result = await readTaskProgress(sessionId);
     assertEquals(result, { done: 1, total: 1 });
   });
 });
 
 Deno.test("readTaskProgress: non-json files ignored", async () => {
-  await withTempHome(async (home) => {
+  await withFixtureHome(async () => {
     const sessionId = "sess-mixed";
-    const dir = `${home}/.claude/tasks/${sessionId}`;
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
-      `${dir}/1.json`,
-      JSON.stringify({ status: "pending" }),
-    );
-    await Deno.writeTextFile(`${dir}/README.md`, "# notes");
     const result = await readTaskProgress(sessionId);
     assertEquals(result, { done: 0, total: 1 });
   });

@@ -6,9 +6,9 @@ export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 
 // Agents whose sessions the picker surfaces. PaneRow.agent stays `string` because
 // `@pane_agent` is read verbatim from tmux and may legitimately be empty or any
-// other value (a non-claude / non-opencode pane). isLivePaneCommand applies the
+// other value (a non-claude / non-opencode / non-codex pane). isLivePaneCommand applies the
 // allowlist; PaneRow.agent is not narrowed at the parser layer.
-export type Agent = "claude" | "opencode";
+export type Agent = "claude" | "opencode" | "codex";
 
 // Per-agent allowlist of `pane_current_command` values that mark a *live* AI
 // session pane (vs a stale pane whose AI process has exited and dropped back to
@@ -22,6 +22,8 @@ export function isLivePaneCommand(agent: string, cmd: string): boolean {
     case "opencode":
       return cmd === ".opencode-wrapp" || cmd === ".opencode-wrapped" ||
         cmd === "opencode";
+    case "codex":
+      return cmd === ".codex-wrapped" || cmd === "codex";
     default:
       return false;
   }

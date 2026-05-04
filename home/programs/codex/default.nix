@@ -29,6 +29,7 @@ let
       streamable_shell = true;
       view_image_tool = true;
       external_migration = true;
+      codex_hooks = true;
     };
   };
 
@@ -36,6 +37,12 @@ let
 in
 {
   home.packages = [ pkgs.codex ];
+
+  home.file.".codex/hooks.json".source = ./hooks.json;
+  home.file.".codex/codex-pane-status.ts" = {
+    source = ./codex-pane-status.ts;
+    executable = true;
+  };
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a splice failure means ~/.codex/config.toml is in an unknown state, so

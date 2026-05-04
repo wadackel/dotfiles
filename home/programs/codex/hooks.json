@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" SessionStart'" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" UserPromptSubmit'" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PreToolUse'" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PostToolUse'" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" Stop'" }] }
+    ],
+    "PermissionRequest": [
+      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5, "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PermissionRequest'" }] }
+    ]
+  }
+}
