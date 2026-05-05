@@ -1,0 +1,1 @@
+../../tmux/pane-shared.ts

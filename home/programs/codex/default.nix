@@ -54,6 +54,10 @@ in
   # ここではその worktree シンボリックリンクごと out-of-store symlink で公開する。
   home.file.".codex/codex-pane-status.ts".source = dotfiles.linkHere ./. "codex-pane-status.ts";
   home.file.".codex/agent-presence.ts".source = dotfiles.linkHere ./. "agent-presence.ts";
+  # pane-shared.ts は claude/codex/opencode 共通の SSOT (型 / キー / formatter /
+  # transition builder)。worktree 内では home/programs/codex/pane-shared.ts が
+  # ../tmux/pane-shared.ts への in-worktree symlink。agent-presence.ts と同形。
+  home.file.".codex/pane-shared.ts".source = dotfiles.linkHere ./. "pane-shared.ts";
   home.file.".codex/codex-hook-log.ts".source = dotfiles.linkHere ./. "codex-hook-log.ts";
   home.file.".codex/codex-notify.ts".source = dotfiles.linkHere ./. "codex-notify.ts";
   home.file.".codex/codex-memo.ts".source = dotfiles.linkHere ./. "codex-memo.ts";
