@@ -30,6 +30,18 @@ declare const Bun: {
     stdout: Uint8Array;
     stderr: Uint8Array;
   };
+  spawn: (
+    cmd: string[],
+    opts?: {
+      stdin?: "pipe" | "inherit" | "ignore";
+      stdout?: "pipe" | "inherit" | "ignore";
+      stderr?: "pipe" | "inherit" | "ignore";
+    },
+  ) => {
+    stdin: { write: (data: string) => void; end: () => void };
+    unref: () => void;
+  };
+  which: (cmd: string) => string | null;
 };
 
 function fetchParent(pid: number): Promise<PsRow | null> {
@@ -111,6 +123,96 @@ async function dispatch(
   applyOps(pane, ops);
 }
 
+// Resolve `deno` once at module load. Bun has no `Deno` global, so the worker
+// must be launched via the user's PATH-resolved deno binary (Nix profile or
+// equivalent). Cached because the lookup is identical for the lifetime of the
+// plugin process.
+const DENO_BIN: string | null = Bun.which("deno");
+
+interface MemoDispatchInput {
+  sessionID: string;
+  cwd: string;
+}
+
+function readMemoDispatch(
+  event: string,
+  data: Record<string, unknown>,
+): MemoDispatchInput | null {
+  // session.idle and session.status:idle both signal the assistant has
+  // finished its turn. Either is sufficient to dispatch memo; if both fire
+  // for the same turn the worker debounces via shouldRunLLM and the daily
+  // note's upsert behavior keeps the entry idempotent.
+  const isIdle = event === "session.idle" ||
+    (event === "session.status" &&
+      typeof (data.properties as Record<string, unknown> | undefined)?.type ===
+        "string" &&
+      (data.properties as Record<string, unknown>).type === "idle");
+  if (!isIdle) return null;
+
+  const sid = typeof data.sessionID === "string" ? data.sessionID : "";
+  const props = data.properties as Record<string, unknown> | undefined;
+  const sidFromProps = typeof props?.sessionID === "string"
+    ? props.sessionID as string
+    : "";
+  const sessionID = sid || sidFromProps;
+  if (!sessionID) return null;
+
+  const cwd = typeof data.cwd === "string"
+    ? (data.cwd as string)
+    : (typeof (props?.info as Record<string, unknown> | undefined)?.directory ===
+        "string"
+      ? ((props!.info as Record<string, unknown>).directory as string)
+      : process.cwd());
+  return { sessionID, cwd };
+}
+
+function spawnMemoWorker(input: MemoDispatchInput): void {
+  if (!DENO_BIN) return;
+  let workerPath: string;
+  try {
+    workerPath =
+      new URL("./scripts/opencode-memo.ts", import.meta.url).pathname;
+  } catch {
+    // import.meta.url should always be available; if URL construction fails,
+    // skip silently rather than break the plugin.
+    return;
+  }
+  try {
+    const child = Bun.spawn(
+      [
+        DENO_BIN,
+        "run",
+        "--allow-read",
+        "--allow-write",
+        "--allow-env=HOME,TMPDIR",
+        "--allow-run=git,gemini,sqlite3",
+        workerPath,
+      ],
+      { stdin: "pipe", stdout: "ignore", stderr: "ignore" },
+    );
+    child.stdin.write(JSON.stringify({
+      session_id: input.sessionID,
+      cwd: input.cwd,
+    }));
+    child.stdin.end();
+    child.unref();
+  } catch (e) {
+    console.warn(`opencode-memo: spawn failed: ${e}`);
+  }
+}
+
+async function dispatchMemo(
+  event: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const input = readMemoDispatch(event, data);
+  if (!input) return;
+  // Skip when running embedded under another agent's process tree, mirroring
+  // the pane-status guard. Prevents duplicate daily-note entries.
+  if (await isEmbedded(process.pid, fetchParent)) return;
+  spawnMemoWorker(input);
+}
+
 // Sanity check on bootstrap: log once if TMUX_PANE is missing so the user
 // can diagnose why the badge stays unset. The plugin is otherwise silent —
 // opencode logs its own stderr.
@@ -118,6 +220,11 @@ function bootstrapWarning(): void {
   if (!paneIdOrNull()) {
     console.warn(
       "opencode-pane-status: TMUX_PANE not set or malformed; plugin is no-op.",
+    );
+  }
+  if (!DENO_BIN) {
+    console.warn(
+      "opencode-memo: `deno` not on PATH; memo dispatch will be no-op.",
     );
   }
 }
@@ -139,6 +246,7 @@ export const PaneStatus: Plugin = async (_input) => {
         ?.sessionID;
       if (typeof sid === "string") data.sessionID = sid;
       await dispatch(e.type, data);
+      await dispatchMemo(e.type, data);
     },
 
     "chat.message": async (input, output) => {

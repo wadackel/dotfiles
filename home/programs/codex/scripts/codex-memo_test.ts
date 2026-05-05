@@ -2,16 +2,18 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   buildLLMInput,
   buildWorkerArgs,
-  escapeObsidianSyntax,
   extractAssistantTexts,
   extractToolSummary,
   extractUserTexts,
   heuristicSummary,
-  parseLLMOutput,
-  resolveRepoName,
-  upsertDailyNote,
   validateHookData,
 } from "./codex-memo.ts";
+
+// Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
+// upsertDailyNote) are now tested in
+// home/programs/agent-memo/memo-shared_test.ts. codex-memo_test.ts only
+// covers Codex-specific transcript parsing, prompt-building, and hook-data
+// validation.
 
 const entries = [
   {
@@ -86,81 +88,6 @@ Deno.test("buildLLMInput: includes compact user prompts, assistant text, and too
   assertStringIncludes(input, "[First assistant response]");
   assertStringIncludes(input, "[Last assistant response]");
   assertStringIncludes(input, "exec_command: 2");
-});
-
-Deno.test("parseLLMOutput: accepts summary plus bullet details", () => {
-  assertEquals(
-    parseLLMOutput(
-      "Codex hookのメモ連携を実装した\n- Stop hookを追加\n- テストを追加",
-    ),
-    {
-      summary: "Codex hookのメモ連携を実装した",
-      details: ["Stop hookを追加", "テストを追加"],
-    },
-  );
-});
-
-Deno.test("resolveRepoName: handles normal repos and worktrees", () => {
-  assertEquals(resolveRepoName("/Users/me/repo", ".git"), "repo");
-  assertEquals(
-    resolveRepoName("/Users/me/worktrees/feat", "/Users/me/repo/.git"),
-    "repo",
-  );
-  assertEquals(
-    resolveRepoName("/Users/me/repo/.worktrees/feat", "../../.git"),
-    "repo",
-  );
-});
-
-Deno.test("upsertDailyNote: inserts before Reading and replaces existing details", async () => {
-  const dir = await Deno.makeTempDir();
-  const daily = `${dir}/daily.md`;
-  await Deno.writeTextFile(
-    daily,
-    [
-      "## 🧠 Work",
-      "",
-      "## 📕 Reading",
-      "",
-    ].join("\n"),
-  );
-
-  upsertDailyNote(daily, "abc12345", [
-    "- 11:00 - `(repo/abc12345)` first",
-    "    - detail",
-  ]);
-  assertEquals(
-    await Deno.readTextFile(daily),
-    [
-      "## 🧠 Work",
-      "- 11:00 - `(repo/abc12345)` first",
-      "    - detail",
-      "",
-      "## 📕 Reading",
-      "",
-    ].join("\n"),
-  );
-
-  upsertDailyNote(daily, "abc12345", [
-    "- 11:05 - `(repo/abc12345)` second",
-  ]);
-  assertEquals(
-    await Deno.readTextFile(daily),
-    [
-      "## 🧠 Work",
-      "- 11:05 - `(repo/abc12345)` second",
-      "",
-      "## 📕 Reading",
-      "",
-    ].join("\n"),
-  );
-});
-
-Deno.test("escapeObsidianSyntax: matches Claude memo hash escaping", () => {
-  assertEquals(
-    escapeObsidianSyntax("#tag and issue #123"),
-    "＃tag and issue ＃123",
-  );
 });
 
 Deno.test("buildWorkerArgs: produces a stable detached argv", () => {

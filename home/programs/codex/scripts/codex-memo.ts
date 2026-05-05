@@ -1,5 +1,17 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,gemini,deno
 
+import {
+  callGemini,
+  dailyNotePath,
+  debounceStatePath,
+  escapeObsidianSyntax,
+  nowTimestamp,
+  repoNameFor,
+  saveDebounceState,
+  shouldRunLLM,
+  upsertDailyNote,
+} from "./memo-shared.ts";
+
 interface TranscriptEnvelope {
   type: string;
   payload?: Record<string, unknown>;
@@ -11,18 +23,8 @@ interface HookData {
   cwd?: string;
 }
 
-interface DebounceState {
-  userMessageCount: number;
-}
-
-interface LLMResult {
-  summary: string;
-  details: string[];
-}
-
 const LOG_FILE = `${Deno.env.get("HOME") ?? "."}/.codex/logs/codex-memo.log`;
 const MAX_LOG_LINES = 1000;
-const GEMINI_TIMEOUT_MS = 15000;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -79,20 +81,6 @@ export function parseTranscript(path: string): TranscriptEnvelope[] {
         return [];
       }
     });
-}
-
-export function resolveRepoName(cwd: string, gitCommonDir: string): string {
-  let gitDir = gitCommonDir;
-  if (!gitDir.startsWith("/")) {
-    gitDir = `${cwd}/${gitDir}`;
-  }
-  const segments: string[] = [];
-  for (const s of gitDir.split("/")) {
-    if (s === "..") segments.pop();
-    else if (s !== ".") segments.push(s);
-  }
-  gitDir = segments.join("/");
-  return gitDir.replace(/\/\.git\/?$/, "").split("/").at(-1) ?? "";
 }
 
 const NOISE_PATTERNS: RegExp[] = [
@@ -245,161 +233,6 @@ export function buildLLMInput(entries: TranscriptEnvelope[]): string {
   return parts.join("\n").slice(0, 3000);
 }
 
-export function parseLLMOutput(raw: string): LLMResult | null {
-  const lines = raw.trim().split("\n").filter((line) => line.trim());
-  if (lines.length === 0) return null;
-  const summary = lines[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(
-    0,
-    200,
-  );
-  if (!summary) return null;
-  const details = lines
-    .slice(1)
-    .filter((line) => /^\s*[-・]/.test(line))
-    .map((line) =>
-      line.replace(/^\s*[-・]\s*/, "").replace(/\*\*/g, "").trim().slice(0, 100)
-    )
-    .filter((line) => line.length > 0)
-    .slice(0, 3);
-  return { summary, details };
-}
-
-async function callGemini(condensed: string): Promise<LLMResult | null> {
-  const prompt = "以下はCodexセッションの要約データです。" +
-    "このセッションで何が行われたかを日本語で要約してください。\n\n" +
-    "出力フォーマット:\n" +
-    "1行目: 40〜80文字の要約（意図と結果を含む）\n" +
-    "2行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n\n" +
-    "補足が不要なほど単純なセッションなら1行目だけでもOK。\n" +
-    "出力は要約のみ。説明や前置きは不要です。";
-
-  let proc: Deno.ChildProcess | null = null;
-  let timer: number | undefined;
-  try {
-    const cmd = new Deno.Command("gemini", {
-      args: ["-m", "gemini-2.5-flash", "-o", "text"],
-      stdin: "piped",
-      stdout: "piped",
-      stderr: "piped",
-    });
-    proc = cmd.spawn();
-    timer = setTimeout(() => {
-      try {
-        proc?.kill("SIGTERM");
-      } catch {
-        // process may already have exited
-      }
-    }, GEMINI_TIMEOUT_MS);
-
-    const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(`${prompt}\n\n${condensed}`));
-    await writer.close();
-
-    const { code, stdout, stderr } = await proc.output();
-    if (code !== 0) {
-      const errMsg = new TextDecoder().decode(stderr).trim().slice(0, 200);
-      await log(`GEMINI ERROR: exit=${code} ${errMsg}`);
-      return null;
-    }
-    return parseLLMOutput(new TextDecoder().decode(stdout));
-  } catch (e) {
-    await log(`GEMINI ERROR: ${e}`);
-    return null;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-  }
-}
-
-function debounceStatePath(sessionShort: string): string {
-  return `${
-    Deno.env.get("TMPDIR") ?? "/tmp"
-  }/codex-memo-llm-${sessionShort}.json`;
-}
-
-function shouldRunLLM(sessionShort: string, currentUserCount: number): boolean {
-  try {
-    const state: DebounceState = JSON.parse(
-      Deno.readTextFileSync(debounceStatePath(sessionShort)),
-    );
-    return currentUserCount > state.userMessageCount;
-  } catch {
-    return true;
-  }
-}
-
-function saveDebounceState(sessionShort: string, userCount: number): void {
-  Deno.writeTextFileSync(
-    debounceStatePath(sessionShort),
-    JSON.stringify({ userMessageCount: userCount } satisfies DebounceState),
-  );
-}
-
-export function escapeObsidianSyntax(text: string): string {
-  return text.replace(/#(?=\w)/g, "＃");
-}
-
-export function upsertDailyNote(
-  dailyPath: string,
-  sessionShort: string,
-  entryLines: string[],
-): void {
-  const content = Deno.readTextFileSync(dailyPath);
-  const lines = content.split("\n");
-  const existingIdx = lines.findIndex((line) =>
-    line.includes(`/${sessionShort})`)
-  );
-  if (existingIdx >= 0) {
-    let endIdx = existingIdx + 1;
-    while (endIdx < lines.length && lines[endIdx].startsWith("    -")) {
-      endIdx++;
-    }
-    lines.splice(existingIdx, endIdx - existingIdx, ...entryLines);
-    Deno.writeTextFileSync(dailyPath, lines.join("\n"));
-    return;
-  }
-
-  const readingIdx = lines.findIndex((line) => /^## 📕 Reading/.test(line));
-  if (readingIdx < 0) return;
-  const insertAt = lines[readingIdx - 1]?.trim() === ""
-    ? readingIdx - 1
-    : readingIdx;
-  lines.splice(insertAt, 0, ...entryLines);
-  Deno.writeTextFileSync(dailyPath, lines.join("\n"));
-}
-
-async function repoNameFor(cwd: string): Promise<string> {
-  try {
-    const cmd = new Deno.Command("git", {
-      cwd,
-      args: ["rev-parse", "--git-common-dir"],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const { stdout } = await cmd.output();
-    const repoName = resolveRepoName(
-      cwd,
-      new TextDecoder().decode(stdout).trim(),
-    );
-    if (repoName) return repoName;
-  } catch {
-    // fall through
-  }
-  return cwd.split("/").at(-1) ?? "unknown";
-}
-
-function dailyNotePath(): string {
-  const today = new Date().toLocaleDateString("sv-SE");
-  return `${Deno.env.get("HOME")}/Documents/Main/99_Tracking/Daily/${today}.md`;
-}
-
-function nowTimestamp(): string {
-  return new Date().toLocaleTimeString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
 export function buildWorkerArgs(
   scriptPath: string,
   hookData: HookData,
@@ -529,7 +362,8 @@ async function mainHook(): Promise<void> {
 
   const dailyContent = Deno.readTextFileSync(ctx.dailyPath);
   const hasExistingEntry = dailyContent.includes(`/${ctx.sessionShort})`);
-  const runLLM = shouldRunLLM(ctx.sessionShort, ctx.userCount);
+  const statePath = debounceStatePath("codex", ctx.sessionShort);
+  const runLLM = shouldRunLLM(statePath, ctx.userCount);
 
   if (!runLLM && hasExistingEntry) {
     await log(`DEBOUNCE: skip (userCount=${ctx.userCount}, entry exists)`);
@@ -569,7 +403,7 @@ async function mainWorker(workerInput: HookData): Promise<void> {
   await log(
     `WORKER LLM: calling gemini flash (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
   );
-  const llmResult = await callGemini(condensed);
+  const llmResult = await callGemini(condensed, "Codex");
   if (!llmResult) {
     await log("WORKER LLM: no result, keeping heuristic entry");
     return;
@@ -585,7 +419,7 @@ async function mainWorker(workerInput: HookData): Promise<void> {
   const llmLines = [mainLine, ...detailLines];
   upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
   await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
-  saveDebounceState(ctx.sessionShort, ctx.userCount);
+  saveDebounceState(debounceStatePath("codex", ctx.sessionShort), ctx.userCount);
 }
 
 async function main(): Promise<void> {

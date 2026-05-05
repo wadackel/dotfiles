@@ -1,5 +1,17 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,gemini
 
+import {
+  callGemini,
+  dailyNotePath,
+  debounceStatePath,
+  escapeObsidianSyntax,
+  nowTimestamp,
+  repoNameFor,
+  saveDebounceState,
+  shouldRunLLM,
+  upsertDailyNote,
+} from "./memo-shared.ts";
+
 // --- Types ---
 
 interface ContentBlock {
@@ -17,15 +29,6 @@ interface TranscriptEntry {
     content: string | ContentBlock[];
   };
   summary?: string;
-}
-
-interface DebounceState {
-  userMessageCount: number;
-}
-
-interface LLMResult {
-  summary: string;
-  details: string[];
 }
 
 // --- Logging ---
@@ -64,22 +67,6 @@ function parseTranscript(path: string): TranscriptEntry[] {
         return [];
       }
     });
-}
-
-// --- Repo Name Resolution ---
-
-export function resolveRepoName(cwd: string, gitCommonDir: string): string {
-  let gitDir = gitCommonDir;
-  if (!gitDir.startsWith("/")) {
-    gitDir = `${cwd}/${gitDir}`;
-  }
-  const segments: string[] = [];
-  for (const s of gitDir.split("/")) {
-    if (s === "..") segments.pop();
-    else if (s !== ".") segments.push(s);
-  }
-  gitDir = segments.join("/");
-  return gitDir.replace(/\/\.git\/?$/, "").split("/").at(-1) ?? "";
 }
 
 // --- Extraction ---
@@ -187,7 +174,6 @@ function heuristicSummary(entries: TranscriptEntry[]): string {
 function buildLLMInput(entries: TranscriptEntry[]): string {
   const parts: string[] = [];
 
-  // User prompts (filtered, truncated)
   const userTexts = extractUserTexts(entries).filter((t) => !isNoise(t));
   if (userTexts.length > 0) {
     parts.push("[User prompts]");
@@ -196,153 +182,24 @@ function buildLLMInput(entries: TranscriptEntry[]): string {
     }
   }
 
-  // First assistant response
   const assistantTexts = extractAssistantTexts(entries);
   if (assistantTexts.length > 0) {
     parts.push("\n[First assistant response]");
     parts.push(assistantTexts[0].replace(/\n/g, " ").slice(0, 300));
   }
 
-  // Last assistant response (if different from first)
   if (assistantTexts.length > 1) {
     parts.push("\n[Last assistant response]");
     parts.push(assistantTexts.at(-1)!.replace(/\n/g, " ").slice(0, 300));
   }
 
-  // Tool usage
   const tools = extractToolSummary(entries);
   if (tools) {
     parts.push("\n[Actions taken]");
     parts.push(tools);
   }
 
-  const result = parts.join("\n");
-  // Cap at ~3000 chars
-  return result.slice(0, 3000);
-}
-
-// --- LLM Call ---
-
-function parseLLMOutput(raw: string): LLMResult | null {
-  const lines = raw.trim().split("\n").filter((l) => l.trim());
-  if (lines.length === 0) return null;
-  const summary = lines[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(
-    0,
-    200,
-  );
-  if (!summary) return null;
-  const details = lines
-    .slice(1)
-    .filter((l) => /^\s*[-・]/.test(l))
-    .map((l) =>
-      l.replace(/^\s*[-・]\s*/, "").replace(/\*\*/g, "").trim().slice(0, 100)
-    )
-    .filter((l) => l.length > 0)
-    .slice(0, 3);
-  return { summary, details };
-}
-
-async function callGemini(condensed: string): Promise<LLMResult | null> {
-  const prompt = "以下はClaude Codeセッションの要約データです。" +
-    "このセッションで何が行われたかを日本語で要約してください。\n\n" +
-    "出力フォーマット:\n" +
-    "1行目: 40〜80文字の要約（意図と結果を含む）\n" +
-    "2行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n\n" +
-    "補足が不要なほど単純なセッションなら1行目だけでもOK。\n" +
-    "出力は要約のみ。説明や前置きは不要です。";
-
-  try {
-    const cmd = new Deno.Command("gemini", {
-      args: ["-m", "gemini-2.5-flash", "-o", "text"],
-      stdin: "piped",
-      stdout: "piped",
-      stderr: "piped",
-    });
-    const proc = cmd.spawn();
-    const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(`${prompt}\n\n${condensed}`));
-    await writer.close();
-
-    const { code, stdout, stderr } = await proc.output();
-    if (code !== 0) {
-      const errMsg = new TextDecoder().decode(stderr).trim().slice(0, 200);
-      await log(`GEMINI ERROR: exit=${code} ${errMsg}`);
-      return null;
-    }
-
-    const raw = new TextDecoder().decode(stdout);
-    return parseLLMOutput(raw);
-  } catch (e) {
-    await log(`GEMINI ERROR: ${e}`);
-    return null;
-  }
-}
-
-// --- Debounce ---
-
-function debounceStatePath(sessionShort: string): string {
-  return `${
-    Deno.env.get("TMPDIR") ?? "/tmp"
-  }/claude-memo-llm-${sessionShort}.json`;
-}
-
-function shouldRunLLM(sessionShort: string, currentUserCount: number): boolean {
-  const statePath = debounceStatePath(sessionShort);
-  try {
-    const raw = Deno.readTextFileSync(statePath);
-    const state: DebounceState = JSON.parse(raw);
-    return currentUserCount > state.userMessageCount;
-  } catch {
-    // No state file → first run
-    return true;
-  }
-}
-
-function saveDebounceState(sessionShort: string, userCount: number): void {
-  const statePath = debounceStatePath(sessionShort);
-  const state: DebounceState = { userMessageCount: userCount };
-  Deno.writeTextFileSync(statePath, JSON.stringify(state));
-}
-
-// --- Obsidian Syntax Escape ---
-
-function escapeObsidianSyntax(text: string): string {
-  return text.replace(/#(?=\w)/g, "＃");
-}
-
-// --- Daily Note Upsert ---
-
-function upsertDailyNote(
-  dailyPath: string,
-  sessionShort: string,
-  entryLines: string[],
-): void {
-  const content = Deno.readTextFileSync(dailyPath);
-  const lines = content.split("\n");
-
-  // Check for existing entry with this session ID
-  const existingIdx = lines.findIndex((l) => l.includes(`/${sessionShort})`));
-  if (existingIdx >= 0) {
-    // Find the full extent of the existing entry (main line + indented detail lines)
-    let endIdx = existingIdx + 1;
-    while (endIdx < lines.length && lines[endIdx].startsWith("    -")) {
-      endIdx++;
-    }
-    lines.splice(existingIdx, endIdx - existingIdx, ...entryLines);
-    Deno.writeTextFileSync(dailyPath, lines.join("\n"));
-    return;
-  }
-
-  // Find insertion point: before ## 📕 Reading
-  const readingIdx = lines.findIndex((l) => /^## 📕 Reading/.test(l));
-  if (readingIdx < 0) return;
-
-  // Insert just before the Reading section (no extra blank line added)
-  const insertAt = lines[readingIdx - 1]?.trim() === ""
-    ? readingIdx - 1
-    : readingIdx;
-  lines.splice(insertAt, 0, ...entryLines);
-  Deno.writeTextFileSync(dailyPath, lines.join("\n"));
+  return parts.join("\n").slice(0, 3000);
 }
 
 // --- Main ---
@@ -384,34 +241,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Determine repo name
-  let repoName: string;
-  try {
-    const cmd = new Deno.Command("git", {
-      args: ["-C", cwd, "rev-parse", "--git-common-dir"],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const { stdout } = await cmd.output();
-    const gitCommonDir = new TextDecoder().decode(stdout).trim();
-    repoName = resolveRepoName(cwd, gitCommonDir);
-  } catch {
-    repoName = "";
-  }
-  if (!repoName) repoName = cwd.split("/").at(-1) ?? "unknown";
+  const repoName = await repoNameFor(cwd);
 
   const sessionShort = sessionId.slice(0, 8);
-  const timestamp = new Date().toLocaleTimeString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  // Daily note path
-  const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
-  const dailyPath = `${
-    Deno.env.get("HOME")
-  }/Documents/Main/99_Tracking/Daily/${today}.md`;
+  const timestamp = nowTimestamp();
+  const dailyPath = dailyNotePath();
   try {
     await Deno.stat(dailyPath);
   } catch {
@@ -423,12 +257,11 @@ async function main(): Promise<void> {
   const dailyContent = Deno.readTextFileSync(dailyPath);
   const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
 
-  // Check debounce: has a new user message arrived since last LLM call?
   const userCount = countUserMessages(entries);
-  const runLLM = shouldRunLLM(sessionShort, userCount);
+  const statePath = debounceStatePath("claude", sessionShort);
+  const runLLM = shouldRunLLM(statePath, userCount);
 
   if (!runLLM && hasExistingEntry) {
-    // No new user messages and entry already exists — preserve the existing (likely LLM-generated) entry
     await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
     return;
   }
@@ -454,14 +287,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  saveDebounceState(sessionShort, userCount);
+  saveDebounceState(statePath, userCount);
 
   const condensed = buildLLMInput(entries);
   await log(
     `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
   );
 
-  const llmResult = await callGemini(condensed);
+  const llmResult = await callGemini(condensed, "Claude Code");
   if (!llmResult) {
     await log("LLM: no result, keeping heuristic entry");
     return;

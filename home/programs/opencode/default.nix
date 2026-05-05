@@ -21,4 +21,13 @@
 
   # RTK plugin: opencode の bash/shell tool.execute.before を `rtk rewrite` に通す。
   home.file.".config/opencode/plugins/rtk.ts".source = dotfiles.linkHere ./. "plugins/rtk.ts";
+
+  # opencode-memo worker (Deno script). plugin.ts は session.idle 時に
+  # `new URL("./scripts/opencode-memo.ts", import.meta.url)` で兄弟解決して
+  # Bun.spawn で起動するため、scripts/ ディレクトリごと
+  # ~/.config/opencode/scripts/ に out-of-store symlink で公開する。配下の
+  # opencode-memo.ts は memo-shared.ts (in-worktree symlink → agent-memo)
+  # を import するので、ディレクトリごと公開すれば import path 解決も同時に
+  # 通る。
+  home.file.".config/opencode/scripts".source = dotfiles.linkHere ./. "scripts";
 }
