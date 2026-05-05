@@ -3,11 +3,18 @@
 // picker reads `@pane_*` from both agents through one shared format. Bun-only
 // I/O lives in plugin.ts; this file is runtime-agnostic so Deno can test it.
 
-// --- Types ---
+import {
+  ALL_PANE_OPTIONS_FOR_OPENCODE,
+  maskPrompt,
+  type Op,
+  TOOL_SUBJECT_MAX_CHARS,
+  truncate,
+} from "./pane-shared.ts";
 
-export type Op =
-  | { kind: "set"; key: string; value: string }
-  | { kind: "unset"; key: string };
+// Re-export for legacy test imports.
+export { maskPrompt, type Op, truncate };
+
+// --- Types ---
 
 export interface PaneState {
   status: string;
@@ -23,45 +30,13 @@ export type HookData = Record<string, unknown>;
 
 // --- Constants ---
 
-// Every @pane_* option opencode-pane-status may write. Kept identical to the
-// claude-side ALL_PANE_OPTIONS minus the Claude-only subagent / teardown /
-// main-stopped keys, since opencode has no subagent concept.
-export const ALL_PANE_OPTIONS = [
-  "@pane_agent",
-  "@pane_status",
-  "@pane_session_id",
-  "@pane_started_at",
-  "@pane_cwd",
-  "@pane_prompt",
-  "@pane_wait_reason",
-  "@pane_current_tool",
-  "@pane_last_tool",
-  "@pane_last_activity_at",
-] as const;
+// Every @pane_* option opencode-pane-status may write. Sourced from
+// pane-shared.ts; alias maintained for in-file readability.
+export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_OPENCODE;
 
-const PROMPT_MAX_CHARS = 40;
-const TOOL_MAX_CHARS = 24;
-
-// --- Pure helpers ---
-
-export function maskPrompt(raw: unknown): string {
-  if (typeof raw !== "string" || raw.length === 0) return "";
-  // Strip C0/C1 control bytes then collapse whitespace runs. Mirrors
-  // claude-pane-status.ts:maskPrompt — same threat model (a crafted prompt
-  // containing $'\x1b[2J' could otherwise clear the picker user's screen
-  // when tmux renders the option value).
-  // deno-lint-ignore no-control-regex
-  const flat = raw.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/ {2,}/g, " ")
-    .trim();
-  if (flat.length <= PROMPT_MAX_CHARS) return flat;
-  return flat.slice(0, PROMPT_MAX_CHARS) + "…";
-}
-
-export function truncate(raw: string, max: number): string {
-  // deno-lint-ignore no-control-regex
-  const clean = raw.replace(/[\x00-\x1f\x7f]+/g, " ");
-  return clean.length > max ? clean.slice(0, max) + "…" : clean;
-}
+// opencode historically used a single TOOL_MAX_CHARS knob; aligned to
+// TOOL_SUBJECT_MAX_CHARS in pane-shared.ts (same value: 24).
+const TOOL_MAX_CHARS = TOOL_SUBJECT_MAX_CHARS;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";

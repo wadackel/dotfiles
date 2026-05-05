@@ -14,6 +14,19 @@ import {
   parsePsLine,
   type PsRow,
 } from "./agent-presence.ts";
+import {
+  ALL_PANE_OPTIONS_FOR_CLAUDE,
+  maskPrompt,
+  type Op,
+  PROMPT_MAX_CHARS,
+  TOOL_ERROR_MAX_CHARS,
+  TOOL_SUBJECT_MAX_CHARS,
+  truncate,
+} from "./pane-shared.ts";
+
+// Re-export for legacy test imports + downstream consumers. The canonical
+// definition lives in pane-shared.ts.
+export { maskPrompt, type Op };
 
 // --- Types ---
 
@@ -31,10 +44,6 @@ type HookData = Record<string, unknown> & {
   error_type?: string;
 };
 
-export type Op =
-  | { kind: "set"; key: string; value: string }
-  | { kind: "unset"; key: string };
-
 export interface PaneState {
   subagents: string; // pipe-sep "Type:id|Type:id" list; "" = none
   pendingTeardown: boolean;
@@ -51,31 +60,14 @@ export interface PaneState {
 // --- Constants ---
 
 // Every @pane_* option the script may write. Used to drain state on teardown.
-export const ALL_PANE_OPTIONS = [
-  "@pane_agent",
-  "@pane_status",
-  "@pane_session_id",
-  "@pane_started_at",
-  "@pane_cwd",
-  "@pane_worktree_branch",
-  "@pane_worktree_path",
-  "@pane_subagents",
-  "@pane_pending_teardown",
-  "@pane_prompt",
-  "@pane_wait_reason",
-  "@pane_current_tool",
-  "@pane_last_tool",
-  "@pane_last_edit_file",
-  "@pane_last_activity_at",
-  "@pane_current_tool_subject",
-  "@pane_last_tool_subject",
-  "@pane_last_tool_error",
-  "@pane_main_stopped",
-  "@pane_context_used_pct",
-] as const;
+// Sourced from pane-shared.ts; alias maintained for in-file readability and
+// for callers that consume the historic name via tests.
+export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_CLAUDE;
 
 // Options cleared at SessionStart so stale values from a previous session on the
-// same pane do not bleed into the new one.
+// same pane do not bleed into the new one. Manually enumerated (claude-shape);
+// codex's parallel constant is derived via .filter() — the two shapes diverge
+// intentionally so neither moves to pane-shared.ts.
 const STALE_AT_SESSION_START = [
   "@pane_started_at",
   "@pane_subagents",
@@ -94,36 +86,6 @@ const STALE_AT_SESSION_START = [
   "@pane_main_stopped",
   "@pane_context_used_pct",
 ] as const;
-
-const PROMPT_MAX_CHARS = 40;
-const TOOL_SUBJECT_MAX_CHARS = 24;
-const TOOL_ERROR_MAX_CHARS = 40;
-
-// --- Pure helpers (exported for tests) ---
-
-export function maskPrompt(raw: unknown): string {
-  if (typeof raw !== "string" || raw.length === 0) return "";
-  // Strip all C0/C1 control bytes (incl. ESC/NUL/BEL) then collapse runs of
-  // whitespace. Control-char stripping blocks terminal-escape injection when
-  // the picker renders the option value — a crafted prompt containing e.g.
-  // $'\x1b[2J' would otherwise clear the picker user's screen.
-  const flat = raw.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/ {2,}/g, " ").trim();
-  if (flat.length <= PROMPT_MAX_CHARS) return flat;
-  return flat.slice(0, PROMPT_MAX_CHARS) + "…";
-}
-
-// Sanitize + truncate for tool subject / error. Strips all C0/C1 control
-// bytes (ESC/NUL/BEL/TAB/CR/LF/etc) to a single space before slicing, which
-// (a) keeps the value safe for tmux list-panes -F output and (b) prevents
-// terminal-escape injection when the picker renders the option value.
-// Unlike maskPrompt this does NOT collapse multi-space runs, so Bash command
-// "echo  foo" keeps its double space. Separate from maskPrompt because the
-// two inputs are semantically different (structured tool_input fields vs
-// free-form user prompt).
-function truncate(raw: string, max: number): string {
-  const clean = raw.replace(/[\x00-\x1f\x7f]+/g, " ");
-  return clean.length > max ? clean.slice(0, max) + "…" : clean;
-}
 
 // Per-tool subject extractors. Edit/Write/MultiEdit are intentionally absent:
 // they fall through to the "unknown tool" default (empty string), which lets

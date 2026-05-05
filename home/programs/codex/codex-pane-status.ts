@@ -4,6 +4,17 @@
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
 
 import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
+import {
+  ALL_PANE_OPTIONS_FOR_CODEX,
+  CLAUDE_ONLY_KEYS as SHARED_CLAUDE_ONLY_KEYS,
+  type Op,
+  PROMPT_MAX_CHARS,
+  TOOL_ERROR_MAX_CHARS,
+  TOOL_SUBJECT_MAX_CHARS,
+} from "./pane-shared.ts";
+
+// Re-export for legacy test imports + downstream consumers.
+export { type Op };
 
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;
@@ -18,10 +29,6 @@ type HookData = Record<string, unknown> & {
   transcript_path?: string | null;
 };
 
-export type Op =
-  | { kind: "set"; key: string; value: string }
-  | { kind: "unset"; key: string };
-
 export interface PaneState {
   status: string;
   currentTool: string;
@@ -30,51 +37,23 @@ export interface PaneState {
   sessionId: string;
 }
 
-export const ALL_PANE_OPTIONS = [
-  "@pane_agent",
-  "@pane_status",
-  "@pane_session_id",
-  "@pane_started_at",
-  "@pane_cwd",
-  "@pane_prompt",
-  "@pane_wait_reason",
-  "@pane_current_tool",
-  "@pane_current_tool_use_id",
-  "@pane_last_tool",
-  "@pane_last_activity_at",
-  "@pane_context_used_pct",
-  "@pane_last_tool_error",
-  "@pane_subagents",
-  "@pane_pending_teardown",
-  "@pane_main_stopped",
-  "@pane_worktree_branch",
-  "@pane_worktree_path",
-  "@pane_last_edit_file",
-  "@pane_current_tool_subject",
-  "@pane_last_tool_subject",
-] as const;
+export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_CODEX;
 
-export const CLAUDE_ONLY_KEYS = [
-  "@pane_subagents",
-  "@pane_pending_teardown",
-  "@pane_main_stopped",
-  "@pane_worktree_branch",
-  "@pane_worktree_path",
-] as const;
+export const CLAUDE_ONLY_KEYS = SHARED_CLAUDE_ONLY_KEYS;
 
+// codex-only resume path key set — no parallel concept in claude/opencode.
 export const RESUME_TRANSIENT_KEYS = [
   "@pane_current_tool",
   "@pane_current_tool_use_id",
   "@pane_wait_reason",
 ] as const;
 
+// Derived (codex-shape) — diverges from claude's manually enumerated equivalent;
+// not unified into pane-shared.ts (Intentional Convention: per-writer local).
 const STALE_AT_SESSION_START = ALL_PANE_OPTIONS.filter((key) =>
   key !== "@pane_agent" && key !== "@pane_session_id" && key !== "@pane_cwd"
 );
 
-const PROMPT_MAX_CHARS = 40;
-const TOOL_SUBJECT_MAX_CHARS = 24;
-const TOOL_ERROR_MAX_CHARS = 40;
 const TOKEN_TAIL_BYTES = 64 * 1024;
 const LOG_MAX_LINES = 1000;
 const LOG_FILE = `${

@@ -369,3 +369,156 @@ Deno.test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async
   assertEquals(code, 0);
   assertEquals(stdout.length, 0);
 });
+// === Phase B.1: fixture-based op-array baselines ===
+// Locked-in current behavior so Phase B.2 (import-substitution)
+// and Phase C (transition-builder migration) can prove bit-
+// identical Op[] output. Generated from capture-codex-fixtures.ts.
+// Identifiers are b1-prefixed to avoid collision with existing helpers.
+
+const B1_TS_KEYS = new Set(["@pane_started_at", "@pane_last_activity_at"]);
+
+function b1Normalize(ops: Op[]): Op[] {
+  return ops.map((op) =>
+    op.kind === "set" && B1_TS_KEYS.has(op.key)
+      ? { kind: "set" as const, key: op.key, value: "<NORMALIZED>" }
+      : op
+  );
+}
+
+const b1State: PaneState = {
+  status: "",
+  currentTool: "",
+  currentToolUseId: "",
+  agent: "",
+  sessionId: "",
+};
+
+Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {
+  const ops = b1Normalize(await eventToOps("SessionStart", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "unset", key: "@pane_status" },
+      { kind: "unset", key: "@pane_started_at" },
+      { kind: "unset", key: "@pane_prompt" },
+      { kind: "unset", key: "@pane_wait_reason" },
+      { kind: "unset", key: "@pane_current_tool" },
+      { kind: "unset", key: "@pane_current_tool_use_id" },
+      { kind: "unset", key: "@pane_last_tool" },
+      { kind: "unset", key: "@pane_last_activity_at" },
+      { kind: "unset", key: "@pane_context_used_pct" },
+      { kind: "unset", key: "@pane_last_tool_error" },
+      { kind: "unset", key: "@pane_subagents" },
+      { kind: "unset", key: "@pane_pending_teardown" },
+      { kind: "unset", key: "@pane_main_stopped" },
+      { kind: "unset", key: "@pane_worktree_branch" },
+      { kind: "unset", key: "@pane_worktree_path" },
+      { kind: "unset", key: "@pane_last_edit_file" },
+      { kind: "unset", key: "@pane_current_tool_subject" },
+      { kind: "unset", key: "@pane_last_tool_subject" },
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: SessionStart resume", async () => {
+  const ops = b1Normalize(await eventToOps("SessionStart", { session_id: "test-sid", cwd: "/repo", source: "resume" }, { ...b1State, agent: "codex", sessionId: "test-sid" }));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "unset", key: "@pane_subagents" },
+      { kind: "unset", key: "@pane_pending_teardown" },
+      { kind: "unset", key: "@pane_main_stopped" },
+      { kind: "unset", key: "@pane_worktree_branch" },
+      { kind: "unset", key: "@pane_worktree_path" },
+      { kind: "unset", key: "@pane_current_tool" },
+      { kind: "unset", key: "@pane_current_tool_use_id" },
+      { kind: "unset", key: "@pane_wait_reason" },
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: UserPromptSubmit with prompt", async () => {
+  const ops = b1Normalize(await eventToOps("UserPromptSubmit", { session_id: "test-sid", cwd: "/repo", prompt: "do the thing" }, b1State));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_status", value: "running" },
+      { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+      { kind: "set", key: "@pane_prompt", value: "do the thing" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: PreToolUse Bash with tool_use_id", async () => {
+  const ops = b1Normalize(await eventToOps("PreToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "ls -la" }, tool_use_id: "test-tool-use" }, b1State));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_current_tool", value: "Bash" },
+      { kind: "set", key: "@pane_current_tool_subject", value: "ls -la" },
+      { kind: "set", key: "@pane_current_tool_use_id", value: "test-tool-use" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: PostToolUse Bash success", async () => {
+  const ops = b1Normalize(await eventToOps("PostToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "ls -la" }, tool_response: { stdout: "out" }, tool_use_id: "test-tool-use" }, { ...b1State, currentTool: "Bash", currentToolUseId: "test-tool-use" }));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+      { kind: "unset", key: "@pane_current_tool" },
+      { kind: "unset", key: "@pane_current_tool_use_id" },
+      { kind: "unset", key: "@pane_current_tool_subject" },
+      { kind: "set", key: "@pane_last_tool", value: "Bash" },
+      { kind: "set", key: "@pane_last_tool_subject", value: "ls -la" },
+      { kind: "unset", key: "@pane_last_edit_file" },
+      { kind: "unset", key: "@pane_last_tool_error" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: PostToolUse Bash error", async () => {
+  const ops = b1Normalize(await eventToOps("PostToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "false" }, tool_response: "Error: command failed", tool_use_id: "test-tool-use" }, { ...b1State, currentTool: "Bash", currentToolUseId: "test-tool-use" }));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+      { kind: "unset", key: "@pane_current_tool" },
+      { kind: "unset", key: "@pane_current_tool_use_id" },
+      { kind: "unset", key: "@pane_current_tool_subject" },
+      { kind: "set", key: "@pane_last_tool", value: "Bash" },
+      { kind: "set", key: "@pane_last_tool_subject", value: "false" },
+      { kind: "unset", key: "@pane_last_edit_file" },
+      { kind: "set", key: "@pane_last_tool_error", value: "command failed" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: Stop", async () => {
+  const ops = b1Normalize(await eventToOps("Stop", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+      { kind: "unset", key: "@pane_context_used_pct" },
+    ]);
+});
+
+Deno.test("Phase B.1 fixture: PermissionRequest", async () => {
+  const ops = b1Normalize(await eventToOps("PermissionRequest", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  assertEquals(ops, [
+      { kind: "set", key: "@pane_agent", value: "codex" },
+      { kind: "set", key: "@pane_session_id", value: "test-sid" },
+      { kind: "set", key: "@pane_cwd", value: "/repo" },
+      { kind: "set", key: "@pane_status", value: "waiting" },
+      { kind: "set", key: "@pane_wait_reason", value: "permission" },
+    ]);
+});
