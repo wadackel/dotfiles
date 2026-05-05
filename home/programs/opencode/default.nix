@@ -18,4 +18,7 @@
   # home/programs/opencode/pane-shared.ts が ../tmux/pane-shared.ts への
   # in-worktree symlink。agent-presence.ts と同形の 2 段階 symlink chain。
   home.file.".config/opencode/pane-shared.ts".source = dotfiles.linkHere ./. "pane-shared.ts";
+
+  # RTK plugin: opencode の bash/shell tool.execute.before を `rtk rewrite` に通す。
+  home.file.".config/opencode/plugins/rtk.ts".source = dotfiles.linkHere ./. "plugins/rtk.ts";
 }

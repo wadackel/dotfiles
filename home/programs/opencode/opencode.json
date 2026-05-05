@@ -14,7 +14,10 @@
   // against CWD, not opencode.json's directory, and treats them as npm-style
   // package directories looking for package.json. {env:HOME} is opencode's
   // own template substitution and is profile-independent.
-  "plugin": ["file://{env:HOME}/.config/opencode/plugin.ts"],
+  "plugin": [
+    "file://{env:HOME}/.config/opencode/plugin.ts",
+    "file://{env:HOME}/.config/opencode/plugins/rtk.ts"
+  ],
 
   // AGENTS.md は ~/.claude/CLAUDE.md がフォールバック読み込みされるため未設定。
   // RTK ガイドだけ追加で読ませる。{env:HOME} は profile 非依存の置換。
