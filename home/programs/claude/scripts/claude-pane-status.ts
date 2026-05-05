@@ -19,9 +19,13 @@ import {
   maskPrompt,
   type Op,
   PROMPT_MAX_CHARS,
+  promptStartTrio,
+  sessionStartBody,
   TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
+  toolStartOps,
   truncate,
+  unsetOps,
 } from "./pane-shared.ts";
 
 // Re-export for legacy test imports + downstream consumers. The canonical
@@ -248,33 +252,27 @@ export function eventToOps(
   // Drain paths: full teardown. Short-circuit before self-heal so the teardown
   // is not followed by self-heal reinstating @pane_agent.
   if (event === "SessionEnd" && count(state.subagents) === 0) {
-    return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
+    return unsetOps(ALL_PANE_OPTIONS);
   }
   if (
     event === "SubagentStop" &&
     count(removeSubagent(state.subagents, str(data.agent_id))) === 0 &&
     state.pendingTeardown
   ) {
-    return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
+    return unsetOps(ALL_PANE_OPTIONS);
   }
 
   const body: Op[] = (() => {
     switch (event) {
       case "SessionStart": {
         // agent / session_id / cwd are set by selfHealOps below.
-        const ops: Op[] = STALE_AT_SESSION_START.map((key) => ({
-          kind: "unset" as const,
-          key,
-        }));
-        ops.push({ kind: "set", key: "@pane_status", value: "idle" });
+        // sessionStartBody = unsetOps(STALE) + status=idle + last_activity_at=now.
         // Seed activity_at so a fresh session shows `idle Ns` in the picker row 2
         // from the moment it starts (otherwise brand-new idle panes display nothing).
-        ops.push({
-          kind: "set",
-          key: "@pane_last_activity_at",
-          value: String(Math.floor(Date.now() / 1000)),
+        return sessionStartBody({
+          staleKeys: STALE_AT_SESSION_START,
+          nowSec: String(Math.floor(Date.now() / 1000)),
         });
-        return ops;
       }
 
       case "SessionEnd": {
@@ -286,9 +284,7 @@ export function eventToOps(
         const prompt = maskPrompt(data.prompt);
         const now = String(Math.floor(Date.now() / 1000));
         const ops: Op[] = [
-          { kind: "set", key: "@pane_status", value: "running" },
-          { kind: "set", key: "@pane_started_at", value: now },
-          { kind: "set", key: "@pane_last_activity_at", value: now },
+          ...promptStartTrio({ nowSec: now }),
           // New main invocation — clear any pending main-stopped marker so
           // the next SubagentStop does not spuriously flip us to idle.
           { kind: "unset", key: "@pane_main_stopped" },
@@ -390,20 +386,10 @@ export function eventToOps(
         // gate which over-blocked main resume whenever any subagent was alive.
         const isMain = !str(data.agent_id);
         const resume = isMain ? resumeOpsIfStuck(state) : [];
-        const ops: Op[] = [
+        return [
           ...resume,
-          { kind: "set", key: "@pane_current_tool", value: toolName },
+          ...toolStartOps({ tool: toolName, subject: subject || undefined }),
         ];
-        if (subject) {
-          ops.push({
-            kind: "set",
-            key: "@pane_current_tool_subject",
-            value: subject,
-          });
-        } else {
-          ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
-        }
-        return ops;
       }
 
       case "PostToolUse": {

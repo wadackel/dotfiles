@@ -178,60 +178,56 @@ export function formatToolError(
 }
 
 // --- Transition builders (composable Op[] producers) ---
+//
+// Builders are sized to the actual common-core observed in claude / codex /
+// opencode eventToOps output (the Phase B.1 fixtures define the exact byte
+// shape each builder must reproduce). selfHealOps stays per-writer (agent-
+// name string is the only diff). PostToolUse-style "finish" ops are NOT
+// shared because the agent-specific orderings diverge: codex inserts
+// @pane_current_tool_use_id between current_tool and current_tool_subject,
+// and orders @pane_last_edit_file BEFORE @pane_last_tool_error, while claude
+// orders them in the opposite direction. A single builder that encodes both
+// orderings is more parameter overhead than savings; each writer composes
+// PostToolUse locally.
 
 // `unsetOps(keys)` is the building block for full teardown / partial drain
-// patterns (e.g. unsetOps(ALL_PANE_OPTIONS_FOR_CLAUDE) on SessionEnd).
+// patterns (e.g. `unsetOps(ALL_PANE_OPTIONS_FOR_CLAUDE)` on SessionEnd or
+// `unsetOps(STALE_AT_SESSION_START)` on SessionStart).
 export function unsetOps(keys: readonly string[]): Op[] {
   return keys.map((key) => ({ kind: "unset" as const, key }));
 }
 
-export interface SessionStartArgs {
-  agent: string;
-  sessionId: string;
-  startedAt: string; // unix seconds as string
-  cwd?: string;
-}
-
-// Common SessionStart core: writes agent / session_id / status=idle /
-// started_at / last_activity_at, plus cwd when provided. Agent-specific
-// stale-state cleanup (claude STALE_AT_SESSION_START, codex resume-path
-// CLAUDE_ONLY_KEYS / RESUME_TRANSIENT_KEYS unsets) stays in the writer.
-// last_activity_at is seeded equal to started_at — every current writer's
-// SessionStart path does this; the override knob was speculative.
-export function sessionStartOps(args: SessionStartArgs): Op[] {
-  const ops: Op[] = [
-    { kind: "set", key: "@pane_agent", value: args.agent },
-    { kind: "set", key: "@pane_session_id", value: args.sessionId },
-    { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_started_at", value: args.startedAt },
-    { kind: "set", key: "@pane_last_activity_at", value: args.startedAt },
-  ];
-  if (args.cwd) {
-    ops.push({ kind: "set", key: "@pane_cwd", value: args.cwd });
-  }
-  return ops;
-}
-
-export interface PromptArgs {
-  prompt: string; // pre-masked (caller calls maskPrompt)
+export interface SessionStartBodyArgs {
+  staleKeys: readonly string[]; // writer-specific: STALE_AT_SESSION_START
   nowSec: string;
 }
 
-// UserPromptSubmit / chat.message common core: status=running, started_at,
-// last_activity_at, and prompt set/unset. Caller adds agent-specific Op
-// (e.g. claude's `unset @pane_main_stopped`) separately.
-export function promptOps(args: PromptArgs): Op[] {
-  const ops: Op[] = [
+// SessionStart common body (without selfHealOps prefix): unsets the writer's
+// stale-key list, then sets @pane_status=idle and seeds @pane_last_activity_at.
+// claude/codex SessionStart matches this shape exactly; opencode's
+// session.created uses promptStartTrio + status="idle" instead.
+export function sessionStartBody(args: SessionStartBodyArgs): Op[] {
+  return [
+    ...unsetOps(args.staleKeys),
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: args.nowSec },
+  ];
+}
+
+export interface PromptStartTrioArgs {
+  nowSec: string;
+}
+
+// UserPromptSubmit / chat.message common ts trio: status=running +
+// started_at + last_activity_at. Caller adds prompt set/unset and any
+// agent-specific extras (e.g. claude's `unset @pane_main_stopped`) AFTER
+// the trio, in the order the writer's existing fixture asserts.
+export function promptStartTrio(args: PromptStartTrioArgs): Op[] {
+  return [
     { kind: "set", key: "@pane_status", value: "running" },
     { kind: "set", key: "@pane_started_at", value: args.nowSec },
     { kind: "set", key: "@pane_last_activity_at", value: args.nowSec },
   ];
-  if (args.prompt) {
-    ops.push({ kind: "set", key: "@pane_prompt", value: args.prompt });
-  } else {
-    ops.push({ kind: "unset", key: "@pane_prompt" });
-  }
-  return ops;
 }
 
 export interface ToolStartArgs {
@@ -254,44 +250,6 @@ export function toolStartOps(args: ToolStartArgs): Op[] {
     });
   } else {
     ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
-  }
-  return ops;
-}
-
-export interface ToolFinishArgs {
-  tool: string;
-  subject?: string;
-  error?: string;
-  nowSec: string;
-}
-
-// PostToolUse / tool.execute.after common core: bump last_activity_at,
-// promote current_tool→last_tool, propagate subject, set/unset error.
-// opencode's variant guards `current_tool` clearing on tool match — that
-// guard stays in the opencode-local call site.
-export function toolFinishOps(args: ToolFinishArgs): Op[] {
-  const ops: Op[] = [
-    { kind: "set", key: "@pane_last_activity_at", value: args.nowSec },
-    { kind: "unset", key: "@pane_current_tool" },
-    { kind: "set", key: "@pane_last_tool", value: args.tool },
-  ];
-  if (args.subject) {
-    ops.push({
-      kind: "set",
-      key: "@pane_last_tool_subject",
-      value: args.subject,
-    });
-  } else {
-    ops.push({ kind: "unset", key: "@pane_last_tool_subject" });
-  }
-  if (args.error) {
-    ops.push({
-      kind: "set",
-      key: "@pane_last_tool_error",
-      value: args.error,
-    });
-  } else {
-    ops.push({ kind: "unset", key: "@pane_last_tool_error" });
   }
   return ops;
 }

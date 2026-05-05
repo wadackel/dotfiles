@@ -7,12 +7,11 @@ import {
   formatToolError,
   maskPrompt,
   type Op,
-  promptOps,
+  promptStartTrio,
   PROMPT_MAX_CHARS,
-  sessionStartOps,
+  sessionStartBody,
   TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
-  toolFinishOps,
   toolStartOps,
   truncate,
   unsetOps,
@@ -195,55 +194,38 @@ Deno.test("unsetOps: produces { kind: 'unset', key } per input key", () => {
   ]);
 });
 
-// --- sessionStartOps ---
+// --- sessionStartBody ---
 
-Deno.test("sessionStartOps: minimal args (no cwd, default nowSec=startedAt)", () => {
-  const ops = sessionStartOps({
-    agent: "claude",
-    sessionId: "sid-1",
-    startedAt: "1700000000",
-  });
+Deno.test("sessionStartBody: empty staleKeys → status idle + last_activity only", () => {
+  const ops = sessionStartBody({ staleKeys: [], nowSec: "1700000000" });
   assertEquals(ops, [
-    { kind: "set", key: "@pane_agent", value: "claude" },
-    { kind: "set", key: "@pane_session_id", value: "sid-1" },
     { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_started_at", value: "1700000000" },
     { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
   ] satisfies Op[]);
 });
 
-Deno.test("sessionStartOps: with cwd appended", () => {
-  const ops = sessionStartOps({
-    agent: "codex",
-    sessionId: "sid-2",
-    startedAt: "1700000000",
-    cwd: "/repo",
+Deno.test("sessionStartBody: staleKeys produce unsets in order", () => {
+  const ops = sessionStartBody({
+    staleKeys: ["@pane_started_at", "@pane_prompt"],
+    nowSec: "1700000123",
   });
   assertEquals(ops, [
-    { kind: "set", key: "@pane_agent", value: "codex" },
-    { kind: "set", key: "@pane_session_id", value: "sid-2" },
+    { kind: "unset", key: "@pane_started_at" },
+    { kind: "unset", key: "@pane_prompt" },
     { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_started_at", value: "1700000000" },
-    { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
-    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_last_activity_at", value: "1700000123" },
   ] satisfies Op[]);
 });
 
-// --- promptOps ---
+// --- promptStartTrio ---
 
-Deno.test("promptOps: with prompt sets @pane_prompt", () => {
-  const ops = promptOps({ prompt: "hi", nowSec: "1700000000" });
+Deno.test("promptStartTrio: emits status=running + started_at + last_activity_at", () => {
+  const ops = promptStartTrio({ nowSec: "1700000000" });
   assertEquals(ops, [
     { kind: "set", key: "@pane_status", value: "running" },
     { kind: "set", key: "@pane_started_at", value: "1700000000" },
     { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
-    { kind: "set", key: "@pane_prompt", value: "hi" },
   ] satisfies Op[]);
-});
-
-Deno.test("promptOps: empty prompt unsets @pane_prompt", () => {
-  const ops = promptOps({ prompt: "", nowSec: "1700000000" });
-  assertEquals(ops[3], { kind: "unset", key: "@pane_prompt" });
 });
 
 // --- toolStartOps ---
@@ -262,46 +244,11 @@ Deno.test("toolStartOps: without subject unsets @pane_current_tool_subject", () 
   ] satisfies Op[]);
 });
 
-// --- toolFinishOps ---
-
-Deno.test("toolFinishOps: success path (subject, no error)", () => {
-  assertEquals(
-    toolFinishOps({ tool: "Bash", subject: "ls", nowSec: "1700000123" }),
-    [
-      { kind: "set", key: "@pane_last_activity_at", value: "1700000123" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "set", key: "@pane_last_tool", value: "Bash" },
-      { kind: "set", key: "@pane_last_tool_subject", value: "ls" },
-      { kind: "unset", key: "@pane_last_tool_error" },
-    ] satisfies Op[],
-  );
-});
-
-Deno.test("toolFinishOps: error path (sets @pane_last_tool_error)", () => {
-  const ops = toolFinishOps({
-    tool: "Bash",
-    error: "command not found",
-    nowSec: "1700000123",
-  });
-  // subject unset (caller passed undefined) + error set
-  assertEquals(ops[3], { kind: "unset", key: "@pane_last_tool_subject" });
-  assertEquals(ops[4], {
-    kind: "set",
-    key: "@pane_last_tool_error",
-    value: "command not found",
-  });
-});
-
-Deno.test("toolFinishOps: no subject + no error → both unset", () => {
-  const ops = toolFinishOps({ tool: "Bash", nowSec: "1700000123" });
-  assertEquals(ops, [
-    { kind: "set", key: "@pane_last_activity_at", value: "1700000123" },
-    { kind: "unset", key: "@pane_current_tool" },
-    { kind: "set", key: "@pane_last_tool", value: "Bash" },
-    { kind: "unset", key: "@pane_last_tool_subject" },
-    { kind: "unset", key: "@pane_last_tool_error" },
-  ] satisfies Op[]);
-});
+// PostToolUse-style "finish" ops are not provided as a single shared
+// builder — claude/codex/opencode order @pane_last_edit_file vs
+// @pane_last_tool_error differently and codex injects
+// @pane_current_tool_use_id. Each writer composes locally; the
+// commonality is captured in the per-writer Phase B.1 fixtures.
 
 // --- Web-standard API guard (smoke check) ---
 

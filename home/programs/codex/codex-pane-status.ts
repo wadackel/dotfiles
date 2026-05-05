@@ -9,8 +9,12 @@ import {
   CLAUDE_ONLY_KEYS as SHARED_CLAUDE_ONLY_KEYS,
   type Op,
   PROMPT_MAX_CHARS,
+  promptStartTrio,
+  sessionStartBody,
   TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
+  toolStartOps,
+  unsetOps as sharedUnsetOps,
 } from "./pane-shared.ts";
 
 // Re-export for legacy test imports + downstream consumers.
@@ -213,9 +217,9 @@ function nowSec(): string {
   return String(Math.floor(Date.now() / 1000));
 }
 
-function unsetOps(keys: readonly string[]): Op[] {
-  return keys.map((key) => ({ kind: "unset" as const, key }));
-}
+// Local alias so the existing call sites read naturally; delegates to the
+// shared partial-drain primitive.
+const unsetOps = sharedUnsetOps;
 
 export async function eventToOps(
   event: string,
@@ -229,27 +233,19 @@ export async function eventToOps(
       const source = str(data.source);
       const sameCodexSession = state.agent === "codex" &&
         state.sessionId === str(data.session_id);
-      if (source === "resume" && sameCodexSession) {
-        body.push(...unsetOps(CLAUDE_ONLY_KEYS));
-        body.push(...unsetOps(RESUME_TRANSIENT_KEYS));
-      } else {
-        body.push(...unsetOps(STALE_AT_SESSION_START));
-      }
-      body.push({ kind: "set", key: "@pane_status", value: "idle" });
-      body.push({
-        kind: "set",
-        key: "@pane_last_activity_at",
-        value: nowSec(),
-      });
+      // Resume path drops claude-attributed + transient state; fresh path
+      // drops the full STALE list. Both paths share the status=idle +
+      // last_activity_at tail via sessionStartBody.
+      const staleKeys = (source === "resume" && sameCodexSession)
+        ? [...CLAUDE_ONLY_KEYS, ...RESUME_TRANSIENT_KEYS]
+        : STALE_AT_SESSION_START;
+      body.push(...sessionStartBody({ staleKeys, nowSec: nowSec() }));
       break;
     }
 
     case "UserPromptSubmit": {
       const prompt = maskPrompt(data.prompt);
-      const now = nowSec();
-      body.push({ kind: "set", key: "@pane_status", value: "running" });
-      body.push({ kind: "set", key: "@pane_started_at", value: now });
-      body.push({ kind: "set", key: "@pane_last_activity_at", value: now });
+      body.push(...promptStartTrio({ nowSec: nowSec() }));
       body.push(
         prompt
           ? { kind: "set", key: "@pane_prompt", value: prompt }
@@ -263,11 +259,8 @@ export async function eventToOps(
       if (!toolName) return [];
       const subject = extractToolSubject(toolName, data.tool_input);
       body.push(...resumeOpsIfStuck(state));
-      body.push({ kind: "set", key: "@pane_current_tool", value: toolName });
       body.push(
-        subject
-          ? { kind: "set", key: "@pane_current_tool_subject", value: subject }
-          : { kind: "unset", key: "@pane_current_tool_subject" },
+        ...toolStartOps({ tool: toolName, subject: subject || undefined }),
       );
       const toolUseId = str(data.tool_use_id);
       if (toolUseId) {

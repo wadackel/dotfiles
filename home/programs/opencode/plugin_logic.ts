@@ -7,8 +7,10 @@ import {
   ALL_PANE_OPTIONS_FOR_OPENCODE,
   maskPrompt,
   type Op,
+  promptStartTrio,
   TOOL_SUBJECT_MAX_CHARS,
   truncate,
+  unsetOps,
 } from "./pane-shared.ts";
 
 // Re-export for legacy test imports.
@@ -100,7 +102,7 @@ export function eventToOps(
 ): Op[] {
   // Drain on session.deleted regardless of state.
   if (event === "session.deleted") {
-    return ALL_PANE_OPTIONS.map((key) => ({ kind: "unset" as const, key }));
+    return unsetOps(ALL_PANE_OPTIONS);
   }
 
   const body: Op[] = (() => {
@@ -162,11 +164,8 @@ export function eventToOps(
           : "";
         const promptText = str(data.prompt) || str(partsText) ||
           str(message?.content);
-        const now = String(Math.floor(Date.now() / 1000));
         const ops: Op[] = [
-          { kind: "set", key: "@pane_status", value: "running" },
-          { kind: "set", key: "@pane_started_at", value: now },
-          { kind: "set", key: "@pane_last_activity_at", value: now },
+          ...promptStartTrio({ nowSec: String(Math.floor(Date.now() / 1000)) }),
         ];
         const masked = maskPrompt(promptText);
         if (masked) {
