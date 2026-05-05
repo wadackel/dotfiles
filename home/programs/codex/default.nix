@@ -45,6 +45,8 @@ in
 {
   home.packages = [ pkgs.codex ];
 
+  home.file.".codex/AGENTS.md".text = "@${config.home.homeDirectory}/.codex/RTK.md\n";
+  home.file.".codex/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".codex/hooks.json".source = ./hooks.json;
   # codex-pane-status.ts は同階層の `./agent-presence.ts` を import する。
   # Deno は relative import を URL ベースで解決し symlink の realpath を辿らない

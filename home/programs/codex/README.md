@@ -19,12 +19,16 @@ used in this dotfiles repo.
   first with a fast heuristic placeholder and then with a best-effort Gemini
   refinement when it completes within the hook budget. Debug with
   `~/.codex/logs/codex-memo.log`.
+- RTK instructions: `~/.codex/AGENTS.md` includes `~/.codex/RTK.md`, matching
+  `rtk init -g --codex`. Codex does not get Claude's transparent Bash rewrite;
+  instead, persistent instructions tell it to prefix shell commands with `rtk`.
 
 ## Deferred parity
 
 - Bash policy blocking: needs empirical confirmation that Codex hook output can
   reliably block tool execution in the same way Claude `PreToolUse` can.
-- RTK command rewrite: needs a Codex equivalent to Claude's `updatedInput` hook
-  output before it can be ported safely.
+- RTK transparent command rewrite: needs a Codex equivalent to Claude's
+  `updatedInput` hook output before it can be ported safely. Current Codex
+  hooks parse `updatedInput` but do not support applying it.
 - Plan gate: Codex edit/apply-patch hook coverage must be verified before
   enforcing a cwd marker gate.
