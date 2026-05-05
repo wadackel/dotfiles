@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
 import {
   ALL_PANE_OPTIONS_FOR_CLAUDE,
   ALL_PANE_OPTIONS_FOR_CODEX,
@@ -7,8 +7,9 @@ import {
   formatToolError,
   maskPrompt,
   type Op,
-  promptStartTrio,
   PROMPT_MAX_CHARS,
+  promptStartTrio,
+  SESSION_ID_RE,
   sessionStartBody,
   TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
@@ -198,10 +199,13 @@ Deno.test("unsetOps: produces { kind: 'unset', key } per input key", () => {
 
 Deno.test("sessionStartBody: empty staleKeys → status idle + last_activity only", () => {
   const ops = sessionStartBody({ staleKeys: [], nowSec: "1700000000" });
-  assertEquals(ops, [
-    { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
-  ] satisfies Op[]);
+  assertEquals(
+    ops,
+    [
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
+    ] satisfies Op[],
+  );
 });
 
 Deno.test("sessionStartBody: staleKeys produce unsets in order", () => {
@@ -209,39 +213,51 @@ Deno.test("sessionStartBody: staleKeys produce unsets in order", () => {
     staleKeys: ["@pane_started_at", "@pane_prompt"],
     nowSec: "1700000123",
   });
-  assertEquals(ops, [
-    { kind: "unset", key: "@pane_started_at" },
-    { kind: "unset", key: "@pane_prompt" },
-    { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_last_activity_at", value: "1700000123" },
-  ] satisfies Op[]);
+  assertEquals(
+    ops,
+    [
+      { kind: "unset", key: "@pane_started_at" },
+      { kind: "unset", key: "@pane_prompt" },
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "1700000123" },
+    ] satisfies Op[],
+  );
 });
 
 // --- promptStartTrio ---
 
 Deno.test("promptStartTrio: emits status=running + started_at + last_activity_at", () => {
   const ops = promptStartTrio({ nowSec: "1700000000" });
-  assertEquals(ops, [
-    { kind: "set", key: "@pane_status", value: "running" },
-    { kind: "set", key: "@pane_started_at", value: "1700000000" },
-    { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
-  ] satisfies Op[]);
+  assertEquals(
+    ops,
+    [
+      { kind: "set", key: "@pane_status", value: "running" },
+      { kind: "set", key: "@pane_started_at", value: "1700000000" },
+      { kind: "set", key: "@pane_last_activity_at", value: "1700000000" },
+    ] satisfies Op[],
+  );
 });
 
 // --- toolStartOps ---
 
 Deno.test("toolStartOps: with subject", () => {
-  assertEquals(toolStartOps({ tool: "Bash", subject: "ls -la" }), [
-    { kind: "set", key: "@pane_current_tool", value: "Bash" },
-    { kind: "set", key: "@pane_current_tool_subject", value: "ls -la" },
-  ] satisfies Op[]);
+  assertEquals(
+    toolStartOps({ tool: "Bash", subject: "ls -la" }),
+    [
+      { kind: "set", key: "@pane_current_tool", value: "Bash" },
+      { kind: "set", key: "@pane_current_tool_subject", value: "ls -la" },
+    ] satisfies Op[],
+  );
 });
 
 Deno.test("toolStartOps: without subject unsets @pane_current_tool_subject", () => {
-  assertEquals(toolStartOps({ tool: "Read" }), [
-    { kind: "set", key: "@pane_current_tool", value: "Read" },
-    { kind: "unset", key: "@pane_current_tool_subject" },
-  ] satisfies Op[]);
+  assertEquals(
+    toolStartOps({ tool: "Read" }),
+    [
+      { kind: "set", key: "@pane_current_tool", value: "Read" },
+      { kind: "unset", key: "@pane_current_tool_subject" },
+    ] satisfies Op[],
+  );
 });
 
 // PostToolUse-style "finish" ops are not provided as a single shared
@@ -249,6 +265,43 @@ Deno.test("toolStartOps: without subject unsets @pane_current_tool_subject", () 
 // @pane_last_tool_error differently and codex injects
 // @pane_current_tool_use_id. Each writer composes locally; the
 // commonality is captured in the per-writer Phase B.1 fixtures.
+
+// --- SESSION_ID_RE boundary cases ---
+
+Deno.test("SESSION_ID_RE: empty string rejected", () => {
+  assertFalse(SESSION_ID_RE.test(""));
+});
+
+Deno.test("SESSION_ID_RE: 1-char alphanumeric accepted", () => {
+  assert(SESSION_ID_RE.test("a"));
+  assert(SESSION_ID_RE.test("A"));
+  assert(SESSION_ID_RE.test("0"));
+});
+
+Deno.test("SESSION_ID_RE: 128-char accepted (boundary)", () => {
+  assert(SESSION_ID_RE.test("a".repeat(128)));
+});
+
+Deno.test("SESSION_ID_RE: 129-char rejected (over boundary)", () => {
+  assertFalse(SESSION_ID_RE.test("a".repeat(129)));
+});
+
+Deno.test("SESSION_ID_RE: hyphen and underscore accepted", () => {
+  assert(SESSION_ID_RE.test("550e8400-e29b-41d4-a716-446655440000"));
+  assert(SESSION_ID_RE.test("sess_001"));
+});
+
+Deno.test("SESSION_ID_RE: path-traversal patterns rejected", () => {
+  assertFalse(SESSION_ID_RE.test(".."));
+  assertFalse(SESSION_ID_RE.test("../bad"));
+  assertFalse(SESSION_ID_RE.test("/etc/passwd"));
+});
+
+Deno.test("SESSION_ID_RE: special characters rejected", () => {
+  assertFalse(SESSION_ID_RE.test("sess:001")); // colon
+  assertFalse(SESSION_ID_RE.test("sess id")); // space
+  assertFalse(SESSION_ID_RE.test("sess.001")); // dot
+});
 
 // --- Web-standard API guard (smoke check) ---
 

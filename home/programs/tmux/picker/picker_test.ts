@@ -123,6 +123,51 @@ Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
   assertEquals(parseRow(line)?.contextUsedPct, 75);
 });
 
+Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to space", () => {
+  // Adversarial input: attacker-controlled cwd / branch / prompt embed ESC, BEL,
+  // NUL bytes. parseRow must replace each with a space so Ink rendering cannot
+  // execute terminal escape sequences. `\x1b` `\x07` `\x00` differ from `\x1f`
+  // (US, field separator), so the 21-field structure survives.
+  const fields = [
+    "%9", // 0 paneId
+    "0:0.0", // 1 target
+    "node", // 2 currentCommand
+    "/tmp/\x1b]0;pwn\x07/dir", // 3 currentPath — ESC + BEL escape sequence
+    "claude", // 4 agent
+    "running", // 5 status
+    "1700000000", // 6 startedAt
+    "/repo/\x1b[2Jproject", // 7 cwd — ESC + screen-clear
+    "feat\x07branch", // 8 worktreeBranch — BEL
+    "Type:id\x00x", // 9 subagents — NUL
+    "hi\x1b[Aworld", // 10 prompt
+    "stuck\x07", // 11 waitReason
+    "Bash\x00", // 12 currentTool
+    "sid-001", // 13 sessionId
+    "Edit", // 14 lastTool
+    "/path/to/\x1b[2Kfile.ts", // 15 lastEditFile
+    "1700000010", // 16 lastActivityAt
+    "subj\x1b[A", // 17 currentToolSubject
+    "lasts\x07", // 18 lastToolSubject
+    "err\x00msg", // 19 lastToolError
+    "10", // 20 contextUsedPct
+  ];
+  const row = parseRow(fields.join("\x1f"));
+  // All ESC / BEL / NUL bytes replaced with " ". \x1f is excluded from the
+  // strip set (it is the separator) but never appears within field values
+  // because split() consumed it.
+  assertEquals(row?.currentPath, "/tmp/ ]0;pwn /dir");
+  assertEquals(row?.cwd, "/repo/ [2Jproject");
+  assertEquals(row?.worktreeBranch, "feat branch");
+  assertEquals(row?.subagents, "Type:id x");
+  assertEquals(row?.prompt, "hi [Aworld");
+  assertEquals(row?.waitReason, "stuck ");
+  assertEquals(row?.currentTool, "Bash ");
+  assertEquals(row?.lastEditFile, "/path/to/ [2Kfile.ts");
+  assertEquals(row?.currentToolSubject, "subj [A");
+  assertEquals(row?.lastToolSubject, "lasts ");
+  assertEquals(row?.lastToolError, "err msg");
+});
+
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);

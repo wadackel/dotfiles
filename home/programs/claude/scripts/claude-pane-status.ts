@@ -9,28 +9,22 @@
 // results per op). Log I/O errors are swallowed — hook must never break the
 // session when the log destination is unavailable.
 
-import {
-  isEmbedded,
-  parsePsLine,
-  type PsRow,
-} from "./agent-presence.ts";
+import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CLAUDE,
+  formatToolError,
   maskPrompt,
   type Op,
+  type PaneOptionKey,
   PROMPT_MAX_CHARS,
   promptStartTrio,
+  SESSION_ID_RE,
   sessionStartBody,
-  TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
   toolStartOps,
   truncate,
   unsetOps,
 } from "./pane-shared.ts";
-
-// Re-export for legacy test imports + downstream consumers. The canonical
-// definition lives in pane-shared.ts.
-export { maskPrompt, type Op };
 
 // --- Types ---
 
@@ -84,13 +78,16 @@ const STALE_AT_SESSION_START = [
   "@pane_last_tool_error",
   "@pane_main_stopped",
   "@pane_context_used_pct",
-] as const;
+] as const satisfies readonly PaneOptionKey[];
 
 // Per-tool subject extractors. Edit/Write/MultiEdit are intentionally absent:
 // they fall through to the "unknown tool" default (empty string), which lets
 // the existing @pane_last_edit_file + `file` segment continue to render the
 // Edit target instead of duplicating it here.
-const SUBJECT_EXTRACTORS: Record<string, (ti: Record<string, unknown>) => string> = {
+const SUBJECT_EXTRACTORS: Record<
+  string,
+  (ti: Record<string, unknown>) => string
+> = {
   Bash: (ti) => str(ti.command),
   Read: (ti) => str(ti.file_path).split("/").pop() ?? "",
   Grep: (ti) => str(ti.pattern),
@@ -138,7 +135,10 @@ export function extractToolSubject(
 // live at the tool_result content-block level, not in tool_response itself.
 export function extractToolError(toolResponse: unknown): string {
   if (typeof toolResponse === "string" && toolResponse.length > 0) {
-    return truncate(toolResponse.replace(/^Error:\s*/, ""), TOOL_ERROR_MAX_CHARS);
+    // formatToolError strips a leading "Error: " prefix and truncates to
+    // TOOL_ERROR_MAX_CHARS with the default `…` ellipsis — same shape as the
+    // prior inline `truncate(replace(...), TOOL_ERROR_MAX_CHARS)`.
+    return formatToolError(toolResponse);
   }
   if (
     toolResponse &&
@@ -146,7 +146,11 @@ export function extractToolError(toolResponse: unknown): string {
     !Array.isArray(toolResponse)
   ) {
     const tr = toolResponse as Record<string, unknown>;
-    if (tr.interrupted === true) return truncate("interrupted", TOOL_ERROR_MAX_CHARS);
+    if (tr.interrupted === true) {
+      // No "Error:" prefix to strip on this synthetic value, but routing
+      // through formatToolError keeps both branches on the same SSOT helper.
+      return formatToolError("interrupted");
+    }
   }
   return "";
 }
@@ -228,6 +232,11 @@ export function resumeOpsIfStuck(state: PaneState): Op[] {
 export function selfHealOps(data: HookData): Op[] {
   const sid = str(data.session_id);
   if (!sid) return [];
+  // Defense-in-depth: drop the entire event if session_id is outside the
+  // SESSION_ID_RE allowlist (path-traversal class). picker re-validates the
+  // same regex at its boundary, so this hard-fails malformed events at the
+  // writer too rather than relying on a single consumer.
+  if (!SESSION_ID_RE.test(sid)) return [];
   const ops: Op[] = [
     { kind: "set", key: "@pane_agent", value: "claude" },
     { kind: "set", key: "@pane_session_id", value: sid },
@@ -516,7 +525,10 @@ export function eventToOps(
         } else {
           ops.push({ kind: "unset", key: "@pane_last_tool_subject" });
         }
-        const errorText = truncate(str(data.error), TOOL_ERROR_MAX_CHARS);
+        // PostToolUseFailure carries `error` as a raw string; formatToolError
+        // is a no-op on the prefix strip when no "Error: " prefix is present
+        // and yields the same truncated form as the prior inline call.
+        const errorText = formatToolError(str(data.error));
         if (errorText) {
           ops.push({
             kind: "set",

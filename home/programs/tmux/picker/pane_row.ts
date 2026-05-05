@@ -99,6 +99,22 @@ function normalizeStatus(raw: string): PaneStatus {
   return Object.hasOwn(STATUS_META, raw) ? (raw as PaneStatus) : "";
 }
 
+// Reader-side ANSI / control-byte choke point. Defense-in-depth against an
+// attacker-controlled directory / branch / path leaking ESC sequences into
+// `tmux list-panes -F` output (e.g. `/tmp/$'\x1b]0;pwn\x07'`). Writer-side
+// sanitization stays trustless — every text field that flows from the kernel
+// or `@pane_*` value into Ink rendering passes through here.
+//
+// `\x1f` (US, field separator) is intentionally out of scope: it is excluded
+// from the strip set so injecting it into a value would still desync the
+// 21-field layout (parseRow returns null on `fields.length < 21`).
+// deno-lint-ignore no-control-regex
+const CONTROL_BYTE_RE = /[\x00-\x1e\x7f]/g;
+
+function stripControlBytes(raw: string): string {
+  return raw.replace(CONTROL_BYTE_RE, " ");
+}
+
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
 // Returns null when the line is malformed (< 21 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
@@ -129,26 +145,26 @@ export function parseRow(line: string): PaneRow | null {
   ] = fields;
   if (!paneId) return null;
   return {
-    paneId,
-    target,
-    currentCommand,
-    currentPath,
-    agent,
+    paneId: stripControlBytes(paneId),
+    target: stripControlBytes(target),
+    currentCommand: stripControlBytes(currentCommand),
+    currentPath: stripControlBytes(currentPath),
+    agent: stripControlBytes(agent),
     status: normalizeStatus(status),
     startedAtSec: parseIntOrNull(startedAt),
-    cwd,
-    worktreeBranch,
-    subagents,
-    prompt,
-    waitReason,
-    currentTool,
-    sessionId,
-    lastTool,
-    lastEditFile,
+    cwd: stripControlBytes(cwd),
+    worktreeBranch: stripControlBytes(worktreeBranch),
+    subagents: stripControlBytes(subagents),
+    prompt: stripControlBytes(prompt),
+    waitReason: stripControlBytes(waitReason),
+    currentTool: stripControlBytes(currentTool),
+    sessionId: stripControlBytes(sessionId),
+    lastTool: stripControlBytes(lastTool),
+    lastEditFile: stripControlBytes(lastEditFile),
     lastActivityAtSec: parseIntOrNull(lastActivityAt),
-    currentToolSubject,
-    lastToolSubject,
-    lastToolError,
+    currentToolSubject: stripControlBytes(currentToolSubject),
+    lastToolSubject: stripControlBytes(lastToolSubject),
+    lastToolError: stripControlBytes(lastToolError),
     contextUsedPct: parseIntOrNull(contextUsedPct),
   };
 }

@@ -7,18 +7,18 @@ import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CODEX,
   CLAUDE_ONLY_KEYS,
+  formatToolError,
+  maskPrompt,
   type Op,
-  PROMPT_MAX_CHARS,
+  type PaneOptionKey,
   promptStartTrio,
+  SESSION_ID_RE,
   sessionStartBody,
-  TOOL_ERROR_MAX_CHARS,
   TOOL_SUBJECT_MAX_CHARS,
   toolStartOps,
+  truncate,
   unsetOps as sharedUnsetOps,
 } from "./pane-shared.ts";
-
-// Re-export for legacy test imports + downstream consumers.
-export { type Op };
 
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;
@@ -46,13 +46,17 @@ export const RESUME_TRANSIENT_KEYS = [
   "@pane_current_tool",
   "@pane_current_tool_use_id",
   "@pane_wait_reason",
-] as const;
+] as const satisfies readonly PaneOptionKey[];
 
 // Derived (codex-shape) — diverges from claude's manually enumerated equivalent;
 // not unified into pane-shared.ts (Intentional Convention: per-writer local).
+// `.filter()` widens the readonly literal tuple back to a mutable string-element
+// array, so `as const` is unavailable here. The explicit `as readonly
+// PaneOptionKey[]` cast preserves the typo gate provided by the parent
+// constant's `satisfies readonly PaneOptionKey[]`.
 const STALE_AT_SESSION_START = ALL_PANE_OPTIONS_FOR_CODEX.filter((key) =>
   key !== "@pane_agent" && key !== "@pane_session_id" && key !== "@pane_cwd"
-);
+) as readonly PaneOptionKey[];
 
 const TOKEN_TAIL_BYTES = 64 * 1024;
 const LOG_MAX_LINES = 1000;
@@ -62,18 +66,6 @@ const LOG_FILE = `${
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
-}
-
-function truncate(raw: string, max: number): string {
-  const clean = stripControls(raw);
-  return clean.length > max ? clean.slice(0, max) + "..." : clean;
-}
-
-function stripControls(raw: string): string {
-  return Array.from(raw, (ch) => {
-    const code = ch.charCodeAt(0);
-    return code <= 0x1f || code === 0x7f ? " " : ch;
-  }).join("");
 }
 
 const SUBJECT_EXTRACTORS: Record<
@@ -107,7 +99,7 @@ export function extractToolSubject(
     const parts = toolName.split("__");
     if (parts.length >= 3) subject = `mcp: ${parts[1]}`;
   }
-  return subject ? truncate(subject, TOOL_SUBJECT_MAX_CHARS) : "";
+  return subject ? truncate(subject, TOOL_SUBJECT_MAX_CHARS, "...") : "";
 }
 
 export function extractEditFile(toolName: string, toolInput: unknown): string {
@@ -118,20 +110,21 @@ export function extractEditFile(toolName: string, toolInput: unknown): string {
     return "";
   }
   const filePath = (toolInput as Record<string, unknown>).file_path;
-  return typeof filePath === "string" ? stripControls(filePath) : "";
-}
-
-export function maskPrompt(raw: unknown): string {
-  if (typeof raw !== "string" || raw.length === 0) return "";
-  const flat = stripControls(raw).replace(/ {2,}/g, " ").trim();
-  return flat.length > PROMPT_MAX_CHARS
-    ? flat.slice(0, PROMPT_MAX_CHARS) + "..."
-    : flat;
+  // Strip C0/C1 control bytes — converges to the shared run-collapse behavior
+  // (see pane-shared.ts:138-141 "intentional behavior unification" comment).
+  // Adversarial inputs (embedded NUL/ESC) collapse runs to a single space
+  // instead of one-space-per-byte; non-adversarial inputs are indistinguishable.
+  return typeof filePath === "string"
+    // deno-lint-ignore no-control-regex
+    ? filePath.replace(/[\x00-\x1f\x7f]+/g, " ")
+    : "";
 }
 
 export function selfHealOps(data: HookData): Op[] {
   const sid = str(data.session_id);
   if (!sid) return [];
+  // Defense-in-depth path-traversal guard; mirrors claude/opencode + picker.
+  if (!SESSION_ID_RE.test(sid)) return [];
   const ops: Op[] = [
     { kind: "set", key: "@pane_agent", value: "codex" },
     { kind: "set", key: "@pane_session_id", value: sid },
@@ -152,7 +145,9 @@ export function resumeOpsIfStuck(state: PaneState): Op[] {
 export function extractToolError(toolResponse: unknown): string | null {
   if (typeof toolResponse !== "string") return null;
   if (!toolResponse.startsWith("Error")) return null;
-  return truncate(toolResponse.replace(/^Error:\s*/, ""), TOOL_ERROR_MAX_CHARS);
+  // codex preserves 3-dot ellipsis at this site; formatToolError handles the
+  // "Error: " prefix strip + truncate internally.
+  return formatToolError(toolResponse, { ellipsis: "..." });
 }
 
 function numberAt(obj: unknown, key: string): number | null {
@@ -240,7 +235,9 @@ export async function eventToOps(
     }
 
     case "UserPromptSubmit": {
-      const prompt = maskPrompt(data.prompt);
+      // codex preserves 3-dot ellipsis (`...`) — pane-shared default is `…`.
+      // See pane-shared.ts:131-132 for the documented intent.
+      const prompt = maskPrompt(data.prompt, { ellipsis: "..." });
       body.push(...promptStartTrio({ nowSec: nowSec() }));
       body.push(
         prompt

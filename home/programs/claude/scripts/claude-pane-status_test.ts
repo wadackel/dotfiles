@@ -10,14 +10,16 @@ import {
   extractToolError,
   extractToolSubject,
   formatElapsed,
-  maskPrompt,
-  type Op,
   type PaneState,
   removeSubagent,
   type RunContext,
   selfHealOps,
 } from "./claude-pane-status.ts";
-import { ALL_PANE_OPTIONS_FOR_CLAUDE as ALL_PANE_OPTIONS } from "./pane-shared.ts";
+import {
+  ALL_PANE_OPTIONS_FOR_CLAUDE as ALL_PANE_OPTIONS,
+  maskPrompt,
+  type Op,
+} from "./pane-shared.ts";
 
 // --- maskPrompt ---
 
@@ -591,7 +593,13 @@ Deno.test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", ()
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(toolOp?.kind, "unset");
@@ -603,10 +611,20 @@ Deno.test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when pa
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "ToolA" },
-    { subagents: "", pendingTeardown: false, currentTool: "ToolB", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "ToolB",
+      status: "",
+      mainStopped: false,
+    },
   );
   const currentOp = ops.find((o) => o.key === "@pane_current_tool");
-  assertEquals(currentOp, undefined, "current_tool must not be touched when a parallel tool is still running");
+  assertEquals(
+    currentOp,
+    undefined,
+    "current_tool must not be touched when a parallel tool is still running",
+  );
   const lastOp = ops.find((o) => o.key === "@pane_last_tool");
   assertEquals(lastOp?.kind === "set" ? lastOp.value : "", "ToolA");
 });
@@ -617,7 +635,13 @@ Deno.test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", ()
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -629,7 +653,13 @@ Deno.test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Edit" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -647,7 +677,13 @@ Deno.test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", (
   const postOps = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Edit" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
   assertEquals(postToolOp?.kind, "unset");
@@ -661,7 +697,13 @@ Deno.test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + sto
       tool_name: "Edit",
       tool_input: { file_path: "/x/y.ts" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
   assertEquals(currentUnset?.kind, "unset");
@@ -671,7 +713,10 @@ Deno.test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + sto
   assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/x/y.ts");
   const activity = ops.find((o) => o.key === "@pane_last_activity_at");
   assertEquals(activity?.kind, "set");
-  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+  assertEquals(
+    /^\d+$/.test(activity?.kind === "set" ? activity.value : ""),
+    true,
+  );
 });
 
 Deno.test("eventToOps: PostToolUse (Write) stores file_path", () => {
@@ -682,7 +727,13 @@ Deno.test("eventToOps: PostToolUse (Write) stores file_path", () => {
       tool_name: "Write",
       tool_input: { file_path: "/a/b/new.md" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Write", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Write",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/new.md");
@@ -696,7 +747,13 @@ Deno.test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
       tool_name: "MultiEdit",
       tool_input: { file_path: "/a/b/multi.ts" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "MultiEdit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "MultiEdit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind === "set" ? lastFile.value : "", "/a/b/multi.ts");
@@ -706,7 +763,13 @@ Deno.test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_fi
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash" },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastTool = ops.find((o) => o.key === "@pane_last_tool");
   assertEquals(lastTool?.kind === "set" ? lastTool.value : "", "Bash");
@@ -721,7 +784,13 @@ Deno.test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no 
   const ops = eventToOps(
     "PostToolUse",
     { session_id: "s1" },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   assertEquals(
     ops.filter((o) => o.key === "@pane_last_tool").length,
@@ -748,7 +817,13 @@ Deno.test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () =
       tool_name: "Edit",
       tool_input: { file_path: "/x/y\n.ts\twith\rctrl" },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(
@@ -765,7 +840,13 @@ Deno.test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_
       tool_name: "Edit",
       tool_input: { file_path: 42 },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
   assertEquals(lastFile?.kind, "unset");
@@ -779,7 +860,10 @@ Deno.test("eventToOps: UserPromptSubmit sets @pane_last_activity_at", () => {
   );
   const activity = ops.find((o) => o.key === "@pane_last_activity_at");
   assertEquals(activity?.kind, "set");
-  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+  assertEquals(
+    /^\d+$/.test(activity?.kind === "set" ? activity.value : ""),
+    true,
+  );
 });
 
 Deno.test("eventToOps: SessionStart sets @pane_last_activity_at (fresh-session idle seed)", () => {
@@ -792,7 +876,10 @@ Deno.test("eventToOps: SessionStart sets @pane_last_activity_at (fresh-session i
     o.kind === "set" && o.key === "@pane_last_activity_at"
   );
   assertEquals(activity?.kind, "set");
-  assertEquals(/^\d+$/.test(activity?.kind === "set" ? activity.value : ""), true);
+  assertEquals(
+    /^\d+$/.test(activity?.kind === "set" ? activity.value : ""),
+    true,
+  );
 });
 
 Deno.test("eventToOps: SessionStart clears new last_* options (stale-session cleanup)", () => {
@@ -886,7 +973,13 @@ Deno.test("eventToOps: SubagentStop drains pending teardown when list becomes em
   const ops = eventToOps(
     "SubagentStop",
     { session_id: "s1", agent_id: "a1" },
-    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "", status: "", mainStopped: false },
+    {
+      subagents: "Explore:a1",
+      pendingTeardown: true,
+      currentTool: "",
+      status: "",
+      mainStopped: false,
+    },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -947,6 +1040,14 @@ Deno.test("selfHealOps: without session_id returns empty", () => {
   assertEquals(selfHealOps({ cwd: "/tmp" }), []);
 });
 
+Deno.test("selfHealOps: invalid session_id (path traversal) drops event", () => {
+  // Defense-in-depth: writer-side SESSION_ID_RE assertion must reject
+  // non-allowlist ids (e.g. `../bad`). Picker re-validates the same regex.
+  assertEquals(selfHealOps({ session_id: "../bad", cwd: "/tmp" }), []);
+  assertEquals(selfHealOps({ session_id: "sess:001" }), []);
+  assertEquals(selfHealOps({ session_id: "a".repeat(129) }), []);
+});
+
 // --- eventToOps self-heal behavior ---
 
 Deno.test("eventToOps: UserPromptSubmit with session_id prefixes self-heal ops", () => {
@@ -993,7 +1094,13 @@ Deno.test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
   const ops = eventToOps(
     "SubagentStop",
     { session_id: "sess-5", agent_id: "a1" },
-    { subagents: "Explore:a1", pendingTeardown: true, currentTool: "", status: "", mainStopped: false },
+    {
+      subagents: "Explore:a1",
+      pendingTeardown: true,
+      currentTool: "",
+      status: "",
+      mainStopped: false,
+    },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -1019,9 +1126,12 @@ Deno.test("eventToOps: Stop with live subagents + session_id → self-heal + mai
 // --- resumeOpsIfStuck: waiting/error → running recovery on activity events ---
 // Each event × each status exercises the helper from a different call site.
 
-function hasResumeOps(ops: { kind: string; key: string; value?: string }[]): boolean {
+function hasResumeOps(
+  ops: { kind: string; key: string; value?: string }[],
+): boolean {
   const setRunning = ops.some(
-    (o) => o.kind === "set" && o.key === "@pane_status" &&
+    (o) =>
+      o.kind === "set" && o.key === "@pane_status" &&
       (o as { value: string }).value === "running",
   );
   const unsetReason = ops.some(
@@ -1333,7 +1443,11 @@ Deno.test("main_stopped: SubagentStop drains to empty with mainStopped=false →
     }),
   );
   const statusOp = ops.find((o) => o.key === "@pane_status");
-  assertEquals(statusOp, undefined, "status must not change without mainStopped");
+  assertEquals(
+    statusOp,
+    undefined,
+    "status must not change without mainStopped",
+  );
   const flagOp = ops.find((o) => o.key === "@pane_main_stopped");
   assertEquals(flagOp, undefined);
 });
@@ -1380,7 +1494,10 @@ Deno.test("main_stopped: ALL_PANE_OPTIONS includes @pane_main_stopped (drain com
 });
 
 Deno.test("context_used_pct: ALL_PANE_OPTIONS includes @pane_context_used_pct (drain completeness)", () => {
-  assertEquals(ALL_PANE_OPTIONS.includes("@pane_context_used_pct" as never), true);
+  assertEquals(
+    ALL_PANE_OPTIONS.includes("@pane_context_used_pct" as never),
+    true,
+  );
 });
 
 Deno.test("main_stopped: SubagentStop drain path (pendingTeardown=true + last subagent) still ALL_PANE_OPTIONS unset only", () => {
@@ -1474,7 +1591,10 @@ Deno.test("extractToolSubject: Read extracts basename from file_path", () => {
     extractToolSubject("Read", { file_path: "/a/b/c.md" }),
     "c.md",
   );
-  assertEquals(extractToolSubject("Read", { file_path: "plain.txt" }), "plain.txt");
+  assertEquals(
+    extractToolSubject("Read", { file_path: "plain.txt" }),
+    "plain.txt",
+  );
   assertEquals(extractToolSubject("Read", { file_path: "" }), "");
 });
 
@@ -1651,7 +1771,11 @@ Deno.test("extractToolSubject: strips control bytes (terminal-escape injection d
 Deno.test("eventToOps: PreToolUse (Bash) sets @pane_current_tool_subject", () => {
   const ops = eventToOps(
     "PreToolUse",
-    { session_id: "s1", tool_name: "Bash", tool_input: { command: "pnpm test" } },
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "pnpm test" },
+    },
     emptyState,
   );
   const subject = ops.find((o) => o.key === "@pane_current_tool_subject");
@@ -1693,7 +1817,13 @@ Deno.test("eventToOps: PostToolUse (Bash) sets last_tool_subject, unsets last_to
       tool_input: { command: "pnpm test" },
       tool_response: { stdout: "ok", stderr: "", interrupted: false },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
   assertEquals(subject?.kind === "set" ? subject.value : "", "pnpm test");
@@ -1710,7 +1840,13 @@ Deno.test("eventToOps: PostToolUse (Bash failure) sets last_tool_error from stri
       tool_input: { command: "false" },
       tool_response: "Error: Exit code 1",
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const error = ops.find((o) => o.key === "@pane_last_tool_error");
   assertEquals(error?.kind === "set" ? error.value : "", "Exit code 1");
@@ -1725,7 +1861,13 @@ Deno.test("eventToOps: PostToolUse (Edit-family) unsets last_tool_subject (deleg
       tool_input: { file_path: "/x/y.ts" },
       tool_response: { type: "update", filePath: "/x/y.ts", content: "..." },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
   assertEquals(subject?.kind, "unset");
@@ -1743,7 +1885,13 @@ Deno.test("eventToOps: PostToolUse matching current tool also unsets @pane_curre
       tool_input: { command: "echo ok" },
       tool_response: { stdout: "ok", stderr: "", interrupted: false },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Bash", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Bash",
+      status: "",
+      mainStopped: false,
+    },
   );
   const currentSubject = ops.find(
     (o) => o.key === "@pane_current_tool_subject",
@@ -1763,7 +1911,13 @@ Deno.test("eventToOps: PostToolUse NOT matching current tool leaves @pane_curren
       tool_input: { command: "echo ok" },
       tool_response: { stdout: "ok", stderr: "", interrupted: false },
     },
-    { subagents: "", pendingTeardown: false, currentTool: "Edit", status: "", mainStopped: false },
+    {
+      subagents: "",
+      pendingTeardown: false,
+      currentTool: "Edit",
+      status: "",
+      mainStopped: false,
+    },
   );
   const currentSubjectOps = ops.filter(
     (o) => o.key === "@pane_current_tool_subject",
@@ -1956,154 +2110,212 @@ const b1State: PaneState = {
 };
 
 Deno.test("Phase B.1 fixture: SessionStart with cwd", () => {
-  const ops = b1Normalize(eventToOps("SessionStart", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  const ops = b1Normalize(
+    eventToOps(
+      "SessionStart",
+      { session_id: "test-sid", cwd: "/repo" },
+      b1State,
+    ),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "unset", key: "@pane_started_at" },
-      { kind: "unset", key: "@pane_subagents" },
-      { kind: "unset", key: "@pane_pending_teardown" },
-      { kind: "unset", key: "@pane_worktree_branch" },
-      { kind: "unset", key: "@pane_worktree_path" },
-      { kind: "unset", key: "@pane_prompt" },
-      { kind: "unset", key: "@pane_wait_reason" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "unset", key: "@pane_last_tool" },
-      { kind: "unset", key: "@pane_last_edit_file" },
-      { kind: "unset", key: "@pane_last_activity_at" },
-      { kind: "unset", key: "@pane_current_tool_subject" },
-      { kind: "unset", key: "@pane_last_tool_subject" },
-      { kind: "unset", key: "@pane_last_tool_error" },
-      { kind: "unset", key: "@pane_main_stopped" },
-      { kind: "unset", key: "@pane_context_used_pct" },
-      { kind: "set", key: "@pane_status", value: "idle" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "unset", key: "@pane_started_at" },
+    { kind: "unset", key: "@pane_subagents" },
+    { kind: "unset", key: "@pane_pending_teardown" },
+    { kind: "unset", key: "@pane_worktree_branch" },
+    { kind: "unset", key: "@pane_worktree_path" },
+    { kind: "unset", key: "@pane_prompt" },
+    { kind: "unset", key: "@pane_wait_reason" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "unset", key: "@pane_last_tool" },
+    { kind: "unset", key: "@pane_last_edit_file" },
+    { kind: "unset", key: "@pane_last_activity_at" },
+    { kind: "unset", key: "@pane_current_tool_subject" },
+    { kind: "unset", key: "@pane_last_tool_subject" },
+    { kind: "unset", key: "@pane_last_tool_error" },
+    { kind: "unset", key: "@pane_main_stopped" },
+    { kind: "unset", key: "@pane_context_used_pct" },
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: UserPromptSubmit with prompt", () => {
-  const ops = b1Normalize(eventToOps("UserPromptSubmit", { session_id: "test-sid", cwd: "/repo", prompt: "do the thing" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("UserPromptSubmit", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      prompt: "do the thing",
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "running" },
-      { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-      { kind: "unset", key: "@pane_main_stopped" },
-      { kind: "set", key: "@pane_prompt", value: "do the thing" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    { kind: "unset", key: "@pane_main_stopped" },
+    { kind: "set", key: "@pane_prompt", value: "do the thing" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: PreToolUse Bash with subject", () => {
-  const ops = b1Normalize(eventToOps("PreToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "ls -la" } }, b1State));
+  const ops = b1Normalize(
+    eventToOps("PreToolUse", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "ls -la" },
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_current_tool", value: "Bash" },
-      { kind: "set", key: "@pane_current_tool_subject", value: "ls -la" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_current_tool", value: "Bash" },
+    { kind: "set", key: "@pane_current_tool_subject", value: "ls -la" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: PostToolUse Bash success", () => {
-  const ops = b1Normalize(eventToOps("PostToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "ls -la" }, tool_response: { stdout: "out", exit_code: 0 } }, { ...b1State, currentTool: "Bash" }));
+  const ops = b1Normalize(
+    eventToOps("PostToolUse", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "ls -la" },
+      tool_response: { stdout: "out", exit_code: 0 },
+    }, { ...b1State, currentTool: "Bash" }),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "unset", key: "@pane_current_tool_subject" },
-      { kind: "set", key: "@pane_last_tool", value: "Bash" },
-      { kind: "set", key: "@pane_last_tool_subject", value: "ls -la" },
-      { kind: "unset", key: "@pane_last_tool_error" },
-      { kind: "unset", key: "@pane_last_edit_file" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "unset", key: "@pane_current_tool_subject" },
+    { kind: "set", key: "@pane_last_tool", value: "Bash" },
+    { kind: "set", key: "@pane_last_tool_subject", value: "ls -la" },
+    { kind: "unset", key: "@pane_last_tool_error" },
+    { kind: "unset", key: "@pane_last_edit_file" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: PostToolUse Bash error", () => {
-  const ops = b1Normalize(eventToOps("PostToolUse", { session_id: "test-sid", cwd: "/repo", tool_name: "Bash", tool_input: { command: "false" }, tool_response: "Error: command failed" }, { ...b1State, currentTool: "Bash" }));
+  const ops = b1Normalize(
+    eventToOps("PostToolUse", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "false" },
+      tool_response: "Error: command failed",
+    }, { ...b1State, currentTool: "Bash" }),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "unset", key: "@pane_current_tool_subject" },
-      { kind: "set", key: "@pane_last_tool", value: "Bash" },
-      { kind: "set", key: "@pane_last_tool_subject", value: "false" },
-      { kind: "set", key: "@pane_last_tool_error", value: "command failed" },
-      { kind: "unset", key: "@pane_last_edit_file" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "unset", key: "@pane_current_tool_subject" },
+    { kind: "set", key: "@pane_last_tool", value: "Bash" },
+    { kind: "set", key: "@pane_last_tool_subject", value: "false" },
+    { kind: "set", key: "@pane_last_tool_error", value: "command failed" },
+    { kind: "unset", key: "@pane_last_edit_file" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: Stop with no subagents", () => {
-  const ops = b1Normalize(eventToOps("Stop", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("Stop", { session_id: "test-sid", cwd: "/repo" }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "idle" },
-      { kind: "unset", key: "@pane_main_stopped" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "unset", key: "@pane_main_stopped" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: SessionEnd drain", () => {
-  const ops = b1Normalize(eventToOps("SessionEnd", { session_id: "test-sid", cwd: "/repo" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("SessionEnd", { session_id: "test-sid", cwd: "/repo" }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "unset", key: "@pane_agent" },
-      { kind: "unset", key: "@pane_status" },
-      { kind: "unset", key: "@pane_session_id" },
-      { kind: "unset", key: "@pane_started_at" },
-      { kind: "unset", key: "@pane_cwd" },
-      { kind: "unset", key: "@pane_worktree_branch" },
-      { kind: "unset", key: "@pane_worktree_path" },
-      { kind: "unset", key: "@pane_subagents" },
-      { kind: "unset", key: "@pane_pending_teardown" },
-      { kind: "unset", key: "@pane_prompt" },
-      { kind: "unset", key: "@pane_wait_reason" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "unset", key: "@pane_last_tool" },
-      { kind: "unset", key: "@pane_last_edit_file" },
-      { kind: "unset", key: "@pane_last_activity_at" },
-      { kind: "unset", key: "@pane_current_tool_subject" },
-      { kind: "unset", key: "@pane_last_tool_subject" },
-      { kind: "unset", key: "@pane_last_tool_error" },
-      { kind: "unset", key: "@pane_main_stopped" },
-      { kind: "unset", key: "@pane_context_used_pct" },
-    ]);
+    { kind: "unset", key: "@pane_agent" },
+    { kind: "unset", key: "@pane_status" },
+    { kind: "unset", key: "@pane_session_id" },
+    { kind: "unset", key: "@pane_started_at" },
+    { kind: "unset", key: "@pane_cwd" },
+    { kind: "unset", key: "@pane_worktree_branch" },
+    { kind: "unset", key: "@pane_worktree_path" },
+    { kind: "unset", key: "@pane_subagents" },
+    { kind: "unset", key: "@pane_pending_teardown" },
+    { kind: "unset", key: "@pane_prompt" },
+    { kind: "unset", key: "@pane_wait_reason" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "unset", key: "@pane_last_tool" },
+    { kind: "unset", key: "@pane_last_edit_file" },
+    { kind: "unset", key: "@pane_last_activity_at" },
+    { kind: "unset", key: "@pane_current_tool_subject" },
+    { kind: "unset", key: "@pane_last_tool_subject" },
+    { kind: "unset", key: "@pane_last_tool_error" },
+    { kind: "unset", key: "@pane_main_stopped" },
+    { kind: "unset", key: "@pane_context_used_pct" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: Notification permission_prompt", () => {
-  const ops = b1Normalize(eventToOps("Notification", { session_id: "test-sid", cwd: "/repo", notification_type: "permission_prompt" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("Notification", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      notification_type: "permission_prompt",
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "waiting" },
-      { kind: "set", key: "@pane_wait_reason", value: "permission" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "waiting" },
+    { kind: "set", key: "@pane_wait_reason", value: "permission" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: SubagentStart with fixed agent_id", () => {
-  const ops = b1Normalize(eventToOps("SubagentStart", { session_id: "test-sid", cwd: "/repo", agent_id: "test-agent-id", subagent_type: "Plan" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("SubagentStart", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      agent_id: "test-agent-id",
+      subagent_type: "Plan",
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_subagents", value: "subagent:test-agent-id" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_subagents", value: "subagent:test-agent-id" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: StopFailure rate_limit", () => {
-  const ops = b1Normalize(eventToOps("StopFailure", { session_id: "test-sid", cwd: "/repo", error_type: "rate_limit" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("StopFailure", {
+      session_id: "test-sid",
+      cwd: "/repo",
+      error_type: "rate_limit",
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "claude" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "error" },
-      { kind: "set", key: "@pane_wait_reason", value: "rate_limit" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "claude" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "error" },
+    { kind: "set", key: "@pane_wait_reason", value: "rate_limit" },
+  ]);
 });

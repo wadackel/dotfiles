@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run
+#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run --no-prompt
 
 // tmux Claude Code session picker (prefix+w).
 // ink + React on Deno. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
@@ -100,11 +100,10 @@ async function gitBranch(cwd: string): Promise<string> {
 }
 
 // Allowed shape for a session id when used as a filesystem path segment.
-// Claude Code session ids are UUIDs, and team-scoped tasks use name-like
-// identifiers; in both cases they fit within this conservative allowlist.
-// Rejecting anything else closes the `sessionId = "../something"` directory
-// traversal class of issue at the picker boundary.
-const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+// Imported from pane-shared.ts so the writer (selfHealOps) and reader
+// (picker) share one regex — defense-in-depth against `sessionId =
+// "../something"` directory traversal at every consumer.
+import { SESSION_ID_RE } from "../shared/pane-shared.ts";
 
 // Read `~/.claude/tasks/<sessionId>/*.json` and aggregate completed/total counts.
 // Returns null when the dir is missing, empty, or every file fails to parse —
@@ -225,6 +224,10 @@ function Preview(
 ) {
   const [content, setContent] = useState<string | null>(null);
   useEffect(() => {
+    // Reset content the moment target changes — without this, a stale capture
+    // of the previous target keeps rendering under the new "Preview: <target>"
+    // header until the new capturePane resolves (~0–1 s).
+    setContent(null);
     let cancelled = false;
     let timerId: number | undefined;
     // Border consumes 1 col on each side (2 total); account for it when clamping lines.

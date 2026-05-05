@@ -8,13 +8,11 @@ import {
   maskPrompt,
   type Op,
   promptStartTrio,
+  SESSION_ID_RE,
   TOOL_SUBJECT_MAX_CHARS,
   truncate,
   unsetOps,
 } from "./pane-shared.ts";
-
-// Re-export for legacy test imports.
-export { maskPrompt, type Op, truncate };
 
 // --- Types ---
 
@@ -80,6 +78,8 @@ function extractToolName(rawTool: unknown): string {
 export function selfHealOps(data: HookData): Op[] {
   const sid = readSessionId(data);
   if (!sid) return [];
+  // Defense-in-depth path-traversal guard; mirrors claude/codex + picker.
+  if (!SESSION_ID_RE.test(sid)) return [];
   const ops: Op[] = [
     { kind: "set", key: "@pane_agent", value: "opencode" },
     { kind: "set", key: "@pane_session_id", value: sid },

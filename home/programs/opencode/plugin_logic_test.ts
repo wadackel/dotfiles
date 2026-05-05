@@ -1,11 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import {
-  eventToOps,
-  maskPrompt,
-  type Op,
-  type PaneState,
-  selfHealOps,
-} from "./plugin_logic.ts";
+import { eventToOps, type PaneState, selfHealOps } from "./plugin_logic.ts";
+import { maskPrompt, type Op } from "./pane-shared.ts";
 
 const STATE: PaneState = { status: "idle", currentTool: "" };
 
@@ -78,6 +73,13 @@ Deno.test("selfHealOps: cwd from properties.info.directory", () => {
     properties: { info: { directory: "/work/proj" } },
   });
   assertEquals(findSet(ops, "@pane_cwd"), "/work/proj");
+});
+
+Deno.test("selfHealOps: invalid sessionID (path traversal) drops event", () => {
+  // Defense-in-depth: writer-side SESSION_ID_RE assertion. Picker re-validates.
+  assertEquals(selfHealOps({ sessionID: "../bad", cwd: "/tmp" }), []);
+  assertEquals(selfHealOps({ session_id: "sess:001" }), []);
+  assertEquals(selfHealOps({ sessionID: "a".repeat(129) }), []);
 });
 
 // --- eventToOps ---
@@ -272,100 +274,141 @@ function b1Normalize(ops: Op[]): Op[] {
 const b1State: PaneState = { status: "", currentTool: "" };
 
 Deno.test("Phase B.1 fixture: session.created", () => {
-  const ops = b1Normalize(eventToOps("session.created", { type: "session.created", properties: { sessionID: "test-sid", info: { directory: "/repo" } } }, b1State));
+  const ops = b1Normalize(
+    eventToOps("session.created", {
+      type: "session.created",
+      properties: { sessionID: "test-sid", info: { directory: "/repo" } },
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "idle" },
-      { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: session.idle", () => {
-  const ops = b1Normalize(eventToOps("session.idle", { type: "session.idle", properties: { sessionID: "test-sid" } }, b1State));
+  const ops = b1Normalize(
+    eventToOps("session.idle", {
+      type: "session.idle",
+      properties: { sessionID: "test-sid" },
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_status", value: "idle" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_status", value: "idle" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: session.status busy", () => {
-  const ops = b1Normalize(eventToOps("session.status", { type: "session.status", properties: { sessionID: "test-sid", type: "busy" } }, b1State));
+  const ops = b1Normalize(
+    eventToOps("session.status", {
+      type: "session.status",
+      properties: { sessionID: "test-sid", type: "busy" },
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_status", value: "running" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_status", value: "running" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: session.error", () => {
-  const ops = b1Normalize(eventToOps("session.error", { type: "session.error", properties: { sessionID: "test-sid", error: "rate-limit" } }, b1State));
+  const ops = b1Normalize(
+    eventToOps("session.error", {
+      type: "session.error",
+      properties: { sessionID: "test-sid", error: "rate-limit" },
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_status", value: "error" },
-      { kind: "set", key: "@pane_wait_reason", value: "rate-limit" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_status", value: "error" },
+    { kind: "set", key: "@pane_wait_reason", value: "rate-limit" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: chat.message with prompt", () => {
-  const ops = b1Normalize(eventToOps("chat.message", { sessionID: "test-sid", directory: "/repo", prompt: "do the thing" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("chat.message", {
+      sessionID: "test-sid",
+      directory: "/repo",
+      prompt: "do the thing",
+    }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_cwd", value: "/repo" },
-      { kind: "set", key: "@pane_status", value: "running" },
-      { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-      { kind: "set", key: "@pane_prompt", value: "do the thing" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    { kind: "set", key: "@pane_prompt", value: "do the thing" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: tool.execute.before Bash", () => {
-  const ops = b1Normalize(eventToOps("tool.execute.before", { sessionID: "test-sid", tool: "Bash" }, b1State));
+  const ops = b1Normalize(
+    eventToOps(
+      "tool.execute.before",
+      { sessionID: "test-sid", tool: "Bash" },
+      b1State,
+    ),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_current_tool", value: "Bash" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_current_tool", value: "Bash" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: tool.execute.after Bash matching", () => {
-  const ops = b1Normalize(eventToOps("tool.execute.after", { sessionID: "test-sid", tool: "Bash" }, { ...b1State, currentTool: "Bash" }));
+  const ops = b1Normalize(
+    eventToOps("tool.execute.after", { sessionID: "test-sid", tool: "Bash" }, {
+      ...b1State,
+      currentTool: "Bash",
+    }),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "set", key: "@pane_last_tool", value: "Bash" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "set", key: "@pane_last_tool", value: "Bash" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: permission.ask", () => {
-  const ops = b1Normalize(eventToOps("permission.ask", { sessionID: "test-sid" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("permission.ask", { sessionID: "test-sid" }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "set", key: "@pane_agent", value: "opencode" },
-      { kind: "set", key: "@pane_session_id", value: "test-sid" },
-      { kind: "set", key: "@pane_status", value: "waiting" },
-      { kind: "set", key: "@pane_wait_reason", value: "permission" },
-    ]);
+    { kind: "set", key: "@pane_agent", value: "opencode" },
+    { kind: "set", key: "@pane_session_id", value: "test-sid" },
+    { kind: "set", key: "@pane_status", value: "waiting" },
+    { kind: "set", key: "@pane_wait_reason", value: "permission" },
+  ]);
 });
 
 Deno.test("Phase B.1 fixture: session.deleted", () => {
-  const ops = b1Normalize(eventToOps("session.deleted", { sessionID: "test-sid" }, b1State));
+  const ops = b1Normalize(
+    eventToOps("session.deleted", { sessionID: "test-sid" }, b1State),
+  );
   assertEquals(ops, [
-      { kind: "unset", key: "@pane_agent" },
-      { kind: "unset", key: "@pane_status" },
-      { kind: "unset", key: "@pane_session_id" },
-      { kind: "unset", key: "@pane_started_at" },
-      { kind: "unset", key: "@pane_cwd" },
-      { kind: "unset", key: "@pane_prompt" },
-      { kind: "unset", key: "@pane_wait_reason" },
-      { kind: "unset", key: "@pane_current_tool" },
-      { kind: "unset", key: "@pane_last_tool" },
-      { kind: "unset", key: "@pane_last_activity_at" },
-    ]);
+    { kind: "unset", key: "@pane_agent" },
+    { kind: "unset", key: "@pane_status" },
+    { kind: "unset", key: "@pane_session_id" },
+    { kind: "unset", key: "@pane_started_at" },
+    { kind: "unset", key: "@pane_cwd" },
+    { kind: "unset", key: "@pane_prompt" },
+    { kind: "unset", key: "@pane_wait_reason" },
+    { kind: "unset", key: "@pane_current_tool" },
+    { kind: "unset", key: "@pane_last_tool" },
+    { kind: "unset", key: "@pane_last_activity_at" },
+  ]);
 });

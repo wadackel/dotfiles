@@ -10,16 +10,11 @@
 // user starts opencode from a tmux pane.
 
 import type { Plugin } from "@opencode-ai/plugin";
-import {
-  eventToOps,
-  type Op,
-  type PaneState,
-} from "./plugin_logic.ts";
-import {
-  isEmbedded,
-  parsePsLine,
-  type PsRow,
-} from "./agent-presence.ts";
+import { eventToOps, type PaneState } from "./plugin_logic.ts";
+// `Op` lives in pane-shared.ts (SSOT). plugin_logic.ts no longer re-exports
+// types — Bun resolves the relative import directly via the symlink chain.
+import { type Op } from "./pane-shared.ts";
+import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 
 // Bun is provided by the opencode runtime. Declare here so this file
 // type-checks under tooling that doesn't auto-load @types/bun.
@@ -44,7 +39,9 @@ function fetchParent(pid: number): Promise<PsRow | null> {
       { stdout: "pipe", stderr: "ignore" },
     );
     if (result.exitCode !== 0) return Promise.resolve(null);
-    return Promise.resolve(parsePsLine(new TextDecoder().decode(result.stdout)));
+    return Promise.resolve(
+      parsePsLine(new TextDecoder().decode(result.stdout)),
+    );
   } catch {
     return Promise.resolve(null);
   }

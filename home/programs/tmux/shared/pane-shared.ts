@@ -124,6 +124,16 @@ export const PROMPT_MAX_CHARS = 40;
 export const TOOL_SUBJECT_MAX_CHARS = 24;
 export const TOOL_ERROR_MAX_CHARS = 40;
 
+// --- session_id allowlist ---
+
+// Conservative allowlist for session_id when used as a path segment (picker
+// reads `~/.claude/tasks/<sessionId>/*.json`) or written to @pane_session_id.
+// Claude Code session ids are UUIDs, codex / opencode use UUID-shape or
+// name-like ids — all fit within this regex. Rejecting anything else closes
+// the `sessionId = "../something"` directory traversal class at every
+// boundary that consumes it (writer selfHealOps + picker reader).
+export const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
 // --- Pure formatters ---
 
 // Strip C0/C1 control bytes (ESC/NUL/BEL/TAB/CR/LF/...) and slice to `max`
