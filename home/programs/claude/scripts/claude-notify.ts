@@ -135,7 +135,9 @@ async function send(sound: string): Promise<void> {
   await log("--- send start ---");
   await log(`ARGS: sound=${sound}`);
   await log(
-    `ENV: TMUX_PANE=${Deno.env.get("TMUX_PANE") ?? "<unset>"} TMUX=${Deno.env.get("TMUX") ?? "<unset>"}`,
+    `ENV: TMUX_PANE=${Deno.env.get("TMUX_PANE") ?? "<unset>"} TMUX=${
+      Deno.env.get("TMUX") ?? "<unset>"
+    }`,
   );
 
   const stdinData = await new Response(Deno.stdin.readable).text();
@@ -196,7 +198,9 @@ async function send(sound: string): Promise<void> {
 
     // Resolve deno path for the -execute callback (launchd won't have deno in PATH)
     const denoPath = Deno.execPath();
-    const scriptPath = `${Deno.env.get("HOME")}/.claude/scripts/claude-notify.ts`;
+    const scriptPath = `${
+      Deno.env.get("HOME")
+    }/.claude/scripts/claude-notify.ts`;
     const executeCmd =
       `${denoPath} run --allow-run --allow-write --allow-env=TMPDIR --allow-read ${scriptPath} activate '${ctx.session}' '${ctx.window}' '${ctx.pane}' '${tmuxPath}'`;
     await log(`EXECUTE_CMD: ${executeCmd}`);
@@ -252,10 +256,13 @@ async function activate(
     `ARGS: session=${session} window=${window} pane=${pane} tmux_cmd=${tmuxCmd}`,
   );
 
-  const { code: osCode, stderr: osErr } = await runCommand("/usr/bin/osascript", [
-    "-e",
-    'tell application "WezTerm" to activate',
-  ]);
+  const { code: osCode, stderr: osErr } = await runCommand(
+    "/usr/bin/osascript",
+    [
+      "-e",
+      'tell application "WezTerm" to activate',
+    ],
+  );
   if (osCode === 0) {
     await log("WEZTERM_ACTIVATE: success");
   } else {

@@ -250,7 +250,8 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
       status: "idle",
       prompt: "row-basename",
       lastTool: "Edit",
-      lastEditFile: "/Users/alice/dotfiles/home/programs/tmux/picker/picker.tsx",
+      lastEditFile:
+        "/Users/alice/dotfiles/home/programs/tmux/picker/picker.tsx",
     });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);

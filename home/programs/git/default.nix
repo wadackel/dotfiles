@@ -21,7 +21,6 @@
       ".serena"
       "/.worktrees"
       ".ofsht.toml"
-      ".actlas/cache.json"
       "CLAUDE.local.md"
       ".claude/scheduled_tasks.lock"
       "**/.claude/settings.local.json"

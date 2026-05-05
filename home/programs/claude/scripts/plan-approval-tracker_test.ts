@@ -18,7 +18,9 @@ async function withTempPending<T>(
   const hash = await cwdHash(cwd);
   const pending = pendingPath(hash);
   const active = cwdMarkerPath(hash);
-  await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), { recursive: true });
+  await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
+    recursive: true,
+  });
   await Deno.writeTextFile(pending, content);
   const t = new Date(Date.now() + mtimeOffsetMs);
   await Deno.utime(pending, t, t);
@@ -159,11 +161,14 @@ Deno.test("e2e: subprocess with /impl prompt promotes pending → active", async
     const hash = await cwdHash(cwd);
     const pending = pendingPath(hash);
     const active = cwdMarkerPath(hash);
-    await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), { recursive: true });
+    await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
+      recursive: true,
+    });
     await Deno.writeTextFile(pending, "e2e-plan-path");
 
     try {
-      const scriptPath = new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
+      const scriptPath =
+        new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
       const cmd = new Deno.Command(scriptPath, {
         stdin: "piped",
         stdout: "piped",
@@ -208,11 +213,14 @@ Deno.test("e2e: subprocess with non-approval prompt → no promotion", async () 
     const hash = await cwdHash(cwd);
     const pending = pendingPath(hash);
     const active = cwdMarkerPath(hash);
-    await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), { recursive: true });
+    await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
+      recursive: true,
+    });
     await Deno.writeTextFile(pending, "should-not-promote");
 
     try {
-      const scriptPath = new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
+      const scriptPath =
+        new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
       const cmd = new Deno.Command(scriptPath, {
         stdin: "piped",
         stdout: "piped",

@@ -10,8 +10,20 @@ const MANAGED_BODY = [
   "",
 ].join("\n");
 
-const EXPECTED_BLOCK =
-  "# nix-managed:start\n" + MANAGED_BODY + "# nix-managed:end\n";
+const EXPECTED_BLOCK = "# nix-managed:start\n" + MANAGED_BODY +
+  "# nix-managed:end\n";
+
+const MANAGED_BODY_WITH_TUI = [
+  'model = "gpt-5.4"',
+  'model_reasoning_effort = "high"',
+  "",
+  "[features]",
+  "streamable_shell = true",
+  "",
+  "[tui]",
+  'status_line = ["model", "project-name", "git-branch", "context-used", "five-hour-limit"]',
+  "",
+].join("\n");
 
 const UNMANAGED_TAIL = [
   "",
@@ -102,4 +114,49 @@ Deno.test("scenario 5: managed body shrinks (section removed) -> section gone, u
   // Unmanaged tail must survive verbatim.
   assertStringIncludes(next, UNMANAGED_TAIL);
   assertStringIncludes(next, '[projects."/Users/me/foo"]');
+});
+
+Deno.test("scenario 6: managed tui status_line prunes legacy unmanaged tui while preserving nested tui state", () => {
+  const current = "# nix-managed:start\n" + MANAGED_BODY +
+    "# nix-managed:end\n" +
+    UNMANAGED_TAIL +
+    [
+      "[tui]",
+      'status_line = ["model", "project-name", "git-branch", "context-used", "five-hour-limit"]',
+      "",
+      "[tui.model_availability_nux]",
+      '"gpt-5.5" = 4',
+      "",
+    ].join("\n");
+
+  const { next, result } = spliceContent(current, MANAGED_BODY_WITH_TUI);
+
+  assertEquals(result.action, "replaced");
+  assertStringIncludes(next, "[tui]\n");
+  assertStringIncludes(next, "[tui.model_availability_nux]");
+  assertStringIncludes(next, '"gpt-5.5" = 4');
+  assertEquals((next.match(/\[tui\]\n/g) ?? []).length, 1);
+  assertEquals((next.match(/status_line =/g) ?? []).length, 1);
+});
+
+Deno.test("scenario 7: unexpected unmanaged tui keys are preserved for fail-loud cleanup", () => {
+  const current = "# nix-managed:start\n" + MANAGED_BODY +
+    "# nix-managed:end\n" +
+    UNMANAGED_TAIL +
+    [
+      "[tui]",
+      'status_line = ["old"]',
+      "other_key = true",
+      "",
+      "[notice.more]",
+      "value = true",
+      "",
+    ].join("\n");
+
+  const { next, result } = spliceContent(current, MANAGED_BODY_WITH_TUI);
+
+  assertEquals(result.action, "replaced");
+  assertStringIncludes(next, 'status_line = ["old"]');
+  assertStringIncludes(next, "other_key = true");
+  assertStringIncludes(next, "[notice.more]");
 });

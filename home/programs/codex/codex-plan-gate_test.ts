@@ -6,12 +6,14 @@ import {
   cwdHash,
   extractPatchFiles,
   gateDecision,
-  isInfraPath,
   type GateInput,
+  isInfraPath,
 } from "./codex-plan-gate.ts";
 
-const CODEX_INFRA = "/Users/wadackel/dotfiles/home/programs/codex/codex-plan-gate.ts";
-const CLAUDE_PATH = "/Users/wadackel/dotfiles/home/programs/claude/skills/plan/SKILL.md";
+const CODEX_INFRA =
+  "/Users/wadackel/dotfiles/home/programs/codex/codex-plan-gate.ts";
+const CLAUDE_PATH =
+  "/Users/wadackel/dotfiles/home/programs/claude/skills/plan/SKILL.md";
 
 async function tmpHomeWith(
   setup: (home: string, hash: string, cwd: string) => Promise<void>,
@@ -25,7 +27,12 @@ async function tmpHomeWith(
 }
 
 function input(toolName: string, command: string, cwd: string): GateInput {
-  return { hook_event_name: "PreToolUse", tool_name: toolName, tool_input: { command }, cwd };
+  return {
+    hook_event_name: "PreToolUse",
+    tool_name: toolName,
+    tool_input: { command },
+    cwd,
+  };
 }
 
 const ADD_FILE_PATCH = (...paths: string[]) =>
@@ -34,8 +41,7 @@ const ADD_FILE_PATCH = (...paths: string[]) =>
   "*** End Patch";
 
 Deno.test("extractPatchFiles parses Add/Update/Delete File markers", () => {
-  const cmd =
-    "*** Begin Patch\n" +
+  const cmd = "*** Begin Patch\n" +
     "*** Add File: home/x.ts\n+1\n" +
     "*** Update File: home/y.ts\n@@\n-old\n+new\n" +
     "*** Delete File: home/z.ts\n" +
@@ -51,10 +57,15 @@ Deno.test("isInfraPath: codex module is infra", () => {
 
 Deno.test("scenario 1: active marker valid → allow", async () => {
   const { home, hash, cwd } = await tmpHomeWith(async (h, hh) => {
-    await Deno.writeTextFile(`${h}/.codex/plans/.active-${hh}`, "/some/plan.md");
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.active-${hh}`,
+      "/some/plan.md",
+    );
   });
   Deno.env.set("HOME", home);
-  const dec = await gateDecision(input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd));
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+  );
   assertEquals(dec.kind, "allow");
   assertEquals(dec.reason, "marker-valid");
 });
@@ -67,7 +78,9 @@ Deno.test("scenario 2: active marker expired → block", async () => {
     await Deno.utime(path, stale, stale);
   });
   Deno.env.set("HOME", home);
-  const dec = await gateDecision(input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd));
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+  );
   assertEquals(dec.kind, "block");
   assertMatch(dec.reason, /期限切れ|expired/);
 });
@@ -75,17 +88,24 @@ Deno.test("scenario 2: active marker expired → block", async () => {
 Deno.test("scenario 3: marker absent (no pending) → block with $plan-codex hint", async () => {
   const { home, cwd } = await tmpHomeWith(async () => {/* no markers */});
   Deno.env.set("HOME", home);
-  const dec = await gateDecision(input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd));
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+  );
   assertEquals(dec.kind, "block");
   assertMatch(dec.reason, /\$plan-codex/);
 });
 
 Deno.test("scenario 4: pending only (no active) → block with $impl-codex hint", async () => {
   const { home, hash, cwd } = await tmpHomeWith(async (h, hh) => {
-    await Deno.writeTextFile(`${h}/.codex/plans/.pending-${hh}`, "/some/plan.md");
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.pending-${hh}`,
+      "/some/plan.md",
+    );
   });
   Deno.env.set("HOME", home);
-  const dec = await gateDecision(input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd));
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+  );
   assertEquals(dec.kind, "block");
   assertMatch(dec.reason, /\$impl-codex/);
 });
@@ -95,7 +115,11 @@ Deno.test("scenario 5: cwd is infra-path (codex module) → allow even without m
   Deno.env.set("HOME", home);
   const codexCwd = "/Users/wadackel/dotfiles/home/programs/codex";
   const dec = await gateDecision(
-    input("apply_patch", ADD_FILE_PATCH(`${codexCwd}/codex-plan-gate.ts`), codexCwd),
+    input(
+      "apply_patch",
+      ADD_FILE_PATCH(`${codexCwd}/codex-plan-gate.ts`),
+      codexCwd,
+    ),
   );
   assertEquals(dec.kind, "allow");
   assertEquals(dec.reason, "infra");
@@ -142,6 +166,8 @@ Deno.test("scenario 8: mixed cwd + outside files, no marker → block (any cwd h
 Deno.test("scenario 9: malformed patch (no file markers) → block fail-closed", async () => {
   const { home, cwd } = await tmpHomeWith(async () => {/* no markers */});
   Deno.env.set("HOME", home);
-  const dec = await gateDecision(input("apply_patch", "no markers here at all", cwd));
+  const dec = await gateDecision(
+    input("apply_patch", "no markers here at all", cwd),
+  );
   assertEquals(dec.kind, "block");
 });

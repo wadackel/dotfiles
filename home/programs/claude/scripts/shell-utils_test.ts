@@ -43,7 +43,10 @@ Deno.test("globToRegex: wildcard matches newlines (multiline segment)", () => {
   // Heredoc-stripped segments may contain embedded newlines
   const segment = "gh pr create --title Test --body \"$(cat <<'HEREDOC'\n)\"";
   assertMatch(segment, globToRegex("gh pr create * <<*"));
-  assertNotMatch("gh pr create --title Test --body-file /tmp/body.md", globToRegex("gh pr create * <<*"));
+  assertNotMatch(
+    "gh pr create --title Test --body-file /tmp/body.md",
+    globToRegex("gh pr create * <<*"),
+  );
 });
 
 // ===== getSegments =====
@@ -57,7 +60,10 @@ Deno.test("getSegments: git -C stays as one segment", async () => {
 });
 
 Deno.test("getSegments: && splits into two segments", async () => {
-  assertEquals(await getSegments("cd /app && git status"), ["cd /app", "git status"]);
+  assertEquals(await getSegments("cd /app && git status"), [
+    "cd /app",
+    "git status",
+  ]);
 });
 
 Deno.test("getSegments: || splits into two segments", async () => {
@@ -68,11 +74,17 @@ Deno.test("getSegments: || splits into two segments", async () => {
 });
 
 Deno.test("getSegments: pipe splits into segments", async () => {
-  assertEquals(await getSegments("git log | head -10"), ["git log", "head -10"]);
+  assertEquals(await getSegments("git log | head -10"), [
+    "git log",
+    "head -10",
+  ]);
 });
 
 Deno.test("getSegments: semicolon splits", async () => {
-  assertEquals(await getSegments("git fetch; git pull"), ["git fetch", "git pull"]);
+  assertEquals(await getSegments("git fetch; git pull"), [
+    "git fetch",
+    "git pull",
+  ]);
 });
 
 Deno.test("getSegments: redirections are stripped", async () => {
@@ -96,14 +108,20 @@ Deno.test("getSegments: subshell parens are removed", async () => {
 Deno.test("getSegments: complex pipeline with env var and redirections", async () => {
   assertEquals(
     await getSegments(
-      'TMUX="" tmux capture-pane -p 2>/dev/null | grep -v \'^$\' | tail -3',
+      "TMUX=\"\" tmux capture-pane -p 2>/dev/null | grep -v '^$' | tail -3",
     ),
     ["tmux capture-pane -p", "grep -v ^$", "tail -3"],
   );
 });
 
 Deno.test("getSegments: multiple operators in sequence", async () => {
-  assertEquals(await getSegments("a && b | c ; d || e"), ["a", "b", "c", "d", "e"]);
+  assertEquals(await getSegments("a && b | c ; d || e"), [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+  ]);
 });
 
 Deno.test("getSegments: empty string returns empty array", async () => {
@@ -320,10 +338,13 @@ Deno.test("getSegments: double-quoted heredoc body is not treated as commands", 
 // ===== Fallback keyword stripping =====
 
 Deno.test("getSegmentsFallback: strips leading shell keywords from segments", () => {
-  assertEquals(getSegmentsFallback("select x in a b; do git -C /tmp status; done"), [
-    "x in a b",
-    "git -C /tmp status",
-  ]);
+  assertEquals(
+    getSegmentsFallback("select x in a b; do git -C /tmp status; done"),
+    [
+      "x in a b",
+      "git -C /tmp status",
+    ],
+  );
 });
 
 Deno.test("getSegmentsFallback: strips do/done/then/fi keywords", () => {
@@ -369,7 +390,9 @@ Deno.test("parseCommand: indented heredoc command is compound", async () => {
 });
 
 Deno.test("parseCommand: heredoc segments exclude redirect", async () => {
-  const result = await parseCommand("agent-browser eval <<'EOF'\nconsole.log(1);\nEOF");
+  const result = await parseCommand(
+    "agent-browser eval <<'EOF'\nconsole.log(1);\nEOF",
+  );
   assertEquals(result.segments, ["agent-browser eval"]);
   assertEquals(result.isCompound, true);
 });

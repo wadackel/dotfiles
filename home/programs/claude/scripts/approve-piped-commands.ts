@@ -96,7 +96,11 @@ export async function extractCommands(command: string): Promise<string[]> {
 const GIT_FLAGS_WITH_ARG = new Set(["-c", "-C", "--git-dir", "--work-tree"]);
 
 /** Git global flags that are standalone (no argument). */
-const GIT_FLAGS_STANDALONE = new Set(["--no-pager", "--bare", "--no-replace-objects"]);
+const GIT_FLAGS_STANDALONE = new Set([
+  "--no-pager",
+  "--bare",
+  "--no-replace-objects",
+]);
 
 /** Strip git global flags that appear before the subcommand. */
 export function stripGitGlobalFlags(segment: string): string {

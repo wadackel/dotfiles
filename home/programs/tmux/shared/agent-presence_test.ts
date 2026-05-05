@@ -91,10 +91,13 @@ Deno.test("parsePsLine: basename normalize -> {ppid, comm}", () => {
 });
 
 Deno.test("parsePsLine: full path + trailing whitespace -> trimmed basename", () => {
-  assertEquals(parsePsLine("  62800   /etc/profiles/per-user/wadackel/bin/codex  "), {
-    ppid: 62800,
-    comm: "codex",
-  });
+  assertEquals(
+    parsePsLine("  62800   /etc/profiles/per-user/wadackel/bin/codex  "),
+    {
+      ppid: 62800,
+      comm: "codex",
+    },
+  );
 });
 
 Deno.test("parsePsLine: malformed line -> null", () => {

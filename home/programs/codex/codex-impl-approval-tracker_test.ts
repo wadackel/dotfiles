@@ -1,10 +1,5 @@
-import {
-  assertEquals,
-} from "https://deno.land/std@0.224.0/assert/mod.ts";
-import {
-  isApprovalPrompt,
-  promote,
-} from "./codex-impl-approval-tracker.ts";
+import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { isApprovalPrompt, promote } from "./codex-impl-approval-tracker.ts";
 
 async function setupHome(
   setup: (home: string, hash: string, cwd: string) => Promise<void>,
@@ -36,18 +31,26 @@ Deno.test("isApprovalPrompt: matches $impl-codex variants only", () => {
 
 Deno.test("scenario 1: prompt match + valid pending → promote", async () => {
   const { hash, cwd, home } = await setupHome(async (h, hh) => {
-    await Deno.writeTextFile(`${h}/.codex/plans/.pending-${hh}`, "/plans/X.md\n");
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.pending-${hh}`,
+      "/plans/X.md\n",
+    );
   });
   const result = await promote(cwd);
   assertEquals(result.promoted, true);
   assertEquals(result.reason, "promoted");
   // active now contains the previous pending content
-  const activeContent = await Deno.readTextFile(`${home}/.codex/plans/.active-${hash}`);
+  const activeContent = await Deno.readTextFile(
+    `${home}/.codex/plans/.active-${hash}`,
+  );
   assertEquals(activeContent, "/plans/X.md\n");
   // pending removed
   let pendingExists = true;
-  try { await Deno.stat(`${home}/.codex/plans/.pending-${hash}`); }
-  catch { pendingExists = false; }
+  try {
+    await Deno.stat(`${home}/.codex/plans/.pending-${hash}`);
+  } catch {
+    pendingExists = false;
+  }
   assertEquals(pendingExists, false);
 });
 
@@ -79,8 +82,14 @@ Deno.test("scenario 4: pending expired (>24h) → no-op with expired reason", as
 
 Deno.test("scenario 5: active already exists with pending → defensive no-op (already-active)", async () => {
   const { cwd } = await setupHome(async (h, hh) => {
-    await Deno.writeTextFile(`${h}/.codex/plans/.active-${hh}`, "/plans/OLD.md");
-    await Deno.writeTextFile(`${h}/.codex/plans/.pending-${hh}`, "/plans/NEW.md");
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.active-${hh}`,
+      "/plans/OLD.md",
+    );
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.pending-${hh}`,
+      "/plans/NEW.md",
+    );
   });
   const result = await promote(cwd);
   // Defensive (matches Claude plan-approval-tracker.ts behavior): do NOT overwrite

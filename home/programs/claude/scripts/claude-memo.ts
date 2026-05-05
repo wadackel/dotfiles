@@ -226,20 +226,24 @@ function buildLLMInput(entries: TranscriptEntry[]): string {
 function parseLLMOutput(raw: string): LLMResult | null {
   const lines = raw.trim().split("\n").filter((l) => l.trim());
   if (lines.length === 0) return null;
-  const summary = lines[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(0, 200);
+  const summary = lines[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(
+    0,
+    200,
+  );
   if (!summary) return null;
   const details = lines
     .slice(1)
     .filter((l) => /^\s*[-・]/.test(l))
-    .map((l) => l.replace(/^\s*[-・]\s*/, "").replace(/\*\*/g, "").trim().slice(0, 100))
+    .map((l) =>
+      l.replace(/^\s*[-・]\s*/, "").replace(/\*\*/g, "").trim().slice(0, 100)
+    )
     .filter((l) => l.length > 0)
     .slice(0, 3);
   return { summary, details };
 }
 
 async function callGemini(condensed: string): Promise<LLMResult | null> {
-  const prompt =
-    "以下はClaude Codeセッションの要約データです。" +
+  const prompt = "以下はClaude Codeセッションの要約データです。" +
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
     "出力フォーマット:\n" +
     "1行目: 40〜80文字の要約（意図と結果を含む）\n" +
@@ -277,7 +281,9 @@ async function callGemini(condensed: string): Promise<LLMResult | null> {
 // --- Debounce ---
 
 function debounceStatePath(sessionShort: string): string {
-  return `${Deno.env.get("TMPDIR") ?? "/tmp"}/claude-memo-llm-${sessionShort}.json`;
+  return `${
+    Deno.env.get("TMPDIR") ?? "/tmp"
+  }/claude-memo-llm-${sessionShort}.json`;
 }
 
 function shouldRunLLM(sessionShort: string, currentUserCount: number): boolean {
@@ -332,7 +338,9 @@ function upsertDailyNote(
   if (readingIdx < 0) return;
 
   // Insert just before the Reading section (no extra blank line added)
-  const insertAt = lines[readingIdx - 1]?.trim() === "" ? readingIdx - 1 : readingIdx;
+  const insertAt = lines[readingIdx - 1]?.trim() === ""
+    ? readingIdx - 1
+    : readingIdx;
   lines.splice(insertAt, 0, ...entryLines);
   Deno.writeTextFileSync(dailyPath, lines.join("\n"));
 }
@@ -349,7 +357,9 @@ async function main(): Promise<void> {
     hookData = JSON.parse(stdinData);
   } catch {
     const preview = stdinData.slice(0, 200).replace(/\n/g, "\\n");
-    await log(`ERROR: failed to parse stdin JSON (len=${stdinData.length}): ${preview}`);
+    await log(
+      `ERROR: failed to parse stdin JSON (len=${stdinData.length}): ${preview}`,
+    );
     return;
   }
 
@@ -357,7 +367,9 @@ async function main(): Promise<void> {
   const transcriptPath = hookData.transcript_path ?? "";
   const cwd = hookData.cwd ?? Deno.cwd();
 
-  await log(`START: session=${sessionId.slice(0, 8)} transcript=${transcriptPath}`);
+  await log(
+    `START: session=${sessionId.slice(0, 8)} transcript=${transcriptPath}`,
+  );
 
   if (!transcriptPath) {
     await log("SKIP: no transcript_path");
@@ -397,7 +409,9 @@ async function main(): Promise<void> {
 
   // Daily note path
   const today = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
-  const dailyPath = `${Deno.env.get("HOME")}/Documents/Main/99_Tracking/Daily/${today}.md`;
+  const dailyPath = `${
+    Deno.env.get("HOME")
+  }/Documents/Main/99_Tracking/Daily/${today}.md`;
   try {
     await Deno.stat(dailyPath);
   } catch {
@@ -426,7 +440,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const heuristicLines = [`- ${timestamp} - \`(${repoName}/${sessionShort})\` ${escapeObsidianSyntax(heuristic)}`];
+  const heuristicLines = [
+    `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+      escapeObsidianSyntax(heuristic)
+    }`,
+  ];
   upsertDailyNote(dailyPath, sessionShort, heuristicLines);
   await log(`HEURISTIC: ${heuristicLines[0]}`);
 
@@ -439,7 +457,9 @@ async function main(): Promise<void> {
   saveDebounceState(sessionShort, userCount);
 
   const condensed = buildLLMInput(entries);
-  await log(`LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`);
+  await log(
+    `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
+  );
 
   const llmResult = await callGemini(condensed);
   if (!llmResult) {
@@ -447,8 +467,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${escapeObsidianSyntax(llmResult.summary)}`;
-  const detailLines = llmResult.details.map((d) => `    - ${escapeObsidianSyntax(d)}`);
+  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+    escapeObsidianSyntax(llmResult.summary)
+  }`;
+  const detailLines = llmResult.details.map((d) =>
+    `    - ${escapeObsidianSyntax(d)}`
+  );
   const llmLines = [mainLine, ...detailLines];
 
   upsertDailyNote(dailyPath, sessionShort, llmLines);

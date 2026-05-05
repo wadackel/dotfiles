@@ -113,7 +113,11 @@ export async function promote(cwd: string): Promise<PromoteResult> {
     } catch {
       // tmp may not exist if the failure happened before write
     }
-    return { promoted: false, reason: "io-error", error: (err as Error).message };
+    return {
+      promoted: false,
+      reason: "io-error",
+      error: (err as Error).message,
+    };
   }
 }
 

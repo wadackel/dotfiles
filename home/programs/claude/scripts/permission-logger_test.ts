@@ -108,7 +108,10 @@ Deno.test("rotateIfNeeded: truncates to MAX_LINES_KEEP when over size", async ()
   try {
     // Create a file larger than 5MB
     // Each line is about 100 chars, so 60000 lines ~= 6MB
-    const line = JSON.stringify({ ts: "2026-01-01T00:00:00Z", data: "x".repeat(80) });
+    const line = JSON.stringify({
+      ts: "2026-01-01T00:00:00Z",
+      data: "x".repeat(80),
+    });
     const lines = Array(60000).fill(line).join("\n") + "\n";
     await Deno.writeTextFile(tmpFile, lines);
 

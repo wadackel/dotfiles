@@ -4,9 +4,9 @@ import {
   checkGate,
   cwdHash,
   cwdMarkerPath,
+  type HookInput,
   isInfraPath,
   isUnderCwd,
-  type HookInput,
 } from "./plan-gate.ts";
 
 // --- Test helpers ---
@@ -18,7 +18,9 @@ async function withTempMarker<T>(
 ): Promise<T> {
   const hash = await cwdHash(cwd);
   const path = cwdMarkerPath(hash);
-  await Deno.mkdir(path.substring(0, path.lastIndexOf("/")), { recursive: true });
+  await Deno.mkdir(path.substring(0, path.lastIndexOf("/")), {
+    recursive: true,
+  });
   await Deno.writeTextFile(path, "");
   // Adjust mtime for expiry tests
   const targetMtime = new Date(Date.now() + mtimeOffsetMs);
@@ -50,7 +52,9 @@ Deno.test("isInfraPath: matches CLAUDE.md / settings.json / scripts/", () => {
     true,
   );
   assertEquals(
-    isInfraPath("/Users/alice/dotfiles/home/programs/claude/scripts/nested/bar.ts"),
+    isInfraPath(
+      "/Users/alice/dotfiles/home/programs/claude/scripts/nested/bar.ts",
+    ),
     true,
   );
 });
@@ -228,7 +232,9 @@ Deno.test("checkGate #5b: pending marker exists + active absent + cwd 内 → bl
   const hash = await cwdHash(cwd);
   const home = Deno.env.get("HOME") ?? "";
   const pendingPath = `${home}/.claude/plans/.pending-${hash}`;
-  await Deno.mkdir(pendingPath.substring(0, pendingPath.lastIndexOf("/")), { recursive: true });
+  await Deno.mkdir(pendingPath.substring(0, pendingPath.lastIndexOf("/")), {
+    recursive: true,
+  });
   await Deno.writeTextFile(pendingPath, "test-plan-path");
   try {
     const input: HookInput = {

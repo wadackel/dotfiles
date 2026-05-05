@@ -6,7 +6,9 @@ import { parse as parseBash } from "jsr:@ein/bash-parser@0.18";
 /** Convert glob pattern to anchored regex. * matches any characters including spaces and newlines. */
 export function globToRegex(pattern: string): RegExp {
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  return new RegExp("^" + escaped.replace(/\*/g, "[\\s\\S]*").replace(/\?/g, "[\\s\\S]") + "$");
+  return new RegExp(
+    "^" + escaped.replace(/\*/g, "[\\s\\S]*").replace(/\?/g, "[\\s\\S]") + "$",
+  );
 }
 
 /**
@@ -81,7 +83,7 @@ function extractCommands(node: any): string[] {
       ];
     case "Case":
       return node.cases.flatMap((c: any) =>
-        c.body ? extractCommands(c.body) : [],
+        c.body ? extractCommands(c.body) : []
       );
     case "Function":
       return extractCommands(node.body);
@@ -149,8 +151,20 @@ export function getSegmentsFallback(command: string): string[] {
     .replace(/\d*<\s*[^\s]+/g, ""); // <input.txt, < input.txt etc.
 
   const SHELL_KEYWORDS = new Set([
-    "do", "done", "then", "fi", "else", "elif", "esac", "in",
-    "for", "while", "until", "select", "case", "if",
+    "do",
+    "done",
+    "then",
+    "fi",
+    "else",
+    "elif",
+    "esac",
+    "in",
+    "for",
+    "while",
+    "until",
+    "select",
+    "case",
+    "if",
   ]);
 
   return normalized

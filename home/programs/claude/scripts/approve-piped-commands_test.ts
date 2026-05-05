@@ -312,7 +312,10 @@ Deno.test("extractCommands: mixed operators", async () => {
 });
 
 Deno.test("extractCommands: strips input redirect", async () => {
-  assertEquals(await extractCommands("sort <input.txt | head"), ["sort", "head"]);
+  assertEquals(await extractCommands("sort <input.txt | head"), [
+    "sort",
+    "head",
+  ]);
 });
 
 Deno.test("extractCommands: strips numbered redirect", async () => {
@@ -325,7 +328,7 @@ Deno.test("extractCommands: strips numbered redirect", async () => {
 Deno.test("extractCommands: env var prefix before command", async () => {
   assertEquals(
     await extractCommands(
-      'TMUX="" tmux capture-pane -p 2>/dev/null | grep -v \'^$\' | tail -3',
+      "TMUX=\"\" tmux capture-pane -p 2>/dev/null | grep -v '^$' | tail -3",
     ),
     ["tmux", "grep", "tail"],
   );
@@ -468,8 +471,14 @@ Deno.test("shouldApprove: unknown path-based command with redirect rejects", asy
 
 Deno.test("shouldApprove: basename fallback with custom patterns", async () => {
   const patterns = ["my-script.ts *"];
-  assertEquals(await shouldApprove("/some/path/my-script.ts arg 2>&1", patterns), true);
-  assertEquals(await shouldApprove("/some/path/other.ts arg 2>&1", patterns), false);
+  assertEquals(
+    await shouldApprove("/some/path/my-script.ts arg 2>&1", patterns),
+    true,
+  );
+  assertEquals(
+    await shouldApprove("/some/path/other.ts arg 2>&1", patterns),
+    false,
+  );
 });
 
 // --- subcommand granularity (regression tests for security fix) ---
@@ -551,7 +560,10 @@ Deno.test("shouldApprove: compound with all subcommands allowed", async () => {
 Deno.test("shouldApprove: standalone heredoc with allowed command", async () => {
   const patterns = ["agent-browser *"];
   assertEquals(
-    await shouldApprove("agent-browser eval <<'EOF'\nconsole.log(1);\nEOF", patterns),
+    await shouldApprove(
+      "agent-browser eval <<'EOF'\nconsole.log(1);\nEOF",
+      patterns,
+    ),
     true,
   );
 });
@@ -599,7 +611,10 @@ Deno.test("shouldApprove: heredoc combined with pipe", async () => {
 Deno.test("shouldApprove: heredoc combined with &&", async () => {
   const patterns = ["agent-browser *", "echo *"];
   assertEquals(
-    await shouldApprove("agent-browser eval <<'EOF' && echo done\nconsole.log(1);\nEOF", patterns),
+    await shouldApprove(
+      "agent-browser eval <<'EOF' && echo done\nconsole.log(1);\nEOF",
+      patterns,
+    ),
     true,
   );
 });
@@ -639,8 +654,7 @@ Deno.test("shouldApprove: H1 — multiline prompt with 2>&1 (Pattern A)", async 
 
 Deno.test("shouldApprove: H2 — special chars without shell syntax (Pattern C)", async () => {
   const patterns = ["codex *"];
-  const cmd =
-    'codex exec -s read-only "text with ${row.pr_number} syntax"';
+  const cmd = 'codex exec -s read-only "text with ${row.pr_number} syntax"';
   assertEquals(await shouldApprove(cmd, patterns), true);
 });
 

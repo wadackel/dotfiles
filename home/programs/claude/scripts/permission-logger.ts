@@ -13,8 +13,15 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_LINES_KEEP = 50_000;
 
 const ACTIONABLE_TOOLS = new Set([
-  "Bash", "Edit", "Write", "Read",
-  "Glob", "Grep", "Task", "WebFetch", "WebSearch",
+  "Bash",
+  "Edit",
+  "Write",
+  "Read",
+  "Glob",
+  "Grep",
+  "Task",
+  "WebFetch",
+  "WebSearch",
 ]);
 
 function isActionableTool(toolName: string): boolean {

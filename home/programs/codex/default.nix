@@ -38,6 +38,16 @@ let
       external_migration = true;
       codex_hooks = true;
     };
+
+    tui = {
+      status_line = [
+        "model"
+        "project-name"
+        "git-branch"
+        "context-used"
+        "five-hour-limit"
+      ];
+    };
   };
 
   managedToml = tomlFormat.generate "codex-managed.toml" managed;

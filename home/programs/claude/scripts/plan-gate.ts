@@ -24,7 +24,10 @@ export interface HookInput {
 }
 
 export type GateDecision =
-  | { kind: "allow"; reason: "missing-fields" | "infra" | "outside-cwd" | "marker-valid" }
+  | {
+    kind: "allow";
+    reason: "missing-fields" | "infra" | "outside-cwd" | "marker-valid";
+  }
   | { kind: "block"; reason: string };
 
 // --- Helpers ---
@@ -41,8 +44,13 @@ export function isInfraPath(abs: string): boolean {
   return INFRA_REGEX.test(abs);
 }
 
-export async function isUnderCwd(filePath: string, cwd: string): Promise<boolean> {
-  const absFile = await canonical(filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`);
+export async function isUnderCwd(
+  filePath: string,
+  cwd: string,
+): Promise<boolean> {
+  const absFile = await canonical(
+    filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`,
+  );
   const absCwd = await canonical(cwd);
   return absFile === absCwd || absFile.startsWith(absCwd + "/");
 }
@@ -97,7 +105,9 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     return { kind: "allow", reason: "missing-fields" };
   }
 
-  const abs = await canonical(filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`);
+  const abs = await canonical(
+    filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`,
+  );
 
   if (isInfraPath(abs)) {
     return { kind: "allow", reason: "infra" };
@@ -124,17 +134,17 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     const pendingExists = await hasPendingMarker(hash);
     reason = pendingExists
       ? [
-          "計画は作成されていますが、まだユーザーによって承認されていません。",
-          `cwd 配下の ${filePath} への編集は block されます。`,
-          "`/impl` と打鍵して plan を承認してください。",
-          "（auto mode では bypass されません — ユーザーの明示的な打鍵が必要です）",
-        ].join("\n")
+        "計画は作成されていますが、まだユーザーによって承認されていません。",
+        `cwd 配下の ${filePath} への編集は block されます。`,
+        "`/impl` と打鍵して plan を承認してください。",
+        "（auto mode では bypass されません — ユーザーの明示的な打鍵が必要です）",
+      ].join("\n")
       : [
-          "このセッションではまだ /plan が実行されていません。",
-          `cwd 配下の ${filePath} への編集は block されます。`,
-          "`/plan <実装したい内容>` を先に実行してください。",
-          "（trivial な変更でも /plan を通す運用です）",
-        ].join("\n");
+        "このセッションではまだ /plan が実行されていません。",
+        `cwd 配下の ${filePath} への編集は block されます。`,
+        "`/plan <実装したい内容>` を先に実行してください。",
+        "（trivial な変更でも /plan を通す運用です）",
+      ].join("\n");
   }
 
   return { kind: "block", reason };
@@ -143,7 +153,9 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
 // --- Entry point ---
 
 if (import.meta.main) {
-  const input: HookInput = JSON.parse(await new Response(Deno.stdin.readable).text());
+  const input: HookInput = JSON.parse(
+    await new Response(Deno.stdin.readable).text(),
+  );
   const decision = await checkGate(input);
 
   if (decision.kind === "allow") {

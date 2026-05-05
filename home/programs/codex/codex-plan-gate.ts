@@ -21,8 +21,7 @@
 
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
-const INFRA_REGEX =
-  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex(\/|$)/;
+const INFRA_REGEX = /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex(\/|$)/;
 
 export interface GateInput {
   hook_event_name?: string;
@@ -131,7 +130,9 @@ export function extractPatchFiles(command: string): string[] {
 }
 
 async function isUnderCwd(filePath: string, absCwd: string): Promise<boolean> {
-  const abs = await canonical(filePath.startsWith("/") ? filePath : `${absCwd}/${filePath}`);
+  const abs = await canonical(
+    filePath.startsWith("/") ? filePath : `${absCwd}/${filePath}`,
+  );
   return abs === absCwd || abs.startsWith(absCwd + "/");
 }
 
@@ -220,7 +221,9 @@ if (import.meta.main) {
     }
   } catch (e) {
     // Fail-closed on parse error: Codex sees exit 2 + stderr and blocks the tool.
-    console.error(`[codex-plan-gate] failed to parse stdin: ${(e as Error).message}`);
+    console.error(
+      `[codex-plan-gate] failed to parse stdin: ${(e as Error).message}`,
+    );
     Deno.exit(2);
   }
 
