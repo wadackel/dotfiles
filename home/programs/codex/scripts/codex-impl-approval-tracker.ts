@@ -2,7 +2,7 @@
 
 // UserPromptSubmit hook for Codex CLI:
 // Promotes ~/.codex/plans/.pending-<cwd-hash> → ~/.codex/plans/.active-<cwd-hash>
-// when the user types `$impl-codex` as the first non-whitespace token of their
+// when the user types `$impl` as the first non-whitespace token of their
 // prompt. Mirrors ~/.claude/scripts/plan-approval-tracker.ts but adapted for
 // Codex's hook contract:
 //   - argv[0] = "UserPromptSubmit"
@@ -12,11 +12,11 @@
 //
 // User-typed approval is the only signal because Codex hooks fire only on
 // genuine user prompts, not on AI's internal skill invocations. If the AI
-// chains $plan-codex → $impl-codex inside a single turn, no UserPromptSubmit
+// chains $plan → $impl inside a single turn, no UserPromptSubmit
 // fires for the synthetic invocation, so promote is never triggered.
 //
 // Defensive on conflict: if `.active-<hash>` already exists when the hook runs,
-// we do NOT overwrite it. /plan-codex Phase 6 removes any prior `.active-`
+// we do NOT overwrite it. $plan Phase 6 removes any prior `.active-`
 // before writing `.pending-`, so the both-exist state is only reachable via
 // races or manual tampering. Overwriting could silently invalidate an
 // in-progress impl session.
@@ -25,10 +25,10 @@ import { cwdHash } from "./codex-plan-gate.ts";
 
 const PENDING_TTL_MS = 24 * 60 * 60 * 1000; // 24h, mirrors codex-plan-gate.ts
 
-// `$impl-codex` must be the first non-whitespace token of the prompt:
-//   accepted: "$impl-codex", "  $impl-codex", "$impl-codex foo", "$impl-codex\nbar"
-//   rejected: "$impl", "$impl-codex-x", "/impl-codex", "please $impl-codex"
-const APPROVAL_REGEX = /^\s*\$impl-codex(\s|$)/;
+// `$impl` must be the first non-whitespace token:
+//   accepted: "$impl", "  $impl", "$impl foo"
+//   rejected: "$impl-extra", "/impl", "please $impl"
+const APPROVAL_REGEX = /^\s*\$impl(\s|$)/;
 
 export interface HookInput {
   prompt?: string;

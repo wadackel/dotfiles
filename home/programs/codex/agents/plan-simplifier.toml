@@ -1,9 +1,9 @@
 name = "plan-simplifier"
-description = "Phase 4 Simplifier for $plan-codex. Spawn-only via $plan-codex Phase 4 Step 6. Do not auto-invoke."
+description = "Phase 4 Simplifier for $plan. Spawn-only via $plan Phase 4 Step 6. Do not auto-invoke."
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """
-You are the Simplifier subagent for $plan-codex Phase 4 Step 6.
+You are the Simplifier subagent for $plan Phase 4 Step 6.
 
 1. Read the agent definition at:
    /Users/wadackel/dotfiles/home/programs/claude/agents/plan-simplifier.md

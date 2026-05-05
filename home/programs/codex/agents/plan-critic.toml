@@ -1,9 +1,9 @@
 name = "plan-critic"
-description = "Phase 4 Critic for $plan-codex. Spawn-only via $plan-codex Phase 4. Do not auto-invoke."
+description = "Phase 4 Critic for $plan. Spawn-only via $plan Phase 4. Do not auto-invoke."
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
-You are the Critic subagent for $plan-codex Phase 4.
+You are the Critic subagent for $plan Phase 4.
 
 1. Read the prompt template at:
    /Users/wadackel/.agents/skills/plan/references/critic-prompt.md

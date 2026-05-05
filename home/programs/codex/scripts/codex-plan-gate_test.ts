@@ -1,6 +1,7 @@
 import {
   assertEquals,
   assertMatch,
+  assertNotMatch,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   cwdHash,
@@ -14,6 +15,8 @@ const CODEX_INFRA =
   "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-gate.ts";
 const CLAUDE_PATH =
   "/Users/wadackel/dotfiles/home/programs/claude/skills/plan/SKILL.md";
+const LEGACY_PLAN_RE = new RegExp("\\$plan-" + "codex");
+const LEGACY_IMPL_RE = new RegExp("\\$impl-" + "codex");
 
 async function tmpHomeWith(
   setup: (home: string, hash: string, cwd: string) => Promise<void>,
@@ -85,17 +88,18 @@ Deno.test("scenario 2: active marker expired → block", async () => {
   assertMatch(dec.reason, /期限切れ|expired/);
 });
 
-Deno.test("scenario 3: marker absent (no pending) → block with $plan-codex hint", async () => {
+Deno.test("scenario 3: marker absent (no pending) → block with $plan hint", async () => {
   const { home, cwd } = await tmpHomeWith(async () => {/* no markers */});
   Deno.env.set("HOME", home);
   const dec = await gateDecision(
     input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
   );
   assertEquals(dec.kind, "block");
-  assertMatch(dec.reason, /\$plan-codex/);
+  assertMatch(dec.reason, /\$plan/);
+  assertNotMatch(dec.reason, LEGACY_PLAN_RE);
 });
 
-Deno.test("scenario 4: pending only (no active) → block with $impl-codex hint", async () => {
+Deno.test("scenario 4: pending only (no active) → block with $impl hint", async () => {
   const { home, hash, cwd } = await tmpHomeWith(async (h, hh) => {
     await Deno.writeTextFile(
       `${h}/.codex/plans/.pending-${hh}`,
@@ -107,7 +111,8 @@ Deno.test("scenario 4: pending only (no active) → block with $impl-codex hint"
     input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
   );
   assertEquals(dec.kind, "block");
-  assertMatch(dec.reason, /\$impl-codex/);
+  assertMatch(dec.reason, /\$impl/);
+  assertNotMatch(dec.reason, LEGACY_IMPL_RE);
 });
 
 Deno.test("scenario 5: cwd is infra-path (codex module) → allow even without marker", async () => {

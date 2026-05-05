@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env
 
 // PreToolUse hook for Codex CLI:
-// Gates apply_patch edits that touch files under cwd on a /plan-codex-generated
+// Gates apply_patch edits that touch files under cwd on a $plan-generated
 // cwd-hash marker. Mirrors ~/.claude/scripts/plan-gate.ts but adapted for Codex's
 // hook contract:
 //   - argv[0] = event name ("PreToolUse")
@@ -17,7 +17,7 @@
 //   3. all patched files are outside cwd     → allow (per-cwd gate scope)
 //   4. ~/.codex/plans/.active-<hash> valid   → allow (active marker; mtime < 24h)
 //   5. otherwise                             → block with hint mentioning
-//                                              $plan-codex or $impl-codex
+//                                              $plan or $impl
 
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -189,23 +189,23 @@ export async function gateDecision(input: GateInput): Promise<GateDecision> {
   let reason: string;
   if (state === "expired") {
     reason = [
-      "/plan-codex の cwd marker が 24 時間を経過して期限切れです。",
+      "$plan の cwd marker が 24 時間を経過して期限切れです。",
       "cwd 配下のファイル編集 (apply_patch) は block されます。",
-      "`$plan-codex <実装したい内容>` で再実行してください。",
+      "`$plan <実装したい内容>` で再実行してください。",
     ].join("\n");
   } else if (pendingExists) {
     reason = [
       "計画は作成されていますが、まだユーザーによって承認されていません。",
       "cwd 配下のファイル編集 (apply_patch) は block されます。",
-      "`$impl-codex` と打鍵して plan を承認してください。",
+      "`$impl` と打鍵して plan を承認してください。",
       "（auto mode では bypass されません — ユーザーの明示的な打鍵が必要です）",
     ].join("\n");
   } else {
     reason = [
-      "このセッションではまだ /plan-codex が実行されていません。",
+      "このセッションではまだ $plan が実行されていません。",
       "cwd 配下のファイル編集 (apply_patch) は block されます。",
-      "`$plan-codex <実装したい内容>` を先に実行してください。",
-      "（trivial な変更でも /plan-codex を通す運用です）",
+      "`$plan <実装したい内容>` を先に実行してください。",
+      "（trivial な変更でも $plan を通す運用です）",
     ].join("\n");
   }
 

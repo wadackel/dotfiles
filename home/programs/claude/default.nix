@@ -14,10 +14,10 @@
   # Claude Code configuration
   home.file.".claude/agents".source = dotfiles.linkHere ./. "agents";
 
-  home.file.".claude/skills".source = dotfiles.linkHere ./. "skills";
+  home.file.".claude/skills".source = dotfiles.linkHere ../agent-skills "views/claude";
 
   # Codex CLI からも参照できるようにする
-  home.file.".agents/skills".source = dotfiles.linkHere ./. "skills";
+  home.file.".agents/skills".source = dotfiles.linkHere ../agent-skills "views/codex";
 
   # scripts ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
   home.file.".claude/scripts".source = dotfiles.linkHere ./. "scripts";

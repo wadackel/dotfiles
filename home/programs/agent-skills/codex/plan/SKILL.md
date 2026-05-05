@@ -1,17 +1,17 @@
 ---
-name: plan-codex
-description: Codex 版の design-first 計画作成 skill。Claude Code の /plan を Codex CLI 用に移植したもの。明示的な `$plan-codex <request>` 起動でのみ動き、auto-load は agents/openai.yaml で抑制してある。implicit invocation を期待する利用 (キーワードからの自動連想) は対象外。
+name: plan
+description: Codex 版の design-first 計画作成 skill。Claude Code の /plan を Codex CLI 用に移植したもの。明示的な `$plan <request>` 起動でのみ動き、auto-load は agents/openai.yaml で抑制してある。implicit invocation を期待する利用 (キーワードからの自動連想) は対象外。
 ---
 
-# $plan-codex
+# $plan
 
-Codex CLI 上で feature plan を作成する skill。Claude Code の `/plan` (`~/.agents/skills/plan/SKILL.md`) を Codex 用に再構成。`$plan-codex <request>` で明示的に起動する。終了時に `~/.codex/plans/.pending-<cwd-hash>` を作成し、ユーザーが次ターンで `$impl-codex` を打つと UserPromptSubmit hook (`codex-impl-approval-tracker.ts`) が `.pending-` を `.active-` に promote する。
+Codex CLI 上で feature plan を作成する skill。Claude Code の `/plan` (`~/.claude/skills/plan/SKILL.md` / worktree: `home/programs/agent-skills/claude/plan/SKILL.md`) を Codex 用に再構成。`$plan <request>` で明示的に起動する。終了時に `~/.codex/plans/.pending-<cwd-hash>` を作成し、ユーザーが次ターンで `$impl` を打つと UserPromptSubmit hook (`codex-impl-approval-tracker.ts`) が `.pending-` を `.active-` に promote する。
 
 ## Argument extraction (Codex 固有)
 
-Codex skill には Claude の `$ARGUMENTS` 展開がない。`$plan-codex README に追記` のように起動した場合、verbatim user message `$plan-codex README に追記` がそのまま skill body に渡る。
+Codex skill には Claude の `$ARGUMENTS` 展開がない。`$plan README に追記` のように起動した場合、verbatim user message `$plan README に追記` がそのまま skill body に渡る。
 
-**最初の行動**: 自分が受け取った user prompt を読み、`$plan-codex` 以降の文字列を **request** として抽出する。空 (引数なし) の場合は「実装したい内容を教えてください」と尋ねて end turn し、次ターンの返答を request として扱う。
+**最初の行動**: 自分が受け取った user prompt を読み、`$plan` 以降の文字列を **request** として抽出する。空 (引数なし) の場合は「実装したい内容を教えてください」と尋ねて end turn し、次ターンの返答を request として扱う。
 
 ## Prerequisites (Phase 4 動作要件)
 
@@ -43,7 +43,7 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 
 ### Requirement Clarification (small+)
 
-判断基準は `~/.agents/skills/plan/references/requirement-checklist.md` を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。**Codex には Claude の AskUserQuestion がないため、対話モデルは "1 turn = 1 round"** に簡略化する:
+判断基準は `home/programs/agent-skills/core/plan/references/requirement-checklist.md` (公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。**Codex には Claude の AskUserQuestion がないため、対話モデルは "1 turn = 1 round"** に簡略化する:
 
 1. Step A Walk: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、NotClear 項目を洗い出す。
 2. Step B Triage: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。
@@ -92,12 +92,12 @@ Spawn three explorer subagents in parallel with these distinct mandates. Wait fo
 
 ## Phase 3 DRAFT (non-trivial only)
 
-`~/.codex/plans/YYYYMMDDTHHmm-<slug>.md` にプラン本体を書く (slug は request から、max 40 chars、lowercase kebab)。
+`~/.codex/plans/YYYYMMDDTHHmm-<slug>.md` にプラン本体を書く (slug は request から、max 40 chars、lowercase kebab)。書き込み前に `mkdir -p ~/.codex/plans` を実行する。
 
 ### Language policy
 
 - 本文 prose: ユーザーの設定言語 (本リポジトリでは日本語)
-- Section headers (`## Context` / `## Overview` / `## Approach` / `## NOT Building` / `## Mandatory Reading` / `## Patterns to Mirror` / `## Intentional Conventions` / `## Files to Change` / `## Task Outline` / `## Test Strategy` / `## Verification Commands` / `## Definition of Done` / `## Risks + Open Questions` / `## Deepening Log` / `## Completion Criteria`): **英語固定** (Phase 5 と $impl-codex Audit/Review が literal string で locate するため)
+- Section headers (`## Context` / `## Overview` / `## Approach` / `## NOT Building` / `## Mandatory Reading` / `## Patterns to Mirror` / `## Intentional Conventions` / `## Files to Change` / `## Task Outline` / `## Test Strategy` / `## Verification Commands` / `## Definition of Done` / `## Risks + Open Questions` / `## Deepening Log` / `## Completion Criteria`): **英語固定** (Phase 5 と $impl Audit/Review が literal string で locate するため)
 - Machine-consumed contents (`## Completion Criteria` 各サブセクション、Acceptance Criteria 行): 英語
 - Phase 1 subsections の見出し: 英語固定 (`### Requirement Clarification` 等)
 - File paths / commands / `EXPECT:` 値: as-is
@@ -110,11 +110,11 @@ Claude 版と同じ表に従う (trivial=Context+Files to Change+Verification+Ta
 
 ## Phase 4 DEEPEN (non-trivial only)
 
-Iterative adversarial-critique flow。プロンプトは Claude 版と物理共有: `~/.agents/skills/plan/references/critic-prompt.md` / `adversarial-prompt.md`。Phase 4 の subagent は `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml` で事前定義済 (Prerequisites 参照)。
+Iterative adversarial-critique flow。プロンプトは Claude 版と物理共有: `home/programs/agent-skills/core/plan/references/critic-prompt.md` / `adversarial-prompt.md` (公開 path: `~/.claude/skills/plan/references/`)。Phase 4 の subagent は `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml` で事前定義済 (Prerequisites 参照)。
 
 ### Step 1 — Context collection
 
-argument-hint からの max-rounds (default 2, cap 5) を抽出 (例: `$plan-codex --max-rounds=3 ...`)。Phase 3 で書いたプラン本体、project CLAUDE.md (`~/.claude/CLAUDE.md` および当該リポジトリの CLAUDE.md) を context として用意。
+argument-hint からの max-rounds (default 2, cap 5) を抽出 (例: `$plan --max-rounds=3 ...`)。Phase 3 で書いたプラン本体、project CLAUDE.md (`~/.claude/CLAUDE.md` および当該リポジトリの CLAUDE.md) を context として用意。
 
 ### Step 2 — Critic Subagent (each round)
 
@@ -185,16 +185,16 @@ Completion Criteria を以下の tagging で設計:
 
 - `[file-state]`: Read / Grep / Glob で観測可能
 - `[orchestrator-only]`: host access が必要なコマンド (`nix flake check`, `darwin-rebuild`, sudo 等)。main session が pre-run して evidence を埋める
-- `[outcome]`: 循環的依存 (例: `$impl-codex` 内蔵 Review が PASS)
+- `[outcome]`: 循環的依存 (例: `$impl` 内蔵 Review が PASS)
 
-verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` は `$impl-codex` 内蔵 Audit + Review が消費する。
+verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` は `$impl` 内蔵 Audit + Review が消費する。
 
 ### Deepening Log artifact
 
-`~/.codex/plans/<plan-basename>.log.md` に各 round の verbatim 出力を append する:
+`~/.codex/plans/<plan-basename>.log.md` に各 round の verbatim 出力を append する。secret / token / credential が含まれる場合は `[REDACTED]` に置換し、未編集の secret を log に保存しない:
 
 ```markdown
-## Round 1
+### Round 1
 
 ### Critic
 <verbatim subagent stdout>
@@ -235,12 +235,14 @@ update_plan({
     { step: "<task 1 short subject>", status: "pending" },
     { step: "<task 2 short subject>", status: "pending" },
     ...
-    { step: "Final Audit + Review", status: "pending" }   // 最後は固定: $impl-codex 内蔵 phase の入口
+    { step: "Final Audit + Review", status: "pending" }   // 最後は固定: $impl 内蔵 Audit + Codex subagent review phase の入口
   ]
 })
 ```
 
 ### サイドカー JSON 初期化
+
+`deno eval` はこの環境では implicit permissions で動作し、`--allow-write` などの permission flags を受け付けない。以下の snippet では permission flags を付けない。
 
 `~/.codex/plans/<plan-basename>.evidence.json` をタスクと同じ順序で初期化する。task id は配列 index ベース (`task-1`, `task-2`, ...) で採番:
 
@@ -263,7 +265,7 @@ deno eval '
 ' -- /Users/$USER/.codex/plans/<basename>.evidence.json '["subject 1","subject 2","Final Audit + Review"]' '<basename>.md'
 ```
 
-末尾の `Final Audit + Review` エントリは $impl-codex 内蔵 Audit/Review phase が「ここまで来たら Audit と Review を実行」と判断するためのマーカー。実装タスクではない。
+末尾の `Final Audit + Review` エントリは $impl 内蔵 Audit + Codex subagent review phase が「ここまで来たら Audit と fresh reviewer subagent review を実行」と判断するためのマーカー。実装タスクではない。
 
 ### Decomposition Rules
 
@@ -272,15 +274,15 @@ Claude 版と同じ:
 2. Verification は各 implementation task に内包 (verification-only task は "Final Audit + Review" のみ許される)
 3. Separation of concerns
 4. Three elements (target files / expected behavior / verification commands + EXPECTED output)
-5. 末尾 "Final Audit + Review" は $impl-codex skill が直接実行する内蔵 phase であり、独立の skill 起動は不要 (Codex には skill-to-skill invocation API がないため)
+5. 末尾 "Final Audit + Review" は $impl skill が直接実行する内蔵 Audit + Codex subagent review phase であり、独立の skill 起動は不要 (Codex には skill-to-skill invocation API がないため)
 
 ### Acceptance criteria by change type
 
-Claude 版 (`~/.agents/skills/plan/SKILL.md`) の表をそのまま参照可能。
+Claude 版 (`~/.claude/skills/plan/SKILL.md` / worktree: `home/programs/agent-skills/claude/plan/SKILL.md`) の表をそのまま参照可能。
 
 ## Phase 6 ACTIVATE PENDING
 
-`.pending-<cwd-hash>` のみ作成する (`.active-` には絶対しない)。`.active-` は次ターンでユーザーが `$impl-codex` を打鍵したときに `codex-impl-approval-tracker.ts` UserPromptSubmit hook が promote する。
+`.pending-<cwd-hash>` のみ作成する (`.active-` には絶対しない)。`.active-` は次ターンでユーザーが `$impl` を打鍵したときに `codex-impl-approval-tracker.ts` UserPromptSubmit hook が promote する。
 
 ```bash
 REAL_PWD=$(realpath "$PWD")
@@ -306,19 +308,19 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 - File: <plan path>
 - Complexity: <trivial/small/medium/large/xl>
 - Tasks: <count> (+ Final Audit + Review)
-- Status: PENDING APPROVAL — type `$impl-codex` to approve and execute
+- Status: PENDING APPROVAL — type `$impl` to approve and execute
 
-⚠️ AI が自己 chain で `$impl-codex` を打っても UserPromptSubmit hook は発火しないため、`.pending-` → `.active-` の promote は起こらない。承認はユーザーの明示打鍵でのみ成立する。
+⚠️ AI が自己 chain で `$impl` を打っても UserPromptSubmit hook は発火しないため、`.pending-` → `.active-` の promote は起こらない。承認はユーザーの明示打鍵でのみ成立する。
 ```
 
 `xl` で plan body が ~600 行を超える場合は section heading の TOC + plan path に置き換え、metadata block は同じ。
 
 ## Integration with existing tooling
 
-- `~/.agents/skills/plan/references/requirement-checklist.md`: Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
-- `~/.agents/skills/plan/references/critic-prompt.md` / `adversarial-prompt.md`: Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
+- `home/programs/agent-skills/core/plan/references/requirement-checklist.md` (公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`): Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
+- `home/programs/agent-skills/core/plan/references/critic-prompt.md` / `adversarial-prompt.md` (公開 path: `~/.claude/skills/plan/references/`): Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
 - `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: Phase 4 が依存する custom agent 定義。dotfiles 実体は `home/programs/codex/agents/`。
-- `$impl-codex` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` を出力する。
+- `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` を出力する。
 - PreToolUse hook (`codex-plan-gate.ts`): cwd 配下の apply_patch を `.active-<hash>` 不在/期限切れ時に block する。Phase 6 で `.pending-` のみを書く理由はこのゲートと連動するため。
 
 ## Design notes
@@ -327,5 +329,5 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 - **`developer_instructions` は pointer 方式**: 各 TOML は prompt 本体を転記せず、`references/*.md` の絶対 path + placeholder 命名 + verdict format 契約のみを持つ。subagent は workspace 共有経路で参照ファイルを Read する。SSOT を `references/*.md` に維持し dual-source-of-truth 同期コストを回避。
 - **Verdict format 契約**: `plan-critic` は `^### Verdict$\n(CONVERGED|ITERATE)$`、`plan-adversarial` は finding tag `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)`、`plan-simplifier` は confidence tag `(HIGH|MEDIUM|LOW)`。main session が rg で抽出する。
 - **`update_plan` の薄さをサイドカー JSON で補う**: ステータス + 短文しか持てないため、`baseline_sha` / `evidence` は `<basename>.evidence.json` に永続化する。
-- **承認ゲート二重化**: `codex-plan-gate.ts` (PreToolUse) が apply_patch を機械的に止め、本 skill の `.pending-` 出力 + UserPromptSubmit hook が承認の唯一のルートを担保する。AI 自己 chain (`$plan-codex` → 同一ターンで `$impl-codex` を model 自身が打つ) では UserPromptSubmit hook が発火しないため、promote は起こらない。
-- **skill-to-skill invocation API がない**: Codex 公式 docs に明文化された skill→skill の起動 API はなく、`$xxx` 言及からの auto-load は prompt-injection 経路に依存する非公式挙動。final gate を独立 skill に分けず `$impl-codex` 内蔵 Audit + Review phase に閉じる根拠。
+- **承認ゲート二重化**: `codex-plan-gate.ts` (PreToolUse) が apply_patch を機械的に止め、本 skill の `.pending-` 出力 + UserPromptSubmit hook が承認の唯一のルートを担保する。AI 自己 chain (`$plan` → 同一ターンで `$impl` を model 自身が打つ) では UserPromptSubmit hook が発火しないため、promote は起こらない。
+- **skill-to-skill invocation API がない**: Codex 公式 docs に明文化された skill→skill の起動 API はなく、`$xxx` 言及からの auto-load は prompt-injection 経路に依存する非公式挙動。final gate を独立 skill に分けず `$impl` 内蔵 Audit + Review phase に閉じる根拠。
