@@ -1,1 +1,1 @@
-../tmux/agent-presence.ts
+../tmux/shared/agent-presence.ts

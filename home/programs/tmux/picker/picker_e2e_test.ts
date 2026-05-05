@@ -250,7 +250,7 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
       status: "idle",
       prompt: "row-basename",
       lastTool: "Edit",
-      lastEditFile: "/Users/alice/dotfiles/home/programs/tmux/picker.tsx",
+      lastEditFile: "/Users/alice/dotfiles/home/programs/tmux/picker/picker.tsx",
     });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
@@ -806,7 +806,7 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
 // stays a manual user check — that is the second tier of the two-stage
 // verification (conf-shape + runtime).
 Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
-  const confPath = new URL("./tmux.conf", import.meta.url).pathname;
+  const confPath = new URL("../config/tmux.conf", import.meta.url).pathname;
   const conf = await Deno.readTextFile(confPath);
 
   const bindLines = conf

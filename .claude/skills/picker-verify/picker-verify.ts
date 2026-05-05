@@ -20,8 +20,8 @@ interface Result {
 const REPO_ROOT = decodeURIComponent(
   new URL("../../../", import.meta.url).pathname,
 );
-const PICKER_PATH = `${REPO_ROOT}home/programs/tmux/picker.tsx`;
-const TEST_PATH = `${REPO_ROOT}home/programs/tmux/picker_e2e_test.ts`;
+const PICKER_PATH = `${REPO_ROOT}home/programs/tmux/picker/picker.tsx`;
+const TEST_PATH = `${REPO_ROOT}home/programs/tmux/picker/picker_e2e_test.ts`;
 
 async function runDeno(args: string[]): Promise<{
   code: number;

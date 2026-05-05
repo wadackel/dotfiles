@@ -16,7 +16,7 @@ import {
   truncate,
   unsetOps,
 } from "./pane-shared.ts";
-import { TMUX_FORMAT } from "./pane_row.ts";
+import { TMUX_FORMAT } from "../picker/pane_row.ts";
 
 // --- Contract: TMUX_FORMAT keys ⊆ ⋃ writer keys ---
 //

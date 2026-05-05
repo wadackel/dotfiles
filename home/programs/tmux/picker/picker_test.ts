@@ -310,7 +310,7 @@ Deno.test("default.nix passes --no-prompt to deno compile (prevents picker hang 
   // never fires; only SIGINT (Ctrl+C) breaks out via signal-exit. Adding
   // --no-prompt converts unauthorized ops into thrown errors caught by the
   // tick try/catch (picker.tsx:781-783), preserving input responsiveness.
-  const url = new URL("./default.nix", import.meta.url);
+  const url = new URL("../default.nix", import.meta.url);
   const text = await Deno.readTextFile(url);
   const m = text.match(
     /run \$\{pkgs\.deno\}\/bin\/deno compile[\s\S]*?--output/,

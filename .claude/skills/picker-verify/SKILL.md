@@ -2,7 +2,7 @@
 name: picker-verify
 description: >-
   Runs e2e tests for the tmux Claude Code session picker
-  (home/programs/tmux/picker.tsx) in an isolated tmux server sandbox.
+  (home/programs/tmux/picker/picker.tsx) in an isolated tmux server sandbox.
   Use proactively after any change to picker.tsx, picker_e2e_harness.ts,
   or picker_e2e_test.ts — even if the user doesn't explicitly ask for
   verification, run at least once to catch regressions before the user
@@ -16,7 +16,7 @@ allowed-tools: Bash(*picker-verify.ts*)
 
 Verify the tmux picker end-to-end against a fresh isolated tmux server.
 Warms the Deno module cache, runs every scenario in
-`home/programs/tmux/picker_e2e_test.ts`, and writes a machine-readable
+`home/programs/tmux/picker/picker_e2e_test.ts`, and writes a machine-readable
 JSON result to stdout.
 
 ## Quick Start
@@ -35,8 +35,8 @@ JSON result to stdout.
 
 The script is self-contained. It:
 
-1. Runs `deno cache home/programs/tmux/picker.tsx` to warm npm modules.
-2. Runs `deno test --allow-run=tmux --allow-env --allow-read home/programs/tmux/picker_e2e_test.ts`.
+1. Runs `deno cache home/programs/tmux/picker/picker.tsx` to warm npm modules.
+2. Runs `deno test --allow-run=tmux --allow-env --allow-read home/programs/tmux/picker/picker_e2e_test.ts`.
 3. Parses the test runner output (scenario names + ok/FAILED).
 4. Emits a single JSON object on stdout.
 

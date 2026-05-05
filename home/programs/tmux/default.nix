@@ -10,32 +10,37 @@
   home.packages = [ pkgs.tmux ];
 
   # Tmux configuration
-  xdg.configFile."tmux/tmux.conf".source = dotfiles.linkHere ./. "tmux.conf";
+  xdg.configFile."tmux/tmux.conf".source = dotfiles.linkHere ./. "config/tmux.conf";
 
   # Tmux popup configuration (symlink to ~/.tmux.popup.conf)
-  home.file.".tmux.popup.conf".source = dotfiles.linkHere ./. "tmux.popup.conf";
+  home.file.".tmux.popup.conf".source = dotfiles.linkHere ./. "config/tmux.popup.conf";
 
   # Tmux popup session script
-  home.file.".local/bin/tmux-popup-session.sh".source = dotfiles.linkHere ./. "popup-session.sh";
+  home.file.".local/bin/tmux-popup-session.sh".source =
+    dotfiles.linkHere ./. "scripts/popup-session.sh";
 
   # Tmux window picker (prefix+w: ink + React on Deno)
-  home.file.".local/bin/picker.tsx".source = dotfiles.linkHere ./. "picker.tsx";
+  home.file.".local/bin/picker.tsx".source = dotfiles.linkHere ./. "picker/picker.tsx";
 
-  # Shared SSOT module imported by both picker.tsx and picker-doctor.ts
-  home.file.".local/bin/pane_row.ts".source = dotfiles.linkHere ./. "pane_row.ts";
+  # Picker source siblings for direct/manual Deno runs.
+  home.file.".local/bin/pane_row.ts".source = dotfiles.linkHere ./. "picker/pane_row.ts";
+  home.file.".local/bin/ansi.ts".source = dotfiles.linkHere ./. "picker/ansi.ts";
+  home.file.".local/bin/cell_width.ts".source = dotfiles.linkHere ./. "picker/cell_width.ts";
+  home.file.".local/bin/format_helpers.ts".source = dotfiles.linkHere ./. "picker/format_helpers.ts";
+  home.file.".local/bin/components.tsx".source = dotfiles.linkHere ./. "picker/components.tsx";
 
   # Picker diagnostic CLI (manual: when a Claude Code pane fails to appear)
-  home.file.".local/bin/picker-doctor.ts".source = dotfiles.linkHere ./. "picker-doctor.ts";
+  home.file.".local/bin/picker-doctor.ts".source = dotfiles.linkHere ./. "picker/picker-doctor.ts";
 
   # Dev layout script
-  home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "dev-layout.sh";
+  home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "scripts/dev-layout.sh";
 
   # AOT-compile picker.tsx into ~/.local/share/picker-tmux/picker.
   # The picker is launched by `prefix+w` via display-popup and the React+Ink
   # module graph evaluation dominates cold startup (~236ms out of ~370ms
   # measured). Deno's npm cache does not amortize this (cold == warm in
   # measurement), so only AOT via `deno compile` eliminates the cost.
-  # Hash-skip avoids recompiling when picker.tsx/pane_row.ts are unchanged.
+  # Hash-skip avoids recompiling when picker source modules are unchanged.
   home.activation.compilePickerBin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     SRC="${./.}"
     OUT="$HOME/.local/share/picker-tmux"
@@ -44,12 +49,12 @@
     # Hash file contents only (not paths) so the Nix store path of `${./.}`
     # does not dirty the hash whenever any sibling file in this dir changes.
     HASH=$(/bin/cat \
-      "$SRC/picker.tsx" \
-      "$SRC/pane_row.ts" \
-      "$SRC/ansi.ts" \
-      "$SRC/cell_width.ts" \
-      "$SRC/format_helpers.ts" \
-      "$SRC/components.tsx" \
+      "$SRC/picker/picker.tsx" \
+      "$SRC/picker/pane_row.ts" \
+      "$SRC/picker/ansi.ts" \
+      "$SRC/picker/cell_width.ts" \
+      "$SRC/picker/format_helpers.ts" \
+      "$SRC/picker/components.tsx" \
       | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
     # home-manager concatenates activation fragments into one shell script,
     # so `exit` here would abort later fragments. Gate the cold path with an
@@ -81,7 +86,7 @@
         --allow-env --allow-read --allow-run \
         --no-prompt \
         --output "$TMP" \
-        "$SRC/picker.tsx"
+        "$SRC/picker/picker.tsx"
       run /bin/mv -f "$TMP" "$BIN"
       run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
     fi
