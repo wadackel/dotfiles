@@ -32,10 +32,6 @@ export type HookData = Record<string, unknown>;
 
 // --- Constants ---
 
-// Every @pane_* option opencode-pane-status may write. Sourced from
-// pane-shared.ts; alias maintained for in-file readability.
-export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_OPENCODE;
-
 // opencode historically used a single TOOL_MAX_CHARS knob; aligned to
 // TOOL_SUBJECT_MAX_CHARS in pane-shared.ts (same value: 24).
 const TOOL_MAX_CHARS = TOOL_SUBJECT_MAX_CHARS;
@@ -102,7 +98,7 @@ export function eventToOps(
 ): Op[] {
   // Drain on session.deleted regardless of state.
   if (event === "session.deleted") {
-    return unsetOps(ALL_PANE_OPTIONS);
+    return unsetOps(ALL_PANE_OPTIONS_FOR_OPENCODE);
   }
 
   const body: Op[] = (() => {

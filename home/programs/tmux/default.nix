@@ -43,7 +43,14 @@
     STAMP="$OUT/.src-hash"
     # Hash file contents only (not paths) so the Nix store path of `${./.}`
     # does not dirty the hash whenever any sibling file in this dir changes.
-    HASH=$(/bin/cat "$SRC/picker.tsx" "$SRC/pane_row.ts" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
+    HASH=$(/bin/cat \
+      "$SRC/picker.tsx" \
+      "$SRC/pane_row.ts" \
+      "$SRC/ansi.ts" \
+      "$SRC/cell_width.ts" \
+      "$SRC/format_helpers.ts" \
+      "$SRC/components.tsx" \
+      | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
     # home-manager concatenates activation fragments into one shell script,
     # so `exit` here would abort later fragments. Gate the cold path with an
     # inverted if/else instead.

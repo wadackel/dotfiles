@@ -6,7 +6,7 @@
 import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CODEX,
-  CLAUDE_ONLY_KEYS as SHARED_CLAUDE_ONLY_KEYS,
+  CLAUDE_ONLY_KEYS,
   type Op,
   PROMPT_MAX_CHARS,
   promptStartTrio,
@@ -41,10 +41,6 @@ export interface PaneState {
   sessionId: string;
 }
 
-export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_CODEX;
-
-export const CLAUDE_ONLY_KEYS = SHARED_CLAUDE_ONLY_KEYS;
-
 // codex-only resume path key set — no parallel concept in claude/opencode.
 export const RESUME_TRANSIENT_KEYS = [
   "@pane_current_tool",
@@ -54,7 +50,7 @@ export const RESUME_TRANSIENT_KEYS = [
 
 // Derived (codex-shape) — diverges from claude's manually enumerated equivalent;
 // not unified into pane-shared.ts (Intentional Convention: per-writer local).
-const STALE_AT_SESSION_START = ALL_PANE_OPTIONS.filter((key) =>
+const STALE_AT_SESSION_START = ALL_PANE_OPTIONS_FOR_CODEX.filter((key) =>
   key !== "@pane_agent" && key !== "@pane_session_id" && key !== "@pane_cwd"
 );
 

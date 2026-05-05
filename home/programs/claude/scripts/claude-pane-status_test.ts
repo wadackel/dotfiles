@@ -3,7 +3,6 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  ALL_PANE_OPTIONS,
   appendSubagent,
   buildLogRecord,
   count,
@@ -18,6 +17,7 @@ import {
   type RunContext,
   selfHealOps,
 } from "./claude-pane-status.ts";
+import { ALL_PANE_OPTIONS_FOR_CLAUDE as ALL_PANE_OPTIONS } from "./pane-shared.ts";
 
 // --- maskPrompt ---
 

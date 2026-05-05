@@ -15,7 +15,7 @@
 //     await teardown();
 //   }
 
-import { sanitizeAnsi } from "./picker.tsx";
+import { sanitizeAnsi } from "./ansi.ts";
 
 // ---- Constants ----
 

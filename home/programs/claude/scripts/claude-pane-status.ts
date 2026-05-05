@@ -63,11 +63,6 @@ export interface PaneState {
 
 // --- Constants ---
 
-// Every @pane_* option the script may write. Used to drain state on teardown.
-// Sourced from pane-shared.ts; alias maintained for in-file readability and
-// for callers that consume the historic name via tests.
-export const ALL_PANE_OPTIONS = ALL_PANE_OPTIONS_FOR_CLAUDE;
-
 // Options cleared at SessionStart so stale values from a previous session on the
 // same pane do not bleed into the new one. Manually enumerated (claude-shape);
 // codex's parallel constant is derived via .filter() — the two shapes diverge
@@ -252,14 +247,14 @@ export function eventToOps(
   // Drain paths: full teardown. Short-circuit before self-heal so the teardown
   // is not followed by self-heal reinstating @pane_agent.
   if (event === "SessionEnd" && count(state.subagents) === 0) {
-    return unsetOps(ALL_PANE_OPTIONS);
+    return unsetOps(ALL_PANE_OPTIONS_FOR_CLAUDE);
   }
   if (
     event === "SubagentStop" &&
     count(removeSubagent(state.subagents, str(data.agent_id))) === 0 &&
     state.pendingTeardown
   ) {
-    return unsetOps(ALL_PANE_OPTIONS);
+    return unsetOps(ALL_PANE_OPTIONS_FOR_CLAUDE);
   }
 
   const body: Op[] = (() => {
