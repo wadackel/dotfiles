@@ -11,7 +11,7 @@ import {
 } from "./codex-plan-gate.ts";
 
 const CODEX_INFRA =
-  "/Users/wadackel/dotfiles/home/programs/codex/codex-plan-gate.ts";
+  "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-gate.ts";
 const CLAUDE_PATH =
   "/Users/wadackel/dotfiles/home/programs/claude/skills/plan/SKILL.md";
 

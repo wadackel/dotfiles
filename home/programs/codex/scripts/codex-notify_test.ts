@@ -37,7 +37,7 @@ Deno.test("buildActivateCommand: uses argument quoting for callback command", ()
   };
   const cmd = buildActivateCommand(
     "/bin/deno",
-    "/Users/me/.codex/codex-notify.ts",
+    "/Users/me/.codex/scripts/codex-notify.ts",
     ctx,
     "/opt/bin/tmux",
   );

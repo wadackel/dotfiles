@@ -170,7 +170,7 @@ Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
       "/Users/me/.codex/sessions/2026/05/04/rollout-019df142.jsonl",
     cwd: "/Users/me/dotfiles",
   };
-  const scriptPath = "/Users/me/.codex/codex-memo.ts";
+  const scriptPath = "/Users/me/.codex/scripts/codex-memo.ts";
   assertEquals(buildWorkerArgs(scriptPath, hookData), [
     "run",
     "--allow-read",

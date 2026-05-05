@@ -26,7 +26,7 @@ let
       "--allow-write"
       "--allow-env=HOME,TMPDIR,TMUX_PANE"
       "--allow-run"
-      "${config.home.homeDirectory}/.codex/codex-notify.ts"
+      "${config.home.homeDirectory}/.codex/scripts/codex-notify.ts"
       "send"
     ];
     personality = "pragmatic";
@@ -58,30 +58,25 @@ in
   home.file.".codex/AGENTS.md".text = "@${config.home.homeDirectory}/.codex/RTK.md\n";
   home.file.".codex/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".codex/hooks.json".source = ./hooks.json;
-  # codex-pane-status.ts は同階層の `./agent-presence.ts` を import する。
+  home.file.".codex/scripts".source = dotfiles.linkHere ./. "scripts";
+
+  # scripts/codex-pane-status.ts は `../agent-presence.ts` を import する。
   # Deno は relative import を URL ベースで解決し symlink の realpath を辿らない
-  # ため、helper を ~/.codex/ 直下に sibling として共置する必要がある。
+  # ため、helper を ~/.codex/ 直下に共置する必要がある。
   # 実体は home/programs/tmux/agent-presence.ts にあり、worktree 内では
   # home/programs/codex/agent-presence.ts が in-worktree symlink で指している。
   # ここではその worktree シンボリックリンクごと out-of-store symlink で公開する。
-  home.file.".codex/codex-pane-status.ts".source = dotfiles.linkHere ./. "codex-pane-status.ts";
   home.file.".codex/agent-presence.ts".source = dotfiles.linkHere ./. "agent-presence.ts";
   # pane-shared.ts は claude/codex/opencode 共通の SSOT (型 / キー / formatter /
   # transition builder)。worktree 内では home/programs/codex/pane-shared.ts が
   # ../tmux/pane-shared.ts への in-worktree symlink。agent-presence.ts と同形。
   home.file.".codex/pane-shared.ts".source = dotfiles.linkHere ./. "pane-shared.ts";
-  home.file.".codex/codex-hook-log.ts".source = dotfiles.linkHere ./. "codex-hook-log.ts";
-  home.file.".codex/codex-notify.ts".source = dotfiles.linkHere ./. "codex-notify.ts";
-  home.file.".codex/codex-memo.ts".source = dotfiles.linkHere ./. "codex-memo.ts";
-  home.file.".codex/codex-plan-gate.ts".source = dotfiles.linkHere ./. "codex-plan-gate.ts";
-  home.file.".codex/codex-impl-approval-tracker.ts".source =
-    dotfiles.linkHere ./. "codex-impl-approval-tracker.ts";
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a splice failure means ~/.codex/config.toml is in an unknown state, so
   # darwin-rebuild should fail loudly rather than complete with a silent broken config.
   home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     run ${pkgs.deno}/bin/deno run --allow-read --allow-write \
-      ${./apply-managed.ts} ${managedToml} "$HOME/.codex/config.toml"
+      ${./scripts/apply-managed.ts} ${managedToml} "$HOME/.codex/config.toml"
   '';
 }

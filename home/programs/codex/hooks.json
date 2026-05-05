@@ -6,12 +6,12 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" SessionStart'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" SessionStart'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" SessionStart'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" SessionStart'"
           }
         ]
       }
@@ -22,17 +22,17 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" UserPromptSubmit'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" UserPromptSubmit'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" UserPromptSubmit'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" UserPromptSubmit'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-impl-approval-tracker.ts\" UserPromptSubmit'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-impl-approval-tracker.ts\" UserPromptSubmit'"
           }
         ]
       }
@@ -44,12 +44,12 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PreToolUse'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" PreToolUse'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PreToolUse'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" PreToolUse'"
           }
         ]
       },
@@ -59,7 +59,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-plan-gate.ts\" PreToolUse'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-plan-gate.ts\" PreToolUse'"
           }
         ]
       }
@@ -71,12 +71,12 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PostToolUse'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" PostToolUse'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PostToolUse'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" PostToolUse'"
           }
         ]
       }
@@ -87,17 +87,17 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" Stop'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" Stop'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" Stop'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" Stop'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-memo.ts\" Stop'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-memo.ts\" Stop'"
           }
         ]
       }
@@ -109,12 +109,12 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-pane-status.ts\" PermissionRequest'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" PermissionRequest'"
           },
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/codex-hook-log.ts\" PermissionRequest'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" PermissionRequest'"
           }
         ]
       }

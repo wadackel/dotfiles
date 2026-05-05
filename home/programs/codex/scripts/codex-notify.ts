@@ -235,7 +235,7 @@ async function send(
   const message = notificationMessage(payload);
   const tmuxPath = await commandPath("tmux");
   const ctx = await tmuxContext(tmuxPath);
-  const scriptPath = `${Deno.env.get("HOME")}/.codex/codex-notify.ts`;
+  const scriptPath = `${Deno.env.get("HOME")}/.codex/scripts/codex-notify.ts`;
   const executeCmd = ctx
     ? buildActivateCommand(Deno.execPath(), scriptPath, ctx, tmuxPath)
     : null;

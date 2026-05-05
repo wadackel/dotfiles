@@ -14,7 +14,7 @@ used in this dotfiles repo.
   block, rewrite, or approve anything.
 - `codex-notify.ts`: manages Codex completion notifications declaratively and
   restores tmux/WezTerm activation behavior where tmux context is available.
-  Debug with `~/.codex/codex-notify.ts debug`.
+  Debug with `~/.codex/scripts/codex-notify.ts debug`.
 - `codex-memo.ts`: records Codex Stop summaries to the Obsidian daily note,
   first with a fast heuristic placeholder and then with a best-effort Gemini
   refinement when it completes within the hook budget. Debug with

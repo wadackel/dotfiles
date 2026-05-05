@@ -3,7 +3,7 @@
 // Bridges Codex CLI lifecycle hooks to tmux pane options for the popup picker.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
 
-import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
+import { isEmbedded, parsePsLine, type PsRow } from "../agent-presence.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CODEX,
   CLAUDE_ONLY_KEYS,
@@ -18,7 +18,7 @@ import {
   toolStartOps,
   truncate,
   unsetOps as sharedUnsetOps,
-} from "./pane-shared.ts";
+} from "../pane-shared.ts";
 
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;

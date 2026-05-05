@@ -12,7 +12,7 @@ import {
   type PaneState,
   selfHealOps,
 } from "./codex-pane-status.ts";
-import { maskPrompt, type Op } from "./pane-shared.ts";
+import { maskPrompt, type Op } from "../pane-shared.ts";
 
 function state(overrides: Partial<PaneState> = {}): PaneState {
   return {
@@ -233,7 +233,7 @@ Deno.test("eventToOps: Stop unsets context pct when transcript miss", async () =
 
 Deno.test("eventToOps: Stop sets context pct when token_count is readable", async () => {
   const transcript =
-    new URL("./fixtures/token-ok.jsonl", import.meta.url).pathname;
+    new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
     "Stop",
     { session_id: "s1", transcript_path: transcript },
@@ -309,14 +309,14 @@ Deno.test("buildRunLog: records metadata without raw option values", () => {
 });
 
 Deno.test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
-  const path = new URL("./fixtures/token-ok.jsonl", import.meta.url).pathname;
+  const path = new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   assertEquals(await extractTokenPct(path), 25);
 });
 
 Deno.test("extractTokenPct: token_count missing / zero window / file missing return null", async () => {
-  const missing = new URL("./fixtures/token-missing.jsonl", import.meta.url)
+  const missing = new URL("../fixtures/token-missing.jsonl", import.meta.url)
     .pathname;
-  const zero = new URL("./fixtures/token-zero-window.jsonl", import.meta.url)
+  const zero = new URL("../fixtures/token-zero-window.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractTokenPct(missing), null);
   assertEquals(await extractTokenPct(zero), null);
@@ -324,7 +324,7 @@ Deno.test("extractTokenPct: token_count missing / zero window / file missing ret
 });
 
 Deno.test("extractTokenPct: clamps percentages above 100", async () => {
-  const path = new URL("./fixtures/token-over-window.jsonl", import.meta.url)
+  const path = new URL("../fixtures/token-over-window.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractTokenPct(path), 100);
 });
@@ -337,7 +337,7 @@ Deno.test("main: no TMUX_PANE exits gracefully and writes no stdout", async () =
       "--allow-read",
       "--allow-write",
       "--allow-run=tmux,ps",
-      "home/programs/codex/codex-pane-status.ts",
+      "home/programs/codex/scripts/codex-pane-status.ts",
       "SessionStart",
     ],
     stdin: "piped",
@@ -364,7 +364,7 @@ Deno.test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async
       "--allow-read",
       "--allow-write",
       "--allow-run=tmux,ps",
-      "home/programs/codex/codex-pane-status.ts",
+      "home/programs/codex/scripts/codex-pane-status.ts",
       "SessionStart",
     ],
     stdin: "piped",
