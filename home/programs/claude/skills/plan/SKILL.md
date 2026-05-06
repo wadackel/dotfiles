@@ -33,7 +33,7 @@ Requirement interpretation and critique in `/plan` are **cost-based and semantic
 
 ## Phase 1 — PARSE
 
-Restate the user's request back to them: "あなたが実装したいのは X ですね？" (confirm understanding).
+Restate the user's request in one sentence: "あなたが実装したいのは X ですね？" This is only a summary/restate; it does not satisfy the clarity gate or replace AskUserQuestion.
 
 Estimate complexity via keyword heuristic + lightweight codebase probe (Grep/Glob, no Explore subagent yet):
 
@@ -51,29 +51,23 @@ Estimate complexity via keyword heuristic + lightweight codebase probe (Grep/Glo
 
 **Invariant (auto mode regardless)**: `/plan` operates identically under auto mode and plan mode. The skill does NOT detect auto mode or reduce Ask frequency. Invoking `/plan` is the explicit user opt-in to the Ask flow.
 
-The judgement model (8 observations as a lens, cost-based triage, evidence rule, ambiguous qualifier calibration signal, Phase 1 output subsections) lives in `references/requirement-checklist.md`. SKILL.md owns only the round-loop orchestration below.
+The judgement model (8 observations as a lens, cost-based triage, evidence rule, ambiguous qualifier calibration signal, Phase 1 output subsections) lives in `references/requirement-checklist.md`. SKILL.md owns only the clarity-loop orchestration below.
 
-**Round loop — default operating limit**: `small` / `medium` / `large` default to 3 rounds. The limit is operational, not protocol:
+**Clarity-gated loop**: `small` / `medium` / `large` continue asking as needed until requirements are clear enough to write an implementation plan. Progress is allowed only when (a) user-only / subjective / high-cost uncertainty is resolved, (b) the user explicitly chooses an assumption and authorizes proceeding, or (c) the remaining uncertainty is codebase-recoverable and has a concrete downstream `next:`. `trivial` / `xl` stay exempt (`trivial` skips Phase 1; `xl` triggers a split proposal).
 
-- If a high-cost uncertainty remains (Scope / Success materially unresolved, proceeding would invalidate the plan), additional rounds are allowed.
-- If only low-cost uncertainty remains, converge early and record the rest in `### Assumptions` or `### Unresolved Items` for downstream handling.
+**Each clarification pass** — Steps A–F:
 
-`trivial` / `xl` stay exempt (`trivial` skips Phase 1; `xl` triggers a split proposal).
-
-**Each round** — Steps A–F:
-
-- **Step A Walk**: Round 1 walks the 8 observations (Why / What / Who / When / Where / How / Success / Failure). Round 2+ re-walks with prior answers applied. Ambiguous qualifiers are a **calibration signal**, not a forced downgrade — only when the qualifier is the center of What / Success does the observation go into Calibration Probe; supportive-modifier uses stay with normal interpretation (see `references/requirement-checklist.md` for the central-vs-supportive criterion and examples).
+- **Step A Walk**: Walk the 8 observations (Why / What / Who / When / Where / How / Success / Failure), applying any prior answers before triage. Ambiguous qualifiers are a **calibration signal**, not a forced downgrade — only when the qualifier is the center of What / Success does the observation go into Calibration Probe; supportive-modifier uses stay with normal interpretation (see `references/requirement-checklist.md` for the central-vs-supportive criterion and examples).
 - **Step B Triage**: For NotClear items, choose Ask / Assume / Self-resolve via the cost-based triage (cost-if-wrong × downstream recoverability) defined in `references/requirement-checklist.md`. No per-observation fixed default; `How` is triaged by the same 2 axes as the others.
 - **Step C Self-resolve probe**: Lightweight Grep/Read only (Explore subagent is Phase 2's job). If probe is infeasible, decide via the cost axis — delegate to Phase 2 EXPLORE when the observation is codebase-recoverable (typically What / When), or promote to Ask when it depends on user-only knowledge.
-- **Step D Re-Ask trigger detection (Round 2+)**: Triggers — (i) open-ended return question in a prior Other answer, (ii) ambiguous / empty answer, (iii) tentative Assumption still NotClear on re-walk, (iv) deferred Ask items carried over. If the same trigger repeats in two consecutive rounds, stop issuing Asks and advance to Phase 2 with the item recorded under `### Unresolved Items`. If Ask overflow or call-budget overflow blocks new questions, record remaining items under `### Unresolved Items` with `next: Phase 4 Step 7 Consolidated Interview` and advance. No canonical phrase is required for either path — the structured subsection is the handoff.
-- **Step E Ask issuance**: Max 3 real questions + 1 override question ("このまま Phase 2 へ進む" / "追加確認が必要") per AskUserQuestion call. ≥4 items → Impact-priority top 3 + override; remainder carried to the next round's candidate head. Round 1 may additionally issue Divergence Probing as a separate call — but only when the conditional trigger applies (see `references/requirement-checklist.md`'s "Divergence Probing — conditional 発動"); do not run it by default. 各 real question には **AI 自身の推奨案を必ず明示**する（grill-me P5）。推奨案が出せない質問は malformed として Step C Self-resolve または Step B Assume に差し戻す。
-- **Step F Answer handling**: "Phase 2 へ進む" override → record remaining answers as final, flag any qualifier-centered choices in `### Assumptions` with `user-overridden: true`. "追加確認" override within round budget → next round. Empty or ambiguous answer → trigger (ii) on next round.
+- **Step D Re-Ask trigger detection**: Triggers — (i) open-ended return question in a prior Other answer, (ii) ambiguous / empty answer, (iii) tentative Assumption still NotClear on re-walk, (iv) deferred Ask items carried over. If the same trigger repeats, do not advance by count exhaustion; ask the user to explicitly choose between assuming a stated value, proceeding with a stated risk, continuing clarification, or scoping the item out. If 5 or more candidate items exist, the top 4 (impact priority) go into the current AskUserQuestion call and the remainder roll to the next clarification iteration; codebase-recoverable items may instead be deferred under `### Unresolved Items` with a concrete `next:`, but user-only blockers stay in the Ask queue.
+- **Step E Ask issuance**: Max 4 real questions per AskUserQuestion call (API hard cap). No override / skip slot — the clarity gate is the only exit. ≥5 items → Impact-priority top 4; remainder rolls to the next clarification iteration. Initial clarification may additionally issue Divergence Probing as a separate call — but only when the conditional trigger applies (see `references/requirement-checklist.md`'s "Divergence Probing — conditional 発動"); do not run it by default. 各 real question には **AI 自身の推奨案を必ず明示**する（grill-me P5）。推奨案が出せない質問は malformed として Step C Self-resolve または Step B Assume に差し戻す。
+- **Step F Answer handling**: Normal answer (user picked one of the AI-recommended candidates) → record value under `### Assumptions` or `### Self-resolved` as appropriate, no flag needed. Other answer that explicitly selects an assumption (e.g. "X と仮定して進めて") → record under `### Assumptions` with `user-overridden: true`; this is the only path that lets a user-judgment-bound observation be treated as resolved without continued asking. Empty or ambiguous answer → trigger (ii) on the next pass. The clarity loop never auto-advances on a global "skip"; convergence is driven only by the conditions below.
 
 **Convergence conditions** (any one):
-- User chose the "Phase 2 へ進む" override
 - Zero re-Ask triggers
-- Same trigger repeated across consecutive rounds (advance with `### Unresolved Items` entry)
-- Operating limit reached and no high-cost uncertainty remaining (advance)
+- Remaining uncertainty is codebase-recoverable and recorded with concrete `next:`
+- User explicitly chose an assumption and authorized proceeding (recorded under `### Assumptions`), or chose to scope the item out for repeated uncertainty
 
 **Phase 1 output subsections** (written immediately before `## Overview`): `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, `### Unresolved Items`. Structure and semantics are owned by `references/requirement-checklist.md`. Phase 4 Critic parses the subsection structure (not any canonical phrase).
 
@@ -83,7 +77,7 @@ Complementary safety net — runs only when the lens cannot start:
 - The request itself cannot be restated (uninterpretable / contradictory / insufficient to summarize in one sentence)
 - The request is 1–2 words with no signal across any of the 8 observations
 
-On fire, re-acquire the request via AskUserQuestion before starting Round 1.
+On fire, re-acquire the request via AskUserQuestion before starting the clarity loop.
 
 ## Phase 2 — EXPLORE (non-trivial only)
 
