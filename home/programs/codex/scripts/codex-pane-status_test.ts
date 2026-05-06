@@ -5,6 +5,7 @@ import {
 import {
   appendSubagent,
   buildRunLog,
+  CHILD_SESSION_START_FRESHNESS_SECONDS,
   childSessionStartOps,
   commandOutput,
   countSubagents,
@@ -13,6 +14,7 @@ import {
   extractTokenPct,
   extractToolError,
   extractToolSubject,
+  hasFreshActivity,
   incrementPendingSubagentNotifications,
   isChildCodexEvent,
   isMissingRequestedUserOption,
@@ -36,6 +38,7 @@ function state(overrides: Partial<PaneState> = {}): PaneState {
     sessionId: "",
     subagents: "",
     mainStopped: false,
+    lastActivityAt: "",
     ...overrides,
   };
 }
@@ -302,6 +305,28 @@ Deno.test("parentStopOps: defers idle or drains from latest list snapshot", () =
   ]);
 });
 
+Deno.test("parentStopOps + subagentMutationOps: final tracked child drains idle", () => {
+  const parentStop = parentStopOps("Codex:child", null, "100");
+  assertEquals(parentStop, [
+    { kind: "set", key: "@pane_main_stopped", value: "1" },
+    { kind: "set", key: "@pane_last_activity_at", value: "100" },
+    { kind: "unset", key: "@pane_context_used_pct" },
+  ]);
+
+  const finalChildStop = subagentMutationOps(
+    "Codex:child",
+    { action: "remove", id: "child" },
+    true,
+    "200",
+  );
+  assertEquals(finalChildStop, [
+    { kind: "unset", key: "@pane_subagents" },
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: "200" },
+    { kind: "unset", key: "@pane_main_stopped" },
+  ]);
+});
+
 Deno.test("childSessionStartOps: appends only when latest parent is running", () => {
   assertEquals(
     childSessionStartOps(
@@ -359,13 +384,54 @@ Deno.test("childSessionStartOps: latest idle falls back to new main session", ()
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("isChildCodexEvent: detects valid different session only while parent running", () => {
+Deno.test("hasFreshActivity: uses named child startup freshness window", () => {
+  assertEquals(
+    hasFreshActivity(
+      "1000",
+      String(1000 + CHILD_SESSION_START_FRESHNESS_SECONDS),
+    ),
+    true,
+  );
+  assertEquals(
+    hasFreshActivity(
+      "1000",
+      String(1001 + CHILD_SESSION_START_FRESHNESS_SECONDS),
+    ),
+    false,
+  );
+  assertEquals(hasFreshActivity("", "1000"), false);
+});
+
+Deno.test("isChildCodexEvent: classifies only known or fresh child candidates", () => {
+  const fresh = String(Math.floor(Date.now() / 1000));
+  const stale = String(
+    Math.floor(Date.now() / 1000) - CHILD_SESSION_START_FRESHNESS_SECONDS - 1,
+  );
   assertEquals(
     isChildCodexEvent(
       { session_id: "child" },
-      state({ status: "running", agent: "codex", sessionId: "parent" }),
+      state({
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        lastActivityAt: fresh,
+      }),
+      "SessionStart",
     ),
     true,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        lastActivityAt: stale,
+      }),
+      "SessionStart",
+    ),
+    false,
   );
   assertEquals(
     isChildCodexEvent(
@@ -390,7 +456,7 @@ Deno.test("isChildCodexEvent: detects valid different session only while parent 
       }),
       "SessionStart",
     ),
-    false,
+    true,
   );
   assertEquals(
     isChildCodexEvent(
@@ -479,10 +545,140 @@ Deno.test("eventToOps: SessionStart resume cross-agent falls back to full drain"
 });
 
 Deno.test("eventToOps: child SessionStart tracks subagent without idling or self-heal", async () => {
+  const fresh = String(Math.floor(Date.now() / 1000));
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "child", source: "startup", cwd: "/repo" },
-    state({ status: "running", agent: "codex", sessionId: "parent" }),
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: fresh,
+    }),
+  );
+  assertEquals(ops, [{
+    kind: "set",
+    key: "@pane_subagents",
+    value: "child",
+    childSessionStart: {
+      id: "child",
+      type: "Codex",
+      cwd: "/repo",
+      source: "startup",
+    },
+  }]);
+});
+
+Deno.test("eventToOps: stale valid-different SessionStart drains as new main", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    { session_id: "new-main", source: "startup", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "old-main",
+      subagents: "",
+      lastActivityAt: "1",
+    }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "new-main",
+  }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+  assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
+});
+
+Deno.test("eventToOps: stale SessionStart with main discriminator drains as new main", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    {
+      session_id: "new-main",
+      agent_type: "main",
+      source: "startup",
+      cwd: "/repo",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "old-main",
+      lastActivityAt: "1",
+    }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "new-main",
+  }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+});
+
+Deno.test("eventToOps: fresh SessionStart with main discriminator drains as new main", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    {
+      session_id: "new-main",
+      agent_type: "main",
+      source: "startup",
+      cwd: "/repo",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "old-main",
+      lastActivityAt: String(Math.floor(Date.now() / 1000)),
+    }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "new-main",
+  }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+  assert(!ops.some((op) => "childSessionStart" in op));
+});
+
+Deno.test("eventToOps: unrelated agent_type does not force child classification", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    {
+      session_id: "new-main",
+      agent_type: "not-child",
+      source: "startup",
+      cwd: "/repo",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "old-main",
+      lastActivityAt: "1",
+    }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "new-main",
+  }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+});
+
+Deno.test("eventToOps: explicit child discriminator can track stale child start", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    {
+      session_id: "child",
+      agent_type: "subagent",
+      source: "startup",
+      cwd: "/repo",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: "1",
+    }),
   );
   assertEquals(ops, [{
     kind: "set",
@@ -509,15 +705,41 @@ Deno.test("eventToOps: different SessionStart while idle is a new main session",
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: invalid child-like SessionStart is ignored", async () => {
-  assertEquals(
-    await eventToOps(
-      "SessionStart",
-      { session_id: "../bad", source: "startup", cwd: "/repo" },
-      state({ status: "running", agent: "codex", sessionId: "parent" }),
-    ),
-    [],
+Deno.test("eventToOps: invalid SessionStart id drains without unsafe self-heal", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    { session_id: "../bad", source: "startup", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: "1",
+    }),
   );
+  assert(
+    !hasOp(ops, {
+      kind: "set",
+      key: "@pane_session_id",
+      value: "../bad",
+    }),
+  );
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+});
+
+Deno.test("eventToOps: missing SessionStart id still drains stale running", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    { source: "startup", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: "1",
+    }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+  assert(!ops.some((op) => op.key === "@pane_session_id"));
 });
 
 Deno.test("eventToOps: UserPromptSubmit sets running prompt timestamps", async () => {
@@ -775,26 +997,24 @@ Deno.test("eventToOps: parent Stop delegates latest-list idle decision", async (
   assert(!hasOp(ops, { kind: "set", key: "@pane_main_stopped", value: "1" }));
 });
 
-Deno.test("eventToOps: child Stop delegates latest-list mutation", async () => {
-  assertEquals(
-    await eventToOps(
-      "Stop",
-      { session_id: "child-missing", cwd: "/repo" },
-      state({
-        status: "running",
-        agent: "codex",
-        sessionId: "parent",
-        subagents: "Codex:child",
-        mainStopped: true,
-      }),
-    ),
-    [{
-      kind: "set",
-      key: "@pane_subagents",
-      value: "child-missing",
-      subagentMutation: { action: "remove", id: "child-missing" },
-    }],
+Deno.test("eventToOps: unknown different Stop is treated as main stop", async () => {
+  const ops = await eventToOps(
+    "Stop",
+    { session_id: "child-missing", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+      mainStopped: true,
+    }),
   );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "child-missing",
+  }));
+  assert(hasParentStop(ops, null));
 });
 
 Deno.test("eventToOps: child Stop does not self-heal parent identity", async () => {
@@ -824,6 +1044,28 @@ Deno.test("eventToOps: PermissionRequest sets waiting permission", async () => {
     { session_id: "s1" },
     state(),
   );
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "waiting" }));
+  assert(
+    hasOp(ops, { kind: "set", key: "@pane_wait_reason", value: "permission" }),
+  );
+});
+
+Deno.test("eventToOps: unknown different PermissionRequest wait-marks main", async () => {
+  const ops = await eventToOps(
+    "PermissionRequest",
+    { session_id: "unknown-child", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:known-child",
+    }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_session_id",
+    value: "unknown-child",
+  }));
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "waiting" }));
   assert(
     hasOp(ops, { kind: "set", key: "@pane_wait_reason", value: "permission" }),
@@ -1020,6 +1262,7 @@ const b1State: PaneState = {
   sessionId: "",
   subagents: "",
   mainStopped: false,
+  lastActivityAt: "",
 };
 
 Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {

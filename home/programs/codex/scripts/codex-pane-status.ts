@@ -50,6 +50,8 @@ export type PaneOp =
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;
   session_id?: string;
+  agent_id?: string;
+  agent_type?: string;
   cwd?: string;
   prompt?: string;
   source?: string;
@@ -68,6 +70,7 @@ export interface PaneState {
   sessionId: string;
   subagents: string;
   mainStopped: boolean;
+  lastActivityAt: string;
 }
 
 export type TmuxShowResult =
@@ -98,6 +101,7 @@ const TMUX_COORDINATION_TIMEOUT_MS = 2000;
 const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
 const PENDING_SUBAGENT_NOTIFICATIONS_KEY =
   "@pane_pending_subagent_notifications";
+export const CHILD_SESSION_START_FRESHNESS_SECONDS = 120;
 const LOG_FILE = `${
   Deno.env.get("HOME") ?? "."
 }/.codex/logs/codex-pane-status.log`;
@@ -330,6 +334,32 @@ export function resumeOpsIfStuck(state: PaneState): Op[] {
   ];
 }
 
+function parseUnixSeconds(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) return null;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export function hasFreshActivity(
+  lastActivityAt: string,
+  now: string = nowSec(),
+): boolean {
+  const last = parseUnixSeconds(lastActivityAt);
+  const current = parseUnixSeconds(now);
+  if (last === null || current === null) return false;
+  return current >= last &&
+    current - last <= CHILD_SESSION_START_FRESHNESS_SECONDS;
+}
+
+function classifyExplicitAgentRole(
+  data: HookData,
+): "child" | "main" | "unknown" {
+  const agentType = str(data.agent_type).toLowerCase();
+  if (agentType === "subagent" || agentType === "child") return "child";
+  if (agentType === "main" || agentType === "parent") return "main";
+  return "unknown";
+}
+
 export function isChildCodexEvent(
   data: HookData,
   state: PaneState,
@@ -337,29 +367,26 @@ export function isChildCodexEvent(
 ): boolean {
   const sid = str(data.session_id);
   const knownChild = sid ? hasSubagent(state.subagents, sid) : false;
-  return Boolean(
+  const validDifferentSession = Boolean(
     sid &&
       SESSION_ID_RE.test(sid) &&
       state.agent === "codex" &&
       SESSION_ID_RE.test(state.sessionId) &&
-      sid !== state.sessionId &&
-      (state.status === "running" ||
-        (event !== "SessionStart" && knownChild &&
-          (state.status === "waiting" || state.status === "error" ||
-            state.mainStopped))),
+      sid !== state.sessionId,
   );
-}
+  if (!validDifferentSession) return false;
 
-function isInvalidChildLikeSessionStart(
-  event: string,
-  data: HookData,
-  state: PaneState,
-): boolean {
-  if (event !== "SessionStart") return false;
-  if (state.agent !== "codex" || state.status !== "running") return false;
-  if (!SESSION_ID_RE.test(state.sessionId)) return false;
-  const sid = str(data.session_id);
-  return !sid || !SESSION_ID_RE.test(sid);
+  if (event === "SessionStart") {
+    if (knownChild) return true;
+    const explicitRole = classifyExplicitAgentRole(data);
+    if (explicitRole === "child") return true;
+    if (explicitRole === "main") return false;
+    return state.status === "running" && hasFreshActivity(state.lastActivityAt);
+  }
+
+  return knownChild &&
+    (state.status === "running" || state.status === "waiting" ||
+      state.status === "error" || state.mainStopped);
 }
 
 export function extractToolError(toolResponse: unknown): string | null {
@@ -437,8 +464,6 @@ export async function eventToOps(
   data: HookData,
   state: PaneState,
 ): Promise<PaneOp[]> {
-  if (isInvalidChildLikeSessionStart(event, data, state)) return [];
-
   if (isChildCodexEvent(data, state, event)) {
     const childId = str(data.session_id);
     switch (event) {
@@ -763,6 +788,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     sessionId,
     subagents,
     mainStopped,
+    lastActivityAt,
   ] = await Promise.all([
     tmuxShowValue(pane, "@pane_status"),
     tmuxShowValue(pane, "@pane_current_tool"),
@@ -771,6 +797,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     tmuxShowValue(pane, "@pane_session_id"),
     tmuxShowValue(pane, "@pane_subagents"),
     tmuxShowValue(pane, "@pane_main_stopped"),
+    tmuxShowValue(pane, "@pane_last_activity_at"),
   ]);
   return {
     status,
@@ -780,6 +807,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     sessionId,
     subagents,
     mainStopped: mainStopped === "1",
+    lastActivityAt,
   };
 }
 
