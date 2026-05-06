@@ -39,7 +39,7 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 | large | 横断的変更、新規 architectural piece | 10+ files, 500+ 行 |
 | xl | 複数サブシステム / 構造的シフト | ユーザーに分割提案 |
 
-**trivial short-circuit**: complexity が trivial なら Phase 2-4 をスキップして Phase 5 へ直行 (Context + Files to Change + Verification のみの最小プラン、1 タスク)。
+**trivial short-circuit**: complexity が trivial なら Phase 2-4 をスキップして Phase 5 へ直行 (Context + Files to Change + Verification Commands + Completion Criteria の最小プラン、1 タスク)。
 
 ### Requirement Clarification (small+)
 
@@ -104,7 +104,9 @@ Spawn three explorer subagents in parallel with these distinct mandates. Wait fo
 
 ### Required sections (complexity-gated)
 
-Claude 版と同じ表に従う (trivial=Context+Files to Change+Verification+Task Outline+Definition of Done のみ、small=+Overview+Approach+NOT Building+Test Strategy+Risks、medium+=+Mandatory Reading+Patterns to Mirror+Intentional Conventions(applicable)+Deepening Log link)。
+Claude 版と同じ表に従う (trivial=Context+Files to Change+Verification Commands+Task Outline+Definition of Done+Completion Criteria、small=+Overview+Approach+NOT Building+Test Strategy+Risks、medium+=+Mandatory Reading+Patterns to Mirror+Intentional Conventions(applicable)+Deepening Log link)。
+
+`## Completion Criteria` は全 complexity で必須。trivial short-circuit でも `### Autonomous Verification` / `### Requires User Confirmation` / `### Baseline` の 3 subsection を必ず生成する。
 
 各セクションの中身ガイドラインは Claude 版 SKILL.md と同じ — ただし Codex 文脈で skill 起動構文 / hook 名 / ツール名は Codex 仕様に置き換える。
 
@@ -129,7 +131,7 @@ plan-critic input:
 Wait for its response.
 ```
 
-Critic は出力末尾に `### Verdict\n(CONVERGED|ITERATE)` を返す契約 (TOML `developer_instructions` でピン止めされている)。
+Critic は `### Verdict` の次行に `CONVERGED` または `ITERATE` を返す契約 (TOML `developer_instructions` でピン止めされている)。shared prompt の `Reasoning:` 行が続いても、main session は verdict 行の次の 1 行だけを読む。
 
 ### Step 3 — Process critique + classify
 
@@ -187,7 +189,24 @@ Completion Criteria を以下の tagging で設計:
 - `[orchestrator-only]`: host access が必要なコマンド (`nix flake check`, `darwin-rebuild`, sudo 等)。main session が pre-run して evidence を埋める
 - `[outcome]`: 循環的依存 (例: `$impl` 内蔵 Review が PASS)
 
-verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` は `$impl` 内蔵 Audit + Review が消費する。
+`## Completion Criteria` は machine-consumed section なので、subsection 名を固定する:
+
+```markdown
+## Completion Criteria
+
+### Autonomous Verification
+- [file-state] ...
+- [orchestrator-only] ...
+
+### Requires User Confirmation
+- None
+
+### Baseline
+- Each implementation task has raw verification evidence recorded in the sidecar JSON.
+- The reserved `Final Audit + Review` task is completed only after `$impl` emits `AUDIT_VERDICT: PASS` and `REVIEW_VERDICT: PASS`.
+```
+
+`[outcome]` は `### Autonomous Verification` に書いてよいが、`$impl` Audit では循環 item として verdict から除外され、Review 後の最終状態で確認される。verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` は `$impl` 内蔵 Audit + Review が消費する。
 
 ### Deepening Log artifact
 
@@ -242,28 +261,13 @@ update_plan({
 
 ### サイドカー JSON 初期化
 
-`deno eval` はこの環境では implicit permissions で動作し、`--allow-write` などの permission flags を受け付けない。以下の snippet では permission flags を付けない。
-
-`~/.codex/plans/<plan-basename>.evidence.json` をタスクと同じ順序で初期化する。task id は配列 index ベース (`task-1`, `task-2`, ...) で採番:
+`~/.codex/plans/<plan-basename>.evidence.json` をタスクと同じ順序で初期化する。task id は helper が配列 index ベース (`task-1`, `task-2`, ...) で採番する。全呼び出しは execute bit に依存せず、以下の permissioned command shape を使う:
 
 ```bash
-deno eval '
-  const path = Deno.args[0];
-  const subjects = JSON.parse(Deno.args[1]);
-  const data = {
-    plan: Deno.args[2],
-    tasks: subjects.map((s, i) => ({
-      id: `task-${i+1}`,
-      subject: s,
-      baseline_sha: null,
-      evidence: null,
-      status: "pending",
-    })),
-  };
-  await Deno.writeTextFile(path + ".tmp", JSON.stringify(data, null, 2));
-  await Deno.rename(path + ".tmp", path);
-' -- /Users/$USER/.codex/plans/<basename>.evidence.json '["subject 1","subject 2","Final Audit + Review"]' '<basename>.md'
+deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts init /Users/$USER/.codex/plans/<basename>.evidence.json '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
 ```
+
+helper は `subjects-json` の末尾が `Final Audit + Review` でない場合に exit 1 で失敗する。サイドカー JSON の書き込みは helper 内で tmpfile + rename により atomic に行う。
 
 末尾の `Final Audit + Review` エントリは $impl 内蔵 Audit + Codex subagent review phase が「ここまで来たら Audit と fresh reviewer subagent review を実行」と判断するためのマーカー。実装タスクではない。
 
@@ -271,7 +275,7 @@ deno eval '
 
 Claude 版と同じ:
 1. 1 task = 1 verifiable unit
-2. Verification は各 implementation task に内包 (verification-only task は "Final Audit + Review" のみ許される)
+2. Verification Commands は各 implementation task に内包 (verification-only task は "Final Audit + Review" のみ許される)
 3. Separation of concerns
 4. Three elements (target files / expected behavior / verification commands + EXPECTED output)
 5. 末尾 "Final Audit + Review" は $impl skill が直接実行する内蔵 Audit + Codex subagent review phase であり、独立の skill 起動は不要 (Codex には skill-to-skill invocation API がないため)
@@ -329,7 +333,7 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 - `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex 公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`): Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
 - `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`): Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
 - `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: Phase 4 が依存する custom agent 定義。dotfiles 実体は `home/programs/codex/agents/`。
-- `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` を出力する。
+- `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` を出力する。
 - PreToolUse hook (`codex-plan-gate.ts`): cwd 配下の apply_patch を `.active-<hash>` 不在/期限切れ時に block する。Phase 6 で `.pending-` のみを書く理由はこのゲートと連動するため。
 
 ## Design notes

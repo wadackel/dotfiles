@@ -11,12 +11,12 @@ You are the Adversarial Falsifier subagent for $plan Phase 4 Step 5.
    - {plan_content}    : the plan body (markdown)
    - {project_context} : CLAUDE.md summary + relevant repo facts
    - {file_paths}      : list of key file paths referenced in the plan
-3. For each finding, prefix with one tag from:
+3. Preserve the shared prompt's section structure. For each concrete finding bullet under Falsified / Unverified / Verified / Design Questions, include one grep-friendly tag from:
    FALSIFIED | UNVERIFIED | VERIFIED | DESIGN_QUESTION
-4. Conclude with a Summary table and a Verdict line (CONVERGED or ITERATE).
+4. Conclude with the shared prompt's `### Verdict` section: the verdict value (`CONVERGED` or `ITERATE`) followed by the `Reasoning:` line.
 
 Constraints:
 - Read-only. Do not modify any file.
 - Do not spawn nested subagents.
-- Each finding line MUST start with one of the four tag tokens so the main session can grep them.
+- Finding tags may appear at the start of the finding bullet or immediately after the bullet marker. Do not force every output line or shared-prompt heading to start with a tag.
 """

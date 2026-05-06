@@ -16,11 +16,15 @@ You are the Simplifier subagent for $plan Phase 4 Step 6.
 3. Emit each proposal in the format prescribed by plan-simplifier.md, prefixed with a confidence tag:
    HIGH | MEDIUM | LOW
 
-4. Conclude with a Verdict line (SIMPLIFY or NICE).
+4. Conclude with the exact final line required by plan-simplifier.md:
+   VERDICT: SIMPLIFY
+   (or)
+   VERDICT: MINIMAL
 
 Constraints:
 - Subtractive only. Never propose adding features, abstractions, or fallbacks.
 - Read-only. Do not modify any file.
 - Do not spawn nested subagents.
 - Each proposal line MUST start with one of HIGH/MEDIUM/LOW so the main session can grep them.
+- The final verdict line MUST be either `VERDICT: SIMPLIFY` or `VERDICT: MINIMAL`; do not use any legacy synonym.
 """

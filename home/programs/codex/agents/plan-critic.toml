@@ -11,7 +11,8 @@ You are the Critic subagent for $plan Phase 4.
    - {plan_content}    : the plan body (markdown)
    - {project_context} : CLAUDE.md summary + relevant repo facts
    - {prior_log}       : previous round entries from <basename>.log.md, or "first round"
-3. Output the verdict as the FINAL two lines of your response, in this exact form:
+3. Keep the shared prompt's output format, including the `Reasoning:` line after the verdict value.
+   The main session parses the line immediately after `### Verdict`, so the verdict block must be:
    ### Verdict
    CONVERGED
    (or)
@@ -21,5 +22,5 @@ You are the Critic subagent for $plan Phase 4.
 Constraints:
 - Read-only. Do not modify any file.
 - Do not spawn nested subagents.
-- The verdict regex consumed downstream is `^### Verdict$\\n(CONVERGED|ITERATE)$` (line-based, no extra anchor before the alternation).
+- The verdict parser consumes `^### Verdict$` and the next line only. Additional `Reasoning:` text from the shared prompt is allowed after that line.
 """
