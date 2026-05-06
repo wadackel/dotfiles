@@ -14,6 +14,7 @@ import {
   waitFor,
   waitForExit,
 } from "./picker_e2e_harness.ts";
+import { codexCwdHash } from "./picker.tsx";
 
 // Helper: resolve a paneId (%N) to its "session:window.pane" target string.
 async function paneTarget(paneId: string): Promise<string> {
@@ -24,6 +25,35 @@ async function paneTarget(paneId: string): Promise<string> {
     "-p",
     "#{session_name}:#{window_index}.#{pane_index}",
   ])).trim();
+}
+
+async function writeCodexProgressFixture(
+  home: string,
+  cwd: string,
+): Promise<void> {
+  await Deno.mkdir(cwd, { recursive: true });
+  const plansDir = `${home}/.codex/plans`;
+  await Deno.mkdir(plansDir, { recursive: true });
+  const planPath = `${plansDir}/picker-e2e-plan.md`;
+  await Deno.writeTextFile(planPath, "## picker e2e plan\n");
+  await Deno.writeTextFile(
+    `${plansDir}/picker-e2e-plan.evidence.json`,
+    JSON.stringify(
+      {
+        plan: "picker-e2e-plan.md",
+        tasks: [
+          { id: "task-1", subject: "one", status: "completed" },
+          { id: "task-2", subject: "two", status: "completed" },
+          { id: "task-3", subject: "three", status: "in_progress" },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  const hash = await codexCwdHash(cwd);
+  if (!hash) throw new Error("failed to hash codex e2e cwd");
+  await Deno.writeTextFile(`${plansDir}/.active-${hash}`, `${planPath}\n`);
 }
 
 // S0: Smoke test — exercises the harness itself. No Claude panes in the
@@ -293,6 +323,42 @@ Deno.test("S8: task progress 2/3 from tasks dir", async () => {
     await waitForExit();
   } finally {
     await teardown();
+  }
+});
+
+// S8b: Codex progress reads ~/.codex/plans/.active-<cwd-hash> and its
+// sibling evidence JSON. The pane carries @pane_cwd so the hash is
+// deterministic and independent of tmux's default current_path.
+Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
+  const originalHome = Deno.env.get("HOME");
+  const tempHome = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "picker-codex-e2e-",
+  });
+  const denoDir = Deno.env.get("DENO_DIR") ??
+    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+  const cwd = `${tempHome}/work/project`;
+  await writeCodexProgressFixture(tempHome, cwd);
+  const env: Record<string, string> = { HOME: tempHome };
+  if (denoDir) env.DENO_DIR = denoDir;
+  await setupServer();
+  try {
+    await createClaudePane({
+      agent: "codex",
+      status: "idle",
+      prompt: "codex-row-progress",
+      lastTool: "Read",
+      cwd,
+    });
+    const picker = await spawnPicker({ env });
+    const out = await waitFor(picker, (o) => o.includes("2/3"));
+    assertStringIncludes(out, "codex-row-progress");
+    assertStringIncludes(out, "2/3");
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(tempHome, { recursive: true }).catch(() => undefined);
   }
 });
 

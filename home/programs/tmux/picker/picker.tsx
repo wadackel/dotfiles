@@ -144,6 +144,160 @@ export async function readTaskProgress(
   return total === 0 ? null : { done, total };
 }
 
+const CODEX_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
+const CODEX_TASK_STATUSES = new Set([
+  "pending",
+  "in_progress",
+  "completed",
+]);
+
+// Mirrors codex-plan-gate.ts:canonical so picker hashes the same cwd string
+// as the edit gate even when the leaf path has disappeared.
+async function canonical(p: string): Promise<string> {
+  try {
+    return await Deno.realPath(p);
+  } catch {
+    // fall through
+  }
+  const tail: string[] = [];
+  let cur = p;
+  while (cur.length > 1) {
+    const idx = cur.lastIndexOf("/");
+    if (idx < 0) break;
+    tail.unshift(cur.slice(idx + 1));
+    cur = idx === 0 ? "/" : cur.slice(0, idx);
+    try {
+      const real = await Deno.realPath(cur);
+      return real === "/" ? "/" + tail.join("/") : real + "/" + tail.join("/");
+    } catch {
+      // keep walking up
+    }
+  }
+  return p;
+}
+
+export async function codexCwdHash(cwd: string): Promise<string | null> {
+  if (!cwd) return null;
+  try {
+    const real = await canonical(cwd);
+    const data = new TextEncoder().encode(real);
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+
+async function readFreshMarker(path: string): Promise<string | null> {
+  try {
+    const stat = await Deno.lstat(path);
+    if (!stat.isFile || stat.isSymlink) return null;
+    const mtime = stat.mtime?.getTime() ?? 0;
+    if (Date.now() - mtime >= CODEX_MARKER_TTL_MS) return null;
+    return (await Deno.readTextFile(path)).trim();
+  } catch {
+    return null;
+  }
+}
+
+async function activeMarkerPresence(
+  path: string,
+): Promise<"present" | "absent" | "blocked"> {
+  try {
+    await Deno.lstat(path);
+    return "present";
+  } catch (err) {
+    return err instanceof Deno.errors.NotFound ? "absent" : "blocked";
+  }
+}
+
+async function evidencePathFromMarker(
+  plansDir: string,
+  marker: string,
+): Promise<string | null> {
+  if (!marker.startsWith("/") || !marker.endsWith(".md")) return null;
+  const basename = marker.slice(marker.lastIndexOf("/") + 1);
+  if (!basename || basename.startsWith(".")) return null;
+  let plansDirReal = "";
+  let planReal = "";
+  try {
+    plansDirReal = await Deno.realPath(plansDir);
+    planReal = await Deno.realPath(marker);
+  } catch {
+    return null;
+  }
+  if (planReal !== plansDirReal + "/" + basename) return null;
+
+  const evidence = `${plansDirReal}/${basename.slice(0, -3)}.evidence.json`;
+  try {
+    const info = await Deno.lstat(evidence);
+    if (!info.isFile || info.isSymlink) return null;
+  } catch {
+    return null;
+  }
+  return evidence;
+}
+
+async function readCodexTaskProgress(
+  cwd: string,
+): Promise<TaskProgress | null> {
+  const home = Deno.env.get("HOME");
+  if (!home) return null;
+  const hash = await codexCwdHash(cwd);
+  if (!hash) return null;
+
+  const plansDir = `${home}/.codex/plans`;
+  const activePath = `${plansDir}/.active-${hash}`;
+  const pendingPath = `${plansDir}/.pending-${hash}`;
+  const active = await activeMarkerPresence(activePath);
+  if (active === "blocked") return null;
+  const marker = active === "present"
+    ? await readFreshMarker(activePath)
+    : await readFreshMarker(pendingPath);
+  if (!marker) return null;
+
+  const evidence = await evidencePathFromMarker(plansDir, marker);
+  if (!evidence) return null;
+
+  try {
+    const raw: unknown = JSON.parse(await Deno.readTextFile(evidence));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const tasks = (raw as { tasks?: unknown }).tasks;
+    if (!Array.isArray(tasks)) return null;
+    let done = 0;
+    let total = 0;
+    for (const task of tasks) {
+      if (!task || typeof task !== "object" || Array.isArray(task)) {
+        return null;
+      }
+      const status = (task as { status?: unknown }).status ?? "pending";
+      if (typeof status !== "string" || !CODEX_TASK_STATUSES.has(status)) {
+        return null;
+      }
+      total++;
+      if (status === "completed") done++;
+    }
+    return total === 0 ? null : { done, total };
+  } catch {
+    return null;
+  }
+}
+
+export async function readTaskProgressForRow(
+  row: PaneRow,
+): Promise<TaskProgress | null> {
+  if (row.agent === "codex") {
+    return await readCodexTaskProgress(row.cwd || row.currentPath);
+  }
+  if (row.agent === "claude") {
+    return await readTaskProgress(row.sessionId);
+  }
+  return null;
+}
+
 // Per-agent live-pane allowlist + isLivePaneCommand live in pane_row.ts so
 // non-TUI tooling (picker-doctor, tests) can share the SSOT without React/Ink.
 // The matcher is intentionally exact-match against tmux's `pane_current_command`
@@ -302,12 +456,12 @@ function App({
         const r = await fetchPanes();
         if (cancelled) return;
         setRows(r);
-        // Fetch task progress for every Claude pane in parallel. Failures are
+        // Fetch task progress for every supported pane in parallel. Failures are
         // isolated (readTaskProgress swallows them) so one bad session dir does
         // not block the whole tick.
         const entries = await Promise.all(
           r.map(async (row) =>
-            [row.paneId, await readTaskProgress(row.sessionId)] as const
+            [row.paneId, await readTaskProgressForRow(row)] as const
           ),
         );
         if (!cancelled) setTaskProgressMap(new Map(entries));

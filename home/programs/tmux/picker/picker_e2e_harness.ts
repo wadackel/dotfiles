@@ -71,6 +71,7 @@ export interface PaneOpts {
   lastActivityAtSec?: number;
   sessionId?: string;
   subagents?: string;
+  cwd?: string;
   // When undefined or true (default), spawn the pane with a live cc
   // placeholder so `pane_current_command` is `.claude-wrapped` — matching
   // the picker's liveness filter (picker.tsx:CLAUDE_PANE_COMMANDS).
@@ -280,6 +281,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.subagents !== undefined) {
     pairs.push(["@pane_subagents", opts.subagents]);
+  }
+  if (opts.cwd !== undefined) {
+    pairs.push(["@pane_cwd", opts.cwd]);
   }
 
   await Promise.all(

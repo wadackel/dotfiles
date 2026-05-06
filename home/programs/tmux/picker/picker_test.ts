@@ -1,13 +1,16 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  codexCwdHash,
   isLivePaneCommand,
   type PaneRow,
   parseRow,
   parseTarget,
   readTaskProgress,
+  readTaskProgressForRow,
   TMUX_FORMAT,
 } from "./picker.tsx";
 import { type Row2Seg, truncateTopSegBody } from "./components.tsx";
+import { cwdHash as gateCwdHash } from "../../codex/scripts/codex-plan-gate.ts";
 
 Deno.test("TMUX_FORMAT contains 21 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
@@ -258,6 +261,94 @@ async function withFixtureHome<T>(
   }
 }
 
+async function withTempHome<T>(
+  fn: (homeDir: string) => Promise<T>,
+): Promise<T> {
+  const home = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "picker-codex-home-",
+  });
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", home);
+  try {
+    return await fn(home);
+  } finally {
+    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
+    else Deno.env.delete("HOME");
+    await Deno.remove(home, { recursive: true }).catch(() => undefined);
+  }
+}
+
+function codexRow(cwd: string): PaneRow {
+  return {
+    paneId: "%1",
+    target: "test:0.0",
+    currentCommand: "codex",
+    currentPath: cwd,
+    agent: "codex",
+    status: "running",
+    startedAtSec: null,
+    cwd,
+    worktreeBranch: "",
+    subagents: "",
+    prompt: "",
+    waitReason: "",
+    currentTool: "",
+    sessionId: "codex-session",
+    lastTool: "",
+    lastEditFile: "",
+    lastActivityAtSec: null,
+    currentToolSubject: "",
+    lastToolSubject: "",
+    lastToolError: "",
+    contextUsedPct: null,
+  };
+}
+
+async function writeCodexPlanState(
+  home: string,
+  cwd: string,
+  opts: {
+    marker: "active" | "pending";
+    tasks?: Array<"pending" | "in_progress" | "completed" | undefined>;
+    markerContent?: string;
+    evidenceText?: string;
+    expired?: boolean;
+  },
+): Promise<{ markerPath: string; planPath: string; evidencePath: string }> {
+  const plansDir = `${home}/.codex/plans`;
+  await Deno.mkdir(plansDir, { recursive: true });
+  await Deno.mkdir(cwd, { recursive: true });
+  const hash = await codexCwdHash(cwd);
+  if (!hash) throw new Error("failed to hash codex cwd");
+
+  const planPath = `${plansDir}/sample-plan.md`;
+  const evidencePath = `${plansDir}/sample-plan.evidence.json`;
+  await Deno.writeTextFile(planPath, "## sample plan\n");
+  const tasks = opts.tasks ?? ["completed", "in_progress", "pending"];
+  const taskObjects = tasks.map((status, i) => {
+    const task: Record<string, unknown> = {
+      id: `task-${i + 1}`,
+      subject: `Task ${i + 1}`,
+    };
+    if (status !== undefined) task.status = status;
+    return task;
+  });
+  await Deno.writeTextFile(
+    evidencePath,
+    opts.evidenceText ??
+      JSON.stringify({ plan: "sample-plan.md", tasks: taskObjects }, null, 2),
+  );
+
+  const markerPath = `${plansDir}/.${opts.marker}-${hash}`;
+  await Deno.writeTextFile(markerPath, opts.markerContent ?? `${planPath}\n`);
+  if (opts.expired) {
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await Deno.utime(markerPath, old, old);
+  }
+  return { markerPath, planPath, evidencePath };
+}
+
 Deno.test("readTaskProgress: empty sessionId → null", async () => {
   assertEquals(await readTaskProgress(""), null);
 });
@@ -305,6 +396,170 @@ Deno.test("readTaskProgress: non-json files ignored", async () => {
     const sessionId = "sess-mixed";
     const result = await readTaskProgress(sessionId);
     assertEquals(result, { done: 0, total: 1 });
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex active marker aggregates evidence tasks", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "active",
+      tasks: ["completed", "completed", "in_progress"],
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
+      done: 2,
+      total: 3,
+    });
+  });
+});
+
+Deno.test("codexCwdHash: matches codex-plan-gate cwdHash", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await Deno.mkdir(cwd, { recursive: true });
+    assertEquals(await codexCwdHash(cwd), await gateCwdHash(cwd));
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex pending marker used when active absent", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "pending",
+      tasks: ["completed", "pending", "pending"],
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
+      done: 1,
+      total: 3,
+    });
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex expired active marker blocks pending fallback", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "pending",
+      tasks: ["completed", "completed", "completed"],
+    });
+    await writeCodexPlanState(home, cwd, {
+      marker: "active",
+      tasks: ["completed"],
+      expired: true,
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex invalid marker path returns null", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "active",
+      markerContent: "/tmp/outside-plan.md\n",
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
+});
+
+Deno.test({
+  name: "readTaskProgressForRow: codex symlink evidence returns null",
+  // Deno.symlink requires unscoped write permission on macOS even when both
+  // paths sit under /tmp (the target canonicalizes through /private/tmp and
+  // test permissions cannot escalate a parent --allow-write=/tmp profile).
+  // The plan's unit verification command intentionally uses --allow-write.
+  async fn() {
+    await withTempHome(async (home) => {
+      const cwd = `${home}/work/project`;
+      const { evidencePath } = await writeCodexPlanState(home, cwd, {
+        marker: "active",
+      });
+      const outside = `${home}/outside-evidence.json`;
+      await Deno.writeTextFile(
+        outside,
+        JSON.stringify({
+          plan: "sample-plan.md",
+          tasks: [{ id: "task-1", subject: "one", status: "completed" }],
+        }),
+      );
+      const outsideReal = await Deno.realPath(outside);
+      await Deno.remove(evidencePath);
+      await Deno.symlink(outsideReal, evidencePath);
+      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+    });
+  },
+});
+
+Deno.test({
+  name: "readTaskProgressForRow: codex symlink plan marker returns null",
+  async fn() {
+    await withTempHome(async (home) => {
+      const cwd = `${home}/work/project`;
+      const { markerPath } = await writeCodexPlanState(home, cwd, {
+        marker: "active",
+      });
+      const plansDir = `${home}/.codex/plans`;
+      const outside = `${home}/outside-plan.md`;
+      const linked = `${plansDir}/linked-plan.md`;
+      await Deno.writeTextFile(outside, "## outside\n");
+      const outsideReal = await Deno.realPath(outside);
+      await Deno.symlink(outsideReal, linked);
+      await Deno.writeTextFile(markerPath, `${linked}\n`);
+      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+    });
+  },
+});
+
+Deno.test({
+  name:
+    "readTaskProgressForRow: codex active marker symlink blocks pending fallback",
+  async fn() {
+    await withTempHome(async (home) => {
+      const cwd = `${home}/work/project`;
+      const { markerPath } = await writeCodexPlanState(home, cwd, {
+        marker: "pending",
+        tasks: ["completed", "completed", "completed"],
+      });
+      const hash = await codexCwdHash(cwd);
+      if (!hash) throw new Error("failed to hash codex cwd");
+      const activePath = `${home}/.codex/plans/.active-${hash}`;
+      await Deno.symlink(`${home}/missing-active-marker`, activePath);
+      assertEquals(markerPath.endsWith(hash), true);
+      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+    });
+  },
+});
+
+Deno.test("readTaskProgressForRow: codex malformed evidence returns null", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "active",
+      evidenceText: "{not json",
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex legacy missing status counts as pending", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await writeCodexPlanState(home, cwd, {
+      marker: "active",
+      tasks: ["completed", undefined, "pending"],
+    });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
+      done: 1,
+      total: 3,
+    });
+  });
+});
+
+Deno.test("readTaskProgressForRow: codex missing marker returns null", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    await Deno.mkdir(cwd, { recursive: true });
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
   });
 });
 // --- truncateTopSegBody ---
