@@ -20,6 +20,33 @@ import {
   unsetOps as sharedUnsetOps,
 } from "../pane-shared.ts";
 
+export type SubagentMutation =
+  | { action: "add"; type: string; id: string }
+  | { action: "remove"; id: string };
+type SubagentMutationOp = {
+  kind: "set";
+  key: "@pane_subagents";
+  value: string;
+  subagentMutation: SubagentMutation;
+};
+type ChildSessionStartOp = {
+  kind: "set";
+  key: "@pane_subagents";
+  value: string;
+  childSessionStart: { id: string; type: string; cwd: string; source: string };
+};
+type ParentStopOp = {
+  kind: "set";
+  key: "@pane_status";
+  value: "idle";
+  parentStop: { contextPct: string | null };
+};
+export type PaneOp =
+  | Op
+  | SubagentMutationOp
+  | ChildSessionStartOp
+  | ParentStopOp;
+
 type HookData = Record<string, unknown> & {
   hook_event_name?: string;
   session_id?: string;
@@ -39,13 +66,20 @@ export interface PaneState {
   currentToolUseId: string;
   agent: string;
   sessionId: string;
+  subagents: string;
+  mainStopped: boolean;
 }
+
+export type TmuxShowResult =
+  | { ok: true; value: string }
+  | { ok: false; stderr: string };
 
 // codex-only resume path key set — no parallel concept in claude/opencode.
 export const RESUME_TRANSIENT_KEYS = [
   "@pane_current_tool",
   "@pane_current_tool_use_id",
   "@pane_wait_reason",
+  "@pane_pending_subagent_notifications",
 ] as const satisfies readonly PaneOptionKey[];
 
 // Derived (codex-shape) — diverges from claude's manually enumerated equivalent;
@@ -60,12 +94,166 @@ const STALE_AT_SESSION_START = ALL_PANE_OPTIONS_FOR_CODEX.filter((key) =>
 
 const TOKEN_TAIL_BYTES = 64 * 1024;
 const LOG_MAX_LINES = 1000;
+const TMUX_COORDINATION_TIMEOUT_MS = 2000;
+const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
+const PENDING_SUBAGENT_NOTIFICATIONS_KEY =
+  "@pane_pending_subagent_notifications";
 const LOG_FILE = `${
   Deno.env.get("HOME") ?? "."
 }/.codex/logs/codex-pane-status.log`;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
+}
+
+function sanitizeListToken(raw: string): string {
+  return raw.replace(/[|:]/g, "-");
+}
+
+export function appendSubagent(
+  list: string,
+  type: string,
+  id: string,
+): string {
+  const entry = `${sanitizeListToken(type)}:${sanitizeListToken(id)}`;
+  if (list.split("|").filter(Boolean).includes(entry)) return list;
+  return list ? `${list}|${entry}` : entry;
+}
+
+export function removeSubagent(list: string, id: string): string {
+  if (!list) return "";
+  const target = sanitizeListToken(id);
+  const entries = list.split("|");
+  const filtered: string[] = [];
+  let removed = false;
+  for (const entry of entries) {
+    if (!removed && entry.endsWith(`:${target}`)) {
+      removed = true;
+      continue;
+    }
+    if (entry) filtered.push(entry);
+  }
+  return filtered.join("|");
+}
+
+export function countSubagents(list: string): number {
+  return list.split("|").filter(Boolean).length;
+}
+
+function hasSubagent(list: string, id: string): boolean {
+  const target = sanitizeListToken(id);
+  return list.split("|").some((entry) => entry.endsWith(`:${target}`));
+}
+
+function parsePendingSubagentNotifications(raw: string): number {
+  if (!/^\d+$/.test(raw)) return 0;
+  const parsed = Number(raw);
+  return Number.isSafeInteger(parsed) ? parsed : 0;
+}
+
+export function incrementPendingSubagentNotifications(raw: string): string {
+  return String(parsePendingSubagentNotifications(raw) + 1);
+}
+
+export function isMissingRequestedUserOption(
+  stderr: string,
+  key: string,
+): boolean {
+  return key.startsWith("@") && stderr.trim() === `invalid option: ${key}`;
+}
+
+export function normalizeMissingUserOption(
+  result: TmuxShowResult,
+  key: string,
+): TmuxShowResult {
+  if (!result.ok && isMissingRequestedUserOption(result.stderr, key)) {
+    return { ok: true, value: "" };
+  }
+  return result;
+}
+
+export function shouldIncrementPendingSubagentNotification(
+  mutation: SubagentMutation,
+  ops: Op[],
+): boolean {
+  return mutation.action === "remove" && ops.length > 0;
+}
+
+export function subagentMutationOps(
+  current: string,
+  mutation: SubagentMutation,
+  mainStopped: boolean,
+  now: string = nowSec(),
+): Op[] {
+  const next = mutation.action === "add"
+    ? appendSubagent(current, mutation.type, mutation.id)
+    : removeSubagent(current, mutation.id);
+  if (next === current) return [];
+
+  const ops: Op[] = [
+    next
+      ? { kind: "set", key: "@pane_subagents", value: next }
+      : { kind: "unset", key: "@pane_subagents" },
+  ];
+  if (mutation.action === "remove" && next === "" && mainStopped) {
+    ops.push({ kind: "set", key: "@pane_status", value: "idle" });
+    ops.push({ kind: "set", key: "@pane_last_activity_at", value: now });
+    ops.push({ kind: "unset", key: "@pane_main_stopped" });
+  }
+  return ops;
+}
+
+export function parentStopOps(
+  currentSubagents: string,
+  contextPct: string | null,
+  now: string = nowSec(),
+): Op[] {
+  if (countSubagents(currentSubagents) > 0) {
+    return [
+      { kind: "set", key: "@pane_main_stopped", value: "1" },
+      { kind: "set", key: "@pane_last_activity_at", value: now },
+      contextPct === null
+        ? { kind: "unset", key: "@pane_context_used_pct" }
+        : { kind: "set", key: "@pane_context_used_pct", value: contextPct },
+    ];
+  }
+  return [
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: now },
+    contextPct === null
+      ? { kind: "unset", key: "@pane_context_used_pct" }
+      : { kind: "set", key: "@pane_context_used_pct", value: contextPct },
+    { kind: "unset", key: "@pane_main_stopped" },
+  ];
+}
+
+export function childSessionStartOps(
+  latest: Pick<PaneState, "status" | "agent" | "sessionId" | "subagents">,
+  child: { id: string; type: string; cwd: string; source: string },
+  now: string = nowSec(),
+): Op[] {
+  const latestParentRunning = latest.status === "running" &&
+    latest.agent === "codex" &&
+    SESSION_ID_RE.test(latest.sessionId) &&
+    child.id !== latest.sessionId;
+  if (latestParentRunning) {
+    return subagentMutationOps(
+      latest.subagents,
+      { action: "add", type: child.type, id: child.id },
+      false,
+      now,
+    );
+  }
+
+  const sameCodexSession = latest.agent === "codex" &&
+    latest.sessionId === child.id;
+  const staleKeys = (child.source === "resume" && sameCodexSession)
+    ? [...CLAUDE_ONLY_KEYS, ...RESUME_TRANSIENT_KEYS]
+    : STALE_AT_SESSION_START;
+  return [
+    ...selfHealOps({ session_id: child.id, cwd: child.cwd }),
+    ...sessionStartBody({ staleKeys, nowSec: now }),
+  ];
 }
 
 const SUBJECT_EXTRACTORS: Record<
@@ -142,6 +330,38 @@ export function resumeOpsIfStuck(state: PaneState): Op[] {
   ];
 }
 
+export function isChildCodexEvent(
+  data: HookData,
+  state: PaneState,
+  event: string = "",
+): boolean {
+  const sid = str(data.session_id);
+  const knownChild = sid ? hasSubagent(state.subagents, sid) : false;
+  return Boolean(
+    sid &&
+      SESSION_ID_RE.test(sid) &&
+      state.agent === "codex" &&
+      SESSION_ID_RE.test(state.sessionId) &&
+      sid !== state.sessionId &&
+      (state.status === "running" ||
+        (event !== "SessionStart" && knownChild &&
+          (state.status === "waiting" || state.status === "error" ||
+            state.mainStopped))),
+  );
+}
+
+function isInvalidChildLikeSessionStart(
+  event: string,
+  data: HookData,
+  state: PaneState,
+): boolean {
+  if (event !== "SessionStart") return false;
+  if (state.agent !== "codex" || state.status !== "running") return false;
+  if (!SESSION_ID_RE.test(state.sessionId)) return false;
+  const sid = str(data.session_id);
+  return !sid || !SESSION_ID_RE.test(sid);
+}
+
 export function extractToolError(toolResponse: unknown): string | null {
   if (typeof toolResponse !== "string") return null;
   if (!toolResponse.startsWith("Error")) return null;
@@ -216,8 +436,102 @@ export async function eventToOps(
   event: string,
   data: HookData,
   state: PaneState,
-): Promise<Op[]> {
-  const body: Op[] = [];
+): Promise<PaneOp[]> {
+  if (isInvalidChildLikeSessionStart(event, data, state)) return [];
+
+  if (isChildCodexEvent(data, state, event)) {
+    const childId = str(data.session_id);
+    switch (event) {
+      case "SessionStart": {
+        return [{
+          kind: "set",
+          key: "@pane_subagents",
+          value: childId,
+          childSessionStart: {
+            id: childId,
+            type: "Codex",
+            cwd: str(data.cwd),
+            source: str(data.source),
+          },
+        }];
+      }
+
+      case "Stop": {
+        return [{
+          kind: "set",
+          key: "@pane_subagents",
+          value: childId,
+          subagentMutation: { action: "remove", id: childId },
+        }];
+      }
+
+      case "PreToolUse": {
+        const toolName = str(data.tool_name);
+        if (!toolName) return [];
+        const subject = extractToolSubject(toolName, data.tool_input);
+        const ops: PaneOp[] = [
+          ...toolStartOps({ tool: toolName, subject: subject || undefined }),
+        ];
+        const toolUseId = str(data.tool_use_id);
+        ops.push(
+          toolUseId
+            ? {
+              kind: "set",
+              key: "@pane_current_tool_use_id",
+              value: toolUseId,
+            }
+            : { kind: "unset", key: "@pane_current_tool_use_id" },
+        );
+        return ops;
+      }
+
+      case "PostToolUse": {
+        const toolName = str(data.tool_name);
+        const now = nowSec();
+        const ops: PaneOp[] = [
+          { kind: "set", key: "@pane_last_activity_at", value: now },
+        ];
+        if (!toolName) return ops;
+        const toolUseId = str(data.tool_use_id);
+        if (toolUseId && toolUseId === state.currentToolUseId) {
+          ops.push({ kind: "unset", key: "@pane_current_tool" });
+          ops.push({ kind: "unset", key: "@pane_current_tool_use_id" });
+          ops.push({ kind: "unset", key: "@pane_current_tool_subject" });
+        }
+        ops.push({ kind: "set", key: "@pane_last_tool", value: toolName });
+        const subject = extractToolSubject(toolName, data.tool_input);
+        ops.push(
+          subject
+            ? { kind: "set", key: "@pane_last_tool_subject", value: subject }
+            : { kind: "unset", key: "@pane_last_tool_subject" },
+        );
+        const editFile = extractEditFile(toolName, data.tool_input);
+        ops.push(
+          editFile
+            ? { kind: "set", key: "@pane_last_edit_file", value: editFile }
+            : { kind: "unset", key: "@pane_last_edit_file" },
+        );
+        const error = extractToolError(data.tool_response);
+        ops.push(
+          error
+            ? { kind: "set", key: "@pane_last_tool_error", value: error }
+            : { kind: "unset", key: "@pane_last_tool_error" },
+        );
+        return ops;
+      }
+
+      case "PermissionRequest":
+        return [];
+
+      case "UserPromptSubmit":
+        return [];
+
+      default:
+        return [];
+    }
+  }
+
+  const body: PaneOp[] = [];
 
   switch (event) {
     case "SessionStart": {
@@ -244,6 +558,7 @@ export async function eventToOps(
           ? { kind: "set", key: "@pane_prompt", value: prompt }
           : { kind: "unset", key: "@pane_prompt" },
       );
+      body.push({ kind: "unset", key: "@pane_main_stopped" });
       break;
     }
 
@@ -303,20 +618,15 @@ export async function eventToOps(
     }
 
     case "Stop": {
-      body.push({ kind: "set", key: "@pane_status", value: "idle" });
-      body.push({
-        kind: "set",
-        key: "@pane_last_activity_at",
-        value: nowSec(),
-      });
       const pct = await extractTokenPct(
         typeof data.transcript_path === "string" ? data.transcript_path : null,
       );
-      body.push(
-        pct === null
-          ? { kind: "unset", key: "@pane_context_used_pct" }
-          : { kind: "set", key: "@pane_context_used_pct", value: String(pct) },
-      );
+      body.push({
+        kind: "set",
+        key: "@pane_status",
+        value: "idle",
+        parentStop: { contextPct: pct === null ? null : String(pct) },
+      });
       break;
     }
 
@@ -348,54 +658,299 @@ async function fetchParent(pid: number): Promise<PsRow | null> {
   }
 }
 
-async function tmuxRun(
+export async function commandOutput(
+  cmd: string,
   args: string[],
-): Promise<{ code: number; stderr: string }> {
-  const { code, stderr } = await new Deno.Command("tmux", {
-    args,
-    stdin: "null",
-    stdout: "null",
-    stderr: "piped",
-    signal: AbortSignal.timeout(2000),
-  }).output();
-  return { code, stderr: new TextDecoder().decode(stderr).trim() };
-}
-
-async function tmuxShow(pane: string, key: string): Promise<string> {
+  options: {
+    stdout: "piped" | "null";
+    stderr: "piped" | "null";
+    timeoutMs?: number;
+  },
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  let timeout: number | undefined;
   try {
-    const { stdout } = await new Deno.Command("tmux", {
-      args: ["show", "-t", pane, "-pv", key],
+    const child = new Deno.Command(cmd, {
+      args,
       stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-      signal: AbortSignal.timeout(2000),
-    }).output();
-    return new TextDecoder().decode(stdout).trim();
-  } catch {
-    return "";
+      stdout: options.stdout,
+      stderr: options.stderr,
+    }).spawn();
+    const output = child.output();
+    const result = options.timeoutMs === undefined
+      ? await output
+      : await Promise.race([
+        output,
+        new Promise<"timeout">((resolve) => {
+          timeout = setTimeout(() => resolve("timeout"), options.timeoutMs);
+        }),
+      ]);
+    if (result === "timeout") {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // process may have exited between the timer and kill
+      }
+      await output.catch(() => undefined);
+      return {
+        code: 124,
+        stdout: "",
+        stderr: `timeout after ${options.timeoutMs}ms`,
+      };
+    }
+    return {
+      code: result.code,
+      stdout: options.stdout === "piped"
+        ? new TextDecoder().decode(result.stdout).trim()
+        : "",
+      stderr: options.stderr === "piped"
+        ? new TextDecoder().decode(result.stderr).trim()
+        : "",
+    };
+  } catch (err) {
+    return { code: 127, stdout: "", stderr: String(err) };
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 
-async function readPaneState(pane: string): Promise<PaneState> {
-  const [status, currentTool, currentToolUseId, agent, sessionId] =
-    await Promise.all([
-      tmuxShow(pane, "@pane_status"),
-      tmuxShow(pane, "@pane_current_tool"),
-      tmuxShow(pane, "@pane_current_tool_use_id"),
-      tmuxShow(pane, "@pane_agent"),
-      tmuxShow(pane, "@pane_session_id"),
-    ]);
-  return { status, currentTool, currentToolUseId, agent, sessionId };
+async function tmuxRun(
+  args: string[],
+): Promise<{ code: number; stderr: string }> {
+  const result = await commandOutput("tmux", args, {
+    stdout: "null",
+    stderr: "piped",
+    timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
+  });
+  return { code: result.code, stderr: result.stderr };
 }
 
-async function applyOp(pane: string, op: Op): Promise<void> {
+function subagentLockName(pane: string): string {
+  return `${SUBAGENT_LOCK_PREFIX}-${pane.replace(/[^A-Za-z0-9_.-]/g, "-")}`;
+}
+
+async function tmuxShow(
+  pane: string,
+  key: string,
+): Promise<TmuxShowResult> {
+  const result = await commandOutput("tmux", ["show", "-t", pane, "-pv", key], {
+    stdout: "piped",
+    stderr: "piped",
+    timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
+  });
+  return result.code === 0
+    ? { ok: true, value: result.stdout }
+    : { ok: false, stderr: result.stderr };
+}
+
+async function tmuxShowOptionalUserOption(
+  pane: string,
+  key: string,
+): Promise<TmuxShowResult> {
+  return normalizeMissingUserOption(await tmuxShow(pane, key), key);
+}
+
+async function tmuxShowValue(pane: string, key: string): Promise<string> {
+  const result = await tmuxShow(pane, key);
+  return result.ok ? result.value : "";
+}
+
+async function readPaneState(pane: string): Promise<PaneState> {
+  const [
+    status,
+    currentTool,
+    currentToolUseId,
+    agent,
+    sessionId,
+    subagents,
+    mainStopped,
+  ] = await Promise.all([
+    tmuxShowValue(pane, "@pane_status"),
+    tmuxShowValue(pane, "@pane_current_tool"),
+    tmuxShowValue(pane, "@pane_current_tool_use_id"),
+    tmuxShowValue(pane, "@pane_agent"),
+    tmuxShowValue(pane, "@pane_session_id"),
+    tmuxShowValue(pane, "@pane_subagents"),
+    tmuxShowValue(pane, "@pane_main_stopped"),
+  ]);
+  return {
+    status,
+    currentTool,
+    currentToolUseId,
+    agent,
+    sessionId,
+    subagents,
+    mainStopped: mainStopped === "1",
+  };
+}
+
+async function applyRegularOp(pane: string, op: Op): Promise<boolean> {
+  const value = op.kind === "set" ? op.value : "";
   const args = op.kind === "set"
-    ? ["set", "-t", pane, "-p", op.key, op.value]
+    ? ["set", "-t", pane, "-p", op.key, value]
     : ["set", "-t", pane, "-p", "-u", op.key];
   const { code, stderr } = await tmuxRun(args);
   if (code !== 0) {
     console.error(`codex-pane-status: tmux set ${op.key} failed: ${stderr}`);
+    return false;
   }
+  return true;
+}
+
+async function applySubagentMutation(
+  pane: string,
+  op: SubagentMutationOp,
+): Promise<void> {
+  const lockName = subagentLockName(pane);
+  const lock = await tmuxRun(["wait-for", "-L", lockName]);
+  if (lock.code !== 0) {
+    console.error(
+      `codex-pane-status: tmux wait-for lock failed: ${lock.stderr}`,
+    );
+    return;
+  }
+  try {
+    const current = await tmuxShowOptionalUserOption(pane, op.key);
+    const mainStopped = await tmuxShowOptionalUserOption(
+      pane,
+      "@pane_main_stopped",
+    );
+    if (!current.ok || !mainStopped.ok) {
+      let stderr = "";
+      if (!current.ok) {
+        stderr = current.stderr;
+      } else if (!mainStopped.ok) {
+        stderr = mainStopped.stderr;
+      }
+      console.error(`codex-pane-status: tmux show failed: ${stderr}`);
+      return;
+    }
+    const ops = subagentMutationOps(
+      current.value,
+      op.subagentMutation,
+      mainStopped.value === "1",
+    );
+    let appliedRemoval = false;
+    for (const nextOp of ops) {
+      const applied = await applyRegularOp(pane, nextOp);
+      if (nextOp.key === "@pane_subagents") appliedRemoval = applied;
+    }
+    if (
+      appliedRemoval &&
+      shouldIncrementPendingSubagentNotification(op.subagentMutation, ops)
+    ) {
+      const pending = await tmuxShowOptionalUserOption(
+        pane,
+        PENDING_SUBAGENT_NOTIFICATIONS_KEY,
+      );
+      if (!pending.ok) {
+        console.error(`codex-pane-status: tmux show failed: ${pending.stderr}`);
+        return;
+      }
+      await applyRegularOp(pane, {
+        kind: "set",
+        key: PENDING_SUBAGENT_NOTIFICATIONS_KEY,
+        value: incrementPendingSubagentNotifications(pending.value),
+      });
+    }
+  } finally {
+    const unlock = await tmuxRun(["wait-for", "-U", lockName]);
+    if (unlock.code !== 0) {
+      console.error(
+        `codex-pane-status: tmux wait-for unlock failed: ${unlock.stderr}`,
+      );
+    }
+  }
+}
+
+async function applyChildSessionStart(
+  pane: string,
+  op: ChildSessionStartOp,
+): Promise<void> {
+  const lockName = subagentLockName(pane);
+  const lock = await tmuxRun(["wait-for", "-L", lockName]);
+  if (lock.code !== 0) {
+    console.error(
+      `codex-pane-status: tmux wait-for lock failed: ${lock.stderr}`,
+    );
+    return;
+  }
+  try {
+    const [status, agent, sessionId, subagents] = await Promise.all([
+      tmuxShow(pane, "@pane_status"),
+      tmuxShow(pane, "@pane_agent"),
+      tmuxShow(pane, "@pane_session_id"),
+      tmuxShowOptionalUserOption(pane, "@pane_subagents"),
+    ]);
+    if (!status.ok || !agent.ok || !sessionId.ok || !subagents.ok) {
+      const failed = [status, agent, sessionId, subagents].find((r) => !r.ok);
+      console.error(
+        `codex-pane-status: tmux show failed: ${
+          failed && !failed.ok ? failed.stderr : ""
+        }`,
+      );
+      return;
+    }
+    const ops = childSessionStartOps(
+      {
+        status: status.value,
+        agent: agent.value,
+        sessionId: sessionId.value,
+        subagents: subagents.value,
+      },
+      op.childSessionStart,
+    );
+    for (const nextOp of ops) await applyRegularOp(pane, nextOp);
+  } finally {
+    const unlock = await tmuxRun(["wait-for", "-U", lockName]);
+    if (unlock.code !== 0) {
+      console.error(
+        `codex-pane-status: tmux wait-for unlock failed: ${unlock.stderr}`,
+      );
+    }
+  }
+}
+
+async function applyParentStop(pane: string, op: ParentStopOp): Promise<void> {
+  const lockName = subagentLockName(pane);
+  const lock = await tmuxRun(["wait-for", "-L", lockName]);
+  if (lock.code !== 0) {
+    console.error(
+      `codex-pane-status: tmux wait-for lock failed: ${lock.stderr}`,
+    );
+    return;
+  }
+  try {
+    const current = await tmuxShowOptionalUserOption(pane, "@pane_subagents");
+    if (!current.ok) {
+      console.error(`codex-pane-status: tmux show failed: ${current.stderr}`);
+      return;
+    }
+    const ops = parentStopOps(current.value, op.parentStop.contextPct);
+    for (const nextOp of ops) await applyRegularOp(pane, nextOp);
+  } finally {
+    const unlock = await tmuxRun(["wait-for", "-U", lockName]);
+    if (unlock.code !== 0) {
+      console.error(
+        `codex-pane-status: tmux wait-for unlock failed: ${unlock.stderr}`,
+      );
+    }
+  }
+}
+
+async function applyOp(pane: string, op: PaneOp): Promise<void> {
+  if (op.kind === "set" && "childSessionStart" in op) {
+    await applyChildSessionStart(pane, op);
+    return;
+  }
+  if (op.kind === "set" && "subagentMutation" in op) {
+    await applySubagentMutation(pane, op);
+    return;
+  }
+  if (op.kind === "set" && "parentStop" in op) {
+    await applyParentStop(pane, op);
+    return;
+  }
+  await applyRegularOp(pane, op);
 }
 
 export interface RunLog {

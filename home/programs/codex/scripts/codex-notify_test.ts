@@ -3,10 +3,16 @@ import {
   buildActivateCommand,
   buildTerminalNotifierArgs,
   debugOutput,
+  isMissingRequestedUserOption,
+  normalizeMissingUserOption,
   notificationMessage,
   parsePayload,
+  pendingSubagentNotificationDecision,
+  runCommand,
   shellQuote,
+  subagentLockName,
   type TmuxContext,
+  tmuxPaneId,
 } from "./codex-notify.ts";
 
 Deno.test("parsePayload: accepts Codex notify payload and falls back on malformed JSON", () => {
@@ -74,4 +80,123 @@ Deno.test("debugOutput: renders tail log or missing-log message", () => {
     debugOutput("/tmp/missing.log", null),
     "No log file found at /tmp/missing.log\n",
   );
+});
+
+Deno.test("runCommand: timeout kills long-running process", async () => {
+  const started = Date.now();
+  const result = await runCommand("/bin/sleep", ["2"], { timeoutMs: 100 });
+  assertEquals(result.code, 124);
+  assertStringIncludes(result.stderr, "timeout after 100ms");
+  if (Date.now() - started > 1000) {
+    throw new Error("timeout command was not killed promptly");
+  }
+});
+
+Deno.test("tmuxPaneId: accepts raw tmux pane ids only", () => {
+  assertEquals(tmuxPaneId("%123"), "%123");
+  assertEquals(tmuxPaneId("1"), null);
+  assertEquals(tmuxPaneId("-L"), null);
+  assertEquals(tmuxPaneId(undefined), null);
+});
+
+Deno.test("subagentLockName: uses raw pane id sanitization", () => {
+  assertEquals(subagentLockName("%123"), "codex-pane-status-subagents--123");
+});
+
+Deno.test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
+  assertEquals(
+    isMissingRequestedUserOption(
+      "invalid option: @pane_pending_subagent_notifications",
+      "@pane_pending_subagent_notifications",
+    ),
+    true,
+  );
+  assertEquals(
+    isMissingRequestedUserOption(
+      "invalid option: @pane_subagents",
+      "@pane_pending_subagent_notifications",
+    ),
+    false,
+  );
+  assertEquals(
+    isMissingRequestedUserOption(
+      "no such pane: %999",
+      "@pane_pending_subagent_notifications",
+    ),
+    false,
+  );
+  assertEquals(
+    isMissingRequestedUserOption("invalid option: status", "status"),
+    false,
+  );
+});
+
+Deno.test("normalizeMissingUserOption: missing pending counter becomes send decision", () => {
+  const normalized = normalizeMissingUserOption(
+    {
+      ok: false,
+      stderr: "invalid option: @pane_pending_subagent_notifications",
+    },
+    "@pane_pending_subagent_notifications",
+  );
+  assertEquals(normalized, { ok: true, value: "" });
+  assertEquals(
+    pendingSubagentNotificationDecision(normalized.ok ? normalized.value : "1"),
+    { kind: "send", count: 0 },
+  );
+});
+
+Deno.test("normalizeMissingUserOption: unrelated tmux failures remain failures", () => {
+  assertEquals(
+    normalizeMissingUserOption(
+      { ok: false, stderr: "no such pane: %999" },
+      "@pane_pending_subagent_notifications",
+    ),
+    { ok: false, stderr: "no such pane: %999" },
+  );
+  assertEquals(
+    normalizeMissingUserOption(
+      { ok: true, value: "1" },
+      "@pane_pending_subagent_notifications",
+    ),
+    { ok: true, value: "1" },
+  );
+});
+
+Deno.test("pendingSubagentNotificationDecision: malformed and zero values send", () => {
+  assertEquals(pendingSubagentNotificationDecision(""), {
+    kind: "send",
+    count: 0,
+  });
+  assertEquals(pendingSubagentNotificationDecision("0"), {
+    kind: "send",
+    count: 0,
+  });
+  assertEquals(pendingSubagentNotificationDecision("-1"), {
+    kind: "send",
+    count: 0,
+  });
+  assertEquals(pendingSubagentNotificationDecision("not-a-number"), {
+    kind: "send",
+    count: 0,
+  });
+});
+
+Deno.test("pendingSubagentNotificationDecision: consumes one pending notification", () => {
+  assertEquals(pendingSubagentNotificationDecision("1"), {
+    kind: "skip",
+    count: 1,
+    remaining: 0,
+    op: { kind: "unset", key: "@pane_pending_subagent_notifications" },
+  });
+  assertEquals(pendingSubagentNotificationDecision("3"), {
+    kind: "skip",
+    count: 3,
+    remaining: 2,
+    op: {
+      kind: "set",
+      key: "@pane_pending_subagent_notifications",
+      value: "2",
+    },
+  });
 });

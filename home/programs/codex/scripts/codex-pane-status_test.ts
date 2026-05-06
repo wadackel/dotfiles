@@ -3,14 +3,27 @@ import {
   assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  appendSubagent,
   buildRunLog,
+  childSessionStartOps,
+  commandOutput,
+  countSubagents,
   eventToOps,
   extractEditFile,
   extractTokenPct,
   extractToolError,
   extractToolSubject,
+  incrementPendingSubagentNotifications,
+  isChildCodexEvent,
+  isMissingRequestedUserOption,
+  normalizeMissingUserOption,
+  type PaneOp,
   type PaneState,
+  parentStopOps,
+  removeSubagent,
   selfHealOps,
+  shouldIncrementPendingSubagentNotification,
+  subagentMutationOps,
 } from "./codex-pane-status.ts";
 import { maskPrompt, type Op } from "../pane-shared.ts";
 
@@ -21,12 +34,23 @@ function state(overrides: Partial<PaneState> = {}): PaneState {
     currentToolUseId: "",
     agent: "",
     sessionId: "",
+    subagents: "",
+    mainStopped: false,
     ...overrides,
   };
 }
 
-function hasOp(ops: Op[], expected: Op): boolean {
+function hasOp(ops: PaneOp[], expected: Op): boolean {
   return ops.some((op) => JSON.stringify(op) === JSON.stringify(expected));
+}
+
+function hasParentStop(ops: PaneOp[], contextPct: string | null): boolean {
+  return ops.some((op) =>
+    op.kind === "set" &&
+    op.key === "@pane_status" &&
+    "parentStop" in op &&
+    op.parentStop.contextPct === contextPct
+  );
 }
 
 Deno.test("selfHealOps: session id missing returns no ops", () => {
@@ -60,6 +84,346 @@ Deno.test("maskPrompt: strips controls, collapses whitespace, truncates", () => 
   );
 });
 
+Deno.test("appendSubagent: appends and preserves order", () => {
+  assertEquals(appendSubagent("", "Codex", "c1"), "Codex:c1");
+  assertEquals(
+    appendSubagent("Codex:c1", "Codex", "c2"),
+    "Codex:c1|Codex:c2",
+  );
+});
+
+Deno.test("appendSubagent: sanitizes list delimiters and is idempotent", () => {
+  assertEquals(appendSubagent("", "Co|dex", "c:1"), "Co-dex:c-1");
+  assertEquals(appendSubagent("Codex:c1", "Codex", "c1"), "Codex:c1");
+});
+
+Deno.test("removeSubagent: removes first matching id", () => {
+  assertEquals(
+    removeSubagent("Codex:c1|Codex:c2|Codex:c1", "c1"),
+    "Codex:c2|Codex:c1",
+  );
+  assertEquals(removeSubagent("Codex:c1", "c1"), "");
+  assertEquals(removeSubagent("Codex:c1", "missing"), "Codex:c1");
+});
+
+Deno.test("countSubagents: counts non-empty list entries", () => {
+  assertEquals(countSubagents(""), 0);
+  assertEquals(countSubagents("Codex:c1|Codex:c2|"), 2);
+});
+
+Deno.test("incrementPendingSubagentNotifications: parses positive integers only", () => {
+  assertEquals(incrementPendingSubagentNotifications(""), "1");
+  assertEquals(incrementPendingSubagentNotifications("0"), "1");
+  assertEquals(incrementPendingSubagentNotifications("2"), "3");
+  assertEquals(incrementPendingSubagentNotifications("-1"), "1");
+  assertEquals(incrementPendingSubagentNotifications("not-a-number"), "1");
+});
+
+Deno.test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
+  assertEquals(
+    isMissingRequestedUserOption(
+      "invalid option: @pane_subagents",
+      "@pane_subagents",
+    ),
+    true,
+  );
+  assertEquals(
+    isMissingRequestedUserOption(
+      "invalid option: @pane_subagents\n",
+      "@pane_subagents",
+    ),
+    true,
+  );
+  assertEquals(
+    isMissingRequestedUserOption(
+      "invalid option: @pane_status",
+      "@pane_subagents",
+    ),
+    false,
+  );
+  assertEquals(
+    isMissingRequestedUserOption("no such pane: %999", "@pane_subagents"),
+    false,
+  );
+  assertEquals(
+    isMissingRequestedUserOption("invalid option: status", "status"),
+    false,
+  );
+});
+
+Deno.test("normalizeMissingUserOption: treats missing user option as empty value only", () => {
+  assertEquals(
+    normalizeMissingUserOption(
+      { ok: false, stderr: "invalid option: @pane_subagents" },
+      "@pane_subagents",
+    ),
+    { ok: true, value: "" },
+  );
+  assertEquals(
+    normalizeMissingUserOption(
+      { ok: false, stderr: "no such pane: %999" },
+      "@pane_subagents",
+    ),
+    { ok: false, stderr: "no such pane: %999" },
+  );
+  assertEquals(
+    normalizeMissingUserOption(
+      { ok: true, value: "Codex:child" },
+      "@pane_subagents",
+    ),
+    { ok: true, value: "Codex:child" },
+  );
+});
+
+Deno.test("shouldIncrementPendingSubagentNotification: only successful removes count", () => {
+  assertEquals(
+    shouldIncrementPendingSubagentNotification(
+      { action: "remove", id: "child" },
+      [{ kind: "unset", key: "@pane_subagents" }],
+    ),
+    true,
+  );
+  assertEquals(
+    shouldIncrementPendingSubagentNotification(
+      { action: "remove", id: "missing" },
+      [],
+    ),
+    false,
+  );
+  assertEquals(
+    shouldIncrementPendingSubagentNotification(
+      { action: "add", type: "Codex", id: "child" },
+      [{ kind: "set", key: "@pane_subagents", value: "Codex:child" }],
+    ),
+    false,
+  );
+});
+
+Deno.test("subagentMutationOps: adds from latest list snapshot", () => {
+  assertEquals(
+    subagentMutationOps(
+      "Codex:c1",
+      { action: "add", type: "Codex", id: "c2" },
+      false,
+      "100",
+    ),
+    [{
+      kind: "set",
+      key: "@pane_subagents",
+      value: "Codex:c1|Codex:c2",
+    }],
+  );
+});
+
+Deno.test("subagentMutationOps: removes from latest list and drains idle", () => {
+  assertEquals(
+    subagentMutationOps(
+      "Codex:c1|Codex:c2",
+      { action: "remove", id: "c1" },
+      true,
+      "100",
+    ),
+    [{ kind: "set", key: "@pane_subagents", value: "Codex:c2" }],
+  );
+  assertEquals(
+    subagentMutationOps(
+      "Codex:c1",
+      { action: "remove", id: "c1" },
+      true,
+      "100",
+    ),
+    [
+      { kind: "unset", key: "@pane_subagents" },
+      { kind: "set", key: "@pane_status", value: "idle" },
+      { kind: "set", key: "@pane_last_activity_at", value: "100" },
+      { kind: "unset", key: "@pane_main_stopped" },
+    ],
+  );
+  assertEquals(
+    subagentMutationOps(
+      "Codex:c1",
+      { action: "remove", id: "missing" },
+      true,
+      "100",
+    ),
+    [],
+  );
+});
+
+Deno.test("subagentMutationOps: missing pending snapshot increments first skipped notification", () => {
+  const ops = subagentMutationOps(
+    "Codex:child",
+    { action: "remove", id: "child" },
+    false,
+    "100",
+  );
+  assertEquals(
+    shouldIncrementPendingSubagentNotification(
+      { action: "remove", id: "child" },
+      ops,
+    ),
+    true,
+  );
+  const pending = normalizeMissingUserOption(
+    {
+      ok: false,
+      stderr: "invalid option: @pane_pending_subagent_notifications",
+    },
+    "@pane_pending_subagent_notifications",
+  );
+  assertEquals(
+    pending.ok ? incrementPendingSubagentNotifications(pending.value) : "",
+    "1",
+  );
+});
+
+Deno.test("parentStopOps: defers idle or drains from latest list snapshot", () => {
+  assertEquals(parentStopOps("Codex:c1", null, "100"), [
+    { kind: "set", key: "@pane_main_stopped", value: "1" },
+    { kind: "set", key: "@pane_last_activity_at", value: "100" },
+    { kind: "unset", key: "@pane_context_used_pct" },
+  ]);
+  assertEquals(parentStopOps("Codex:c1", "25", "100"), [
+    { kind: "set", key: "@pane_main_stopped", value: "1" },
+    { kind: "set", key: "@pane_last_activity_at", value: "100" },
+    { kind: "set", key: "@pane_context_used_pct", value: "25" },
+  ]);
+  assertEquals(parentStopOps("", "25", "100"), [
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: "100" },
+    { kind: "set", key: "@pane_context_used_pct", value: "25" },
+    { kind: "unset", key: "@pane_main_stopped" },
+  ]);
+  assertEquals(parentStopOps("", null, "100"), [
+    { kind: "set", key: "@pane_status", value: "idle" },
+    { kind: "set", key: "@pane_last_activity_at", value: "100" },
+    { kind: "unset", key: "@pane_context_used_pct" },
+    { kind: "unset", key: "@pane_main_stopped" },
+  ]);
+});
+
+Deno.test("childSessionStartOps: appends only when latest parent is running", () => {
+  assertEquals(
+    childSessionStartOps(
+      {
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:c1",
+      },
+      { id: "child", type: "Codex", cwd: "/repo", source: "startup" },
+      "100",
+    ),
+    [{
+      kind: "set",
+      key: "@pane_subagents",
+      value: "Codex:c1|Codex:child",
+    }],
+  );
+});
+
+Deno.test("childSessionStartOps: missing subagents snapshot registers first child", () => {
+  assertEquals(
+    childSessionStartOps(
+      {
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "",
+      },
+      { id: "child", type: "Codex", cwd: "/repo", source: "startup" },
+      "100",
+    ),
+    [{
+      kind: "set",
+      key: "@pane_subagents",
+      value: "Codex:child",
+    }],
+  );
+});
+
+Deno.test("childSessionStartOps: latest idle falls back to new main session", () => {
+  const ops = childSessionStartOps(
+    {
+      status: "idle",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    },
+    { id: "child", type: "Codex", cwd: "/repo", source: "startup" },
+    "100",
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+  assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+});
+
+Deno.test("isChildCodexEvent: detects valid different session only while parent running", () => {
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({ status: "running", agent: "codex", sessionId: "parent" }),
+    ),
+    true,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({
+        status: "waiting",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+      }),
+    ),
+    true,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({
+        status: "waiting",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+      }),
+      "SessionStart",
+    ),
+    false,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({
+        status: "idle",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+      }),
+    ),
+    false,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "child" },
+      state({
+        status: "waiting",
+        agent: "codex",
+        sessionId: "parent",
+      }),
+    ),
+    false,
+  );
+  assertEquals(
+    isChildCodexEvent(
+      { session_id: "../bad" },
+      state({ status: "running", agent: "codex", sessionId: "parent" }),
+    ),
+    false,
+  );
+});
+
 Deno.test("eventToOps: SessionStart startup drains stale state and seeds idle", async () => {
   const ops = await eventToOps(
     "SessionStart",
@@ -69,6 +433,10 @@ Deno.test("eventToOps: SessionStart startup drains stale state and seeds idle", 
   assert(hasOp(ops, { kind: "set", key: "@pane_agent", value: "codex" }));
   assert(hasOp(ops, { kind: "unset", key: "@pane_prompt" }));
   assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
+  assert(hasOp(ops, {
+    kind: "unset",
+    key: "@pane_pending_subagent_notifications",
+  }));
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
@@ -90,6 +458,10 @@ Deno.test("eventToOps: SessionStart resume same codex preserves durable fields a
     state({ agent: "codex", sessionId: "s1", currentToolUseId: "tool-1" }),
   );
   assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
+  assert(hasOp(ops, {
+    kind: "unset",
+    key: "@pane_pending_subagent_notifications",
+  }));
   assert(hasOp(ops, { kind: "unset", key: "@pane_current_tool" }));
   assert(hasOp(ops, { kind: "unset", key: "@pane_current_tool_use_id" }));
   assert(!hasOp(ops, { kind: "unset", key: "@pane_prompt" }));
@@ -104,6 +476,48 @@ Deno.test("eventToOps: SessionStart resume cross-agent falls back to full drain"
   );
   assert(hasOp(ops, { kind: "unset", key: "@pane_prompt" }));
   assert(hasOp(ops, { kind: "unset", key: "@pane_context_used_pct" }));
+});
+
+Deno.test("eventToOps: child SessionStart tracks subagent without idling or self-heal", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    { session_id: "child", source: "startup", cwd: "/repo" },
+    state({ status: "running", agent: "codex", sessionId: "parent" }),
+  );
+  assertEquals(ops, [{
+    kind: "set",
+    key: "@pane_subagents",
+    value: "child",
+    childSessionStart: {
+      id: "child",
+      type: "Codex",
+      cwd: "/repo",
+      source: "startup",
+    },
+  }]);
+});
+
+Deno.test("eventToOps: different SessionStart while idle is a new main session", async () => {
+  const ops = await eventToOps(
+    "SessionStart",
+    { session_id: "new-main", source: "startup", cwd: "/repo" },
+    state({ status: "idle", agent: "codex", sessionId: "old-main" }),
+  );
+  assert(
+    hasOp(ops, { kind: "set", key: "@pane_session_id", value: "new-main" }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
+});
+
+Deno.test("eventToOps: invalid child-like SessionStart is ignored", async () => {
+  assertEquals(
+    await eventToOps(
+      "SessionStart",
+      { session_id: "../bad", source: "startup", cwd: "/repo" },
+      state({ status: "running", agent: "codex", sessionId: "parent" }),
+    ),
+    [],
+  );
 });
 
 Deno.test("eventToOps: UserPromptSubmit sets running prompt timestamps", async () => {
@@ -157,6 +571,57 @@ Deno.test("eventToOps: PreToolUse without tool name is no-op", async () => {
     await eventToOps("PreToolUse", { session_id: "s1" }, state()),
     [],
   );
+});
+
+Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume", async () => {
+  const ops = await eventToOps(
+    "PreToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "waiting",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_current_tool", value: "Bash" }));
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_current_tool_use_id",
+    value: "u-child",
+  }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+});
+
+Deno.test("eventToOps: child PreToolUse does not resume error parent", async () => {
+  const ops = await eventToOps(
+    "PreToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "error",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_current_tool", value: "Bash" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
 Deno.test("eventToOps: PostToolUse clears current only for matching tool_use_id", async () => {
@@ -221,14 +686,66 @@ Deno.test("eventToOps: PostToolUse records last edit file when payload exposes f
   }));
 });
 
+Deno.test("eventToOps: child PostToolUse records last tool without self-heal or resume", async () => {
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "waiting",
+      currentTool: "Bash",
+      currentToolUseId: "u-child",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_last_tool", value: "Bash" }));
+  assert(hasOp(ops, { kind: "unset", key: "@pane_current_tool" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+});
+
+Deno.test("eventToOps: child PostToolUse does not resume error parent", async () => {
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "error",
+      currentTool: "Bash",
+      currentToolUseId: "u-child",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    }),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_last_tool", value: "Bash" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+});
+
 Deno.test("eventToOps: Stop unsets context pct when transcript miss", async () => {
   const ops = await eventToOps(
     "Stop",
     { session_id: "s1", transcript_path: "/no/such/file.jsonl" },
     state(),
   );
-  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
-  assert(hasOp(ops, { kind: "unset", key: "@pane_context_used_pct" }));
+  assert(hasParentStop(ops, null));
+  assert(!hasOp(ops, { kind: "unset", key: "@pane_context_used_pct" }));
+  assert(!hasOp(ops, { kind: "unset", key: "@pane_main_stopped" }));
 });
 
 Deno.test("eventToOps: Stop sets context pct when token_count is readable", async () => {
@@ -239,9 +756,66 @@ Deno.test("eventToOps: Stop sets context pct when token_count is readable", asyn
     { session_id: "s1", transcript_path: transcript },
     state(),
   );
-  assert(
-    hasOp(ops, { kind: "set", key: "@pane_context_used_pct", value: "25" }),
+  assert(hasParentStop(ops, "25"));
+});
+
+Deno.test("eventToOps: parent Stop delegates latest-list idle decision", async () => {
+  const ops = await eventToOps(
+    "Stop",
+    { session_id: "parent", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+    }),
   );
+  assert(hasOp(ops, { kind: "set", key: "@pane_session_id", value: "parent" }));
+  assert(hasParentStop(ops, null));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_main_stopped", value: "1" }));
+});
+
+Deno.test("eventToOps: child Stop delegates latest-list mutation", async () => {
+  assertEquals(
+    await eventToOps(
+      "Stop",
+      { session_id: "child-missing", cwd: "/repo" },
+      state({
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+        mainStopped: true,
+      }),
+    ),
+    [{
+      kind: "set",
+      key: "@pane_subagents",
+      value: "child-missing",
+      subagentMutation: { action: "remove", id: "child-missing" },
+    }],
+  );
+});
+
+Deno.test("eventToOps: child Stop does not self-heal parent identity", async () => {
+  const ops = await eventToOps(
+    "Stop",
+    { session_id: "child", cwd: "/repo" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      subagents: "Codex:child",
+      mainStopped: true,
+    }),
+  );
+  assertEquals(ops, [{
+    kind: "set",
+    key: "@pane_subagents",
+    value: "child",
+    subagentMutation: { action: "remove", id: "child" },
+  }]);
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
 });
 
 Deno.test("eventToOps: PermissionRequest sets waiting permission", async () => {
@@ -253,6 +827,38 @@ Deno.test("eventToOps: PermissionRequest sets waiting permission", async () => {
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "waiting" }));
   assert(
     hasOp(ops, { kind: "set", key: "@pane_wait_reason", value: "permission" }),
+  );
+});
+
+Deno.test("eventToOps: child PermissionRequest does not wait-mark parent", async () => {
+  assertEquals(
+    await eventToOps(
+      "PermissionRequest",
+      { session_id: "child", cwd: "/repo" },
+      state({
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+      }),
+    ),
+    [],
+  );
+});
+
+Deno.test("eventToOps: child UserPromptSubmit does not self-heal parent identity", async () => {
+  assertEquals(
+    await eventToOps(
+      "UserPromptSubmit",
+      { session_id: "child", cwd: "/repo", prompt: "child prompt" },
+      state({
+        status: "running",
+        agent: "codex",
+        sessionId: "parent",
+        subagents: "Codex:child",
+      }),
+    ),
+    [],
   );
 });
 
@@ -306,6 +912,14 @@ Deno.test("buildRunLog: records metadata without raw option values", () => {
   assertEquals(log.ts, "2026-05-04T00:00:00.000Z");
   assertEquals(log.ops, [{ kind: "set", key: "@pane_status" }]);
   assertEquals(log.session_id, "s1");
+});
+
+Deno.test("commandOutput: handles null streams without masking exit code", async () => {
+  const result = await commandOutput("/bin/echo", ["hi"], {
+    stdout: "null",
+    stderr: "piped",
+  });
+  assertEquals(result, { code: 0, stdout: "", stderr: "" });
 });
 
 Deno.test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
@@ -390,7 +1004,7 @@ Deno.test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async
 
 const B1_TS_KEYS = new Set(["@pane_started_at", "@pane_last_activity_at"]);
 
-function b1Normalize(ops: Op[]): Op[] {
+function b1Normalize(ops: PaneOp[]): PaneOp[] {
   return ops.map((op) =>
     op.kind === "set" && B1_TS_KEYS.has(op.key)
       ? { kind: "set" as const, key: op.key, value: "<NORMALIZED>" }
@@ -404,6 +1018,8 @@ const b1State: PaneState = {
   currentToolUseId: "",
   agent: "",
   sessionId: "",
+  subagents: "",
+  mainStopped: false,
 };
 
 Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {
@@ -429,6 +1045,7 @@ Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {
     { kind: "unset", key: "@pane_context_used_pct" },
     { kind: "unset", key: "@pane_last_tool_error" },
     { kind: "unset", key: "@pane_subagents" },
+    { kind: "unset", key: "@pane_pending_subagent_notifications" },
     { kind: "unset", key: "@pane_pending_teardown" },
     { kind: "unset", key: "@pane_main_stopped" },
     { kind: "unset", key: "@pane_worktree_branch" },
@@ -461,6 +1078,7 @@ Deno.test("Phase B.1 fixture: SessionStart resume", async () => {
     { kind: "unset", key: "@pane_current_tool" },
     { kind: "unset", key: "@pane_current_tool_use_id" },
     { kind: "unset", key: "@pane_wait_reason" },
+    { kind: "unset", key: "@pane_pending_subagent_notifications" },
     { kind: "set", key: "@pane_status", value: "idle" },
     { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
   ]);
@@ -482,6 +1100,7 @@ Deno.test("Phase B.1 fixture: UserPromptSubmit with prompt", async () => {
     { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
     { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
     { kind: "set", key: "@pane_prompt", value: "do the thing" },
+    { kind: "unset", key: "@pane_main_stopped" },
   ]);
 });
 
@@ -565,9 +1184,12 @@ Deno.test("Phase B.1 fixture: Stop", async () => {
     { kind: "set", key: "@pane_agent", value: "codex" },
     { kind: "set", key: "@pane_session_id", value: "test-sid" },
     { kind: "set", key: "@pane_cwd", value: "/repo" },
-    { kind: "set", key: "@pane_status", value: "idle" },
-    { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
-    { kind: "unset", key: "@pane_context_used_pct" },
+    {
+      kind: "set",
+      key: "@pane_status",
+      value: "idle",
+      parentStop: { contextPct: null },
+    },
   ]);
 });
 
