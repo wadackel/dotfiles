@@ -6,6 +6,7 @@ import {
   extractToolSummary,
   extractUserTexts,
   heuristicSummary,
+  isSubagentTranscript,
   validateHookData,
 } from "./codex-memo.ts";
 
@@ -108,6 +109,67 @@ Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
     "--worker",
     JSON.stringify(hookData),
   ]);
+});
+
+Deno.test("isSubagentTranscript: detects subagent thread_spawn source", () => {
+  const subagentEntries = [
+    {
+      type: "session_meta",
+      payload: {
+        id: "019dfb77-c077-7d73-bdfb-cb1b48fb2bfd",
+        source: {
+          subagent: {
+            thread_spawn: {
+              parent_thread_id: "019dfb1c-faa2-7261-93a8-396b9bca5ade",
+              depth: 1,
+              agent_role: "code-reviewer",
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "event_msg",
+      payload: { type: "user_message", message: "Code Quality review..." },
+    },
+  ];
+  assertEquals(isSubagentTranscript(subagentEntries), true);
+});
+
+Deno.test("isSubagentTranscript: returns false for parent cli source", () => {
+  const parentEntries = [
+    {
+      type: "session_meta",
+      payload: {
+        id: "019dfb1c-faa2-7261-93a8-396b9bca5ade",
+        source: "cli",
+      },
+    },
+    {
+      type: "event_msg",
+      payload: { type: "user_message", message: "親プロンプト" },
+    },
+  ];
+  assertEquals(isSubagentTranscript(parentEntries), false);
+});
+
+Deno.test("isSubagentTranscript: returns false when session_meta missing", () => {
+  // existing fixture (entries) has no session_meta — represents a transcript
+  // where the meta line failed to parse. Treat as non-subagent (memo continues).
+  assertEquals(isSubagentTranscript(entries), false);
+});
+
+Deno.test("isSubagentTranscript: returns false for unknown source shape (object without subagent key)", () => {
+  const unknownEntries = [
+    {
+      type: "session_meta",
+      payload: {
+        id: "future-id",
+        source: { user: { foo: "bar" } },
+      },
+    },
+  ];
+  assertEquals(isSubagentTranscript(unknownEntries), false);
 });
 
 Deno.test("validateHookData: accepts valid HookData and rejects malformed input", () => {

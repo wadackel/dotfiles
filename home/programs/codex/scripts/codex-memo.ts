@@ -83,6 +83,22 @@ export function parseTranscript(path: string): TranscriptEnvelope[] {
     });
 }
 
+export function isSubagentTranscript(entries: TranscriptEnvelope[]): boolean {
+  for (const entry of entries) {
+    if (entry.type !== "session_meta") continue;
+    const payload = entry.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return false;
+    }
+    const source = (payload as Record<string, unknown>).source;
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return false;
+    }
+    return "subagent" in (source as Record<string, unknown>);
+  }
+  return false;
+}
+
 const NOISE_PATTERNS: RegExp[] = [
   /^# AGENTS\.md instructions/,
   /^<skill>/,
@@ -305,6 +321,11 @@ async function prepareContext(
     entries = parseTranscript(transcriptPath);
   } catch (e) {
     await log(`${logPrefix}SKIP: cannot parse transcript: ${e}`);
+    return null;
+  }
+
+  if (isSubagentTranscript(entries)) {
+    await log(`${logPrefix}SKIP: subagent transcript`);
     return null;
   }
 
