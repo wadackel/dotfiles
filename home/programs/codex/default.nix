@@ -60,6 +60,7 @@ in
   home.file.".codex/hooks.json".source = ./hooks.json;
   home.file.".codex/scripts".source = dotfiles.linkHere ./. "scripts";
   home.file.".codex/agents".source = dotfiles.linkHere ./. "agents";
+  home.file.".agents/skills".source = dotfiles.linkHere ./. "skills";
 
   # scripts/codex-pane-status.ts は `../agent-presence.ts` を import する。
   # Deno は relative import を URL ベースで解決し symlink の realpath を辿らない

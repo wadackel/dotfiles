@@ -13,6 +13,8 @@ import {
 
 const CODEX_INFRA =
   "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-gate.ts";
+const CODEX_SKILL_PATH =
+  "/Users/wadackel/dotfiles/home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PATH =
   "/Users/wadackel/dotfiles/home/programs/claude/skills/plan/SKILL.md";
 const LEGACY_PLAN_RE = new RegExp("\\$plan-" + "codex");
@@ -52,8 +54,9 @@ Deno.test("extractPatchFiles parses Add/Update/Delete File markers", () => {
   assertEquals(extractPatchFiles(cmd), ["home/x.ts", "home/y.ts", "home/z.ts"]);
 });
 
-Deno.test("isInfraPath: codex module is infra", () => {
+Deno.test("isInfraPath: only codex bootstrap files are infra", () => {
   assertEquals(isInfraPath(CODEX_INFRA), true);
+  assertEquals(isInfraPath(CODEX_SKILL_PATH), false);
   assertEquals(isInfraPath(CLAUDE_PATH), false);
   assertEquals(isInfraPath("/tmp/random.ts"), false);
 });
@@ -115,19 +118,41 @@ Deno.test("scenario 4: pending only (no active) → block with $impl hint", asyn
   assertNotMatch(dec.reason, LEGACY_IMPL_RE);
 });
 
-Deno.test("scenario 5: cwd is infra-path (codex module) → allow even without marker", async () => {
+Deno.test("scenario 5: codex bootstrap file edit → allow as infra", async () => {
   const { home } = await tmpHomeWith(async () => {/* no markers */});
   Deno.env.set("HOME", home);
   const codexCwd = "/Users/wadackel/dotfiles/home/programs/codex";
   const dec = await gateDecision(
     input(
       "apply_patch",
-      ADD_FILE_PATCH(`${codexCwd}/codex-plan-gate.ts`),
+      ADD_FILE_PATCH(CODEX_INFRA),
       codexCwd,
     ),
   );
   assertEquals(dec.kind, "allow");
   assertEquals(dec.reason, "infra");
+});
+
+Deno.test("scenario 5b: codex skill edit from codex cwd is gated", async () => {
+  const { home } = await tmpHomeWith(async () => {/* no markers */});
+  Deno.env.set("HOME", home);
+  const codexCwd = "/Users/wadackel/dotfiles/home/programs/codex";
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(CODEX_SKILL_PATH), codexCwd),
+  );
+  assertEquals(dec.kind, "block");
+  assertMatch(dec.reason, /\$plan/);
+});
+
+Deno.test("scenario 5c: codex skill path from repo root cwd is gated", async () => {
+  const { home } = await tmpHomeWith(async () => {/* no markers */});
+  Deno.env.set("HOME", home);
+  const repoRoot = "/Users/wadackel/dotfiles";
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(CODEX_SKILL_PATH), repoRoot),
+  );
+  assertEquals(dec.kind, "block");
+  assertMatch(dec.reason, /\$plan/);
 });
 
 Deno.test("scenario 6: non-edit tool (Bash) → allow regardless of marker", async () => {

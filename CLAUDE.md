@@ -225,13 +225,13 @@ This repository includes comprehensive Claude Code configuration:
   - Exception: Scripts called from `hooks` are not Bash tool calls, so adding to `permissions.allow` is not required
   - When adding new scripts, grant execute permission with `chmod +x` (execute bit is required for hook execution. Git manages mode as 100644/100755, so a commit is also needed)
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
-- **Skills layout**: Skill implementations are split under `home/programs/agent-skills/`:
-  - `claude/`: Claude Code-specific skills such as `/plan` and `/impl`
-  - `codex/`: Codex-specific skills such as `$plan` and `$impl`
-  - `core/`: shared contracts/references such as plan reference prompts
-  - `views/claude` and `views/codex`: public symlink views exposed as `~/.claude/skills` and `~/.agents/skills`
-  - Existing non plan/impl skills may be temporarily exposed through view symlinks back to `home/programs/claude/skills/`
-  - The view directories are linked as whole directories without `recursive = true`; adding or changing symlinks inside the views is reflected immediately after the Nix-public path has been applied
+- **Skills layout**:
+  - `home/programs/claude/skills/`: public Claude Code skills exposed as `~/.claude/skills`
+  - `home/programs/codex/skills/`: public Codex skills exposed as `~/.agents/skills`
+  - `home/programs/agent-skills/shared/`: shared non-public skill assets such as plan reference prompts
+  - Agent-specific skills with the same public name (for example `plan` and `impl`) live directly under each agent's public skill root
+  - Generic skills used by both agents keep their implementation under `home/programs/claude/skills/`; Codex exposes them with symlinks from `home/programs/codex/skills/`
+  - Both public skill roots are linked as whole directories without `recursive = true`; adding files under either published root is reflected after the Nix-public path has been applied
 - **Global CLAUDE.md**: `home/programs/claude/CLAUDE.md` is the symlink source for `~/.claude/CLAUDE.md`. Edit this file directly when modifying global settings
 - **`permissions.allow`**: Adding `Edit(~/.claude/**)` and `Write(~/.claude/**)` allows skills to edit files under `~/.claude/` without confirmation dialogs
 

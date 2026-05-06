@@ -13,7 +13,7 @@
 //
 // Decision rules (in order):
 //   1. tool_name not "apply_patch"           → allow (other tools out of scope)
-//   2. cwd is under codex infra-path         → allow (bootstrap exception)
+//   2. patch edits only bootstrap gate files → allow (bootstrap exception)
 //   3. all patched files are outside cwd     → allow (per-cwd gate scope)
 //   4. ~/.codex/plans/.active-<hash> valid   → allow (active marker; mtime < 24h)
 //   5. otherwise                             → block with hint mentioning
@@ -21,7 +21,8 @@
 
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
-const INFRA_REGEX = /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex(\/|$)/;
+const BOOTSTRAP_INFRA_REGEX =
+  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker)\.ts)$/;
 
 export interface GateInput {
   hook_event_name?: string;
@@ -71,7 +72,7 @@ export async function canonical(p: string): Promise<string> {
 }
 
 export function isInfraPath(abs: string): boolean {
-  return INFRA_REGEX.test(abs);
+  return BOOTSTRAP_INFRA_REGEX.test(abs);
 }
 
 export async function cwdHash(cwd: string): Promise<string> {
@@ -136,6 +137,15 @@ async function isUnderCwd(filePath: string, absCwd: string): Promise<boolean> {
   return abs === absCwd || abs.startsWith(absCwd + "/");
 }
 
+async function absolutePatchPath(
+  filePath: string,
+  absCwd: string,
+): Promise<string> {
+  return await canonical(
+    filePath.startsWith("/") ? filePath : `${absCwd}/${filePath}`,
+  );
+}
+
 export async function gateDecision(input: GateInput): Promise<GateDecision> {
   const tool = input.tool_name ?? "";
   if (tool !== "apply_patch") {
@@ -150,12 +160,6 @@ export async function gateDecision(input: GateInput): Promise<GateDecision> {
 
   const absCwd = await canonical(cwd);
 
-  // Bootstrap allowance: editing the codex infra itself is always permitted,
-  // otherwise we cannot fix a broken gate.
-  if (isInfraPath(absCwd)) {
-    return { kind: "allow", reason: "infra" };
-  }
-
   const files = extractPatchFiles(command);
   if (files.length === 0) {
     // Fail-closed: apply_patch with no recognizable file markers means we
@@ -165,6 +169,21 @@ export async function gateDecision(input: GateInput): Promise<GateDecision> {
       reason:
         "apply_patch のパッチから対象ファイルを抽出できませんでした (Begin/Add/Update/Delete File マーカー無し)。安全のため block します。",
     };
+  }
+
+  // Bootstrap allowance: editing only the gate's own hook entrypoints is always
+  // permitted, otherwise a broken gate could not be repaired. Codex skills and
+  // other prompt/control-plane files remain gated even when cwd is
+  // home/programs/codex.
+  let allBootstrapInfra = true;
+  for (const f of files) {
+    if (!isInfraPath(await absolutePatchPath(f, absCwd))) {
+      allBootstrapInfra = false;
+      break;
+    }
+  }
+  if (allBootstrapInfra) {
+    return { kind: "allow", reason: "infra" };
   }
 
   // Allow only if every patched file is outside cwd.
