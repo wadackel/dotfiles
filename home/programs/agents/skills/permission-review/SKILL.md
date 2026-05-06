@@ -97,12 +97,12 @@ Every candidate **must** be presented in this format. This is a required format,
 
 ### Step 3: Individual Review (Phase 2)
 
-Review each candidate **one at a time** in a separate `AskUserQuestion` call.
+Review each candidate **one at a time** in a separate user-confirmation turn.
 Do NOT batch multiple candidates into a single question -- the user needs to see
 the full context (command examples, reason, existing patterns) for each candidate
 before deciding.
 
-For each candidate in `allowCandidates` / `reviewItems`, use `AskUserQuestion` with up to 3 options + Other:
+For each candidate in `allowCandidates` / `reviewItems`, ask through the current agent's user-confirmation mechanism with up to 3 options + Other. In text-only runtimes, present the options, end the turn, and wait for the user's next response before applying anything:
 
 1. **Select and add pattern** -- proceed to sub-flow for pattern selection
 2. **Add to bash-policy** -- use the **bash-policy-add skill**
@@ -118,7 +118,7 @@ When "Select and add pattern" is chosen:
 
 Each option should include a brief explanation:
 ```
-AskUserQuestion:
+User confirmation prompt:
   - "Bash(git commit *)" -- allow commit only
   - "Bash(git status *)" -- allow status only
   - "Bash(git *)" -- allow all git commands

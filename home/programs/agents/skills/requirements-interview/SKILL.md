@@ -24,7 +24,7 @@ The workflow has five phases. Each phase builds on the previous one, but the pro
 
 Run immediately when the skill activates — **before the user provides any requirements.** Even if `$ARGUMENTS` contains requirements, hold them for Phase 1 and resolve Setup first.
 
-Setup has two dimensions. For each one, **triage before blocking-asking** — the goal is at most **one** `AskUserQuestion` call in Phase 0, and often zero.
+Setup has two dimensions. For each one, **triage before blocking-asking** -- the goal is at most **one** user-confirmation turn in Phase 0, and often zero.
 
 **Dimension 1 — Deliverable type.** What form should the output take? (GitHub Issue, Markdown spec, PRD, ADR, etc.)
 
@@ -50,9 +50,9 @@ Setup has two dimensions. For each one, **triage before blocking-asking** — th
 
 **Decision rule.**
 
-1. If BOTH dimensions are inferable → **skip `AskUserQuestion`**. Record the inferred values as an "Assumptions (Setup)" note at the top of the Phase 4 deliverable, so the user can override on review.
-2. If ONE dimension is inferable → ask only the other in a single `AskUserQuestion` call.
-3. If NEITHER is inferable → ask both in a single `AskUserQuestion` call (two questions, one call).
+1. If BOTH dimensions are inferable -> **skip user confirmation**. Record the inferred values as an "Assumptions (Setup)" note at the top of the Phase 4 deliverable, so the user can override on review.
+2. If ONE dimension is inferable -> ask only the other in a single user-confirmation turn.
+3. If NEITHER is inferable -> ask both in a single user-confirmation turn (two questions, one turn).
 
 Never split Setup across multiple turns. When asking, phrase it in a way that lets the user also override the inferred value: "Deliverable = GitHub Issue と推定しました。違えば選択してください。Detail level はどうしますか？"
 
@@ -83,15 +83,15 @@ Group related ambiguities and prioritize — resolve the ones that affect scope 
 
 ### Phase 3: Interview
 
-Use `AskUserQuestion` to resolve ambiguities. Follow these principles:
+Use the current agent's user-confirmation mechanism to resolve ambiguities. In text-only runtimes, ask concise questions, end the turn, and wait for the user's next response before continuing. Follow these principles:
 
 **Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts. Each option should include a short description of its implications. Use `preview` for visual/structural comparisons.
 
-**Batch related questions.** Group 2-3 related questions per turn (max 4 per AskUserQuestion call). Don't ask everything at once — it's overwhelming. Don't ask one at a time — it's tedious.
+**Batch related questions.** Group 2-3 related questions per turn (max 4 questions per confirmation turn). Don't ask everything at once — it's overwhelming. Don't ask one at a time — it's tedious.
 
 **Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user.
 
-**Always provide a recommended answer.** Every real question in an `AskUserQuestion` call must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase or convert it to an Assumption instead. The user can override, but the AI never delegates judgment by asking with no recommendation.
+**Always provide a recommended answer.** Every real question in a confirmation turn must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase or convert it to an Assumption instead. The user can override, but the AI never delegates judgment by asking with no recommendation.
 
 **Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
 

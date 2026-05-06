@@ -47,8 +47,8 @@ Use the findings to inform the suggestions offered in the next step.
 
 ### Step 3: Ask About Missing Items
 
-For each item that is still unknown, ask the user using `AskUserQuestion`.
-Batch unrelated questions into a single call (up to 4 questions per call).
+For each item that is still unknown, ask the user through the current agent's user-confirmation mechanism.
+Batch unrelated questions into a single confirmation turn (up to 4 questions per turn). In text-only runtimes, ask the batched questions, end the turn, and wait for the user's next response before continuing.
 
 Key guidance per item:
 

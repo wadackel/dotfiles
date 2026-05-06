@@ -47,7 +47,7 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
 3. Identify the tech stack (framework, language, existing test runner)
 4. Read relevant source files to understand the feature's behavior
 5. Assess risk areas: what parts of this change are most likely to break, and what is the business impact if they do?
-6. **If using AskUserQuestion and user selects verbal explanation option** (e.g., "口頭で説明"), provide structured guidance on what information is needed:
+6. **If using a user-confirmation prompt and the user selects a verbal explanation option** (e.g., "口頭で説明"), provide structured guidance on what information is needed:
 
    ```
    次の情報を教えてください：

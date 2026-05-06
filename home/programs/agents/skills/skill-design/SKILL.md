@@ -33,7 +33,7 @@ Write all SKILL.md content in English (section headings, descriptions, comments,
 Two narrow exceptions are permitted, both treated as Intentional Conventions:
 
 1. **Bilingual trigger phrases in `description`**: Japanese trigger phrases (e.g., `'コードレビューして'`, `'実装して'`) may sit alongside English action verbs in the frontmatter `description` field for bilingual dispatch. They are intentional, not violations.
-2. **User-facing print strings inside fenced code blocks or quoted message templates**: Strings that Claude prints verbatim to the user (confirmation prompts, AskUserQuestion option labels, sample template headers) may stay in the user's language, typically Japanese for jp users. Keep them inside fenced code blocks or backticks so they are visually distinguishable from instruction prose.
+2. **User-facing print strings inside fenced code blocks or quoted message templates**: Strings that the agent prints verbatim to the user (confirmation prompts, option labels, sample template headers) may stay in the user's language, typically Japanese for jp users. Keep them inside fenced code blocks or backticks so they are visually distinguishable from instruction prose.
 
 Anything outside these two exceptions — narrative prose, rule statements, `-- Why:` rationale comments, workflow steps, examples that are NOT user-facing print samples — must be English.
 

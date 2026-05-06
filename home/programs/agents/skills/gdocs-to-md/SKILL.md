@@ -46,7 +46,7 @@ Output will be written to: <cwd>
 
 - **Full URL**: extract the document ID using the pattern `/d/([a-zA-Z0-9_-]+)/`
 - **Raw ID**: use as-is (alphanumeric string, typically 30+ characters)
-- **No argument**: use AskUserQuestion to ask for the URL or document ID
+- **No argument**: ask through the current agent's user-confirmation mechanism for the URL or document ID; in text-only runtimes, ask the question, end the turn, and wait for the user's next response before continuing
 
 ### Step 2 — Create isolated temp file
 

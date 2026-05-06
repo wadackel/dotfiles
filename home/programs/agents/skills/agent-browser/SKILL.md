@@ -527,7 +527,7 @@ Never hardcode expected values or input data for verification. Derive them from 
 
 - If identifiable from conversation context, use that
 - Otherwise, extract programmatically from DOM elements, API responses, or app state
-- As a last resort, ask the user via `AskUserQuestion`
+- As a last resort, ask the user through the current agent's user-confirmation mechanism; in text-only runtimes, ask the question, end the turn, and wait for the user's next response
 
 ### SPA Runtime Data Extraction
 

@@ -33,7 +33,7 @@ No Deno permission flags required (stdin-only, no file/network access).
 
 | Situation | Action |
 |---|---|
-| `$ARGUMENTS` not provided | Use AskUserQuestion to prompt for URL or document ID |
+| `$ARGUMENTS` not provided | Ask through the current agent's user-confirmation mechanism for the URL or document ID; in text-only runtimes, ask the question, end the turn, and wait for the user's next response |
 | URL provided but no ID found | Report parsing failure; ask user to provide the raw document ID instead |
 | gws auth / permission error | Report error; suggest running `gws auth login` to re-authenticate |
 | Docs API not enabled | Report the error message; direct user to enable Docs API in GCP Console |

@@ -87,7 +87,7 @@ Then ask the user to choose a review mode:
 3. **Skip all** — Skip all
 
 If the user chooses **individual review**, iterate through each RECOMMEND rule
-with a separate AskUserQuestion (Add / Skip), collecting approved rules.
+with a separate user-confirmation turn (Add / Skip), collecting approved rules. In text-only runtimes, ask for the current rule decision, end the turn, and wait for the user's next response before moving to the next rule.
 
 ### Step 4: Apply Approved Rules
 

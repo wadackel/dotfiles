@@ -1,6 +1,6 @@
 ---
 name: simplify-review
-description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', 'YAGNI check', or when /plan Phase 4 converges and the plan contains 5+ implementation steps. Also use proactively before ExitPlanMode for non-trivial plans, or at task completion when the diff is large (20+ changed files or 500+ lines)."
+description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', 'YAGNI check', or when /plan Phase 4 converges and the plan contains 5+ implementation steps. Also use proactively before finalizing non-trivial plans, or at task completion when the diff is large (20+ changed files or 500+ lines)."
 argument-hint: "[plan|code|auto]"
 ---
 
@@ -26,7 +26,7 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 
 | Context | Trigger |
 |---|---|
-| After `/plan` Phase 4 converges | Proactive — run before ExitPlanMode |
+| After `/plan` Phase 4 converges | Proactive — run before finalizing the plan |
 | User says "simplify", "YAGNI check", etc. | Manual |
 | Task completion with large diff | Proactive — before verification |
 | User review feedback says "too complex" | Reactive |
