@@ -29,6 +29,7 @@ export type PaneOptionKey =
   | "@pane_worktree_branch"
   | "@pane_worktree_path"
   | "@pane_subagents"
+  | "@pane_pending_subagent_notifications"
   | "@pane_pending_teardown"
   | "@pane_prompt"
   | "@pane_wait_reason"
@@ -85,6 +86,7 @@ export const ALL_PANE_OPTIONS_FOR_CODEX = [
   "@pane_context_used_pct",
   "@pane_last_tool_error",
   "@pane_subagents",
+  "@pane_pending_subagent_notifications",
   "@pane_pending_teardown",
   "@pane_main_stopped",
   "@pane_worktree_branch",

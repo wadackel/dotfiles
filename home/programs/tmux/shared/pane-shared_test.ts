@@ -73,6 +73,21 @@ Deno.test("CLAUDE_ONLY_KEYS ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
   }
 });
 
+Deno.test("codex pending subagent notification counter is codex-scoped", () => {
+  const codexKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CODEX);
+  const claudeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CLAUDE);
+  const opencodeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_OPENCODE);
+  assert(
+    codexKeys.has("@pane_pending_subagent_notifications"),
+  );
+  assertFalse(
+    claudeKeys.has("@pane_pending_subagent_notifications"),
+  );
+  assertFalse(
+    opencodeKeys.has("@pane_pending_subagent_notifications"),
+  );
+});
+
 // --- Constants ---
 
 Deno.test("constants match pre-refactor writer values", () => {
