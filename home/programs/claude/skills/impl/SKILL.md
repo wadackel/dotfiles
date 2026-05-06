@@ -89,11 +89,7 @@ If context compaction occurs mid-`/impl`:
 
 ## Plan compliance check on completion
 
-After all tasks are `completed` and before `/completion-audit` + `/subagent-review`:
-1. Re-`Read` the plan file's "Files to Change" and "Completion Criteria" sections.
-2. Compare against actual `git diff --stat` of the implementation.
-3. Flag any (a) plan items not implemented, (b) implementation items not in the plan, (c) misinterpreted items.
-4. Report the comparison to the user before invoking the final gate task.
+Plan vs implementation comparison is `/completion-audit` Step 1 (Evidence Collection)'s responsibility — `/impl` does not run a separate compliance check. Compliance gaps (plan items not implemented, implementation items not in the plan, misinterpreted items) surface from the auditor's verdict.
 
 ## When to invoke the code-simplifier subagent
 
@@ -146,3 +142,5 @@ The "Run /completion-audit and /subagent-review" task created by `/plan` Phase 5
 **Why Security Sweep is absorbed into /subagent-review**: the prior Security Sweep was a separate orchestration step that duplicated the heuristic check already owned by `/subagent-review` Step 7. Collapsing them removes one orchestration layer without changing detection coverage — the same `security-trigger-heuristic.md` fires `security-auditor` when triggers match the aggregated diff. Residual risk (heuristic false negatives on exotic security signals) is unchanged from the prior design; users can force full coverage by invoking `security-auditor` directly or running `/santa-loop` manually.
 
 **Why an approval gate beyond plan-gate**: `plan-gate.ts` is a mechanical PreToolUse block on Edit/Write — it stops the symptom (rogue edits) but not the cause (AI self-invoking `/impl` after `/plan` in auto mode). Requiring `.active-<hash>` (created only by user-typed `/impl` via the UserPromptSubmit hook `plan-approval-tracker.ts`) makes the SKILL itself refuse self-invocation gracefully, before any tool calls. The hook + SKILL refusal + plan-gate together form defense-in-depth: SKILL refuses politely, plan-gate blocks unconditionally, and the hook is the only writer that can promote pending → active. Auto-mode self-invocation cannot bypass any of the three layers.
+
+**Why plan-compliance check is delegated to /completion-audit**: the prior `/impl` step ran a plan-vs-diff comparison (Re-Read plan → `git diff --stat` → flag mismatches → report) right before invoking the final gate, but `/completion-audit` Step 1 already extracts plan Purpose / Completion Criteria + `git diff --name-only` and audits the same surface. Running both produced two near-identical compliance reports per `/impl` run; collapsing to delegation keeps `/impl` lean and makes the auditor the single accountable owner of compliance verdicts.

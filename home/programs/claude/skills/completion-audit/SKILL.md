@@ -110,16 +110,22 @@ Then take action based on the verdict:
 
 | Result | Action |
 |--------|--------|
-| `VERIFIED: PASS` | Completion claim is authorized. Proceed to Step 4 |
+| `VERIFIED: PASS` | Evidence audit passed. Proceed to Step 4 — `/subagent-review` is the next gate before completion can be declared |
 | `VERIFIED: FAIL` | Read the auditor's gap analysis. Address the specific gaps (run missing verifications, fix issues), then re-run from Step 1 with a **fresh** subagent |
 | No VERIFIED line | Treat as FAIL |
 | 3 consecutive FAILs | Report the final audit result to the user and let them decide. Do not mark the task complete |
 
 Never retry with the same subagent — always spawn fresh.
 
-### Step 4: Claim
+### Step 4: Hand off to /subagent-review
 
-Only after `VERIFIED: PASS` may you declare all work complete.
+`VERIFIED: PASS` from this skill authorizes only the **evidence-sufficiency** half of the final gate — it does **not** by itself authorize a completion claim. The current `/impl` final gate requires `/subagent-review` to also return PASS against the aggregated diff before all work may be declared complete (see `~/.claude/skills/impl/SKILL.md` Final gate section).
+
+After `VERIFIED: PASS`:
+1. Hand off to `/subagent-review` (invoked by `/impl` automatically; manually invoke if running `/completion-audit` standalone).
+2. Only after `/subagent-review` returns PASS (no open MUST_FIX) may completion be declared.
+
+Standalone invocation note: when `/completion-audit` is run outside `/impl`, `VERIFIED: PASS` indicates evidence is sufficient — the user is responsible for invoking `/subagent-review` (or accepting the partial-gate result explicitly) before claiming completion.
 
 ## Red Flags — STOP
 

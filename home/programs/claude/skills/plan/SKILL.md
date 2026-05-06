@@ -115,7 +115,7 @@ Write the initial plan to `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (slug from r
 ### Language policy
 
 - **Body prose** (Context / Approach / Risks / Open Questions / `-- Why: ...` rationales / natural-language narrative): write in the user's configured language (`# Language` in system prompt, derived from `~/.claude/settings.json`).
-- **Section headers** (`## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, `## Completion Criteria`): keep in English. `completion-audit` and Phase 5 locate sections by these literal strings.
+- **Section headers** (`## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Completion Criteria`, `## Risks + Open Questions`): keep in English. `completion-audit` and Phase 5 locate sections by these literal strings.
 - **Machine-consumed contents**: `## Completion Criteria` subsections (Autonomous Verification / Requires User Confirmation / Baseline) and Acceptance Criteria lines are English.
 - **Phase 1 subsections** (`### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, `### Unresolved Items`): English subsection names (Phase 4 Critic parses them); field values follow the body-prose rule.
 - File paths, commands, code snippets, `EXPECT:` values: as-is.
@@ -135,8 +135,7 @@ Log file `<plan>.log.md` (Deepening Log) follows the same policy.
 | Intentional Conventions (user-decided style that diverges from canonical) | | | ✓ (when applicable) |
 | Files to Change (CREATE / UPDATE) | ✓ | ✓ | ✓ |
 | Task Outline | ✓ | ✓ | ✓ |
-| Verification Commands (with `EXPECT:`) | ✓ | ✓ | ✓ |
-| Definition of Done | ✓ | ✓ | ✓ |
+| Completion Criteria (Autonomous Verification + Requires User Confirmation + Baseline — see Phase 4 Step 8 for the canonical structure) | ✓ | ✓ | ✓ |
 | Test Strategy | | ✓ | ✓ |
 | Risks + Open Questions | | ✓ | ✓ |
 
@@ -180,9 +179,9 @@ Declare what tests the plan adds, updates, or intentionally skips. Required for 
 Required subsections (when behavior-change):
 - **Existing coverage**: tests already covering the target area — `file:lines` + one-line description of what each test observes. "(none found)" is a valid answer when no prior tests exist.
 - **Tests to add / update**: for each target behavior change, specify (i) what behavior is verified, (ii) test file path (existing or new), (iii) test type (unit / integration / e2e / static-assertion (e.g. `rg` section-presence) / manual-only with reason).
-- **No tests needed (if applicable)**: explicit justification per omission. Accepted reasons — quote one verbatim or state equivalent: "pure doc change (no runtime consumer)", "skill-markdown change verified by `[file-state]` static assertions in Verification Commands", "verified by existing test X at file:lines". Silent omission is rejected by Phase 4 Critic Dimension 7.
+- **No tests needed (if applicable)**: explicit justification per omission. Accepted reasons — quote one verbatim or state equivalent: "pure doc change (no runtime consumer)", "skill-markdown change verified by `[file-state]` static assertions in Completion Criteria", "verified by existing test X at file:lines". Silent omission is rejected by Phase 4 Critic Dimension 7.
 
-Test tasks derived from this section must appear in `## Task Outline` as first-class tasks (not bundled as implicit verification of an implementation task), unless the only verification is static-assertion and is already covered under `## Verification Commands` / `## Completion Criteria`.
+Test tasks derived from this section must appear in `## Task Outline` as first-class tasks (not bundled as implicit verification of an implementation task), unless the only verification is static-assertion and is already covered under `## Completion Criteria` (Autonomous Verification subsection).
 
 Keep the plan body lean (target ~120–150 lines, excluding Deepening Log). Per-round critique history lives in `<plan>.log.md`.
 
@@ -236,7 +235,7 @@ HIGH-confidence simplifications auto-apply (subtractive only, behavior-preservin
 ### Step 7 — Consolidated Interview (one call at end of Phase 4)
 All needs-user-input items from Phase 2 Explore unknowns and Phase 4 Steps 3/5/6 collapse into a single `AskUserQuestion` call (max 4 questions; split into the minimum number of calls if more, but never interview inside a single Step). Phase 1 Requirement Clarification runs its own multi-round cycle at Phase 1 — those items do not re-enter Step 7 unless surfaced by the Critic from `### Unresolved Items`. Present an `以下を自己解決しました:` block before questions.
 
-### Step 8 — Definition of Done pipeline
+### Step 8 — Completion Criteria pipeline
 Design observable Completion Criteria:
 - **Autonomous Verification** — commands + `EXPECT` outputs. Tag each item (required for medium+):
   - `[file-state]` — verifiable by Read / Grep / Glob
@@ -390,3 +389,5 @@ Emit the **full plan body inline** so the user can approve without opening the f
 **Why meaning over notation in judgement, strict in contracts**: requirement interpretation is where rigid rules cause brittle behavior (missing token ≠ missing intent). Machine contracts (section headers, verdict enums, gate markers) are strict because downstream parsing depends on them.
 
 **Why explicit user approval after Phase 6**: auto mode encourages "execute immediately" which let AI chain `/plan` → `/impl` in the same turn. UserPromptSubmit hook fires only on real user input (not AI Skill invocations), so requiring user-typed `/impl` to promote `.pending-` → `.active-` is the only mechanical way to distinguish AI self-invocation from human approval. Skill body instructions alone are insufficient against the auto-mode "Execute immediately" directive.
+
+**Why `Completion Criteria` is the single canonical Required section name**: the prior table listed two extra Required rows (an `EXPECT:`-style verification block and a generic done-criteria block) in addition to `Completion Criteria`, while Phase 4 Step 8's example actually emitted a `## Completion Criteria` section parsed by `/completion-audit`, `/subagent-review`, and Phase 5. The two extra rows were doc-only labels with no machine consumer (verified by grep — no skill, hook, or script literal-matched the strings outside this file). Collapsing the table to `Completion Criteria` (with the canonical Autonomous Verification / Requires User Confirmation / Baseline subsections in Phase 4 Step 8) removes the naming drift without changing parser behavior. Step 8 was renamed to `Completion Criteria pipeline` for the same reason.
