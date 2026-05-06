@@ -1,4 +1,6 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR,TMUX_PANE --allow-run
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR,TMUX_PANE,CODEX_THREAD_ID --allow-run
+
+import { SESSION_ID_RE } from "../pane-shared.ts";
 
 interface NotifyPayload {
   "last-assistant-message"?: string;
@@ -24,6 +26,7 @@ const DEFAULT_MESSAGE = "Codex task completed";
 const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
 const PENDING_SUBAGENT_NOTIFICATIONS_KEY =
   "@pane_pending_subagent_notifications";
+const MAIN_SESSION_ID_KEY = "@pane_session_id";
 const TMUX_COORDINATION_TIMEOUT_MS = 2000;
 const COMMON_COMMAND_PATHS: Record<string, string[]> = {
   "terminal-notifier": [
@@ -178,6 +181,104 @@ export type PendingConsumeDecision =
       key: string;
     };
   };
+
+export type NotificationIdentityDecision =
+  | {
+    kind: "send";
+    reason: "identity-main";
+    threadId: string;
+    mainSessionId: string;
+  }
+  | {
+    kind: "skip";
+    reason: "identity-subagent";
+    threadId: string;
+    mainSessionId: string;
+  }
+  | {
+    kind: "unknown";
+    reason:
+      | "identity-missing"
+      | "identity-invalid"
+      | "main-session-missing"
+      | "main-session-invalid"
+      | "main-session-read-failed";
+    threadId: string;
+    mainSessionId: string;
+  };
+
+async function notificationIdentityDecisionForPane(
+  tmuxPath: string,
+  pane: string,
+  threadId: string | undefined,
+): Promise<NotificationIdentityDecision> {
+  const mainSession = await tmuxShowOptionalUserOption(
+    tmuxPath,
+    pane,
+    MAIN_SESSION_ID_KEY,
+  );
+  if (!mainSession.ok) {
+    return {
+      kind: "unknown",
+      reason: "main-session-read-failed",
+      threadId: threadId ?? "",
+      mainSessionId: mainSession.stderr,
+    };
+  }
+  return notificationIdentityDecision(threadId, mainSession.value);
+}
+
+export function notificationIdentityDecision(
+  threadId: string | undefined,
+  mainSessionId: string,
+): NotificationIdentityDecision {
+  const normalizedThreadId = threadId ?? "";
+  if (!normalizedThreadId) {
+    return {
+      kind: "unknown",
+      reason: "identity-missing",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    };
+  }
+  if (!SESSION_ID_RE.test(normalizedThreadId)) {
+    return {
+      kind: "unknown",
+      reason: "identity-invalid",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    };
+  }
+  if (!mainSessionId) {
+    return {
+      kind: "unknown",
+      reason: "main-session-missing",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    };
+  }
+  if (!SESSION_ID_RE.test(mainSessionId)) {
+    return {
+      kind: "unknown",
+      reason: "main-session-invalid",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    };
+  }
+  return normalizedThreadId === mainSessionId
+    ? {
+      kind: "send",
+      reason: "identity-main",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    }
+    : {
+      kind: "skip",
+      reason: "identity-subagent",
+      threadId: normalizedThreadId,
+      mainSessionId,
+    };
+}
 
 export function pendingSubagentNotificationDecision(
   raw: string,
@@ -412,8 +513,28 @@ async function send(
   const message = notificationMessage(payload);
   const tmuxPath = await commandPath("tmux");
   const rawPane = tmuxPaneId(Deno.env.get("TMUX_PANE"));
-  if (rawPane && await consumePendingSubagentNotification(tmuxPath, rawPane)) {
-    return;
+  if (rawPane) {
+    const identity = await notificationIdentityDecisionForPane(
+      tmuxPath,
+      rawPane,
+      Deno.env.get("CODEX_THREAD_ID"),
+    );
+    await log(
+      `notify_identity reason=${identity.reason} kind=${identity.kind} thread=${identity.threadId} main=${identity.mainSessionId}`,
+    );
+    if (identity.kind === "skip") {
+      await consumePendingSubagentNotification(tmuxPath, rawPane);
+      await log(
+        `subagent_notify_skip reason=identity-subagent thread=${identity.threadId} main=${identity.mainSessionId}`,
+      );
+      return;
+    }
+    if (
+      identity.kind === "unknown" &&
+      await consumePendingSubagentNotification(tmuxPath, rawPane)
+    ) {
+      return;
+    }
   }
   const ctx = await tmuxContext(tmuxPath);
   const scriptPath = `${Deno.env.get("HOME")}/.codex/scripts/codex-notify.ts`;

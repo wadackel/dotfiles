@@ -384,6 +384,17 @@ export function isChildCodexEvent(
     return state.status === "running" && hasFreshActivity(state.lastActivityAt);
   }
 
+  if (
+    event === "UserPromptSubmit" || event === "PreToolUse" ||
+    event === "PostToolUse"
+  ) {
+    if (knownChild) {
+      return state.status === "running" || state.status === "waiting" ||
+        state.status === "error" || state.mainStopped;
+    }
+    return state.status === "running" && hasFreshActivity(state.lastActivityAt);
+  }
+
   return knownChild &&
     (state.status === "running" || state.status === "waiting" ||
       state.status === "error" || state.mainStopped);
@@ -466,6 +477,18 @@ export async function eventToOps(
 ): Promise<PaneOp[]> {
   if (isChildCodexEvent(data, state, event)) {
     const childId = str(data.session_id);
+    const registerUnknownChild: PaneOp[] = !hasSubagent(state.subagents, childId)
+      ? [{
+        kind: "set" as const,
+        key: "@pane_subagents" as const,
+        value: childId,
+        subagentMutation: {
+          action: "add" as const,
+          type: "Codex",
+          id: childId,
+        },
+      }]
+      : [];
     switch (event) {
       case "SessionStart": {
         return [{
@@ -492,9 +515,10 @@ export async function eventToOps(
 
       case "PreToolUse": {
         const toolName = str(data.tool_name);
-        if (!toolName) return [];
+        if (!toolName) return registerUnknownChild;
         const subject = extractToolSubject(toolName, data.tool_input);
         const ops: PaneOp[] = [
+          ...registerUnknownChild,
           ...toolStartOps({ tool: toolName, subject: subject || undefined }),
         ];
         const toolUseId = str(data.tool_use_id);
@@ -514,6 +538,7 @@ export async function eventToOps(
         const toolName = str(data.tool_name);
         const now = nowSec();
         const ops: PaneOp[] = [
+          ...registerUnknownChild,
           { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (!toolName) return ops;
@@ -549,7 +574,7 @@ export async function eventToOps(
         return [];
 
       case "UserPromptSubmit":
-        return [];
+        return registerUnknownChild;
 
       default:
         return [];

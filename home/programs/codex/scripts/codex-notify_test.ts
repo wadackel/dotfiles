@@ -5,6 +5,7 @@ import {
   debugOutput,
   isMissingRequestedUserOption,
   normalizeMissingUserOption,
+  notificationIdentityDecision,
   notificationMessage,
   parsePayload,
   pendingSubagentNotificationDecision,
@@ -161,6 +162,54 @@ Deno.test("normalizeMissingUserOption: unrelated tmux failures remain failures",
     ),
     { ok: true, value: "1" },
   );
+});
+
+Deno.test("notificationIdentityDecision: matching thread and pane main session sends", () => {
+  assertEquals(notificationIdentityDecision("main-session", "main-session"), {
+    kind: "send",
+    reason: "identity-main",
+    threadId: "main-session",
+    mainSessionId: "main-session",
+  });
+});
+
+Deno.test("notificationIdentityDecision: different valid thread skips as subagent", () => {
+  assertEquals(notificationIdentityDecision("child-session", "main-session"), {
+    kind: "skip",
+    reason: "identity-subagent",
+    threadId: "child-session",
+    mainSessionId: "main-session",
+  });
+});
+
+Deno.test("notificationIdentityDecision: missing identity is unknown so fallback can preserve main notifications", () => {
+  assertEquals(notificationIdentityDecision(undefined, "main-session"), {
+    kind: "unknown",
+    reason: "identity-missing",
+    threadId: "",
+    mainSessionId: "main-session",
+  });
+  assertEquals(notificationIdentityDecision("main-session", ""), {
+    kind: "unknown",
+    reason: "main-session-missing",
+    threadId: "main-session",
+    mainSessionId: "",
+  });
+});
+
+Deno.test("notificationIdentityDecision: invalid identities are unknown, not subagents", () => {
+  assertEquals(notificationIdentityDecision("../child", "main-session"), {
+    kind: "unknown",
+    reason: "identity-invalid",
+    threadId: "../child",
+    mainSessionId: "main-session",
+  });
+  assertEquals(notificationIdentityDecision("child-session", "../main"), {
+    kind: "unknown",
+    reason: "main-session-invalid",
+    threadId: "child-session",
+    mainSessionId: "../main",
+  });
 });
 
 Deno.test("pendingSubagentNotificationDecision: malformed and zero values send", () => {

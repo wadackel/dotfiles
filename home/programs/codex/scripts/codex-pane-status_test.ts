@@ -56,6 +56,16 @@ function hasParentStop(ops: PaneOp[], contextPct: string | null): boolean {
   );
 }
 
+function hasSubagentAdd(ops: PaneOp[], id: string): boolean {
+  return ops.some((op) =>
+    op.kind === "set" &&
+    op.key === "@pane_subagents" &&
+    "subagentMutation" in op &&
+    op.subagentMutation.action === "add" &&
+    op.subagentMutation.id === id
+  );
+}
+
 Deno.test("selfHealOps: session id missing returns no ops", () => {
   assertEquals(selfHealOps({}), []);
 });
@@ -1102,6 +1112,70 @@ Deno.test("eventToOps: child UserPromptSubmit does not self-heal parent identity
     ),
     [],
   );
+});
+
+Deno.test("eventToOps: fresh different UserPromptSubmit does not self-heal parent identity", async () => {
+  const ops = await eventToOps(
+    "UserPromptSubmit",
+    { session_id: "child", cwd: "/repo", prompt: "child prompt" },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: String(Math.floor(Date.now() / 1000)),
+    }),
+  );
+  assert(hasSubagentAdd(ops, "child"));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+});
+
+Deno.test("eventToOps: fresh different PreToolUse does not self-heal parent identity", async () => {
+  const ops = await eventToOps(
+    "PreToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      lastActivityAt: String(Math.floor(Date.now() / 1000)),
+    }),
+  );
+  assert(hasSubagentAdd(ops, "child"));
+  assert(hasOp(ops, { kind: "set", key: "@pane_current_tool", value: "Bash" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+});
+
+Deno.test("eventToOps: fresh different PostToolUse does not self-heal parent identity", async () => {
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "child",
+      cwd: "/repo",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u-child",
+    },
+    state({
+      status: "running",
+      agent: "codex",
+      sessionId: "parent",
+      currentTool: "Bash",
+      currentToolUseId: "u-child",
+      lastActivityAt: String(Math.floor(Date.now() / 1000)),
+    }),
+  );
+  assert(hasSubagentAdd(ops, "child"));
+  assert(hasOp(ops, { kind: "set", key: "@pane_last_tool", value: "Bash" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
+  assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
 Deno.test("eventToOps: unknown event is no-op", async () => {

@@ -24,7 +24,7 @@ let
       "run"
       "--allow-read"
       "--allow-write"
-      "--allow-env=HOME,TMPDIR,TMUX_PANE"
+      "--allow-env=HOME,TMPDIR,TMUX_PANE,CODEX_THREAD_ID"
       "--allow-run"
       "${config.home.homeDirectory}/.codex/scripts/codex-notify.ts"
       "send"
