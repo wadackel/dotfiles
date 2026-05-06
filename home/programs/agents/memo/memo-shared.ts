@@ -1,6 +1,6 @@
 // Shared memo library used by claude-memo / codex-memo / opencode-memo.
 // Each agent script imports from a sibling symlink at <agent>/scripts/memo-shared.ts
-// → ../../agent-memo/memo-shared.ts.
+// → ../../agents/memo/memo-shared.ts.
 //
 // Agent-specific concerns (transcript / DB parser, NOISE_PATTERNS,
 // heuristicSummary, buildLLMInput, log path, hook entry) stay in the agent

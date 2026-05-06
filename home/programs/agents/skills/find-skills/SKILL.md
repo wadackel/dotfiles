@@ -94,10 +94,19 @@ npx skills add <owner/repo@skill> -g -y
 
 The `-g` flag installs globally (user-level, into `~/.claude/skills/`) and `-y` skips confirmation prompts.
 
-After installation, suggest tracking the new skill in the dotfiles repository:
+After installation, inspect the installed skill before exposing it beyond Claude:
+
+- Validate `<skill-name>` is a single basename with no `/`, `..`, whitespace, or shell metacharacters.
+- Review `SKILL.md`, scripts, references, symlink targets, and commands for prompt/control-plane or execution risk.
+- Only expose it to Codex when the skill is intentionally cross-agent safe; otherwise keep it Claude-only.
+
+For common skills that pass inspection, move the implementation into the shared dotfiles root and expose it from each intended agent public root:
 
 ```bash
-git add home/programs/claude/skills/<skill-name>/
+mv home/programs/claude/skills/<skill-name> home/programs/agents/skills/<skill-name>
+ln -s ../../agents/skills/<skill-name> home/programs/claude/skills/<skill-name>
+ln -s ../../agents/skills/<skill-name> home/programs/codex/skills/<skill-name>
+git add home/programs/agents/skills/<skill-name> home/programs/claude/skills/<skill-name> home/programs/codex/skills/<skill-name>
 ```
 
 ## Common Skill Categories

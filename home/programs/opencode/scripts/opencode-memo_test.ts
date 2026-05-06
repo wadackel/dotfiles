@@ -10,7 +10,7 @@ import {
   type MessageRow,
   type PartRow,
 } from "./opencode-memo.ts";
-import { upsertDailyNote } from "../../agent-memo/memo-shared.ts";
+import { upsertDailyNote } from "../../agents/memo/memo-shared.ts";
 
 const messages: MessageRow[] = [
   { id: "m1", role: "user" },

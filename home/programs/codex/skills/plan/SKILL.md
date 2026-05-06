@@ -43,7 +43,7 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 
 ### Requirement Clarification (small+)
 
-判断基準は `home/programs/agent-skills/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。**Codex には Claude の AskUserQuestion がないため、対話モデルは "1 turn = 1 round"** に簡略化する:
+判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。**Codex には Claude の AskUserQuestion がないため、対話モデルは "1 turn = 1 round"** に簡略化する:
 
 1. Step A Walk: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、NotClear 項目を洗い出す。
 2. Step B Triage: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。
@@ -110,7 +110,7 @@ Claude 版と同じ表に従う (trivial=Context+Files to Change+Verification+Ta
 
 ## Phase 4 DEEPEN (non-trivial only)
 
-Iterative adversarial-critique flow。プロンプトは Claude 版と物理共有: `home/programs/agent-skills/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`)。Phase 4 の subagent は `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml` で事前定義済 (Prerequisites 参照)。
+Iterative adversarial-critique flow。プロンプトは Claude 版と物理共有: `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`)。Phase 4 の subagent は `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml` で事前定義済 (Prerequisites 参照)。
 
 ### Step 1 — Context collection
 
@@ -326,8 +326,8 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 
 ## Integration with existing tooling
 
-- `home/programs/agent-skills/shared/plan/references/requirement-checklist.md` (Codex 公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`): Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
-- `home/programs/agent-skills/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`): Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
+- `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex 公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`): Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
+- `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`): Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
 - `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: Phase 4 が依存する custom agent 定義。dotfiles 実体は `home/programs/codex/agents/`。
 - `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)$` を出力する。
 - PreToolUse hook (`codex-plan-gate.ts`): cwd 配下の apply_patch を `.active-<hash>` 不在/期限切れ時に block する。Phase 6 で `.pending-` のみを書く理由はこのゲートと連動するため。

@@ -1,1 +1,1 @@
-../../agent-memo/memo-shared.ts
+../../agents/memo/memo-shared.ts

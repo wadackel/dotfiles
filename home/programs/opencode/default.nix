@@ -26,7 +26,7 @@
   # `new URL("./scripts/opencode-memo.ts", import.meta.url)` で兄弟解決して
   # Bun.spawn で起動するため、scripts/ ディレクトリごと
   # ~/.config/opencode/scripts/ に out-of-store symlink で公開する。配下の
-  # opencode-memo.ts は memo-shared.ts (in-worktree symlink → agent-memo)
+  # opencode-memo.ts は memo-shared.ts (in-worktree symlink → agents/memo)
   # を import するので、ディレクトリごと公開すれば import path 解決も同時に
   # 通る。
   home.file.".config/opencode/scripts".source = dotfiles.linkHere ./. "scripts";

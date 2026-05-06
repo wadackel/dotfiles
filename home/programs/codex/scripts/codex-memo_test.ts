@@ -11,7 +11,7 @@ import {
 
 // Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
 // upsertDailyNote) are now tested in
-// home/programs/agent-memo/memo-shared_test.ts. codex-memo_test.ts only
+// home/programs/agents/memo/memo-shared_test.ts. codex-memo_test.ts only
 // covers Codex-specific transcript parsing, prompt-building, and hook-data
 // validation.
 

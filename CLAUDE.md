@@ -228,10 +228,12 @@ This repository includes comprehensive Claude Code configuration:
 - **Skills layout**:
   - `home/programs/claude/skills/`: public Claude Code skills exposed as `~/.claude/skills`
   - `home/programs/codex/skills/`: public Codex skills exposed as `~/.agents/skills`
-  - `home/programs/agent-skills/shared/`: shared non-public skill assets such as plan reference prompts
+  - `home/programs/agents/skills/`: common skill implementations shared by multiple agents
+  - `home/programs/agents/memo/`: shared memo libraries used by Claude / Codex / opencode
+  - `home/programs/agents/shared/`: shared non-public skill assets such as plan reference prompts
   - Agent-specific skills with the same public name (for example `plan` and `impl`) live directly under each agent's public skill root
-  - Generic skills used by both agents keep their implementation under `home/programs/claude/skills/`; Codex exposes them with symlinks from `home/programs/codex/skills/`
-  - Both public skill roots are linked as whole directories without `recursive = true`; adding files under either published root is reflected after the Nix-public path has been applied
+  - Generic skills used by multiple agents keep their implementation under `home/programs/agents/skills/`; each agent public root exposes them with symlinks
+  - Both public skill roots are linked as whole directories without `recursive = true`; adding a new common skill under `home/programs/agents/skills/` plus per-agent symlinks under the public roots is reflected without adding new Nix `home.file` entries
 - **Global CLAUDE.md**: `home/programs/claude/CLAUDE.md` is the symlink source for `~/.claude/CLAUDE.md`. Edit this file directly when modifying global settings
 - **`permissions.allow`**: Adding `Edit(~/.claude/**)` and `Write(~/.claude/**)` allows skills to edit files under `~/.claude/` without confirmation dialogs
 
