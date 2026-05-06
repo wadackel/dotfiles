@@ -129,12 +129,22 @@ Reasoning: [1–2 sentences. If any Dimension 7 MUST-check raised a Critical Iss
 
 Phase 1 Requirement Clarification emits three structured subsections under the plan body (before `## Overview`): `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Round 1 Critic **must parse these subsections by structure, not by phrase match**, and surface their contents as critique inputs.
 
+### Blocking Interview regression checks
+
+Round 1 Critic must treat these as mandatory checks:
+
+1. If a user-only, subjective, or high-cost Scope / Success / Failure uncertainty was silently self-resolved without a user Ask or explicit user-chosen assumption, raise a **Critical Issue [USER]**. Restate prose, approval wording, `### Requires User Confirmation`, or a downstream `next:` does not count for these blockers. `next:` is acceptable only for codebase-recoverable uncertainty.
+2. If the plan or Phase 1 subsections imply a Blocking Interview happened but the documented continuation lifecycle is missing or contradicted (for Codex: strict `$plan --answer` continuation parse, `.clarifying-<cwd-hash>.json` creation before Ask, answer-waiting end turn, and cleanup after successful plan creation; for Claude: `AskUserQuestion` call path), raise a **Critical Issue [TECH]**. Do not require a live `.clarifying-<cwd-hash>.json` after a successful continuation, because Codex deletes it during cleanup.
+3. If the plan advances because of a fixed round cap, default operating limit, or repeated-trigger cap while user-only / subjective / high-cost requirements remain unresolved, raise a **Critical Issue [USER]**. Count-based exhaustion is not a valid clarity condition.
+
 ### `### Unresolved Items` — semantic parse
 
 Each entry in `### Unresolved Items` has three fields: `item`, `reason`, `next`. Round 1 Critic must:
 
 1. Enumerate every entry in the subsection.
-2. For each entry, surface a **Critical Issue [USER]** labeled with the `item` value, quoting the `reason` (why it was left unresolved) and the `next` field (where it is expected to be resolved — typically `Phase 4 Step 7 Consolidated Interview`).
+2. For each entry, classify the `reason` / `next` pair:
+   - If it is codebase-recoverable / technical discovery and `next` points to a concrete downstream resolution step, surface it as an **Improvement Suggestion [TECH]** or non-blocking validation note.
+   - If it contains user-only, subjective, or high-cost Scope / Success / Failure uncertainty, surface a **Critical Issue [USER]** because it should have been Asked before artifact creation or recorded as an explicit user-selected assumption.
 3. If `next` does **not** point to a concrete downstream resolution step (e.g., left blank, or vague like "later"), treat it as a hidden scope gap and surface that in Scope Appropriateness as well.
 
 Failing to enumerate `### Unresolved Items` entries is a disqualifying omission. If the subsection is **absent from the plan**, or present with body `(none)`, record the line `Phase 1 unresolved items: none detected` in the critique output.
@@ -146,7 +156,8 @@ Each entry in `### Assumptions` has `observation`, `value`, `reason`, and option
 1. Scan all entries for the `user-overridden: true` flag.
 2. For each user-overridden entry:
    - If the value can be verified from the codebase (file / pattern / config lookup), treat it as an **Improvement Suggestion [TECH]** and report the verification result alongside the original value.
-   - If the value depends on user judgment (subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the Phase 4 Step 7 Consolidated Interview queue.
+   - If the value depends on user judgment and the entry clearly records an explicit user-selected assumption, accept it as resolved user intent and do not re-interview it solely because it is subjective.
+   - If the value depends on user judgment but the entry is ambiguous about whether the user explicitly selected it, treat it as a **Critical Issue [USER]** and recommend a new Ask before implementation changes proceed.
 3. Non-overridden assumptions are still valid critique targets under dimension 1 (Assumption Validity) if they look load-bearing and unverified — but they are not mandatory surfaces.
 
 Do **not** match on `Assumption: ... (user-overridden, flagged for Phase 4 Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.

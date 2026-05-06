@@ -11,7 +11,13 @@ Codex CLI 上で feature plan を作成する skill。Claude Code の `/plan` (`
 
 Codex skill には Claude の `$ARGUMENTS` 展開がない。`$plan README に追記` のように起動した場合、verbatim user message `$plan README に追記` がそのまま skill body に渡る。
 
-**最初の行動**: 自分が受け取った user prompt を読み、`$plan` 以降の文字列を **request** として抽出する。空 (引数なし) の場合は「実装したい内容を教えてください」と尋ねて end turn し、次ターンの返答を request として扱う。
+**最初の行動**: 自分が受け取った user prompt を読み、以下の優先順位で解釈する。
+
+1. 明示構文 `$plan --answer <回答>` について、user prompt の先頭が `^\s*\$plan\s+--answer(?:\s+|$)` に一致する場合のみ、通常の `$plan <request>` より優先して Blocking Interview の継続回答として扱う。対応する `.clarifying-<cwd-hash>.json` を読み、保存済み `request` と今回の `<回答>` を統合して Phase 1 を再開する。質問時に提示した `interviewId` が marker と一致しない場合は継続しない。
+2. user prompt の先頭が `^\s*\$plan(?:\s+|$)` に一致する場合は、`$plan` 以降の文字列を **request** として抽出する。
+3. 空 (引数なし) の場合は「実装したい内容を教えてください」と尋ねて end turn し、次ターンの返答を request として扱う。
+
+`.clarifying-<cwd-hash>.json` が見つからない状態で `$plan --answer` が来た場合は、「継続中の確認セッションが見つかりません。もう一度 `$plan <request>` から始めてください。」と伝えて end turn する。
 
 ## Prerequisites (Phase 4 動作要件)
 
@@ -27,7 +33,7 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 
 ### Restate
 
-ユーザー request を 1 文で言い直して確認: 「あなたが実装したいのは X ですね？」
+ユーザー request を 1 文で要約する。これは理解の restate であり、Ask の代替確認ではない: 「あなたが実装したいのは X ですね？」
 
 ### Complexity 推定
 
@@ -43,15 +49,18 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 
 ### Requirement Clarification (small+)
 
-判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。**Codex には Claude の AskUserQuestion がないため、対話モデルは "1 turn = 1 round"** に簡略化する:
+判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。
 
-1. Step A Walk: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、NotClear 項目を洗い出す。
-2. Step B Triage: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。
-3. Step C Self-resolve probe: 軽量な grep/read で答えられるものは自分で解決。
-4. Step E Ask: 残った real question を **最大 3 件** (各々に AI 自身の推奨案を必ず明示)、テキストで列挙して **end turn**。次ターンのユーザー回答で round 終了。
-5. Step F: 回答を踏まえ、Assumptions / Unresolved Items に振り分けて Phase 2 へ進む。
+**Blocking Interview Protocol**: Phase 1 は clarity-gated に進める。要求が実装計画を書ける程度に明確になるまで、必要に応じて質問を続ける。先に進める条件は、(a) user-only / subjective / high-cost な不確定が解消した、(b) user が明示的に仮定を選んで進行を許可した、または (c) 不確定が codebase-recoverable で、具体的な `next:` を持って Phase 2 / Phase 4 に委譲できる、のいずれか。
 
-MVP では原則 1 round で収束させる (Phase 2 EXPLORE で codebase-recoverable な疑問は自己解決)。
+1. Step A Walk: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、NotClear 項目を洗い出す。Restate は理解の要約であり、確認の代替ではない。
+2. Step B Triage: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。Ask しない項目は `no-ask reason` を `### Assumptions` または `### Self-resolved` に記録する。
+3. Step C Self-resolve probe: 軽量な grep/read で答えられるものは自分で解決する。codebase-recoverable だが Phase 1 で確定できない項目は、具体的な `next:` を持たせて後続 Phase に委譲する。
+4. Step D Ask: 残った real question を impact-priority でまとめ、各質問に AI 自身の推奨案を必ず明示する。質問を出す場合、この turn では plan file / evidence sidecar / pending marker を一切作らない。
+5. Step E Clarifying marker: 質問を出す直前に `~/.codex/plans/.clarifying-<cwd-hash>.json` を作成または上書きする。schema は `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, `interviewId` を含む。`interviewId` は質問文にも表示し、継続時に照合する。新しい Blocking Interview を始める場合は既存 marker を上書きする。
+6. Step F Wait: `ここで回答を待ちます。次の turn で自然言語で回答するか、確実な継続が必要なら $plan --answer <回答> を使ってください。` と明記して **end turn** する。
+7. Step G Continue: 次ターンの自然言語回答は best-effort で直前の `.clarifying-<cwd-hash>.json` に紐づける。保証された継続には `$plan --answer <回答>` を使う。回答後も clarity gate が満たされなければ追加質問を出し、満たされたら marker を削除して Phase 2 へ進む。
+8. Step H Cleanup: plan 作成が成功したら `.clarifying-<cwd-hash>.json` を削除する。新しい non-clarifying `$plan <request>` が plan 作成まで成功した場合も、古い clarifying marker を削除する。
 
 ### Phase 1 出力
 

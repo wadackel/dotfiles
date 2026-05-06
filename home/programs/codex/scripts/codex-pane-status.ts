@@ -414,6 +414,33 @@ function numberAt(obj: unknown, key: string): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+function tokenCountPayload(
+  payload: Record<string, unknown>,
+): Record<string, unknown> | null {
+  if (payload.type === "token_count") return payload;
+  if (payload.type !== "event_msg") return null;
+  const nested = payload.payload;
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) {
+    return null;
+  }
+  const nestedPayload = nested as Record<string, unknown>;
+  return nestedPayload.type === "token_count" ? nestedPayload : null;
+}
+
+function currentContextTokens(info: Record<string, unknown>): number | null {
+  const lastUsage = info.last_token_usage;
+  const lastTotal = numberAt(lastUsage, "total_tokens");
+  if (lastTotal !== null) return lastTotal;
+
+  const lastInput = numberAt(lastUsage, "input_tokens");
+  if (lastInput !== null) return lastInput;
+
+  // Older fixtures / historical records may not have last_token_usage. The
+  // cumulative total is only a fallback; using it for modern Codex records
+  // makes long sessions pin to 100%.
+  return numberAt(info.total_token_usage, "total_tokens");
+}
+
 export async function extractTokenPct(
   transcriptPath: string | null | undefined,
 ): Promise<number | null> {
@@ -434,17 +461,18 @@ export async function extractTokenPct(
       if (!line.trim()) continue;
       try {
         const payload = JSON.parse(line) as Record<string, unknown>;
-        if (payload.type !== "token_count") continue;
-        const info = payload.info as Record<string, unknown> | undefined;
-        const totalUsage = info?.total_token_usage;
-        const totalTokens = numberAt(totalUsage, "total_tokens");
+        const tokenPayload = tokenCountPayload(payload);
+        if (tokenPayload === null) continue;
+        const info = tokenPayload.info as Record<string, unknown> | undefined;
+        const currentTokens = info ? currentContextTokens(info) : null;
         const contextWindow = numberAt(info, "model_context_window");
         if (
-          totalTokens === null || contextWindow === null || contextWindow <= 0
+          currentTokens === null || contextWindow === null ||
+          contextWindow <= 0
         ) {
           return null;
         }
-        const pct = Math.round((totalTokens / contextWindow) * 100);
+        const pct = Math.round((currentTokens / contextWindow) * 100);
         return Math.max(0, Math.min(100, pct));
       } catch {
         // tolerate partial tail lines / malformed historical records
@@ -477,18 +505,19 @@ export async function eventToOps(
 ): Promise<PaneOp[]> {
   if (isChildCodexEvent(data, state, event)) {
     const childId = str(data.session_id);
-    const registerUnknownChild: PaneOp[] = !hasSubagent(state.subagents, childId)
-      ? [{
-        kind: "set" as const,
-        key: "@pane_subagents" as const,
-        value: childId,
-        subagentMutation: {
-          action: "add" as const,
-          type: "Codex",
-          id: childId,
-        },
-      }]
-      : [];
+    const registerUnknownChild: PaneOp[] =
+      !hasSubagent(state.subagents, childId)
+        ? [{
+          kind: "set" as const,
+          key: "@pane_subagents" as const,
+          value: childId,
+          subagentMutation: {
+            action: "add" as const,
+            type: "Codex",
+            id: childId,
+          },
+        }]
+        : [];
     switch (event) {
       case "SessionStart": {
         return [{
@@ -688,6 +717,22 @@ export async function eventToOps(
 
     default:
       return [];
+  }
+
+  if (
+    event === "UserPromptSubmit" || event === "PreToolUse" ||
+    event === "PostToolUse"
+  ) {
+    const pct = await extractTokenPct(
+      typeof data.transcript_path === "string" ? data.transcript_path : null,
+    );
+    if (pct !== null) {
+      body.push({
+        kind: "set",
+        key: "@pane_context_used_pct",
+        value: String(pct),
+      });
+    }
   }
 
   return [...selfHealOps(data), ...body];

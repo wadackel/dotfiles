@@ -763,6 +763,21 @@ Deno.test("eventToOps: UserPromptSubmit sets running prompt timestamps", async (
   assert(ops.some((op) => op.kind === "set" && op.key === "@pane_started_at"));
 });
 
+Deno.test("eventToOps: UserPromptSubmit publishes context pct when token_count is readable", async () => {
+  const transcript =
+    new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
+  const ops = await eventToOps(
+    "UserPromptSubmit",
+    { session_id: "s1", prompt: "build it", transcript_path: transcript },
+    state(),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_context_used_pct",
+    value: "25",
+  }));
+});
+
 Deno.test("eventToOps: UserPromptSubmit empty prompt unsets prompt", async () => {
   const ops = await eventToOps(
     "UserPromptSubmit",
@@ -798,6 +813,27 @@ Deno.test("eventToOps: PreToolUse resumes waiting and records tool_use_id", asyn
   }));
 });
 
+Deno.test("eventToOps: PreToolUse publishes context pct when token_count is readable", async () => {
+  const transcript =
+    new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
+  const ops = await eventToOps(
+    "PreToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_input: { command: "deno test" },
+      tool_use_id: "u1",
+      transcript_path: transcript,
+    },
+    state({ status: "waiting" }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_context_used_pct",
+    value: "25",
+  }));
+});
+
 Deno.test("eventToOps: PreToolUse without tool name is no-op", async () => {
   assertEquals(
     await eventToOps("PreToolUse", { session_id: "s1" }, state()),
@@ -806,6 +842,8 @@ Deno.test("eventToOps: PreToolUse without tool name is no-op", async () => {
 });
 
 Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume", async () => {
+  const transcript =
+    new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
     "PreToolUse",
     {
@@ -814,6 +852,7 @@ Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume
       tool_name: "Bash",
       tool_input: { command: "deno test" },
       tool_use_id: "u-child",
+      transcript_path: transcript,
     },
     state({
       status: "waiting",
@@ -831,6 +870,7 @@ Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume
   assert(!hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
   assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
+  assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
 });
 
 Deno.test("eventToOps: child PreToolUse does not resume error parent", async () => {
@@ -879,6 +919,42 @@ Deno.test("eventToOps: PostToolUse without tool name only updates activity", asy
     ops.some((op) => op.kind === "set" && op.key === "@pane_last_activity_at"),
   );
   assert(!ops.some((op) => op.key === "@pane_last_tool"));
+});
+
+Deno.test("eventToOps: PostToolUse publishes context pct when token_count is readable", async () => {
+  const transcript =
+    new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_use_id: "u1",
+      transcript_path: transcript,
+    },
+    state({ currentToolUseId: "u1" }),
+  );
+  assert(hasOp(ops, {
+    kind: "set",
+    key: "@pane_context_used_pct",
+    value: "25",
+  }));
+});
+
+Deno.test("eventToOps: normal event with missing token_count leaves context pct untouched", async () => {
+  const transcript =
+    new URL("../fixtures/token-missing.jsonl", import.meta.url).pathname;
+  const ops = await eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      tool_name: "Bash",
+      tool_use_id: "u1",
+      transcript_path: transcript,
+    },
+    state({ currentToolUseId: "u1" }),
+  );
+  assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
 });
 
 Deno.test("eventToOps: PostToolUse records last tool and string Error response", async () => {
@@ -1098,6 +1174,18 @@ Deno.test("eventToOps: child PermissionRequest does not wait-mark parent", async
   );
 });
 
+Deno.test("eventToOps: PermissionRequest does not publish context pct", async () => {
+  const transcript =
+    new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
+  const ops = await eventToOps(
+    "PermissionRequest",
+    { session_id: "s1", transcript_path: transcript },
+    state(),
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "waiting" }));
+  assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
+});
+
 Deno.test("eventToOps: child UserPromptSubmit does not self-heal parent identity", async () => {
   assertEquals(
     await eventToOps(
@@ -1241,6 +1329,20 @@ Deno.test("commandOutput: handles null streams without masking exit code", async
 Deno.test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
   const path = new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   assertEquals(await extractTokenPct(path), 25);
+});
+
+Deno.test("extractTokenPct: reads current nested event_msg token_count shape", async () => {
+  const path = new URL("../fixtures/token-nested-ok.jsonl", import.meta.url)
+    .pathname;
+  assertEquals(await extractTokenPct(path), 25);
+});
+
+Deno.test("extractTokenPct: uses last usage instead of cumulative session total", async () => {
+  const path = new URL(
+    "../fixtures/token-cumulative-over-window.jsonl",
+    import.meta.url,
+  ).pathname;
+  assertEquals(await extractTokenPct(path), 11);
 });
 
 Deno.test("extractTokenPct: token_count missing / zero window / file missing return null", async () => {

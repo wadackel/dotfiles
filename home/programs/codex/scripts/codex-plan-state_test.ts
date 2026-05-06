@@ -147,6 +147,49 @@ Deno.test("documents the permissioned CLI invocation used by skills", async () =
   );
 });
 
+Deno.test("impl skill documents the combined final review contract", async () => {
+  const implSkill = await Deno.readTextFile(
+    "home/programs/codex/skills/impl/SKILL.md",
+  );
+
+  const required = [
+    "Combined Generic Review",
+    "SECTION_VERDICT: PASS (no diff and no untracked files)",
+    "git ls-files --others --exclude-standard",
+    "REVIEW_FILES",
+    "untracked file contents",
+    "Area: SPEC|QUALITY",
+    "No VERDICT",
+    "malformed output",
+    "max 3 attempts",
+    "Domain-Specific Reviewer Dispatch",
+    "Security Dispatch Heuristic",
+    "Reviewer self-modification",
+  ];
+
+  for (const text of required) {
+    assertEquals(
+      implSkill.includes(text),
+      true,
+      `impl skill should include ${text}`,
+    );
+  }
+
+  const removed = [
+    "### Step 4b: Code Quality",
+    "fresh `code-reviewer` subagent を再 spawn",
+    "Spec Compliance PASS 後",
+  ];
+
+  for (const text of removed) {
+    assertEquals(
+      implSkill.includes(text),
+      false,
+      `impl skill should not reintroduce ${text}`,
+    );
+  }
+});
+
 Deno.test("rejects writes outside the Codex plans evidence namespace", async () => {
   const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
   Deno.env.set("HOME", home);
