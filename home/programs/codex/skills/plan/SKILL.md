@@ -29,6 +29,20 @@ Phase 4 DEEPEN は Codex の subagent dispatch に依存する。以下の custo
 
 dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場合は Phase 4 を実行できないため、`darwin-rebuild switch --flake .#private` を勧めて end turn する。
 
+## Core behavior
+
+`$plan` は、実装者がユーザー意図から逸れずに実装できる計画を作るための skill。曖昧な要求に対して、実装経路が見えているだけで plan 作成へ進んではいけない。
+
+small / medium / large の要求では、user-intent decision が解消されるまで `plan file / evidence sidecar / pending marker` を作らない。解消とは、ユーザーが回答した、ユーザーが明示的に仮定を選んで進行を許可した、または残りが codebase-recoverable technical discovery として具体的な downstream `next:` を持つ状態を指す。
+
+コード・設定・ログ・既存 issue・現在の会話から観測できる事実は、質問前に軽量調査で自己解決する。ユーザーの望む振る舞い、優先度、scope boundary、成功条件、risk tolerance、trade-off acceptance は観測から推測しない。
+
+Facts can be inferred from observation; user intent cannot.
+
+調査をその turn で実行できない文脈 (dry-run、read-only smoke、"first message only" 指示など) では、「これから調査する」とだけ返して終わらない。観測で解ける候補は `Self-resolved later` として短く示し、残る最重要の `User decision` を recommended answer (推奨案) と rationale 付きで質問して end turn する。
+
+すべての real clarification question には recommended answer (推奨案) と短い rationale を付ける。推奨案を出せない場合は、調査不足・質問の粒度が広すぎる・または user-only decision の候補が整理できていない状態なので、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く。
+
 ## Phase 1 PARSE
 
 ### Restate
@@ -51,16 +65,35 @@ dotfiles 実体は `home/programs/codex/agents/`。1 つでも欠けている場
 
 判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。
 
-**Blocking Interview Protocol**: Phase 1 は clarity-gated に進める。要求が実装計画を書ける程度に明確になるまで、必要に応じて質問を続ける。先に進める条件は、(a) user-only / subjective / high-cost な不確定が解消した、(b) user が明示的に仮定を選んで進行を許可した、または (c) 不確定が codebase-recoverable で、具体的な `next:` を持って Phase 2 / Phase 4 に委譲できる、のいずれか。
+**Clarity-gated loop**: Phase 1 は clarity-gated に進める。small / medium / large は、要求が実装計画を書ける程度に明確になるまで必要に応じて質問を続ける。`trivial` は Phase 1 を skip し、`xl` は分割提案に進む。
 
-1. Step A Walk: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、NotClear 項目を洗い出す。Restate は理解の要約であり、確認の代替ではない。
-2. Step B Triage: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。Ask しない項目は `no-ask reason` を `### Assumptions` または `### Self-resolved` に記録する。
-3. Step C Self-resolve probe: 軽量な grep/read で答えられるものは自分で解決する。codebase-recoverable だが Phase 1 で確定できない項目は、具体的な `next:` を持たせて後続 Phase に委譲する。
-4. Step D Ask: 残った real question を impact-priority でまとめ、各質問に AI 自身の推奨案を必ず明示する。質問を出す場合、この turn では plan file / evidence sidecar / pending marker を一切作らない。
-5. Step E Clarifying marker: 質問を出す直前に `~/.codex/plans/.clarifying-<cwd-hash>.json` を作成または上書きする。schema は `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, `interviewId` を含む。`interviewId` は質問文にも表示し、継続時に照合する。新しい Blocking Interview を始める場合は既存 marker を上書きする。
-6. Step F Wait: `ここで回答を待ちます。次の turn で自然言語で回答するか、確実な継続が必要なら $plan --answer <回答> を使ってください。` と明記して **end turn** する。
-7. Step G Continue: 次ターンの自然言語回答は best-effort で直前の `.clarifying-<cwd-hash>.json` に紐づける。保証された継続には `$plan --answer <回答>` を使う。回答後も clarity gate が満たされなければ追加質問を出し、満たされたら marker を削除して Phase 2 へ進む。
-8. Step H Cleanup: plan 作成が成功したら `.clarifying-<cwd-hash>.json` を削除する。新しい non-clarifying `$plan <request>` が plan 作成まで成功した場合も、古い clarifying marker を削除する。
+**Interview gate**: 未解決の ambiguity は plan 作成前に必ず分類する。
+
+| Bucket | Meaning | Action |
+|---|---|---|
+| **Observed fact** | codebase、関連ログ、docs、既存 issue、現在の会話から観測できる | 軽量 grep/read で自己解決し、secret / token / credential を plan や log に残さない |
+| **User decision** | desired behavior、priority、scope boundary、audience、risk tolerance、success criteria、trade-off acceptance に依存する | ユーザーに聞く。reasonable default があっても Draft assumption にしない |
+| **Technical deferral** | codebase-recoverable だが Phase 1 の軽量 probe では重すぎる technical discovery | `### Unresolved Items` に具体的な `next:` を書き、Phase 2 / Phase 4 / implementation へ委譲する |
+| **Draft assumption** | ユーザーが明示的に仮定で進めることを許可した、または non-blocking technical/default detail | `### Assumptions` に理由付きで記録する |
+
+`User decision` が 1 つでも残る場合、この turn では `plan file / evidence sidecar / pending marker` を作らず質問して end turn する。
+
+**Each clarification pass**:
+
+1. **Step A Walk**: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、過去回答を反映したうえで NotClear 項目を洗い出す。Restate は理解の要約であり、Ask の代替ではない。
+2. **Step B Triage**: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。Ask しない項目は `no-ask reason` を `### Assumptions` / `### Self-resolved` / `### Unresolved Items` のいずれかに記録する。user intent に依存する値は、ユーザーの明示選択なしに Assume しない。
+3. **Step C Self-resolve probe**: 軽量な grep/read で答えられるものは自分で解決する。codebase-recoverable だが Phase 1 で確定できない項目は、具体的な `next:` を持たせて後続 Phase に委譲する。user-only knowledge に依存するなら Ask に昇格する。
+4. **Step D Re-Ask trigger detection**: trigger は (i) prior answer に含まれる open-ended return question、(ii) ambiguous / empty answer、(iii) tentative Assumption が re-walk でまだ NotClear、(iv) deferred Ask items の繰り越し。同じ trigger が残り続ける場合、回数消化で進まず、ユーザーに「明示した仮定で進める / リスクを承知で進める / 追加確認する / scope out する」を選ばせる。
+5. **Step E Ask issuance**: 残った real question を impact-priority で最大 4 件にまとめる。各 question には recommended answer (推奨案) と短い rationale を必ず付ける。質問を出す直前に `~/.codex/plans/.clarifying-<cwd-hash>.json` を作成または上書きする。schema は `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, `interviewId` を含む。`interviewId` は質問文にも表示し、継続時に照合する。新しい Blocking Interview を始める場合は既存 marker を上書きする。
+6. **Step F Wait**: `ここで回答を待ちます。次の turn で自然言語で回答するか、確実な継続が必要なら $plan --answer <回答> を使ってください。` と明記して **end turn** する。
+7. **Step G Answer handling**: 次ターンの自然言語回答は best-effort で直前の `.clarifying-<cwd-hash>.json` に紐づける。保証された継続には `$plan --answer <回答>` を使う。ユーザーが AI 推奨案を選んだ場合は該当値を記録する。ユーザーが「X と仮定して進めて」のように明示した場合のみ、user-judgment-bound observation を `### Assumptions` に `user-overridden: true` 付きで記録して進める。空または曖昧な回答は次 pass の re-Ask trigger とする。
+8. **Step H Cleanup**: clarity gate が満たされたら marker を削除して Phase 2 へ進む。plan 作成が成功したら `.clarifying-<cwd-hash>.json` を削除する。新しい non-clarifying `$plan <request>` が plan 作成まで成功した場合も、古い clarifying marker を削除する。
+
+**Convergence conditions** (any one):
+
+- Ask / re-Ask trigger が 0 件、かつ `User decision` が残っていない
+- 残る uncertainty が codebase-recoverable で、具体的な downstream `next:` とともに `### Unresolved Items` へ記録済み
+- ユーザーが明示的な仮定で進行を許可した、または repeated uncertainty を scope out した
 
 ### Phase 1 出力
 
@@ -188,7 +221,7 @@ Adversarial は finding を `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)` ta
 
 ### Step 7 — Consolidated Interview (round 末尾で 1 回)
 
-Step 3 / Step 5 / Step 6 から繰り上がった needs-user-input items を 1 つのテキスト列挙 (max 4 questions) に集約し end turn する。Codex には AskUserQuestion API がないため、ユーザーは次ターンで自然言語で答える。`以下を自己解決しました:` ブロックで Self-resolved 内容を先に提示する。
+Step 3 / Step 5 / Step 6 から繰り上がった needs-user-input items を 1 つのテキスト列挙 (max 4 questions) に集約し end turn する。Codex には AskUserQuestion API がないため、ユーザーは次ターンで自然言語で答える。`以下を自己解決しました:` ブロックで Self-resolved 内容を先に提示する。ここで出す real question も Phase 1 と同じく recommended answer (推奨案) と短い rationale を必ず付ける。推奨できない場合は、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く。
 
 ### Step 8 — Definition of Done pipeline
 

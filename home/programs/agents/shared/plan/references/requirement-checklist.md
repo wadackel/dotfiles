@@ -18,6 +18,21 @@
 - **前進を許容する**: 不確定が codebase-recoverable で、Phase 2 EXPLORE / Phase 4 Critic / implementation のどこでどう解くかを具体的な `next:` として書ける場合は、Self-resolve または Unresolved Items に委譲して進む。
 - **明示選択で前進する**: 同じ不確定が繰り返し残る場合、回数消化で自動前進せず、user に「仮定を選ぶ / このまま進める / 追加で確認する / scope out する」のいずれかを明示的に選ばせる。
 
+## Interview gate — 観測事実と user intent の分離
+
+Phase 1 で未解決 ambiguity を扱う前に、必ず以下の bucket に分類する。Cost-based triage はこの gate の後に使う。Reasonable default は user decision を draft assumption に変換する根拠にならない。
+
+| Bucket | Meaning | Action |
+|---|---|---|
+| **Observed fact** | codebase、関連ログ、docs、既存 issue、現在の会話から観測できる事実 | 先に調査する。ログを使う場合は必要最小限を読み、secret / token / credential / unrelated personal data を artifact や log に残さない |
+| **User decision** | desired behavior、priority、scope boundary、audience、risk tolerance、success criteria、trade-off acceptance に依存する判断 | Ask。user が明示的に選んだ仮定以外では Assumption にしない |
+| **Technical deferral** | codebase-recoverable だが Phase 1 の軽量 probe では重すぎる technical discovery | `### Unresolved Items` に `item` / `reason` / concrete `next` を書く |
+| **Draft assumption** | user が明示的に仮定で進めることを許可した、または non-blocking technical/default detail | `### Assumptions` に value と reason を書く。user judgment 由来なら `user-overridden: true` を付ける |
+
+Facts can be inferred from observation; user intent cannot.
+
+Desired behavior、scope boundaries、success criteria、priority、audience、risk tolerance、trade-off acceptance は、user が明示的に許可しない限り Draft assumption ではない。これらが残る場合は artifact 作成前に Ask する。
+
 ## 8 観点 lens
 
 各観点は「この観点を置き去りにすると plan を壊す可能性がある」というチェックポイントの並び。**明示語 signal のリストは anchor**（判定を固定化するルールではなく、見落としを減らすための目安）として扱う。
@@ -119,13 +134,15 @@ NotClear 項目に対する triage は、観点ごとの fixed default ではな
 | コスト × 回収可能性 | 選択 |
 |---|---|
 | 高コスト、低回収可能性 | **Ask** — user 確認が必要 |
-| 低コスト、高回収可能性 | **Self-resolve**（Phase 1 の軽量 probe）または **Assume**（safe default） |
-| 低コスト、低回収可能性 | **Assume**（tentative、Phase 4 で再評価） |
+| 低コスト、低回収可能性 | **Draft assumption only for non-blocking details** — user intent に依存しない値、または user が明示的に許可した仮定に限る |
+| 低コスト、高回収可能性 | **Self-resolve**（Phase 1 の軽量 probe）または **Draft assumption**（non-blocking technical/default detail に限る） |
 | 高コスト、高回収可能性 | **Self-resolve** 優先、probe 不能なら **Ask** |
 
-**How の扱い**: 「問答無用で assume」の hard default は採用しない。How も他の観点と同様に上記 2 軸で判断する。典型的には「低コスト × 高回収可能性」に落ち着くため結果として Assume になることが多いが、user が明示的好みを示している signal があれば Ask 判断もありうる。
+**How の扱い**: 「問答無用で assume」の hard default は採用しない。How も他の観点と同様に上記 2 軸で判断する。典型的には「低コスト × 高回収可能性」に落ち着くため non-blocking technical/default detail として Draft assumption になることが多いが、user が明示的好みを示している signal があれば Ask 判断もありうる。
 
-**判断の記録**: 採用した triage は plan 本文の `### Assumptions` または `### Self-resolved` に該当エントリとして記録する（形式は後述）。
+**Assumption の制限**: `Assume` / `Draft assumption` は、non-blocking technical/default detail、または user が明示的に選んだ仮定だけに使う。Desired behavior、scope boundaries、success criteria、priority、audience、risk tolerance、trade-off acceptance は、軽そうに見えても user decision として扱う。
+
+**判断の記録**: 採用した triage は plan 本文の `### Assumptions` / `### Self-resolved` / `### Unresolved Items` のいずれかに該当エントリとして記録する（形式は後述）。
 
 ## Phase 1 出力 subsection（plan 内部 convention）
 
@@ -136,16 +153,13 @@ Phase 1 clarity gate 収束時、`## Overview` の直前に下記 subsection を
 
 - Interview status: clear enough to plan（reason: <all user-only high-cost uncertainty resolved / user chose explicit assumption / codebase-recoverable with concrete next>）
 - One-line restate: <user 要求を 1 文に圧縮。user は次の prompt で override 可能>（grill-me P3）
+- Scope fact: dotfiles/home/programs/claude/skills/plan/（source: 要求文 'plan skill を再設計' から文脈的に restate 可能）
 
 ### Assumptions
 
-- observation: Where
-  value: dotfiles/home/programs/claude/skills/plan/
-  reason: 要求文 'plan skill を再設計' から文脈的に restate 可能
-
 - observation: How
   value: 既存 markdown edit で reference file を書き換え
-  reason: codebase signal — 既存 skill 群が同じ pattern を踏襲
+  reason: user explicitly selected this assumption after the AI recommended it
   user-overridden: true   # optional. user override 由来の場合のみ付ける
 
 ### Self-resolved
@@ -154,21 +168,21 @@ Phase 1 clarity gate 収束時、`## Overview` の直前に下記 subsection を
   value: SKILL.md と references 3 ファイルを編集
   source: Phase 1 の Grep probe で確定
 
-- observation: When
-  value: Phase 2 EXPLORE で確定予定
-  source: probe 不能、Phase 2 に委譲
-
 ### Unresolved Items
 
 - item: 既存 test harness の最小実行コマンド
   reason: codebase-recoverable technical discovery だが、Phase 1 の軽量 probe だけでは確定しない
   next: Phase 2 EXPLORE で関連 test layout と既存実行例を調査
+
+- item: 起動文脈の詳細な call path
+  reason: codebase-recoverable technical discovery だが、Phase 1 の軽量 probe だけでは確定しない
+  next: Phase 2 EXPLORE で entry point / hook / command invocation を調査
 ```
 
 ### Subsection semantics
 
 - `### Requirement Clarification` — clarity gate の要約。人間可読で OK（Critic は parse しない）
-- `### Assumptions` — tentative / user-overridden / codebase-default 由来の仮定。各エントリに `observation` / `value` / `reason` を明記。user override 由来は `user-overridden: true` フラグを付ける（Phase 4 Critic が `### Assumptions` を走査して `user-overridden` を拾う）
+- `### Assumptions` — non-blocking technical/default detail、または user が明示的に選んだ仮定。各エントリに `observation` / `value` / `reason` を明記。user judgment 由来は `user-overridden: true` フラグを必ず付ける（Phase 4 Critic が `### Assumptions` を走査して `user-overridden` を拾う）。User decision を、reasonable default があるという理由だけでここに置かない
 - `### Self-resolved` — Phase 1 probe または Phase 2 EXPLORE 委譲で確定する項目。各エントリに `observation` / `value` / `source` を明記
 - `### Unresolved Items` — clarity loop 終了時点で確定できなかった codebase-recoverable / technical-discovery 項目のみを書く。user-only / subjective blocker はここに出さず、artifact 作成前に Ask するか explicit user-selected assumption として `### Assumptions` に記録する。各エントリに **3 フィールド必須**:
   - `item`: 何が未確定か
@@ -186,6 +200,7 @@ Ask 分類になった項目の発行ルール。進行管理の source of truth
 - Ask 件数 0: 追加確認 trigger も 0 件なら user-confirmation turn 自体 skip
 - Ask 件数 1–4: 全件を 1 回の AskUserQuestion call にまとめる（slot 上限 4 = AskUserQuestion API hard cap、override slot は使わない）
 - Ask 件数 5 以上: cost 優先順（Outcome > Boundary > Context > Definition、同 tier 内は observation 番号昇順）で上位 4 件、残りは次回 clarification iteration の確認候補先頭に繰り越し
+- すべての real question には AI の recommended answer（推奨案）と短い rationale を付ける。推奨できない場合は、調査不足・質問の粒度が広すぎる・user-only decision の候補が整理できていない状態なので、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く
 
 同じ不確定が残り続ける場合は、count-based に自動前進せず、user に「仮定を選ぶ / このまま進める / 追加で確認する / scope out する」のいずれかを明示的に選ばせる。codebase-recoverable な残項目だけは `### Unresolved Items` に具体的な `next:` を書いて委譲できる（legacy canonical phrase 形式は使わない）。
 

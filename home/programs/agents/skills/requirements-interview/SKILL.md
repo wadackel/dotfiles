@@ -4,6 +4,7 @@ description: |
   Structured requirements elicitation through iterative interviews. Transforms vague user requests into well-defined specifications and deliverables (GitHub Issues, Markdown specs, PRDs, etc.).
   Use this skill when the user asks to "要件を整理して", "Issueにまとめて", "仕様を書いて", "PRDを書いて", "要求を明確にして", "ヒアリングして", "spec-writer", "requirements-interview", or when producing any specification document, feature request, bug report, or design document from ambiguous input.
   Also use proactively when the user provides a vague feature request or bug description that needs clarification before action — even if they don't explicitly ask for an interview.
+argument-hint: "[rough requirement, target artifact, or issue/spec/PRD context]"
 ---
 
 # Requirements Interview
@@ -16,9 +17,23 @@ Users often know *what they want* but express it incompletely. The gap between w
 
 The core principle: **a good deliverable is one that a third party — another person, another Claude session, a future you — can understand and act on without needing to ask follow-up questions.**
 
+## Core behavior
+
+Interview the user until the requirements are clear enough that a third party can act without follow-up questions.
+
+Do not produce the final Issue, Markdown spec, PRD, ADR, bug report, or design document while user-intent decisions remain unresolved.
+
+Walk the decision tree one branch at a time. Ask the next question or tight question batch that resolves the highest-impact branch, then end the turn and wait for the user's answer.
+
+For every real question, provide your recommended answer and briefly explain why. The user can override it, but you must not delegate judgment with an unsupported open question.
+
+If a question can be answered by exploring the codebase, relevant logs, docs, existing issues, or the current conversation, explore first instead of asking the user. When using logs, inspect only what is needed and never copy secrets, tokens, credentials, or unrelated personal data into the deliverable.
+
+Facts can be inferred from observation; user intent cannot.
+
 ## Process overview
 
-The workflow has five phases. Each phase builds on the previous one, but the process is adaptive — skip or compress phases when the context is already clear.
+The workflow has five phases. Each phase builds on the previous one, but the process is adaptive. Compress only mechanics that are already clear; do not compress away required user-intent clarification for ambiguous requirements.
 
 ### Phase 0: Setup
 
@@ -54,6 +69,8 @@ Setup has two dimensions. For each one, **triage before blocking-asking** -- the
 2. If ONE dimension is inferable -> ask only the other in a single user-confirmation turn.
 3. If NEITHER is inferable -> ask both in a single user-confirmation turn (two questions, one turn).
 
+Skipping Phase 0 confirmation only skips confirmation of deliverable type and detail level. It does not skip the requirements interview.
+
 Never split Setup across multiple turns. When asking, phrase it in a way that lets the user also override the inferred value: "Deliverable = GitHub Issue と推定しました。違えば選択してください。Detail level はどうしますか？"
 
 ### Phase 1: Establish context
@@ -87,15 +104,25 @@ Use the current agent's user-confirmation mechanism to resolve ambiguities. In t
 
 **Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts. Each option should include a short description of its implications. Use `preview` for visual/structural comparisons.
 
-**Batch related questions.** Group 2-3 related questions per turn (max 4 questions per confirmation turn). Don't ask everything at once — it's overwhelming. Don't ask one at a time — it's tedious.
+**Batch related questions carefully.** Group 2-3 tightly related low-friction questions per turn (max 4 questions per confirmation turn). Ask a single high-impact question by itself when that answer changes which branch of the decision tree should be explored next. Don't ask everything at once — it's overwhelming.
 
 **Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user.
 
-**Always provide a recommended answer.** Every real question in a confirmation turn must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase or convert it to an Assumption instead. The user can override, but the AI never delegates judgment by asking with no recommendation.
+**Always provide a recommended answer.** Every real question in a confirmation turn must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase, narrow the question, or treat it as an Open question in a user-authorized draft. The user can override, but the AI never delegates judgment by asking with no recommendation.
+
+**Interview gate.** Before producing the deliverable, classify every unresolved ambiguity into exactly one bucket:
+
+| Bucket | Meaning | Action |
+|---|---|---|
+| **Observed fact** | Can be verified from code, relevant logs, docs, existing issues, or the current conversation | Research it; do not ask the user; redact sensitive log data |
+| **User decision** | Depends on desired behavior, priority, scope, audience, risk tolerance, success criteria, or acceptance of trade-offs | Ask the user |
+| **Draft assumption** | User explicitly allowed drafting with assumptions, or the detail is a non-blocking setup/detail-level inference | State it as an assumption in the deliverable |
+
+If any **User decision** remains, ask an interview question before drafting. Do not convert a User decision into a Draft assumption merely because a reasonable default exists. Desired behavior, scope boundaries, success criteria, priority, audience, and risk tolerance are never Draft assumptions unless the user explicitly authorizes drafting with assumptions.
 
 **Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
 
-**Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and note it as an assumption in the deliverable (see the Assumptions / Open questions distinction in Phase 4 below).
+**Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and ask whether to proceed with that default. Record it as an Assumption only when the user accepts the default or explicitly authorizes drafting with assumptions.
 
 ### Phase 4: Produce the deliverable
 
@@ -114,10 +141,12 @@ With all ambiguities resolved, create the deliverable in the agreed format.
 
 | Bucket | When to use | Owner of next action | Resolution path |
 |---|---|---|---|
-| **Assumptions** | A value is missing, and a reasonable default / inference was chosen. The deliverable proceeds as if this value is correct. | Reader (reviewer / implementer) is asked to confirm or override. | "Correct me if wrong" — silent acceptance = accepted. |
+| **Assumptions** | A non-blocking value is missing, and the user explicitly allowed an assumption or Phase 0 produced a deterministic setup inference. The deliverable proceeds as if this value is correct. | Reader (reviewer / implementer) is asked to confirm or override. | "Correct me if wrong" — silent acceptance = accepted. |
 | **Open questions** | A value is missing, and no reasonable default exists. The deliverable **cannot** proceed until someone answers (data, stakeholder, measurement). | Specific human / team / observation. | Explicit answer must be supplied before the next phase. |
 
 Heuristic: if you filled in a value and flagged it as "please confirm", it is an **Assumption**. If you left the value blank because filling it in would be a guess that could mislead, it is an **Open question**. Setup inferences (deliverable type, detail level) are always Assumptions — never Open questions — because Phase 0's triage rule chose them deterministically.
+
+This Assumptions table does not override the Phase 3 Interview gate. A user-intent decision cannot become an Assumption only because the agent has a reasonable default. Put that default in the recommended answer to the user instead.
 
 **Self-check before output:** Re-read the deliverable and ask: "Could someone unfamiliar with this conversation understand and act on this?" If any part relies on context only present in the conversation, make it explicit in the deliverable.
 
@@ -139,9 +168,11 @@ Pay attention to how the user communicates:
 
 ## When NOT to interview
 
-Skip or compress the interview when:
-- The user provides a fully specified request with clear acceptance criteria
-- The task is a simple, well-understood operation (typo fix, config change)
-- The user explicitly says "just do it" or "details are up to you"
+Skip the interview only when one of these is true:
+- The user explicitly asks for a draft with assumptions, says to proceed without further questions, or says the agent may choose the missing requirements
+- The request already includes concrete scope, target audience, success criteria, acceptance criteria, and relevant constraints
+- The task is a mechanical rewrite of already-specified content
 
 In these cases, proceed directly to the deliverable but still apply the self-check: would a third party understand this?
+
+A vague request to create an Issue, Markdown spec, PRD, feature request, bug report, or design document is never fully specified merely because a reasonable implementation path exists.

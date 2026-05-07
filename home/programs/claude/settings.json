@@ -771,5 +771,6 @@
   "preferredNotifChannel": "terminal_bell",
   "teammateMode": "in-process",
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "agentPushNotifEnabled": true
 }
