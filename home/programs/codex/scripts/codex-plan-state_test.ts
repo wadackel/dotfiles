@@ -163,6 +163,14 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "malformed output",
     "max 3 attempts",
     "Domain-Specific Reviewer Dispatch",
+    "Step 4 lifecycle budget",
+    "agent_id / role / stage / attempt / status / closed",
+    "close_agent",
+    "agent thread limit reached",
+    "retry exactly once",
+    "max 3 concurrent",
+    "bounded batch",
+    "result-integrated reviewers",
     "Security Dispatch Heuristic",
     "Reviewer self-modification",
   ];
@@ -179,6 +187,8 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "### Step 4b: Code Quality",
     "fresh `code-reviewer` subagent を再 spawn",
     "Spec Compliance PASS 後",
+    "同一 assistant turn で" + "並列 spawn",
+    "同一 turn で" + "並列 dispatch",
   ];
 
   for (const text of removed) {

@@ -51,6 +51,20 @@ function section(markdown: string, heading: string): string {
   return next < 0 ? rest : rest.slice(0, heading.length + next);
 }
 
+function spanBetween(
+  markdown: string,
+  startMarker: string,
+  endMarker: string,
+): string {
+  const start = markdown.indexOf(startMarker);
+  assert(start >= 0, `missing start marker: ${startMarker}`);
+
+  const end = markdown.indexOf(endMarker, start + startMarker.length);
+  assert(end >= 0, `missing end marker after ${startMarker}: ${endMarker}`);
+
+  return markdown.slice(start, end);
+}
+
 function assertIncludesAll(haystack: string, needles: string[]): void {
   for (const needle of needles) {
     assertStringIncludes(haystack, needle);
@@ -110,6 +124,63 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
     "3 rounds",
     "3 round",
     "operating limit",
+  ]);
+});
+
+Deno.test("Codex Approval Summary exposes approval decision details", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  const output = spanBetween(
+    skill,
+    "### Output to user",
+    "## Integration with existing tooling",
+  );
+
+  assertIncludesAll(output, [
+    "## Approval Summary",
+    "### Overview",
+    "### Approach",
+    "### Files to Change",
+    "### Execution",
+    "Source: ## Overview",
+    "Source: ## Approach",
+    "Source: ## Files to Change",
+    "source: ## Task Outline",
+    "source: ## Verification Commands",
+    "source: ## Risks + Open Questions",
+    "tree-style code block",
+    "CREATE / UPDATE / DELETE",
+    "Collapse by directory",
+    "Final Audit + Review",
+    "PENDING APPROVAL",
+    "承認はユーザーの明示打鍵でのみ成立",
+  ]);
+});
+
+Deno.test("Codex plan skill documents subagent lifecycle cleanup", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  const phase2 = section(skill, "## Phase 2 EXPLORE");
+  const phase4 = section(skill, "## Phase 4 DEEPEN");
+  const designNotes = section(skill, "## Design notes");
+
+  assertIncludesAll(phase2, [
+    "Subagent Lifecycle Budget",
+    "agent_id / role / phase / status / closed",
+    "close_agent",
+    "result-integrated",
+    "agent thread limit reached",
+    "retry exactly once",
+    "3 件すべてを `close_agent`",
+  ]);
+  assertIncludesAll(phase4, [
+    "`plan-critic` agent を `close_agent`",
+    "result-integrated subagents",
+    "両方を `close_agent`",
+    "missing side を retry exactly once",
+  ]);
+  assertIncludesAll(designNotes, [
+    "Subagent Lifecycle Budget",
+    "通常時の live subagents",
+    "bounded",
   ]);
 });
 

@@ -63,6 +63,8 @@ Facts can be inferred from observation; user intent cannot.
 
 ### Requirement Clarification (small+)
 
+This subsection defines the Blocking Interview Protocol for non-trivial `$plan` requests.
+
 判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 側は `~/.claude/skills/plan/references/requirement-checklist.md`) を参照 (Claude 版と同一: 8 観察軸、cost-based triage、ambiguous qualifier 校正シグナル)。
 
 **Clarity-gated loop**: Phase 1 は clarity-gated に進める。small / medium / large は、要求が実装計画を書ける程度に明確になるまで必要に応じて質問を続ける。`trivial` は Phase 1 を skip し、`xl` は分割提案に進む。
@@ -76,7 +78,7 @@ Facts can be inferred from observation; user intent cannot.
 | **Technical deferral** | codebase-recoverable だが Phase 1 の軽量 probe では重すぎる technical discovery | `### Unresolved Items` に具体的な `next:` を書き、Phase 2 / Phase 4 / implementation へ委譲する |
 | **Draft assumption** | ユーザーが明示的に仮定で進めることを許可した、または non-blocking technical/default detail | `### Assumptions` に理由付きで記録する |
 
-`User decision` が 1 つでも残る場合、この turn では `plan file / evidence sidecar / pending marker` を作らず質問して end turn する。
+`User decision` が 1 つでも残る場合、この turn では `plan file / evidence sidecar / pending marker を一切作らない`。質問して end turn する。
 
 **Each clarification pass**:
 
@@ -122,6 +124,14 @@ Spawn three explorer subagents in parallel with these distinct mandates. Wait fo
 3 mandate は Claude 版と同形。重複検索を避けるため mandate 境界を明示する。
 
 結果は **Unified Discovery Table** (`Category | File:Lines | Pattern | Key Snippet`) に集約する。
+
+### Subagent Lifecycle Budget
+
+main session は subagent を起動したら、その場で `agent_id / role / phase / status / closed` の簡易 ledger を保持する。subagent の出力を plan 本文・Unified Discovery Table・Deepening Log に統合したら、その subagent は result-integrated と見なし、次 phase へ進む前に `close_agent` で閉じる。`close_agent` は結果統合後または terminal/known completed agent にだけ使い、実行中の調査を途中で打ち切る目的では使わない。
+
+通常時の live subagents は 3 以下を目安にする。Phase 2 の explorer 3 並列は許容するが、3 件の結果を Unified Discovery Table に集約した直後に 3 件すべてを `close_agent` する。Phase 4 に入る前には ledger を確認し、known completed なのに未 close の subagent があれば先に閉じる。
+
+spawn が `agent thread limit reached` で失敗した場合だけ、known completed / terminal agents を `close_agent` で閉じ、失敗した dispatch を retry exactly once する。retry 後も失敗する場合は追加の spawn を繰り返さず、該当 phase の失敗時ルールに従って degrade するか停止する。
 
 ### Empirical analysis (existing-behavior 改修時)
 
@@ -185,6 +195,8 @@ main session が Critic 出力を triage:
 
 Verdict 抽出: `rg -m1 -A1 '^### Verdict$' <subagent-output>` の 2 行目が `CONVERGED` か `ITERATE`。`<plan-basename>.log.md` に Round N entry を append (verbatim subagent 出力)。
 
+Critic 出力を triage し、verdict 抽出と log append が完了したら、その round の `plan-critic` agent を `close_agent` で閉じる。次 round を fresh spawn する前に ledger 上の critic が closed であることを確認する。
+
 ### Step 4 — Convergence check
 
 以下のいずれかで Step 5 へ:
@@ -217,7 +229,9 @@ Wait for both, then return their findings together.
 
 Adversarial は finding を `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)` tag 付きで返す。Simplifier は提案を `(HIGH|MEDIUM|LOW)` confidence tag 付きで返す。HIGH は subtractive only auto-apply、MEDIUM/LOW は Step 7 Queue へ。
 
-**並列 dispatch 失敗時**: 同一メッセージで spawn したのに片方だけ応答が返る場合、欠損側は ITERATE (Adversarial) / 提案なし (Simplifier) と扱い、その round 内では再発火しない (次 round 以降の自然な再実行に任せる)。
+Step 5 + Step 6 を開始する前に、ledger 上の result-integrated subagents がすべて closed であることを確認する。Adversarial / Simplifier の結果を Step 7 queue や plan 本文に反映したら、両方を `close_agent` で閉じる。
+
+**並列 dispatch 失敗時**: 同一メッセージで spawn したのに片方だけ応答が返る場合、欠損側は ITERATE (Adversarial) / 提案なし (Simplifier) と扱い、その round 内では再発火しない (次 round 以降の自然な再実行に任せる)。ただし失敗理由が `agent thread limit reached` と観測できる場合だけ、Subagent Lifecycle Budget のルールに従って cleanup 後に missing side を retry exactly once してよい。
 
 ### Step 7 — Consolidated Interview (round 末尾で 1 回)
 
@@ -340,14 +354,29 @@ deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="
 
 ### Output to user
 
-ユーザーが plan file を開かずに `$impl` 承認可否を判断できるよう、まず compact な承認判断サマリを出し、その後に plan body と metadata block を出す。`## Approval Summary` は短く固定項目で埋め、各値は plan 本文の該当 section から抽出する:
+ユーザーが plan file を開かずに `$impl` 承認可否を判断できるよう、まず承認判断に足る summary を出し、その後に plan body と metadata block を出す。`## Approval Summary` は plan 本文の該当 section から抽出し、`Overview` / `Approach` / `Files to Change` を必ず先に示す。summary は plan body の再掲ではなく approval decision surface なので、各 subsection は compact に保つ:
 
-```
+````
 ## Plan
 
 ## Approval Summary
-- Goal: <one sentence> (source: ## Overview, or request/## Context when Overview is absent)
-- Scope / files: <files and actions; max 5 paths, summarize if more> (source: ## Files to Change)
+
+### Overview
+<2-4 bullets or a short paragraph that states what Codex understood and what will change. Source: ## Overview. If ## Overview is absent for trivial plans, use the request and ## Context.>
+
+### Approach
+<3-5 bullets describing the intended implementation direction, key design choices, and notable non-goals/tradeoffs. Source: ## Approach. If ## Approach is absent, derive only from ## Task Outline and ## NOT Building.>
+
+### Files to Change
+<tree-style code block showing only affected paths, annotated with CREATE / UPDATE / DELETE and one-line impact. Source: ## Files to Change. Collapse by directory and point to the plan file when the tree would exceed ~20 lines.>
+
+```text
+path/
+└── to/
+    └── file.ext  UPDATE: one-line impact
+```
+
+### Execution
 - Task outline: <implementation task subjects, excluding Final Audit + Review; max 5 tasks, one line each> (source: ## Task Outline)
 - Verification: <commands and expected outcomes; max 3 commands, summarize if more> (source: ## Verification Commands)
 - Risks / open questions: <top 1-3 items, or `None` when the section is absent> (source: ## Risks + Open Questions)
@@ -364,7 +393,7 @@ deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="
 - Status: PENDING APPROVAL — type `$impl` to approve and execute
 
 ⚠️ AI が自己 chain で `$impl` を打っても UserPromptSubmit hook は発火しないため、`.pending-` → `.active-` の promote は起こらない。承認はユーザーの明示打鍵でのみ成立する。
-```
+````
 
 `xl` で plan body が ~600 行を超える場合は `## Plan body` を section heading の TOC + plan path に置き換え、metadata block は同じ。Approval Summary は省略不可。
 
@@ -379,7 +408,7 @@ deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="
 
 ## Design notes
 
-- **subagent dispatch を活用**: Phase 2 EXPLORE は内蔵 `explorer` agent で 3 並列、Phase 4 DEEPEN は custom TOML agents (plan-critic / plan-adversarial / plan-simplifier) で Critic + Adversarial + Simplifier。`[agents]` config defaults (max_threads=6 / max_depth=1) で動作、MCP は optional。Codex 0.128.0 で empirical 検証済 (Phase 0 probe)。
+- **subagent dispatch を活用**: Phase 2 EXPLORE は内蔵 `explorer` agent で 3 並列、Phase 4 DEEPEN は custom TOML agents (plan-critic / plan-adversarial / plan-simplifier) で Critic + Adversarial + Simplifier。`[agents]` config defaults (max_threads=6 / max_depth=1) で動作、MCP は optional。Codex 0.128.0 で empirical 検証済 (Phase 0 probe)。ただし skill 側では Subagent Lifecycle Budget により result-integrated agents を `close_agent` で閉じ、通常時の live subagents を bounded に保つ。
 - **`developer_instructions` は pointer 方式**: 各 TOML は prompt 本体を転記せず、`references/*.md` の絶対 path + placeholder 命名 + verdict format 契約のみを持つ。subagent は workspace 共有経路で参照ファイルを Read する。SSOT を `references/*.md` に維持し dual-source-of-truth 同期コストを回避。
 - **Verdict format 契約**: `plan-critic` は `^### Verdict$\n(CONVERGED|ITERATE)$`、`plan-adversarial` は finding tag `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)`、`plan-simplifier` は confidence tag `(HIGH|MEDIUM|LOW)`。main session が rg で抽出する。
 - **`update_plan` の薄さをサイドカー JSON で補う**: ステータス + 短文しか持てないため、`baseline_sha` / `evidence` は `<basename>.evidence.json` に永続化する。
