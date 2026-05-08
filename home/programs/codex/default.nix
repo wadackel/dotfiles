@@ -17,7 +17,7 @@ let
   managed = {
     model = "gpt-5.5";
     model_reasoning_effort = "high";
-    model_reasoning_summary = "detailed";
+    model_reasoning_summary = "concise";
     sandbox_mode = "danger-full-access";
     notify = [
       "${pkgs.deno}/bin/deno"
