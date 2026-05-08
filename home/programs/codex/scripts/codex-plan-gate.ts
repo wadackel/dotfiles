@@ -22,7 +22,7 @@
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 const BOOTSTRAP_INFRA_REGEX =
-  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker)\.ts)$/;
+  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker|codex-plan-marker)\.ts)$/;
 
 export interface GateInput {
   hook_event_name?: string;

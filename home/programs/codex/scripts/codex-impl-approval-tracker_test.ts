@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { isApprovalPrompt, promote } from "./codex-impl-approval-tracker.ts";
 
 const LEGACY_IMPL = "$impl-" + "codex";
@@ -14,6 +14,12 @@ async function setupHome(
   await setup(home, hash, cwd);
   Deno.env.set("HOME", home);
   return { home, hash, cwd };
+}
+
+async function writePlan(home: string, name: string): Promise<string> {
+  const path = `${home}/.codex/plans/${name}`;
+  await Deno.writeTextFile(path, "# Plan\n");
+  return await Deno.realPath(path);
 }
 
 Deno.test("isApprovalPrompt: matches $impl variants only", () => {
@@ -35,9 +41,10 @@ Deno.test("isApprovalPrompt: matches $impl variants only", () => {
 
 Deno.test("scenario 1: prompt match + valid pending → promote", async () => {
   const { hash, cwd, home } = await setupHome(async (h, hh) => {
+    const plan = await writePlan(h, "X.md");
     await Deno.writeTextFile(
       `${h}/.codex/plans/.pending-${hh}`,
-      "/plans/X.md\n",
+      `${plan}\n`,
     );
   });
   const result = await promote(cwd);
@@ -47,7 +54,10 @@ Deno.test("scenario 1: prompt match + valid pending → promote", async () => {
   const activeContent = await Deno.readTextFile(
     `${home}/.codex/plans/.active-${hash}`,
   );
-  assertEquals(activeContent, "/plans/X.md\n");
+  assertEquals(
+    activeContent,
+    `${await Deno.realPath(`${home}/.codex/plans/X.md`)}\n`,
+  );
   // pending removed
   let pendingExists = true;
   try {
@@ -75,8 +85,9 @@ Deno.test("scenario 3: pending absent → no-op with no-pending reason", async (
 
 Deno.test("scenario 4: pending expired (>24h) → no-op with expired reason", async () => {
   const { cwd } = await setupHome(async (h, hh) => {
+    const plan = await writePlan(h, "Y.md");
     const path = `${h}/.codex/plans/.pending-${hh}`;
-    await Deno.writeTextFile(path, "/plans/Y.md");
+    await Deno.writeTextFile(path, plan);
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
     await Deno.utime(path, stale, stale);
   });
@@ -87,13 +98,15 @@ Deno.test("scenario 4: pending expired (>24h) → no-op with expired reason", as
 
 Deno.test("scenario 5: active already exists with pending → defensive no-op (already-active)", async () => {
   const { cwd } = await setupHome(async (h, hh) => {
+    const oldPlan = await writePlan(h, "OLD.md");
+    const newPlan = await writePlan(h, "NEW.md");
     await Deno.writeTextFile(
       `${h}/.codex/plans/.active-${hh}`,
-      "/plans/OLD.md",
+      oldPlan,
     );
     await Deno.writeTextFile(
       `${h}/.codex/plans/.pending-${hh}`,
-      "/plans/NEW.md",
+      newPlan,
     );
   });
   const result = await promote(cwd);

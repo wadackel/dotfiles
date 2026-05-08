@@ -21,9 +21,10 @@
 // races or manual tampering. Overwriting could silently invalidate an
 // in-progress impl session.
 
-import { cwdHash } from "./codex-plan-gate.ts";
+import { promote, type PromoteResult } from "./codex-plan-marker.ts";
 
-const PENDING_TTL_MS = 24 * 60 * 60 * 1000; // 24h, mirrors codex-plan-gate.ts
+export { promote };
+export type { PromoteResult };
 
 // `$impl` must be the first non-whitespace token:
 //   accepted: "$impl", "  $impl", "$impl foo"
@@ -35,26 +36,12 @@ export interface HookInput {
   cwd?: string;
 }
 
-export interface PromoteResult {
-  promoted: boolean;
-  reason: "promoted" | "no-pending" | "expired" | "already-active" | "io-error";
-  error?: string;
-}
-
 export function isApprovalPrompt(prompt: string): boolean {
   return APPROVAL_REGEX.test(prompt);
 }
 
 function homeDir(): string {
   return Deno.env.get("HOME") ?? "";
-}
-
-function pendingMarkerPath(hash: string): string {
-  return `${homeDir()}/.codex/plans/.pending-${hash}`;
-}
-
-function activeMarkerPath(hash: string): string {
-  return `${homeDir()}/.codex/plans/.active-${hash}`;
 }
 
 // HOME is re-resolved per call so test setups that mutate Deno.env after
@@ -71,53 +58,6 @@ async function appendLog(line: string): Promise<void> {
     );
   } catch {
     // logging must never break the hook
-  }
-}
-
-export async function promote(cwd: string): Promise<PromoteResult> {
-  const hash = await cwdHash(cwd);
-  const pending = pendingMarkerPath(hash);
-  const active = activeMarkerPath(hash);
-
-  let pendingStat: Deno.FileInfo;
-  try {
-    pendingStat = await Deno.stat(pending);
-  } catch {
-    return { promoted: false, reason: "no-pending" };
-  }
-
-  const mtime = pendingStat.mtime?.getTime() ?? 0;
-  if (Date.now() - mtime >= PENDING_TTL_MS) {
-    return { promoted: false, reason: "expired" };
-  }
-
-  try {
-    await Deno.stat(active);
-    return { promoted: false, reason: "already-active" };
-  } catch {
-    // active not present → proceed
-  }
-
-  // Atomic write: stage the new active marker under a tmp name and rename it
-  // into place so a partial write is never observed by codex-plan-gate.
-  const activeTmp = `${active}.tmp`;
-  try {
-    const content = await Deno.readTextFile(pending);
-    await Deno.writeTextFile(activeTmp, content);
-    await Deno.rename(activeTmp, active);
-    await Deno.remove(pending);
-    return { promoted: true, reason: "promoted" };
-  } catch (err) {
-    try {
-      await Deno.remove(activeTmp);
-    } catch {
-      // tmp may not exist if the failure happened before write
-    }
-    return {
-      promoted: false,
-      reason: "io-error",
-      error: (err as Error).message,
-    };
   }
 }
 

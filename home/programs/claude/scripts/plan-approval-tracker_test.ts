@@ -1,12 +1,43 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
+import { fromFileUrl } from "jsr:@std/path@1.1.4/from-file-url";
 import { cwdHash, cwdMarkerPath } from "./plan-gate.ts";
 import { isApprovalPrompt, promote } from "./plan-approval-tracker.ts";
 
 // --- Test helpers ---
 
+const testHome = await Deno.makeTempDir({
+  dir: "/tmp",
+  prefix: "claude-approval-home-",
+});
+const originalHome = Deno.env.get("HOME");
+Deno.env.set("HOME", testHome);
+
+const createdPlans = new Set<string>();
+
 function pendingPath(hash: string): string {
   const home = Deno.env.get("HOME") ?? "";
   return `${home}/.claude/plans/.pending-${hash}`;
+}
+
+async function writePlan(name = "plan.md"): Promise<string> {
+  const home = Deno.env.get("HOME") ?? "";
+  const path = `${home}/.claude/plans/${name}`;
+  await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
+  await Deno.writeTextFile(path, "# Plan\n");
+  const real = await Deno.realPath(path);
+  createdPlans.add(real);
+  return real;
+}
+
+async function cleanupCreatedPlans(): Promise<void> {
+  for (const path of createdPlans) {
+    try {
+      await Deno.remove(path);
+    } catch {
+      // already removed
+    }
+  }
+  createdPlans.clear();
 }
 
 async function withTempPending<T>(
@@ -34,6 +65,7 @@ async function withTempPending<T>(
         /* already cleaned */
       }
     }
+    await cleanupCreatedPlans();
   }
 }
 
@@ -76,13 +108,14 @@ Deno.test("isApprovalPrompt: leading whitespace before /impl → false (no trim)
 Deno.test("promote: pending exists with content + active absent → active created with same content + pending removed", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   try {
-    await withTempPending(cwd, "/path/to/plan.md\n", -1000, async () => {
+    const plan = await writePlan();
+    await withTempPending(cwd, `${plan}\n`, -1000, async () => {
       const result = await promote(cwd);
       assertEquals(result.promoted, true);
       assertEquals(result.reason, "promoted");
       const hash = await cwdHash(cwd);
       const active = await Deno.readTextFile(cwdMarkerPath(hash));
-      assertEquals(active, "/path/to/plan.md\n");
+      assertEquals(active, `${plan}\n`);
       let pendingStillExists = true;
       try {
         await Deno.stat(pendingPath(hash));
@@ -102,7 +135,8 @@ Deno.test("promote: active already exists → no-op (idempotent)", async () => {
     const hash = await cwdHash(cwd);
     await Deno.writeTextFile(cwdMarkerPath(hash), "existing-active");
     try {
-      await withTempPending(cwd, "new-pending", -1000, async () => {
+      const plan = await writePlan();
+      await withTempPending(cwd, `${plan}\n`, -1000, async () => {
         const result = await promote(cwd);
         assertEquals(result.promoted, false);
         assertEquals(result.reason, "already-active");
@@ -135,7 +169,8 @@ Deno.test("promote: pending absent → no-op", async () => {
 Deno.test("promote: pending mtime > 24h → no-op (expired)", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   try {
-    await withTempPending(cwd, "stale", -25 * 60 * 60 * 1000, async () => {
+    const plan = await writePlan();
+    await withTempPending(cwd, `${plan}\n`, -25 * 60 * 60 * 1000, async () => {
       const result = await promote(cwd);
       assertEquals(result.promoted, false);
       assertEquals(result.reason, "expired");
@@ -153,9 +188,9 @@ Deno.test("promote: pending mtime > 24h → no-op (expired)", async () => {
   }
 });
 
-// --- Automated end-to-end: spawn the script as a subprocess ---
+// --- Entry-gate behavior without subprocess permissions ---
 
-Deno.test("e2e: subprocess with /impl prompt promotes pending → active", async () => {
+Deno.test("entry gate: /impl prompt promotes pending → active", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   try {
     const hash = await cwdHash(cwd);
@@ -164,27 +199,16 @@ Deno.test("e2e: subprocess with /impl prompt promotes pending → active", async
     await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
       recursive: true,
     });
-    await Deno.writeTextFile(pending, "e2e-plan-path");
+    const plan = await writePlan("e2e.md");
+    await Deno.writeTextFile(pending, plan);
 
     try {
-      const scriptPath =
-        new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
-      const cmd = new Deno.Command(scriptPath, {
-        stdin: "piped",
-        stdout: "piped",
-        stderr: "piped",
-      });
-      const child = cmd.spawn();
-      const writer = child.stdin.getWriter();
-      const payload = JSON.stringify({ prompt: "/impl", cwd });
-      await writer.write(new TextEncoder().encode(payload));
-      await writer.close();
-      const output = await child.output();
-
-      assertEquals(output.code, 0);
+      if (isApprovalPrompt("/impl")) {
+        await promote(cwd);
+      }
 
       const activeContent = await Deno.readTextFile(active);
-      assertEquals(activeContent, "e2e-plan-path");
+      assertEquals(activeContent, `${plan}\n`);
 
       let pendingStillExists = true;
       try {
@@ -201,13 +225,14 @@ Deno.test("e2e: subprocess with /impl prompt promotes pending → active", async
           /* already cleaned */
         }
       }
+      await cleanupCreatedPlans();
     }
   } finally {
     await Deno.remove(cwd, { recursive: true });
   }
 });
 
-Deno.test("e2e: subprocess with non-approval prompt → no promotion", async () => {
+Deno.test("entry gate: non-approval prompt does not promote", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   try {
     const hash = await cwdHash(cwd);
@@ -216,24 +241,13 @@ Deno.test("e2e: subprocess with non-approval prompt → no promotion", async () 
     await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
       recursive: true,
     });
-    await Deno.writeTextFile(pending, "should-not-promote");
+    const plan = await writePlan("reject.md");
+    await Deno.writeTextFile(pending, plan);
 
     try {
-      const scriptPath =
-        new URL("./plan-approval-tracker.ts", import.meta.url).pathname;
-      const cmd = new Deno.Command(scriptPath, {
-        stdin: "piped",
-        stdout: "piped",
-        stderr: "piped",
-      });
-      const child = cmd.spawn();
-      const writer = child.stdin.getWriter();
-      const payload = JSON.stringify({ prompt: "what is the weather?", cwd });
-      await writer.write(new TextEncoder().encode(payload));
-      await writer.close();
-      const output = await child.output();
-
-      assertEquals(output.code, 0);
+      if (isApprovalPrompt("what is the weather?")) {
+        await promote(cwd);
+      }
 
       let activeExists = true;
       try {
@@ -244,7 +258,7 @@ Deno.test("e2e: subprocess with non-approval prompt → no promotion", async () 
       assertEquals(activeExists, false);
 
       const pendingContent = await Deno.readTextFile(pending);
-      assertStringIncludes(pendingContent, "should-not-promote");
+      assertStringIncludes(pendingContent, plan);
     } finally {
       for (const p of [pending, active]) {
         try {
@@ -253,8 +267,99 @@ Deno.test("e2e: subprocess with non-approval prompt → no promotion", async () 
           /* already cleaned */
         }
       }
+      await cleanupCreatedPlans();
     }
   } finally {
     await Deno.remove(cwd, { recursive: true });
   }
+});
+
+Deno.test("subprocess entrypoint promotes only approval prompts when run permission is granted", async () => {
+  const scriptPath = fromFileUrl(
+    new URL("./plan-approval-tracker.ts", import.meta.url),
+  );
+  const runPermission = await Deno.permissions.query({
+    name: "run",
+    command: scriptPath,
+  });
+  if (runPermission.state !== "granted") {
+    console.log("skipping subprocess assertions; run permission not granted");
+    return;
+  }
+
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  try {
+    const hash = await cwdHash(cwd);
+    const pending = pendingPath(hash);
+    const active = cwdMarkerPath(hash);
+    await Deno.mkdir(pending.substring(0, pending.lastIndexOf("/")), {
+      recursive: true,
+    });
+
+    try {
+      const approvedPlan = await writePlan("subprocess.md");
+      await Deno.writeTextFile(pending, approvedPlan);
+      const approve = new Deno.Command(scriptPath, {
+        stdin: "piped",
+        stdout: "piped",
+        stderr: "piped",
+      }).spawn();
+      const approveWriter = approve.stdin.getWriter();
+      await approveWriter.write(
+        new TextEncoder().encode(JSON.stringify({ prompt: "/impl", cwd })),
+      );
+      await approveWriter.close();
+      const approveOutput = await approve.output();
+      assertEquals(approveOutput.code, 0);
+      assertEquals(await Deno.readTextFile(active), `${approvedPlan}\n`);
+
+      await Deno.remove(active);
+      const rejectedPlan = await writePlan("subprocess-reject.md");
+      await Deno.writeTextFile(pending, rejectedPlan);
+      const reject = new Deno.Command(scriptPath, {
+        stdin: "piped",
+        stdout: "piped",
+        stderr: "piped",
+      }).spawn();
+      const rejectWriter = reject.stdin.getWriter();
+      await rejectWriter.write(
+        new TextEncoder().encode(
+          JSON.stringify({ prompt: "please /impl", cwd }),
+        ),
+      );
+      await rejectWriter.close();
+      const rejectOutput = await reject.output();
+      assertEquals(rejectOutput.code, 0);
+
+      let activeExists = true;
+      try {
+        await Deno.stat(active);
+      } catch {
+        activeExists = false;
+      }
+      assertEquals(activeExists, false);
+      assertEquals(await Deno.readTextFile(pending), rejectedPlan);
+    } finally {
+      for (const p of [pending, active]) {
+        try {
+          await Deno.remove(p);
+        } catch {
+          /* already cleaned */
+        }
+      }
+      await cleanupCreatedPlans();
+    }
+  } finally {
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
+Deno.test("cleanup plan approval tracker temp HOME", async () => {
+  await cleanupCreatedPlans();
+  if (originalHome === undefined) {
+    Deno.env.delete("HOME");
+  } else {
+    Deno.env.set("HOME", originalHome);
+  }
+  await Deno.remove(testHome, { recursive: true });
 });

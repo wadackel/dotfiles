@@ -330,15 +330,13 @@ Claude 版 (`~/.claude/skills/plan/SKILL.md` / worktree: `home/programs/claude/s
 
 `.pending-<cwd-hash>` のみ作成する (`.active-` には絶対しない)。`.active-` は次ターンでユーザーが `$impl` を打鍵したときに `codex-impl-approval-tracker.ts` UserPromptSubmit hook が promote する。
 
+marker 操作は deterministic helper に委譲する。agent は cwd-hash や marker path を inline shell で組み立てない。
+
 ```bash
-REAL_PWD=$(realpath "$PWD")
-CWD_HASH=$(printf '%s' "$REAL_PWD" | shasum -a 256 | cut -c1-16)
-mkdir -p "$HOME/.codex/plans"
-rm -f "$HOME/.codex/plans/.active-${CWD_HASH}"  # 過去の承認を必ず無効化 (re-plan ケース)
-printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${CWD_HASH}"
+deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="$HOME/.codex/plans" --no-prompt ~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3>' "$PWD"
 ```
 
-`<PLAN_FILE_PATH from Phase 3>` は Phase 3 で決めた絶対パスを agent が template-substitute する (bash 変数展開ではなく文字列置換)。
+`<PLAN_FILE_PATH from Phase 3>` は Phase 3 で決めた絶対パスを agent が template-substitute する (bash 変数展開ではなく文字列置換)。helper は `$PWD` を `codex-plan-gate.ts` と同じ canonical cwd-hash へ変換し、`~/.codex/plans` を作成し、re-plan 時の古い active marker を削除してから pending marker を atomic write する。
 
 ### Output to user
 
@@ -377,6 +375,7 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 - `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: Phase 4 が依存する custom agent 定義。dotfiles 実体は `home/programs/codex/agents/`。
 - `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` を出力する。
 - PreToolUse hook (`codex-plan-gate.ts`): cwd 配下の apply_patch を `.active-<hash>` 不在/期限切れ時に block する。Phase 6 で `.pending-` のみを書く理由はこのゲートと連動するため。
+- Marker helper (`codex-plan-marker.ts`): Phase 6 の pending activation、`$impl` 起動時の active requirement、final PASS 後の active cleanup、UserPromptSubmit hook の promote 処理を担う deterministic helper。
 
 ## Design notes
 
@@ -384,5 +383,5 @@ printf '%s\n' '<PLAN_FILE_PATH from Phase 3>' > "$HOME/.codex/plans/.pending-${C
 - **`developer_instructions` は pointer 方式**: 各 TOML は prompt 本体を転記せず、`references/*.md` の絶対 path + placeholder 命名 + verdict format 契約のみを持つ。subagent は workspace 共有経路で参照ファイルを Read する。SSOT を `references/*.md` に維持し dual-source-of-truth 同期コストを回避。
 - **Verdict format 契約**: `plan-critic` は `^### Verdict$\n(CONVERGED|ITERATE)$`、`plan-adversarial` は finding tag `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)`、`plan-simplifier` は confidence tag `(HIGH|MEDIUM|LOW)`。main session が rg で抽出する。
 - **`update_plan` の薄さをサイドカー JSON で補う**: ステータス + 短文しか持てないため、`baseline_sha` / `evidence` は `<basename>.evidence.json` に永続化する。
-- **承認ゲート二重化**: `codex-plan-gate.ts` (PreToolUse) が apply_patch を機械的に止め、本 skill の `.pending-` 出力 + UserPromptSubmit hook が承認の唯一のルートを担保する。AI 自己 chain (`$plan` → 同一ターンで `$impl` を model 自身が打つ) では UserPromptSubmit hook が発火しないため、promote は起こらない。
+- **承認ゲート二重化**: `codex-plan-gate.ts` (PreToolUse) が apply_patch を機械的に止め、本 skill の `codex-plan-marker.ts activate-pending` + UserPromptSubmit hook が承認の唯一のルートを担保する。AI 自己 chain (`$plan` → 同一ターンで `$impl` を model 自身が打つ) では UserPromptSubmit hook が発火しないため、promote は起こらない。
 - **skill-to-skill invocation API がない**: Codex 公式 docs に明文化された skill→skill の起動 API はなく、`$xxx` 言及からの auto-load は prompt-injection 経路に依存する非公式挙動。final gate を独立 skill に分けず `$impl` 内蔵 Audit + Review phase に閉じる根拠。

@@ -22,18 +22,25 @@ ACTIVE  = ~/.claude/plans/.active-<sha256(realpath $PWD) | hex slice 16>
 PENDING = ~/.claude/plans/.pending-<...>
 ```
 
-Approval gate — check before any work:
+Approval gate — check before any work using the deterministic marker helper. The agent must not manually compose cwd hashes or marker paths:
 
-- **`.active-<hash>` exists** (valid mtime < 24h): read its content (the plan path) and proceed.
-- **`.active-<hash>` absent but `.pending-<hash>` exists**: refuse with `Plan exists but is not yet approved. The user must explicitly type /impl as a top-level prompt to approve. Auto-mode self-invocation does NOT bypass this gate — UserPromptSubmit hook (plan-approval-tracker.ts) is the only mechanism that promotes .pending- → .active-.` Stop processing immediately. Do NOT attempt edits.
-- **Both absent**: refuse with `Run /plan first. No active plan for this cwd.`
-- **`.active-<hash>` expired** (mtime > 24h, also blocked by `plan-gate.ts`): tell the user to re-run `/plan`.
+```bash
+deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$PWD"
+```
 
-The approval signal is `/impl` typed as the leading slash command of a top-level user prompt. The hook performs `.pending-` → `.active-` promotion on detection. AI invoking the `/impl` Skill via the Skill tool does NOT fire UserPromptSubmit and therefore cannot self-promote.
+The helper's stdout is the active plan path. Proceed only when it exits 0.
+
+- **helper exits 0**: read stdout (the plan path) and proceed.
+- **`.active` expired**: refuse with `.active marker expired. Run /plan <request> again.` Stop processing immediately.
+- **pending only**: refuse with `Plan exists but is not approved. Type /impl as a top-level prompt to approve.` Stop processing immediately. Do NOT attempt edits.
+- **pending expired**: refuse with `.pending marker expired. Run /plan <request> again.` Stop processing immediately.
+- **absent**: refuse with `Run /plan <request> first. No active plan for this cwd.`
+
+The approval signal is `/impl` typed as the leading slash command of a top-level user prompt. The hook performs helper-backed `.pending-` → `.active-` promotion on detection. AI invoking the `/impl` Skill via the Skill tool does NOT fire UserPromptSubmit and therefore cannot self-promote.
 
 ## Workflow
 
-1. Resolve plan file path from the cwd-hash marker.
+1. Use the approval gate's `require-active` stdout as the plan file path.
 2. `Read` the plan file in full so subsequent tasks can faithfully follow its **Files to Change** and **Patterns to Mirror**.
 3. `TaskList` → process tasks in **ID ascending order**, skipping any with non-empty `blockedBy`.
 4. For each task:

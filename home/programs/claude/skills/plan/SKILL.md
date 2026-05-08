@@ -333,15 +333,13 @@ This two-marker scheme exists because auto mode encourages "execute immediately"
 
 **Important**: the `PLAN_FILE_PATH` value below is **template-substituted by the agent at invocation time** using the path decided in Phase 3. This is not a bash variable expansion — the agent writes the literal plan path into the bash command string. The pending marker's content (the plan path) is copied verbatim into the active marker on promotion.
 
+marker 操作は deterministic helper に委譲する。agent は cwd-hash や marker path を inline shell で組み立てない。
+
 ```bash
-REAL_PWD=$(realpath "$PWD")
-CWD_HASH=$(printf '%s' "$REAL_PWD" | shasum -a 256 | cut -c1-16)
-mkdir -p "$HOME/.claude/plans"
-rm -f "$HOME/.claude/plans/.active-${CWD_HASH}"  # invalidate any prior approval (re-plan case)
-printf '%s\n' '<PLAN_FILE_PATH from Phase 3, agent-substituted>' > "$HOME/.claude/plans/.pending-${CWD_HASH}"
+deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3, agent-substituted>' "$PWD"
 ```
 
--- Why: cwd-hash is computed from the realpath `$PWD` on both sides (bash `realpath` and TS `Deno.realPath`) so symlink-heavy cwds hash-match. 24h TTL is checked by both `plan-gate.ts` (active) and `plan-approval-tracker.ts` (pending); each `/plan` invocation refreshes pending mtime and clears any stale active marker.
+-- Why: `plan-marker.ts` computes the same canonical cwd-hash as `plan-gate.ts`, writes the pending marker atomically, and clears any stale active marker for the re-plan case. 24h TTL is checked by both `plan-gate.ts` and `plan-marker.ts`; each `/plan` invocation refreshes pending mtime and invalidates prior approval.
 
 ### Output to user
 
