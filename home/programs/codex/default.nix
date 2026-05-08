@@ -36,7 +36,7 @@ let
       streamable_shell = true;
       view_image_tool = true;
       external_migration = true;
-      codex_hooks = true;
+      hooks = true;
     };
 
     tui = {
