@@ -762,7 +762,8 @@
     "hookify@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": true,
+    "pnl@kw-marketplace": true
   },
   "language": "japanese",
   "alwaysThinkingEnabled": true,
@@ -770,7 +771,7 @@
   "skipDangerousModePermissionPrompt": true,
   "preferredNotifChannel": "terminal_bell",
   "teammateMode": "in-process",
+  "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "agentPushNotifEnabled": true
+  "voiceEnabled": true
 }
