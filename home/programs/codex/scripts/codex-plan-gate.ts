@@ -16,16 +16,18 @@
 //   2. patch edits only bootstrap gate files → allow (bootstrap exception)
 //   3. all patched files are outside cwd     → allow (per-cwd gate scope)
 //   4. ~/.codex/plans/.active-<hash> valid   → allow (active marker; mtime < 24h)
-//   5. otherwise                             → block with hint mentioning
+//   5. session/cwd bypass marker valid       → allow (user typed $bypass-plan-gate)
+//   6. otherwise                             → block with hint mentioning
 //                                              $plan or $impl
 
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 const BOOTSTRAP_INFRA_REGEX =
-  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker|codex-plan-marker)\.ts)$/;
+  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker|codex-plan-marker|codex-bypass-plan-gate-tracker)\.ts)$/;
 
 export interface GateInput {
   hook_event_name?: string;
+  session_id?: string;
   tool_name?: string;
   tool_input?: { command?: string };
   cwd?: string;
@@ -39,9 +41,27 @@ export type GateDecision =
       | "infra"
       | "outside-cwd"
       | "marker-valid"
+      | "bypass-valid"
       | "missing-fields";
   }
   | { kind: "block"; reason: string };
+
+export interface BypassMarkerInfo {
+  plansDir: string;
+  path: string;
+  cwdHash: string;
+  sessionHash: string;
+}
+
+export interface BypassMarker {
+  version: 1;
+  createdAt: string;
+  cwd: string;
+  cwdHash: string;
+  session_id: string;
+  sessionHash: string;
+  prompt: string;
+}
 
 // Canonicalize a path even if its leaf does not yet exist (e.g. files about to
 // be created by apply_patch). Walks up to the nearest existing ancestor,
@@ -85,6 +105,15 @@ export async function cwdHash(cwd: string): Promise<string> {
     .slice(0, 16);
 }
 
+export async function sessionHash(sessionId: string): Promise<string> {
+  const data = new TextEncoder().encode(sessionId);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+}
+
 export type CwdMarkerState = "valid" | "expired" | "absent";
 
 function activeMarkerPath(home: string, hash: string): string {
@@ -93,6 +122,120 @@ function activeMarkerPath(home: string, hash: string): string {
 
 function pendingMarkerPath(home: string, hash: string): string {
   return `${home}/.codex/plans/.pending-${hash}`;
+}
+
+function homeDir(): string {
+  const home = Deno.env.get("HOME");
+  if (!home) {
+    throw new Error("HOME is not set");
+  }
+  return home;
+}
+
+export async function bypassMarkerInfo(
+  cwd: string,
+  sessionId: string,
+): Promise<BypassMarkerInfo> {
+  if (!sessionId) {
+    throw new Error("session_id is required");
+  }
+  const home = homeDir();
+  const cwdMarkerHash = await cwdHash(cwd);
+  const sessionMarkerHash = await sessionHash(sessionId);
+  const plansDir = `${home}/.codex/plans`;
+  return {
+    plansDir,
+    cwdHash: cwdMarkerHash,
+    sessionHash: sessionMarkerHash,
+    path:
+      `${plansDir}/.bypass-plan-gate-${cwdMarkerHash}-${sessionMarkerHash}.json`,
+  };
+}
+
+async function assertRegularFile(path: string): Promise<Deno.FileInfo> {
+  const info = await Deno.lstat(path);
+  if (!info.isFile || info.isSymlink) {
+    throw new Error(`marker must be a regular file: ${path}`);
+  }
+  return info;
+}
+
+async function atomicWriteText(path: string, content: string): Promise<void> {
+  const slash = path.lastIndexOf("/");
+  if (slash < 1) {
+    throw new Error(`refusing to write marker outside a directory: ${path}`);
+  }
+  const dir = path.slice(0, slash);
+  const basename = path.slice(slash + 1);
+  const tmp = `${dir}/.${basename}.${crypto.randomUUID()}.tmp`;
+  try {
+    await Deno.writeTextFile(tmp, content, {
+      createNew: true,
+      mode: 0o600,
+    });
+    await assertRegularFile(tmp);
+    await Deno.rename(tmp, path);
+  } catch (err) {
+    try {
+      await Deno.remove(tmp);
+    } catch {
+      // tmp may not exist or may already have been renamed.
+    }
+    throw err;
+  }
+}
+
+export async function activateBypassMarker(input: {
+  cwd: string;
+  session_id: string;
+  prompt?: string;
+}): Promise<BypassMarkerInfo> {
+  const info = await bypassMarkerInfo(input.cwd, input.session_id);
+  await Deno.mkdir(info.plansDir, { recursive: true });
+  const marker: BypassMarker = {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    cwd: await canonical(input.cwd),
+    cwdHash: info.cwdHash,
+    session_id: input.session_id,
+    sessionHash: info.sessionHash,
+    prompt: input.prompt ?? "",
+  };
+  await atomicWriteText(info.path, JSON.stringify(marker, null, 2) + "\n");
+  return info;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export async function hasValidBypassMarker(
+  cwd: string,
+  sessionId: string,
+): Promise<boolean> {
+  if (!sessionId) {
+    return false;
+  }
+  let info: BypassMarkerInfo;
+  try {
+    info = await bypassMarkerInfo(cwd, sessionId);
+    await assertRegularFile(info.path);
+    const parsed: unknown = JSON.parse(await Deno.readTextFile(info.path));
+    if (!isRecord(parsed)) {
+      return false;
+    }
+    const canonicalCwd = await canonical(cwd);
+    return parsed.version === 1 &&
+      typeof parsed.createdAt === "string" &&
+      parsed.createdAt.length > 0 &&
+      parsed.cwd === canonicalCwd &&
+      parsed.cwdHash === info.cwdHash &&
+      typeof parsed.prompt === "string" &&
+      parsed.sessionHash === info.sessionHash &&
+      parsed.session_id === sessionId;
+  } catch {
+    return false;
+  }
 }
 
 export async function activeMarkerState(cwd: string): Promise<CwdMarkerState> {
@@ -204,6 +347,10 @@ export async function gateDecision(input: GateInput): Promise<GateDecision> {
   }
 
   const pendingExists = state === "absent" ? await hasPending(cwd) : false;
+  const sessionId = typeof input.session_id === "string" ? input.session_id : "";
+  if (await hasValidBypassMarker(cwd, sessionId)) {
+    return { kind: "allow", reason: "bypass-valid" };
+  }
 
   let reason: string;
   if (state === "expired") {

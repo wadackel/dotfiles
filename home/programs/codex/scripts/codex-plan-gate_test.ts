@@ -4,6 +4,8 @@ import {
   assertNotMatch,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  activateBypassMarker,
+  bypassMarkerInfo,
   cwdHash,
   extractPatchFiles,
   gateDecision,
@@ -13,6 +15,8 @@ import {
 
 const CODEX_INFRA =
   "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-gate.ts";
+const CODEX_BYPASS_INFRA =
+  "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-bypass-plan-gate-tracker.ts";
 const CODEX_SKILL_PATH =
   "/Users/wadackel/dotfiles/home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PATH =
@@ -31,13 +35,22 @@ async function tmpHomeWith(
   return { home, hash, cwd };
 }
 
-function input(toolName: string, command: string, cwd: string): GateInput {
-  return {
+function input(
+  toolName: string,
+  command: string,
+  cwd: string,
+  sessionId?: string,
+): GateInput {
+  const base: GateInput = {
     hook_event_name: "PreToolUse",
     tool_name: toolName,
     tool_input: { command },
     cwd,
   };
+  if (sessionId) {
+    base.session_id = sessionId;
+  }
+  return base;
 }
 
 const ADD_FILE_PATCH = (...paths: string[]) =>
@@ -56,6 +69,7 @@ Deno.test("extractPatchFiles parses Add/Update/Delete File markers", () => {
 
 Deno.test("isInfraPath: only codex bootstrap files are infra", () => {
   assertEquals(isInfraPath(CODEX_INFRA), true);
+  assertEquals(isInfraPath(CODEX_BYPASS_INFRA), true);
   assertEquals(isInfraPath(CODEX_SKILL_PATH), false);
   assertEquals(isInfraPath(CLAUDE_PATH), false);
   assertEquals(isInfraPath("/tmp/random.ts"), false);
@@ -91,6 +105,48 @@ Deno.test("scenario 2: active marker expired → block", async () => {
   assertMatch(dec.reason, /期限切れ|expired/);
 });
 
+Deno.test("scenario 2b: active marker valid takes precedence over bypass", async () => {
+  const { home, hash, cwd } = await tmpHomeWith(async (h, hh, c) => {
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.active-${hh}`,
+      "/some/plan.md",
+    );
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "allow");
+  assertEquals(dec.reason, "marker-valid");
+});
+
+Deno.test("scenario 2c: bypass marker overrides expired active marker", async () => {
+  const { home, hash, cwd } = await tmpHomeWith(async (h, hh, c) => {
+    const path = `${h}/.codex/plans/.active-${hh}`;
+    await Deno.writeTextFile(path, "/some/plan.md");
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await Deno.utime(path, stale, stale);
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "allow");
+  assertEquals(dec.reason, "bypass-valid");
+});
+
 Deno.test("scenario 3: marker absent (no pending) → block with $plan hint", async () => {
   const { home, cwd } = await tmpHomeWith(async () => {/* no markers */});
   Deno.env.set("HOME", home);
@@ -116,6 +172,227 @@ Deno.test("scenario 4: pending only (no active) → block with $impl hint", asyn
   assertEquals(dec.kind, "block");
   assertMatch(dec.reason, /\$impl/);
   assertNotMatch(dec.reason, LEGACY_IMPL_RE);
+});
+
+Deno.test("scenario 4b: bypass marker overrides pending-only marker", async () => {
+  const { home, hash, cwd } = await tmpHomeWith(async (h, hh, c) => {
+    await Deno.writeTextFile(
+      `${h}/.codex/plans/.pending-${hh}`,
+      "/some/plan.md",
+    );
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "allow");
+  assertEquals(dec.reason, "bypass-valid");
+});
+
+Deno.test("scenario 4c: bypass marker allows same session and cwd", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "allow");
+  assertEquals(dec.reason, "bypass-valid");
+});
+
+Deno.test("scenario 4d: bypass marker does not allow different session", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-2"),
+  );
+  assertEquals(dec.kind, "block");
+  assertMatch(dec.reason, /\$plan/);
+});
+
+Deno.test("scenario 4e: bypass marker does not allow missing session", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+  );
+  assertEquals(dec.kind, "block");
+  assertMatch(dec.reason, /\$plan/);
+});
+
+Deno.test("scenario 4e.1: non-string session_id is treated as missing", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision({
+    ...input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd),
+    session_id: 123 as unknown as string,
+  });
+  assertEquals(dec.kind, "block");
+  assertMatch(dec.reason, /\$plan/);
+});
+
+Deno.test("scenario 4f: malformed bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await bypassMarkerInfo(c, "session-1");
+    await Deno.writeTextFile(info.path, "{not-json");
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4g: non-object bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await bypassMarkerInfo(c, "session-1");
+    await Deno.writeTextFile(info.path, "[]");
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4h: wrong cwd hash bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+    const marker = JSON.parse(await Deno.readTextFile(info.path));
+    marker.cwdHash = "wrong";
+    await Deno.writeTextFile(info.path, JSON.stringify(marker));
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4i: wrong session hash bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+    const marker = JSON.parse(await Deno.readTextFile(info.path));
+    marker.sessionHash = "wrong";
+    await Deno.writeTextFile(info.path, JSON.stringify(marker));
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4i.1: wrong cwd field bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+    const marker = JSON.parse(await Deno.readTextFile(info.path));
+    marker.cwd = "/tmp/wrong";
+    await Deno.writeTextFile(info.path, JSON.stringify(marker));
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4i.2: missing required bypass marker fields are treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await activateBypassMarker({
+      cwd: c,
+      session_id: "session-1",
+      prompt: "$bypass-plan-gate",
+    });
+    const marker = JSON.parse(await Deno.readTextFile(info.path));
+    delete marker.createdAt;
+    delete marker.prompt;
+    await Deno.writeTextFile(info.path, JSON.stringify(marker));
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4j: symlink bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await bypassMarkerInfo(c, "session-1");
+    const target = `${h}/.codex/plans/target.json`;
+    await Deno.writeTextFile(target, "{}");
+    await Deno.symlink(target, info.path);
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
+});
+
+Deno.test("scenario 4k: directory bypass marker is treated as absent", async () => {
+  const { home, cwd } = await tmpHomeWith(async (h, _hh, c) => {
+    Deno.env.set("HOME", h);
+    const info = await bypassMarkerInfo(c, "session-1");
+    await Deno.mkdir(info.path);
+  });
+  Deno.env.set("HOME", home);
+  const dec = await gateDecision(
+    input("apply_patch", ADD_FILE_PATCH(`${cwd}/foo.ts`), cwd, "session-1"),
+  );
+  assertEquals(dec.kind, "block");
 });
 
 Deno.test("scenario 5: codex bootstrap file edit → allow as infra", async () => {

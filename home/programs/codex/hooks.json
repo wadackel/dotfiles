@@ -33,6 +33,11 @@
             "type": "command",
             "timeout": 5,
             "command": "sh -c '\"$HOME/.codex/scripts/codex-impl-approval-tracker.ts\" UserPromptSubmit'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-bypass-plan-gate-tracker.ts\" UserPromptSubmit'"
           }
         ]
       }
