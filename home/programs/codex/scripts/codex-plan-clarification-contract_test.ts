@@ -81,6 +81,19 @@ function assertExcludesAll(haystack: string, needles: string[]): void {
   }
 }
 
+function assertInOrder(haystack: string, needles: string[]): void {
+  let previous = -1;
+  for (const needle of needles) {
+    const current = haystack.indexOf(needle);
+    assert(current >= 0, `missing ordered marker: ${needle}`);
+    assert(
+      current > previous,
+      `marker should appear after previous marker: ${needle}`,
+    );
+    previous = current;
+  }
+}
+
 Deno.test("Codex argument extraction prioritizes --answer continuation", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const argumentExtraction = section(skill, "## Argument extraction");
@@ -140,10 +153,18 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
     "### Overview",
     "### Approach",
     "### Files to Change",
+    "### Completion Criteria",
+    "### Test Strategy",
     "### Execution",
     "Source: ## Overview",
     "Source: ## Approach",
     "Source: ## Files to Change",
+    "Source: ## Completion Criteria",
+    "## Task Outline",
+    "Preserve the plan's Completion Criteria vocabulary",
+    "Source: ## Test Strategy when present",
+    "## Verification Commands and ## Completion Criteria",
+    "no separate Test Strategy section exists",
     "source: ## Task Outline",
     "source: ## Verification Commands",
     "source: ## Risks + Open Questions",
@@ -154,32 +175,86 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
     "PENDING APPROVAL",
     "承認はユーザーの明示打鍵でのみ成立",
   ]);
+  assertInOrder(output, [
+    "### Overview",
+    "### Approach",
+    "### Files to Change",
+    "### Completion Criteria",
+    "### Test Strategy",
+    "### Execution",
+  ]);
 });
 
-Deno.test("Codex plan skill documents subagent lifecycle cleanup", async () => {
+Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4 subagents", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const phase2 = section(skill, "## Phase 2 EXPLORE");
   const phase4 = section(skill, "## Phase 4 DEEPEN");
   const designNotes = section(skill, "## Design notes");
 
   assertIncludesAll(phase2, [
-    "Subagent Lifecycle Budget",
-    "agent_id / role / phase / status / closed",
-    "close_agent",
-    "result-integrated",
-    "agent thread limit reached",
-    "retry exactly once",
+    "main session",
+    "discovery outcome を埋める責任",
+    "補助的に使ってよい",
+    "mandatory ではなく、禁止でもない",
+    "main session が統合",
+    "読み取り中心の deterministic command",
+    "network access",
+    "package-manager install / run-script",
+    "shell eval",
+    "write",
+    "credential access",
+    "destructive command",
+    "ユーザーが明示的に承認",
+    "Existing patterns",
+    "Execution paths and boundaries",
+    "Existing behavior, constraints, verification conditions",
+    "Unified Discovery Table",
+  ]);
+  assertExcludesAll(phase2, [
+    "subagent は起動しない",
+    "Codex 版では explorer subagent へ委譲せず",
+    "Spawn three explorer",
+    "[explorer 1]",
+    "[explorer 2]",
+    "[explorer 3]",
     "3 件すべてを `close_agent`",
   ]);
   assertIncludesAll(phase4, [
+    "$plan <request>",
+    "Phase 4 subagent deepening",
+    "planning workflow の承認",
+    "追加で「subagent を使ってよいですか」とユーザーに確認しない",
+    "named review agents の spawn に限り",
+    "通常の Codex policy を超える tool 権限を許可するものではない",
+    "Phase 4 を skip できるのは",
+    "Deepening Log とユーザー向け出力に理由を明記",
+    "successful subagent deepening と同等扱いしない",
+    "local self-review へ置き換えてはならない",
+    "Phase 4 Subagent Lifecycle Budget",
+    "agent_id / role / phase / status / closed",
     "`plan-critic` agent を `close_agent`",
+    "plan-adversarial",
+    "plan-simplifier",
+    "Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel",
     "result-integrated subagents",
     "両方を `close_agent`",
     "missing side を retry exactly once",
   ]);
+  assertExcludesAll(phase4, [
+    "permission policy",
+    "user-explicit policy",
+    "追加のユーザー許可待ち",
+    "Subagent-based Phase 4 was not dispatched",
+    "active Codex tool policy",
+    "self-review fallback",
+  ]);
   assertIncludesAll(designNotes, [
-    "Subagent Lifecycle Budget",
-    "通常時の live subagents",
+    "Phase 2 は main-session owned exploration",
+    "補助的に使ってよい",
+    "Phase 4 subagent dispatch は原則 mandatory",
+    "追加のユーザー許可確認は不要",
+    "local self-review へ置き換えない",
+    "Phase 4 Subagent Lifecycle Budget",
     "bounded",
   ]);
 });
