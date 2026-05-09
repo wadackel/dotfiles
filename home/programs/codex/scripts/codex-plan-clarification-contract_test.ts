@@ -99,13 +99,13 @@ Deno.test("Codex argument extraction prioritizes --answer continuation", async (
   const argumentExtraction = section(skill, "## Argument extraction");
 
   assertIncludesAll(argumentExtraction, [
-    "$plan --answer <回答>",
+    "$plan --answer <answer>",
     "^\\s*\\$plan\\s+--answer(?:\\s+|$)",
-    "通常の `$plan <request>` より優先",
+    "before normal `$plan <request>` parsing",
     ".clarifying-<cwd-hash>.json",
     "interviewId",
-    "見つからない状態",
-    "もう一度 `$plan <request>`",
+    "without a matching `.clarifying-<cwd-hash>.json`",
+    "restart from `$plan <request>`",
   ]);
 });
 
@@ -115,18 +115,18 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
   const clarification = section(skill, "### Requirement Clarification");
 
   assertIncludesAll(restate, [
-    "理解の restate",
-    "Ask の代替確認ではない",
+    "restate of understanding",
+    "does not replace an Ask",
   ]);
   assertIncludesAll(clarification, [
     "Blocking Interview Protocol",
     "clarity-gated",
-    "plan file / evidence sidecar / pending marker を一切作らない",
-    "ここで回答を待ちます",
-    "$plan --answer <回答>",
+    "create no plan file, evidence sidecar, or pending marker",
+    "Here I will wait for your answer",
+    "$plan --answer <answer>",
     ".clarifying-<cwd-hash>.json",
     "interviewId",
-    "best-effort",
+    "Best-effort",
     "no-ask reason",
   ]);
   assertExcludesAll(clarification, [
@@ -173,7 +173,7 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
     "Collapse by directory",
     "Final Audit + Review",
     "PENDING APPROVAL",
-    "承認はユーザーの明示打鍵でのみ成立",
+    "Approval is established only by the user's explicit top-level `$impl` keystroke",
   ]);
   assertInOrder(output, [
     "### Overview",
@@ -185,6 +185,19 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
   ]);
 });
 
+Deno.test("Codex plan skill preserves user-facing output language", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  const languagePolicy = section(skill, "### Language policy");
+
+  assertIncludesAll(languagePolicy, [
+    "Skill instruction prose in this file is English",
+    "User-facing generated output remains in the user's configured language",
+    "Japanese unless the user asks otherwise",
+    "Section headers are fixed English strings",
+    "Machine-consumed contents",
+  ]);
+});
+
 Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4 subagents", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const phase2 = section(skill, "## Phase 2 EXPLORE");
@@ -193,18 +206,18 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
 
   assertIncludesAll(phase2, [
     "main session",
-    "discovery outcome を埋める責任",
-    "補助的に使ってよい",
-    "mandatory ではなく、禁止でもない",
-    "main session が統合",
-    "読み取り中心の deterministic command",
+    "discovery outcomes",
+    "may be used as helpers",
+    "optional, not mandatory and not forbidden",
+    "integrated by the main session",
+    "deterministic read-only commands",
     "network access",
-    "package-manager install / run-script",
+    "package-manager install or run-script",
     "shell eval",
     "write",
     "credential access",
     "destructive command",
-    "ユーザーが明示的に承認",
+    "explicitly approved by the user",
     "Existing patterns",
     "Execution paths and boundaries",
     "Existing behavior, constraints, verification conditions",
@@ -222,23 +235,23 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
   assertIncludesAll(phase4, [
     "$plan <request>",
     "Phase 4 subagent deepening",
-    "planning workflow の承認",
-    "追加で「subagent を使ってよいですか」とユーザーに確認しない",
-    "named review agents の spawn に限り",
-    "通常の Codex policy を超える tool 権限を許可するものではない",
-    "Phase 4 を skip できるのは",
-    "Deepening Log とユーザー向け出力に理由を明記",
-    "successful subagent deepening と同等扱いしない",
-    "local self-review へ置き換えてはならない",
+    "approval for the planning workflow",
+    "Do not ask the user again for permission",
+    "spawning named review agents",
+    "does not grant write, network, credential, shell, or any tool permission beyond active Codex policy",
+    "Skip Phase 4 only for",
+    "record the reason in the Deepening Log and user output",
+    "successful subagent deepening",
+    "Do not replace required subagent deepening with local self-review",
     "Phase 4 Subagent Lifecycle Budget",
     "agent_id / role / phase / status / closed",
-    "`plan-critic` agent を `close_agent`",
+    "close that round's `plan-critic` agent",
     "plan-adversarial",
     "plan-simplifier",
     "Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel",
     "result-integrated subagents",
-    "両方を `close_agent`",
-    "missing side を retry exactly once",
+    "close both",
+    "retry the missing side exactly once",
   ]);
   assertExcludesAll(phase4, [
     "permission policy",
@@ -249,11 +262,11 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
     "self-review fallback",
   ]);
   assertIncludesAll(designNotes, [
-    "Phase 2 は main-session owned exploration",
-    "補助的に使ってよい",
-    "Phase 4 subagent dispatch は原則 mandatory",
-    "追加のユーザー許可確認は不要",
-    "local self-review へ置き換えない",
+    "Phase 2 is main-session owned exploration",
+    "may use explorer subagents only as helpers",
+    "Phase 4 subagent dispatch is normally mandatory",
+    "Do not ask for extra user permission",
+    "do not replace it with local self-review",
     "Phase 4 Subagent Lifecycle Budget",
     "bounded",
   ]);

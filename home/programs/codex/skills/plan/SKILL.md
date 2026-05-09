@@ -1,27 +1,27 @@
 ---
 name: plan
-description: Codex 版の design-first 計画作成 skill。Claude Code の /plan を Codex CLI 用に移植したもの。明示的な `$plan <request>` 起動でのみ動き、auto-load は agents/openai.yaml で抑制してある。implicit invocation を期待する利用 (キーワードからの自動連想) は対象外。
+description: Codex design-first planning skill. It adapts the Claude Code /plan workflow for Codex CLI and runs only when the user explicitly invokes `$plan <request>`. Auto-loading is disabled by agents/openai.yaml; do not rely on keyword-based implicit invocation.
 ---
 
 # $plan
 
-Codex CLI 上で feature plan を作成する skill。Claude Code の `/plan` (`~/.claude/skills/plan/SKILL.md` / worktree: `home/programs/claude/skills/plan/SKILL.md`) を Codex 用に再構成。`$plan <request>` で明示的に起動する。終了時に `~/.codex/plans/.pending-<cwd-hash>` を作成し、ユーザーが次ターンで `$impl` を打つと UserPromptSubmit hook (`codex-impl-approval-tracker.ts`) が `.pending-` を `.active-` に promote する。
+Creates an implementation plan in Codex CLI. This skill adapts Claude Code's `/plan` workflow (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) for Codex. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>`. When the user types `$impl` in the next turn, the UserPromptSubmit hook (`codex-impl-approval-tracker.ts`) promotes `.pending-` to `.active-`.
 
 ## Argument extraction
 
-Codex skill には Claude の `$ARGUMENTS` 展開がない。`$plan README に追記` のように起動した場合、verbatim user message `$plan README に追記` がそのまま skill body に渡る。
+Codex skills do not have Claude's `$ARGUMENTS` expansion. If the user invokes `$plan README update`, the verbatim user prompt `$plan README update` is passed into this skill body.
 
-**最初の行動**: 自分が受け取った user prompt を読み、以下の優先順位で解釈する。
+First action: read the received user prompt and interpret it with this priority order.
 
-1. 明示構文 `$plan --answer <回答>` について、user prompt の先頭が `^\s*\$plan\s+--answer(?:\s+|$)` に一致する場合のみ、通常の `$plan <request>` より優先して Blocking Interview の継続回答として扱う。対応する `.clarifying-<cwd-hash>.json` を読み、保存済み `request` と今回の `<回答>` を統合して Phase 1 を再開する。質問時に提示した `interviewId` が marker と一致しない場合は継続しない。
-2. user prompt の先頭が `^\s*\$plan(?:\s+|$)` に一致する場合は、`$plan` 以降の文字列を **request** として抽出する。
-3. 空 (引数なし) の場合は「実装したい内容を教えてください」と尋ねて end turn し、次ターンの返答を request として扱う。
+1. If the prompt starts with `^\s*\$plan\s+--answer(?:\s+|$)`, treat it as a continuation answer for the Blocking Interview before normal `$plan <request>` parsing. Read the matching `.clarifying-<cwd-hash>.json`, merge the saved `request` with this `<answer>`, and resume Phase 1. Continue only if the `interviewId` shown with the question matches the marker.
+2. If the prompt starts with `^\s*\$plan(?:\s+|$)`, extract everything after `$plan` as the request.
+3. If the request is empty, ask the user for the implementation request and end the turn. Treat the next answer as the request.
 
-`.clarifying-<cwd-hash>.json` が見つからない状態で `$plan --answer` が来た場合は、「継続中の確認セッションが見つかりません。もう一度 `$plan <request>` から始めてください。」と伝えて end turn する。
+Guaranteed continuation syntax is `$plan --answer <answer>`. If `$plan --answer` arrives without a matching `.clarifying-<cwd-hash>.json`, tell the user that no active clarification session was found and ask them to restart from `$plan <request>`, then end the turn.
 
 ## Prerequisites
 
-Phase 4 DEEPEN は Codex の subagent dispatch に依存する。
+Phase 4 DEEPEN depends on Codex subagent dispatch.
 
 - `~/.codex/agents/plan-critic.toml`
 - `~/.codex/agents/plan-adversarial.toml`
@@ -29,144 +29,147 @@ Phase 4 DEEPEN は Codex の subagent dispatch に依存する。
 
 ## Core behavior
 
-`$plan` は、実装者がユーザー意図から逸れずに実装できる計画を作るための skill。曖昧な要求に対して、実装経路が見えているだけで plan 作成へ進んではいけない。
+`$plan` exists to produce a plan that lets the implementer execute without drifting from user intent. Do not proceed to plan creation merely because an implementation path is technically visible.
 
-small / medium / large の要求では、user-intent decision が解消されるまで `plan file / evidence sidecar / pending marker` を作らない。解消とは、ユーザーが回答した、ユーザーが明示的に仮定を選んで進行を許可した、または残りが codebase-recoverable technical discovery として具体的な downstream `next:` を持つ状態を指す。
+For small, medium, and large requests, do not create the plan file, evidence sidecar, or pending marker until user-intent decisions are resolved. Resolved means the user answered, the user explicitly authorized a stated assumption, or the remaining uncertainty is codebase-recoverable technical discovery with a concrete downstream `next:`.
 
-コード・設定・ログ・既存 issue・現在の会話から観測できる事実は、質問前に軽量調査で自己解決する。ユーザーの望む振る舞い、優先度、scope boundary、成功条件、risk tolerance、trade-off acceptance は観測から推測しない。
+Self-resolve observable facts before asking. Facts may come from code, config, logs, existing issues, and the current conversation. Do not infer desired behavior, priorities, scope boundaries, success criteria, risk tolerance, or trade-off acceptance from observation.
 
 Facts can be inferred from observation; user intent cannot.
 
-調査をその turn で実行できない文脈 (dry-run、read-only smoke、"first message only" 指示など) では、「これから調査する」とだけ返して終わらない。観測で解ける候補は `Self-resolved later` として短く示し、残る最重要の `User decision` を recommended answer (推奨案) と rationale 付きで質問して end turn する。
+If the current context prevents actual investigation, such as dry-run, read-only smoke, or first-message-only instructions, do not end with only "I will investigate." Briefly list observable items as `Self-resolved later`, ask the highest-impact remaining `User decision`, include a recommended answer and rationale, then end the turn.
 
-すべての real clarification question には recommended answer (推奨案) と短い rationale を付ける。推奨案を出せない場合は、調査不足・質問の粒度が広すぎる・または user-only decision の候補が整理できていない状態なので、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く。
+Every real clarification question must include a recommended answer and a short rationale. If no recommendation is possible, the question is too broad or under-researched. Narrow it or investigate enough to make a defensible recommendation.
 
 ## Phase 1 PARSE
 
 ### Restate
 
-ユーザー request を 1 文で要約する。これは理解の restate であり、Ask の代替確認ではない。
+Summarize the user's request in one sentence. This is a restate of understanding and does not replace an Ask.
 
-### Complexity 推定
+### Complexity estimate
 
 | Level | Signals | Scope |
 |---|---|---|
-| trivial | typo / コメント / 単一 config 値 / 1 行コピー編集 | 1 file, <10 行, 設計判断不要 |
-| small | 単一 module 追加、明確な既存パターンに従う | 1-3 files, <100 行 |
-| medium | 複数ファイル feature、既存規約踏襲 | 3-10 files, 100-500 行 |
-| large | 横断的変更、新規 architectural piece | 10+ files, 500+ 行 |
-| xl | 複数サブシステム / 構造的シフト | ユーザーに分割提案 |
+| trivial | typo / comment / single config value / one-line copy edit | 1 file, <10 lines, no design decision |
+| small | single module addition, follows a clear existing pattern | 1-3 files, <100 lines |
+| medium | multi-file feature, follows existing conventions | 3-10 files, 100-500 lines |
+| large | cross-cutting change or new architectural piece | 10+ files, 500+ lines |
+| xl | multiple subsystems or structural shift | propose splitting to the user |
 
-**trivial short-circuit**: complexity が trivial なら Phase 2-4 をスキップして Phase 5 へ直行 (Context + Files to Change + Verification Commands + Completion Criteria の最小プラン、1 タスク)。
+Trivial short-circuit: if complexity is trivial, skip Phases 2-4 and go directly to Phase 5 with a minimal plan: Context, Files to Change, Verification Commands, Completion Criteria, and one task.
 
-### Requirement Clarification (small+)
+### Requirement Clarification
 
 This subsection defines the Blocking Interview Protocol for non-trivial `$plan` requests.
 
-判断基準は `home/programs/agents/shared/plan/references/requirement-checklist.md` (公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`) を参照。
+Use `home/programs/agents/shared/plan/references/requirement-checklist.md` (public path `~/.agents/skills/plan/references/requirement-checklist.md`) as the judgment lens.
 
-**Clarity-gated loop**: Phase 1 は clarity-gated に進める。small / medium / large / xl は、要求が実装計画を書ける程度に明確になるまで必要に応じて質問を続ける。質問回数の上限はなく要求がクリアになるまで継続する。 `trivial` は Phase 1 を skip する。
+Clarity-gated loop: Phase 1 is clarity-gated. For small, medium, large, and xl requests, keep asking as needed until the request is clear enough to write an implementation plan. There is no fixed maximum number of clarification rounds. `trivial` skips Phase 1.
 
-**Interview gate**: 未解決の ambiguity は plan 作成前に必ず分類する。
+Interview gate: every unresolved ambiguity must be classified before plan creation.
 
 | Bucket | Meaning | Action |
 |---|---|---|
-| **Observed fact** | codebase、関連ログ、docs、既存 issue、現在の会話から観測できる | 軽量 grep/read で自己解決し、secret / token / credential を plan や log に残さない |
-| **User decision** | desired behavior、priority、scope boundary、audience、risk tolerance、success criteria、trade-off acceptance に依存する | ユーザーに聞く。reasonable default があっても Draft assumption にしない |
-| **Technical deferral** | codebase-recoverable だが Phase 1 の軽量 probe では重すぎる technical discovery | `### Unresolved Items` に具体的な `next:` を書き、Phase 2 / Phase 4 / implementation へ委譲する |
-| **Draft assumption** | ユーザーが明示的に仮定で進めることを許可した、または non-blocking technical/default detail | `### Assumptions` に理由付きで記録する |
+| **Observed fact** | Observable from codebase, logs, docs, existing issues, or current conversation | Self-resolve with lightweight grep/read. Do not record secrets, tokens, or credentials in plans or logs. |
+| **User decision** | Depends on desired behavior, priority, scope boundary, audience, risk tolerance, success criteria, or trade-off acceptance | Ask the user. Do not convert to Draft assumption just because a reasonable default exists. |
+| **Technical deferral** | Codebase-recoverable but too heavy for a Phase 1 lightweight probe | Record in `### Unresolved Items` with a concrete `next:` for Phase 2, Phase 4, or implementation. |
+| **Draft assumption** | User explicitly allowed proceeding with an assumption, or the detail is non-blocking technical/default behavior | Record in `### Assumptions` with a reason. |
 
-`User decision` が 1 つでも残る場合、この turn では `plan file / evidence sidecar / pending marker を一切作らない`。質問して end turn する。
+If any `User decision` remains, create no plan file, evidence sidecar, or pending marker in this turn. Ask and end the turn.
 
-**Each clarification pass**:
+Each clarification pass:
 
-1. **Step A Walk**: 8 観察 (Why / What / Who / When / Where / How / Success / Failure) を歩き、過去回答を反映したうえで NotClear 項目を洗い出す。Restate は理解の要約であり、Ask の代替ではない。
-2. **Step B Triage**: cost-if-wrong × downstream recoverability で Ask / Assume / Self-resolve を選ぶ。Ask しない項目は `no-ask reason` を `### Assumptions` / `### Self-resolved` / `### Unresolved Items` のいずれかに記録する。user intent に依存する値は、ユーザーの明示選択なしに Assume しない。
-3. **Step C Self-resolve probe**: 軽量な grep/read で答えられるものは自分で解決する。codebase-recoverable だが Phase 1 で確定できない項目は、具体的な `next:` を持たせて後続 Phase に委譲する。user-only knowledge に依存するなら Ask に昇格する。
-4. **Step D Re-Ask trigger detection**: trigger は (i) prior answer に含まれる open-ended return question、(ii) ambiguous / empty answer、(iii) tentative Assumption が re-walk でまだ NotClear、(iv) deferred Ask items の繰り越し。同じ trigger が残り続ける場合、回数消化で進まず、ユーザーに「明示した仮定で進める / リスクを承知で進める / 追加確認する / scope out する」を選ばせる。
-5. **Step E Ask issuance**: 残った real question を impact-priority で最大 4 件にまとめる。各 question には recommended answer (推奨案) と短い rationale を必ず付ける。質問を出す直前に `~/.codex/plans/.clarifying-<cwd-hash>.json` を作成または上書きする。schema は `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, `interviewId` を含む。`interviewId` は質問文にも表示し、継続時に照合する。新しい Blocking Interview を始める場合は既存 marker を上書きする。
-6. **Step F Wait**: `ここで回答を待ちます。次の turn で自然言語で回答するか、確実な継続が必要なら $plan --answer <回答> を使ってください。` と明記して **end turn** する。
-7. **Step G Answer handling**: 次ターンの自然言語回答は best-effort で直前の `.clarifying-<cwd-hash>.json` に紐づける。保証された継続には `$plan --answer <回答>` を使う。ユーザーが AI 推奨案を選んだ場合は該当値を記録する。ユーザーが「X と仮定して進めて」のように明示した場合のみ、user-judgment-bound observation を `### Assumptions` に `user-overridden: true` 付きで記録して進める。空または曖昧な回答は次 pass の re-Ask trigger とする。
-8. **Step H Cleanup**: clarity gate が満たされたら marker を削除して Phase 2 へ進む。plan 作成が成功したら `.clarifying-<cwd-hash>.json` を削除する。新しい non-clarifying `$plan <request>` が plan 作成まで成功した場合も、古い clarifying marker を削除する。
+1. **Step A Walk**: Walk the 8 observations: Why, What, Who, When, Where, How, Success, Failure. Apply prior answers, then identify NotClear items. Restate is not a substitute for Ask.
+2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice.
+3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for Phase 1, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask.
+4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
+5. **Step E Ask issuance**: Combine remaining real questions by impact priority, maximum 4 questions. Every question must include a recommended answer and short rationale. Immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
+6. **Step F Wait**: Say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn.
+7. **Step G Answer handling**: Best-effort attach a natural-language next-turn answer to the latest `.clarifying-<cwd-hash>.json`. For guaranteed continuation, use `$plan --answer <answer>`. If the user chooses the recommended answer, record it. If the user explicitly says to proceed with a stated assumption, record user-judgment-bound observation in `### Assumptions` with `user-overridden: true`. Empty or ambiguous answers become re-Ask triggers.
+8. **Step H Cleanup**: When the clarity gate is satisfied, delete the marker and continue to Phase 2. After successful plan creation, delete `.clarifying-<cwd-hash>.json`. If a new non-clarifying `$plan <request>` succeeds, also delete any old clarifying marker.
 
-**Convergence conditions** (any one):
+Convergence conditions, any one:
 
-- Ask / re-Ask trigger が 0 件、かつ `User decision` が残っていない
-- 残る uncertainty が codebase-recoverable で、具体的な downstream `next:` とともに `### Unresolved Items` へ記録済み
-- ユーザーが明示的な仮定で進行を許可した、または repeated uncertainty を scope out した
+- Zero Ask / re-Ask triggers and no remaining `User decision`
+- Remaining uncertainty is codebase-recoverable and recorded in `### Unresolved Items` with a concrete downstream `next:`
+- User explicitly authorized a stated assumption or scoped out repeated uncertainty
 
-### Phase 1 出力
+### Phase 1 output
 
-`### Requirement Clarification` / `### Assumptions` / `### Self-resolved` / `### Unresolved Items` の 4 サブセクションを `## Overview` の直前に書く。subsection 名は英語固定 (downstream parsing のため)。
+Write these four subsections immediately before `## Overview`: `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing.
 
 ## Phase 2 EXPLORE (non-trivial only)
 
-main session が以下 3 つの discovery outcome を埋める責任を持つ。通常は `rg` / `sed` / file read / 読み取り中心の deterministic command で十分だが、Codex 自身が必要と判断した場合は explorer subagent を補助的に使ってよい。調査中に得た file:lines / snippet / command evidence は main session が統合し、Phase 3 の Mandatory Reading / Patterns to Mirror / Test Strategy / Completion Criteria に反映する。
+The main session owns these three discovery outcomes. Usually `rg`, `sed`, file reads, and other deterministic read-only commands are enough. Explorer subagents may be used as helpers when Codex judges them useful. Evidence from file lines, snippets, and commands must be integrated by the main session into Phase 3: Mandatory Reading, Patterns to Mirror, Test Strategy, and Completion Criteria.
 
-Phase 2 の command 実行は観測目的に限る。package-manager install、credential access は、ユーザーが明示的に承認した場合を除き Phase 2 discovery として実行しない。
+Phase 2 commands are for observation only. Do not use package-manager installs or credential access during Phase 2 unless the user explicitly approves.
 
-1. **Existing patterns**: 既存の規約 (命名 / error handling / config / test layout / dependency style) を grep/read で集める。各発見を file:lines + snippet で記録。
-2. **Execution paths and boundaries**: entry points / data flow / state transitions / API contracts / architectural seams を辿る。trigger から observable outcome までの経路を file:lines で記録。
-3. **Existing behavior, constraints, verification conditions**: 現状挙動・不変条件・関連既存テスト (file:lines) と検証手段を集める。Acceptance / Completion Criteria / Test Strategy を設計するのに足る情報を提供する。
+1. **Existing patterns**: collect existing conventions for naming, error handling, config, test layout, and dependency style. Record each finding with file:lines and snippet.
+2. **Execution paths and boundaries**: trace entry points, data flow, state transitions, API contracts, and architectural boundaries. Record the path from trigger to observable outcome with file:lines.
+3. **Existing behavior, constraints, verification conditions**: collect current behavior, invariants, related existing tests, and verification methods. Provide enough information to design Acceptance, Completion Criteria, and Test Strategy.
 
-main session は outcome ごとの読み取り対象を短く分け、local read で足りる範囲と explorer に委譲する範囲を判断し、既に読んだ file:lines は再読しすぎない。
+The main session should separate read targets by outcome, decide what local reads can cover and what an explorer should cover, and avoid repeatedly reading the same file:lines.
 
-任意で explorer subagent を使う場合も、Phase 2 の観測目的制約を継承する。write / install / credential access は使わず、file:lines 付き evidence を main session に返す。
+If explorer subagents are used, they inherit Phase 2 observation limits. They must not write, install, or access credentials, and they must return evidence with file:lines.
 
-Phase 2 explorer は mandatory ではなく、禁止でもない。Phase 2 discovery では network access、package-manager install / run-script、shell eval、write、credential access、destructive command を実行しない。例外はユーザーが明示的に承認した場合に限る。
+Phase 2 explorers are optional, not mandatory and not forbidden. During Phase 2 discovery, do not use network access, package-manager install or run-script, shell eval, write operations, credential access, or destructive commands unless explicitly approved by the user.
 
-結果は **Unified Discovery Table** (`Category | File:Lines | Pattern | Key Snippet`) に集約する。
+Consolidate results into a **Unified Discovery Table**: `Category | File:Lines | Pattern | Key Snippet`.
 
-### Empirical analysis (existing-behavior 改修時)
+### Empirical analysis (existing-behavior revisions)
 
-`## Files to Change` に UPDATE があり振る舞いを変える場合、または bug-fix / refactor / 仕様変更 / perf / CLI 出力 / semantics change の場合、3 mandate のうち 1 枠を empirical 観察に振り替える:
+If `## Files to Change` contains UPDATE and behavior changes, or if the request is bug-fix, refactor, spec change, performance, CLI output, or semantic change, use one of the three mandates for empirical observation:
 
-- historical signals: `~/.codex/plans/*.md`、`~/.codex/sessions/**/*.jsonl`、`~/.claude/retrospective-ledger.jsonl`、`git log -p`
-- direct current-behavior observation: CLI 実行、hook 発火、effective config 読み
+- historical signals: `~/.codex/plans/*.md`, `~/.codex/sessions/**/*.jsonl`, `~/.claude/retrospective-ledger.jsonl`, `git log -p`
+- direct current-behavior observation: run the CLI, trigger the hook, or read effective config
 
-「spec が言うこと」vs「実際に起きること」を Tier 1/2 で記録し、Empirical Behavior 行として Discovery Table に追加。
+Record "what the spec says" vs "what actually happens" at Tier 1/2 and add an Empirical Behavior row to the Discovery Table.
 
 ## Phase 3 DRAFT (non-trivial only)
 
-`~/.codex/plans/YYYYMMDDTHHmm-<slug>.md` にプラン本体を書く (slug は request から、max 40 chars、lowercase kebab)。書き込み前に `mkdir -p ~/.codex/plans` を実行する。
+Write the plan body to `~/.codex/plans/YYYYMMDDTHHmm-<slug>.md`. The slug comes from the request, max 40 characters, lowercase kebab. Before writing, run `mkdir -p ~/.codex/plans`.
 
 ### Language policy
 
-- 本文 prose: ユーザーの設定言語 (本リポジトリでは日本語)
-- Section headers (`## Context` / `## Overview` / `## Approach` / `## NOT Building` / `## Mandatory Reading` / `## Patterns to Mirror` / `## Intentional Conventions` / `## Files to Change` / `## Task Outline` / `## Test Strategy` / `## Verification Commands` / `## Definition of Done` / `## Risks + Open Questions` / `## Deepening Log` / `## Completion Criteria`): **英語固定** (Phase 5 と $impl Audit/Review が literal string で locate するため)
-- Machine-consumed contents (`## Completion Criteria` 各サブセクション、Acceptance Criteria 行): 英語
-- Phase 1 subsections の見出し: 英語固定 (`### Requirement Clarification` 等)
-- File paths / commands / `EXPECT:` 値: as-is
+- Skill instruction prose in this file is English.
+- User-facing generated output remains in the user's configured language. In this repository, that means Japanese unless the user asks otherwise.
+- Section headers are fixed English strings because Phase 5 and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, `## Deepening Log`, and `## Completion Criteria`.
+- Machine-consumed contents, including `## Completion Criteria` subsections and Acceptance Criteria lines, are English.
+- Phase 1 subsection headings are fixed English: `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`.
+- File paths, commands, and `EXPECT:` values stay as-is.
 
 ### Required sections (complexity-gated)
 
-trivial=Context+Files to Change+Verification Commands+Task Outline+Definition of Done+Completion Criteria、small=+Overview+Approach+NOT Building+Test Strategy+Risks、medium+=+Mandatory Reading+Patterns to Mirror+Intentional Conventions(applicable)+Deepening Log link。
+`## Completion Criteria` is required for every complexity level. Even trivial short-circuit plans must include `### Autonomous Verification`, `### Requires User Confirmation`, and `### Baseline`.
 
-`## Completion Criteria` は全 complexity で必須。trivial short-circuit でも `### Autonomous Verification` / `### Requires User Confirmation` / `### Baseline` の 3 subsection を必ず生成する。
+- trivial: Context, Files to Change, Verification Commands, Task Outline, Definition of Done, Completion Criteria
+- small: trivial sections plus Overview, Approach, NOT Building, Test Strategy, Risks
+- medium and larger: small sections plus Mandatory Reading, Patterns to Mirror, applicable Intentional Conventions, and Deepening Log link
 
 ## Phase 4 DEEPEN (non-trivial only)
 
-Iterative adversarial-critique flow。プロンプトは `~/.agents/skills/plan/references/` に定義済。Phase 4 の subagent は `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml` で事前定義済 (Prerequisites 参照)。
+Iterative adversarial-critique flow. Prompts live in `~/.agents/skills/plan/references/`. Phase 4 subagents are predefined in `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`.
 
-`$plan <request>` の明示起動は、この Phase 4 subagent deepening を含む planning workflow の承認として扱う。Phase 4 で `plan-critic` / `plan-adversarial` / `plan-simplifier` を起動するために、追加で「subagent を使ってよいですか」とユーザーに確認しない。この承認は named review agents の spawn に限り、write、network access、credential access、shell execution、または通常の Codex policy を超える tool 権限を許可するものではない。Phase 4 を skip できるのは、trivial short-circuit、Prerequisites 不足、spawn tool 不可、またはユーザーが deepening / subagent review を明示的に不要と指示した場合のみ。spawn tool 不可で degrade する場合は、Deepening Log とユーザー向け出力に理由を明記し、successful subagent deepening と同等扱いしない。追加のユーザー許可確認がないことだけを理由に、required subagent deepening を local self-review へ置き換えてはならない。
+Explicit `$plan <request>` invocation is approval for the planning workflow including Phase 4 subagent deepening. Do not ask the user again for permission to start `plan-critic`, `plan-adversarial`, or `plan-simplifier`. This approval is limited to spawning named review agents. It does not grant write, network, credential, shell, or any tool permission beyond active Codex policy. Skip Phase 4 only for trivial short-circuit, missing prerequisites, unavailable spawn tool, or explicit user instruction to skip deepening/subagent review. If spawn is unavailable, record the reason in the Deepening Log and user output; do not treat local self-review as successful subagent deepening. Do not replace required subagent deepening with local self-review only because additional user permission was not requested.
 
 ### Phase 4 Subagent Lifecycle Budget
 
-Phase 4 で subagent を起動したら、main session はその場で `agent_id / role / phase / status / closed` の簡易 ledger を保持する。subagent の出力を plan 本文・Deepening Log・Consolidated Interview queue に統合したら、その subagent は result-integrated と見なし、次 step / next round へ進む前に `close_agent` で閉じる。`close_agent` は結果統合後または terminal/known completed agent にだけ使い、実行中の調査や review を途中で打ち切る目的では使わない。
+When Phase 4 starts subagents, keep a lightweight ledger: `agent_id / role / phase / status / closed`. After integrating a subagent result into the plan, Deepening Log, or Consolidated Interview queue, mark it result-integrated and close it with `close_agent` before the next step or round. Use `close_agent` only for result-integrated or terminal/known completed agents, not to interrupt running work.
 
-Phase 2 の explorer は mandatory ではないため、この lifecycle budget の主対象ではない。通常時の Phase 4 live subagents は 2 以下 (Adversarial + Simplifier の true parallel) を目安にする。Phase 4 に入る前に ledger を確認し、known completed なのに未 close の subagent があれば先に閉じる。
+Phase 2 explorers are optional and not the main target of this lifecycle budget. In normal Phase 4 operation, keep live subagents bounded, with Adversarial + Simplifier as the usual true-parallel pair. Before Phase 4, close any known completed but unclosed subagent.
 
-spawn が `agent thread limit reached` で失敗した場合だけ、known completed / terminal agents を `close_agent` で閉じ、失敗した dispatch を retry exactly once する。retry 後も失敗する場合は追加の spawn を繰り返さず、該当 step の失敗時ルールに従って degrade するか停止する。
+If spawn fails with `agent thread limit reached`, close known completed / terminal agents, then retry the failed dispatch exactly once. If retry still fails, do not keep spawning; follow that step's failure/degrade rule.
 
-### Step 1 — Context collection
+### Step 1 - Context collection
 
-argument-hint からの max-rounds (default 2, cap 5) を抽出 (例: `$plan --max-rounds=3 ...`)。Phase 3 で書いたプラン本体、project AGENTS.md (`~/.codex/AGENTS.md` および当該リポジトリの AGENTS.md) を context として用意。
+Extract `max-rounds` from the argument hint if present, default 2 and cap 5, for example `$plan --max-rounds=3 ...`. Prepare the plan body written in Phase 3 and project AGENTS context (`~/.codex/AGENTS.md` and this repository's AGENTS.md).
 
-### Step 2 — Critic Subagent (each round)
+### Step 2 - Critic Subagent (each round)
 
-各 round で `plan-critic` subagent を spawn する:
+For each round, spawn the `plan-critic` subagent:
 
-```
+```text
 Spawn the plan-critic subagent.
 plan-critic input:
   {plan_content}: <full plan body>
@@ -175,35 +178,36 @@ plan-critic input:
 Wait for its response.
 ```
 
-Critic は `### Verdict` の次行に `CONVERGED` または `ITERATE` を返す契約 (TOML `developer_instructions` でピン止めされている)。shared prompt の `Reasoning:` 行が続いても、main session は verdict 行の次の 1 行だけを読む。
+The Critic contract returns `CONVERGED` or `ITERATE` on the line immediately after `### Verdict`. Even if a `Reasoning:` line follows, read only that next verdict line.
 
-### Step 3 — Process critique + classify
+### Step 3 - Process critique + classify
 
-main session が Critic 出力を triage:
+The main session triages Critic output:
 
-- **Self-resolvable**: main session が grep/read で解決し、プラン本文に `-- Why: ...` rationale 付きで反映
-- **Needs user input**: Step 7 Consolidated Interview Queue へ
-- **Reject**: 過去のユーザー決定に矛盾するもの
+- **Self-resolvable**: resolve by grep/read and apply to the plan with `-- Why: ...` rationale
+- **Needs user input**: add to Step 7 Consolidated Interview Queue
+- **Reject**: conflicts with a prior user decision or is irrelevant
 
-Verdict 抽出: `rg -m1 -A1 '^### Verdict$' <subagent-output>` の 2 行目が `CONVERGED` か `ITERATE`。`<plan-basename>.log.md` に Round N entry を append (verbatim subagent 出力)。
+Verdict extraction: `rg -m1 -A1 '^### Verdict$' <subagent-output>` and read the second line as `CONVERGED` or `ITERATE`. Append a Round N entry with verbatim subagent output to `<plan-basename>.log.md`.
 
-Critic 出力を triage し、verdict 抽出と log append が完了したら、その round の `plan-critic` agent を `close_agent` で閉じる。次 round を fresh spawn する前に ledger 上の critic が closed であることを確認する。
+After triage, verdict extraction, and log append, close that round's `plan-critic` agent. Ensure the critic is closed before spawning the next round.
 
-### Step 4 — Convergence check
+### Step 4 - Convergence check
 
-以下のいずれかで Step 5 へ:
-- Verdict `CONVERGED`
-- max-rounds 到達
-- 同一 issue が連続 2 round で repeat (escalate)
+Continue to Step 5 if any of these is true:
+
+- Verdict is `CONVERGED`
+- max-rounds reached
+- same issue repeats for 2 consecutive rounds
 - zero Critical Issues
 
-そうでなければ Step 2 に戻り、次 round を fresh spawn で実行。
+Otherwise return to Step 2 with a fresh critic.
 
-### Step 5 + Step 6 — Adversarial + Simplifier (true parallel)
+### Step 5 + Step 6 - Adversarial + Simplifier (true parallel)
 
-`plan-adversarial` と `plan-simplifier` を **同一メッセージ** で spawn する (Codex orchestration が並列で立ち上げる):
+Spawn `plan-adversarial` and `plan-simplifier` in parallel in the same message:
 
-```
+```text
 Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel.
 
 plan-adversarial input:
@@ -219,25 +223,25 @@ plan-simplifier input:
 Wait for both, then return their findings together.
 ```
 
-Adversarial は finding を `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)` tag 付きで返す。Simplifier は提案を `(HIGH|MEDIUM|LOW)` confidence tag 付きで返す。HIGH は subtractive only auto-apply、MEDIUM/LOW は Step 7 Queue へ。
+Adversarial returns findings tagged `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)`. Simplifier returns proposals tagged `(HIGH|MEDIUM|LOW)` confidence. Auto-apply only HIGH subtractive proposals; send MEDIUM/LOW to Step 7 Queue.
 
-Step 5 + Step 6 を開始する前に、ledger 上の result-integrated subagents がすべて closed であることを確認する。Adversarial / Simplifier の結果を Step 7 queue や plan 本文に反映したら、両方を `close_agent` で閉じる。
+Before Step 5 + Step 6, verify result-integrated subagents in the ledger are closed. After reflecting Adversarial/Simplifier results into the plan or Step 7 queue, close both.
 
-**並列 dispatch 失敗時**: 同一メッセージで spawn したのに片方だけ応答が返る場合、欠損側は ITERATE (Adversarial) / 提案なし (Simplifier) と扱い、その round 内では再発火しない (次 round 以降の自然な再実行に任せる)。ただし失敗理由が `agent thread limit reached` と観測できる場合だけ、Phase 4 Subagent Lifecycle Budget のルールに従って cleanup 後に missing side を retry exactly once してよい。
+Parallel dispatch failure: if one side is missing despite same-message spawn, treat the missing side as ITERATE for Adversarial or no proposals for Simplifier. Do not re-fire in that round. If the reason is `agent thread limit reached`, clean up as defined above and retry the missing side exactly once.
 
-### Step 7 — Consolidated Interview (round 末尾で 1 回)
+### Step 7 - Consolidated Interview (once at round end)
 
-Step 3 / Step 5 / Step 6 から繰り上がった needs-user-input items を 1 つのテキスト列挙 (max 4 questions) に集約し end turn する。Codex には AskUserQuestion API がないため、ユーザーは次ターンで自然言語で答える。`以下を自己解決しました:` ブロックで Self-resolved 内容を先に提示する。ここで出す real question も Phase 1 と同じく recommended answer (推奨案) と短い rationale を必ず付ける。推奨できない場合は、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く。
+Combine needs-user-input items from Steps 3, 5, and 6 into one text list, max 4 questions, then end the turn. Codex has no AskUserQuestion API here, so the user answers naturally next turn. First show a `Self-resolved items:` block. Every real question follows the Phase 1 rule: recommended answer plus short rationale. If no recommendation is possible, narrow or investigate before asking.
 
-### Step 8 — Definition of Done pipeline
+### Step 8 - Definition of Done pipeline
 
-Completion Criteria を以下の tagging で設計:
+Design Completion Criteria with these tags:
 
-- `[file-state]`: Read / Grep / Glob で観測可能
-- `[orchestrator-only]`: host access が必要なコマンド (`nix flake check`, `darwin-rebuild`, sudo 等)。main session が pre-run して evidence を埋める
-- `[outcome]`: 循環的依存 (例: `$impl` 内蔵 Review が PASS)
+- `[file-state]`: observable with Read / Grep / Glob
+- `[orchestrator-only]`: requires host access commands such as `nix flake check`, `darwin-rebuild`, or sudo; main session pre-runs and records evidence
+- `[outcome]`: circular dependency, for example `$impl` built-in Review PASS
 
-`## Completion Criteria` は machine-consumed section なので、subsection 名を固定する:
+`## Completion Criteria` is machine-consumed and must keep these subsection names:
 
 ```markdown
 ## Completion Criteria
@@ -254,11 +258,11 @@ Completion Criteria を以下の tagging で設計:
 - The reserved `Final Audit + Review` task is completed only after `$impl` emits `AUDIT_VERDICT: PASS` and `REVIEW_VERDICT: PASS`.
 ```
 
-`[outcome]` は `### Autonomous Verification` に書いてよいが、`$impl` Audit では循環 item として verdict から除外され、Review 後の最終状態で確認される。verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` は `$impl` 内蔵 Audit + Review が消費する。
+`[outcome]` may appear under `### Autonomous Verification`, but `$impl` Audit excludes it as circular and checks it only after final Review. Verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Audit + Review.
 
 ### Deepening Log artifact
 
-`~/.codex/plans/<plan-basename>.log.md` に各 round の verbatim 出力を append する。secret / token / credential が含まれる場合は `[REDACTED]` に置換し、未編集の secret を log に保存しない:
+Append verbatim round output to `~/.codex/plans/<plan-basename>.log.md`. Redact secrets, tokens, and credentials as `[REDACTED]`; never save raw secrets.
 
 ```markdown
 ### Round 1
@@ -274,80 +278,77 @@ Completion Criteria を以下の tagging で設計:
 
 ### Applied changes
 - <bullet 1>: <Why>
-- ...
 ```
 
-各 round entry は `### Round N` で始まる verbatim 出力で構成。subsection 構造は固定せず、subagent が返した形式をそのまま貼る (現時点で機械消費なし)。
-
-プラン本文側は `## Deepening Log` セクションを 1 つ持ち、`See [./<basename>.log.md](./<basename>.log.md)` の link のみ書く (本文を肥大化させない)。
+Round entries begin with `### Round N`. Subsection structure is not machine-consumed; paste subagent formats as returned. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
 
 ## Phase 5 DECOMPOSE
 
-main session がタスクを Codex の `update_plan` に登録 + サイドカー JSON を初期化する。
+The main session registers tasks with Codex `update_plan` and initializes the evidence sidecar JSON.
 
-### `update_plan` の制約 (probe で確認済)
+### `update_plan` constraints
 
-- 戻り値は literal `"Plan updated"` のみ。タスク識別子は返らない。
-- フィールドは `step` (1-5 word の短文) + `status` (pending|in_progress|completed) のみ。`metadata` 保持不可。
-- 1 セッション内で永続、`codex resume` でも保持される。
+- Return value is only literal `"Plan updated"`. No task IDs are returned.
+- Fields are only `step` (1-5 word short phrase) and `status` (`pending|in_progress|completed`). No metadata.
+- Persistent within one session and preserved across `codex resume`.
 
 ### 1-call DECOMPOSE
 
-タスクを **1 回の `update_plan` 呼び出し** で順序付き配列として登録する。Pass 1/2 分割は廃止 (戻り値に id がないため `blockedBy` 概念が成立しない):
+Register tasks in one `update_plan` call as an ordered array. The old Pass 1/2 split is removed because no returned IDs means no stable `blockedBy` concept:
 
-```
+```text
 update_plan({
   explanation: "Decompose plan into impl tasks",
   plan: [
     { step: "<task 1 short subject>", status: "pending" },
     { step: "<task 2 short subject>", status: "pending" },
     ...
-    { step: "Final Audit + Review", status: "pending" }   // 最後は固定: $impl 内蔵 Audit + Codex subagent review phase の入口
+    { step: "Final Audit + Review", status: "pending" }
   ]
 })
 ```
 
-### サイドカー JSON 初期化
+### Sidecar JSON initialization
 
-`~/.codex/plans/<plan-basename>.evidence.json` をタスクと同じ順序で初期化する。task id は helper が配列 index ベース (`task-1`, `task-2`, ...) で採番する。全呼び出しは execute bit に依存せず、以下の permissioned command shape を使う:
+Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Do not depend on execute bits; use this permissioned command shape:
 
 ```bash
 deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts init /Users/$USER/.codex/plans/<basename>.evidence.json '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
 ```
 
-helper は `subjects-json` の末尾が `Final Audit + Review` でない場合に exit 1 で失敗する。サイドカー JSON の書き込みは helper 内で tmpfile + rename により atomic に行う。
+The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.
 
-末尾の `Final Audit + Review` エントリは $impl 内蔵 Audit + Codex subagent review phase が「ここまで来たら Audit と fresh reviewer subagent review を実行」と判断するためのマーカー。実装タスクではない。
+The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Audit and fresh Codex subagent Review phase. It is not an implementation task.
 
 ### Decomposition Rules
 
-1. 1 task = 1 verifiable unit
-2. Verification Commands は各 implementation task に内包 (verification-only task は "Final Audit + Review" のみ許される)
-3. Separation of concerns
-4. Three elements (target files / expected behavior / verification commands + EXPECTED output)
-5. 末尾 "Final Audit + Review" は $impl skill が直接実行する内蔵 Audit + Codex subagent review phase であり、独立の skill 起動は不要 (Codex には skill-to-skill invocation API がないため)
+1. One task equals one verifiable unit.
+2. Verification Commands are included in each implementation task. The only verification-only task allowed is `Final Audit + Review`.
+3. Keep separation of concerns.
+4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output.
+5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + Codex subagent Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
 ### Acceptance criteria by change type
 
-Claude 版 (`~/.claude/skills/plan/SKILL.md` / worktree: `home/programs/claude/skills/plan/SKILL.md`) の表をそのまま参照可能。
+Use the Claude version table as a reference: `~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`.
 
 ## Phase 6 ACTIVATE PENDING
 
-`.pending-<cwd-hash>` のみ作成する (`.active-` には絶対しない)。`.active-` は次ターンでユーザーが `$impl` を打鍵したときに `codex-impl-approval-tracker.ts` UserPromptSubmit hook が promote する。
+Create only `.pending-<cwd-hash>`. Never create `.active-` directly. `.active-` is promoted by the `codex-impl-approval-tracker.ts` UserPromptSubmit hook when the user types `$impl` in the next turn.
 
-marker 操作は deterministic helper に委譲する。agent は cwd-hash や marker path を inline shell で組み立てない。
+Delegate marker operations to the deterministic helper. Do not build cwd-hash or marker paths inline in shell.
 
 ```bash
 deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="$HOME/.codex/plans" --no-prompt ~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3>' "$PWD"
 ```
 
-`<PLAN_FILE_PATH from Phase 3>` は Phase 3 で決めた絶対パスを agent が template-substitute する (bash 変数展開ではなく文字列置換)。helper は `$PWD` を `codex-plan-gate.ts` と同じ canonical cwd-hash へ変換し、`~/.codex/plans` を作成し、re-plan 時の古い active marker を削除してから pending marker を atomic write する。
+`<PLAN_FILE_PATH from Phase 3>` is the absolute path decided in Phase 3 and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash as `codex-plan-gate.ts`, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
 
 ### Output to user
 
-ユーザーが plan file を開かずに `$impl` 承認可否を判断できるよう、まず承認判断に足る summary を出し、その後に plan body と metadata block を出す。`## Approval Summary` は plan 本文の該当 section から抽出し、`Overview` / `Approach` / `Files to Change` を必ず先に示す。summary は plan body の再掲ではなく approval decision surface なので、各 subsection は compact に保つ:
+The user must be able to decide whether to approve `$impl` without opening the plan file. First output an approval-ready summary, then the plan body and metadata block. `## Approval Summary` is extracted from plan sections and must show `Overview`, `Approach`, and `Files to Change` first. The summary is the approval decision surface, not a duplicate of the plan body, so keep it compact.
 
-````
+````markdown
 ## Plan
 
 ## Approval Summary
@@ -371,7 +372,7 @@ path/
 <compact bullets describing what must be true for the plan to be complete. Source: ## Completion Criteria plus task-level expected behavior / verification from ## Task Outline. Preserve the plan's Completion Criteria vocabulary; do not rename this to Acceptance Criteria.>
 
 ### Test Strategy
-<compact bullets describing existing coverage, tests to add/update, and any justified omissions. Source: ## Test Strategy when present. If ## Test Strategy is absent (for example, trivial plans), derive only from ## Verification Commands and ## Completion Criteria and state that no separate Test Strategy section exists for this plan.>
+<compact bullets describing existing coverage, tests to add/update, and any justified omissions. Source: ## Test Strategy when present. If ## Test Strategy is absent, derive only from ## Verification Commands and ## Completion Criteria and state that no separate Test Strategy section exists for this plan.>
 
 ### Execution
 - Task outline: <implementation task subjects, excluding Final Audit + Review; max 5 tasks, one line each> (source: ## Task Outline)
@@ -387,24 +388,24 @@ path/
 - File: <plan path>
 - Complexity: <trivial/small/medium/large/xl>
 - Tasks: <count> (+ Final Audit + Review)
-- Status: PENDING APPROVAL — type `$impl` to approve and execute
+- Status: PENDING APPROVAL - type `$impl` to approve and execute
 
-⚠️ AI が自己 chain で `$impl` を打っても UserPromptSubmit hook は発火しないため、`.pending-` → `.active-` の promote は起こらない。承認はユーザーの明示打鍵でのみ成立する。
+AI self-chaining `$impl` does not fire the UserPromptSubmit hook, so `.pending-` is not promoted to `.active-`. Approval is established only by the user's explicit top-level `$impl` keystroke.
 ````
 
-`xl` で plan body が ~600 行を超える場合は `## Plan body` を section heading の TOC + plan path に置き換え、metadata block は同じ。Approval Summary は省略不可。
+If an xl plan body exceeds roughly 600 lines, replace `## Plan body` with a TOC of section headings plus the plan path. Do not omit Approval Summary.
 
 ## Integration with existing tooling
 
-- `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex 公開 path: `~/.agents/skills/plan/references/requirement-checklist.md`、Claude 公開 path: `~/.claude/skills/plan/references/requirement-checklist.md`): Claude 版と共有 (linkHere whole-dir 経由で物理的に同一ファイル)。Phase 1 の判断基準。
-- `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex 公開 path: `~/.agents/skills/plan/references/`、Claude 公開 path: `~/.claude/skills/plan/references/`): Phase 4 の subagent prompt 本体。`~/.codex/agents/{plan-critic,plan-adversarial}.toml` の `developer_instructions` から pointer 参照される (workspace 共有経路)。
-- `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: Phase 4 が依存する custom agent 定義。dotfiles 実体は `home/programs/codex/agents/`。
-- `$impl` skill: Phase 5 で登録した `update_plan` のタスク列を順次実行し、最後に内蔵 Audit + Codex subagent review phase で `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` を出力する。
-- PreToolUse hook (`codex-plan-gate.ts`): cwd 配下の apply_patch を `.active-<hash>` 不在/期限切れ時に block する。Phase 6 で `.pending-` のみを書く理由はこのゲートと連動するため。
-- Marker helper (`codex-plan-marker.ts`): Phase 6 の pending activation、`$impl` 起動時の active requirement、final PASS 後の active cleanup、UserPromptSubmit hook の promote 処理を担う deterministic helper。
+- `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex public path `~/.agents/skills/plan/references/requirement-checklist.md`, Claude public path `~/.claude/skills/plan/references/requirement-checklist.md`): shared with the Claude version through whole-dir linking. Phase 1 judgment lens.
+- `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): Phase 4 subagent prompts. `~/.codex/agents/{plan-critic,plan-adversarial}.toml` points to these shared workspace paths.
+- `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`: custom agent definitions required by Phase 4. Dotfiles source is `home/programs/codex/agents/`.
+- `$impl` skill: executes the `update_plan` task list registered in Phase 5 and finally emits `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its built-in Audit + Codex subagent review phase.
+- PreToolUse hook (`codex-plan-gate.ts`): blocks `apply_patch` under cwd when `.active-<hash>` is absent or expired. Phase 6 writes only `.pending-` to pair with this gate.
+- Marker helper (`codex-plan-marker.ts`): owns Phase 6 pending activation, `$impl` active requirement, active cleanup after final PASS, and UserPromptSubmit promotion.
 
 ## Design notes
 
-- **Phase 2 は main-session owned exploration**: `main session` が discovery outcome を埋め、必要な場合だけ explorer subagent を補助的に使ってよい。Phase 2 の explorer は mandatory ではなく、禁止でもない。
-- **Phase 4 subagent dispatch は原則 mandatory**: `$plan <request>` は Phase 4 subagent deepening を含む planning workflow の承認として扱う。追加のユーザー許可確認は不要で、spawn 不可などの明示条件なしに local self-review へ置き換えない。
-- **Phase 4 Subagent Lifecycle Budget**: result-integrated subagents は `close_agent` で閉じ、通常時の live subagents を bounded に保つ。
+- **Phase 2 is main-session owned exploration**: the main session fills discovery outcomes and may use explorer subagents only as helpers.
+- **Phase 4 subagent dispatch is normally mandatory**: `$plan <request>` includes approval for Phase 4 subagent deepening. Do not ask for extra user permission and do not replace it with local self-review without an explicit skip condition.
+- **Phase 4 Subagent Lifecycle Budget**: close result-integrated subagents with `close_agent` and keep live subagents bounded.

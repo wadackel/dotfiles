@@ -1,8 +1,4 @@
-import {
-  assertEquals,
-  assertMatch,
-  assertRejects,
-} from "jsr:@std/assert@^1";
+import { assertEquals, assertMatch, assertRejects } from "jsr:@std/assert@^1";
 import {
   initPlanEvidence,
   normalizePlanEvidence,
@@ -126,7 +122,10 @@ Deno.test("run init writes canonical JSON through the command surface", async ()
   ]);
 
   const data = JSON.parse(await Deno.readTextFile(path));
-  assertEquals(data.tasks.map((task: { subject: string }) => task.subject), SUBJECTS);
+  assertEquals(
+    data.tasks.map((task: { subject: string }) => task.subject),
+    SUBJECTS,
+  );
 });
 
 Deno.test("documents the permissioned CLI invocation used by skills", async () => {
@@ -173,6 +172,7 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "result-integrated reviewers",
     "Security Dispatch Heuristic",
     "Reviewer self-modification",
+    "User-facing progress and final reports should remain in the user's configured language",
   ];
 
   for (const text of required) {
