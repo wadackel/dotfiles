@@ -267,6 +267,14 @@ if [[ -x $(command -v ofsht) ]]; then
   zsh-defer _init_ofsht_completion
 fi
 
+# ravelact completion (遅延ロード)
+if [[ -x $(command -v ravelact) ]]; then
+  _init_ravelact_completion() {
+    source <(COMPLETE=zsh ravelact)
+  }
+  zsh-defer _init_ravelact_completion
+fi
+
 # Terraform completion (遅延ロード)
 if [[ -x $(command -v terraform) ]]; then
   _init_terraform_completion() {
