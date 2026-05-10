@@ -44,6 +44,23 @@ fi
 # zsh-defer is skipped in Phase 1 due to download issues
 # Can be added in Phase 2 if needed
 
+# Emit OSC 7 (current working directory) for terminal cwd tracking.
+# Used by WezTerm pane:get_current_working_dir() to resolve relative paths
+# in clickable hyperlinks (e.g., .md → mo).
+autoload -Uz add-zsh-hook
+function _emit_osc7_cwd() {
+  local cwd_url="file://${HOST}${PWD}"
+  if [[ -n "$TMUX" ]]; then
+    # tmux 内では DCS パススルー envelope で包み、内部の ESC バイトを ESC ESC に二重化する
+    local esc=$'\e'
+    local payload="${esc}]7;${cwd_url}${esc}\\"
+    printf '\ePtmux;%s\e\\' "${payload//$esc/${esc}${esc}}"
+  else
+    printf '\e]7;%s\e\\' "$cwd_url"
+  fi
+}
+add-zsh-hook precmd _emit_osc7_cwd
+
 # ====================================================
 # Git Workflow Functions
 # ====================================================

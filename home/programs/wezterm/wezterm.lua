@@ -1,5 +1,7 @@
 local wezterm = require("wezterm")
 
+local MO_BIN = "/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin/mo"
+
 wezterm.on("gui-startup", function()
   local _, _, window = wezterm.mux.spawn_window({})
   local w = window:gui_window()
@@ -9,6 +11,45 @@ end)
 
 wezterm.on("window-config-reloaded", function(window)
   window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
+end)
+
+wezterm.on("open-uri", function(window, pane, uri)
+  local target = uri:match("^mo:(.+)$")
+  if not target then
+    return
+  end
+
+  target = target:gsub(":%d+:%d+$", ""):gsub(":%d+$", "")
+
+  if target:sub(1, 2) == "~/" then
+    target = (os.getenv("HOME") or "") .. target:sub(2)
+  end
+
+  if target:sub(1, 1) ~= "/" then
+    local cwd = pane:get_current_working_dir()
+    if cwd then
+      -- 新しい WezTerm は Url userdata の file_path を返す。空文字の場合に備え string fallback も保持
+      local cwd_path = (cwd.file_path and cwd.file_path ~= "") and cwd.file_path
+        or tostring(cwd):gsub("^file://[^/]*", "")
+      if cwd_path and cwd_path ~= "" then
+        target = cwd_path:gsub("/$", "") .. "/" .. target
+      end
+    end
+  end
+
+  -- 制御バイト混入を拒否（OSC 8 / passthrough 経由で与えられた攻撃ペイロードを弾く）
+  if target:find("[%z\1-\31\127]") then
+    return false
+  end
+
+  -- 絶対パスでない場合は `./` 接頭辞で先頭の `-` を中和する。さらに `--` 区切りで mo の
+  -- 引数パーサが target を以降の値として確実に扱うようにする
+  if target:sub(1, 1) ~= "/" then
+    target = "./" .. target
+  end
+
+  wezterm.background_child_process({ MO_BIN, "--open", "--", target })
+  return false
 end)
 
 return {
@@ -140,6 +181,12 @@ return {
     {
       regex = "\\b\\w+://[\\w.-]+\\S*\\b",
       format = "$0",
+    },
+    -- Markdown file paths: abs / rel / ~/ / bare / with :line[:col]
+    -- (?!\.\w) で .md.bak 等の誤マッチを除外
+    {
+      regex = [[[\w./@+~\-]+\.md(?!\.\w)(?::\d+(?::\d+)?)?]],
+      format = "mo:$0",
     },
   },
 }
