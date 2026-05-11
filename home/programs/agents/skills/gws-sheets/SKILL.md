@@ -2,6 +2,7 @@
 name: gws-sheets
 version: 1.0.0
 description: "Google Sheets: Read and write spreadsheets."
+model: sonnet
 metadata:
   openclaw:
     category: "productivity"

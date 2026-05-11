@@ -2,6 +2,7 @@
 name: gws-docs
 version: 1.0.0
 description: "Read and write Google Docs."
+model: sonnet
 metadata:
   openclaw:
     category: "productivity"

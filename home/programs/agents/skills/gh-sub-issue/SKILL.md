@@ -7,6 +7,7 @@ description: |
   "remove sub-issue", "reorder sub-issues", "sub-issueを追加", "子イシューを作成",
   "サブイシューの一覧", "サブイシューを外す", "サブイシューを並び替え",
   "break down issue", "issue hierarchy", or any sub-issue management task.
+model: sonnet
 argument-hint: "<parent-issue-url>"
 ---
 

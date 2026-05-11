@@ -2,6 +2,7 @@
 name: gws-calendar
 version: 1.0.0
 description: "Google Calendar: Manage calendars and events."
+model: sonnet
 metadata:
   openclaw:
     category: "productivity"

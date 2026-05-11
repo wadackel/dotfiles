@@ -1,6 +1,7 @@
 ---
 name: auto-pr
 description: Creates a pull request AND iterates until all CI checks pass — a single command replacing the create-pr + iterate-pr sequence. Use when asked to "PRを作ってCIが通るまでやって", "auto-pr", "PRを出してmergeできる状態にして", or any request to fully complete the PR lifecycle end-to-end. Distinct from /create-pr (PR creation only) and /iterate-pr (fixing an existing PR).
+model: sonnet
 argument-hint: "[draft] [ja]"
 ---
 

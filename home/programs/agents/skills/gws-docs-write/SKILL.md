@@ -2,6 +2,7 @@
 name: gws-docs-write
 version: 1.0.0
 description: "Google Docs: Append text to a document."
+model: sonnet
 metadata:
   openclaw:
     category: "productivity"

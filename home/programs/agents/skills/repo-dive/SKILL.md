@@ -7,6 +7,7 @@ description: |
   code access: investigation, analysis, comparison, reference, learning, or review.
   Triggers: GitHub repo URL + any code exploration intent ("調査して", "コードを見て",
   "investigate", "analyze", "explore", "compare", "refer to").
+model: sonnet
 argument-hint: "<repo-url> [branch-or-pr]"
 ---
 

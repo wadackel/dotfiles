@@ -2,6 +2,7 @@
 name: gws-slides
 version: 1.0.0
 description: "Google Slides: Read and write presentations."
+model: sonnet
 metadata:
   openclaw:
     category: "productivity"

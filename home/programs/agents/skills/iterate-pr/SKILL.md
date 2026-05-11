@@ -1,6 +1,7 @@
 ---
 name: iterate-pr
 description: Iterates on the current branch's pull request until all CI checks pass and review feedback is addressed. Automates the feedback-fix-push-wait cycle with gh CLI. Use when you need to fix CI failures, address review feedback, or continuously push fixes until all checks are green. Also use when asked to "fix CI", "iterate PR", "CIを通して", "PRを直して", "CI失敗を修正して", "レビュー指摘を対応して".
+model: sonnet
 ---
 
 # Iterate on PR Until CI Passes

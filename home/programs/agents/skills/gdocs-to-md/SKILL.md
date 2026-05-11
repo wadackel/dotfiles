@@ -7,6 +7,7 @@ description: >-
   "Google DocsをMarkdownに変換して", "docsをmdにして",
   "MarkdownにExportして", or when a Google Docs URL is provided with intent to
   produce a .md file.
+model: sonnet
 argument-hint: "[Google Docs URL or ID]"
 ---
 
