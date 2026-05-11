@@ -1,6 +1,6 @@
 ---
 name: obsidian-notes
-description: Obsidian vault conventions and note formatting rules. Covers vault directory structure (00_Inbox, 01_Projects, 02_Notes, etc.), note creation format (no h1, start from h2), and frontmatter template. Auto-loads when creating or editing Obsidian notes, using obsidian CLI commands, or saving content to the vault.
+description: Obsidian vault conventions, note formatting rules, and Obsidian Flavored Markdown (OFM) syntax reference. Covers vault directory structure (00_Inbox, 01_Projects, 02_Notes, etc.), note creation format (no h1, start from h2), frontmatter template, and OFM extensions — wikilinks, callouts, embeds, properties, tags, comments, highlights, math, mermaid, footnotes. Auto-loads when creating or editing Obsidian notes, using obsidian CLI commands, saving content to the vault, or writing OFM syntax (wikilink, callout, embed, frontmatter, property, コールアウト, 埋め込み, wikilink, プロパティ).
 ---
 
 # Obsidian Note Conventions
@@ -113,3 +113,126 @@ Key points discussed...
 **Daily note**: Follow existing daily note patterns in the vault. Check `Templates/` for daily note template if available.
 
 **Project note**: If a project directory exists under `01_Projects/`, save there. Otherwise, use `00_Inbox/` and let the user refile.
+
+## Obsidian Flavored Markdown Syntax
+
+OFM extensions on top of CommonMark/GFM. Standard Markdown is assumed knowledge.
+
+> Adapted from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (MIT). Spec: [Obsidian Flavored Markdown](https://help.obsidian.md/obsidian-flavored-markdown).
+
+### Internal Links (Wikilinks)
+
+```markdown
+[[Note Name]]                  Link to note
+[[Note Name|Display Text]]     Custom display text
+[[Note Name#Heading]]          Link to heading
+[[Note Name#^block-id]]        Link to block
+[[#Heading in same note]]      Same-note heading link
+```
+
+Define a block ID by appending `^block-id` to any paragraph:
+
+```markdown
+This paragraph can be linked to. ^my-block-id
+```
+
+`[[wikilinks]]` for in-vault notes (rename-tracking); `[text](url)` for external URLs.
+
+### Embeds
+
+Prefix any wikilink with `!` to embed its content inline:
+
+```markdown
+![[Note Name]]                 Embed full note
+![[Note Name#Heading]]         Embed section
+![[image.png|300]]             Embed image (width)
+![[document.pdf#page=3]]       Embed PDF page
+```
+
+See [EMBEDS.md](references/EMBEDS.md) for audio, video, list, and search-result embeds plus external images.
+
+### Callouts
+
+```markdown
+> [!note]
+> Basic callout.
+
+> [!warning] Custom Title
+> Callout with a custom title.
+
+> [!faq]- Collapsed by default
+> Foldable callout (- collapsed, + expanded).
+```
+
+Common types: `note`, `tip`, `warning`, `info`, `example`, `quote`, `bug`, `danger`, `success`, `failure`, `question`, `abstract`, `todo`.
+
+See [CALLOUTS.md](references/CALLOUTS.md) for the full list with aliases, nesting, and custom CSS callouts.
+
+### Properties (Frontmatter Syntax)
+
+```yaml
+---
+title: My Note
+date: 2024-01-15
+tags: [project, active]
+aliases: [Alternative Name]
+cssclasses: [custom-class]
+---
+```
+
+Default keys: `tags` (searchable labels), `aliases` (alt names for link suggestions), `cssclasses` (CSS classes).
+
+See [PROPERTIES.md](references/PROPERTIES.md) for all property types and tag syntax rules.
+
+> **Vault policy** (this repo): create notes with `aliases:` / `tags:` / `description:` **left empty** — see the [Frontmatter](#frontmatter) section above. PROPERTIES.md is a syntax reference for cases where the user later fills in values.
+
+### Tags
+
+Inline tags: `#tag`, `#nested/tag`. Allowed chars: letters, numbers (not first), `_`, `-`, `/`. Can also be declared under frontmatter `tags`.
+
+### Comments
+
+```markdown
+This is visible %%but this is hidden%% text.
+
+%%
+This entire block is hidden in reading view.
+%%
+```
+
+### Highlights
+
+```markdown
+==Highlighted text==
+```
+
+### Math (LaTeX)
+
+```markdown
+Inline: $e^{i\pi} + 1 = 0$
+Block: $$ \frac{a}{b} = c $$ (delimiters on their own lines)
+```
+
+### Diagrams (Mermaid)
+
+````markdown
+```mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do this]
+```
+````
+
+Link Mermaid nodes to Obsidian notes via `class NodeName internal-link;`.
+
+### Footnotes
+
+```markdown
+Text with a footnote[^1].
+
+[^1]: Footnote content.
+
+Inline footnote.^[This is inline.]
+```
+
+Official spec: [Links](https://help.obsidian.md/links) / [Embeds](https://help.obsidian.md/embeds) / [Callouts](https://help.obsidian.md/callouts) / [Properties](https://help.obsidian.md/properties).
