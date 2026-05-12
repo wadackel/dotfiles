@@ -1,7 +1,6 @@
 ---
 name: bash-policy-add
 description: Adds a rule to bash-policy.yaml to block specific shell command patterns and redirect Claude to preferred alternatives. Use when asked to "block command X", "enforce pnpm over npx", "prevent git -C usage", "add a bash-policy rule", or "コマンドXをブロックして", "bash-policyに追加して". Conducts a structured interview to gather all required information before making any changes.
-model: sonnet
 argument-hint: "[command pattern to block]"
 ---
 

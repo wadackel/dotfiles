@@ -2,7 +2,6 @@
 name: gws-gmail-send
 version: 1.0.0
 description: "Gmail: Send an email."
-model: sonnet
 metadata:
   openclaw:
     category: "productivity"

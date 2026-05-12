@@ -1,7 +1,6 @@
 ---
 name: ast-grep
 description: Translates natural language queries into ast-grep YAML rules for structural code search using Abstract Syntax Tree (AST) patterns. Use when asked to "find code patterns", "search for specific language constructs", "AST search", "structural search", "ast-grepで検索", "コードパターンを探して", "構造的に検索して", or when text-based grep is insufficient for matching code structure (e.g., "find all async functions that don't handle errors", "find all calls to X inside class Y").
-model: sonnet
 ---
 
 # ast-grep Code Search

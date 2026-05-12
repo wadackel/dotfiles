@@ -8,7 +8,6 @@ description: |
   the current branch with the upstream default branch.
   Also use when the user mentions merge conflicts from an outdated branch or wants to
   bring their feature branch up to date before creating a PR.
-model: sonnet
 ---
 
 # Rebase onto Latest Base Branch

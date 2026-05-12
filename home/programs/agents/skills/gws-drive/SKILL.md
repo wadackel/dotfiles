@@ -2,7 +2,6 @@
 name: gws-drive
 version: 1.0.0
 description: "Google Drive: Manage files, folders, and shared drives."
-model: sonnet
 metadata:
   openclaw:
     category: "productivity"

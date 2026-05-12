@@ -2,7 +2,6 @@
 name: gws-gmail
 version: 1.0.0
 description: "Gmail: Send, read, and manage email."
-model: sonnet
 metadata:
   openclaw:
     category: "productivity"

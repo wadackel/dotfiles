@@ -2,7 +2,6 @@
 name: gws-sheets-read
 version: 1.0.0
 description: "Google Sheets: Read values from a spreadsheet."
-model: sonnet
 metadata:
   openclaw:
     category: "productivity"
