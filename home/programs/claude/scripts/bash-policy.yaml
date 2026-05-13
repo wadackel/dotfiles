@@ -1,4 +1,10 @@
 rules:
+  - pattern: "*bypass-plan-gate.ts*"
+    message: |
+      /bypass-plan-gate skill must NOT be invoked via Bash by the AI.
+      The skill is USER-INVOCATION ONLY (frontmatter `disable-model-invocation: true`).
+      Running the underlying script via Bash defeats the safety guarantee.
+      If the user explicitly asked you to bypass the gate, ask them to type `/bypass-plan-gate` themselves.
   - pattern: "git -C *"
     message: "Do not use 'git -C <path>'. Use 'cd <path> && git <subcmd>' instead (see CLAUDE.md)."
   - pattern: "gh pr create * <<*"

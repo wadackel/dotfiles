@@ -44,6 +44,18 @@ export async function loadRules(path: string): Promise<Rule[]> {
   }
 }
 
+/**
+ * Pre-segmentation guard: AST-based segmentation drops shell redirect
+ * targets (`> file`, `>> file`), so per-rule glob matching on segments cannot
+ * see them. For the gate's own state directory, any reference to
+ * `.claude/plans/` in the raw command — argument or redirect target — is
+ * forbidden. This closes the Bash-side attack surface (touch / cp / mv / tee
+ * / `>` redirect / ln -s) on the gate's own marker files.
+ */
+export function rawCommandTouchesPlansDir(command: string): boolean {
+  return /\.claude\/plans\//.test(command);
+}
+
 /** Walk up from cwd to find .claude/bash-policy.yaml */
 export async function findProjectConfig(cwd: string): Promise<string | null> {
   let dir = cwd;
@@ -71,6 +83,18 @@ if (import.meta.main) {
 
   const command = input.tool_input.command;
   const cwd = input.cwd ?? Deno.cwd();
+
+  if (rawCommandTouchesPlansDir(command)) {
+    console.error(
+      [
+        "[bash-policy] Raw command references ~/.claude/plans/ (gate state directory).",
+        "Direct manipulation of plan-gate state markers via Bash is forbidden.",
+        "Use /plan, /impl, or /bypass-plan-gate skills instead.",
+        `Blocked: ${command}`,
+      ].join("\n"),
+    );
+    Deno.exit(2);
+  }
 
   // Load global config (co-located with this script)
   const scriptDir = new URL(".", import.meta.url).pathname;

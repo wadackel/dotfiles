@@ -21,14 +21,51 @@ const INFRA_REGEX =
 export interface HookInput {
   tool_input?: { file_path?: string };
   cwd?: string;
+  session_id?: string;
 }
 
 export type GateDecision =
   | {
     kind: "allow";
-    reason: "missing-fields" | "infra" | "outside-cwd" | "marker-valid";
+    reason:
+      | "missing-fields"
+      | "infra"
+      | "outside-cwd"
+      | "marker-valid"
+      | "bypass-valid";
   }
   | { kind: "block"; reason: string };
+
+// AI cannot bypass the gate by writing marker files directly via Edit/Write.
+// `~/.claude/plans/` is the gate's own state directory; any tool-driven write
+// here is denied regardless of cwd / infra / marker state. The legitimate
+// writers (plan-marker.ts, bypass-plan-gate.ts) run via Bash, which this hook
+// does not see.
+export function plansDirPath(): string {
+  return `${Deno.env.get("HOME") ?? ""}/.claude/plans`;
+}
+
+export function isInsidePlansDir(abs: string): boolean {
+  const dir = plansDirPath();
+  return abs === dir || abs.startsWith(dir + "/");
+}
+
+export interface BypassMarkerInfo {
+  plansDir: string;
+  path: string;
+  cwdHash: string;
+  sessionHash: string;
+}
+
+export interface BypassMarker {
+  version: 1;
+  createdAt: string;
+  cwd: string;
+  cwdHash: string;
+  session_id: string;
+  sessionHash: string;
+  prompt: string;
+}
 
 // --- Helpers ---
 
@@ -95,6 +132,130 @@ async function hasPendingMarker(hash: string): Promise<boolean> {
   }
 }
 
+// --- Bypass marker helpers (codex-compatible schema) ---
+
+export async function sessionHash(sessionId: string): Promise<string> {
+  const data = new TextEncoder().encode(sessionId);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+}
+
+function homeDir(): string {
+  const home = Deno.env.get("HOME");
+  if (!home) {
+    throw new Error("HOME is not set");
+  }
+  return home;
+}
+
+export async function bypassMarkerInfo(
+  cwd: string,
+  sessionId: string,
+): Promise<BypassMarkerInfo> {
+  if (!sessionId) {
+    throw new Error("session_id is required");
+  }
+  const home = homeDir();
+  const cwdMarkerHash = await cwdHash(cwd);
+  const sessionMarkerHash = await sessionHash(sessionId);
+  const plansDir = `${home}/.claude/plans`;
+  return {
+    plansDir,
+    cwdHash: cwdMarkerHash,
+    sessionHash: sessionMarkerHash,
+    path:
+      `${plansDir}/.bypass-plan-gate-${cwdMarkerHash}-${sessionMarkerHash}.json`,
+  };
+}
+
+async function assertRegularFile(path: string): Promise<Deno.FileInfo> {
+  const info = await Deno.lstat(path);
+  if (!info.isFile || info.isSymlink) {
+    throw new Error(`marker must be a regular file: ${path}`);
+  }
+  return info;
+}
+
+async function atomicWriteText(path: string, content: string): Promise<void> {
+  const slash = path.lastIndexOf("/");
+  if (slash < 1) {
+    throw new Error(`refusing to write marker outside a directory: ${path}`);
+  }
+  const dir = path.slice(0, slash);
+  const basename = path.slice(slash + 1);
+  const tmp = `${dir}/.${basename}.${crypto.randomUUID()}.tmp`;
+  try {
+    await Deno.writeTextFile(tmp, content, {
+      createNew: true,
+      mode: 0o600,
+    });
+    await assertRegularFile(tmp);
+    await Deno.rename(tmp, path);
+  } catch (err) {
+    try {
+      await Deno.remove(tmp);
+    } catch {
+      // tmp may not exist or may already have been renamed.
+    }
+    throw err;
+  }
+}
+
+export async function activateBypassMarker(input: {
+  cwd: string;
+  session_id: string;
+  prompt?: string;
+}): Promise<BypassMarkerInfo> {
+  const info = await bypassMarkerInfo(input.cwd, input.session_id);
+  await Deno.mkdir(info.plansDir, { recursive: true });
+  const marker: BypassMarker = {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    cwd: await canonical(input.cwd),
+    cwdHash: info.cwdHash,
+    session_id: input.session_id,
+    sessionHash: info.sessionHash,
+    prompt: input.prompt ?? "",
+  };
+  await atomicWriteText(info.path, JSON.stringify(marker, null, 2) + "\n");
+  return info;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+export async function hasValidBypassMarker(
+  cwd: string,
+  sessionId: string,
+): Promise<boolean> {
+  if (!sessionId) {
+    return false;
+  }
+  try {
+    const info = await bypassMarkerInfo(cwd, sessionId);
+    await assertRegularFile(info.path);
+    const parsed: unknown = JSON.parse(await Deno.readTextFile(info.path));
+    if (!isRecord(parsed)) {
+      return false;
+    }
+    const canonicalCwd = await canonical(cwd);
+    return parsed.version === 1 &&
+      typeof parsed.createdAt === "string" &&
+      parsed.createdAt.length > 0 &&
+      parsed.cwd === canonicalCwd &&
+      parsed.cwdHash === info.cwdHash &&
+      typeof parsed.prompt === "string" &&
+      parsed.sessionHash === info.sessionHash &&
+      parsed.session_id === sessionId;
+  } catch {
+    return false;
+  }
+}
+
 // --- Main gate logic (testable) ---
 
 export async function checkGate(input: HookInput): Promise<GateDecision> {
@@ -109,6 +270,17 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`,
   );
 
+  if (isInsidePlansDir(abs)) {
+    return {
+      kind: "block",
+      reason: [
+        `${filePath} は plan-gate 自身の state directory (~/.claude/plans/) 配下です。`,
+        "active / pending / bypass-plan-gate マーカーの直接編集は機構的に禁止されています。",
+        "marker を変更したい場合は対応する skill (/plan, /impl, /bypass-plan-gate) を経由してください。",
+      ].join("\n"),
+    };
+  }
+
   if (isInfraPath(abs)) {
     return { kind: "allow", reason: "infra" };
   }
@@ -120,6 +292,11 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
   const state = await cwdMarkerState(cwd);
   if (state === "valid") {
     return { kind: "allow", reason: "marker-valid" };
+  }
+
+  const sessionId = typeof input.session_id === "string" ? input.session_id : "";
+  if (await hasValidBypassMarker(cwd, sessionId)) {
+    return { kind: "allow", reason: "bypass-valid" };
   }
 
   let reason: string;
