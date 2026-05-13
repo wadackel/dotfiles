@@ -3,6 +3,8 @@
 // e2e harnesses can import these helpers without dragging in npm:react /
 // npm:ink at parse time.
 
+import { charCells } from "./cell_width.ts";
+
 // tmux capture-pane -e emits ANSI. ink <Text> passes SGR (color) through
 // cleanly, but cursor-move CSI corrupts the layout AND OSC/DCS/APC/PM can
 // smuggle titles, hyperlinks, and device control into the host terminal
@@ -32,18 +34,27 @@ export function sanitizeAnsi(input: string): string {
 // ANSI-aware line truncation. After sanitizeAnsi, only SGR CSI sequences
 // remain; if a raw .slice(0, N) happens to cut mid-escape, Ink would render
 // a dangling ESC and leak terminal control into the host. This truncator
-// counts only printable characters toward the column budget while passing
-// escape sequences through intact. If truncation occurs mid-SGR-span, a
-// reset `\x1b[0m` is appended so no color leaks to the next line.
+// counts display cells (East Asian Wide / Fullwidth = 2 cells, via
+// `charCells`) toward the column budget while passing escape sequences
+// through intact. If truncation occurs mid-SGR-span, a reset `\x1b[0m` is
+// appended so no color leaks to the next line.
+//
+// Cell-aware semantics are load-bearing for the picker preview: Ink wraps a
+// `<Text>` line whose visual width exceeds the box, which pushes the bottom
+// rows (where AI-agent chat input sits) out of view. Counting CJK as 2
+// cells keeps the rendered width within `maxCols` even on Japanese pane
+// content. Surrogate-pair handling lets CJK Extension B (U+20000+) code
+// points stay atomic instead of being split mid-character.
 export function truncateAnsiLine(line: string, maxCols: number): string {
   let out = "";
-  let printable = 0;
+  let used = 0;
   let hasOpenSgr = false;
   let i = 0;
-  while (i < line.length && printable < maxCols) {
+  while (i < line.length && used < maxCols) {
     const ch = line[i];
     if (ch === "\x1b") {
       const rest = line.slice(i);
+      // deno-lint-ignore no-control-regex
       const m = rest.match(/^\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/);
       if (m) {
         out += m[0];
@@ -58,9 +69,18 @@ export function truncateAnsiLine(line: string, maxCols: number): string {
       i++;
       continue;
     }
-    out += ch;
-    printable++;
-    i++;
+    // Read one code point, joining a UTF-16 surrogate pair atomically so a
+    // wide CJK Ext B char is never split mid-codepoint.
+    const code = line.charCodeAt(i);
+    const isHighSurrogate = code >= 0xD800 && code <= 0xDBFF &&
+      i + 1 < line.length;
+    const cp = isHighSurrogate ? line.substring(i, i + 2) : ch;
+    const advance = isHighSurrogate ? 2 : 1;
+    const w = charCells(cp);
+    if (used + w > maxCols) break;
+    out += cp;
+    used += w;
+    i += advance;
   }
   if (hasOpenSgr) out += "\x1b[0m";
   return out;

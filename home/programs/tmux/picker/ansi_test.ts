@@ -73,7 +73,7 @@ Deno.test("sanitizeAnsi: CSI with < = > parameter bytes stripped (ECMA-48)", () 
 
 // --- truncateAnsiLine ---
 
-Deno.test("truncateAnsiLine: plain text truncated by printable char count", () => {
+Deno.test("truncateAnsiLine: plain text truncated by display-cell count", () => {
   assertEquals(truncateAnsiLine("hello world", 5), "hello");
   assertEquals(truncateAnsiLine("short", 20), "short");
 });
@@ -95,4 +95,53 @@ Deno.test("truncateAnsiLine: no reset when SGR already closed in preserved span"
   const colored = "\x1b[31mA\x1b[0mBCDE";
   // printable=5, maxCols=5: keeps entire thing; SGR already reset.
   assertEquals(truncateAnsiLine(colored, 5), "\x1b[31mA\x1b[0mBCDE");
+});
+
+// --- truncateAnsiLine: cell-width awareness ---
+// `maxCols` is a TERMINAL CELL budget (not a code-point count). East Asian
+// Wide / Fullwidth code points consume 2 cells. This is what prevents Ink
+// from visually wrapping CJK preview lines and pushing the chat-box at the
+// bottom of an AI-agent pane out of view.
+
+Deno.test("truncateAnsiLine: pure CJK truncated to even cell budget", () => {
+  // "あいうえお" = 5 chars × 2 cells = 10 cells. maxCols=4 → "あい" (4 cells).
+  assertEquals(truncateAnsiLine("あいうえお", 4), "あい");
+});
+
+Deno.test("truncateAnsiLine: pure CJK with odd cell budget leaves trailing cell empty", () => {
+  // maxCols=3: "あ" (2 cells) fits, next "い" (2 cells) would overflow → stop.
+  assertEquals(truncateAnsiLine("あいう", 3), "あ");
+});
+
+Deno.test("truncateAnsiLine: mixed ASCII + CJK respects cell totals", () => {
+  // "ab あい cd" cells: a(1)+b(1)+SP(1)+あ(2)+い(2)+SP(1)+c(1)+d(1)=10.
+  // maxCols=6: a(1)+b(1)+SP(1)+あ(2)=5, next い(2) → 7 > 6 → stop at "ab あ".
+  assertEquals(truncateAnsiLine("ab あい cd", 6), "ab あ");
+});
+
+Deno.test("truncateAnsiLine: CJK inside closed SGR span", () => {
+  // "\x1b[31m日本語\x1b[0m" cells = 6 (3 × 2). maxCols=4 → keep "日本", SGR
+  // already closed by the trailing \x1b[0m we never reach, so we still need
+  // to emit a reset because hasOpenSgr was set when SGR opened.
+  assertEquals(
+    truncateAnsiLine("\x1b[31m日本語\x1b[0m", 4),
+    "\x1b[31m日本\x1b[0m",
+  );
+});
+
+Deno.test("truncateAnsiLine: CJK cut keeps SGR-open + appends reset", () => {
+  // No trailing \x1b[0m in input. maxCols=4 → "日本" inside red, reset added.
+  assertEquals(
+    truncateAnsiLine("\x1b[32m日本語", 4),
+    "\x1b[32m日本\x1b[0m",
+  );
+});
+
+Deno.test("truncateAnsiLine: surrogate pair (CJK Ext B) counts as 2 cells, not split", () => {
+  // U+20000 (𠀀, CJK Ext B) is a wide char encoded as UTF-16 surrogate pair.
+  // 2 cells per occurrence; iteration must read both code units atomically.
+  const wide = "\u{20000}\u{20001}\u{20002}"; // 3 wide CPs = 6 cells.
+  assertEquals(truncateAnsiLine(wide, 4), "\u{20000}\u{20001}");
+  // maxCols=3 → only first wide CP fits (2 cells), next would overflow.
+  assertEquals(truncateAnsiLine(wide, 3), "\u{20000}");
 });
