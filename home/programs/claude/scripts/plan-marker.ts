@@ -6,6 +6,21 @@ import { cwdHash, cwdMarkerPath } from "./plan-gate.ts";
 // expand HOME; all write paths are still constrained by markerPaths().
 const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * The complete set of plan-marker.ts CLI subcommands. bash-policy.ts uses this
+ * tuple as the source of truth when deciding whether to exempt a Bash
+ * invocation of this helper from the plans-dir substring guard. Adding a new
+ * subcommand here automatically updates bash-policy's exemption logic; do not
+ * fork the list anywhere else.
+ */
+export const PLAN_MARKER_SUBCOMMANDS = [
+  "activate-pending",
+  "status",
+  "require-active",
+  "clear-active",
+] as const;
+export type PlanMarkerSubcommand = typeof PLAN_MARKER_SUBCOMMANDS[number];
+
 export type MarkerState =
   | "active"
   | "active-expired"

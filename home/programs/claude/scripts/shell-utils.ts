@@ -188,6 +188,59 @@ export interface ParsedCommand {
 }
 
 /**
+ * Structured token view of a single non-compound shell command.
+ * `name` is the AST Command name word (the executable token);
+ * `args` are the positional Word suffix tokens in order.
+ *
+ * Use this when callers need to distinguish "the executable is X" from
+ * "the string `X` appears somewhere in a quoted argument" — for example
+ * `bash -c 'plan-marker.ts ...'` has name `bash` and args `["-c", "..."]`,
+ * not name `plan-marker.ts`.
+ */
+export interface SingleCommand {
+  name: string;
+  args: string[];
+}
+
+/**
+ * Parse a single, non-compound shell command into `{name, args}`.
+ *
+ * Returns `null` when the command is compound (`;`, `&&`, `||`, `|`,
+ * `$(...)`, `` `...` ``, subshells, redirects, heredocs, loops, conditionals,
+ * etc.), when the AST yields zero or multiple top-level commands, or when the
+ * parser fails outright. The structural rejection is intentional — callers
+ * relying on `parseSingleCommand` to decide "is this exactly a `foo bar baz`
+ * call" must not have a fallback path that lets compounds through, because
+ * regex over joined-segment text cannot distinguish `bash -c 'foo bar baz'`
+ * from a direct `foo bar baz`.
+ */
+export async function parseSingleCommand(
+  command: string,
+): Promise<SingleCommand | null> {
+  try {
+    const preprocessed = stripHeredocs(command);
+    const ast = await parseBash(preprocessed);
+    if (ast.type !== "Script" || ast.commands.length !== 1) return null;
+    const node = ast.commands[0];
+    if (node.type !== "Command") return null;
+    if (hasRedirect(node) || hasCommandExpansion(node)) return null;
+    const name: string | undefined = node.name?.text;
+    if (typeof name !== "string" || name.length === 0) return null;
+    const args: string[] = [];
+    for (const s of node.suffix ?? []) {
+      // Any non-Word suffix (Redirect, AssignmentWord with expansion, etc.)
+      // means the call is not a plain `name arg arg arg` shape. Bail.
+      if (s?.type !== "Word") return null;
+      if (typeof s.text !== "string") return null;
+      args.push(s.text);
+    }
+    return { name, args };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse a shell command into segments and compound detection in a single AST parse.
  * Falls back to regex-based detection on parse errors or empty AST result.
  */
