@@ -40,6 +40,26 @@
         "type": "github"
       }
     },
+    "mise-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778766202,
+        "narHash": "sha256-u1iCl7xv+SwP+dBo/UPZScZlEokexR9pLNqSO2cP3Dk=",
+        "owner": "wadackel",
+        "repo": "mise-nix",
+        "rev": "336eec8bc83a2078e9ef2cecd303c6cf87268b1b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wadackel",
+        "repo": "mise-nix",
+        "type": "github"
+      }
+    },
     "mo-nix": {
       "inputs": {
         "nixpkgs": [
@@ -136,6 +156,7 @@
       "inputs": {
         "codex-nix": "codex-nix",
         "home-manager": "home-manager",
+        "mise-nix": "mise-nix",
         "mo-nix": "mo-nix",
         "nix-claude-code": "nix-claude-code",
         "nix-darwin": "nix-darwin",

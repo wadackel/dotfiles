@@ -20,6 +20,10 @@
       url = "github:wadackel/mo-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    mise-nix = {
+      url = "github:wadackel/mise-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     codex-nix = {
       url = "github:wadackel/codex-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -35,6 +39,7 @@
       treefmt-nix,
       nix-claude-code,
       mo-nix,
+      mise-nix,
       codex-nix,
       ...
     }:
@@ -54,6 +59,7 @@
           treefmt-nix
           nix-claude-code
           mo-nix
+          mise-nix
           codex-nix
           ;
       };
@@ -64,6 +70,7 @@
       overlays = [
         nix-claude-code.overlays.default
         mo-nix.overlays.default
+        mise-nix.overlays.default
         codex-nix.overlays.default
         (final: prev: {
           mvfst = prev.mvfst.overrideAttrs (old: {
@@ -75,11 +82,6 @@
           # direnv 2.37.1 の checkPhase (zsh test suite) が macOS で
           # ハングする upstream issue を回避するため doCheck を無効化。
           direnv = prev.direnv.overrideAttrs (_old: {
-            doCheck = false;
-          });
-          # mise-2026.4.6 の checkPhase (cargo test の依存 crate compile) が
-          # macOS rebuild で長時間応答しなくなるため doCheck を無効化。
-          mise = prev.mise.overrideAttrs (_old: {
             doCheck = false;
           });
         })
