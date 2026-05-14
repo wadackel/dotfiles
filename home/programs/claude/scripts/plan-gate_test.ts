@@ -8,7 +8,7 @@ import {
   cwdMarkerPath,
   type HookInput,
   isInfraPath,
-  isInsidePlansDir,
+  isPlansMarkerPath,
   isUnderCwd,
   plansDirPath,
 } from "./plan-gate.ts";
@@ -653,17 +653,30 @@ Deno.test("bypass #15: directory bypass marker → block", async () => {
 
 // --- Security: plans dir write block (AI cannot self-grant via Edit/Write) ---
 
-Deno.test("isInsidePlansDir: true for paths under ~/.claude/plans/", () => {
+Deno.test("isPlansMarkerPath: true for marker basenames under ~/.claude/plans/", () => {
   const dir = plansDirPath();
-  assertEquals(isInsidePlansDir(`${dir}/.active-abc`), true);
-  assertEquals(isInsidePlansDir(`${dir}/.bypass-plan-gate-aa-bb.json`), true);
-  assertEquals(isInsidePlansDir(`${dir}/anything`), true);
+  assertEquals(isPlansMarkerPath(`${dir}/.active-abc`), true);
+  assertEquals(isPlansMarkerPath(`${dir}/.pending-abc`), true);
+  assertEquals(isPlansMarkerPath(`${dir}/.bypass-plan-gate-aa-bb.json`), true);
 });
 
-Deno.test("isInsidePlansDir: false for paths outside ~/.claude/plans/", () => {
+Deno.test("isPlansMarkerPath: false for non-marker basenames (plan body) under ~/.claude/plans/", () => {
   const dir = plansDirPath();
-  assertEquals(isInsidePlansDir(`${dir}-suffix/file`), false);
-  assertEquals(isInsidePlansDir("/Users/alice/project/src.ts"), false);
+  assertEquals(isPlansMarkerPath(`${dir}/anything`), false);
+  assertEquals(isPlansMarkerPath(`${dir}/20260514T0200-foo.md`), false);
+  assertEquals(isPlansMarkerPath(`${dir}/20260514T0200-foo.log.md`), false);
+});
+
+Deno.test("isPlansMarkerPath: false for paths outside ~/.claude/plans/", () => {
+  const dir = plansDirPath();
+  assertEquals(isPlansMarkerPath(`${dir}-suffix/.active-abc`), false);
+  assertEquals(isPlansMarkerPath("/Users/alice/project/src.ts"), false);
+});
+
+Deno.test("isPlansMarkerPath: false for nested paths under ~/.claude/plans/", () => {
+  // marker write must hit plans dir directly; subdirs are not marker scope.
+  const dir = plansDirPath();
+  assertEquals(isPlansMarkerPath(`${dir}/sub/.active-abc`), false);
 });
 
 Deno.test("security: write to ~/.claude/plans/.active-* → block", async () => {
@@ -739,5 +752,37 @@ Deno.test("security: plans dir block takes precedence over infra allowlist", asy
       Deno.env.delete("HOME");
     }
     await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("checkGate: plan body (.md) under plans dir is not blocked by marker rule", async () => {
+  // Plan body files (`<slug>.md`, `<slug>.log.md`) live in plans dir but are
+  // not markers; they must pass the marker block and fall through to the
+  // normal cwd/infra/marker evaluation. When cwd is outside plans dir, the
+  // body resolves to `outside-cwd` allow.
+  const originalHome = Deno.env.get("HOME");
+  const home = await Deno.makeTempDir({ dir: "/tmp", prefix: "planbody-home-" });
+  const cwd = await Deno.makeTempDir({ dir: "/tmp", prefix: "planbody-cwd-" });
+  Deno.env.set("HOME", home);
+  try {
+    await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
+    const target = `${home}/.claude/plans/20260514T0200-fix-plan-gate-md-write.md`;
+    const result = await checkGate({
+      tool_input: { file_path: target },
+      cwd,
+      session_id: "session-1",
+    });
+    assertEquals(result.kind, "allow");
+    if (result.kind === "allow") {
+      assertEquals(result.reason, "outside-cwd");
+    }
+  } finally {
+    if (originalHome !== undefined) {
+      Deno.env.set("HOME", originalHome);
+    } else {
+      Deno.env.delete("HOME");
+    }
+    await Deno.remove(home, { recursive: true });
+    await Deno.remove(cwd, { recursive: true });
   }
 });

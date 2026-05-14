@@ -2,6 +2,7 @@
 
 // PreToolUse hook (matcher: "Edit|Write|MultiEdit"):
 // Gates edits to files under cwd on /plan-generated cwd-hash marker.
+// - Marker files under ~/.claude/plans/ (basename matching .active-*, .pending-*, .bypass-plan-gate-*) are always denied.
 // - Files under an infra allowlist (dotfiles/home/programs/claude/{CLAUDE.md,settings.json,scripts/**}) are always allowed.
 // - Files outside cwd are always allowed.
 // - Files under cwd require a valid cwd-hash marker at ~/.claude/plans/.active-<hash> (mtime < 24h).
@@ -37,17 +38,29 @@ export type GateDecision =
   | { kind: "block"; reason: string };
 
 // AI cannot bypass the gate by writing marker files directly via Edit/Write.
-// `~/.claude/plans/` is the gate's own state directory; any tool-driven write
-// here is denied regardless of cwd / infra / marker state. The legitimate
+// `~/.claude/plans/` is the gate's own state directory; only basenames matching
+// a known marker pattern (.active-*, .pending-*, .bypass-plan-gate-*) are
+// denied regardless of cwd / infra / marker state. Plan body markdown
+// (`<slug>.md`, `<slug>.log.md`) is not a marker and falls through to the
+// normal cwd / infra / marker / bypass evaluation. The legitimate marker
 // writers (plan-marker.ts, bypass-plan-gate.ts) run via Bash, which this hook
 // does not see.
+const PLANS_MARKER_BASENAME_REGEX = /^\.(active|pending|bypass-plan-gate)-/;
+
 export function plansDirPath(): string {
   return `${Deno.env.get("HOME") ?? ""}/.claude/plans`;
 }
 
-export function isInsidePlansDir(abs: string): boolean {
+export function isPlansMarkerPath(abs: string): boolean {
   const dir = plansDirPath();
-  return abs === dir || abs.startsWith(dir + "/");
+  if (!abs.startsWith(dir + "/")) {
+    return false;
+  }
+  const basename = abs.slice(dir.length + 1);
+  if (basename.includes("/")) {
+    return false;
+  }
+  return PLANS_MARKER_BASENAME_REGEX.test(basename);
 }
 
 export interface BypassMarkerInfo {
@@ -270,11 +283,11 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     filePath.startsWith("/") ? filePath : `${cwd}/${filePath}`,
   );
 
-  if (isInsidePlansDir(abs)) {
+  if (isPlansMarkerPath(abs)) {
     return {
       kind: "block",
       reason: [
-        `${filePath} は plan-gate 自身の state directory (~/.claude/plans/) 配下です。`,
+        `${filePath} は plan-gate 自身の marker file です。`,
         "active / pending / bypass-plan-gate マーカーの直接編集は機構的に禁止されています。",
         "marker を変更したい場合は対応する skill (/plan, /impl, /bypass-plan-gate) を経由してください。",
       ].join("\n"),
