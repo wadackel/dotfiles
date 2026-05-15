@@ -3,32 +3,33 @@ import {
   activateBypass,
   isBypassPrompt,
   normalizeHookInput,
-} from "./codex-bypass-plan-gate-tracker.ts";
+} from "./codex-plan-marker-grant-tracker.ts";
 import { bypassMarkerInfo } from "./codex-plan-gate.ts";
 
 async function setupHome(): Promise<{ home: string; cwd: string }> {
-  const home = await Deno.makeTempDir({ prefix: "codex-bypass-home-" });
-  const cwd = await Deno.makeTempDir({ prefix: "codex-bypass-cwd-" });
+  const home = await Deno.makeTempDir({ prefix: "codex-pmg-home-" });
+  const cwd = await Deno.makeTempDir({ prefix: "codex-pmg-cwd-" });
   Deno.env.set("HOME", home);
   return { home, cwd };
 }
 
-Deno.test("isBypassPrompt: matches $bypass-plan-gate variants only", () => {
-  assertEquals(isBypassPrompt("$bypass-plan-gate"), true);
-  assertEquals(isBypassPrompt("  $bypass-plan-gate"), true);
-  assertEquals(isBypassPrompt("$bypass-plan-gate reason"), true);
-  assertEquals(isBypassPrompt("$bypass-plan-gate\nreason"), true);
+Deno.test("isBypassPrompt: matches $plan-marker-grant variants only", () => {
+  assertEquals(isBypassPrompt("$plan-marker-grant"), true);
+  assertEquals(isBypassPrompt("  $plan-marker-grant"), true);
+  assertEquals(isBypassPrompt("$plan-marker-grant reason"), true);
+  assertEquals(isBypassPrompt("$plan-marker-grant\nreason"), true);
 
-  assertEquals(isBypassPrompt("/bypass-plan-gate"), false);
-  assertEquals(isBypassPrompt("$bypass-plan-gate-extra"), false);
-  assertEquals(isBypassPrompt("please $bypass-plan-gate"), false);
+  assertEquals(isBypassPrompt("/plan-marker-grant"), false);
+  assertEquals(isBypassPrompt("$plan-marker-grant-extra"), false);
+  assertEquals(isBypassPrompt("please $plan-marker-grant"), false);
+  assertEquals(isBypassPrompt("$bypass-plan-gate"), false);
   assertEquals(isBypassPrompt(""), false);
 });
 
 Deno.test("activateBypass writes a session/cwd scoped marker", async () => {
   const { cwd } = await setupHome();
   const result = await activateBypass({
-    prompt: "$bypass-plan-gate",
+    prompt: "$plan-marker-grant",
     cwd,
     session_id: "session-1",
   });
@@ -48,11 +49,11 @@ Deno.test("activateBypass requires cwd and session_id", async () => {
   await setupHome();
 
   assertEquals(
-    await activateBypass({ prompt: "$bypass-plan-gate", session_id: "s1" }),
+    await activateBypass({ prompt: "$plan-marker-grant", session_id: "s1" }),
     { activated: false, reason: "missing-fields" },
   );
   assertEquals(
-    await activateBypass({ prompt: "$bypass-plan-gate", cwd: "/tmp" }),
+    await activateBypass({ prompt: "$plan-marker-grant", cwd: "/tmp" }),
     { activated: false, reason: "missing-fields" },
   );
 });
@@ -61,7 +62,7 @@ Deno.test("activateBypass marker path never contains raw session_id", async () =
   const { cwd } = await setupHome();
   const sessionId = "session/with/../slashes && $(echo unsafe)";
   const result = await activateBypass({
-    prompt: "$bypass-plan-gate",
+    prompt: "$plan-marker-grant",
     cwd,
     session_id: sessionId,
   });
@@ -85,12 +86,12 @@ Deno.test("normalizeHookInput accepts only object string fields", () => {
   assertEquals(normalizeHookInput([]), {});
   assertEquals(
     normalizeHookInput({
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
       cwd: 123,
       session_id: "s1",
     }),
     {
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
       cwd: "",
       session_id: "s1",
     },

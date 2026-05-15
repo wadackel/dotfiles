@@ -188,7 +188,7 @@ if (import.meta.main) {
       [
         "[bash-policy] Raw command references ~/.claude/plans/ (gate state directory).",
         "Direct manipulation of plan-gate state markers via Bash is forbidden.",
-        "Use /plan, /impl, or /bypass-plan-gate skills instead.",
+        "Use /plan, /impl, or /plan-marker-grant skills instead.",
         `Blocked: ${command}`,
       ].join("\n"),
     );

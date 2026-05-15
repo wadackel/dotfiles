@@ -3,7 +3,7 @@ import { fromFileUrl } from "jsr:@std/path/from-file-url";
 import { checkGate, type HookInput } from "../../scripts/plan-gate.ts";
 
 const scriptPath = fromFileUrl(
-  new URL("./bypass-plan-gate.ts", import.meta.url),
+  new URL("./plan-marker-grant.ts", import.meta.url),
 );
 
 interface RunResult {
@@ -37,11 +37,11 @@ async function withTempEnv<T>(
 ): Promise<T> {
   const home = await Deno.makeTempDir({
     dir: "/tmp",
-    prefix: "bypass-cli-home-",
+    prefix: "plan-marker-grant-cli-home-",
   });
   const cwd = await Deno.makeTempDir({
     dir: "/tmp",
-    prefix: "bypass-cli-cwd-",
+    prefix: "plan-marker-grant-cli-cwd-",
   });
   try {
     return await run(home, cwd);

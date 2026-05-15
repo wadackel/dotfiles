@@ -510,6 +510,84 @@ local function mo_run(args, input)
   return vim.trim(result)
 end
 
+local function mo_notify_error(message)
+  message = vim.trim(message or "")
+  if message == "" then
+    message = "unknown error"
+  end
+  if message:match("^mo:") then
+    vim.notify(message, vim.log.levels.ERROR)
+  else
+    vim.notify("mo: " .. message, vim.log.levels.ERROR)
+  end
+end
+
+local function mo_is_file_url(url)
+  if type(url) ~= "string" then
+    return false
+  end
+
+  local authority = url:match("^https?://([^/?#]+)")
+  local query = url:match("^https?://[^/?#]+[^?#]*%?([^#]*)")
+  local is_loopback = authority ~= nil
+    and (
+      authority:match("^localhost:%d+$") ~= nil
+      or authority:match("^127%.0%.0%.1:%d+$") ~= nil
+      or authority:match("^%[::1%]:%d+$") ~= nil
+    )
+
+  if not is_loopback or query == nil then
+    return false
+  end
+  for param in query:gmatch("[^&]+") do
+    if param:match("^file=[0-9a-fA-F]+$") then
+      return true
+    end
+  end
+  return false
+end
+
+local function mo_open_files(args)
+  if vim.fn.executable("mo") == 0 then
+    vim.notify("mo is not installed", vim.log.levels.ERROR)
+    return false
+  end
+
+  local cmd = { "mo", "--json", "--no-open" }
+  vim.list_extend(cmd, args)
+  local job = vim.system(cmd, { text = true }):wait()
+  if job.code ~= 0 then
+    mo_notify_error(job.stderr ~= "" and job.stderr or job.stdout)
+    return false
+  end
+
+  local ok, data = pcall(vim.json.decode, job.stdout)
+  if not ok or type(data) ~= "table" then
+    vim.notify("mo: failed to parse open result", vim.log.levels.ERROR)
+    return false
+  end
+
+  local files = data.files
+  local file = type(files) == "table" and files[1] or nil
+  local url = type(file) == "table" and file.url or nil
+  if type(url) ~= "string" or url == "" then
+    vim.notify("mo: no file URL returned", vim.log.levels.ERROR)
+    return false
+  end
+  if not mo_is_file_url(url) then
+    vim.notify("mo: unsafe file URL returned", vim.log.levels.ERROR)
+    return false
+  end
+
+  local open_job = vim.system({ "/usr/bin/open", url }, { text = true }):wait()
+  if open_job.code ~= 0 then
+    mo_notify_error(open_job.stderr ~= "" and open_job.stderr or open_job.stdout)
+    return false
+  end
+
+  return true
+end
+
 vim.api.nvim_create_user_command("MoOpen", function(opts)
   local file = vim.fn.expand("%:p")
   if file == "" then
@@ -520,9 +598,9 @@ vim.api.nvim_create_user_command("MoOpen", function(opts)
   if opts.args ~= "" then
     vim.list_extend(args, { "--target", opts.args })
   end
-  table.insert(args, "--open")
+  table.insert(args, "--")
   table.insert(args, file)
-  mo_run(args)
+  mo_open_files(args)
 end, { nargs = "?" })
 
 vim.api.nvim_create_user_command("MoStatus", function()
@@ -579,7 +657,6 @@ keymap({ "n" }, "<Space>ms", "<cmd>MoStatus<CR>")
 keymap({ "n" }, "<Space>mq", "<cmd>MoShutdown<CR>")
 keymap({ "n" }, "<Space>mb", "<cmd>MoBrowse<CR>")
 keymap({ "n" }, "<Space>mc", "<cmd>MoClear<CR>")
-
 
 -- =============================================================
 -- Agent Prompt Workflow
@@ -813,7 +890,6 @@ keymap({ "n" }, "<Leader>af", ":AgentPromptFinish<CR>", { desc = "Agent prompt: 
 AP.resolve_file = ap_resolve_file
 AP.format_ref = ap_format_ref
 _G.AP = AP
-
 
 -- =============================================================
 -- Plugins
@@ -1965,12 +2041,11 @@ require("lazy").setup({
           if #target.nodes == 0 then
             return
           end
-          local args = { "--open" }
+          local args = { "--" }
           for _, node in ipairs(target.nodes) do
             table.insert(args, node.path)
           end
-          mo_run(args)
-          if target.origin == "marks" then
+          if mo_open_files(args) and target.origin == "marks" then
             builtin._clear_marks(ctx.store)
             ctx.buffer:render(ctx.store)
           end

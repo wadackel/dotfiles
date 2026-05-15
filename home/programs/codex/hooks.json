@@ -37,7 +37,7 @@
           {
             "type": "command",
             "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/scripts/codex-bypass-plan-gate-tracker.ts\" UserPromptSubmit'"
+            "command": "sh -c '\"$HOME/.codex/scripts/codex-plan-marker-grant-tracker.ts\" UserPromptSubmit'"
           }
         ]
       }

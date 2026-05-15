@@ -16,14 +16,14 @@
 //   2. patch edits only bootstrap gate files → allow (bootstrap exception)
 //   3. all patched files are outside cwd     → allow (per-cwd gate scope)
 //   4. ~/.codex/plans/.active-<hash> valid   → allow (active marker; mtime < 24h)
-//   5. session/cwd bypass marker valid       → allow (user typed $bypass-plan-gate)
+//   5. session/cwd bypass marker valid       → allow (user typed $plan-marker-grant)
 //   6. otherwise                             → block with hint mentioning
 //                                              $plan or $impl
 
 const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 const BOOTSTRAP_INFRA_REGEX =
-  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker|codex-plan-marker|codex-bypass-plan-gate-tracker)\.ts)$/;
+  /^\/Users\/[^/]+\/dotfiles\/home\/programs\/codex\/(?:hooks\.json|scripts\/(?:codex-plan-gate|codex-impl-approval-tracker|codex-plan-marker|codex-plan-marker-grant-tracker)\.ts)$/;
 
 export interface GateInput {
   hook_event_name?: string;

@@ -16,7 +16,7 @@ import {
 const CODEX_INFRA =
   "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-gate.ts";
 const CODEX_BYPASS_INFRA =
-  "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-bypass-plan-gate-tracker.ts";
+  "/Users/wadackel/dotfiles/home/programs/codex/scripts/codex-plan-marker-grant-tracker.ts";
 const CODEX_SKILL_PATH =
   "/Users/wadackel/dotfiles/home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PATH =
@@ -115,7 +115,7 @@ Deno.test("scenario 2b: active marker valid takes precedence over bypass", async
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -136,7 +136,7 @@ Deno.test("scenario 2c: bypass marker overrides expired active marker", async ()
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -184,7 +184,7 @@ Deno.test("scenario 4b: bypass marker overrides pending-only marker", async () =
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -201,7 +201,7 @@ Deno.test("scenario 4c: bypass marker allows same session and cwd", async () => 
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -218,7 +218,7 @@ Deno.test("scenario 4d: bypass marker does not allow different session", async (
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -235,7 +235,7 @@ Deno.test("scenario 4e: bypass marker does not allow missing session", async () 
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -252,7 +252,7 @@ Deno.test("scenario 4e.1: non-string session_id is treated as missing", async ()
     await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
   });
   Deno.env.set("HOME", home);
@@ -296,7 +296,7 @@ Deno.test("scenario 4h: wrong cwd hash bypass marker is treated as absent", asyn
     const info = await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
     const marker = JSON.parse(await Deno.readTextFile(info.path));
     marker.cwdHash = "wrong";
@@ -315,7 +315,7 @@ Deno.test("scenario 4i: wrong session hash bypass marker is treated as absent", 
     const info = await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
     const marker = JSON.parse(await Deno.readTextFile(info.path));
     marker.sessionHash = "wrong";
@@ -334,7 +334,7 @@ Deno.test("scenario 4i.1: wrong cwd field bypass marker is treated as absent", a
     const info = await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
     const marker = JSON.parse(await Deno.readTextFile(info.path));
     marker.cwd = "/tmp/wrong";
@@ -353,7 +353,7 @@ Deno.test("scenario 4i.2: missing required bypass marker fields are treated as a
     const info = await activateBypassMarker({
       cwd: c,
       session_id: "session-1",
-      prompt: "$bypass-plan-gate",
+      prompt: "$plan-marker-grant",
     });
     const marker = JSON.parse(await Deno.readTextFile(info.path));
     delete marker.createdAt;

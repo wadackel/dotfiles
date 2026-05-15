@@ -1,12 +1,13 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env
 
 // PreToolUse hook (matcher: "Edit|Write|MultiEdit"):
-// Gates edits to files under cwd on /plan-generated cwd-hash marker.
+// Gates edits to files under cwd on /plan-generated session+cwd-hash marker.
 // - Marker files under ~/.claude/plans/ (basename matching .active-*, .pending-*, .bypass-plan-gate-*) are always denied.
 // - Files under an infra allowlist (dotfiles/home/programs/claude/{CLAUDE.md,settings.json,scripts/**}) are always allowed.
 // - Files outside cwd are always allowed.
-// - Files under cwd require a valid cwd-hash marker at ~/.claude/plans/.active-<hash> (mtime < 24h).
+// - Files under cwd require a valid session+cwd marker at ~/.claude/plans/.active-<cwd-hash>-<session-hash> (mtime < 24h).
 // - Missing marker or expired marker → block with instruction to run `/plan`.
+// - Missing session_id (hook stdin) → block (fail-closed; cannot identify session).
 
 // --- Constants ---
 
@@ -63,6 +64,14 @@ export function isPlansMarkerPath(abs: string): boolean {
   return PLANS_MARKER_BASENAME_REGEX.test(basename);
 }
 
+export interface MarkerPaths {
+  plansDir: string;
+  cwdHash: string;
+  sessionHash: string;
+  activePath: string;
+  pendingPath: string;
+}
+
 export interface BypassMarkerInfo {
   plansDir: string;
   path: string;
@@ -115,38 +124,6 @@ export async function cwdHash(cwd: string): Promise<string> {
     .slice(0, 16);
 }
 
-export type CwdMarkerState = "valid" | "expired" | "absent";
-
-export function cwdMarkerPath(hash: string): string {
-  const home = Deno.env.get("HOME") ?? "";
-  return `${home}/.claude/plans/.active-${hash}`;
-}
-
-export async function cwdMarkerState(cwd: string): Promise<CwdMarkerState> {
-  const hash = await cwdHash(cwd);
-  const path = cwdMarkerPath(hash);
-  try {
-    const stat = await Deno.stat(path);
-    const mtime = stat.mtime?.getTime() ?? 0;
-    return Date.now() - mtime < CWD_MARKER_TTL_MS ? "valid" : "expired";
-  } catch {
-    return "absent";
-  }
-}
-
-async function hasPendingMarker(hash: string): Promise<boolean> {
-  const home = Deno.env.get("HOME") ?? "";
-  const path = `${home}/.claude/plans/.pending-${hash}`;
-  try {
-    await Deno.stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- Bypass marker helpers (codex-compatible schema) ---
-
 export async function sessionHash(sessionId: string): Promise<string> {
   const data = new TextEncoder().encode(sessionId);
   const buf = await crypto.subtle.digest("SHA-256", data);
@@ -163,6 +140,60 @@ function homeDir(): string {
   }
   return home;
 }
+
+// Session+cwd 用の marker path 計算。bypassMarkerInfo と同じ命名規則 (`-<cwdHash>-<sessionHash>`)
+// を使うことで、isPlansMarkerPath の prefix-only regex で 3 種類の marker をまとめて判別できる。
+// session_id 非空は呼び出し側で保証する前提。
+export async function markerPaths(
+  cwd: string,
+  sessionId: string,
+): Promise<MarkerPaths> {
+  if (!sessionId || !sessionId.trim()) {
+    throw new Error("session_id is required");
+  }
+  const home = homeDir();
+  const cwdMarkerHash = await cwdHash(cwd);
+  const sessionMarkerHash = await sessionHash(sessionId);
+  const plansDir = `${home}/.claude/plans`;
+  return {
+    plansDir,
+    cwdHash: cwdMarkerHash,
+    sessionHash: sessionMarkerHash,
+    activePath: `${plansDir}/.active-${cwdMarkerHash}-${sessionMarkerHash}`,
+    pendingPath: `${plansDir}/.pending-${cwdMarkerHash}-${sessionMarkerHash}`,
+  };
+}
+
+export type CwdMarkerState = "valid" | "expired" | "absent";
+
+export async function cwdMarkerState(
+  cwd: string,
+  sessionId: string,
+): Promise<CwdMarkerState> {
+  const paths = await markerPaths(cwd, sessionId);
+  try {
+    const stat = await Deno.stat(paths.activePath);
+    const mtime = stat.mtime?.getTime() ?? 0;
+    return Date.now() - mtime < CWD_MARKER_TTL_MS ? "valid" : "expired";
+  } catch {
+    return "absent";
+  }
+}
+
+async function hasPendingMarker(
+  cwd: string,
+  sessionId: string,
+): Promise<boolean> {
+  const paths = await markerPaths(cwd, sessionId);
+  try {
+    await Deno.stat(paths.pendingPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- Bypass marker helpers (codex-compatible schema) ---
 
 export async function bypassMarkerInfo(
   cwd: string,
@@ -289,7 +320,7 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
       reason: [
         `${filePath} は plan-gate 自身の marker file です。`,
         "active / pending / bypass-plan-gate マーカーの直接編集は機構的に禁止されています。",
-        "marker を変更したい場合は対応する skill (/plan, /impl, /bypass-plan-gate) を経由してください。",
+        "marker を変更したい場合は対応する skill (/plan, /impl, /plan-marker-grant) を経由してください。",
       ].join("\n"),
     };
   }
@@ -302,12 +333,32 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     return { kind: "allow", reason: "outside-cwd" };
   }
 
-  const state = await cwdMarkerState(cwd);
+  // Session_id required before any session-scoped marker lookup. Fail-closed
+  // (block) on empty / whitespace-only / non-string session_id — without a
+  // real session identifier neither active nor bypass marker can be keyed
+  // for this session, so falling through would emit a misleading "no /plan
+  // yet" message instead of revealing the real hook payload issue. Trim is
+  // defense-in-depth: a whitespace-only string would otherwise hash to a
+  // deterministic value with no real session behind it.
+  const sessionId =
+    (typeof input.session_id === "string" ? input.session_id : "").trim();
+  if (!sessionId) {
+    return {
+      kind: "block",
+      reason: [
+        "hook input から session_id を取得できませんでした。",
+        `cwd 配下の ${filePath} への編集は block されます。`,
+        "session が識別できないため plan-gate は marker を判定できません。",
+        "hook payload が想定外の形である可能性があります (Claude Code を最新版に更新してください)。",
+      ].join("\n"),
+    };
+  }
+
+  const state = await cwdMarkerState(cwd, sessionId);
   if (state === "valid") {
     return { kind: "allow", reason: "marker-valid" };
   }
 
-  const sessionId = typeof input.session_id === "string" ? input.session_id : "";
   if (await hasValidBypassMarker(cwd, sessionId)) {
     return { kind: "allow", reason: "bypass-valid" };
   }
@@ -315,13 +366,12 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
   let reason: string;
   if (state === "expired") {
     reason = [
-      "/plan の cwd marker が 24 時間を経過して期限切れです。",
+      "このセッションの /plan marker が 24 時間を経過して期限切れです。",
       `${filePath} への編集は block されます。`,
       "`/plan <実装したい内容>` で再実行してください。",
     ].join("\n");
   } else {
-    const hash = await cwdHash(cwd);
-    const pendingExists = await hasPendingMarker(hash);
+    const pendingExists = await hasPendingMarker(cwd, sessionId);
     reason = pendingExists
       ? [
         "計画は作成されていますが、まだユーザーによって承認されていません。",

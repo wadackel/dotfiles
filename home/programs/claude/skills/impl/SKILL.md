@@ -1,6 +1,7 @@
 ---
 name: impl
-description: Executes the plan task by task. Per task — implement, verify acceptance criteria, optionally run simplify-review on large diffs, mark complete. Final gate is /completion-audit → /subagent-review. /santa-loop is opt-in (user-invoked only, not part of the default flow). Use after /plan completes. Triggers include /impl / 実行して / 実装開始 / 作業を進めて / implement the plan.
+description: Executes the plan produced by /plan task by task. Per task — implement, verify acceptance criteria, optionally run simplify-review on large diffs, mark complete. Final gate is /completion-audit → /subagent-review.
+disable-model-invocation: true
 ---
 
 # /impl
@@ -15,17 +16,19 @@ Executes the plan produced by `/plan` task by task. Single source of truth for t
 
 ## Prerequisites
 
-`/impl` reads the active plan from the cwd-hash marker that `/plan` Phase 6 created **and the user explicitly approved**.
+`/impl` reads the active plan from the session+cwd-hash marker that `/plan` Phase 6 created **and the user explicitly approved**.
 
 ```
-ACTIVE  = ~/.claude/plans/.active-<sha256(realpath $PWD) | hex slice 16>
-PENDING = ~/.claude/plans/.pending-<...>
+ACTIVE  = ~/.claude/plans/.active-<cwd-hash:16hex>-<session-hash:32hex>
+PENDING = ~/.claude/plans/.pending-<cwd-hash:16hex>-<session-hash:32hex>
 ```
 
-Approval gate — check before any work using the deterministic marker helper. The agent must not manually compose cwd hashes or marker paths:
+The marker is session-scoped: each Claude session has its own `<session-hash>` derived from the runtime `session_id`. A stale active marker from a different session in the same cwd cannot grant edit rights to the current session, so `/plan` must be re-run for every session.
+
+Approval gate — check before any work using the deterministic marker helper. The agent must not manually compose cwd / session hashes or marker paths. `$CLAUDE_CODE_SESSION_ID` is the Bash-tool-visible env var (note the `CLAUDE_CODE_` prefix; this is distinct from the `CLAUDE_SESSION_ID` exposed only inside the `!`-substitution syntax used by `/plan-marker-grant`):
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$PWD"
+deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$PWD" "$CLAUDE_CODE_SESSION_ID"
 ```
 
 The helper's stdout is the active plan path. Proceed only when it exits 0.

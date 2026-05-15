@@ -1,7 +1,8 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
 
 // UserPromptSubmit hook:
-// Promotes ~/.claude/plans/.pending-<cwd-hash> → ~/.claude/plans/.active-<cwd-hash>
+// Promotes ~/.claude/plans/.pending-<cwd-hash>-<session-hash> →
+//          ~/.claude/plans/.active-<cwd-hash>-<session-hash>
 // when the user types `/impl` as the first slash command of their prompt.
 //
 // - Only the user's actual keystroke fires UserPromptSubmit; AI Skill-tool
@@ -9,6 +10,10 @@
 //   user-typed approval from AI self-invocation.
 // - fail-open silent: any I/O / parse error → log to stderr and exit 0
 //   (matches plan-gate.ts policy; never blocks the user prompt itself).
+// - session_id missing → silent no-op. We cannot identify which session's
+//   pending marker to promote, and blocking the prompt would be UX-hostile.
+//   The plan-gate (fail-closed on missing session_id) is the safety net
+//   for the edit side; this hook only forfeits the promote step.
 
 import { promote, type PromoteResult } from "./plan-marker.ts";
 
@@ -25,6 +30,7 @@ const APPROVAL_REGEX = /^\/impl(\s|$)/;
 export interface HookInput {
   prompt?: string;
   cwd?: string;
+  session_id?: string;
 }
 
 // --- Helpers ---
@@ -41,12 +47,14 @@ if (import.meta.main) {
     const input: HookInput = JSON.parse(raw);
     const prompt = input.prompt ?? "";
     const cwd = input.cwd ?? "";
+    const sessionId =
+      (typeof input.session_id === "string" ? input.session_id : "").trim();
 
-    if (!cwd || !isApprovalPrompt(prompt)) {
+    if (!cwd || !sessionId || !isApprovalPrompt(prompt)) {
       Deno.exit(0);
     }
 
-    const result = await promote(cwd);
+    const result = await promote(cwd, sessionId);
     if (result.reason === "io-error") {
       console.error(
         `[plan-approval-tracker] promote failed: ${

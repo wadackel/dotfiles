@@ -1,6 +1,100 @@
 local wezterm = require("wezterm")
 
 local MO_BIN = "/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin/mo"
+local TMUX_BIN = "/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin/tmux"
+
+local function trim(value)
+  return (value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function path_exists(path)
+  local success = wezterm.run_child_process({ "/bin/test", "-e", path })
+  return success
+end
+
+local function tmux(args)
+  local command = { TMUX_BIN }
+  for _, arg in ipairs(args) do
+    table.insert(command, arg)
+  end
+  local success, stdout = wezterm.run_child_process(command)
+  if not success then
+    return nil
+  end
+  return stdout
+end
+
+local function tmux_shared_window_cwd()
+  local client_count = 0
+  local client_session
+  for session in (tmux({ "list-clients", "-F", "#{client_session}" }) or ""):gmatch("[^\r\n]+") do
+    client_count = client_count + 1
+    if client_count > 1 then
+      return nil
+    end
+    client_session = session
+  end
+  if client_count ~= 1 or client_session == nil then
+    return nil
+  end
+
+  local active_window = trim(tmux({ "display-message", "-t", client_session, "-p", "#{window_id}" }))
+  if active_window == "" then
+    return nil
+  end
+
+  local shared_cwd
+  for cwd in (tmux({ "list-panes", "-t", active_window, "-F", "#{pane_current_path}" }) or ""):gmatch("[^\r\n]+") do
+    cwd = trim(cwd)
+    if cwd == "" or cwd:sub(1, 1) ~= "/" then
+      return nil
+    end
+    if shared_cwd == nil then
+      shared_cwd = cwd
+    elseif shared_cwd ~= cwd then
+      return nil
+    end
+  end
+
+  return shared_cwd
+end
+
+local function log_mo_error(message)
+  message = (message or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if message == "" then
+    message = "unknown error"
+  end
+  if message:match("^mo:") then
+    wezterm.log_error(message)
+  else
+    wezterm.log_error("mo: " .. message)
+  end
+end
+
+local function is_mo_file_url(url)
+  if type(url) ~= "string" then
+    return false
+  end
+
+  local authority = url:match("^https?://([^/?#]+)")
+  local query = url:match("^https?://[^/?#]+[^?#]*%?([^#]*)")
+  local is_loopback = authority ~= nil
+    and (
+      authority:match("^localhost:%d+$") ~= nil
+      or authority:match("^127%.0%.0%.1:%d+$") ~= nil
+      or authority:match("^%[::1%]:%d+$") ~= nil
+    )
+
+  if not is_loopback or query == nil then
+    return false
+  end
+  for param in query:gmatch("[^&]+") do
+    if param:match("^file=[0-9a-fA-F]+$") then
+      return true
+    end
+  end
+  return false
+end
 
 wezterm.on("gui-startup", function()
   local _, _, window = wezterm.mux.spawn_window({})
@@ -21,6 +115,11 @@ wezterm.on("open-uri", function(window, pane, uri)
 
   target = target:gsub(":%d+:%d+$", ""):gsub(":%d+$", "")
 
+  local relative_target = nil
+  if target:sub(1, 1) ~= "/" and target:sub(1, 2) ~= "~/" then
+    relative_target = target
+  end
+
   if target:sub(1, 2) == "~/" then
     target = (os.getenv("HOME") or "") .. target:sub(2)
   end
@@ -37,6 +136,13 @@ wezterm.on("open-uri", function(window, pane, uri)
     end
   end
 
+  if relative_target and not path_exists(target) then
+    local cwd = tmux_shared_window_cwd()
+    if cwd then
+      target = cwd:gsub("/$", "") .. "/" .. relative_target
+    end
+  end
+
   -- 制御バイト混入を拒否（OSC 8 / passthrough 経由で与えられた攻撃ペイロードを弾く）
   if target:find("[%z\1-\31\127]") then
     return false
@@ -48,7 +154,31 @@ wezterm.on("open-uri", function(window, pane, uri)
     target = "./" .. target
   end
 
-  wezterm.background_child_process({ MO_BIN, "--open", "--", target })
+  local success, stdout, stderr = wezterm.run_child_process({ MO_BIN, "--json", "--no-open", "--", target })
+  if not success then
+    log_mo_error(stderr ~= "" and stderr or stdout)
+    return false
+  end
+
+  local ok, data = pcall(wezterm.json_parse, stdout)
+  if not ok or type(data) ~= "table" then
+    log_mo_error("failed to parse open result")
+    return false
+  end
+
+  local files = data.files
+  local file = type(files) == "table" and files[1] or nil
+  local url = type(file) == "table" and file.url or nil
+  if type(url) ~= "string" or url == "" then
+    log_mo_error("no file URL returned")
+    return false
+  end
+  if not is_mo_file_url(url) then
+    log_mo_error("unsafe file URL returned")
+    return false
+  end
+
+  wezterm.open_with(url)
   return false
 end)
 

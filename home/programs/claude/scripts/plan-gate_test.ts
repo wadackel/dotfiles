@@ -5,11 +5,11 @@ import {
   canonical,
   checkGate,
   cwdHash,
-  cwdMarkerPath,
   type HookInput,
   isInfraPath,
   isPlansMarkerPath,
   isUnderCwd,
+  markerPaths,
   plansDirPath,
 } from "./plan-gate.ts";
 
@@ -17,11 +17,12 @@ import {
 
 async function withTempMarker<T>(
   cwd: string,
+  sessionId: string,
   mtimeOffsetMs: number,
   run: () => Promise<T>,
 ): Promise<T> {
-  const hash = await cwdHash(cwd);
-  const path = cwdMarkerPath(hash);
+  const paths = await markerPaths(cwd, sessionId);
+  const path = paths.activePath;
   await Deno.mkdir(path.substring(0, path.lastIndexOf("/")), {
     recursive: true,
   });
@@ -124,7 +125,30 @@ Deno.test("canonical: returns input for nonexistent path (fallback)", async () =
   assertEquals(await canonical(nonexistent), nonexistent);
 });
 
-// --- checkGate: the 5 scenarios from the plan ---
+Deno.test("markerPaths: returns session+cwd scoped active/pending paths", async () => {
+  const paths = await markerPaths("/Users/alice/project", "session-X");
+  // cwdHash is 16 hex, sessionHash is 32 hex.
+  assertStringIncludes(paths.activePath, "/.claude/plans/.active-");
+  assertStringIncludes(paths.pendingPath, "/.claude/plans/.pending-");
+  assertEquals(paths.cwdHash.length, 16);
+  assertEquals(paths.sessionHash.length, 32);
+  assertStringIncludes(paths.activePath, paths.cwdHash);
+  assertStringIncludes(paths.activePath, paths.sessionHash);
+  assertStringIncludes(paths.pendingPath, paths.cwdHash);
+  assertStringIncludes(paths.pendingPath, paths.sessionHash);
+});
+
+Deno.test("markerPaths: throws on empty session_id", async () => {
+  let threw = false;
+  try {
+    await markerPaths("/Users/alice/project", "");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+// --- checkGate: the scenarios from the plan ---
 
 Deno.test("checkGate #1: missing file_path → allow (fail-open)", async () => {
   const input: HookInput = { cwd: "/Users/alice/project" };
@@ -145,6 +169,7 @@ Deno.test("checkGate #2: infra path (CLAUDE.md) → allow", async () => {
       file_path: "/Users/alice/dotfiles/home/programs/claude/CLAUDE.md",
     },
     cwd: "/Users/alice/dotfiles",
+    session_id: "test-session",
   };
   const result = await checkGate(input);
   assertEquals(result.kind, "allow");
@@ -157,6 +182,7 @@ Deno.test("checkGate #2: infra path (settings.json) → allow", async () => {
       file_path: "/Users/alice/dotfiles/home/programs/claude/settings.json",
     },
     cwd: "/Users/alice/dotfiles",
+    session_id: "test-session",
   };
   const result = await checkGate(input);
   assertEquals(result.kind, "allow");
@@ -168,18 +194,20 @@ Deno.test("checkGate #2: infra path (scripts/foo.ts) → allow", async () => {
       file_path: "/Users/alice/dotfiles/home/programs/claude/scripts/foo.ts",
     },
     cwd: "/Users/alice/dotfiles",
+    session_id: "test-session",
   };
   const result = await checkGate(input);
   assertEquals(result.kind, "allow");
 });
 
-Deno.test("checkGate #3: outside cwd → allow", async () => {
+Deno.test("checkGate #3: outside cwd → allow (no session_id needed)", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   const other = await Deno.makeTempDir({ dir: "/tmp" });
   try {
     const input: HookInput = {
       tool_input: { file_path: `${other}/foo.md` },
       cwd,
+      // session_id omitted on purpose — outside-cwd allow precedes session_id check
     };
     const result = await checkGate(input);
     assertEquals(result.kind, "allow");
@@ -190,15 +218,16 @@ Deno.test("checkGate #3: outside cwd → allow", async () => {
   }
 });
 
-Deno.test("checkGate #4: cwd-hash marker valid (mtime < 24h) + cwd 内 → allow", async () => {
+Deno.test("checkGate #4: session-scoped active marker valid + cwd 内 → allow", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   const file = `${cwd}/a.ts`;
   await Deno.writeTextFile(file, "");
   try {
-    await withTempMarker(cwd, -1000, async () => {
+    await withTempMarker(cwd, "session-A", -1000, async () => {
       const input: HookInput = {
         tool_input: { file_path: file },
         cwd,
+        session_id: "session-A",
       };
       const result = await checkGate(input);
       assertEquals(result.kind, "allow");
@@ -209,7 +238,7 @@ Deno.test("checkGate #4: cwd-hash marker valid (mtime < 24h) + cwd 内 → allow
   }
 });
 
-Deno.test("checkGate #5: marker absent + cwd 内 + infra 外 → block (未実行 message)", async () => {
+Deno.test("checkGate #5: marker absent + cwd 内 → block (未実行 message)", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   const file = `${cwd}/a.ts`;
   await Deno.writeTextFile(file, "");
@@ -217,6 +246,7 @@ Deno.test("checkGate #5: marker absent + cwd 内 + infra 外 → block (未実�
     const input: HookInput = {
       tool_input: { file_path: file },
       cwd,
+      session_id: "session-A",
     };
     const result = await checkGate(input);
     assertEquals(result.kind, "block");
@@ -229,21 +259,18 @@ Deno.test("checkGate #5: marker absent + cwd 内 + infra 外 → block (未実�
   }
 });
 
-Deno.test("checkGate #5b: pending marker exists + active absent + cwd 内 → block (承認待ち message)", async () => {
+Deno.test("checkGate #5b: pending marker exists + active absent + 同 session → block (承認待ち message)", async () => {
   const cwd = await Deno.makeTempDir({ dir: "/tmp" });
   const file = `${cwd}/a.ts`;
   await Deno.writeTextFile(file, "");
-  const hash = await cwdHash(cwd);
-  const home = Deno.env.get("HOME") ?? "";
-  const pendingPath = `${home}/.claude/plans/.pending-${hash}`;
-  await Deno.mkdir(pendingPath.substring(0, pendingPath.lastIndexOf("/")), {
-    recursive: true,
-  });
-  await Deno.writeTextFile(pendingPath, "test-plan-path");
+  const paths = await markerPaths(cwd, "session-A");
+  await Deno.mkdir(paths.plansDir, { recursive: true });
+  await Deno.writeTextFile(paths.pendingPath, "test-plan-path");
   try {
     const input: HookInput = {
       tool_input: { file_path: file },
       cwd,
+      session_id: "session-A",
     };
     const result = await checkGate(input);
     assertEquals(result.kind, "block");
@@ -254,7 +281,7 @@ Deno.test("checkGate #5b: pending marker exists + active absent + cwd 内 → bl
     }
   } finally {
     try {
-      await Deno.remove(pendingPath);
+      await Deno.remove(paths.pendingPath);
     } catch {
       /* already cleaned */
     }
@@ -267,11 +294,11 @@ Deno.test("checkGate #5: marker expired (mtime > 24h) + cwd 内 → block (期�
   const file = `${cwd}/a.ts`;
   await Deno.writeTextFile(file, "");
   try {
-    // 25h 前にずらす
-    await withTempMarker(cwd, -25 * 60 * 60 * 1000, async () => {
+    await withTempMarker(cwd, "session-A", -25 * 60 * 60 * 1000, async () => {
       const input: HookInput = {
         tool_input: { file_path: file },
         cwd,
+        session_id: "session-A",
       };
       const result = await checkGate(input);
       assertEquals(result.kind, "block");
@@ -283,6 +310,126 @@ Deno.test("checkGate #5: marker expired (mtime > 24h) + cwd 内 → block (期�
   } finally {
     await Deno.remove(cwd, { recursive: true });
   }
+});
+
+// --- Cross-session isolation (本修正の invariant test) ---
+
+Deno.test("checkGate cross-session: session A の active marker は session B からは absent → block", async () => {
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  const file = `${cwd}/a.ts`;
+  await Deno.writeTextFile(file, "");
+  try {
+    await withTempMarker(cwd, "session-A", -1000, async () => {
+      // Session A の active marker は存在するが、session B の hook input で gate を叩く
+      const input: HookInput = {
+        tool_input: { file_path: file },
+        cwd,
+        session_id: "session-B",
+      };
+      const result = await checkGate(input);
+      assertEquals(result.kind, "block");
+      if (result.kind === "block") {
+        assertStringIncludes(result.reason, "まだ /plan が実行されていません");
+      }
+    });
+  } finally {
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
+Deno.test("checkGate cross-session: session A の pending marker は session B からは無関係 → block (未実行 message)", async () => {
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  const file = `${cwd}/a.ts`;
+  await Deno.writeTextFile(file, "");
+  const paths = await markerPaths(cwd, "session-A");
+  await Deno.mkdir(paths.plansDir, { recursive: true });
+  await Deno.writeTextFile(paths.pendingPath, "test-plan-path");
+  try {
+    const input: HookInput = {
+      tool_input: { file_path: file },
+      cwd,
+      session_id: "session-B",
+    };
+    const result = await checkGate(input);
+    assertEquals(result.kind, "block");
+    if (result.kind === "block") {
+      // Session B には自分の pending が存在しないので「未実行」分岐に落ちる
+      assertStringIncludes(result.reason, "まだ /plan が実行されていません");
+    }
+  } finally {
+    try {
+      await Deno.remove(paths.pendingPath);
+    } catch {
+      /* already cleaned */
+    }
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
+// --- session_id missing → block (fail-closed, BEFORE bypass check) ---
+
+Deno.test("checkGate session_id missing: cwd 内 + session_id undefined → block (session 識別不能 message)", async () => {
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  const file = `${cwd}/a.ts`;
+  await Deno.writeTextFile(file, "");
+  try {
+    const input: HookInput = {
+      tool_input: { file_path: file },
+      cwd,
+      // session_id omitted
+    };
+    const result = await checkGate(input);
+    assertEquals(result.kind, "block");
+    if (result.kind === "block") {
+      assertStringIncludes(result.reason, "session_id");
+    }
+  } finally {
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
+Deno.test("checkGate session_id missing: cwd 内 + session_id 空文字 → block", async () => {
+  const cwd = await Deno.makeTempDir({ dir: "/tmp" });
+  const file = `${cwd}/a.ts`;
+  await Deno.writeTextFile(file, "");
+  try {
+    const input: HookInput = {
+      tool_input: { file_path: file },
+      cwd,
+      session_id: "",
+    };
+    const result = await checkGate(input);
+    assertEquals(result.kind, "block");
+    if (result.kind === "block") {
+      assertStringIncludes(result.reason, "session_id");
+    }
+  } finally {
+    await Deno.remove(cwd, { recursive: true });
+  }
+});
+
+Deno.test("checkGate session_id missing: valid bypass marker exists でも session_id 欠落で block (Adversarial A4)", async () => {
+  // session_id 欠落の早期 block は bypass marker check より前に倒れる必要がある。
+  await withTempBypassHome(
+    async (_home, c) => {
+      await activateBypassMarker({
+        cwd: c,
+        session_id: "session-A",
+        prompt: "/plan-marker-grant",
+      });
+    },
+    async (cwd, file) => {
+      const result = await checkGate({
+        tool_input: { file_path: file },
+        cwd,
+        // session_id omitted on purpose
+      });
+      assertEquals(result.kind, "block");
+      if (result.kind === "block") {
+        assertStringIncludes(result.reason, "session_id");
+      }
+    },
+  );
 });
 
 // --- Bypass marker scenarios ---
@@ -333,7 +480,7 @@ Deno.test("bypass #1: valid bypass marker + active absent → allow bypass-valid
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -352,14 +499,13 @@ Deno.test("bypass #1: valid bypass marker + active absent → allow bypass-valid
 
 Deno.test("bypass #2: active valid + bypass marker → marker-valid (active 優先)", async () => {
   await withTempBypassHome(
-    async (home, c) => {
-      const hash = await cwdHash(c);
-      const activePath = `${home}/.claude/plans/.active-${hash}`;
-      await Deno.writeTextFile(activePath, "/some/plan.md");
+    async (_home, c) => {
+      const paths = await markerPaths(c, "session-1");
+      await Deno.writeTextFile(paths.activePath, "/some/plan.md");
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -378,15 +524,14 @@ Deno.test("bypass #2: active valid + bypass marker → marker-valid (active 優�
 
 Deno.test("bypass #3: bypass overrides expired active marker", async () => {
   await withTempBypassHome(
-    async (home, c) => {
-      const hash = await cwdHash(c);
-      const activePath = `${home}/.claude/plans/.active-${hash}`;
-      await Deno.writeTextFile(activePath, "/some/plan.md");
-      await setExpired(activePath);
+    async (_home, c) => {
+      const paths = await markerPaths(c, "session-1");
+      await Deno.writeTextFile(paths.activePath, "/some/plan.md");
+      await setExpired(paths.activePath);
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -405,14 +550,13 @@ Deno.test("bypass #3: bypass overrides expired active marker", async () => {
 
 Deno.test("bypass #4: bypass overrides pending-only state", async () => {
   await withTempBypassHome(
-    async (home, c) => {
-      const hash = await cwdHash(c);
-      const pendingPath = `${home}/.claude/plans/.pending-${hash}`;
-      await Deno.writeTextFile(pendingPath, "/some/plan.md");
+    async (_home, c) => {
+      const paths = await markerPaths(c, "session-1");
+      await Deno.writeTextFile(paths.pendingPath, "/some/plan.md");
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -435,7 +579,7 @@ Deno.test("bypass #5: different session_id → block", async () => {
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -449,13 +593,13 @@ Deno.test("bypass #5: different session_id → block", async () => {
   );
 });
 
-Deno.test("bypass #6: missing session_id → block", async () => {
+Deno.test("bypass #6: missing session_id → block (early-return, BEFORE bypass check)", async () => {
   await withTempBypassHome(
     async (_home, c) => {
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -464,6 +608,9 @@ Deno.test("bypass #6: missing session_id → block", async () => {
         cwd,
       });
       assertEquals(result.kind, "block");
+      if (result.kind === "block") {
+        assertStringIncludes(result.reason, "session_id");
+      }
     },
   );
 });
@@ -474,7 +621,7 @@ Deno.test("bypass #7: non-string session_id → block", async () => {
       await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
     },
     async (cwd, file) => {
@@ -528,7 +675,7 @@ Deno.test("bypass #10: wrong cwdHash bypass marker → block", async () => {
       const info = await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
       const marker = JSON.parse(await Deno.readTextFile(info.path));
       marker.cwdHash = "wrong";
@@ -551,7 +698,7 @@ Deno.test("bypass #11: wrong sessionHash bypass marker → block", async () => {
       const info = await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
       const marker = JSON.parse(await Deno.readTextFile(info.path));
       marker.sessionHash = "wrong";
@@ -574,7 +721,7 @@ Deno.test("bypass #12: wrong cwd field bypass marker → block", async () => {
       const info = await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
       const marker = JSON.parse(await Deno.readTextFile(info.path));
       marker.cwd = "/tmp/wrong-path";
@@ -597,7 +744,7 @@ Deno.test("bypass #13: missing createdAt or prompt → block", async () => {
       const info = await activateBypassMarker({
         cwd: c,
         session_id: "session-1",
-        prompt: "/bypass-plan-gate",
+        prompt: "/plan-marker-grant",
       });
       const marker = JSON.parse(await Deno.readTextFile(info.path));
       delete marker.createdAt;
@@ -656,7 +803,9 @@ Deno.test("bypass #15: directory bypass marker → block", async () => {
 Deno.test("isPlansMarkerPath: true for marker basenames under ~/.claude/plans/", () => {
   const dir = plansDirPath();
   assertEquals(isPlansMarkerPath(`${dir}/.active-abc`), true);
+  assertEquals(isPlansMarkerPath(`${dir}/.active-abc-def`), true);
   assertEquals(isPlansMarkerPath(`${dir}/.pending-abc`), true);
+  assertEquals(isPlansMarkerPath(`${dir}/.pending-abc-def`), true);
   assertEquals(isPlansMarkerPath(`${dir}/.bypass-plan-gate-aa-bb.json`), true);
 });
 
@@ -685,10 +834,9 @@ Deno.test("security: write to ~/.claude/plans/.active-* → block", async () => 
   const cwd = await Deno.makeTempDir({ dir: "/tmp", prefix: "security-cwd-" });
   Deno.env.set("HOME", home);
   try {
-    const hash = await cwdHash(cwd);
-    const target = `${home}/.claude/plans/.active-${hash}`;
+    const paths = await markerPaths(cwd, "session-1");
     const result = await checkGate({
-      tool_input: { file_path: target },
+      tool_input: { file_path: paths.activePath },
       cwd,
       session_id: "session-1",
     });

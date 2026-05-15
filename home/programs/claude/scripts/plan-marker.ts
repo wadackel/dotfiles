@@ -1,6 +1,11 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-import { cwdHash, cwdMarkerPath } from "./plan-gate.ts";
+import {
+  type MarkerPaths,
+  markerPaths,
+} from "./plan-gate.ts";
+
+export type { MarkerPaths };
 
 // The shebang uses broad write permission because Deno shebang arguments cannot
 // expand HOME; all write paths are still constrained by markerPaths().
@@ -28,13 +33,6 @@ export type MarkerState =
   | "pending-expired"
   | "absent";
 
-export interface MarkerPaths {
-  hash: string;
-  plansDir: string;
-  activePath: string;
-  pendingPath: string;
-}
-
 export interface MarkerStatus extends MarkerPaths {
   state: MarkerState;
   planPath: string | null;
@@ -51,32 +49,22 @@ function usage(): never {
   console.error(
     [
       "Usage:",
-      "  plan-marker.ts activate-pending <plan-path> [cwd]",
-      "  plan-marker.ts status [cwd]",
-      "  plan-marker.ts require-active [cwd]",
-      "  plan-marker.ts clear-active [cwd]",
+      "  plan-marker.ts activate-pending <plan-path> <cwd> <session-id>",
+      "  plan-marker.ts status <cwd> <session-id>",
+      "  plan-marker.ts require-active <cwd> <session-id>",
+      "  plan-marker.ts clear-active <cwd> <session-id>",
     ].join("\n"),
   );
   Deno.exit(1);
 }
 
-function homeDir(): string {
-  const home = Deno.env.get("HOME");
-  if (!home) {
-    throw new Error("HOME is not set");
+function requireSessionId(sessionId: string | undefined): string {
+  const trimmed = (sessionId ?? "").trim();
+  if (!trimmed) {
+    console.error("session-id is required");
+    Deno.exit(1);
   }
-  return home;
-}
-
-async function markerPaths(cwd: string): Promise<MarkerPaths> {
-  const hash = await cwdHash(cwd);
-  const plansDir = `${homeDir()}/.claude/plans`;
-  return {
-    hash,
-    plansDir,
-    activePath: cwdMarkerPath(hash),
-    pendingPath: `${plansDir}/.pending-${hash}`,
-  };
+  return trimmed;
 }
 
 function absentStatus(paths: MarkerPaths): MarkerStatus {
@@ -227,8 +215,11 @@ function isFresh(info: Deno.FileInfo): boolean {
   return Date.now() - mtime < MARKER_TTL_MS;
 }
 
-export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
-  const paths = await markerPaths(cwd);
+export async function getStatus(
+  cwd: string,
+  sessionId: string,
+): Promise<MarkerStatus> {
+  const paths = await markerPaths(cwd, sessionId);
   const realPlansDir = await existingPlansDir(paths.plansDir);
   if (!realPlansDir) {
     return absentStatus(paths);
@@ -273,12 +264,13 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
 
 export async function activatePending(
   planPath: string,
-  cwd = Deno.cwd(),
+  cwd: string,
+  sessionId: string,
 ): Promise<MarkerPaths> {
   if (!planPath.startsWith("/")) {
     throw new Error("plan path must be absolute");
   }
-  const paths = await markerPaths(cwd);
+  const paths = await markerPaths(cwd, sessionId);
   const realPlansDir = await ensurePlansDir(paths.plansDir);
   const realPlanPath = await validatePlanPath(planPath, realPlansDir);
   try {
@@ -292,8 +284,11 @@ export async function activatePending(
   return paths;
 }
 
-export async function requireActive(cwd = Deno.cwd()): Promise<string> {
-  const status = await getStatus(cwd);
+export async function requireActive(
+  cwd: string,
+  sessionId: string,
+): Promise<string> {
+  const status = await getStatus(cwd, sessionId);
   switch (status.state) {
     case "active":
       if (status.planPath) {
@@ -317,8 +312,11 @@ export async function requireActive(cwd = Deno.cwd()): Promise<string> {
   }
 }
 
-export async function clearActive(cwd = Deno.cwd()): Promise<boolean> {
-  const paths = await markerPaths(cwd);
+export async function clearActive(
+  cwd: string,
+  sessionId: string,
+): Promise<boolean> {
+  const paths = await markerPaths(cwd, sessionId);
   try {
     await Deno.remove(paths.activePath);
     return true;
@@ -330,8 +328,11 @@ export async function clearActive(cwd = Deno.cwd()): Promise<boolean> {
   }
 }
 
-export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
-  const paths = await markerPaths(cwd);
+export async function promote(
+  cwd: string,
+  sessionId: string,
+): Promise<PromoteResult> {
+  const paths = await markerPaths(cwd, sessionId);
   try {
     await Deno.lstat(paths.activePath);
     return { promoted: false, reason: "already-active" };
@@ -347,7 +348,7 @@ export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
 
   let status: MarkerStatus;
   try {
-    status = await getStatus(cwd);
+    status = await getStatus(cwd, sessionId);
   } catch (err) {
     return {
       promoted: false,
@@ -395,32 +396,45 @@ export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
 }
 
 export async function run(args: string[]): Promise<void> {
-  const [command, first, second] = args;
+  const [command, first, second, third] = args;
   if (!command) {
     usage();
   }
 
   if (command === "activate-pending") {
-    if (!first) {
+    if (!first || !second) {
       usage();
     }
-    const paths = await activatePending(first, second ?? Deno.cwd());
+    const sessionId = requireSessionId(third);
+    const paths = await activatePending(first, second, sessionId);
     console.log(paths.pendingPath);
     return;
   }
 
   if (command === "status") {
-    console.log(JSON.stringify(await getStatus(first ?? Deno.cwd()), null, 2));
+    if (!first) {
+      usage();
+    }
+    const sessionId = requireSessionId(second);
+    console.log(JSON.stringify(await getStatus(first, sessionId), null, 2));
     return;
   }
 
   if (command === "require-active") {
-    console.log(await requireActive(first ?? Deno.cwd()));
+    if (!first) {
+      usage();
+    }
+    const sessionId = requireSessionId(second);
+    console.log(await requireActive(first, sessionId));
     return;
   }
 
   if (command === "clear-active") {
-    const removed = await clearActive(first ?? Deno.cwd());
+    if (!first) {
+      usage();
+    }
+    const sessionId = requireSessionId(second);
+    const removed = await clearActive(first, sessionId);
     console.log(removed ? "active-cleared" : "active-absent");
     return;
   }

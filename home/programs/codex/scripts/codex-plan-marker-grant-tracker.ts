@@ -1,16 +1,23 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
 
 // UserPromptSubmit hook for Codex CLI:
-// Creates a session/cwd scoped bypass marker when the user types
-// `$bypass-plan-gate` as the first non-whitespace token of their prompt.
+// Creates a session/cwd scoped plan-gate marker when the user types
+// `$plan-marker-grant` as the first non-whitespace token of their prompt.
 // The hook never blocks the prompt; it only observes and records state.
+//
+// Internal naming note: the marker disk basename + `BYPASS_REGEX` constant +
+// `activateBypass` / `isBypassPrompt` / `BypassResult` symbols + the imported
+// `activateBypassMarker` / `BypassMarkerInfo` from codex-plan-gate.ts all
+// retain the original `bypass` identifier. The rename targets only the
+// user-facing prompt token, the skill name, the tracker filename, and the
+// log basename. See ../skills/plan-marker-grant/SKILL.md for the rationale.
 
 import {
   activateBypassMarker,
   type BypassMarkerInfo,
 } from "./codex-plan-gate.ts";
 
-const BYPASS_REGEX = /^\s*\$bypass-plan-gate(\s|$)/;
+const BYPASS_REGEX = /^\s*\$plan-marker-grant(\s|$)/;
 
 export interface HookInput {
   prompt?: string;
@@ -58,7 +65,7 @@ async function appendLog(line: string): Promise<void> {
     const dir = `${homeDir()}/.codex/logs`;
     await Deno.mkdir(dir, { recursive: true });
     await Deno.writeTextFile(
-      `${dir}/codex-bypass-plan-gate-tracker.log`,
+      `${dir}/codex-plan-marker-grant-tracker.log`,
       `${new Date().toISOString()} ${line}\n`,
       { append: true },
     );

@@ -1,13 +1,18 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-// /bypass-plan-gate skill implementation.
+// /plan-marker-grant skill implementation.
 //
-// Writes / reads / deletes a session+cwd scoped bypass marker so the plan-gate
+// Writes / reads / deletes a session+cwd scoped plan-gate marker so the plan-gate
 // allows Edit/Write/MultiEdit even without an active /plan marker. Invoked from
 // SKILL.md via `!` preprocessing — the skill body passes argv as
 //   [subcommand, cwd, sessionId]
 // with subcommand expanded from `$ARGUMENTS`. Empty / missing subcommand is
 // treated as "activate".
+//
+// Internal naming note: this script imports `activateBypassMarker`,
+// `bypassMarkerInfo`, `hasValidBypassMarker` from plan-gate.ts. The internal
+// symbols + marker basename retain the original `bypass-plan-gate` identifier
+// intentionally — see SKILL.md for the rationale.
 
 import {
   activateBypassMarker,
@@ -88,7 +93,7 @@ if (import.meta.main) {
     }
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
-    console.error(`[bypass-plan-gate] ${(err as Error).message}`);
+    console.error(`[plan-marker-grant] ${(err as Error).message}`);
     Deno.exit(1);
   }
 }
