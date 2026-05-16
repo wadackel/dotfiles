@@ -36,6 +36,34 @@ For each issue found, provide:
 - **Description**: What is wrong
 - **Suggestion**: Concrete fix
 
+## Language
+
+Write all user-facing prose (issue descriptions, suggestions, expected behavior, notes, summary) in **Japanese**.
+
+Keep the following fields in **English** so downstream parsing works:
+
+- `VERDICT: PASS|FAIL` line
+- Severity labels: `MUST_FIX`, `SHOULD_FIX`, `NIT`, `MEDIUM`, `LOW`, `CRITICAL`, `HIGH`
+- Type labels: `MISSING`, `EXTRA`, `MISUNDERSTOOD`, `INCOMPLETE`
+- Category labels: `READABILITY`, `CONSISTENCY`, `MAINTAINABILITY`, `ROBUSTNESS`, `SIMPLICITY`
+- Section headers: `### Must Fix`, `### Should Fix`, `### Nits`, `### Issues`, `### Notes`, `## Findings`, `## Summary`
+- Empty-section sentinels: `None`, `Empty if none`, `(none)` — used by aggregation to detect populated sections; do not translate
+- Field labels: `File:Line`, `Type`, `Severity`, `Category`, `Description`, `Suggestion`, `Expected`
+- File paths, line numbers, code snippets, command output: as-is
+
+Domain reviewers may use either the Must Fix / Should Fix / Nits schema or the CRITICAL / HIGH / MEDIUM / LOW schema — keep whichever schema your output uses in English.
+
+Example (correct):
+
+  ### Should Fix
+  - **Severity**: SHOULD_FIX
+  - **Category**: READABILITY
+  - **File:Line**: home/programs/claude/scripts/foo.ts:42
+  - **Description**: 変数名 `x` が用途を示しておらず可読性が低い
+  - **Suggestion**: `userCount` に改名
+
+Do NOT translate the section headers, severity tags, empty-section sentinels, or field labels.
+
 ## Output Format
 
 ### Must Fix

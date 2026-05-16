@@ -22,6 +22,42 @@ Skip when:
 - Invocation target is docs-only (`.md` / `.txt` only).
 - User explicitly says "no subagent review".
 
+## Language Policy
+
+All reviewer subagents dispatched by `/subagent-review` MUST follow this policy. The directive text below is the **canonical source** — Step 2 / Step 4 / Step 6 / Step 7 each inline the same block into their dispatch prompt so the reviewer reads it inside its own context.
+
+```
+## Language
+
+Write all user-facing prose (issue descriptions, suggestions, expected behavior, notes, summary) in **Japanese**.
+
+Keep the following fields in **English** so downstream parsing works:
+
+- `VERDICT: PASS|FAIL` line
+- Severity labels: `MUST_FIX`, `SHOULD_FIX`, `NIT`, `MEDIUM`, `LOW`, `CRITICAL`, `HIGH`
+- Type labels: `MISSING`, `EXTRA`, `MISUNDERSTOOD`, `INCOMPLETE`
+- Category labels: `READABILITY`, `CONSISTENCY`, `MAINTAINABILITY`, `ROBUSTNESS`, `SIMPLICITY`
+- Section headers: `### Must Fix`, `### Should Fix`, `### Nits`, `### Issues`, `### Notes`, `## Findings`, `## Summary`
+- Empty-section sentinels: `None`, `Empty if none`, `(none)` — used by aggregation to detect populated sections; do not translate
+- Field labels: `File:Line`, `Type`, `Severity`, `Category`, `Description`, `Suggestion`, `Expected`
+- File paths, line numbers, code snippets, command output: as-is
+
+Domain reviewers may use either the Must Fix / Should Fix / Nits schema or the CRITICAL / HIGH / MEDIUM / LOW schema — keep whichever schema your output uses in English.
+
+Example (correct):
+
+  ### Should Fix
+  - **Severity**: SHOULD_FIX
+  - **Category**: READABILITY
+  - **File:Line**: home/programs/claude/scripts/foo.ts:42
+  - **Description**: 変数名 `x` が用途を示しておらず可読性が低い
+  - **Suggestion**: `userCount` に改名
+
+Do NOT translate the section headers, severity tags, empty-section sentinels, or field labels.
+```
+
+**Sub-rule from CLAUDE.md "Language Defaults For Generated Artifacts":** Machine-contract fields (parsed by downstream tooling) are not part of the generated-artifact language scope. The reviewer's output language is the configured artifact language (Japanese for this user), but the fields listed above retain their canonical English form.
+
 ## Workflow
 
 > **Cross-cutting invariant**: All non-blocker findings (`SHOULD_FIX` / `NIT` / Security `MEDIUM`/`LOW` / Spec populated `### Issues` and `### Notes`) from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission.
@@ -128,6 +164,8 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.
 # For each agent in AGENTS, launch via the Agent tool in the SAME assistant turn (parallel tool calls in a single message).
 ```
 
+When constructing each Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
+
 #### Handling results
 
 Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
@@ -160,6 +198,8 @@ if [ "$DISPATCH_SECURITY" = "1" ]; then
   : # See references/security-trigger-heuristic.md for full rationale
 fi
 ```
+
+When constructing the Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
 
 ## Mandatory Final Output
 
