@@ -24,6 +24,8 @@ Skip when:
 
 ## Workflow
 
+> **Cross-cutting invariant**: All non-blocker findings (`SHOULD_FIX` / `NIT` / Security `MEDIUM`/`LOW` / Spec populated `### Issues` and `### Notes`) from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission.
+
 ### Step 1: Context Collection
 
 1. **Task spec**: Retrieve from `TaskGet` description. For ad-hoc invocation, use `$ARGUMENTS` or ask the user
@@ -159,6 +161,69 @@ if [ "$DISPATCH_SECURITY" = "1" ]; then
 fi
 ```
 
+## Mandatory Final Output
+
+After all stages (Spec / Code Quality / Domain / Security) complete — regardless of overall verdict — `/subagent-review` MUST emit a single aggregated findings block as the last thing in its output. This is a non-skippable invariant: a `PASS` verdict on every stage does NOT exempt this emission.
+
+### Extraction rule
+
+For each stage that ran, take its **last** subagent response (the final round's output, including the `PASS` round when the stage looped through `FAIL` → fix → re-review) and extract every populated section that did not cause that subagent's `FAIL` verdict:
+
+- Code Quality / Domain reviewers: populated `### SHOULD_FIX` and `### NIT` sections.
+- Security: populated `MEDIUM` and `LOW` items (severity names preserved verbatim — do NOT translate to MUST/SHOULD/NIT).
+- Spec Compliance: populated `### Issues` (when stage `VERDICT: PASS`) and `### Notes`.
+- Any other populated non-blocker section emitted by a future reviewer — this rule is intentionally generalized.
+
+Copy each section **verbatim** (file:line, description, suggested fix). Do not paraphrase, summarize, or re-rank.
+
+### Multi-round aggregation rule
+
+When a stage looped through multiple rounds (e.g. Round 1 `FAIL` with `MUST_FIX: A` + `SHOULD_FIX: B,C,D` → fix → Round 2 `PASS` with no SHOULD_FIX listed because the reviewer only re-checked the diff after the fix), take the **union of non-blocker findings across all rounds for that stage, deduped** (by file:line + description). This prevents structural loss of earlier-round SHOULD_FIX items that the final-round reviewer did not re-list.
+
+### Zero-finding shortcut
+
+If every stage has zero non-blocker findings after the union+dedupe pass, emit exactly one line:
+
+```
+Non-blocker findings: none across all stages
+```
+
+Do NOT emit per-stage `(none)` boilerplate.
+
+### Output template (when at least one finding exists)
+
+```
+## Final Findings Report
+
+### Spec — Issues (PASS verdict)
+- <verbatim items, or omit this subsection when empty>
+
+### Spec — Notes
+- <verbatim items, or omit this subsection when empty>
+
+### Code Quality — SHOULD_FIX
+- <verbatim items>
+
+### Code Quality — NIT
+- <verbatim items, 1 line per item, may be condensed for readability>
+
+### Domain (<reviewer-name>) — SHOULD_FIX
+- <verbatim items>
+
+### Domain (<reviewer-name>) — NIT
+- <verbatim items>
+
+### Security — MEDIUM
+- <verbatim items>
+
+### Security — LOW
+- <verbatim items>
+```
+
+Only include subsections for stages/severities that produced findings. Stage-skipped reviewers (e.g. Domain reviewer not triggered because no matching file extension was in the diff) are simply absent from the block — do NOT add `(skipped)` rows.
+
+This block is the canonical hand-off to `/impl`'s final report and MUST be transcribed verbatim downstream.
+
 ## Loop Limits
 
 - **Max 3 attempts per stage** (Spec Compliance and Code Quality independently)
@@ -172,6 +237,7 @@ fi
 - Accepting SHOULD_FIX as a blocker (only MUST_FIX blocks)
 - Retrying the same subagent instead of spawning fresh
 - Proceeding to next task while review has open MUST_FIX issues
+- Suppressing or summarizing SHOULD_FIX / NIT / Spec Notes / Security MEDIUM/LOW findings in the user-facing report when overall verdict is PASS — these MUST flow through the [Mandatory Final Output](#mandatory-final-output) block verbatim
 
 ## Relationship with codex-review
 

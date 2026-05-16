@@ -1,243 +1,243 @@
 # Requirement Clarification Lens
 
-`/plan` Phase 1 PARSE の Requirement Clarification で参照する判断補助。**分類テーブルではなく、見落とし防止の lens として使う**。8 観点は「network of questions」であって、各観点に対して fixed default triage を機械的に当てはめる位置付けではない。
+Decision aid referenced by the `plan` skill's Phase 1 PARSE Requirement Clarification. **Use it as a lens to prevent oversight, not as a classification table.** The eight observations form a "network of questions"; they are NOT a structure where a fixed default triage is mechanically applied per observation.
 
-## 位置付けと目的
+## Role and purpose
 
-- 対象: `/plan` Phase 1 PARSE（main agent が直接 walk を実行）
-- 発動条件: complexity が `small` / `medium` / `large` のいずれか（trivial と xl は対象外）
-- 目的: 実装を誤らないレベルまで user intent を固めること。protocol 消化ではない
-- 進行管理（clarity loop の Step A–F、収束判定、user-confirmation turn 発行ルール）は SKILL.md Phase 1 が source of truth。本 lens は **判断補助（observation の見落とし防止と triage の判断軸）** を owns する
+- Scope: `/plan` Phase 1 PARSE (the main agent performs the walk directly)
+- Trigger: complexity is one of `small` / `medium` / `large` (trivial and xl are out of scope)
+- Purpose: solidify user intent to the level where implementation will not go wrong. Not protocol checklist completion.
+- Process control (the clarity-loop Steps A–F, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md Phase 1 as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
 
 ## Clarity gate: no fixed confirmation cap
 
-`small` / `medium` / `large` は、要件が明確になるまで必要に応じて確認を続ける。進行判断は回数ではなく、plan を壊す不確定が残っているかどうかで決める。
+For `small` / `medium` / `large`, keep confirming as needed until the requirement is clear. Progression is judged not by count but by whether plan-breaking uncertainty remains.
 
-- **Ask の定義**: user の次回答を待つ interaction。Restate、理解確認の prose、`### Requires User Confirmation` への記録は Ask の代替ではない。
-- **追加確認を続ける**: Scope / Success / Failure のような「そのまま進むと plan 全体が無価値化する」高コスト不確定、または user-only / subjective な中心仕様が残っている場合、明確になるまで Ask を続ける。
-- **前進を許容する**: 不確定が codebase-recoverable で、Phase 2 EXPLORE / Phase 4 Critic / implementation のどこでどう解くかを具体的な `next:` として書ける場合は、Self-resolve または Unresolved Items に委譲して進む。
-- **明示選択で前進する**: 同じ不確定が繰り返し残る場合、回数消化で自動前進せず、user に「仮定を選ぶ / このまま進める / 追加で確認する / scope out する」のいずれかを明示的に選ばせる。
+- **Definition of Ask**: an interaction that waits for the user's next answer. Restating, prose for understanding-check, or recording under `### Requires User Confirmation` is NOT a substitute for an Ask.
+- **Keep asking**: when high-cost uncertainty that would make the whole plan worthless if left wrong remains — Scope / Success / Failure, or a user-only / subjective central spec — keep Asking until it is clear.
+- **Allow progression**: when uncertainty is codebase-recoverable and can be written down as a concrete `next:` describing where and how to resolve it in Phase 2 EXPLORE / Phase 4 Critic / implementation, delegate to Self-resolve or Unresolved Items and proceed.
+- **Progress by explicit choice**: when the same uncertainty keeps repeating, do not auto-advance by exhausting tries; have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out".
 
-## Interview gate — 観測事実と user intent の分離
+## Interview gate — separating observed facts from user intent
 
-Phase 1 で未解決 ambiguity を扱う前に、必ず以下の bucket に分類する。Cost-based triage はこの gate の後に使う。Reasonable default は user decision を draft assumption に変換する根拠にならない。
+Before handling unresolved ambiguity in Phase 1, always classify it into one of the buckets below. Cost-based triage is used AFTER this gate. The existence of a reasonable default is NOT grounds for converting a user decision into a draft assumption.
 
 | Bucket | Meaning | Action |
 |---|---|---|
-| **Observed fact** | codebase、関連ログ、docs、既存 issue、現在の会話から観測できる事実 | 先に調査する。ログを使う場合は必要最小限を読み、secret / token / credential / unrelated personal data を artifact や log に残さない |
-| **User decision** | desired behavior、priority、scope boundary、audience、risk tolerance、success criteria、trade-off acceptance に依存する判断 | Ask。user が明示的に選んだ仮定以外では Assumption にしない |
-| **Technical deferral** | codebase-recoverable だが Phase 1 の軽量 probe では重すぎる technical discovery | `### Unresolved Items` に `item` / `reason` / concrete `next` を書く |
-| **Draft assumption** | user が明示的に仮定で進めることを許可した、または non-blocking technical/default detail | `### Assumptions` に value と reason を書く。user judgment 由来なら `user-overridden: true` を付ける |
+| **Observed fact** | A fact that can be observed from the codebase, related logs, docs, existing issues, or the current conversation | Investigate first. When using logs, read the minimum necessary and do not leave secret / token / credential / unrelated personal data in artifacts or logs |
+| **User decision** | A judgment that depends on desired behavior, priority, scope boundary, audience, risk tolerance, success criteria, or trade-off acceptance | Ask. Do not turn it into an Assumption except when the user has explicitly chosen the assumption |
+| **Technical deferral** | Codebase-recoverable technical discovery that is too heavy for a Phase 1 lightweight probe | Write `item` / `reason` / a concrete `next` under `### Unresolved Items` |
+| **Draft assumption** | A user explicitly permitted proceeding under an assumption, OR a non-blocking technical/default detail | Write the value and reason under `### Assumptions`. If derived from user judgment, add `user-overridden: true` |
 
 Facts can be inferred from observation; user intent cannot.
 
-Desired behavior、scope boundaries、success criteria、priority、audience、risk tolerance、trade-off acceptance は、user が明示的に許可しない限り Draft assumption ではない。これらが残る場合は artifact 作成前に Ask する。
+Desired behavior, scope boundaries, success criteria, priority, audience, risk tolerance, and trade-off acceptance are NOT draft assumptions unless the user explicitly permits it. When they remain unresolved, Ask before creating the artifact.
 
-## 8 観点 lens
+## Eight-observation lens
 
-各観点は「この観点を置き去りにすると plan を壊す可能性がある」というチェックポイントの並び。**明示語 signal のリストは anchor**（判定を固定化するルールではなく、見落としを減らすための目安）として扱う。
+Each observation is a checkpoint: "if you leave this observation behind, it can break the plan." **The list of explicit-token signals is anchors** (a guide for reducing oversight, not a rule that fixes the verdict).
 
 ### 1. Why — motivation
 
-- **lens の狙い**: この変更で何を解消するのか、なぜ今なのか
-- **Anchor signals**: 意図動詞（`〜したい`）、理由マーカー（`ので` / `理由は`）、課題表明（`困って` / `問題` / `Issue #\d+`）、因果接続詞を含む完結した reason clause
-- **置き去りの代償**: Why がないと Scope 判断も Success 判断も根拠を失う → 全観点に波及
-- **典型 probe**: 「この変更で何を解消したい？根本的な課題は？」
+- **Lens intent**: what does this change resolve, and why now
+- **Anchor signals** (in Japanese requests): intent verbs (`〜したい`), reason markers (`ので` / `理由は`), problem statements (`困って` / `問題` / `Issue #\d+`), a complete reason clause with causal conjunctions. Also recognize English equivalents: "I want to", "because", "the reason is", "we're having trouble with", "the issue is".
+- **Cost of being left behind**: without Why, both Scope and Success judgments lose grounding → ripples across every observation
+- **Typical probe**: "What does this change resolve? What is the root problem?"
 
 ### 2. What — deliverable
 
-- **lens の狙い**: 何が作られ、何が変わるのか
-- **Anchor signals**: 成果物 noun（`command` / `function` / `config` / `UI` / `skill` / `agent` / `hook` / `script` / `option`）、具体的 file/path 名
-- **置き去りの代償**: What が曖昧だと、Phase 2 の探索対象が定まらず Phase 3 の Files to Change も書けない
-- **典型 probe**: 「具体的に何が作られる？ (command / function / config / UI 等)」
+- **Lens intent**: what gets built, what changes
+- **Anchor signals**: deliverable nouns (`command` / `function` / `config` / `UI` / `skill` / `agent` / `hook` / `script` / `option`), concrete file/path names
+- **Cost of being left behind**: if What is ambiguous, Phase 2's exploration target is unsettled and Phase 3's Files to Change cannot be written
+- **Typical probe**: "Concretely, what gets built? (command / function / config / UI etc.)"
 
 ### 3. Who — actor
 
-- **lens の狙い**: 誰が使うのか（単独 user / チーム / 他人）
-- **Anchor signals**: `自分` / `自分用` / `チーム` / `ユーザー`、role 名詞（reviewer / contributor 等）
-- **置き去りの代償**: UX 齟齬。dotfiles 文脈では単一 user が安全 default だが、他人に共有する設計なら検討が変わる
-- **典型 probe**: 「誰がこれを使う？一人？チーム？自分以外の想定は？」
+- **Lens intent**: who uses it (a single user / a team / others)
+- **Anchor signals**: `自分` / `自分用` / `チーム` / `ユーザー`; English equivalents like "for myself", "personal use", "team", "users"; role nouns (reviewer / contributor / etc.)
+- **Cost of being left behind**: UX mismatch. In a dotfiles context a single user is the safe default, but a design intended for sharing changes the considerations
+- **Typical probe**: "Who uses this? One person? A team? Anyone besides you?"
 
 ### 4. When — trigger/context
 
-- **lens の狙い**: いつ / どの文脈で動作するのか
-- **Anchor signals**: `手動` / `自動` / `hook` / `CI` / `起動時` / `PreToolUse` / `PostToolUse` / `on-<event>` 形式
-- **置き去りの代償**: 起動設計ミス。hook なのかコマンドなのかで実装構造がまるで変わる
-- **典型 probe**: 「いつ / どの文脈で起動する？手動？自動？ trigger は？」
+- **Lens intent**: when / in what context it runs
+- **Anchor signals**: `手動` / `自動` / `hook` / `CI` / `起動時` / `PreToolUse` / `PostToolUse` / `on-<event>` form; English equivalents like "manual", "automatic", "on startup", "on save"
+- **Cost of being left behind**: trigger-design errors. Whether it is a hook or a command completely changes the implementation structure
+- **Typical probe**: "When / in what context does it run? Manual? Automatic? What is the trigger?"
 
 ### 5. Where — scope boundary
 
-- **lens の狙い**: どこまで含め、何を含めないのか
-- **Anchor signals**: 具体的 path / skill / agent 名、`特定の〜だけ` / `〜全体` / `以外の〜は除く`
-- **置き去りの代償**: 余計な実装 or 不足、silent scope creep。Scope の誤りは下流で回収しにくい
-- **典型 probe**: 「どこまで含める？逆に含めないものは？」
+- **Lens intent**: how far to include, what to exclude
+- **Anchor signals**: concrete path / skill / agent names; `特定の〜だけ` / `〜全体` / `以外の〜は除く`; English equivalents like "only X", "all of Y", "except Z"
+- **Cost of being left behind**: extra implementation or under-delivery, silent scope creep. Scope errors are hard to recover from downstream
+- **Typical probe**: "How far should we include? What should we exclude?"
 
 ### 6. How — approach preference
 
-- **lens の狙い**: 実装方針に user の好み/制約があるか
-- **Anchor signals**: 具体的 library / framework / pattern 名、「既存の X を踏襲」「Y と同じ方式」等の明示的参照
-- **置き去りの代償**: 多くのケースで low-cost（Phase 2 EXPLORE で既存 pattern が得られ、Phase 4 Critic が不整合を拾う）。ただし user が明示的好みを持っている場合を取りこぼすと再作業
-- **典型 probe**: 「実装方針の好みは？既存 pattern 踏襲？新規設計？」
+- **Lens intent**: whether the user has a preference or constraint on the implementation approach
+- **Anchor signals**: concrete library / framework / pattern names; explicit references like "follow the existing X" / "same approach as Y"
+- **Cost of being left behind**: low-cost in most cases (Phase 2 EXPLORE finds existing patterns and Phase 4 Critic catches inconsistencies). However, missing an explicit user preference causes rework
+- **Typical probe**: "Any preference on the approach? Follow an existing pattern? New design?"
 
 ### 7. Success — observable
 
-- **lens の狙い**: 何をもって成功とするのか、観測可能な条件は
-- **Anchor signals**: `〜できたら OK` / `〜すれば成功`、測定語（`時間` / `回数` / `率` / `size` / `latency`）、test 語（`テスト` / `verify`）
-- **置き去りの代償**: Completion Criteria が書けず、`/completion-audit` が機能しない。「動けば OK」は Success を定義していない
-- **典型 probe**: 「何をもって成功？観測可能な条件は？」
+- **Lens intent**: by what criteria do we judge success, what are the observable conditions
+- **Anchor signals**: `〜できたら OK` / `〜すれば成功`; English equivalents like "it's done when X" / "successful if Y"; measurement words (`時間` / `回数` / `率` / `size` / `latency`, "time" / "count" / "rate"); test words (`テスト` / `verify`)
+- **Cost of being left behind**: Completion Criteria cannot be written and `/completion-audit` does not function. "It works" does not define Success
+- **Typical probe**: "By what criteria is it a success? What are the observable conditions?"
 
 ### 8. Failure — anti-req
 
-- **lens の狙い**: 絶対してはいけないこと、避けたい副作用は
-- **Anchor signals**: `〜はダメ` / `避けたい` / `must not` / `禁止`、safety / regression / 副作用
-- **置き去りの代償**: user の設計制約を silent に踏み越える。Failure 側の制約は signal が弱く見逃しやすい
-- **典型 probe**: 「絶対してはいけないこと / 避けたい副作用は？」
+- **Lens intent**: what must absolutely not happen, what side effects to avoid
+- **Anchor signals**: `〜はダメ` / `避けたい` / `must not` / `禁止`; English equivalents like "must not", "avoid", "forbidden"; safety / regression / side-effect framing
+- **Cost of being left behind**: silently stepping over user design constraints. Failure-side constraints have weak signals and are easy to miss
+- **Typical probe**: "What must absolutely not happen? Any side effects to avoid?"
 
-## Evidence rule — Clear/NotClear の判断
+## Evidence rule — judging Clear / NotClear
 
-分類の基準は「signal token が要求文に literal match しているか」ではなく **「文脈から restate できるか、解釈に飛躍が必要か」**。
+The classification criterion is NOT "does a signal token literally match the request" — it is **"can the meaning be restated from context, or does it require a leap of interpretation"**.
 
-- **明示語があれば引用する**: 要求文中に anchor signal が literal match していれば、`Why: Clear (要求文の 'ズレた' に match)` のように引用して証跡にしてよい
-- **明示語がなくても、文脈全体から合理的に restate できれば Clear**: 例えば `dotfiles の tmux 設定で option を追加してほしい` に Where 明示語はなくても、文脈全体で Where = dotfiles/tmux に確定するなら Clear 扱い可
-- **解釈に飛躍がある場合のみ NotClear → Ask / Assume / Self-resolve**: 複数の解釈が並立する、または user 独自知識が必要と判断される場合に triage 対象に入れる
+- **Quote the explicit word when present**: if an anchor signal literally matches in the request, you may cite it as evidence, e.g. `Why: Clear (matched 'ズレた' in the request)`
+- **Even without an explicit word, Clear if it can be reasonably restated from full context**: e.g. "I want to add an option to the tmux config in dotfiles" has no explicit Where word, but the full context fixes Where = dotfiles/tmux, so it can be treated as Clear
+- **Only NotClear → Ask / Assume / Self-resolve when there is a leap of interpretation**: enter the triage when multiple interpretations stand, or when user-only knowledge is judged necessary
 
-**exact token 必須ルールは廃止**: 「文脈では十分明確なのに token がないから NotClear」という brittle な挙動を避ける。
+**The exact-token-required rule is retired**: avoid the brittle "context is clear enough but no token, therefore NotClear" behavior.
 
-## Ambiguous qualifier — calibration signal として扱う
+## Ambiguous qualifier — treat as a calibration signal
 
-主観形容詞 / 程度副詞 / 曖昧技術語（例: `野暮ったい` / `わかりづらい` / `見づらい` / `モダンじゃない` / `大幅に` / `しっかり` / `リアルタイム` / `なめらか` / `軽量`）は **強制降格しない**。扱いは **その語が設計判断の中心仕様か補助修飾か** で分岐する。
+Subjective adjectives / degree adverbs / vague technical words (e.g. `野暮ったい` / `わかりづらい` / `見づらい` / `モダンじゃない` / `大幅に` / `しっかり` / `リアルタイム` / `なめらか` / `軽量`; English equivalents like "clunky" / "hard to read" / "modern" / "substantially" / "real-time" / "smooth" / "lightweight") **are NOT auto-downgraded**. Handling branches by **whether the word is a central spec of the design decision or a supportive qualifier**.
 
-- **中心仕様の例**: 「pointer が野暮ったいので何とかしたい」→ `野暮ったい` が What / Success の核。具体像（Unicode 変更 / 色強調 / 削除 + 行反転）を calibrate しないと実装が定まらない → Calibration Probe 候補
-- **補助修飾の例**: 「なめらかに動くように tmux option を追加」→ `なめらか` は副次的修飾。`tmux option を追加` という中心仕様は別に明示されており、実装は option 追加で確定 → 通常解釈で進める
-- **判断軸**: 「この語を確定させないと Phase 3 DRAFT の Files to Change / Approach が書けないか？」YES なら中心、NO なら補助
+- **Example of central spec**: "the pointer feels clunky; I want to do something about it" → `clunky` is at the core of What / Success. Without calibrating concrete imagery (Unicode change / color emphasis / removal + line inversion), the implementation is not settled → Calibration Probe candidate
+- **Example of supportive qualifier**: "add a tmux option so it animates smoothly" → `smoothly` is secondary modification. The central spec `add a tmux option` is otherwise explicit and implementation is settled as an option addition → proceed under normal interpretation
+- **Decision axis**: "Without settling this word, can Phase 3 DRAFT's Files to Change / Approach be written?" YES → central; NO → supportive
 
-**Calibration Probe（中心仕様と判断した場合のみ起動）**:
-- 3 個の concrete candidate を user-confirmation options に提示（観測可能な condition または threshold value、1 つに (Recommended) tag を付けて top、末尾に Other を含める）
-- 通常 Ask と同じく確認 batch の Ask 件数にカウント（slot 1 消費）
-- 候補 3 個を defensible に研究できない場合は Calibration Probe 化を諦め、自由記述の Ask に降格
-- user の主観そのものが中心仕様で、候補化しても意味が歪む場合は、artifact 作成前に Ask で calibration するか、user が明示的に選んだ仮定を記録して進む。`### Unresolved Items` の downstream `next:` deferral は codebase-recoverable uncertainty のみに使う。
+**Calibration Probe (triggered only if judged central spec)**:
+- Present 3 concrete candidates as user-confirmation options (observable conditions or threshold values; tag one (Recommended) at the top and include Other at the end)
+- Counts toward the confirmation-batch Ask quota like a normal Ask (consumes slot 1)
+- If 3 candidates cannot be defensibly researched, abandon Calibration Probe and downgrade to a free-text Ask
+- When the user's subjectivity itself is the central spec and candidate-ization would distort the meaning, either Ask to calibrate before artifact creation, or record an explicitly user-selected assumption and proceed. `### Unresolved Items` downstream `next:` deferral is only for codebase-recoverable uncertainty.
 
-## Cost-based triage — Ask / Assume / Self-resolve の選択
+## Cost-based triage — choosing Ask / Assume / Self-resolve
 
-NotClear 項目に対する triage は、観点ごとの fixed default ではなく **以下 2 軸の同時判断** で決める:
+Triage for NotClear items is decided NOT by per-observation fixed defaults but by **the simultaneous judgment of the two axes below**:
 
-- **軸 A — 誤ったときの波及コスト**: この観点を取り違えると plan 全体がどれだけ壊れるか
-  - **高**（Outcome / Boundary 層）: Why / Where / Success / Failure。plan の根拠や境界が崩れる
-  - **中**（Context 層）: Who / When。UX や起動設計のズレ
-  - **低**（Definition 層）: What / How。Phase 2 EXPLORE / Phase 4 Critic で比較的拾える
-- **軸 B — 後続 Phase / 実装での回収可能性**: Phase 2 EXPLORE の codebase 探索や Phase 4 Critic の adversarial 検証で覆せるか
-  - **高**: codebase に signal が残っているタイプ（既存実装パターン、呼び出し文脈、既存 test）
-  - **低**: user の主観 / 好み / 未開示の domain 知識
+- **Axis A — cost of being wrong**: how badly the plan breaks if this observation is misread
+  - **High** (Outcome / Boundary layer): Why / Where / Success / Failure. The plan's grounding or boundaries collapse
+  - **Medium** (Context layer): Who / When. UX or trigger-design mismatch
+  - **Low** (Definition layer): What / How. Relatively recoverable in Phase 2 EXPLORE / Phase 4 Critic
+- **Axis B — recoverability in subsequent Phases / implementation**: can it be overturned in Phase 2 EXPLORE's codebase search or Phase 4 Critic's adversarial verification?
+  - **High**: signal types that remain in the codebase (existing implementation patterns, call-site context, existing tests)
+  - **Low**: user's subjectivity / preferences / undisclosed domain knowledge
 
-### Triage の結論
+### Triage conclusions
 
-| コスト × 回収可能性 | 選択 |
+| Cost × Recoverability | Choice |
 |---|---|
-| 高コスト、低回収可能性 | **Ask** — user 確認が必要 |
-| 低コスト、低回収可能性 | **Draft assumption only for non-blocking details** — user intent に依存しない値、または user が明示的に許可した仮定に限る |
-| 低コスト、高回収可能性 | **Self-resolve**（Phase 1 の軽量 probe）または **Draft assumption**（non-blocking technical/default detail に限る） |
-| 高コスト、高回収可能性 | **Self-resolve** 優先、probe 不能なら **Ask** |
+| High cost, low recoverability | **Ask** — user confirmation is required |
+| Low cost, low recoverability | **Draft assumption only for non-blocking details** — limited to values that do not depend on user intent, or assumptions explicitly permitted by the user |
+| Low cost, high recoverability | **Self-resolve** (Phase 1 lightweight probe) or **Draft assumption** (only for non-blocking technical/default detail) |
+| High cost, high recoverability | Prefer **Self-resolve**; if probing is impossible, **Ask** |
 
-**How の扱い**: 「問答無用で assume」の hard default は採用しない。How も他の観点と同様に上記 2 軸で判断する。典型的には「低コスト × 高回収可能性」に落ち着くため non-blocking technical/default detail として Draft assumption になることが多いが、user が明示的好みを示している signal があれば Ask 判断もありうる。
+**Handling of How**: do not adopt the "unconditionally assume" hard default. How is judged on the same two axes as every other observation. It typically lands in "low cost × high recoverability" and becomes a Draft assumption as a non-blocking technical/default detail, but when there is a signal that the user has an explicit preference, Ask is also a valid call.
 
-**Assumption の制限**: `Assume` / `Draft assumption` は、non-blocking technical/default detail、または user が明示的に選んだ仮定だけに使う。Desired behavior、scope boundaries、success criteria、priority、audience、risk tolerance、trade-off acceptance は、軽そうに見えても user decision として扱う。
+**Restrictions on Assumptions**: `Assume` / `Draft assumption` are only for non-blocking technical/default detail, or for assumptions the user has explicitly chosen. Desired behavior, scope boundaries, success criteria, priority, audience, risk tolerance, and trade-off acceptance are treated as user decisions even when they look light.
 
-**判断の記録**: 採用した triage は plan 本文の `### Assumptions` / `### Self-resolved` / `### Unresolved Items` のいずれかに該当エントリとして記録する（形式は後述）。
+**Recording the judgment**: the chosen triage is recorded in the plan body as an entry under `### Assumptions` / `### Self-resolved` / `### Unresolved Items` as appropriate (format described below).
 
-## Phase 1 出力 subsection（plan 内部 convention）
+## Phase 1 output subsections (plan-internal convention)
 
-Phase 1 clarity gate 収束時、`## Overview` の直前に下記 subsection を出力する。Phase 4 Critic は **canonical phrase ではなく subsection の構造を parse** して未確定項目を引き継ぐ。
+At Phase 1 clarity-gate convergence, output the following subsections immediately before `## Overview`. The Phase 4 Critic **parses subsection structure, not canonical phrases**, and carries forward unresolved items.
 
 ```markdown
 ### Requirement Clarification
 
-- Interview status: clear enough to plan（reason: <all user-only high-cost uncertainty resolved / user chose explicit assumption / codebase-recoverable with concrete next>）
-- One-line restate: <user 要求を 1 文に圧縮。user は次の prompt で override 可能>（grill-me P3）
-- Scope fact: dotfiles/home/programs/claude/skills/plan/（source: 要求文 'plan skill を再設計' から文脈的に restate 可能）
+- Interview status: clear enough to plan (reason: <all user-only high-cost uncertainty resolved / user chose explicit assumption / codebase-recoverable with concrete next>)
+- One-line restate: <user request compressed to one sentence. The user can override in the next prompt> (grill-me P3)
+- Scope fact: dotfiles/home/programs/claude/skills/plan/ (source: contextually restatable from the request 'redesign the plan skill')
 
 ### Assumptions
 
 - observation: How
-  value: 既存 markdown edit で reference file を書き換え
+  value: edit the reference files via existing markdown edits
   reason: user explicitly selected this assumption after the AI recommended it
-  user-overridden: true   # optional. user override 由来の場合のみ付ける
+  user-overridden: true   # optional. Only added when the entry came from a user override
 
 ### Self-resolved
 
 - observation: What
-  value: SKILL.md と references 3 ファイルを編集
-  source: Phase 1 の Grep probe で確定
+  value: edit SKILL.md and three reference files
+  source: confirmed by a Phase 1 Grep probe
 
 ### Unresolved Items
 
-- item: 既存 test harness の最小実行コマンド
-  reason: codebase-recoverable technical discovery だが、Phase 1 の軽量 probe だけでは確定しない
-  next: Phase 2 EXPLORE で関連 test layout と既存実行例を調査
+- item: the minimal command to run the existing test harness
+  reason: codebase-recoverable technical discovery, but not settled by a Phase 1 lightweight probe alone
+  next: investigate the related test layout and existing run examples in Phase 2 EXPLORE
 
-- item: 起動文脈の詳細な call path
-  reason: codebase-recoverable technical discovery だが、Phase 1 の軽量 probe だけでは確定しない
-  next: Phase 2 EXPLORE で entry point / hook / command invocation を調査
+- item: detailed call path for the trigger context
+  reason: codebase-recoverable technical discovery, but not settled by a Phase 1 lightweight probe alone
+  next: investigate entry point / hook / command invocation in Phase 2 EXPLORE
 ```
 
 ### Subsection semantics
 
-- `### Requirement Clarification` — clarity gate の要約。人間可読で OK（Critic は parse しない）
-- `### Assumptions` — non-blocking technical/default detail、または user が明示的に選んだ仮定。各エントリに `observation` / `value` / `reason` を明記。user judgment 由来は `user-overridden: true` フラグを必ず付ける（Phase 4 Critic が `### Assumptions` を走査して `user-overridden` を拾う）。User decision を、reasonable default があるという理由だけでここに置かない
-- `### Self-resolved` — Phase 1 probe または Phase 2 EXPLORE 委譲で確定する項目。各エントリに `observation` / `value` / `source` を明記
-- `### Unresolved Items` — clarity loop 終了時点で確定できなかった codebase-recoverable / technical-discovery 項目のみを書く。user-only / subjective blocker はここに出さず、artifact 作成前に Ask するか explicit user-selected assumption として `### Assumptions` に記録する。各エントリに **3 フィールド必須**:
-  - `item`: 何が未確定か
-  - `reason`: なぜ今は確定できないか（codebase-recoverable technical discovery / Phase 1 probe scope exceeded / information-gathering cost too high など）
-  - `next`: 次にどこで扱うか（`Phase 2 EXPLORE で追加探索` / `Phase 4 Critic で technical validation` / `implementation 時に repo state を確認` など）
+- `### Requirement Clarification` — clarity-gate summary. Human-readable is fine (Critic does not parse)
+- `### Assumptions` — non-blocking technical/default detail, OR an assumption the user has explicitly chosen. Each entry must state `observation` / `value` / `reason`. Entries derived from user judgment must carry the `user-overridden: true` flag (Phase 4 Critic walks `### Assumptions` and picks up `user-overridden`). Do NOT place a user decision here just because a reasonable default exists
+- `### Self-resolved` — items settled by a Phase 1 probe or by deferral to Phase 2 EXPLORE. Each entry must state `observation` / `value` / `source`
+- `### Unresolved Items` — at clarity-loop termination, write only codebase-recoverable / technical-discovery items that could not be settled. Do NOT surface user-only / subjective blockers here; Ask before artifact creation, or record them as explicit user-selected assumptions in `### Assumptions`. Each entry requires **three fields**:
+  - `item`: what is unsettled
+  - `reason`: why it cannot be settled now (codebase-recoverable technical discovery / Phase 1 probe scope exceeded / information-gathering cost too high / etc.)
+  - `next`: where to handle it next (`continue exploration in Phase 2 EXPLORE` / `technical validation in Phase 4 Critic` / `verify against repo state at implementation` / etc.)
 
-**subsection が非存在 = 0 件を意味する**: `### Unresolved Items` を書かない場合、Phase 4 Critic は unresolved が 0 件と解釈する。0 件であることを明示したい場合は subsection を書いて body に `(none)` と記す。
+**Subsection absence = zero entries**: when `### Unresolved Items` is not written, the Phase 4 Critic interprets unresolved as zero. To assert zero explicitly, write the subsection with the body `(none)`.
 
-**Self-resolved block 併記**: Ask 発行時、冒頭に `以下を自己解決しました:` の human-readable 要約を示して誤判定の即時 flag を促す（exact token 引用必須ルールは廃止、restate で OK）。text-only runtime では質問を提示したらその turn を終え、user の次回答を待ってから続行する。
+**Self-resolved companion block**: when issuing an Ask, prepend a human-readable summary `Self-resolved earlier:` so misjudgments can be flagged immediately (the exact-token quotation requirement is retired; restating is fine). In a text-only runtime, end the turn after posting the questions and wait for the user's next reply before continuing.
 
-## Ask 発行の batch 規則
+## Ask issuance batch rules
 
-Ask 分類になった項目の発行ルール。進行管理の source of truth は SKILL.md Phase 1 Step E。以下は判断軸のみ:
+Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md Phase 1 Step E. Only the decision axes are here:
 
-- Ask 件数 0: 追加確認 trigger も 0 件なら user-confirmation turn 自体 skip
-- Ask 件数 1–4: 全件を 1 回の AskUserQuestion call にまとめる（slot 上限 4 = AskUserQuestion API hard cap、override slot は使わない）
-- Ask 件数 5 以上: cost 優先順（Outcome > Boundary > Context > Definition、同 tier 内は observation 番号昇順）で上位 4 件、残りは次回 clarification iteration の確認候補先頭に繰り越し
-- すべての real question には AI の recommended answer（推奨案）と短い rationale を付ける。推奨できない場合は、調査不足・質問の粒度が広すぎる・user-only decision の候補が整理できていない状態なので、質問を狭めるか追加調査し、推奨案と rationale を付けられる形にしてから聞く
+- Ask count 0: if there are also zero additional-confirmation triggers, skip the user-confirmation turn itself
+- Ask count 1–4: bundle all into a single AskUserQuestion call (slot cap 4 = AskUserQuestion API hard cap; do not use an override slot)
+- Ask count 5+: by cost priority (Outcome > Boundary > Context > Definition; within a tier, ascending observation number), take the top 4; carry the rest into the head of the next clarification iteration's confirmation candidates
+- Every real question must carry an AI-recommended answer with a short rationale. If you cannot recommend, the state is one of insufficient investigation / question granularity too broad / user-only decision candidates not organized — narrow the question or do more research, and only ask once a recommendation and rationale can be attached
 
-同じ不確定が残り続ける場合は、count-based に自動前進せず、user に「仮定を選ぶ / このまま進める / 追加で確認する / scope out する」のいずれかを明示的に選ばせる。codebase-recoverable な残項目だけは `### Unresolved Items` に具体的な `next:` を書いて委譲できる（legacy canonical phrase 形式は使わない）。
+When the same uncertainty keeps remaining, do NOT auto-advance by count; have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out". Only codebase-recoverable remainders may be delegated under `### Unresolved Items` with a concrete `next:` (do not use the legacy canonical-phrase form).
 
-## Divergence Probing — conditional 発動
+## Divergence Probing — conditional invocation
 
-未言及派生機能の能動提案は **default-off**。以下のいずれかに該当するときのみ起動する:
+Active proposal of unmentioned derivative features is **default-off**. Activate only when one of the following applies:
 
-- **条件 A**: 参考実装 URL が与えられており、その実装との差分確認が本質的な価値になるケース（user が参考実装を挙げた時点で、delta を問うことが暗黙の要求）
-- **条件 B**: user request が「設計の抜け漏れ検討」「他に必要なことは？」などを明示的に求めているケース
+- **Condition A**: A reference-implementation URL is given, and checking deltas against that implementation provides essential value (when the user cites a reference implementation, asking about delta is an implicit requirement)
+- **Condition B**: The user request explicitly asks for "consideration of design gaps" or "what else is needed", etc.
 
-いずれにも該当しない通常の feature planning では **起動しない**。理由: 通常 planning では user の主要求を固めることが先で、延長機能の提案は Phase 4 Critic の Scope Appropriateness 軸で代替的に捕捉される。
+In normal feature planning that does not match either, **do not activate**. Reason: in normal planning, solidifying the user's primary request comes first, and proposing extended features is alternatively captured by the Phase 4 Critic's Scope Appropriateness axis.
 
-起動する場合の挙動:
+Behavior when activated:
 
-- 候補抽出 source: 要求文中 keyword、参考実装 URL の機能群、user request context
-- 抽出数 → user-confirmation 形式:
+- Candidate-extraction sources: keywords in the request, the feature set of the reference-implementation URL, user-request context
+- Number extracted → user-confirmation form:
   - 0 candidates: skip
-  - 1 candidate: single-select、options = `[今回 scope に含める / 別 plan で追跡 / 対象外 / Other]`
-  - 2–4 candidates: multiSelect、2–3 candidates なら `各 candidate + Other`、4 candidates なら `各 candidate` のみ（Option cap 4 厳守）
-- 参考実装 URL given 時は 2–4 candidates の delta 分析を必須化
-- 選択された candidate は「今回 scope に含める」、非選択 candidate は **暗黙的に「対象外」**。`Other` 選択は free-text として記録
+  - 1 candidate: single-select, options = `[include in this scope / track in a separate plan / out of scope / Other]`
+  - 2–4 candidates: multiSelect; for 2–3 candidates use `each candidate + Other`; for 4 candidates use `each candidate` only (strict Option cap 4)
+- When a reference-implementation URL is given, require delta analysis for 2–4 candidates
+- Selected candidates are "included in this scope"; non-selected candidates are **implicitly out of scope**. An `Other` selection is recorded as free-text
 
-起動制限:
-- 起動するのは最初の clarification pass のみ
-- 後続 pass での派生機能検討は Phase 4 Critic の Scope Appropriateness 軸に委譲
+Activation limits:
+- Activates only in the first clarification pass
+- Derivative-feature consideration in subsequent passes is delegated to the Phase 4 Critic's Scope Appropriateness axis
 
-## Impact priority — Ask overflow 時の並び替え
+## Impact priority — reordering on Ask overflow
 
-確認 batch 内 Ask 件数が slot（通常 4 = AskUserQuestion API 上限）を超えるときの上位選定、および batch 内の質問順決定に使う:
+Used both to pick the top items when the Ask count exceeds the slots in a confirmation batch (normally 4 = AskUserQuestion API limit), and to determine the question order within a batch:
 
-1. **Outcome 層** — Why / Success
-2. **Boundary 層** — Where / Failure
-3. **Context 層** — Who / When
-4. **Definition 層** — What / How
+1. **Outcome layer** — Why / Success
+2. **Boundary layer** — Where / Failure
+3. **Context layer** — Who / When
+4. **Definition layer** — What / How
 
-**Tiebreaker**: 同 tier 内は observation 番号昇順（Why < What < Who < When < Where < How < Success < Failure）。
+**Tiebreaker**: within a tier, ascending observation number (Why < What < Who < When < Where < How < Success < Failure).
 
-## Ambiguity Gate との責任分界
+## Responsibility boundary with the Ambiguity Gate
 
-本 lens は 8 観点の positive walk を担当する。SKILL.md の Ambiguity Gate は本 lens で拾えない exception（要求文の restate 自体が失敗、1–2 語の単語のみで signal 無しなど）専用。Gate 発動時は lens walk をスキップして要求文の再取得から始める（以降は通常の clarity loop に合流）。
+This lens is responsible for the positive walk over the eight observations. The SKILL.md Ambiguity Gate is dedicated to exceptions the lens cannot handle (restating the request itself fails, only 1–2-word input with no signal, etc.). When the Gate fires, skip the lens walk and start by re-eliciting the request (from there, rejoin the normal clarity loop).
