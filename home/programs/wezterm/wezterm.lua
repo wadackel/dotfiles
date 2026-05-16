@@ -100,7 +100,6 @@ wezterm.on("gui-startup", function()
   local _, _, window = wezterm.mux.spawn_window({})
   local w = window:gui_window()
   w:maximize()
-  w:toggle_fullscreen()
 end)
 
 wezterm.on("window-config-reloaded", function(window)
