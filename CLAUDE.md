@@ -271,7 +271,7 @@ Example: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
 
 ### Hook Data
 
-Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`, `cwd`) plus event-specific fields. `cwd` is the project root at session start (constant regardless of `cd` within bash commands). Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
+Claude Code hooks receive JSON via stdin with common fields (`session_id`, `transcript_path`, `hook_event_name`, `cwd`) plus event-specific fields. `cwd` reflects the current shell cwd: Claude Code tracks Bash `cd` and updates the payload accordingly, so it is NOT stable for the lifetime of the session. Hooks that need a per-session stable key (e.g. plan-gate) must scope on `session_id`, not on `cwd`. Stop hook: `stop_hook_active`. Notification hook: `message`, `title`, `notification_type`.
 
 ### `permissions.allow` Limitations
 

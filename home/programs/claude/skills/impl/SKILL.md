@@ -14,19 +14,19 @@ Executes the plan produced by `/plan`, task by task. Sole source of truth for th
 
 ## Preconditions
 
-`/impl` reads the active plan from a session+cwd-hash marker that `/plan`'s Phase 6 created **and that the user explicitly approved**.
+`/impl` reads the active plan from a session-hash marker that `/plan`'s Phase 6 created **and that the user explicitly approved**.
 
 ```
-ACTIVE  = ~/.claude/plans/.active-<cwd-hash:16hex>-<session-hash:32hex>
-PENDING = ~/.claude/plans/.pending-<cwd-hash:16hex>-<session-hash:32hex>
+ACTIVE  = ~/.claude/plans/.active-<session-hash:32hex>
+PENDING = ~/.claude/plans/.pending-<session-hash:32hex>
 ```
 
-Markers are session-scoped: each Claude session has a unique `<session-hash>` derived from the runtime's `session_id`. A stale active marker from a different session does not grant edit rights to the current session even in the same cwd, so `/plan` must be re-run per session.
+Markers are session-scoped: each Claude session has a unique `<session-hash>` derived from the runtime's `session_id`. A marker held by a different session does not grant edit rights to the current session, so `/plan` must be re-run per session. `cwd` is intentionally NOT part of the marker key — Claude Code updates the hook payload's `cwd` to track Bash `cd`, so a cwd-bound marker would be invalidated by any subdirectory navigation mid-session.
 
-Approval gate — confirm with the deterministic marker helper before starting work. The agent must not assemble cwd / session hashes or marker paths by hand. `$CLAUDE_CODE_SESSION_ID` is the environment variable visible to the Bash tool (note the `CLAUDE_CODE_` prefix; this is different from the `CLAUDE_SESSION_ID` alias that is only exposed inside the `!` substitution syntax used by `/plan-marker-grant`):
+Approval gate — confirm with the deterministic marker helper before starting work. The agent must not assemble session hash or marker paths by hand. `$CLAUDE_CODE_SESSION_ID` is the environment variable visible to the Bash tool (note the `CLAUDE_CODE_` prefix; this is different from the `CLAUDE_SESSION_ID` alias that is only exposed inside the `!` substitution syntax used by `/plan-marker-grant`):
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$PWD" "$CLAUDE_CODE_SESSION_ID"
+deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$CLAUDE_CODE_SESSION_ID"
 ```
 
 The helper's stdout is the active plan path. Proceed only on exit 0.
@@ -35,7 +35,7 @@ The helper's stdout is the active plan path. Proceed only on exit 0.
 - **`.active` expired**: reject with `.active marker expired. Run /plan <request> again.` Stop processing immediately
 - **pending only**: reject with `Plan exists but is not approved. Type /impl as a top-level prompt to approve.` Stop processing immediately. Do not attempt edits
 - **pending expired**: reject with `.pending marker expired. Run /plan <request> again.` Stop processing immediately
-- **absent**: reject with `Run /plan <request> first. No active plan for this cwd.`
+- **absent**: reject with `Run /plan <request> first. No active plan for this session.`
 
 The approval signal is the user typing `/impl` as the leading slash command of a top-level user prompt. On detection, the hook performs a helper-backed `.pending-` → `.active-` promotion. An AI invoking the `/impl` skill via the Skill tool does NOT trigger UserPromptSubmit, so self-promotion is impossible.
 
@@ -89,7 +89,7 @@ If the user wants to revise the plan during `/impl`:
 ## Recovery after compaction
 
 If context compaction occurs mid-`/impl`:
-1. Re-resolve the active plan path from the cwd-hash marker
+1. Re-resolve the active plan path from the session-hash marker
 2. `TaskList` → find tasks not yet `completed`
 3. Re-`Read` the plan file
 4. Resume from the lowest-ID `pending` (or stalled `in_progress`) task

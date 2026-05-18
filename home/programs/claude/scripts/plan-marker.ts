@@ -1,9 +1,6 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-import {
-  type MarkerPaths,
-  markerPaths,
-} from "./plan-gate.ts";
+import { type MarkerPaths, markerPaths } from "./plan-gate.ts";
 
 export type { MarkerPaths };
 
@@ -49,10 +46,10 @@ function usage(): never {
   console.error(
     [
       "Usage:",
-      "  plan-marker.ts activate-pending <plan-path> <cwd> <session-id>",
-      "  plan-marker.ts status <cwd> <session-id>",
-      "  plan-marker.ts require-active <cwd> <session-id>",
-      "  plan-marker.ts clear-active <cwd> <session-id>",
+      "  plan-marker.ts activate-pending <plan-path> <session-id>",
+      "  plan-marker.ts status <session-id>",
+      "  plan-marker.ts require-active <session-id>",
+      "  plan-marker.ts clear-active <session-id>",
     ].join("\n"),
   );
   Deno.exit(1);
@@ -72,7 +69,7 @@ function absentStatus(paths: MarkerPaths): MarkerStatus {
     ...paths,
     state: "absent",
     planPath: null,
-    reason: "no plan marker exists for cwd",
+    reason: "no plan marker exists for this session",
   };
 }
 
@@ -215,11 +212,8 @@ function isFresh(info: Deno.FileInfo): boolean {
   return Date.now() - mtime < MARKER_TTL_MS;
 }
 
-export async function getStatus(
-  cwd: string,
-  sessionId: string,
-): Promise<MarkerStatus> {
-  const paths = await markerPaths(cwd, sessionId);
+export async function getStatus(sessionId: string): Promise<MarkerStatus> {
+  const paths = await markerPaths(sessionId);
   const realPlansDir = await existingPlansDir(paths.plansDir);
   if (!realPlansDir) {
     return absentStatus(paths);
@@ -264,13 +258,12 @@ export async function getStatus(
 
 export async function activatePending(
   planPath: string,
-  cwd: string,
   sessionId: string,
 ): Promise<MarkerPaths> {
   if (!planPath.startsWith("/")) {
     throw new Error("plan path must be absolute");
   }
-  const paths = await markerPaths(cwd, sessionId);
+  const paths = await markerPaths(sessionId);
   const realPlansDir = await ensurePlansDir(paths.plansDir);
   const realPlanPath = await validatePlanPath(planPath, realPlansDir);
   try {
@@ -284,11 +277,8 @@ export async function activatePending(
   return paths;
 }
 
-export async function requireActive(
-  cwd: string,
-  sessionId: string,
-): Promise<string> {
-  const status = await getStatus(cwd, sessionId);
+export async function requireActive(sessionId: string): Promise<string> {
+  const status = await getStatus(sessionId);
   switch (status.state) {
     case "active":
       if (status.planPath) {
@@ -305,18 +295,15 @@ export async function requireActive(
       throw new Error(".pending marker expired. Run `/plan <request>` again.");
     case "absent":
       throw new Error(
-        "Run `/plan <request>` first. No active plan for this cwd.",
+        "Run `/plan <request>` first. No active plan for this session.",
       );
     default:
       return assertNever(status.state);
   }
 }
 
-export async function clearActive(
-  cwd: string,
-  sessionId: string,
-): Promise<boolean> {
-  const paths = await markerPaths(cwd, sessionId);
+export async function clearActive(sessionId: string): Promise<boolean> {
+  const paths = await markerPaths(sessionId);
   try {
     await Deno.remove(paths.activePath);
     return true;
@@ -328,11 +315,8 @@ export async function clearActive(
   }
 }
 
-export async function promote(
-  cwd: string,
-  sessionId: string,
-): Promise<PromoteResult> {
-  const paths = await markerPaths(cwd, sessionId);
+export async function promote(sessionId: string): Promise<PromoteResult> {
+  const paths = await markerPaths(sessionId);
   try {
     await Deno.lstat(paths.activePath);
     return { promoted: false, reason: "already-active" };
@@ -348,7 +332,7 @@ export async function promote(
 
   let status: MarkerStatus;
   try {
-    status = await getStatus(cwd, sessionId);
+    status = await getStatus(sessionId);
   } catch (err) {
     return {
       promoted: false,
@@ -396,45 +380,36 @@ export async function promote(
 }
 
 export async function run(args: string[]): Promise<void> {
-  const [command, first, second, third] = args;
+  const [command, first, second] = args;
   if (!command) {
     usage();
   }
 
   if (command === "activate-pending") {
-    if (!first || !second) {
+    if (!first) {
       usage();
     }
-    const sessionId = requireSessionId(third);
-    const paths = await activatePending(first, second, sessionId);
+    const sessionId = requireSessionId(second);
+    const paths = await activatePending(first, sessionId);
     console.log(paths.pendingPath);
     return;
   }
 
   if (command === "status") {
-    if (!first) {
-      usage();
-    }
-    const sessionId = requireSessionId(second);
-    console.log(JSON.stringify(await getStatus(first, sessionId), null, 2));
+    const sessionId = requireSessionId(first);
+    console.log(JSON.stringify(await getStatus(sessionId), null, 2));
     return;
   }
 
   if (command === "require-active") {
-    if (!first) {
-      usage();
-    }
-    const sessionId = requireSessionId(second);
-    console.log(await requireActive(first, sessionId));
+    const sessionId = requireSessionId(first);
+    console.log(await requireActive(sessionId));
     return;
   }
 
   if (command === "clear-active") {
-    if (!first) {
-      usage();
-    }
-    const sessionId = requireSessionId(second);
-    const removed = await clearActive(first, sessionId);
+    const sessionId = requireSessionId(first);
+    const removed = await clearActive(sessionId);
     console.log(removed ? "active-cleared" : "active-absent");
     return;
   }

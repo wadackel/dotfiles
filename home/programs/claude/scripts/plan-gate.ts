@@ -1,17 +1,21 @@
 #!/usr/bin/env -S deno run --allow-read --allow-env
 
 // PreToolUse hook (matcher: "Edit|Write|MultiEdit"):
-// Gates edits to files under cwd on /plan-generated session+cwd-hash marker.
+// Gates edits to files under cwd on /plan-generated session-hash marker.
 // - Marker files under ~/.claude/plans/ (basename matching .active-*, .pending-*, .bypass-plan-gate-*) are always denied.
 // - Files under an infra allowlist (dotfiles/home/programs/claude/{CLAUDE.md,settings.json,scripts/**}) are always allowed.
 // - Files outside cwd are always allowed.
-// - Files under cwd require a valid session+cwd marker at ~/.claude/plans/.active-<cwd-hash>-<session-hash> (mtime < 24h).
+// - Files under cwd require a valid session marker at ~/.claude/plans/.active-<session-hash> (mtime < 24h).
 // - Missing marker or expired marker → block with instruction to run `/plan`.
 // - Missing session_id (hook stdin) → block (fail-closed; cannot identify session).
+//
+// cwd is used only for the under-cwd inclusion check (files outside cwd are
+// always allowed). Marker scoping is per-session, so Bash `cd <subdir>` mid-
+// session does not invalidate the marker.
 
 // --- Constants ---
 
-const CWD_MARKER_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const MARKER_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 // infra allowlist: dotfiles 実ソース配下の CLAUDE.md / settings.json / scripts/** のみ対象。
 // ~/.claude/** は nix store への read-only symlink なので編集不可、allowlist 対象外。
@@ -66,7 +70,6 @@ export function isPlansMarkerPath(abs: string): boolean {
 
 export interface MarkerPaths {
   plansDir: string;
-  cwdHash: string;
   sessionHash: string;
   activePath: string;
   pendingPath: string;
@@ -75,15 +78,12 @@ export interface MarkerPaths {
 export interface BypassMarkerInfo {
   plansDir: string;
   path: string;
-  cwdHash: string;
   sessionHash: string;
 }
 
 export interface BypassMarker {
   version: 1;
   createdAt: string;
-  cwd: string;
-  cwdHash: string;
   session_id: string;
   sessionHash: string;
   prompt: string;
@@ -114,16 +114,6 @@ export async function isUnderCwd(
   return absFile === absCwd || absFile.startsWith(absCwd + "/");
 }
 
-export async function cwdHash(cwd: string): Promise<string> {
-  const real = await canonical(cwd);
-  const data = new TextEncoder().encode(real);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 16);
-}
-
 export async function sessionHash(sessionId: string): Promise<string> {
   const data = new TextEncoder().encode(sessionId);
   const buf = await crypto.subtle.digest("SHA-256", data);
@@ -141,50 +131,39 @@ function homeDir(): string {
   return home;
 }
 
-// Session+cwd 用の marker path 計算。bypassMarkerInfo と同じ命名規則 (`-<cwdHash>-<sessionHash>`)
-// を使うことで、isPlansMarkerPath の prefix-only regex で 3 種類の marker をまとめて判別できる。
-// session_id 非空は呼び出し側で保証する前提。
-export async function markerPaths(
-  cwd: string,
-  sessionId: string,
-): Promise<MarkerPaths> {
+// Session 単位の marker path 計算。`.active-<sessionHash>` / `.pending-<sessionHash>` /
+// `.bypass-plan-gate-<sessionHash>.json` の 3 種類が同じ basename prefix 規則
+// (isPlansMarkerPath の正規表現) で判別できる。session_id 非空は呼び出し側で保証する前提。
+export async function markerPaths(sessionId: string): Promise<MarkerPaths> {
   if (!sessionId || !sessionId.trim()) {
     throw new Error("session_id is required");
   }
   const home = homeDir();
-  const cwdMarkerHash = await cwdHash(cwd);
   const sessionMarkerHash = await sessionHash(sessionId);
   const plansDir = `${home}/.claude/plans`;
   return {
     plansDir,
-    cwdHash: cwdMarkerHash,
     sessionHash: sessionMarkerHash,
-    activePath: `${plansDir}/.active-${cwdMarkerHash}-${sessionMarkerHash}`,
-    pendingPath: `${plansDir}/.pending-${cwdMarkerHash}-${sessionMarkerHash}`,
+    activePath: `${plansDir}/.active-${sessionMarkerHash}`,
+    pendingPath: `${plansDir}/.pending-${sessionMarkerHash}`,
   };
 }
 
-export type CwdMarkerState = "valid" | "expired" | "absent";
+export type MarkerState = "valid" | "expired" | "absent";
 
-export async function cwdMarkerState(
-  cwd: string,
-  sessionId: string,
-): Promise<CwdMarkerState> {
-  const paths = await markerPaths(cwd, sessionId);
+export async function markerState(sessionId: string): Promise<MarkerState> {
+  const paths = await markerPaths(sessionId);
   try {
     const stat = await Deno.stat(paths.activePath);
     const mtime = stat.mtime?.getTime() ?? 0;
-    return Date.now() - mtime < CWD_MARKER_TTL_MS ? "valid" : "expired";
+    return Date.now() - mtime < MARKER_TTL_MS ? "valid" : "expired";
   } catch {
     return "absent";
   }
 }
 
-async function hasPendingMarker(
-  cwd: string,
-  sessionId: string,
-): Promise<boolean> {
-  const paths = await markerPaths(cwd, sessionId);
+async function hasPendingMarker(sessionId: string): Promise<boolean> {
+  const paths = await markerPaths(sessionId);
   try {
     await Deno.stat(paths.pendingPath);
     return true;
@@ -196,22 +175,18 @@ async function hasPendingMarker(
 // --- Bypass marker helpers (codex-compatible schema) ---
 
 export async function bypassMarkerInfo(
-  cwd: string,
   sessionId: string,
 ): Promise<BypassMarkerInfo> {
   if (!sessionId) {
     throw new Error("session_id is required");
   }
   const home = homeDir();
-  const cwdMarkerHash = await cwdHash(cwd);
   const sessionMarkerHash = await sessionHash(sessionId);
   const plansDir = `${home}/.claude/plans`;
   return {
     plansDir,
-    cwdHash: cwdMarkerHash,
     sessionHash: sessionMarkerHash,
-    path:
-      `${plansDir}/.bypass-plan-gate-${cwdMarkerHash}-${sessionMarkerHash}.json`,
+    path: `${plansDir}/.bypass-plan-gate-${sessionMarkerHash}.json`,
   };
 }
 
@@ -249,17 +224,14 @@ async function atomicWriteText(path: string, content: string): Promise<void> {
 }
 
 export async function activateBypassMarker(input: {
-  cwd: string;
   session_id: string;
   prompt?: string;
 }): Promise<BypassMarkerInfo> {
-  const info = await bypassMarkerInfo(input.cwd, input.session_id);
+  const info = await bypassMarkerInfo(input.session_id);
   await Deno.mkdir(info.plansDir, { recursive: true });
   const marker: BypassMarker = {
     version: 1,
     createdAt: new Date().toISOString(),
-    cwd: await canonical(input.cwd),
-    cwdHash: info.cwdHash,
     session_id: input.session_id,
     sessionHash: info.sessionHash,
     prompt: input.prompt ?? "",
@@ -273,25 +245,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function hasValidBypassMarker(
-  cwd: string,
   sessionId: string,
 ): Promise<boolean> {
   if (!sessionId) {
     return false;
   }
   try {
-    const info = await bypassMarkerInfo(cwd, sessionId);
+    const info = await bypassMarkerInfo(sessionId);
     await assertRegularFile(info.path);
     const parsed: unknown = JSON.parse(await Deno.readTextFile(info.path));
     if (!isRecord(parsed)) {
       return false;
     }
-    const canonicalCwd = await canonical(cwd);
     return parsed.version === 1 &&
       typeof parsed.createdAt === "string" &&
       parsed.createdAt.length > 0 &&
-      parsed.cwd === canonicalCwd &&
-      parsed.cwdHash === info.cwdHash &&
       typeof parsed.prompt === "string" &&
       parsed.sessionHash === info.sessionHash &&
       parsed.session_id === sessionId;
@@ -354,12 +322,12 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
     };
   }
 
-  const state = await cwdMarkerState(cwd, sessionId);
+  const state = await markerState(sessionId);
   if (state === "valid") {
     return { kind: "allow", reason: "marker-valid" };
   }
 
-  if (await hasValidBypassMarker(cwd, sessionId)) {
+  if (await hasValidBypassMarker(sessionId)) {
     return { kind: "allow", reason: "bypass-valid" };
   }
 
@@ -371,7 +339,7 @@ export async function checkGate(input: HookInput): Promise<GateDecision> {
       "`/plan <実装したい内容>` で再実行してください。",
     ].join("\n");
   } else {
-    const pendingExists = await hasPendingMarker(cwd, sessionId);
+    const pendingExists = await hasPendingMarker(sessionId);
     reason = pendingExists
       ? [
         "計画は作成されていますが、まだユーザーによって承認されていません。",

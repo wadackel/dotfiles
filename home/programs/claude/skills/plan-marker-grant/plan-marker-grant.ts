@@ -2,10 +2,10 @@
 
 // /plan-marker-grant skill implementation.
 //
-// Writes / reads / deletes a session+cwd scoped plan-gate marker so the plan-gate
+// Writes / reads / deletes a session-scoped plan-gate marker so the plan-gate
 // allows Edit/Write/MultiEdit even without an active /plan marker. Invoked from
 // SKILL.md via `!` preprocessing — the skill body passes argv as
-//   [subcommand, cwd, sessionId]
+//   [subcommand, sessionId]
 // with subcommand expanded from `$ARGUMENTS`. Empty / missing subcommand is
 // treated as "activate".
 //
@@ -37,34 +37,31 @@ function requireArg(value: string | undefined, name: string): string {
   return value;
 }
 
-async function runActivate(cwd: string, sessionId: string): Promise<unknown> {
+async function runActivate(sessionId: string): Promise<unknown> {
   const marker = await activateBypassMarker({
-    cwd,
     session_id: sessionId,
   });
   return {
     status: "activated",
     marker: {
       path: marker.path,
-      cwdHash: marker.cwdHash,
       sessionHash: marker.sessionHash,
     },
   };
 }
 
-async function runStatus(cwd: string, sessionId: string): Promise<unknown> {
-  const info = await bypassMarkerInfo(cwd, sessionId);
-  const valid = await hasValidBypassMarker(cwd, sessionId);
+async function runStatus(sessionId: string): Promise<unknown> {
+  const info = await bypassMarkerInfo(sessionId);
+  const valid = await hasValidBypassMarker(sessionId);
   return {
     valid,
     path: info.path,
-    cwdHash: info.cwdHash,
     sessionHash: info.sessionHash,
   };
 }
 
-async function runClear(cwd: string, sessionId: string): Promise<unknown> {
-  const info = await bypassMarkerInfo(cwd, sessionId);
+async function runClear(sessionId: string): Promise<unknown> {
+  const info = await bypassMarkerInfo(sessionId);
   try {
     await Deno.remove(info.path);
     return { status: "cleared", path: info.path };
@@ -78,18 +75,17 @@ async function runClear(cwd: string, sessionId: string): Promise<unknown> {
 
 if (import.meta.main) {
   try {
-    const [rawSubcommand, rawCwd, rawSessionId] = Deno.args;
+    const [rawSubcommand, rawSessionId] = Deno.args;
     const subcommand = parseSubcommand(rawSubcommand);
-    const cwd = requireArg(rawCwd, "cwd");
     const sessionId = requireArg(rawSessionId, "session_id");
 
     let result: unknown;
     if (subcommand === "activate") {
-      result = await runActivate(cwd, sessionId);
+      result = await runActivate(sessionId);
     } else if (subcommand === "status") {
-      result = await runStatus(cwd, sessionId);
+      result = await runStatus(sessionId);
     } else {
-      result = await runClear(cwd, sessionId);
+      result = await runClear(sessionId);
     }
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {

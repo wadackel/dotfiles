@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Design-first entrypoint. Runs the full planning lifecycle (parse → explore → draft → deepen → decompose) and writes the plan to ~/.claude/plans/ with a task list and a cwd-hash gate marker that unlocks Edit/Write/MultiEdit for the session.
+description: Design-first entrypoint. Runs the full planning lifecycle (parse → explore → draft → deepen → decompose) and writes the plan to ~/.claude/plans/ with a task list and a session-hash gate marker that unlocks Edit/Write/MultiEdit for the session.
 argument-hint: "[feature description]"
 disable-model-invocation: true
 ---
@@ -332,21 +332,21 @@ TaskUpdate(gateId, addBlockedBy: implTaskIds)
 
 ## Phase 6 — ACTIVATE PENDING
 
-Write a session+cwd-hash **pending** marker so the user can approve the plan by typing `/impl`. The marker is `.pending-<cwd-hash>-<session-hash>` (NOT `.active-<cwd-hash>-<session-hash>`). The active marker is created only when the user types `/impl` as a top-level prompt — the `plan-approval-tracker.ts` UserPromptSubmit hook performs the promotion.
+Write a session-scoped **pending** marker so the user can approve the plan by typing `/impl`. The marker is `.pending-<session-hash>` (NOT `.active-<session-hash>`). The active marker is created only when the user types `/impl` as a top-level prompt — the `plan-approval-tracker.ts` UserPromptSubmit hook performs the promotion.
 
-This two-marker scheme exists because auto mode encourages "execute immediately"; if `/plan` itself created `.active-<cwd-hash>-<session-hash>`, the AI could chain `/plan` → `/impl` in the same turn without user approval. UserPromptSubmit fires only on real user keystrokes (not AI skill-tool invocations), so requiring user input `/impl` to promote `.pending-` → `.active-` is the only mechanical way to distinguish AI self-invocation from human approval.
+This two-marker scheme exists because auto mode encourages "execute immediately"; if `/plan` itself created `.active-<session-hash>`, the AI could chain `/plan` → `/impl` in the same turn without user approval. UserPromptSubmit fires only on real user keystrokes (not AI skill-tool invocations), so requiring user input `/impl` to promote `.pending-` → `.active-` is the only mechanical way to distinguish AI self-invocation from human approval.
 
-Markers are also scoped: each Claude session gets its own `<session-hash>`, so a stale active marker from a different session in the same cwd does not grant edit rights to the current session. A per-session `/plan` is structurally required.
+Markers are session-scoped: each Claude session gets its own `<session-hash>`, so a marker held by a different session does not grant edit rights to the current session. A per-session `/plan` is structurally required. `cwd` is intentionally NOT part of the marker key — Claude Code updates the hook payload's `cwd` to track Bash `cd`, so a cwd-bound marker would be invalidated by any subdirectory navigation mid-session.
 
 **Important**: the `PLAN_FILE_PATH` value below is **template-substituted by the agent at invocation time**. This is not bash variable expansion — the agent writes the literal plan path into the bash command string. `$CLAUDE_CODE_SESSION_ID` is the Claude-Code-provided environment variable available in the Bash tool's shell (note the `CLAUDE_CODE_` prefix; the `!` substitution syntax used by `/plan-marker-grant` exposes a different `CLAUDE_SESSION_ID` alias). The pending-marker content (the plan path) is copied verbatim into the active marker at promotion time.
 
-Marker operations are delegated to a deterministic helper. The agent does not assemble cwd-hash / session-hash or marker paths in inline shell.
+Marker operations are delegated to a deterministic helper. The agent does not assemble session-hash or marker paths in inline shell.
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3, agent-substituted>' "$PWD" "$CLAUDE_CODE_SESSION_ID"
+deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
 ```
 
--- Why: `plan-marker.ts` computes the same canonical session+cwd-hash as `plan-gate.ts`, atomically writes the pending marker, and clears stale active markers for this session+cwd on a re-plan. The 24-hour TTL is checked by both `plan-gate.ts` and `plan-marker.ts`; each `/plan` invocation updates the pending mtime, invalidating prior approvals.
+-- Why: `plan-marker.ts` derives the same session-hash as `plan-gate.ts`, atomically writes the pending marker, and clears stale active markers for this session on a re-plan. The 24-hour TTL is checked by both `plan-gate.ts` and `plan-marker.ts`; each `/plan` invocation updates the pending mtime, invalidating prior approvals.
 
 ### Output to user
 

@@ -16,7 +16,6 @@ async function withHome<T>(
   runTest: (
     ctx: {
       home: string;
-      cwd: string;
       sessionId: string;
       activePath: string;
       pendingPath: string;
@@ -29,16 +28,11 @@ async function withHome<T>(
     dir: "/tmp",
     prefix: "claude-marker-home-",
   });
-  const cwd = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "claude-marker-cwd-",
-  });
   Deno.env.set("HOME", home);
-  const paths = await markerPaths(cwd, sessionId);
+  const paths = await markerPaths(sessionId);
   try {
     return await runTest({
       home,
-      cwd,
       sessionId,
       activePath: paths.activePath,
       pendingPath: paths.pendingPath,
@@ -50,7 +44,6 @@ async function withHome<T>(
       Deno.env.set("HOME", originalHome);
     }
     await Deno.remove(home, { recursive: true });
-    await Deno.remove(cwd, { recursive: true });
   }
 }
 
@@ -62,12 +55,12 @@ async function writePlan(home: string, name = "plan.md"): Promise<string> {
 }
 
 Deno.test("activatePending writes pending marker and removes existing active marker", async () => {
-  await withHome(async ({ home, cwd, sessionId, activePath, pendingPath }) => {
+  await withHome(async ({ home, sessionId, activePath, pendingPath }) => {
     const oldPlan = await writePlan(home, "old.md");
     const newPlan = await writePlan(home, "new.md");
     await Deno.writeTextFile(activePath, `${oldPlan}\n`);
 
-    const paths = await activatePending(newPlan, cwd, sessionId);
+    const paths = await activatePending(newPlan, sessionId);
 
     assertEquals(paths.pendingPath, pendingPath);
     assertEquals(await Deno.readTextFile(pendingPath), `${newPlan}\n`);
@@ -82,10 +75,10 @@ Deno.test("activatePending writes pending marker and removes existing active mar
 });
 
 Deno.test("activatePending rejects relative plan paths", async () => {
-  await withHome(async ({ cwd, sessionId }) => {
+  await withHome(async ({ sessionId }) => {
     let message = "";
     try {
-      await activatePending("relative-plan.md", cwd, sessionId);
+      await activatePending("relative-plan.md", sessionId);
     } catch (err) {
       message = (err as Error).message;
     }
@@ -94,43 +87,43 @@ Deno.test("activatePending rejects relative plan paths", async () => {
 });
 
 Deno.test("getStatus reports pending, active, expired active, and absent states", async () => {
-  await withHome(async ({ home, cwd, sessionId, activePath }) => {
+  await withHome(async ({ home, sessionId, activePath }) => {
     const plan = await writePlan(home);
-    assertEquals((await getStatus(cwd, sessionId)).state, "absent");
+    assertEquals((await getStatus(sessionId)).state, "absent");
 
-    await activatePending(plan, cwd, sessionId);
-    const pending = await getStatus(cwd, sessionId);
+    await activatePending(plan, sessionId);
+    const pending = await getStatus(sessionId);
     assertEquals(pending.state, "pending");
     assertEquals(pending.planPath, plan);
 
-    const result = await promote(cwd, sessionId);
+    const result = await promote(sessionId);
     assertEquals(result.reason, "promoted");
-    const active = await getStatus(cwd, sessionId);
+    const active = await getStatus(sessionId);
     assertEquals(active.state, "active");
     assertEquals(active.planPath, plan);
 
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
     await Deno.utime(activePath, stale, stale);
-    assertEquals((await getStatus(cwd, sessionId)).state, "active-expired");
+    assertEquals((await getStatus(sessionId)).state, "active-expired");
   });
 });
 
 Deno.test("requireActive prints only valid active plan path", async () => {
-  await withHome(async ({ home, cwd, sessionId }) => {
+  await withHome(async ({ home, sessionId }) => {
     const plan = await writePlan(home);
-    await activatePending(plan, cwd, sessionId);
-    await promote(cwd, sessionId);
-    assertEquals(await requireActive(cwd, sessionId), plan);
+    await activatePending(plan, sessionId);
+    await promote(sessionId);
+    assertEquals(await requireActive(sessionId), plan);
   });
 });
 
 Deno.test("requireActive rejects pending-only marker", async () => {
-  await withHome(async ({ home, cwd, sessionId }) => {
+  await withHome(async ({ home, sessionId }) => {
     const plan = await writePlan(home);
-    await activatePending(plan, cwd, sessionId);
+    await activatePending(plan, sessionId);
     let message = "";
     try {
-      await requireActive(cwd, sessionId);
+      await requireActive(sessionId);
     } catch (err) {
       message = (err as Error).message;
     }
@@ -139,24 +132,24 @@ Deno.test("requireActive rejects pending-only marker", async () => {
 });
 
 Deno.test("clearActive is idempotent", async () => {
-  await withHome(async ({ home, cwd, sessionId }) => {
+  await withHome(async ({ home, sessionId }) => {
     const plan = await writePlan(home);
-    await activatePending(plan, cwd, sessionId);
-    await promote(cwd, sessionId);
-    assertEquals(await clearActive(cwd, sessionId), true);
-    assertEquals(await clearActive(cwd, sessionId), false);
-    assertEquals((await getStatus(cwd, sessionId)).state, "absent");
+    await activatePending(plan, sessionId);
+    await promote(sessionId);
+    assertEquals(await clearActive(sessionId), true);
+    assertEquals(await clearActive(sessionId), false);
+    assertEquals((await getStatus(sessionId)).state, "absent");
   });
 });
 
 Deno.test("promote preserves active marker when one already exists", async () => {
-  await withHome(async ({ home, cwd, sessionId, activePath, pendingPath }) => {
+  await withHome(async ({ home, sessionId, activePath, pendingPath }) => {
     const oldPlan = await writePlan(home, "old.md");
     const newPlan = await writePlan(home, "new.md");
     await Deno.writeTextFile(activePath, `${oldPlan}\n`);
     await Deno.writeTextFile(pendingPath, `${newPlan}\n`);
 
-    const result = await promote(cwd, sessionId);
+    const result = await promote(sessionId);
 
     assertEquals(result.promoted, false);
     assertEquals(result.reason, "already-active");
@@ -166,39 +159,39 @@ Deno.test("promote preserves active marker when one already exists", async () =>
 });
 
 Deno.test("promote rejects expired pending marker", async () => {
-  await withHome(async ({ home, cwd, sessionId, pendingPath }) => {
+  await withHome(async ({ home, sessionId, pendingPath }) => {
     const plan = await writePlan(home);
     await Deno.writeTextFile(pendingPath, `${plan}\n`);
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
     await Deno.utime(pendingPath, stale, stale);
 
-    const result = await promote(cwd, sessionId);
+    const result = await promote(sessionId);
 
     assertEquals(result.promoted, false);
     assertEquals(result.reason, "expired");
-    assertEquals((await getStatus(cwd, sessionId)).state, "pending-expired");
+    assertEquals((await getStatus(sessionId)).state, "pending-expired");
   });
 });
 
 Deno.test("run command parser activates, requires, and clears markers", async () => {
-  await withHome(async ({ home, cwd, sessionId }) => {
+  await withHome(async ({ home, sessionId }) => {
     const plan = await writePlan(home);
-    await run(["activate-pending", plan, cwd, sessionId]);
+    await run(["activate-pending", plan, sessionId]);
 
     let pendingError = "";
     try {
-      await run(["require-active", cwd, sessionId]);
+      await run(["require-active", sessionId]);
     } catch (err) {
       pendingError = (err as Error).message;
     }
     assertStringIncludes(pendingError, "not approved");
 
-    const promoted = await promote(cwd, sessionId);
+    const promoted = await promote(sessionId);
     assertEquals(promoted.reason, "promoted");
 
-    await run(["require-active", cwd, sessionId]);
-    await run(["clear-active", cwd, sessionId]);
-    assertEquals((await getStatus(cwd, sessionId)).state, "absent");
+    await run(["require-active", sessionId]);
+    await run(["clear-active", sessionId]);
+    assertEquals((await getStatus(sessionId)).state, "absent");
   });
 });
 
@@ -213,11 +206,11 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
     return;
   }
 
-  await withHome(async ({ home, cwd, sessionId, activePath }) => {
+  await withHome(async ({ home, sessionId, activePath }) => {
     const plan = await writePlan(home);
     const requireActiveCmd = () =>
       new Deno.Command(scriptPath, {
-        args: ["require-active", cwd, sessionId],
+        args: ["require-active", sessionId],
         stdout: "piped",
         stderr: "piped",
       }).output();
@@ -230,7 +223,7 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
     );
 
     const activate = await new Deno.Command(scriptPath, {
-      args: ["activate-pending", plan, cwd, sessionId],
+      args: ["activate-pending", plan, sessionId],
       stdout: "piped",
       stderr: "piped",
     }).output();
@@ -243,7 +236,7 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
       "not approved",
     );
 
-    assertEquals((await promote(cwd, sessionId)).reason, "promoted");
+    assertEquals((await promote(sessionId)).reason, "promoted");
     const active = await requireActiveCmd();
     assertEquals(active.code, 0);
     assertEquals(new TextDecoder().decode(active.stdout), `${plan}\n`);
@@ -260,13 +253,13 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
 });
 
 Deno.test("getStatus rejects symlinked markers", async () => {
-  await withHome(async ({ home, cwd, sessionId, activePath }) => {
+  await withHome(async ({ home, sessionId, activePath }) => {
     const plan = await writePlan(home);
     await Deno.symlink(plan, activePath);
 
     let message = "";
     try {
-      await getStatus(cwd, sessionId);
+      await getStatus(sessionId);
     } catch (err) {
       message = (err as Error).message;
     }
@@ -275,11 +268,11 @@ Deno.test("getStatus rejects symlinked markers", async () => {
 });
 
 Deno.test("activatePending rejects plan paths outside the plans directory", async () => {
-  await withHome(async ({ cwd, sessionId }) => {
+  await withHome(async ({ sessionId }) => {
     const outside = await Deno.makeTempFile({ dir: "/tmp", suffix: ".md" });
     let message = "";
     try {
-      await activatePending(outside, cwd, sessionId);
+      await activatePending(outside, sessionId);
     } catch (err) {
       message = (err as Error).message;
     } finally {
@@ -290,7 +283,7 @@ Deno.test("activatePending rejects plan paths outside the plans directory", asyn
 });
 
 Deno.test("activatePending rejects a symlinked plans directory", async () => {
-  await withHome(async ({ home, cwd, sessionId }) => {
+  await withHome(async ({ home, sessionId }) => {
     const target = await Deno.makeTempDir({
       dir: "/tmp",
       prefix: "claude-marker-plans-target-",
@@ -302,7 +295,7 @@ Deno.test("activatePending rejects a symlinked plans directory", async () => {
 
     let message = "";
     try {
-      await activatePending(plan, cwd, sessionId);
+      await activatePending(plan, sessionId);
     } catch (err) {
       message = (err as Error).message;
     } finally {
@@ -324,9 +317,9 @@ Deno.test("subprocess promote command is not exposed", async () => {
     return;
   }
 
-  await withHome(async ({ cwd, sessionId }) => {
+  await withHome(async ({ sessionId }) => {
     const output = await new Deno.Command(scriptPath, {
-      args: ["promote", cwd, sessionId],
+      args: ["promote", sessionId],
       stdout: "piped",
       stderr: "piped",
     }).output();
@@ -344,18 +337,14 @@ Deno.test("cross-session: session A の pending は session B からは absent",
     dir: "/tmp",
     prefix: "claude-marker-cross-home-",
   });
-  const cwd = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "claude-marker-cross-cwd-",
-  });
   Deno.env.set("HOME", home);
   try {
     const plan = await writePlan(home);
-    await activatePending(plan, cwd, "session-A");
-    const statusA = await getStatus(cwd, "session-A");
+    await activatePending(plan, "session-A");
+    const statusA = await getStatus("session-A");
     assertEquals(statusA.state, "pending");
 
-    const statusB = await getStatus(cwd, "session-B");
+    const statusB = await getStatus("session-B");
     assertEquals(statusB.state, "absent");
   } finally {
     if (originalHome === undefined) {
@@ -364,7 +353,6 @@ Deno.test("cross-session: session A の pending は session B からは absent",
       Deno.env.set("HOME", originalHome);
     }
     await Deno.remove(home, { recursive: true });
-    await Deno.remove(cwd, { recursive: true });
   }
 });
 
@@ -374,22 +362,18 @@ Deno.test("cross-session: session A の active marker (promote 後) は session 
     dir: "/tmp",
     prefix: "claude-marker-cross-home-",
   });
-  const cwd = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "claude-marker-cross-cwd-",
-  });
   Deno.env.set("HOME", home);
   try {
     const plan = await writePlan(home);
-    await activatePending(plan, cwd, "session-A");
-    await promote(cwd, "session-A");
+    await activatePending(plan, "session-A");
+    await promote("session-A");
     // session A は active 状態
-    assertEquals(await requireActive(cwd, "session-A"), plan);
+    assertEquals(await requireActive("session-A"), plan);
 
     // session B からは absent
     let messageB = "";
     try {
-      await requireActive(cwd, "session-B");
+      await requireActive("session-B");
     } catch (err) {
       messageB = (err as Error).message;
     }
@@ -401,7 +385,6 @@ Deno.test("cross-session: session A の active marker (promote 後) は session 
       Deno.env.set("HOME", originalHome);
     }
     await Deno.remove(home, { recursive: true });
-    await Deno.remove(cwd, { recursive: true });
   }
 });
 
@@ -411,26 +394,22 @@ Deno.test("cross-session: session A の clear-active は session B の active ma
     dir: "/tmp",
     prefix: "claude-marker-cross-home-",
   });
-  const cwd = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "claude-marker-cross-cwd-",
-  });
   Deno.env.set("HOME", home);
   try {
     const plan = await writePlan(home);
     // 両セッションを active 化
-    await activatePending(plan, cwd, "session-A");
-    await promote(cwd, "session-A");
-    await activatePending(plan, cwd, "session-B");
-    await promote(cwd, "session-B");
-    assertEquals((await getStatus(cwd, "session-A")).state, "active");
-    assertEquals((await getStatus(cwd, "session-B")).state, "active");
+    await activatePending(plan, "session-A");
+    await promote("session-A");
+    await activatePending(plan, "session-B");
+    await promote("session-B");
+    assertEquals((await getStatus("session-A")).state, "active");
+    assertEquals((await getStatus("session-B")).state, "active");
 
     // session A だけクリア
-    assertEquals(await clearActive(cwd, "session-A"), true);
-    assertEquals((await getStatus(cwd, "session-A")).state, "absent");
+    assertEquals(await clearActive("session-A"), true);
+    assertEquals((await getStatus("session-A")).state, "absent");
     // session B は影響なし
-    assertEquals((await getStatus(cwd, "session-B")).state, "active");
+    assertEquals((await getStatus("session-B")).state, "active");
   } finally {
     if (originalHome === undefined) {
       Deno.env.delete("HOME");
@@ -438,7 +417,6 @@ Deno.test("cross-session: session A の clear-active は session B の active ma
       Deno.env.set("HOME", originalHome);
     }
     await Deno.remove(home, { recursive: true });
-    await Deno.remove(cwd, { recursive: true });
   }
 });
 
@@ -453,10 +431,10 @@ Deno.test("CLI: activate-pending without session_id → exit 1 usage", async () 
     return;
   }
 
-  await withHome(async ({ home, cwd }) => {
+  await withHome(async ({ home }) => {
     const plan = await writePlan(home);
     const output = await new Deno.Command(scriptPath, {
-      args: ["activate-pending", plan, cwd], // session-id omitted
+      args: ["activate-pending", plan], // session-id omitted
       stdout: "piped",
       stderr: "piped",
     }).output();
@@ -479,9 +457,9 @@ Deno.test("CLI: require-active without session_id → exit 1 usage", async () =>
     return;
   }
 
-  await withHome(async ({ cwd }) => {
+  await withHome(async () => {
     const output = await new Deno.Command(scriptPath, {
-      args: ["require-active", cwd], // session-id omitted
+      args: ["require-active"], // session-id omitted
       stdout: "piped",
       stderr: "piped",
     }).output();

@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
 
 // UserPromptSubmit hook:
-// Promotes ~/.claude/plans/.pending-<cwd-hash>-<session-hash> →
-//          ~/.claude/plans/.active-<cwd-hash>-<session-hash>
+// Promotes ~/.claude/plans/.pending-<session-hash> →
+//          ~/.claude/plans/.active-<session-hash>
 // when the user types `/impl` as the first slash command of their prompt.
 //
 // - Only the user's actual keystroke fires UserPromptSubmit; AI Skill-tool
@@ -50,11 +50,13 @@ if (import.meta.main) {
     const sessionId =
       (typeof input.session_id === "string" ? input.session_id : "").trim();
 
+    // cwd 条件は defensive: hook payload に cwd が来ていない異常入力では promote を試みない。
+    // promote 自体は sessionId だけで動くため、cwd は識別キーではなく sanity check。
     if (!cwd || !sessionId || !isApprovalPrompt(prompt)) {
       Deno.exit(0);
     }
 
-    const result = await promote(cwd, sessionId);
+    const result = await promote(sessionId);
     if (result.reason === "io-error") {
       console.error(
         `[plan-approval-tracker] promote failed: ${
