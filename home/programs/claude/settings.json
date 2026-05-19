@@ -1,4 +1,5 @@
 {
+  "skillListingBudgetFraction": 0.05,
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -772,7 +773,6 @@
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "skillListingBudgetFraction": 0.05,
   "preferredNotifChannel": "terminal_bell",
   "teammateMode": "in-process",
   "agentPushNotifEnabled": true,

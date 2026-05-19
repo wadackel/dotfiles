@@ -349,11 +349,44 @@ ab-state-refresh() {
 
   agent-browser close >/dev/null 2>&1
 
+  # Stage all snapshots (existing main.json seed + this-run saves) under a
+  # tight-umask temp dir, then merge into main.json in one jq pass at the end.
+  # Files are named state.NNNN.json (%04d zero-padded) so the lex sort fed to
+  # jq -s matches capture order; group_by | map(.[-1]) keeps the LAST occurrence
+  # per key, so later (newer) snapshots win on cookie / origin collisions.
+  # state.0000.json is reserved for the seed copy of an existing main.json,
+  # so cookies / origins untouched this run survive a partial refresh.
+  # Note: %04d supports up to 9999 captures per invocation; realistic
+  # ab-state-refresh runs stay well under this.
+  local merge_dir
+  merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
+    print -u2 "ab-state-refresh: mktemp failed."
+    return 1
+  }
+  # Function-local trap (zsh-specific): fires on any return path including
+  # signals, so each early-return below doesn't need its own `rm -rf`. The
+  # trap auto-unsets when the function exits.
+  trap 'rm -rf "$merge_dir"' EXIT INT TERM
+  if [[ -s "$state_path" ]]; then
+    if jq empty "$state_path" >/dev/null 2>&1; then
+      (umask 077 && cp "$state_path" "$merge_dir/state.0000.json") || {
+        print -u2 "ab-state-refresh: failed to snapshot existing $state_path."
+        return 1
+      }
+    else
+      print -u2 "ab-state-refresh: existing $state_path is not valid JSON; ignoring and rebuilding."
+    fi
+  fi
+
+  # Origins picked in the -i path. Declared at function scope so the
+  # missing-origin diagnostic in the common tail can see it.
+  local -a sel_origins=()
+
   case "${1:-}" in
   -i)
     # Interactive: pick from currently-open Chrome tabs via fzf, then save
-    # each picked tab's origin (switch → wait → state save) and merge with jq.
-    # Active tab on exit is the last switched-to tab; user can Cmd+` to restore.
+    # each picked tab's snapshot into merge_dir. Active tab on exit is the
+    # last switched-to tab; user can Cmd+` to restore.
     if (( $# > 1 )); then
       print -u2 "ab-state-refresh: cannot combine -i with positional URL arguments"
       print -u2 "  usage: ab-state-refresh [-i | URL [URL ...]]"
@@ -414,30 +447,20 @@ ab-state-refresh() {
       return 0
     fi
 
-    local -a sel_tab_ids sel_origins
+    local -a sel_tab_ids
     local _t_id _t_origin _t_display
     while IFS=$'\t' read -r _t_id _t_origin _t_display; do
       sel_tab_ids+=("$_t_id")
       sel_origins+=("$_t_origin")
     done <<< "$selected"
 
-    local merge_dir total=${#sel_tab_ids[@]}
-    merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
-      print -u2 "ab-state-refresh: mktemp failed."
-      return 1
-    }
-    # Pre-create main.json with mode 600 before the jq redirect (same TOCTOU
-    # rationale as the URL-arg path above).
-    (umask 077 && : > "$state_path") || {
-      rm -rf "$merge_dir"
-      print -u2 "ab-state-refresh: failed to prepare $state_path."
-      return 1
-    }
+    local total=${#sel_tab_ids[@]}
     (
       umask 077
-      local idx=0 tab_id
+      local idx=0 tab_id out
       for tab_id in "${sel_tab_ids[@]}"; do
         idx=$((idx + 1))
+        out=$(printf '%s/state.%04d.json' "$merge_dir" $idx)
         print -u2 "ab-state-refresh: switching to tab $idx/$total: $tab_id"
         # `tab tN` switches synchronously (verified empirically). If the user
         # closed the tab between fzf confirm and now, the switch fails — warn
@@ -450,75 +473,40 @@ ab-state-refresh() {
           continue
         fi
         agent-browser wait 2000 || exit 1
-        agent-browser state save "$merge_dir/state.${idx}.json" || exit 1
+        agent-browser state save "$out" || exit 1
       done
-      # If every tab switch failed, the glob below has no matches and jq -s
-      # exits non-zero, which the outer wrapper catches.
-      jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}' \
-        "$merge_dir"/state.*.json > "$state_path" || exit 1
     ) || {
-      rm -rf "$merge_dir"
       print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
       return 1
     }
-    rm -rf "$merge_dir"
-
-    # Diagnostic: warn if any picked origin is absent from the saved state
-    # (typical cause: tab was on chrome-error://, e.g. local dev server down).
-    local saved_origins missing_list
-    saved_origins=$(jq -r '.origins[].origin' "$state_path" 2>/dev/null)
-    local -a missing
-    local _o
-    for _o in "${sel_origins[@]}"; do
-      if ! print -r -- "$saved_origins" | grep -Fxq -- "$_o"; then
-        missing+=("$_o")
-      fi
-    done
-    if (( ${#missing[@]} > 0 )); then
-      missing_list="${(j:, :)missing}"
-      print -u2 "ab-state-refresh: selected origins not saved: $missing_list"
-    fi
     ;;
   *)
     if (( $# == 0 )); then
       # No URLs: agent-browser state save captures whatever Page Target is
-      # currently focused in the user's Chrome plus its iframes. To capture
-      # additional origins, pass them as arguments.
+      # currently focused in the user's Chrome plus its iframes. Save into
+      # merge_dir (not directly to main.json) so the common tail can merge
+      # it with the existing-file seed.
       (
         umask 077
         agent-browser connect "$ws_url" || exit 1
-        agent-browser state save "$state_path" || exit 1
+        agent-browser state save "$merge_dir/state.0001.json" || exit 1
       ) || {
         print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
         return 1
       }
     else
       # Multi-URL: state save only captures the focused tab + iframes, so open
-      # a new tab per URL, save each to a temp file, then merge origins via jq.
-      # cookies are browser-context-wide so any single save's cookies suffice
-      # (we keep the last). Each `tab new` opens a visible foreground tab — the
-      # user must close them manually after the run.
-      local merge_dir total=$#
-      merge_dir=$(umask 077 && mktemp -d "${TMPDIR:-/tmp}/ab-state-refresh.XXXXXX") || {
-        print -u2 "ab-state-refresh: mktemp failed."
-        return 1
-      }
-      # Pre-create the state file under tight perms BEFORE the jq redirect below.
-      # `> "$state_path"` is parsed by the parent shell, so the file would
-      # otherwise be created with the parent's umask (typically 022 → mode 644)
-      # and exposed for the duration of jq's write. On first-ever runs the
-      # subsequent chmod 600 closes the window only after secrets are written.
-      (umask 077 && : > "$state_path") || {
-        rm -rf "$merge_dir"
-        print -u2 "ab-state-refresh: failed to prepare $state_path."
-        return 1
-      }
+      # a new tab per URL and save each into merge_dir. Each `tab new` opens
+      # a visible foreground tab — the user must close them manually after
+      # the run.
+      local total=$#
       (
         umask 077
         agent-browser connect "$ws_url" || exit 1
-        local idx=0 url
+        local idx=0 url out
         for url in "$@"; do
           idx=$((idx + 1))
+          out=$(printf '%s/state.%04d.json' "$merge_dir" $idx)
           print -u2 "ab-state-refresh: opening tab $idx/$total: $url"
           # `tab new` already waits for the load event; the extra 2 s gives async
           # XHR-driven auth state a chance to land in localStorage before save.
@@ -526,19 +514,74 @@ ab-state-refresh() {
           # hangs on ad-heavy or analytics-heavy sites).
           agent-browser tab new "$url" || exit 1
           agent-browser wait 2000 || exit 1
-          agent-browser state save "$merge_dir/state.${idx}.json" || exit 1
+          agent-browser state save "$out" || exit 1
         done
-        jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}' \
-          "$merge_dir"/state.*.json > "$state_path" || exit 1
       ) || {
-        rm -rf "$merge_dir"
         print -u2 "ab-state-refresh: failed to refresh state via $ws_url."
         return 1
       }
-      rm -rf "$merge_dir"
     fi
     ;;
   esac
+
+  # Common tail. Enumerate this-run snapshots (state.0000.json is the seed —
+  # exclude it from the diagnostic source). The (N) glob qualifier returns
+  # an empty match instead of tripping NOMATCH when no saves exist.
+  local -a new_save_files
+  local _f
+  for _f in "$merge_dir"/state.*.json(N); do
+    [[ "${_f:t}" == "state.0000.json" ]] && continue
+    new_save_files+=("$_f")
+  done
+  if (( ${#new_save_files[@]} == 0 )); then
+    print -u2 "ab-state-refresh: no new state captured; main.json unchanged."
+    return 1
+  fi
+
+  # -i missing-origin diagnostic. Read from this-run snapshots, not from
+  # $state_path — otherwise a seeded origin matching a picked tab would
+  # silently suppress the warning even when this run failed to capture it
+  # (e.g. tab on chrome-error://). `(@f)` splits jq's newline-separated
+  # output into a zsh array; `[(Ie)$_o]` returns 0 when no exact match is
+  # found, avoiding a per-origin grep subshell.
+  if (( ${#sel_origins[@]} > 0 )); then
+    local -a _captured
+    _captured=( ${(@f)"$(jq -rs '[.[] | (.origins // [])[].origin] | unique | .[]' "${new_save_files[@]}" 2>/dev/null)"} )
+    local -a _missing
+    local _o
+    for _o in "${sel_origins[@]}"; do
+      (( ${_captured[(Ie)$_o]} )) || _missing+=("$_o")
+    done
+    if (( ${#_missing[@]} > 0 )); then
+      print -u2 "ab-state-refresh: selected origins not saved: ${(j:, :)_missing}"
+    fi
+  fi
+
+  # Pre-create main.json with mode 600 before the jq redirect: `> "$state_path"`
+  # is parsed by the parent shell, which would otherwise use its umask
+  # (typically 022 → mode 644) and expose secrets for the duration of jq's
+  # write. Truncating under umask 077 closes that window before bytes land
+  # on disk; the chmod 600 below is defense-in-depth.
+  (umask 077 && : > "$state_path") || {
+    print -u2 "ab-state-refresh: failed to prepare $state_path."
+    return 1
+  }
+  # Merge: dedup cookies by [name, domain, path] and origins by .origin;
+  # later entries in jq's input order win on key collision (group_by is
+  # stable). With the seed at state.0000.json and this-run saves at
+  # state.0001.json+, newer captures override older values while untouched
+  # entries survive. `select(type == "object")` guards against any input
+  # whose top-level value isn't a JSON object (e.g. a save that produced
+  # `null` or a scalar). `add // []` guards the empty-input case.
+  jq -s '
+    {
+      cookies: ((map(select(type == "object") | .cookies // []) | add // []) | group_by([.name, .domain, .path]) | map(.[-1])),
+      origins: ((map(select(type == "object") | .origins // []) | add // []) | group_by(.origin) | map(.[-1]))
+    }
+  ' "$merge_dir"/state.*.json > "$state_path" || {
+    print -u2 "ab-state-refresh: failed to merge state via $ws_url."
+    return 1
+  }
 
   chmod 600 "$state_path"
 

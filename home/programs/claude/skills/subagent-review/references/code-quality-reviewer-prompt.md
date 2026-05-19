@@ -75,7 +75,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 ### Nits
 [Minor style/preference items — empty if none]
 
-VERDICT: [PASS if no MUST_FIX issues, FAIL otherwise]
+VERDICT: [PASS if no MUST_FIX or SHOULD_FIX issues, FAIL otherwise]
 ```
 
 ## Usage

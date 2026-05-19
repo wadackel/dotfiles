@@ -60,7 +60,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 ## Workflow
 
-> **Cross-cutting invariant**: All non-blocker findings (`SHOULD_FIX` / `NIT` / Security `MEDIUM`/`LOW` / Spec populated `### Issues` and `### Notes`) from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission.
+> **Cross-cutting invariant**: All non-blocker findings (`NIT` / Security `MEDIUM`/`LOW` / Spec populated `### Issues` and `### Notes`) — plus any `SHOULD_FIX` / `HIGH` items the main session **intentionally deferred** (out-of-scope, follow-up issue, etc.) — from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission. Under the current policy `SHOULD_FIX` and `HIGH` are blockers, so a clean `PASS` exit normally yields zero of them in the final report.
 
 ### Step 1: Context Collection
 
@@ -105,7 +105,7 @@ Spawn a **fresh** `code-reviewer` subagent. Only after Spec Compliance passes.
 
 **Expected output**: Issues categorized by severity (MUST_FIX / SHOULD_FIX / NIT) + `VERDICT: PASS` or `VERDICT: FAIL`.
 
-FAIL only if MUST_FIX issues exist. SHOULD_FIX and NIT do not block.
+FAIL if MUST_FIX OR SHOULD_FIX issues exist. NIT does not block.
 
 ### Step 5: Handle Code Quality Result
 
@@ -114,7 +114,7 @@ Same handling as Step 3:
 | Result | Action |
 |--------|--------|
 | `VERDICT: PASS` | Task review complete |
-| `VERDICT: FAIL` | Fix MUST_FIX issues → re-review with fresh subagent |
+| `VERDICT: FAIL` | Fix MUST_FIX + SHOULD_FIX issues → re-review with fresh subagent |
 | 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review quality 3x failed]`, report to user |
 
 ### Step 6: Domain-Specific Reviewer Dispatch (parallel, orthogonal triggers)
@@ -169,9 +169,9 @@ When constructing each Agent prompt, prepend the `## Language Policy` directive 
 #### Handling results
 
 Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
-- A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX issue.
-- On FAIL: fix the MUST_FIX items, then re-dispatch **only the FAILed specialist(s)** with a fresh agent instance (max 3 rounds per specialist). Specialists that already returned PASS are not re-dispatched.
-- Step 6 as a whole is PASS only when every dispatched specialist returns PASS (or NIT-only) within its 3-round budget.
+- A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX or SHOULD_FIX issue (CRITICAL or HIGH for the 4-tier schema).
+- On FAIL: fix the MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) items, then re-dispatch **only the FAILed specialist(s)** with a fresh agent instance (max 3 rounds per specialist). Specialists that already returned PASS are not re-dispatched.
+- Step 6 as a whole is PASS only when every dispatched specialist returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
 
 ### Step 7: Security Dispatch Heuristic
 
@@ -183,7 +183,7 @@ Evaluated after Code Quality / Domain steps complete. Replaces the former separa
 - **Content**: `child_process`, `exec`, `eval`, `new Function`, SQL DML, `password`, `process.env.XXX`, `os/exec`, `exec.Command`, template-literal `fetch()`, string-concat HTTP
 - **Config**: `settings.json`, `.claude/**`, `.env*`, `permissions.allow*`, `secrets*.{yml,yaml,json,toml}`
 
-When any trigger fires, dispatch `security-auditor` (existing agent). Same MUST_FIX / SHOULD_FIX handling + max 3 rounds as Step 6.
+When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 6. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
 
 #### Implementation
 
@@ -218,7 +218,9 @@ Copy each section **verbatim** (file:line, description, suggested fix). Do not p
 
 ### Multi-round aggregation rule
 
-When a stage looped through multiple rounds (e.g. Round 1 `FAIL` with `MUST_FIX: A` + `SHOULD_FIX: B,C,D` → fix → Round 2 `PASS` with no SHOULD_FIX listed because the reviewer only re-checked the diff after the fix), take the **union of non-blocker findings across all rounds for that stage, deduped** (by file:line + description). This prevents structural loss of earlier-round SHOULD_FIX items that the final-round reviewer did not re-list.
+When a stage looped through multiple rounds, take the **union of non-blocker findings across all rounds for that stage, deduped** (by file:line + description). Under the current policy, NIT / MEDIUM / LOW are the only non-blockers, so this rule effectively guards against structural loss of those items if the final-round reviewer omits them.
+
+Note: SHOULD_FIX (and HIGH) are blockers under the current policy, so a stage that exits with `PASS` already has zero remaining SHOULD_FIX / HIGH items. They should appear in the final report only when the main session **intentionally deferred** them (e.g. flagged as out-of-scope and recorded on the task) — in that case keep them verbatim. Otherwise treat a non-empty SHOULD_FIX / HIGH list at PASS as a contradiction worth surfacing to the user.
 
 ### Zero-finding shortcut
 
@@ -274,10 +276,10 @@ This block is the canonical hand-off to `/impl`'s final report and MUST be trans
 
 - Skipping Spec Compliance and jumping to Code Quality (order is mandatory)
 - Passing main session's "what I implemented" summary to the reviewer
-- Accepting SHOULD_FIX as a blocker (only MUST_FIX blocks)
+- Accepting NIT / MEDIUM / LOW as a blocker (only MUST_FIX + SHOULD_FIX, and CRITICAL + HIGH for security, block)
 - Retrying the same subagent instead of spawning fresh
-- Proceeding to next task while review has open MUST_FIX issues
-- Suppressing or summarizing SHOULD_FIX / NIT / Spec Notes / Security MEDIUM/LOW findings in the user-facing report when overall verdict is PASS — these MUST flow through the [Mandatory Final Output](#mandatory-final-output) block verbatim
+- Proceeding to next task while review has open MUST_FIX or SHOULD_FIX (CRITICAL / HIGH) issues
+- Suppressing or summarizing NIT / Spec Notes / Security MEDIUM/LOW (and any intentionally deferred SHOULD_FIX / HIGH) findings in the user-facing report when overall verdict is PASS — these MUST flow through the [Mandatory Final Output](#mandatory-final-output) block verbatim
 
 ## Relationship with codex-review
 
