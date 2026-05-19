@@ -520,7 +520,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*|AskUserQuestion|ExitPlanMode",
         "hooks": [
           {
             "type": "command",
@@ -577,7 +577,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*",
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*|AskUserQuestion|ExitPlanMode",
         "hooks": [
           {
             "type": "command",

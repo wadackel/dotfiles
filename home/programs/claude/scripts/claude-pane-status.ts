@@ -80,6 +80,16 @@ const STALE_AT_SESSION_START = [
   "@pane_context_used_pct",
 ] as const satisfies readonly PaneOptionKey[];
 
+// Tools that pause for user input. PreToolUse for these flips status to
+// "waiting" so the picker no longer shows "run" while the agent is paused.
+// PostToolUse's resumeOpsIfStuck handles the waiting→running transition.
+// EnterPlanMode is intentionally absent: it declares plan-mode entry; the
+// actual approval pause happens at ExitPlanMode.
+const WAITING_TOOL_REASONS: Record<string, string> = {
+  AskUserQuestion: "question",
+  ExitPlanMode: "plan review",
+};
+
 // Per-tool subject extractors. Edit/Write/MultiEdit are intentionally absent:
 // they fall through to the "unknown tool" default (empty string), which lets
 // the existing @pane_last_edit_file + `file` segment continue to render the
@@ -389,6 +399,19 @@ export function eventToOps(
         // events have no `agent_id`. Replaces the older `state.subagents===""`
         // gate which over-blocked main resume whenever any subagent was alive.
         const isMain = !str(data.agent_id);
+        // Tools in WAITING_TOOL_REASONS pause the agent for user input
+        // (AskUserQuestion, ExitPlanMode). Flip status to waiting immediately
+        // instead of waiting for a delayed Notification(elicitation_dialog).
+        // Subagents cannot invoke these tools in normal flow; guard with
+        // isMain so a stray subagent-origin event cannot mis-flip waiting.
+        const waitReason = isMain ? WAITING_TOOL_REASONS[toolName] : undefined;
+        if (waitReason) {
+          return [
+            { kind: "set", key: "@pane_status", value: "waiting" },
+            { kind: "set", key: "@pane_wait_reason", value: waitReason },
+            ...toolStartOps({ tool: toolName, subject: subject || undefined }),
+          ];
+        }
         const resume = isMain ? resumeOpsIfStuck(state) : [];
         return [
           ...resume,

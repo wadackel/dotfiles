@@ -2319,3 +2319,108 @@ Deno.test("Phase B.1 fixture: StopFailure rate_limit", () => {
     { kind: "set", key: "@pane_wait_reason", value: "rate_limit" },
   ]);
 });
+
+// --- PreToolUse: user-input pause tools (AskUserQuestion / ExitPlanMode) ---
+// These tools pause the agent for user input. PreToolUse must flip status to
+// waiting immediately so the picker no longer shows "run" while paused. Without
+// this, the pane only flips to wait if a delayed Notification(elicitation_dialog)
+// happens to fire.
+
+Deno.test(
+  "eventToOps: PreToolUse(AskUserQuestion) main-origin → waiting + 'question'",
+  () => {
+    const ops = eventToOps(
+      "PreToolUse",
+      { session_id: "s1", tool_name: "AskUserQuestion" },
+      stateWith({ status: "running" }),
+    );
+    const status = ops.find((o) => o.key === "@pane_status");
+    assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+    const reason = ops.find((o) => o.key === "@pane_wait_reason");
+    assertEquals(reason?.kind === "set" ? reason.value : "", "question");
+    const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+    assertEquals(
+      toolOp?.kind === "set" ? toolOp.value : "",
+      "AskUserQuestion",
+    );
+  },
+);
+
+Deno.test(
+  "eventToOps: PreToolUse(ExitPlanMode) main-origin → waiting + 'plan review'",
+  () => {
+    const ops = eventToOps(
+      "PreToolUse",
+      { session_id: "s1", tool_name: "ExitPlanMode" },
+      stateWith({ status: "running" }),
+    );
+    const status = ops.find((o) => o.key === "@pane_status");
+    assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+    const reason = ops.find((o) => o.key === "@pane_wait_reason");
+    assertEquals(reason?.kind === "set" ? reason.value : "", "plan review");
+    const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+    assertEquals(toolOp?.kind === "set" ? toolOp.value : "", "ExitPlanMode");
+  },
+);
+
+Deno.test(
+  "eventToOps: PreToolUse(AskUserQuestion) subagent-origin → NO waiting flip",
+  () => {
+    // Subagents cannot legitimately invoke AskUserQuestion in normal flow.
+    // Defensive: agent_id present (subagent-origin) must NOT flip main-pane
+    // status to waiting.
+    const ops = eventToOps(
+      "PreToolUse",
+      {
+        session_id: "s1",
+        agent_id: "a1",
+        agent_type: "Explore",
+        tool_name: "AskUserQuestion",
+      },
+      stateWith({ status: "running", subagents: "Explore:a1" }),
+    );
+    const status = ops.find((o) => o.key === "@pane_status");
+    // Either no status op, or status is unchanged (not "waiting").
+    assertEquals(status, undefined);
+    const reason = ops.find((o) => o.key === "@pane_wait_reason");
+    assertEquals(reason, undefined);
+    // current_tool is still recorded (tool display is last-wins).
+    const toolOp = ops.find((o) => o.key === "@pane_current_tool");
+    assertEquals(
+      toolOp?.kind === "set" ? toolOp.value : "",
+      "AskUserQuestion",
+    );
+  },
+);
+
+Deno.test(
+  "eventToOps: PostToolUse(AskUserQuestion) with status=waiting → resume to running",
+  () => {
+    const ops = eventToOps(
+      "PostToolUse",
+      { session_id: "s1", tool_name: "AskUserQuestion" },
+      stateWith({ status: "waiting", currentTool: "AskUserQuestion" }),
+    );
+    const status = ops.find((o) =>
+      o.kind === "set" && o.key === "@pane_status"
+    );
+    assertEquals(status?.kind === "set" ? status.value : "", "running");
+    const reason = ops.find((o) => o.key === "@pane_wait_reason");
+    assertEquals(reason?.kind, "unset");
+  },
+);
+
+Deno.test(
+  "eventToOps: PostToolUse(ExitPlanMode) with status=waiting → resume to running",
+  () => {
+    const ops = eventToOps(
+      "PostToolUse",
+      { session_id: "s1", tool_name: "ExitPlanMode" },
+      stateWith({ status: "waiting", currentTool: "ExitPlanMode" }),
+    );
+    const status = ops.find((o) =>
+      o.kind === "set" && o.key === "@pane_status"
+    );
+    assertEquals(status?.kind === "set" ? status.value : "", "running");
+  },
+);
