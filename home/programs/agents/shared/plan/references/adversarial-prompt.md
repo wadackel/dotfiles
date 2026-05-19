@@ -105,3 +105,9 @@ The Explore subagent will independently read files, search the codebase, and inv
 2. **Unverified** → Add to plan as explicit risk with test strategy
 3. **Verified** → Record in Deepening Log for confidence tracking
 4. **Design Questions** → Ask the user through the current agent's user-confirmation mechanism if needed; in text-only runtimes, ask the question, end the turn, and wait for the user's next response
+
+---
+
+## Input shape notes
+
+This template is shared by Claude `/plan` v2 (Direction Agreement Gate flow), Claude `/plan-v1` (legacy Step A–F flow), and Codex `/plan` (Blocking Interview Protocol). All three emit verifiable technical claims via `## Approach`, `## Files to Change`, `## Patterns to Mirror`, `## Completion Criteria`, and `## Risks + Open Questions`, parsed semantically. No claim extraction step needs to branch on which `/plan` produced the file.

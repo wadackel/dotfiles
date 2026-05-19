@@ -3,7 +3,7 @@ import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 const CWD_ROOT = new URL(`file://${Deno.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
-const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
+const CLAUDE_PLAN_V1 = "home/programs/claude/skills/plan-v1/SKILL.md";
 const SHARED_CHECKLIST =
   "home/programs/agents/shared/plan/references/requirement-checklist.md";
 const CRITIC_PROMPT =
@@ -310,7 +310,7 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
 });
 
 Deno.test("Claude Requirement Clarification preserves AskUserQuestion without fixed cap progression", async () => {
-  const skill = await readRepoFile(CLAUDE_PLAN);
+  const skill = await readRepoFile(CLAUDE_PLAN_V1);
   const restate = section(skill, "## Phase 1");
   const clarification = section(skill, "### Requirement Clarification");
 

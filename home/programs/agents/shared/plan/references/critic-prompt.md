@@ -162,6 +162,10 @@ Each entry in `### Assumptions` has `observation`, `value`, `reason`, and option
 
 Do **not** match on `Assumption: ... (user-overridden, flagged for Phase 4 Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.
 
+### AGREE handoff (Claude /plan v2)
+
+The new Claude `/plan` replaces the v1 Step A–F clarity loop with a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible: the plan still emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. The Codex `/plan` and the legacy `/plan-v1` keep using the Step A–F clarity loop and `### Requirement Clarification` subsection; both shapes are valid inputs.
+
 ---
 
 ## Usage Examples

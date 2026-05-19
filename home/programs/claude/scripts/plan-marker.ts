@@ -6,6 +6,36 @@ export type { MarkerPaths };
 
 // The shebang uses broad write permission because Deno shebang arguments cannot
 // expand HOME; all write paths are still constrained by markerPaths().
+
+/*
+ * Two-marker rationale (pending → active promotion)
+ * --------------------------------------------------
+ * /plan writes `.pending-<session-hash>` only. The active marker `.active-<session-hash>`
+ * is created exclusively when the user types `/impl` as a top-level prompt;
+ * UserPromptSubmit then runs plan-approval-tracker.ts which calls this helper to
+ * promote `.pending-` → `.active-`. UserPromptSubmit fires only on real user
+ * keystrokes — not on AI skill-tool invocations — so requiring `/impl` to be
+ * typed as a top-level prompt is the only mechanical way to distinguish AI
+ * self-invocation from human approval. This blocks the auto-mode "execute
+ * immediately" failure mode where the AI could otherwise chain /plan → /impl in
+ * a single turn without explicit user consent.
+ *
+ * Session-scoped, cwd-independent
+ * -------------------------------
+ * Each Claude session gets its own `<session-hash>` derived from the runtime's
+ * session_id (see markerPaths() in plan-gate.ts). A marker held by a different
+ * session does not grant edit rights to the current session, so a per-session
+ * /plan invocation is structurally required. `cwd` is intentionally NOT part of
+ * the marker key: Claude Code updates the hook payload's `cwd` to follow Bash
+ * `cd`, so a cwd-bound marker would be invalidated by any subdirectory
+ * navigation mid-session.
+ *
+ * TTL and re-plan invalidation
+ * ----------------------------
+ * Both marker types carry a 24-hour TTL checked by plan-gate.ts and this file.
+ * Each new /plan invocation updates the pending mtime, invalidating prior
+ * approvals.
+ */
 const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
