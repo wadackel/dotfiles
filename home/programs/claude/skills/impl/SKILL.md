@@ -26,7 +26,7 @@ Markers are session-scoped: each Claude session has a unique `<session-hash>` de
 Approval gate — confirm with the deterministic marker helper before starting work. The agent must not assemble session hash or marker paths by hand. `$CLAUDE_CODE_SESSION_ID` is the environment variable visible to the Bash tool (note the `CLAUDE_CODE_` prefix; this is different from the `CLAUDE_SESSION_ID` alias that is only exposed inside the `!` substitution syntax used by `/plan-marker-grant`):
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts require-active "$CLAUDE_CODE_SESSION_ID"
+~/.claude/scripts/plan-marker.ts require-active "$CLAUDE_CODE_SESSION_ID"
 ```
 
 The helper's stdout is the active plan path. Proceed only on exit 0.

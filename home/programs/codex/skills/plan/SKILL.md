@@ -339,7 +339,7 @@ Create only `.pending-<cwd-hash>`. Never create `.active-` directly. `.active-` 
 Delegate marker operations to the deterministic helper. Do not build cwd-hash or marker paths inline in shell.
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="$HOME/.codex/plans" --no-prompt ~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3>' "$PWD"
+~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3>' "$PWD"
 ```
 
 `<PLAN_FILE_PATH from Phase 3>` is the absolute path decided in Phase 3 and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash as `codex-plan-gate.ts`, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.

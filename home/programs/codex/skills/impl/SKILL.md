@@ -14,7 +14,7 @@ User-facing progress and final reports should remain in the user's configured la
 First require an active marker through the deterministic helper. The agent must not assemble cwd hashes or marker paths inline in shell:
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="$HOME/.codex/plans" --no-prompt ~/.codex/scripts/codex-plan-marker.ts require-active "$PWD"
+~/.codex/scripts/codex-plan-marker.ts require-active "$PWD"
 ```
 
 The helper stdout is the plan path. Continue to Step 1 only when the helper exits 0.
@@ -306,7 +306,7 @@ Verdict format must match `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)`, and th
 
 | State | Action |
 |---|---|
-| `AUDIT_VERDICT: PASS` + `REVIEW_VERDICT: PASS` | Run helper `complete` for the trailing sidecar task `Final Audit + Review`, update `update_plan` to completed, run `deno run --allow-env=HOME --allow-read="$HOME/.codex/plans,$PWD" --allow-write="$HOME/.codex/plans" --no-prompt ~/.codex/scripts/codex-plan-marker.ts clear-active "$PWD"` to delete the active marker, then show the final report: changed files, tests added, and diff summary |
+| `AUDIT_VERDICT: PASS` + `REVIEW_VERDICT: PASS` | Run helper `complete` for the trailing sidecar task `Final Audit + Review`, update `update_plan` to completed, run `~/.codex/scripts/codex-plan-marker.ts clear-active "$PWD"` to delete the active marker, then show the final report: changed files, tests added, and diff summary |
 | `AUDIT_VERDICT: FAIL` | Step 4 was skipped. Ask whether to re-decompose with `$plan` or let the user manually fix and rerun `$impl` |
 | `AUDIT_VERDICT: PASS` + `REVIEW_VERDICT: FAIL` | Show failed sections to the user and return to Step 2 to fix them, or fix in the same turn when minor and rerun Step 3 |
 

@@ -343,7 +343,7 @@ Markers are session-scoped: each Claude session gets its own `<session-hash>`, s
 Marker operations are delegated to a deterministic helper. The agent does not assemble session-hash or marker paths in inline shell.
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
+~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from Phase 3, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
 ```
 
 -- Why: `plan-marker.ts` derives the same session-hash as `plan-gate.ts`, atomically writes the pending marker, and clears stale active markers for this session on a re-plan. The 24-hour TTL is checked by both `plan-gate.ts` and `plan-marker.ts`; each `/plan` invocation updates the pending mtime, invalidating prior approvals.

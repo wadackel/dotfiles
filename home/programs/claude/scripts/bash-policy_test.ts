@@ -101,6 +101,11 @@ const CANONICAL_FORMS = [
   "deno run --allow-env=HOME --no-prompt /Users/foo/.claude/scripts/plan-marker.ts status /tmp",
   "deno run --allow-env=HOME --no-prompt /Users/foo/.claude/scripts/plan-marker.ts require-active /tmp",
   "deno run --allow-env=HOME --no-prompt /Users/foo/.claude/scripts/plan-marker.ts clear-active /tmp",
+  // Shebang-direct form — the canonical emit shape after SKILL.md refactor.
+  "/Users/foo/.claude/scripts/plan-marker.ts activate-pending /Users/foo/.claude/plans/bar.md /tmp",
+  "/Users/foo/.claude/scripts/plan-marker.ts status /tmp",
+  "/Users/foo/.claude/scripts/plan-marker.ts require-active /tmp",
+  "/Users/foo/.claude/scripts/plan-marker.ts clear-active /tmp",
 ];
 
 Deno.test("isCanonicalPlanMarkerCommand: allows the four canonical subcommands", async () => {

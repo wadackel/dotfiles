@@ -174,7 +174,7 @@ The main session decomposes — no subagent dispatch.
 Write the session-scoped **pending** marker. The active marker is created only when the user types `/impl` as a top-level prompt (the UserPromptSubmit hook promotes `.pending-` → `.active-`). See `~/.claude/scripts/plan-marker.ts` source for the two-marker rationale and session-hash derivation.
 
 ```bash
-deno run --allow-env=HOME --allow-read="$HOME/.claude/plans,$PWD" --allow-write="$HOME/.claude/plans" --no-prompt ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
+~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
 ```
 
 Emit the full plan body inline so the user can approve without opening the file, then the metadata block:
