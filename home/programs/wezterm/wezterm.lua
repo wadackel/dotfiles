@@ -96,23 +96,8 @@ local function is_mo_file_url(url)
   return false
 end
 
-wezterm.on("gui-startup", function()
-  local _, _, window = wezterm.mux.spawn_window({})
-  local w = window:gui_window()
-  w:maximize()
-end)
-
-wezterm.on("window-config-reloaded", function(window)
-  window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
-end)
-
-wezterm.on("open-uri", function(window, pane, uri)
-  local target = uri:match("^mo:(.+)$")
-  if not target then
-    return
-  end
-
-  target = target:gsub(":%d+:%d+$", ""):gsub(":%d+$", "")
+local function resolve_target(pane, raw_target)
+  local target = raw_target
 
   local relative_target = nil
   if target:sub(1, 1) ~= "/" and target:sub(1, 2) ~= "~/" then
@@ -144,41 +129,84 @@ wezterm.on("open-uri", function(window, pane, uri)
 
   -- 制御バイト混入を拒否（OSC 8 / passthrough 経由で与えられた攻撃ペイロードを弾く）
   if target:find("[%z\1-\31\127]") then
-    return false
+    return nil, relative_target, "control bytes in target"
   end
 
-  -- 絶対パスでない場合は `./` 接頭辞で先頭の `-` を中和する。さらに `--` 区切りで mo の
-  -- 引数パーサが target を以降の値として確実に扱うようにする
+  -- 絶対パスでない場合は `./` 接頭辞で先頭の `-` を中和する
   if target:sub(1, 1) ~= "/" then
     target = "./" .. target
   end
 
-  local success, stdout, stderr = wezterm.run_child_process({ MO_BIN, "--json", "--no-open", "--", target })
-  if not success then
-    log_mo_error(stderr ~= "" and stderr or stdout)
+  return target, relative_target, nil
+end
+
+wezterm.on("gui-startup", function()
+  local _, _, window = wezterm.mux.spawn_window({})
+  local w = window:gui_window()
+  w:maximize()
+end)
+
+wezterm.on("window-config-reloaded", function(window)
+  window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
+end)
+
+wezterm.on("open-uri", function(window, pane, uri)
+  local mo_target = uri:match("^mo:(.+)$")
+  if mo_target then
+    -- mo: 固有: 末尾の `:line[:col]` ジャンプ指示を除去してからパス解決
+    mo_target = mo_target:gsub(":%d+:%d+$", ""):gsub(":%d+$", "")
+
+    local target, _relative_target, err = resolve_target(pane, mo_target)
+    if err then
+      return false
+    end
+
+    -- `--` 区切りで mo の引数パーサが target を以降の値として確実に扱うようにする
+    local success, stdout, stderr = wezterm.run_child_process({ MO_BIN, "--json", "--no-open", "--", target })
+    if not success then
+      log_mo_error(stderr ~= "" and stderr or stdout)
+      return false
+    end
+
+    local ok, data = pcall(wezterm.json_parse, stdout)
+    if not ok or type(data) ~= "table" then
+      log_mo_error("failed to parse open result")
+      return false
+    end
+
+    local files = data.files
+    local file = type(files) == "table" and files[1] or nil
+    local url = type(file) == "table" and file.url or nil
+    if type(url) ~= "string" or url == "" then
+      log_mo_error("no file URL returned")
+      return false
+    end
+    if not is_mo_file_url(url) then
+      log_mo_error("unsafe file URL returned")
+      return false
+    end
+
+    wezterm.open_with(url)
     return false
   end
 
-  local ok, data = pcall(wezterm.json_parse, stdout)
-  if not ok or type(data) ~= "table" then
-    log_mo_error("failed to parse open result")
-    return false
-  end
+  local img_target = uri:match("^img:(.+)$")
+  if img_target then
+    local target, _relative_target, err = resolve_target(pane, img_target)
+    if err then
+      wezterm.log_error("img: " .. err)
+      return false
+    end
 
-  local files = data.files
-  local file = type(files) == "table" and files[1] or nil
-  local url = type(file) == "table" and file.url or nil
-  if type(url) ~= "string" or url == "" then
-    log_mo_error("no file URL returned")
-    return false
-  end
-  if not is_mo_file_url(url) then
-    log_mo_error("unsafe file URL returned")
-    return false
-  end
+    -- `open(1)` は LaunchServices に dispatch して即 return するため、同期呼び出しでも UI を阻害しない
+    local success, _stdout, stderr = wezterm.run_child_process({ "/usr/bin/open", "-a", "Preview", target })
+    if not success then
+      wezterm.log_error("img: " .. (stderr ~= "" and stderr or "open failed"))
+      return false
+    end
 
-  wezterm.open_with(url)
-  return false
+    return false
+  end
 end)
 
 return {
@@ -316,6 +344,12 @@ return {
     {
       regex = [[[\w./@+~\-]+\.md(?!\.\w)(?::\d+(?::\d+)?)?]],
       format = "mo:$0",
+    },
+    -- Image file paths: jpg / jpeg / png / gif / webp / heic / svg
+    -- (?!\.\w) で foo.png.bak 等の誤マッチを除外
+    {
+      regex = [[[\w./@+~\-]+\.(jpe?g|png|gif|webp|heic|svg)(?!\.\w)]],
+      format = "img:$0",
     },
   },
 }
