@@ -1210,3 +1210,43 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
     await teardown();
   }
 });
+
+// S30: picker layout follows tmux resize-window. Picker reads stdout.columns
+// once at render and previously did not re-render on terminal resize. The
+// resize-tracking useEffect subscribes to stdout 'resize' so the layout
+// (listWidth / previewWidth / bodyHeight / showFilterUI) updates live.
+//
+// Signal: the " filter  " title-bar hint (picker.tsx:590-600) is gated only on
+// showFilterUI (= totalCols >= 80). It is independent of filterEnabled state,
+// unlike the wait/idle PILL badge which also requires `w` to be pressed.
+// The `w` filter toggle is intentionally NOT sent here — pressing it would
+// flip the hint string to " clear  " and obscure the resize signal.
+Deno.test("S30: picker re-layouts after tmux resize-window", async () => {
+  await setupServer({ cols: 60, rows: 20 });
+  try {
+    await createClaudePane({ status: "waiting", prompt: "row-a" });
+    const picker = await spawnPicker();
+
+    // Initial narrow render: showFilterUI false → " filter  " absent.
+    const narrowOut = await captureOutput(picker);
+    assertFalse(
+      narrowOut.includes(" filter  "),
+      `unexpected ' filter  ' hint at narrow width:\n${narrowOut}`,
+    );
+
+    // Widen the tmux window — picker must repaint and surface the hint.
+    // Target is the same SESSION:WINDOW path that spawnPicker uses; the
+    // harness's SESSION const is "test" and PICKER_WINDOW_NAME is "picker".
+    await tmux(["resize-window", "-t", picker, "-x", "120", "-y", "30"]);
+    await waitFor(picker, (out) => out.includes(" filter  "));
+
+    // Narrow again — picker must repaint and hide the hint.
+    await tmux(["resize-window", "-t", picker, "-x", "60", "-y", "20"]);
+    await waitFor(picker, (out) => !out.includes(" filter  "));
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

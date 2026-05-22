@@ -435,6 +435,23 @@ function App({
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
+  // useStdout() does not re-render on resize; subscribe to stdout's 'resize'
+  // event so that totalCols/totalRows (and everything derived: listWidth,
+  // previewWidth, bodyHeight, showFilterUI) follow tmux popup / window resizes.
+  const [size, setSize] = useState({
+    columns: stdout?.columns ?? 120,
+    rows: stdout?.rows ?? 30,
+  });
+  useEffect(() => {
+    if (!stdout) return;
+    const handler = () => {
+      setSize({ columns: stdout.columns, rows: stdout.rows });
+    };
+    stdout.on("resize", handler);
+    return () => {
+      stdout.off("resize", handler);
+    };
+  }, [stdout]);
   const [rows, setRows] = useState(initialRows);
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
@@ -529,8 +546,8 @@ function App({
   }
 
   const current = derivedRows[index];
-  const totalCols = stdout?.columns ?? 120;
-  const totalRows = stdout?.rows ?? 30;
+  const totalCols = size.columns;
+  const totalRows = size.rows;
   const listWidth = Math.max(40, Math.floor(totalCols * 0.6));
   const previewWidth = Math.max(20, totalCols - listWidth - 1);
   const bodyHeight = Math.max(5, totalRows - 2);
