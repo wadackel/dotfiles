@@ -1,0 +1,10 @@
+modern-web-guidance
+Source: https://github.com/GoogleChrome/modern-web-guidance
+Vendored version: 0.0.169
+License: Apache-2.0
+
+Modifications from upstream:
+- CLI invocations changed from `npx -y modern-web-guidance@latest <cmd>` to `modern-web-guidance <cmd>` (binary installed via mise; see home/programs/mise/default.nix)
+- Removed `--skill-version <hash>` flag (incompatible with mise "latest" version tracking)
+- Replaced the "Using npx" section with a "Using the mise-managed binary" section reflecting the local installation strategy
+- Added `license`, `metadata.author`, `metadata.version`, `metadata.upstream` keys to the SKILL.md frontmatter
