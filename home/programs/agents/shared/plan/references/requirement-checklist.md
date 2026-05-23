@@ -1,13 +1,13 @@
 # Requirement Clarification Lens
 
-Decision aid referenced by the `plan` skill's Phase 1 PARSE Requirement Clarification. **Use it as a lens to prevent oversight, not as a classification table.** The eight observations form a "network of questions"; they are NOT a structure where a fixed default triage is mechanically applied per observation.
+Decision aid referenced by the `plan` skill's AGREE Requirement Clarification. **Use it as a lens to prevent oversight, not as a classification table.** The eight observations form a "network of questions"; they are NOT a structure where a fixed default triage is mechanically applied per observation.
 
 ## Role and purpose
 
-- Scope: `/plan` Phase 1 PARSE (the main agent performs the walk directly)
+- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through A1–A7 cadence with AskUserQuestion, Codex through the Blocking Interview Protocol with `$plan --answer`)
 - Trigger: complexity is one of `small` / `medium` / `large` (trivial and xl are out of scope)
 - Purpose: solidify user intent to the level where implementation will not go wrong. Not protocol checklist completion.
-- Process control (the clarity-loop Steps A–F, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md Phase 1 as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
+- Process control (the clarity loop, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md AGREE as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
 
 ## Clarity gate: no fixed confirmation cap
 
@@ -15,18 +15,18 @@ For `small` / `medium` / `large`, keep confirming as needed until the requiremen
 
 - **Definition of Ask**: an interaction that waits for the user's next answer. Restating, prose for understanding-check, or recording under `### Requires User Confirmation` is NOT a substitute for an Ask.
 - **Keep asking**: when high-cost uncertainty that would make the whole plan worthless if left wrong remains — Scope / Success / Failure, or a user-only / subjective central spec — keep Asking until it is clear.
-- **Allow progression**: when uncertainty is codebase-recoverable and can be written down as a concrete `next:` describing where and how to resolve it in Phase 2 EXPLORE / Phase 4 Critic / implementation, delegate to Self-resolve or Unresolved Items and proceed.
+- **Allow progression**: when uncertainty is codebase-recoverable and can be written down as a concrete `next:` describing where and how to resolve it in EXPLORE / DEEPEN Critic / implementation, delegate to Self-resolve or Unresolved Items and proceed.
 - **Progress by explicit choice**: when the same uncertainty keeps repeating, do not auto-advance by exhausting tries; have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out".
 
 ## Interview gate — separating observed facts from user intent
 
-Before handling unresolved ambiguity in Phase 1, always classify it into one of the buckets below. Cost-based triage is used AFTER this gate. The existence of a reasonable default is NOT grounds for converting a user decision into a draft assumption.
+Before handling unresolved ambiguity in AGREE, always classify it into one of the buckets below. Cost-based triage is used AFTER this gate. The existence of a reasonable default is NOT grounds for converting a user decision into a draft assumption.
 
 | Bucket | Meaning | Action |
 |---|---|---|
 | **Observed fact** | A fact that can be observed from the codebase, related logs, docs, existing issues, or the current conversation | Investigate first. When using logs, read the minimum necessary and do not leave secret / token / credential / unrelated personal data in artifacts or logs |
 | **User decision** | A judgment that depends on desired behavior, priority, scope boundary, audience, risk tolerance, success criteria, or trade-off acceptance | Ask. Do not turn it into an Assumption except when the user has explicitly chosen the assumption |
-| **Technical deferral** | Codebase-recoverable technical discovery that is too heavy for a Phase 1 lightweight probe | Write `item` / `reason` / a concrete `next` under `### Unresolved Items` |
+| **Technical deferral** | Codebase-recoverable technical discovery that is too heavy for an AGREE lightweight probe | Write `item` / `reason` / a concrete `next` under `### Unresolved Items` |
 | **Draft assumption** | A user explicitly permitted proceeding under an assumption, OR a non-blocking technical/default detail | Write the value and reason under `### Assumptions`. If derived from user judgment, add `user-overridden: true` |
 
 Facts can be inferred from observation; user intent cannot.
@@ -48,7 +48,7 @@ Each observation is a checkpoint: "if you leave this observation behind, it can 
 
 - **Lens intent**: what gets built, what changes
 - **Anchor signals**: deliverable nouns (`command` / `function` / `config` / `UI` / `skill` / `agent` / `hook` / `script` / `option`), concrete file/path names
-- **Cost of being left behind**: if What is ambiguous, Phase 2's exploration target is unsettled and Phase 3's Files to Change cannot be written
+- **Cost of being left behind**: if What is ambiguous, EXPLORE's exploration target is unsettled and DRAFT's Files to Change cannot be written
 - **Typical probe**: "Concretely, what gets built? (command / function / config / UI etc.)"
 
 ### 3. Who — actor
@@ -76,7 +76,7 @@ Each observation is a checkpoint: "if you leave this observation behind, it can 
 
 - **Lens intent**: whether the user has a preference or constraint on the implementation approach
 - **Anchor signals**: concrete library / framework / pattern names; explicit references like "follow the existing X" / "same approach as Y"
-- **Cost of being left behind**: low-cost in most cases (Phase 2 EXPLORE finds existing patterns and Phase 4 Critic catches inconsistencies). However, missing an explicit user preference causes rework
+- **Cost of being left behind**: low-cost in most cases (EXPLORE finds existing patterns and DEEPEN Critic catches inconsistencies). However, missing an explicit user preference causes rework
 - **Typical probe**: "Any preference on the approach? Follow an existing pattern? New design?"
 
 ### 7. Success — observable
@@ -109,7 +109,7 @@ Subjective adjectives / degree adverbs / vague technical words (e.g. `野暮っ�
 
 - **Example of central spec**: "the pointer feels clunky; I want to do something about it" → `clunky` is at the core of What / Success. Without calibrating concrete imagery (Unicode change / color emphasis / removal + line inversion), the implementation is not settled → Calibration Probe candidate
 - **Example of supportive qualifier**: "add a tmux option so it animates smoothly" → `smoothly` is secondary modification. The central spec `add a tmux option` is otherwise explicit and implementation is settled as an option addition → proceed under normal interpretation
-- **Decision axis**: "Without settling this word, can Phase 3 DRAFT's Files to Change / Approach be written?" YES → central; NO → supportive
+- **Decision axis**: "Without settling this word, can DRAFT's Files to Change / Approach be written?" YES → central; NO → supportive
 
 **Calibration Probe (triggered only if judged central spec)**:
 - Present 3 concrete candidates as user-confirmation options (observable conditions or threshold values; tag one (Recommended) at the top and include Other at the end)
@@ -124,8 +124,8 @@ Triage for NotClear items is decided NOT by per-observation fixed defaults but b
 - **Axis A — cost of being wrong**: how badly the plan breaks if this observation is misread
   - **High** (Outcome / Boundary layer): Why / Where / Success / Failure. The plan's grounding or boundaries collapse
   - **Medium** (Context layer): Who / When. UX or trigger-design mismatch
-  - **Low** (Definition layer): What / How. Relatively recoverable in Phase 2 EXPLORE / Phase 4 Critic
-- **Axis B — recoverability in subsequent Phases / implementation**: can it be overturned in Phase 2 EXPLORE's codebase search or Phase 4 Critic's adversarial verification?
+  - **Low** (Definition layer): What / How. Relatively recoverable in EXPLORE / DEEPEN Critic
+- **Axis B — recoverability in subsequent phases / implementation**: can it be overturned in EXPLORE's codebase search or DEEPEN Critic's adversarial verification?
   - **High**: signal types that remain in the codebase (existing implementation patterns, call-site context, existing tests)
   - **Low**: user's subjectivity / preferences / undisclosed domain knowledge
 
@@ -135,7 +135,7 @@ Triage for NotClear items is decided NOT by per-observation fixed defaults but b
 |---|---|
 | High cost, low recoverability | **Ask** — user confirmation is required |
 | Low cost, low recoverability | **Draft assumption only for non-blocking details** — limited to values that do not depend on user intent, or assumptions explicitly permitted by the user |
-| Low cost, high recoverability | **Self-resolve** (Phase 1 lightweight probe) or **Draft assumption** (only for non-blocking technical/default detail) |
+| Low cost, high recoverability | **Self-resolve** (AGREE lightweight probe) or **Draft assumption** (only for non-blocking technical/default detail) |
 | High cost, high recoverability | Prefer **Self-resolve**; if probing is impossible, **Ask** |
 
 **Handling of How**: do not adopt the "unconditionally assume" hard default. How is judged on the same two axes as every other observation. It typically lands in "low cost × high recoverability" and becomes a Draft assumption as a non-blocking technical/default detail, but when there is a signal that the user has an explicit preference, Ask is also a valid call.
@@ -144,9 +144,9 @@ Triage for NotClear items is decided NOT by per-observation fixed defaults but b
 
 **Recording the judgment**: the chosen triage is recorded in the plan body as an entry under `### Assumptions` / `### Self-resolved` / `### Unresolved Items` as appropriate (format described below).
 
-## Phase 1 output subsections (plan-internal convention)
+## AGREE output subsections (plan-internal convention)
 
-At Phase 1 clarity-gate convergence, output the following subsections immediately before `## Overview`. The Phase 4 Critic **parses subsection structure, not canonical phrases**, and carries forward unresolved items.
+At AGREE clarity-gate convergence, output the following subsections immediately before `## Overview`. The DEEPEN Critic **parses subsection structure, not canonical phrases**, and carries forward unresolved items.
 
 ```markdown
 ### Requirement Clarification
@@ -166,36 +166,36 @@ At Phase 1 clarity-gate convergence, output the following subsections immediatel
 
 - observation: What
   value: edit SKILL.md and three reference files
-  source: confirmed by a Phase 1 Grep probe
+  source: confirmed by an AGREE Grep probe
 
 ### Unresolved Items
 
 - item: the minimal command to run the existing test harness
-  reason: codebase-recoverable technical discovery, but not settled by a Phase 1 lightweight probe alone
-  next: investigate the related test layout and existing run examples in Phase 2 EXPLORE
+  reason: codebase-recoverable technical discovery, but not settled by an AGREE lightweight probe alone
+  next: investigate the related test layout and existing run examples in EXPLORE
 
 - item: detailed call path for the trigger context
-  reason: codebase-recoverable technical discovery, but not settled by a Phase 1 lightweight probe alone
-  next: investigate entry point / hook / command invocation in Phase 2 EXPLORE
+  reason: codebase-recoverable technical discovery, but not settled by an AGREE lightweight probe alone
+  next: investigate entry point / hook / command invocation in EXPLORE
 ```
 
 ### Subsection semantics
 
 - `### Requirement Clarification` — clarity-gate summary. Human-readable is fine (Critic does not parse)
-- `### Assumptions` — non-blocking technical/default detail, OR an assumption the user has explicitly chosen. Each entry must state `observation` / `value` / `reason`. Entries derived from user judgment must carry the `user-overridden: true` flag (Phase 4 Critic walks `### Assumptions` and picks up `user-overridden`). Do NOT place a user decision here just because a reasonable default exists
-- `### Self-resolved` — items settled by a Phase 1 probe or by deferral to Phase 2 EXPLORE. Each entry must state `observation` / `value` / `source`
+- `### Assumptions` — non-blocking technical/default detail, OR an assumption the user has explicitly chosen. Each entry must state `observation` / `value` / `reason`. Entries derived from user judgment must carry the `user-overridden: true` flag (DEEPEN Critic walks `### Assumptions` and picks up `user-overridden`). Do NOT place a user decision here just because a reasonable default exists
+- `### Self-resolved` — items settled by an AGREE probe or by deferral to EXPLORE. Each entry must state `observation` / `value` / `source`
 - `### Unresolved Items` — at clarity-loop termination, write only codebase-recoverable / technical-discovery items that could not be settled. Do NOT surface user-only / subjective blockers here; Ask before artifact creation, or record them as explicit user-selected assumptions in `### Assumptions`. Each entry requires **three fields**:
   - `item`: what is unsettled
-  - `reason`: why it cannot be settled now (codebase-recoverable technical discovery / Phase 1 probe scope exceeded / information-gathering cost too high / etc.)
-  - `next`: where to handle it next (`continue exploration in Phase 2 EXPLORE` / `technical validation in Phase 4 Critic` / `verify against repo state at implementation` / etc.)
+  - `reason`: why it cannot be settled now (codebase-recoverable technical discovery / AGREE probe scope exceeded / information-gathering cost too high / etc.)
+  - `next`: where to handle it next (`continue exploration in EXPLORE` / `technical validation in DEEPEN Critic` / `verify against repo state at implementation` / etc.)
 
-**Subsection absence = zero entries**: when `### Unresolved Items` is not written, the Phase 4 Critic interprets unresolved as zero. To assert zero explicitly, write the subsection with the body `(none)`.
+**Subsection absence = zero entries**: when `### Unresolved Items` is not written, the DEEPEN Critic interprets unresolved as zero. To assert zero explicitly, write the subsection with the body `(none)`.
 
 **Self-resolved companion block**: when issuing an Ask, prepend a human-readable summary `Self-resolved earlier:` so misjudgments can be flagged immediately (the exact-token quotation requirement is retired; restating is fine). In a text-only runtime, end the turn after posting the questions and wait for the user's next reply before continuing.
 
 ## Ask issuance batch rules
 
-Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md Phase 1 Step E. Only the decision axes are here:
+Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md AGREE / Blocking Interview Protocol Step E. Only the decision axes are here:
 
 - Ask count 0: if there are also zero additional-confirmation triggers, skip the user-confirmation turn itself
 - Ask count 1–4: bundle all into a single AskUserQuestion call (slot cap 4 = AskUserQuestion API hard cap; do not use an override slot)
@@ -211,7 +211,7 @@ Active proposal of unmentioned derivative features is **default-off**. Activate 
 - **Condition A**: A reference-implementation URL is given, and checking deltas against that implementation provides essential value (when the user cites a reference implementation, asking about delta is an implicit requirement)
 - **Condition B**: The user request explicitly asks for "consideration of design gaps" or "what else is needed", etc.
 
-In normal feature planning that does not match either, **do not activate**. Reason: in normal planning, solidifying the user's primary request comes first, and proposing extended features is alternatively captured by the Phase 4 Critic's Scope Appropriateness axis.
+In normal feature planning that does not match either, **do not activate**. Reason: in normal planning, solidifying the user's primary request comes first, and proposing extended features is alternatively captured by the DEEPEN Critic's Scope Appropriateness axis.
 
 Behavior when activated:
 
@@ -225,7 +225,7 @@ Behavior when activated:
 
 Activation limits:
 - Activates only in the first clarification pass
-- Derivative-feature consideration in subsequent passes is delegated to the Phase 4 Critic's Scope Appropriateness axis
+- Derivative-feature consideration in subsequent passes is delegated to the DEEPEN Critic's Scope Appropriateness axis
 
 ## Impact priority — reordering on Ask overflow
 

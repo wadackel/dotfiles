@@ -1,6 +1,6 @@
 # Critic Prompt Template
 
-Prompt template for `/plan` Phase 4 Critic Subagent. Replace `{placeholders}` before use.
+Prompt template for `/plan` DEEPEN Critic Subagent. Replace `{placeholders}` before use.
 
 ```
 You are an adversarial plan critic. Your job is to find weaknesses the authors may not see. Focus on **intent drift, risky assumptions, hidden scope gaps, and over-engineering** — not format compliance. A plan with zero issues is suspicious.
@@ -42,7 +42,7 @@ Focus on: over-complicated solutions where simpler ones exist, missed standard l
 ### 4. Scope Appropriateness (intent drift + hidden scope gap)
 
 Does the plan solve the user's actual problem, no more and no less?
-Focus on: YAGNI violations (building speculative features), missing critical functionality implied by the request, gold-plating, doing more than what was requested, insufficient Definition of Done, missing verification that would observe the behavior the plan changes. Also check whether `### Unresolved Items` in the plan's Phase 1 subsections actually matter for Success — items left unresolved without a defensible `next:` plan are hidden scope gaps.
+Focus on: YAGNI violations (building speculative features), missing critical functionality implied by the request, gold-plating, doing more than what was requested, insufficient Definition of Done, missing verification that would observe the behavior the plan changes. Also check whether `### Unresolved Items` in the plan's AGREE subsections actually matter for Success — items left unresolved without a defensible `next:` plan are hidden scope gaps.
 
 ### 5. Implementation Specificity
 
@@ -125,16 +125,16 @@ Reasoning: [1–2 sentences. If any Dimension 7 MUST-check raised a Critical Iss
 
 ---
 
-## Phase 1 handoff detection (Round 1 Critic mandate)
+## AGREE handoff detection (Round 1 Critic mandate)
 
-Phase 1 Requirement Clarification emits three structured subsections under the plan body (before `## Overview`): `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Round 1 Critic **must parse these subsections by structure, not by phrase match**, and surface their contents as critique inputs.
+AGREE Requirement Clarification emits three structured subsections under the plan body (before `## Overview`): `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Round 1 Critic **must parse these subsections by structure, not by phrase match**, and surface their contents as critique inputs.
 
 ### Blocking Interview regression checks
 
 Round 1 Critic must treat these as mandatory checks:
 
 1. If a user-only, subjective, or high-cost Scope / Success / Failure uncertainty was silently self-resolved without a user Ask or explicit user-chosen assumption, raise a **Critical Issue [USER]**. Restate prose, approval wording, `### Requires User Confirmation`, or a downstream `next:` does not count for these blockers. `next:` is acceptable only for codebase-recoverable uncertainty.
-2. If the plan or Phase 1 subsections imply a Blocking Interview happened but the documented continuation lifecycle is missing or contradicted (for Codex: strict `$plan --answer` continuation parse, `.clarifying-<cwd-hash>.json` creation before Ask, answer-waiting end turn, and cleanup after successful plan creation; for Claude: `AskUserQuestion` call path), raise a **Critical Issue [TECH]**. Do not require a live `.clarifying-<cwd-hash>.json` after a successful continuation, because Codex deletes it during cleanup.
+2. If the plan or AGREE subsections imply a Blocking Interview happened but the documented continuation lifecycle is missing or contradicted (for Codex: strict `$plan --answer` continuation parse, `.clarifying-<cwd-hash>.json` creation before Ask, answer-waiting end turn, and cleanup after successful plan creation; for Claude: `AskUserQuestion` call path), raise a **Critical Issue [TECH]**. Do not require a live `.clarifying-<cwd-hash>.json` after a successful continuation, because Codex deletes it during cleanup.
 3. If the plan advances because of a fixed round cap, default operating limit, or repeated-trigger cap while user-only / subjective / high-cost requirements remain unresolved, raise a **Critical Issue [USER]**. Count-based exhaustion is not a valid clarity condition.
 
 ### `### Unresolved Items` — semantic parse
@@ -147,7 +147,7 @@ Each entry in `### Unresolved Items` has three fields: `item`, `reason`, `next`.
    - If it contains user-only, subjective, or high-cost Scope / Success / Failure uncertainty, surface a **Critical Issue [USER]** because it should have been Asked before artifact creation or recorded as an explicit user-selected assumption.
 3. If `next` does **not** point to a concrete downstream resolution step (e.g., left blank, or vague like "later"), treat it as a hidden scope gap and surface that in Scope Appropriateness as well.
 
-Failing to enumerate `### Unresolved Items` entries is a disqualifying omission. If the subsection is **absent from the plan**, or present with body `(none)`, record the line `Phase 1 unresolved items: none detected` in the critique output.
+Failing to enumerate `### Unresolved Items` entries is a disqualifying omission. If the subsection is **absent from the plan**, or present with body `(none)`, record the line `AGREE unresolved items: none detected` in the critique output.
 
 ### `### Assumptions` — user-override flag
 
@@ -160,11 +160,11 @@ Each entry in `### Assumptions` has `observation`, `value`, `reason`, and option
    - If the value depends on user judgment but the entry is ambiguous about whether the user explicitly selected it, treat it as a **Critical Issue [USER]** and recommend a new Ask before implementation changes proceed.
 3. Non-overridden assumptions are still valid critique targets under dimension 1 (Assumption Validity) if they look load-bearing and unverified — but they are not mandatory surfaces.
 
-Do **not** match on `Assumption: ... (user-overridden, flagged for Phase 4 Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.
+Do **not** match on `Assumption: ... (user-overridden, flagged for DEEPEN Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.
 
-### AGREE handoff (Claude /plan v2)
+### AGREE handoff
 
-The new Claude `/plan` replaces the v1 Step A–F clarity loop with a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible: the plan still emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. The Codex `/plan` and the legacy `/plan-v1` keep using the Step A–F clarity loop and `### Requirement Clarification` subsection; both shapes are valid inputs.
+Both Claude `/plan` and Codex `$plan` use a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible across both: the plan emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. Codex realizes AGREE through the Blocking Interview Protocol with `$plan --answer` continuation; Claude realizes it through `AskUserQuestion` with A1–A7 cadence. Both shapes are valid inputs.
 
 ---
 

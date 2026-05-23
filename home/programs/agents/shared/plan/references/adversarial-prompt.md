@@ -1,6 +1,6 @@
 # Adversarial Falsification Prompt Template
 
-Prompt template for `/plan` Phase 4 Step 5 (Adversarial Falsification). Replace `{placeholders}` before use.
+Prompt template for `/plan` DEEPEN Adversarial Falsification. Replace `{placeholders}` before use.
 
 ```
 You are an adversarial falsification agent. Your goal is to DISPROVE specific factual claims in the plan by finding concrete code-level evidence that contradicts them. You are not evaluating plan quality or format — the Critic has already done that. You are testing whether the plan's technical claims are actually true.
@@ -40,7 +40,7 @@ If the plan involves debugging or fixing a failure, additionally verify:
 
 ## Output Format
 
-Report findings using this structure (headers and verdict values below are consumed by Phase 4; keep them verbatim):
+Report findings using this structure (headers and verdict values below are consumed by DEEPEN; keep them verbatim):
 
 ### Extracted Claims
 [Numbered list of every technical claim found in the plan, with plan section reference]
@@ -110,4 +110,4 @@ The Explore subagent will independently read files, search the codebase, and inv
 
 ## Input shape notes
 
-This template is shared by Claude `/plan` v2 (Direction Agreement Gate flow), Claude `/plan-v1` (legacy Step A–F flow), and Codex `/plan` (Blocking Interview Protocol). All three emit verifiable technical claims via `## Approach`, `## Files to Change`, `## Patterns to Mirror`, `## Completion Criteria`, and `## Risks + Open Questions`, parsed semantically. No claim extraction step needs to branch on which `/plan` produced the file.
+This template is shared by Claude `/plan` (Direction Agreement Gate flow) and Codex `$plan` (Blocking Interview Protocol realization of AGREE). Both emit verifiable technical claims via `## Approach`, `## Files to Change`, `## Patterns to Mirror`, `## Completion Criteria`, and `## Risks + Open Questions`, parsed semantically. No claim extraction step needs to branch on which `/plan` produced the file.

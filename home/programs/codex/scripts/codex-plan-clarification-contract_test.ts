@@ -3,7 +3,6 @@ import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 const CWD_ROOT = new URL(`file://${Deno.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
-const CLAUDE_PLAN_V1 = "home/programs/claude/skills/plan-v1/SKILL.md";
 const SHARED_CHECKLIST =
   "home/programs/agents/shared/plan/references/requirement-checklist.md";
 const CRITIC_PROMPT =
@@ -198,13 +197,13 @@ Deno.test("Codex plan skill preserves user-facing output language", async () => 
   ]);
 });
 
-Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4 subagents", async () => {
+Deno.test("Codex plan skill uses optional EXPLORE explorer and mandatory DEEPEN subagents", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
-  const phase2 = section(skill, "## Phase 2 EXPLORE");
-  const phase4 = section(skill, "## Phase 4 DEEPEN");
+  const explore = section(skill, "## EXPLORE");
+  const deepen = section(skill, "## DEEPEN");
   const designNotes = section(skill, "## Design notes");
 
-  assertIncludesAll(phase2, [
+  assertIncludesAll(explore, [
     "main session",
     "discovery outcomes",
     "may be used as helpers",
@@ -223,7 +222,7 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
     "Existing behavior, constraints, verification conditions",
     "Unified Discovery Table",
   ]);
-  assertExcludesAll(phase2, [
+  assertExcludesAll(explore, [
     "subagent は起動しない",
     "Codex 版では explorer subagent へ委譲せず",
     "Spawn three explorer",
@@ -232,18 +231,18 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
     "[explorer 3]",
     "3 件すべてを `close_agent`",
   ]);
-  assertIncludesAll(phase4, [
+  assertIncludesAll(deepen, [
     "$plan <request>",
-    "Phase 4 subagent deepening",
+    "DEEPEN subagent deepening",
     "approval for the planning workflow",
     "Do not ask the user again for permission",
     "spawning named review agents",
     "does not grant write, network, credential, shell, or any tool permission beyond active Codex policy",
-    "Skip Phase 4 only for",
+    "Skip DEEPEN only for",
     "record the reason in the Deepening Log and user output",
     "successful subagent deepening",
     "Do not replace required subagent deepening with local self-review",
-    "Phase 4 Subagent Lifecycle Budget",
+    "DEEPEN Subagent Lifecycle Budget",
     "agent_id / role / phase / status / closed",
     "close that round's `plan-critic` agent",
     "plan-adversarial",
@@ -253,21 +252,21 @@ Deno.test("Codex plan skill uses optional Phase 2 explorer and mandatory Phase 4
     "close both",
     "retry the missing side exactly once",
   ]);
-  assertExcludesAll(phase4, [
+  assertExcludesAll(deepen, [
     "permission policy",
     "user-explicit policy",
     "追加のユーザー許可待ち",
-    "Subagent-based Phase 4 was not dispatched",
+    "Subagent-based DEEPEN was not dispatched",
     "active Codex tool policy",
     "self-review fallback",
   ]);
   assertIncludesAll(designNotes, [
-    "Phase 2 is main-session owned exploration",
+    "EXPLORE is main-session owned exploration",
     "may use explorer subagents only as helpers",
-    "Phase 4 subagent dispatch is normally mandatory",
+    "DEEPEN subagent dispatch is normally mandatory",
     "Do not ask for extra user permission",
     "do not replace it with local self-review",
-    "Phase 4 Subagent Lifecycle Budget",
+    "DEEPEN Subagent Lifecycle Budget",
     "bounded",
   ]);
 });
@@ -277,66 +276,35 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
 
   assertIncludesAll(checklist, [
     "Clarity gate: no fixed confirmation cap",
-    "要件が明確になるまで",
-    "Ask の定義",
-    "user の次回答を待つ interaction",
-    "Restate、理解確認の prose、`### Requires User Confirmation` への記録は Ask の代替ではない",
-    "user の主観そのものが中心仕様",
-    "Ask で calibration",
-    "artifact 作成前",
-    "downstream `next:` deferral は codebase-recoverable uncertainty のみに使う",
-    "user-only / subjective blocker はここに出さず",
+    "keep confirming as needed until the requirement is clear",
+    "Definition of Ask",
+    "an interaction that waits for the user's next answer",
+    "Restating, prose for understanding-check, or recording under `### Requires User Confirmation` is NOT a substitute for an Ask",
+    "the user's subjectivity itself is the central spec",
+    "Ask to calibrate",
+    "before artifact creation",
+    "`### Unresolved Items` downstream `next:` deferral is only for codebase-recoverable uncertainty",
+    "Do NOT surface user-only / subjective blockers here",
     "codebase-recoverable",
-    "具体的な `next:`",
-    "仮定を選ぶ / このまま進める / 追加で確認する / scope out する",
-    "slot 上限 4 = AskUserQuestion API hard cap",
+    "concrete `next:`",
+    "choose an assumption / proceed as-is / continue clarifying / scope out",
+    "slot cap 4 = AskUserQuestion API hard cap",
   ]);
   assertExcludesAll(checklist, [
     "Round budget",
     "round budget",
     "Rounds:",
-    "default 上限",
+    "default operating limit",
     "3 round",
     "operating limit",
-    "user 主観判断であり、現時点の codebase probe だけでは候補を確定できない",
-    "slot（通常 3）",
-    "override で 1 回にまとめる",
+    "Max 3 real questions + 1 override question",
+    "slot (normally 3)",
+    "bundle into a single override",
   ]);
   const unresolvedExample = section(checklist, "### Unresolved Items");
   assertExcludesAll(unresolvedExample, [
-    "Phase 4 Step 7 Consolidated Interview で確定",
+    "DEEPEN Consolidated Interview で確定",
     "implementation 時に user 判断",
-  ]);
-});
-
-Deno.test("Claude Requirement Clarification preserves AskUserQuestion without fixed cap progression", async () => {
-  const skill = await readRepoFile(CLAUDE_PLAN_V1);
-  const restate = section(skill, "## Phase 1");
-  const clarification = section(skill, "### Requirement Clarification");
-
-  assertIncludesAll(restate, [
-    "summary/restate",
-    "does not satisfy the clarity gate or replace AskUserQuestion",
-  ]);
-  assertIncludesAll(clarification, [
-    "AskUserQuestion",
-    "Clarity-gated loop",
-    "continue asking as needed",
-    "Max 4 real questions per AskUserQuestion call (API hard cap)",
-    "No override / skip slot",
-    "the clarity gate is the only exit",
-    "explicitly choose",
-  ]);
-  assertExcludesAll(clarification, [
-    "default 3 rounds",
-    "3 rounds",
-    "3 round",
-    "round budget",
-    "Operating limit",
-    "operating limit",
-    "Max 3 real questions + 1 override question",
-    "Phase 2 へ進む",
-    "追加確認が必要",
   ]);
 });
 
@@ -360,7 +328,7 @@ Deno.test("Critic prompt mandates regression findings for clarification failures
     "do not re-interview it solely because it is subjective",
   ]);
   assertExcludesAll(prompt, [
-    "subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the Phase 4 Step 7 Consolidated Interview queue",
+    "subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the DEEPEN Consolidated Interview queue",
   ]);
 });
 
