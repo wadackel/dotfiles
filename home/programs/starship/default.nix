@@ -12,6 +12,7 @@
         # "$username"
         # "$hostname"
         "$directory"
+        "$nix_shell"
         "$git_branch"
         "$git_commit"
         "$git_state"
@@ -41,6 +42,14 @@
       git_branch.style = "fg:103";
       git_state.style = "fg:104";
       git_status.style = "fg:104";
+
+      nix_shell = {
+        disabled = false;
+        # nf-linux-nixos (U+F313) via JSON escape — keeps source ASCII per CLAUDE.md
+        symbol = "${builtins.fromJSON ''"\uf313"''} ";
+        format = "[$symbol]($style)";
+        style = "fg:109";
+      };
     };
   };
 }
