@@ -1340,3 +1340,32 @@ Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async 
     await teardown();
   }
 });
+
+// S-N4: M keypress clears userLabel back to none. Counterpart to S-N2
+// (m cycles forward). Start with userLabel='wip' rendered, then send 'M'
+// and assert the label text disappears after the next tick + repaint.
+// 'wip' is chosen over 'review' because the Preview header text contains
+// the substring 'review' ("P[review]w"), which would make a naive
+// includes() assertion trivially true even after the label is cleared.
+Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      userLabel: "wip",
+      prompt: "clear-me",
+    });
+    const picker = await spawnPicker();
+    // Confirm the initial label is rendered before sending the reset key.
+    await waitFor(picker, (out) => out.includes("wip"));
+
+    await sendKey(picker, "M");
+    // The label text disappears after the next 1s tick + repaint.
+    await waitFor(picker, (out) => !out.includes("wip"), 4000);
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

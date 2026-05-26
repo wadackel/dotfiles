@@ -514,6 +514,30 @@ function App({
   );
   const index = foundIdx >= 0 ? foundIdx : 0;
 
+  const writeUserLabel = (paneId: string, label: UserLabel) => {
+    // Optimistic local update: visible label changes within ~10ms. The next
+    // fetchPanes tick (≤ TICK_INTERVAL_MS) overwrites with the canonical tmux
+    // value, so a failed write self-heals on the next tick.
+    setRows((prev: PaneRow[]) =>
+      prev.map((r: PaneRow) =>
+        r.paneId === paneId ? { ...r, userLabel: label } : r
+      )
+    );
+    tmuxRun([
+      "set-option",
+      "-p",
+      "-t",
+      paneId,
+      "@pane_user_label",
+      label,
+    ]).catch((e) => {
+      // Fire-and-forget — log rejection (e.g. tmux binary missing) so the
+      // next fetchPanes tick can still self-heal without surfacing a stack
+      // trace into the Ink TUI. Matches the tick() try/catch pattern.
+      console.error("picker: writeUserLabel tmux write failed:", e);
+    });
+  };
+
   useInput((input, key) => {
     if (key.escape || input === "q") {
       onSelect(null);
@@ -540,22 +564,16 @@ function App({
       return;
     }
     if (input === "m") {
-      // Cycle the user-defined label on the currently selected pane. The
-      // tmux pane option write happens asynchronously; the next fetchPanes
-      // tick (≤ TICK_INTERVAL_MS) picks up the new value and re-renders.
-      // No local state mutation needed — the SSOT is the tmux option.
+      // Cycle the user-defined label on the currently selected pane.
+      // writeUserLabel applies an optimistic local update + tmux write.
       const target = derivedRows[index];
-      if (target) {
-        const next = nextUserLabel(target.userLabel);
-        tmuxRun([
-          "set-option",
-          "-p",
-          "-t",
-          target.paneId,
-          "@pane_user_label",
-          next,
-        ]);
-      }
+      if (target) writeUserLabel(target.paneId, nextUserLabel(target.userLabel));
+      return;
+    }
+    if (input === "M") {
+      // Reset user label to none (counterpart to m's cycle).
+      const target = derivedRows[index];
+      if (target) writeUserLabel(target.paneId, "");
       return;
     }
   });
@@ -640,7 +658,7 @@ function App({
                 {filterEnabled ? " clear  " : " filter  "}
               </Text>
               <Text color={DOGRUN.muted}>·</Text>
-              <Text color={DOGRUN.accent}>{"  m"}</Text>
+              <Text color={DOGRUN.accent}>{"  m/M"}</Text>
               <Text color={DOGRUN.fg}>{" label  "}</Text>
             </>
           )
