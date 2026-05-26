@@ -5,7 +5,7 @@
 
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
-import React, { useEffect, useState } from "npm:react@18.3.1";
+import React, { useEffect, useRef, useState } from "npm:react@18.3.1";
 import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@5.2.1";
 
 // ---- Types + row parsing SSOT ----
@@ -461,6 +461,13 @@ function App({
     };
   }, [stdout]);
   const [rows, setRows] = useState(initialRows);
+  // Pending `m`/`M` writes the tmux SSOT has not yet acknowledged. The fetch
+  // tick (≤ TICK_INTERVAL_MS) can race ahead of an in-flight tmuxRun and read
+  // the stale label, reverting an optimistic update on screen. Keying by
+  // paneId lets the merge below keep showing the user's intended value until
+  // SSOT catches up. useRef (not useState) because mutations are always
+  // paired with a setRows call that drives the re-render.
+  const pendingLabelWrites = useRef<Map<string, UserLabel>>(new Map());
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
   >(new Map());
@@ -480,7 +487,20 @@ function App({
       try {
         const r = await fetchPanes();
         if (cancelled) return;
-        setRows(r);
+        // Merge in any pending m/M writes whose tmux SSOT hasn't caught up.
+        // When SSOT matches the pending label, clear the guard so future ticks
+        // accept canonical values again (self-healing on external writes).
+        const pending = pendingLabelWrites.current;
+        const merged = pending.size === 0 ? r : r.map((row) => {
+          const want = pending.get(row.paneId);
+          if (want === undefined) return row;
+          if (row.userLabel === want) {
+            pending.delete(row.paneId);
+            return row;
+          }
+          return { ...row, userLabel: want };
+        });
+        setRows(merged);
         // Fetch task progress for every supported pane in parallel. Failures are
         // isolated (readTaskProgress swallows them) so one bad session dir does
         // not block the whole tick.
@@ -515,9 +535,12 @@ function App({
   const index = foundIdx >= 0 ? foundIdx : 0;
 
   const writeUserLabel = (paneId: string, label: UserLabel) => {
-    // Optimistic local update: visible label changes within ~10ms. The next
-    // fetchPanes tick (≤ TICK_INTERVAL_MS) overwrites with the canonical tmux
-    // value, so a failed write self-heals on the next tick.
+    // Optimistic local update + pending guard. The tick's merge keeps showing
+    // `label` until tmux SSOT acknowledges it, so a fetchPanes that races
+    // ahead of the in-flight tmuxRun cannot revert the visible value. On
+    // write failure the guard is dropped so the next tick self-heals to the
+    // canonical (unchanged) tmux value.
+    pendingLabelWrites.current.set(paneId, label);
     setRows((prev: PaneRow[]) =>
       prev.map((r: PaneRow) =>
         r.paneId === paneId ? { ...r, userLabel: label } : r
@@ -531,10 +554,12 @@ function App({
       "@pane_user_label",
       label,
     ]).catch((e) => {
-      // Fire-and-forget — log rejection (e.g. tmux binary missing) so the
-      // next fetchPanes tick can still self-heal without surfacing a stack
-      // trace into the Ink TUI. Matches the tick() try/catch pattern.
       console.error("picker: writeUserLabel tmux write failed:", e);
+      // Only drop our own guard — a later press may have superseded `label`,
+      // in which case the newer pending write should remain in effect.
+      if (pendingLabelWrites.current.get(paneId) === label) {
+        pendingLabelWrites.current.delete(paneId);
+      }
     });
   };
 
