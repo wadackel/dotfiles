@@ -1,11 +1,21 @@
 ---
 name: obsidian-cli
 description: >-
-  Interact with Obsidian vault using the obsidian CLI commands.
-  Auto-loads when creating, reading, appending, searching, or managing notes
-  in the Obsidian vault via the obsidian CLI. Use when asked to read vault files,
-  create notes, append content, search the vault, open files in Obsidian,
-  or list vault contents.
+  Interact with the running Obsidian vault via the `obsidian` CLI: read,
+  create, append, search, rename, move notes; manage daily notes; list
+  files and folders; set/read frontmatter properties; list tags. Auto-loads
+  whenever the user wants to save content to Obsidian, take or capture a
+  note, append to today's daily note, search the vault, look up or quote
+  an existing vault note, or open a note in Obsidian — even when the user
+  does not mention the CLI by name. Triggers include "save to Obsidian",
+  "note this", "take a note", "add to today's note", "search my vault",
+  "what did I write about X", "open in Obsidian", "rename this note",
+  "Obsidianに保存", "メモして", "メモを取って", "メモに残して",
+  "デイリーノートに追記", "今日のノートに追加", "vaultを検索",
+  "Obsidianのノートを読んで", "Obsidianで開いて", "ノートをリネーム",
+  or any request that names a vault file, a vault folder (e.g.
+  `00_Inbox/`, `99_Tracking/Daily/`), a daily/weekly note, or a wikilink
+  target.
 ---
 
 # Obsidian CLI
