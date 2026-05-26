@@ -120,6 +120,17 @@ export const CLAUDE_ONLY_KEYS = [
   "@pane_worktree_path",
 ] as const satisfies readonly PaneOptionKey[];
 
+// Keys owned by the picker itself (read AND written by picker.tsx, not by
+// any agent hook). These keys appear in TMUX_FORMAT so the picker can read
+// them but are intentionally absent from ALL_PANE_OPTIONS_FOR_<AGENT>. The
+// contract test in pane-shared_test.ts subtracts this set from the
+// "TMUX_FORMAT keys ⊆ ⋃ writer keys" check so picker-owned keys do not
+// trigger a false-positive contract violation. State written here lives
+// for the pane's lifetime only (no SessionEnd teardown by agents needed).
+export const PICKER_OWNED_KEYS = [
+  "@pane_user_label",
+] as const satisfies readonly string[];
+
 // --- Length constants ---
 
 export const PROMPT_MAX_CHARS = 40;

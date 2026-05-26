@@ -36,6 +36,7 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     lastToolSubject: "",
     lastToolError: "",
     contextUsedPct: null,
+    userLabel: "",
     ...overrides,
   };
 }

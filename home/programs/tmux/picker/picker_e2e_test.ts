@@ -1250,3 +1250,93 @@ Deno.test("S30: picker re-layouts after tmux resize-window", async () => {
     await teardown();
   }
 });
+
+// S-N1: User-defined label overrides PaneStatus in row-1 display.
+// When @pane_user_label is set, picker renders the label's text + icon
+// instead of the pane's automatic status (run/wait/idle/err).
+Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running", // would normally render `run`
+      userLabel: "feedback", // takes priority
+      prompt: "labeled-row",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+
+    // Label text replaces status text.
+    assertStringIncludes(out, "feedback");
+    // Status text from the underlying PaneStatus is suppressed.
+    assertFalse(
+      out.includes(" run "),
+      `status text 'run' leaked into labeled row:\n${out}`,
+    );
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S-N2: m keypress on a row writes @pane_user_label via set-option, and
+// the next fetchPanes tick reflects it in the capture. We don't poll
+// tmux directly — the on-screen label text is the user-visible contract.
+Deno.test("S-N2: m keypress cycles userLabel none → review", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "cycle-me",
+    });
+    const picker = await spawnPicker();
+    // Wait for the initial render so 'm' targets the right row.
+    await waitFor(picker, (out) => out.includes("cycle-me"));
+
+    await sendKey(picker, "m");
+    // The label text appears after the next 1s tick + repaint.
+    await waitFor(picker, (out) => out.includes("review"), 4000);
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S-N3: Column alignment is preserved when labeled and unlabeled rows
+// coexist. The fixed-width status-or-label column (9 cells) ensures the
+// agent chip and repo columns start at the same horizontal offset on
+// both rows. We assert this indirectly by checking both labels render
+// AND both rows reach the repo column.
+Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      userLabel: "feedback", // 8-char max-width label
+      prompt: "labeled-row",
+      cwd: "/repo/alpha",
+    });
+    await createClaudePane({
+      status: "idle", // no label, shows "idle"
+      prompt: "plain-row",
+      cwd: "/repo/beta",
+    });
+    const picker = await spawnPicker();
+    const out = await captureOutput(picker);
+
+    // Both label text and status text coexist (label only on first row).
+    assertStringIncludes(out, "feedback");
+    assertStringIncludes(out, "idle");
+    // Both repo basenames reach the repo column (no truncation collapse).
+    assertStringIncludes(out, "alpha");
+    assertStringIncludes(out, "beta");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

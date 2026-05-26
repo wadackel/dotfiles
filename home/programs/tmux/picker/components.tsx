@@ -13,16 +13,13 @@
 import React from "npm:react@18.3.1";
 import { Box, Text } from "npm:ink@5.2.1";
 
-import { type PaneRow } from "./pane_row.ts";
+import { type PaneRow, STATUS_META, USER_LABEL_META } from "./pane_row.ts";
 import {
   basename,
   cwdBranchParts,
   formatElapsed,
   parseSubagents,
   renderSubagentTree,
-  statusColor,
-  statusIcon,
-  statusShort,
   summaryOf,
   toolSegmentText,
 } from "./format_helpers.ts";
@@ -38,7 +35,14 @@ export interface TaskProgress {
 // --- Layout constants ---
 
 // Row-1 fixed-width overhead before the summary body:
-//   pointer(2) + "icon "(2) + status5(5) + elapsed5(5) + agentSlot(13) + " · "(3) + "  "(2) = 32
+//   pointer(2) + icon(1) + " textPad"(1 + 9) + agentSlot(13) + " · "(3) + "  "(2) = 31
+// `textPad` holds either the pane-status short text (run/wait/idle/err) or
+// the user-defined label text (review/wip/feedback/pending), whichever
+// displayMeta() selects for the row. Padded to STATUS_OR_LABEL_TEXT_WIDTH
+// so repo column left-edge aligns across labeled and unlabeled rows. The
+// leading space sits on the textPad side (not appended to icon) because
+// PUA glyphs inside the same <Text> as a trailing space hit Ink 5.2.1's
+// supplementary-plane clip bug — see the JSX comment on the renderer.
 // `agentSlot` is fixed at 13 cells = PILL_LEFT(1) + " " + agentLabel +
 // " "(2 + agentLabel.length) + PILL_RIGHT(1) + trailingPad(9 - agentLabel.length).
 // Chip width tracks the canonical name length (claude=10 / opencode=12 /
@@ -47,7 +51,13 @@ export interface TaskProgress {
 // decorative idiom as the filter chip in the title bar.
 // Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
 // PaneRowLine's summaryBudget — keep them in sync via this single constant.
-export const ROW1_FIXED_OVERHEAD = 32;
+export const ROW1_FIXED_OVERHEAD = 31;
+
+// Width of the row-1 status/label text column (icon is rendered separately
+// as a 2-cell <Text>: icon glyph + trailing space). Sized to fit the
+// longest UserLabel short text — `feedback` (8 cells) — plus 1 cell of
+// trailing gap before the agent chip.
+export const STATUS_OR_LABEL_TEXT_WIDTH = 9;
 
 // Row-2 segment (icon + body, colored together). Built in priority order; when
 // the cumulative cell width exceeds budget, trim from the end (lowest priority
@@ -134,6 +144,28 @@ export const DOGRUN = {
   err: "#d68888", // token ≥75% threshold — desaturated from STATUS_META.error
 } as const;
 
+// --- Row-1 display selector ---
+
+// Pick the row-1 icon / text / color for a pane. When the pane carries a
+// user-defined label (row.userLabel non-empty) the label's meta wins; the
+// pane's automatic PaneStatus (run/wait/idle/err) is hidden in row-1 in
+// that case. This helper is **row-1 only** — row-2 segments (lastTool,
+// subagents, file, progress, idle-elapsed) continue to derive from
+// PaneStatus through format_helpers.ts.
+//
+// Returns the raw label text without padding; callers pad to
+// STATUS_OR_LABEL_TEXT_WIDTH so the column aligns.
+export function displayMeta(
+  row: PaneRow,
+): { color: string; icon: string; text: string } {
+  if (row.userLabel) {
+    const m = USER_LABEL_META[row.userLabel];
+    return { color: m.color, icon: m.icon, text: m.short };
+  }
+  const m = STATUS_META[row.status];
+  return { color: m.color, icon: m.icon, text: m.short };
+}
+
 // --- PaneRowLine ---
 
 interface PaneRowLineProps {
@@ -157,14 +189,12 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     branchMax,
   }: PaneRowLineProps,
 ) => {
-  const color = statusColor(row.status);
+  const display = displayMeta(row);
   const pointer = selected ? "❯ " : "  ";
-  const icon = statusIcon(row.status);
-  const statusText = statusShort(row.status);
-  // Trailing space in each padded column produces inter-column gaps without
-  // extra spacer <Text> nodes.
-  const status5 = statusText.slice(0, 4).padEnd(5);
-  const elapsed5 = formatElapsed(row.startedAtSec, now).padEnd(5);
+  // Pad text to fixed width so repo column left-edge stays aligned across
+  // labeled and unlabeled rows. Trailing space in each padded column
+  // produces inter-column gaps without extra spacer <Text> nodes.
+  const textPad = display.text.padEnd(STATUS_OR_LABEL_TEXT_WIDTH);
   const { repo, branch: branchName } = cwdBranchParts(
     row.cwd || row.currentPath,
     row.worktreeBranch,
@@ -286,12 +316,16 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
 
   return (
     <Box flexDirection="column">
-      {/* Line 1: marker + icon + status + elapsed + agent-chip + repo · branch + summary */}
+      {/* Line 1: marker + icon + status-or-label + agent-chip + repo · branch + summary.
+          The icon and text are emitted as TWO sibling <Text> nodes (rather
+          than concatenated as `icon + " "`) to dodge the Ink 5.2.1 supplementary-
+          plane clipping bug — UserLabel icons live in the PUA, so the trailing
+          space gets eaten if combined with the glyph inside one <Text>. Same
+          idiom as the row-2 segments below. */}
       <Box>
         <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
-        <Text color={color}>{icon + " "}</Text>
-        <Text color={color}>{status5}</Text>
-        <Text color={DOGRUN.fgDim}>{elapsed5}</Text>
+        <Text color={display.color}>{display.icon}</Text>
+        <Text color={display.color}>{" " + textPad}</Text>
         <Text color={DOGRUN.bgChip}>{PILL_LEFT}</Text>
         <Text color={DOGRUN.fgChip} backgroundColor={DOGRUN.bgChip}>
           {" " + agentLabel + " "}

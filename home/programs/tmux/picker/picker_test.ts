@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import {
   codexCwdHash,
   isLivePaneCommand,
+  nextUserLabel,
   type PaneRow,
   parseRow,
   parseTarget,
@@ -12,9 +13,9 @@ import {
 import { type Row2Seg, truncateTopSegBody } from "./components.tsx";
 import { cwdHash as gateCwdHash } from "../../codex/scripts/codex-plan-gate.ts";
 
-Deno.test("TMUX_FORMAT contains 21 US-separated field tokens", () => {
+Deno.test("TMUX_FORMAT contains 22 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 21);
+  assertEquals(fields.length, 22);
 });
 
 Deno.test("parseRow: full row with all fields present", () => {
@@ -40,6 +41,7 @@ Deno.test("parseRow: full row with all fields present", () => {
     "picker.tsx",
     "Exit code 1",
     "42",
+    "review",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -64,12 +66,13 @@ Deno.test("parseRow: full row with all fields present", () => {
     lastToolSubject: "picker.tsx",
     lastToolError: "Exit code 1",
     contextUsedPct: 42,
+    userLabel: "review",
   };
   assertEquals(row, expected);
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : (i === 3 ? "/home/me" : v)
   )
     .join("\x1f");
@@ -89,48 +92,73 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   assertEquals(row?.lastToolSubject, "");
   assertEquals(row?.lastToolError, "");
   assertEquals(row?.contextUsedPct, null);
+  assertEquals(row?.userLabel, "");
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
+Deno.test("parseRow: unknown userLabel normalized to empty string", () => {
+  const line = Array(22).fill("").map((v, i) =>
+    i === 0 ? "%1" : i === 21 ? "bogus" : v
+  ).join("\x1f");
+  assertEquals(parseRow(line)?.userLabel, "");
+});
+
+Deno.test("parseRow: valid userLabel preserved", () => {
+  for (const label of ["review", "wip", "feedback", "pending"] as const) {
+    const line = Array(22).fill("").map((v, i) =>
+      i === 0 ? "%1" : i === 21 ? label : v
+    ).join("\x1f");
+    assertEquals(parseRow(line)?.userLabel, label);
+  }
+});
+
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, null);
 });
 
 Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
-  const line = Array(21).fill("").map((v, i) =>
+  const line = Array(22).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "75" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, 75);
+});
+
+Deno.test("nextUserLabel: cycles none → review → wip → feedback → pending → none", () => {
+  assertEquals(nextUserLabel(""), "review");
+  assertEquals(nextUserLabel("review"), "wip");
+  assertEquals(nextUserLabel("wip"), "feedback");
+  assertEquals(nextUserLabel("feedback"), "pending");
+  assertEquals(nextUserLabel("pending"), "");
 });
 
 Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to space", () => {
   // Adversarial input: attacker-controlled cwd / branch / prompt embed ESC, BEL,
   // NUL bytes. parseRow must replace each with a space so Ink rendering cannot
   // execute terminal escape sequences. `\x1b` `\x07` `\x00` differ from `\x1f`
-  // (US, field separator), so the 21-field structure survives.
+  // (US, field separator), so the 22-field structure survives.
   const fields = [
     "%9", // 0 paneId
     "0:0.0", // 1 target
@@ -153,6 +181,7 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
     "lasts\x07", // 18 lastToolSubject
     "err\x00msg", // 19 lastToolError
     "10", // 20 contextUsedPct
+    "review", // 21 userLabel
   ];
   const row = parseRow(fields.join("\x1f"));
   // All ESC / BEL / NUL bytes replaced with " ". \x1f is excluded from the
@@ -174,11 +203,11 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
-  // 20 fields (one short of 21) → null
-  const twenty = Array(20).fill("x").join("\x1f");
-  assertEquals(parseRow(twenty), null);
-  // 21 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(21).fill("").join("\x1f");
+  // 21 fields (one short of 22) → null
+  const twentyOne = Array(21).fill("x").join("\x1f");
+  assertEquals(parseRow(twentyOne), null);
+  // 22 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
+  const emptyId = Array(22).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 
@@ -302,6 +331,7 @@ function codexRow(cwd: string): PaneRow {
     lastToolSubject: "",
     lastToolError: "",
     contextUsedPct: null,
+    userLabel: "",
   };
 }
 

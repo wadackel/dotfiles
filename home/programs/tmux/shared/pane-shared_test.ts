@@ -7,6 +7,7 @@ import {
   formatToolError,
   maskPrompt,
   type Op,
+  PICKER_OWNED_KEYS,
   PROMPT_MAX_CHARS,
   promptStartTrio,
   SESSION_ID_RE,
@@ -19,13 +20,14 @@ import {
 } from "./pane-shared.ts";
 import { TMUX_FORMAT } from "../picker/pane_row.ts";
 
-// --- Contract: TMUX_FORMAT keys ⊆ ⋃ writer keys ---
+// --- Contract: TMUX_FORMAT keys ⊆ ⋃ writer keys (∪ PICKER_OWNED_KEYS) ---
 //
 // Writers may set keys that the picker does not display (writer-internal
 // state machine fields like @pane_pending_teardown, @pane_main_stopped,
 // @pane_worktree_path, @pane_current_tool_use_id). The opposite direction —
-// picker reads a key no writer ever sets — IS a contract violation: the
-// picker would surface a permanently-empty cell.
+// picker reads a key no writer ever sets — IS a contract violation, EXCEPT
+// for picker-owned keys (PICKER_OWNED_KEYS) which the picker reads AND
+// writes itself.
 
 function tmuxFormatKeys(): Set<string> {
   // TMUX_FORMAT contains placeholders like #{@pane_agent}; extract the @pane_*
@@ -35,16 +37,43 @@ function tmuxFormatKeys(): Set<string> {
   return new Set(TMUX_FORMAT.match(re) ?? []);
 }
 
-Deno.test("TMUX_FORMAT keys ⊆ union of all writer ALL_PANE_OPTIONS", () => {
+Deno.test("TMUX_FORMAT keys ⊆ union of all writer ALL_PANE_OPTIONS (or picker-owned)", () => {
   const allWriter = new Set<string>([
     ...ALL_PANE_OPTIONS_FOR_CLAUDE,
     ...ALL_PANE_OPTIONS_FOR_CODEX,
     ...ALL_PANE_OPTIONS_FOR_OPENCODE,
   ]);
+  const pickerOwned = new Set<string>(PICKER_OWNED_KEYS);
   for (const key of tmuxFormatKeys()) {
-    if (!allWriter.has(key)) {
+    if (!allWriter.has(key) && !pickerOwned.has(key)) {
       throw new Error(
-        `picker reads ${key} via TMUX_FORMAT but no writer lists it in ALL_PANE_OPTIONS_FOR_<AGENT> — picker would render an empty cell forever`,
+        `picker reads ${key} via TMUX_FORMAT but no writer lists it in ALL_PANE_OPTIONS_FOR_<AGENT> and it is not in PICKER_OWNED_KEYS — picker would render an empty cell forever`,
+      );
+    }
+  }
+});
+
+Deno.test("PICKER_OWNED_KEYS members are absent from all writer ALL_PANE_OPTIONS", () => {
+  const allWriter = new Set<string>([
+    ...ALL_PANE_OPTIONS_FOR_CLAUDE,
+    ...ALL_PANE_OPTIONS_FOR_CODEX,
+    ...ALL_PANE_OPTIONS_FOR_OPENCODE,
+  ]);
+  for (const key of PICKER_OWNED_KEYS) {
+    if (allWriter.has(key)) {
+      throw new Error(
+        `${key} is in PICKER_OWNED_KEYS but ALSO appears in a writer's ALL_PANE_OPTIONS_FOR_<AGENT> — ownership is ambiguous`,
+      );
+    }
+  }
+});
+
+Deno.test("PICKER_OWNED_KEYS members appear in TMUX_FORMAT", () => {
+  const formatKeys = tmuxFormatKeys();
+  for (const key of PICKER_OWNED_KEYS) {
+    if (!formatKeys.has(key)) {
+      throw new Error(
+        `${key} is in PICKER_OWNED_KEYS but missing from TMUX_FORMAT — picker has nothing to read`,
       );
     }
   }

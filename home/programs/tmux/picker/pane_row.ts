@@ -4,6 +4,12 @@
 
 export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 
+// User-defined session label. Written by the picker itself (not by agent
+// hooks) via `set-option -p -t <paneId> @pane_user_label <value>`. Empty
+// string means "no label" (= none). The label set takes display priority
+// over PaneStatus in row-1: see displayMeta() in components.tsx.
+export type UserLabel = "" | "review" | "wip" | "feedback" | "pending";
+
 // Agents whose sessions the picker surfaces. PaneRow.agent stays `string` because
 // `@pane_agent` is read verbatim from tmux and may legitimately be empty or any
 // other value (a non-claude / non-opencode / non-codex pane). isLivePaneCommand applies the
@@ -51,6 +57,7 @@ export interface PaneRow {
   lastToolSubject: string;
   lastToolError: string;
   contextUsedPct: number | null;
+  userLabel: UserLabel;
 }
 
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).
@@ -64,9 +71,45 @@ export const STATUS_META = {
   "": { color: "#9ea3c0", short: "", icon: " " },
 } as const;
 
+// UserLabel → display metadata. Same shape as STATUS_META so displayMeta() in
+// components.tsx can pick from either. Icons are Nerd Font Material Design
+// (1 cell wide in CaskaydiaCove Nerd Font Mono); colors are dogrun palette
+// hex values matching DOGRUN.* in components.tsx. PUA code points are emitted
+// inline here because pane_row.ts ships through the Nix store unmodified;
+// the CLAUDE.md "Private Use Area glyphs at runtime" rule applies to files
+// generated at install time, not to TypeScript sources read by Deno.
+export const USER_LABEL_META = {
+  "": { color: "#9ea3c0", short: "", icon: " " },
+  review: { color: "#929be5", short: "review", icon: "\u{F0996}" }, // nf-md-comment-eye
+  wip: { color: "#a8a384", short: "wip", icon: "\u{F1898}" }, // nf-md-progress-pencil
+  feedback: { color: "#ac8b83", short: "feedback", icon: "\u{F0CDE}" }, // nf-md-thumbs-up-down
+  pending: { color: "#545c8c", short: "pending", icon: "\u{F00C3}" }, // nf-md-bookmark-outline
+} as const;
+
+// Cycling order for `m` keypress in the picker. Length 5 so `(idx + 1) % 5`
+// closes the loop back to "" (none). The order is intentional, not derived
+// from Object.keys(USER_LABEL_META) — Object.keys order is technically
+// guaranteed for string keys in modern JS but the explicit array makes the
+// cycle a first-class part of the contract.
+export const USER_LABEL_CYCLE: readonly UserLabel[] = [
+  "",
+  "review",
+  "wip",
+  "feedback",
+  "pending",
+] as const;
+
+// Compute the next label in the picker cycle. Unknown / out-of-cycle input
+// is treated as "" so the cycle restarts from the head.
+export function nextUserLabel(current: UserLabel): UserLabel {
+  const idx = USER_LABEL_CYCLE.indexOf(current);
+  if (idx < 0) return USER_LABEL_CYCLE[1];
+  return USER_LABEL_CYCLE[(idx + 1) % USER_LABEL_CYCLE.length];
+}
+
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-// Field count = 21; parseRow's malformed-check below must match.
+// Field count = 22; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -87,7 +130,8 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_current_tool_subject}\x1f" +
   "#{@pane_last_tool_subject}\x1f" +
   "#{@pane_last_tool_error}\x1f" +
-  "#{@pane_context_used_pct}";
+  "#{@pane_context_used_pct}\x1f" +
+  "#{@pane_user_label}";
 
 const NUMERIC = /^\d+$/;
 
@@ -99,6 +143,10 @@ function normalizeStatus(raw: string): PaneStatus {
   return Object.hasOwn(STATUS_META, raw) ? (raw as PaneStatus) : "";
 }
 
+function normalizeUserLabel(raw: string): UserLabel {
+  return Object.hasOwn(USER_LABEL_META, raw) ? (raw as UserLabel) : "";
+}
+
 // Reader-side ANSI / control-byte choke point. Defense-in-depth against an
 // attacker-controlled directory / branch / path leaking ESC sequences into
 // `tmux list-panes -F` output (e.g. `/tmp/$'\x1b]0;pwn\x07'`). Writer-side
@@ -107,7 +155,7 @@ function normalizeStatus(raw: string): PaneStatus {
 //
 // `\x1f` (US, field separator) is intentionally out of scope: it is excluded
 // from the strip set so injecting it into a value would still desync the
-// 21-field layout (parseRow returns null on `fields.length < 21`).
+// 22-field layout (parseRow returns null on `fields.length < 22`).
 // deno-lint-ignore no-control-regex
 const CONTROL_BYTE_RE = /[\x00-\x1e\x7f]/g;
 
@@ -116,10 +164,10 @@ function stripControlBytes(raw: string): string {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 21 fields or empty pane_id).
+// Returns null when the line is malformed (< 22 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 21) return null;
+  if (fields.length < 22) return null;
   const [
     paneId,
     target,
@@ -142,6 +190,7 @@ export function parseRow(line: string): PaneRow | null {
     lastToolSubject,
     lastToolError,
     contextUsedPct,
+    userLabel,
   ] = fields;
   if (!paneId) return null;
   return {
@@ -166,5 +215,6 @@ export function parseRow(line: string): PaneRow | null {
     lastToolSubject: stripControlBytes(lastToolSubject),
     lastToolError: stripControlBytes(lastToolError),
     contextUsedPct: parseIntOrNull(contextUsedPct),
+    userLabel: normalizeUserLabel(userLabel),
   };
 }

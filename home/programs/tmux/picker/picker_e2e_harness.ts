@@ -16,6 +16,7 @@
 //   }
 
 import { sanitizeAnsi } from "./ansi.ts";
+import type { UserLabel } from "./pane_row.ts";
 
 // ---- Constants ----
 
@@ -72,6 +73,11 @@ export interface PaneOpts {
   sessionId?: string;
   subagents?: string;
   cwd?: string;
+  // User-defined session label set via picker.tsx's `m` keypress, stored
+  // in the @pane_user_label tmux pane option. When set (non-empty), the
+  // picker's row-1 display swaps icon/text/color from PaneStatus to the
+  // label's meta. Leave unset (or set to "") to test the unlabeled path.
+  userLabel?: UserLabel;
   // When undefined or true (default), spawn the pane with a live cc
   // placeholder so `pane_current_command` is `.claude-wrapped` — matching
   // the picker's liveness filter (picker.tsx:CLAUDE_PANE_COMMANDS).
@@ -284,6 +290,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.cwd !== undefined) {
     pairs.push(["@pane_cwd", opts.cwd]);
+  }
+  if (opts.userLabel !== undefined) {
+    pairs.push(["@pane_user_label", opts.userLabel]);
   }
 
   await Promise.all(

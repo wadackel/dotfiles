@@ -16,20 +16,28 @@ import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@5.2.1";
 import {
   type Agent,
   isLivePaneCommand,
+  nextUserLabel,
   type PaneRow,
   type PaneStatus,
   parseRow,
   STATUS_META,
   TMUX_FORMAT,
+  USER_LABEL_CYCLE,
+  USER_LABEL_META,
+  type UserLabel,
 } from "./pane_row.ts";
 export {
   type Agent,
   isLivePaneCommand,
+  nextUserLabel,
   type PaneRow,
   type PaneStatus,
   parseRow,
   STATUS_META,
   TMUX_FORMAT,
+  USER_LABEL_CYCLE,
+  USER_LABEL_META,
+  type UserLabel,
 };
 
 // Row-1 repo/branch column width caps for the dynamic layout. App computes
@@ -531,6 +539,25 @@ function App({
       setFilterEnabled((v: boolean) => !v);
       return;
     }
+    if (input === "m") {
+      // Cycle the user-defined label on the currently selected pane. The
+      // tmux pane option write happens asynchronously; the next fetchPanes
+      // tick (≤ TICK_INTERVAL_MS) picks up the new value and re-renders.
+      // No local state mutation needed — the SSOT is the tmux option.
+      const target = derivedRows[index];
+      if (target) {
+        const next = nextUserLabel(target.userLabel);
+        tmuxRun([
+          "set-option",
+          "-p",
+          "-t",
+          target.paneId,
+          "@pane_user_label",
+          next,
+        ]);
+      }
+      return;
+    }
   });
 
   if (rows.length === 0) {
@@ -612,6 +639,9 @@ function App({
               <Text color={DOGRUN.fg}>
                 {filterEnabled ? " clear  " : " filter  "}
               </Text>
+              <Text color={DOGRUN.muted}>·</Text>
+              <Text color={DOGRUN.accent}>{"  m"}</Text>
+              <Text color={DOGRUN.fg}>{" label  "}</Text>
             </>
           )
           : null}
