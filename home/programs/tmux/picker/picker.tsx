@@ -534,25 +534,39 @@ function App({
   );
   const index = foundIdx >= 0 ? foundIdx : 0;
 
-  const writeUserLabel = (paneId: string, label: UserLabel) => {
+  const writeUserLabel = (
+    paneId: string,
+    label: UserLabel,
+    sessionId: string,
+  ) => {
     // Optimistic local update + pending guard. The tick's merge keeps showing
     // `label` until tmux SSOT acknowledges it, so a fetchPanes that races
-    // ahead of the in-flight tmuxRun cannot revert the visible value. On
-    // write failure the guard is dropped so the next tick self-heals to the
-    // canonical (unchanged) tmux value.
+    // ahead of the in-flight tmuxRun cannot revert the visible value. The
+    // .catch below only fires on a spawn-level failure (tmuxRun resolves on a
+    // non-zero tmux exit, logging stderr); in that case the guard is dropped
+    // so the next tick self-heals to the canonical (unchanged) tmux value.
+    //
+    // @pane_user_label_session records the session the label is bound to.
+    // parseRow gates display on it matching the pane's current session, so a
+    // new agent session (fresh @pane_session_id) drops the stale label
+    // automatically. Both keys are written together; on label="" the session
+    // value is irrelevant but writing it keeps the path uniform.
     pendingLabelWrites.current.set(paneId, label);
     setRows((prev: PaneRow[]) =>
       prev.map((r: PaneRow) =>
         r.paneId === paneId ? { ...r, userLabel: label } : r
       )
     );
-    tmuxRun([
-      "set-option",
-      "-p",
-      "-t",
-      paneId,
-      "@pane_user_label",
-      label,
+    Promise.all([
+      tmuxRun(["set-option", "-p", "-t", paneId, "@pane_user_label", label]),
+      tmuxRun([
+        "set-option",
+        "-p",
+        "-t",
+        paneId,
+        "@pane_user_label_session",
+        sessionId,
+      ]),
     ]).catch((e) => {
       console.error("picker: writeUserLabel tmux write failed:", e);
       // Only drop our own guard — a later press may have superseded `label`,
@@ -592,13 +606,19 @@ function App({
       // Cycle the user-defined label on the currently selected pane.
       // writeUserLabel applies an optimistic local update + tmux write.
       const target = derivedRows[index];
-      if (target) writeUserLabel(target.paneId, nextUserLabel(target.userLabel));
+      if (target) {
+        writeUserLabel(
+          target.paneId,
+          nextUserLabel(target.userLabel),
+          target.sessionId,
+        );
+      }
       return;
     }
     if (input === "M") {
       // Reset user label to none (counterpart to m's cycle).
       const target = derivedRows[index];
-      if (target) writeUserLabel(target.paneId, "");
+      if (target) writeUserLabel(target.paneId, "", target.sessionId);
       return;
     }
   });

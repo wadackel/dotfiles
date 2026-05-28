@@ -78,6 +78,12 @@ export interface PaneOpts {
   // picker's row-1 display swaps icon/text/color from PaneStatus to the
   // label's meta. Leave unset (or set to "") to test the unlabeled path.
   userLabel?: UserLabel;
+  // Session id the user label is bound to, stored in @pane_user_label_session.
+  // picker.tsx writes the pane's current session id alongside the label; the
+  // picker only honors the label when this matches @pane_session_id. Set it
+  // different from sessionId to reproduce a stale label left by a closed
+  // session, which the picker must drop.
+  userLabelSession?: string;
   // When undefined or true (default), spawn the pane with a live cc
   // placeholder so `pane_current_command` is `.claude-wrapped` — matching
   // the picker's liveness filter (picker.tsx:CLAUDE_PANE_COMMANDS).
@@ -293,6 +299,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.userLabel !== undefined) {
     pairs.push(["@pane_user_label", opts.userLabel]);
+  }
+  if (opts.userLabelSession !== undefined) {
+    pairs.push(["@pane_user_label_session", opts.userLabelSession]);
   }
 
   await Promise.all(

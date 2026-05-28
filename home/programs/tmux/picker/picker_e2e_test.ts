@@ -1369,3 +1369,39 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
     await teardown();
   }
 });
+
+// S-N5: A label bound to a closed session does not leak into a new session
+// on the same pane. The pane's current @pane_session_id ("sess-new") differs
+// from the session the label was attached to (@pane_user_label_session =
+// "sess-old"), so parseRow drops the stale label and the picker renders the
+// automatic status instead. This is the core fix: stale labels are gated on
+// session identity, not on unreliable close hooks. 'wip' is used for the same
+// reason as S-N4 (the Preview header contains the substring 'review').
+Deno.test("S-N5: stale label from a closed session is not shown after a new session starts", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running", // automatic status that should surface instead
+      userLabel: "wip", // left over from the previous (closed) session
+      userLabelSession: "sess-old", // session the label was bound to
+      sessionId: "sess-new", // the freshly started session on this pane
+      prompt: "stale-label-row",
+    });
+    const picker = await spawnPicker();
+    await waitFor(picker, (out) => out.includes("stale-label-row"));
+
+    const out = await captureOutput(picker);
+    // The stale label must not render.
+    assertFalse(
+      out.includes("wip"),
+      `stale label 'wip' leaked despite session change:\n${out}`,
+    );
+    // The automatic status takes over now that the label is gated out.
+    assertStringIncludes(out, "run");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

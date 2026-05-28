@@ -13,9 +13,9 @@ import {
 import { type Row2Seg, truncateTopSegBody } from "./components.tsx";
 import { cwdHash as gateCwdHash } from "../../codex/scripts/codex-plan-gate.ts";
 
-Deno.test("TMUX_FORMAT contains 22 US-separated field tokens", () => {
+Deno.test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 22);
+  assertEquals(fields.length, 23);
 });
 
 Deno.test("parseRow: full row with all fields present", () => {
@@ -42,6 +42,7 @@ Deno.test("parseRow: full row with all fields present", () => {
     "Exit code 1",
     "42",
     "review",
+    "sess-abc",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -72,7 +73,7 @@ Deno.test("parseRow: full row with all fields present", () => {
 });
 
 Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : (i === 3 ? "/home/me" : v)
   )
     .join("\x1f");
@@ -96,14 +97,14 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
 });
 
 Deno.test("parseRow: unknown status normalized to empty string", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 Deno.test("parseRow: unknown userLabel normalized to empty string", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 21 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.userLabel, "");
@@ -111,36 +112,75 @@ Deno.test("parseRow: unknown userLabel normalized to empty string", () => {
 
 Deno.test("parseRow: valid userLabel preserved", () => {
   for (const label of ["review", "wip", "feedback", "pending"] as const) {
-    const line = Array(22).fill("").map((v, i) =>
+    const line = Array(23).fill("").map((v, i) =>
       i === 0 ? "%1" : i === 21 ? label : v
     ).join("\x1f");
     assertEquals(parseRow(line)?.userLabel, label);
   }
 });
 
+// --- userLabel session-binding gate ---
+// parseRow honors @pane_user_label only when @pane_user_label_session (field
+// 22) matches @pane_session_id (field 13). A new agent session writes a fresh
+// session id, so a label bound to a closed session falls through to "".
+
+function rowWithLabelSession(
+  sessionId: string,
+  userLabel: string,
+  userLabelSession: string,
+): string {
+  return Array(23).fill("").map((v, i) =>
+    i === 0
+      ? "%1"
+      : i === 13
+      ? sessionId
+      : i === 21
+      ? userLabel
+      : i === 22
+      ? userLabelSession
+      : v
+  ).join("\x1f");
+}
+
+Deno.test("parseRow: userLabel kept when label session matches current session", () => {
+  const line = rowWithLabelSession("sess-A", "review", "sess-A");
+  assertEquals(parseRow(line)?.userLabel, "review");
+});
+
+Deno.test("parseRow: userLabel dropped when label session != current session", () => {
+  // Stale label left over from a previous session on the same pane.
+  const line = rowWithLabelSession("sess-NEW", "review", "sess-OLD");
+  assertEquals(parseRow(line)?.userLabel, "");
+});
+
+Deno.test("parseRow: userLabel none when both session ids empty", () => {
+  const line = rowWithLabelSession("", "", "");
+  assertEquals(parseRow(line)?.userLabel, "");
+});
+
 Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
 Deno.test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, null);
 });
 
 Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
-  const line = Array(22).fill("").map((v, i) =>
+  const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "75" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, 75);
@@ -158,7 +198,7 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
   // Adversarial input: attacker-controlled cwd / branch / prompt embed ESC, BEL,
   // NUL bytes. parseRow must replace each with a space so Ink rendering cannot
   // execute terminal escape sequences. `\x1b` `\x07` `\x00` differ from `\x1f`
-  // (US, field separator), so the 22-field structure survives.
+  // (US, field separator), so the 23-field structure survives.
   const fields = [
     "%9", // 0 paneId
     "0:0.0", // 1 target
@@ -182,6 +222,7 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
     "err\x00msg", // 19 lastToolError
     "10", // 20 contextUsedPct
     "review", // 21 userLabel
+    "sid-001", // 22 userLabelSession (matches sessionId → label honored)
   ];
   const row = parseRow(fields.join("\x1f"));
   // All ESC / BEL / NUL bytes replaced with " ". \x1f is excluded from the
@@ -203,11 +244,11 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
 Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
-  // 21 fields (one short of 22) → null
-  const twentyOne = Array(21).fill("x").join("\x1f");
-  assertEquals(parseRow(twentyOne), null);
-  // 22 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(22).fill("").join("\x1f");
+  // 22 fields (one short of 23) → null
+  const twentyTwo = Array(22).fill("x").join("\x1f");
+  assertEquals(parseRow(twentyTwo), null);
+  // 23 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
+  const emptyId = Array(23).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 

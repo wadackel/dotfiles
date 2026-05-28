@@ -127,8 +127,17 @@ export const CLAUDE_ONLY_KEYS = [
 // "TMUX_FORMAT keys ⊆ ⋃ writer keys" check so picker-owned keys do not
 // trigger a false-positive contract violation. State written here lives
 // for the pane's lifetime only (no SessionEnd teardown by agents needed).
+//
+// @pane_user_label_session records the @pane_session_id that was current when
+// the label was written. The picker reads it to gate label display: when the
+// recorded session no longer matches the pane's current @pane_session_id (a
+// new agent session was started on the same pane), parseRow normalizes the
+// label to "" so a stale label from a closed session does not leak into the
+// new one. This keys the fix on session identity, not on unreliable close
+// hooks.
 export const PICKER_OWNED_KEYS = [
   "@pane_user_label",
+  "@pane_user_label_session",
 ] as const satisfies readonly string[];
 
 // --- Length constants ---

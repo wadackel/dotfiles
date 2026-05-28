@@ -109,7 +109,7 @@ export function nextUserLabel(current: UserLabel): UserLabel {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-// Field count = 22; parseRow's malformed-check below must match.
+// Field count = 23; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -131,7 +131,8 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_last_tool_subject}\x1f" +
   "#{@pane_last_tool_error}\x1f" +
   "#{@pane_context_used_pct}\x1f" +
-  "#{@pane_user_label}";
+  "#{@pane_user_label}\x1f" +
+  "#{@pane_user_label_session}";
 
 const NUMERIC = /^\d+$/;
 
@@ -155,7 +156,7 @@ function normalizeUserLabel(raw: string): UserLabel {
 //
 // `\x1f` (US, field separator) is intentionally out of scope: it is excluded
 // from the strip set so injecting it into a value would still desync the
-// 22-field layout (parseRow returns null on `fields.length < 22`).
+// 23-field layout (parseRow returns null on `fields.length < 23`).
 // deno-lint-ignore no-control-regex
 const CONTROL_BYTE_RE = /[\x00-\x1e\x7f]/g;
 
@@ -164,10 +165,10 @@ function stripControlBytes(raw: string): string {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 22 fields or empty pane_id).
+// Returns null when the line is malformed (< 23 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 22) return null;
+  if (fields.length < 23) return null;
   const [
     paneId,
     target,
@@ -191,8 +192,19 @@ export function parseRow(line: string): PaneRow | null {
     lastToolError,
     contextUsedPct,
     userLabel,
+    userLabelSession,
   ] = fields;
   if (!paneId) return null;
+  // Gate the user label on session identity: only honor it when the session
+  // it was attached to is still the pane's current session. A new agent
+  // session writes a fresh @pane_session_id, so a label left over from a
+  // closed session falls through to "" (none) instead of leaking forward.
+  // userLabelSession is consumed here and intentionally NOT exposed on
+  // PaneRow — consumers only need the already-normalized userLabel.
+  const effectiveUserLabel =
+    stripControlBytes(userLabelSession) === stripControlBytes(sessionId)
+      ? normalizeUserLabel(userLabel)
+      : "";
   return {
     paneId: stripControlBytes(paneId),
     target: stripControlBytes(target),
@@ -215,6 +227,6 @@ export function parseRow(line: string): PaneRow | null {
     lastToolSubject: stripControlBytes(lastToolSubject),
     lastToolError: stripControlBytes(lastToolError),
     contextUsedPct: parseIntOrNull(contextUsedPct),
-    userLabel: normalizeUserLabel(userLabel),
+    userLabel: effectiveUserLabel,
   };
 }
