@@ -1,5 +1,6 @@
 import { assertEquals, assertMatch, assertNotMatch } from "jsr:@std/assert";
 import {
+  flattenCommand,
   getSegments,
   getSegmentsFallback,
   globToRegex,
@@ -498,4 +499,92 @@ Deno.test("parseCommand: process substitution falls back gracefully", async () =
   const result = await parseCommand("cat <(echo hello)");
   assertEquals(result.isCompound, true);
   assertEquals(Array.isArray(result.segments), true);
+});
+
+// ===== flattenCommand =====
+
+const HELPER = "/h/.claude/scripts/plan-marker.ts";
+const PLAN = "/h/.claude/plans/b.md";
+
+Deno.test("flattenCommand: cd && helper yields two flat commands, no exotic", async () => {
+  const flat = await flattenCommand(`cd /r && ${HELPER} activate-pending ${PLAN} s`);
+  assertEquals(flat?.exotic, false);
+  assertEquals(flat?.commands.length, 2);
+  assertEquals(flat?.commands[0].name, "cd");
+  assertEquals(flat?.commands[0].redirects, []);
+  assertEquals(flat?.commands[1].name, HELPER);
+  assertEquals(flat?.commands[1].args, ["activate-pending", PLAN, "s"]);
+  assertEquals(flat?.commands[1].redirects, []);
+});
+
+Deno.test("flattenCommand: semicolon and pipe are flat (not exotic)", async () => {
+  const semi = await flattenCommand("a ; b ; c");
+  assertEquals(semi?.exotic, false);
+  assertEquals(semi?.commands.length, 3);
+  const pipe = await flattenCommand("a | b");
+  assertEquals(pipe?.exotic, false);
+  assertEquals(pipe?.commands.length, 2);
+});
+
+Deno.test("flattenCommand: &> redirect (prefix position) is captured", async () => {
+  const flat = await flattenCommand(`echo x &> /h/.claude/plans/x`);
+  assertEquals(flat?.exotic, false);
+  // `&>` splits into an async `echo x` plus a nameless command bearing the
+  // redirect in prefix position. Some leaf must carry the plans-dir target.
+  const redirects = flat?.commands.flatMap((c) => c.redirects) ?? [];
+  assertEquals(
+    redirects.some((r) => r.target === "/h/.claude/plans/x" && !r.isFdDup),
+    true,
+  );
+});
+
+Deno.test("flattenCommand: suffix redirect target + fd-dup are captured", async () => {
+  const out = await flattenCommand(`echo x > /h/.claude/plans/.active-pwn`);
+  assertEquals(out?.commands[0].redirects, [
+    { target: "/h/.claude/plans/.active-pwn", isFdDup: false },
+  ]);
+
+  const devnull = await flattenCommand(`ls /h/.claude/plans/ 2>/dev/null`);
+  assertEquals(devnull?.commands[0].redirects, [
+    { target: "/dev/null", isFdDup: false },
+  ]);
+
+  const fddup = await flattenCommand(`ls /h/.claude/plans 2>&1`);
+  assertEquals(fddup?.commands[0].redirects, [{ target: "1", isFdDup: true }]);
+
+  const clobber = await flattenCommand(`ls x >| /h/.claude/plans/y`);
+  assertEquals(clobber?.commands[0].redirects, [
+    { target: "/h/.claude/plans/y", isFdDup: false },
+  ]);
+
+  const none = await flattenCommand(`ls /h/.claude/plans/`);
+  assertEquals(none?.commands[0].redirects, []);
+});
+
+Deno.test("flattenCommand: command expansion sets hasExpansion", async () => {
+  const flat = await flattenCommand(`echo $(touch /h/.claude/plans/x)`);
+  assertEquals(flat?.exotic, false);
+  assertEquals(flat?.commands.some((c) => c.hasExpansion), true);
+});
+
+Deno.test("flattenCommand: subshell is exotic", async () => {
+  const flat = await flattenCommand(`(cmd)`);
+  assertEquals(flat?.exotic, true);
+});
+
+Deno.test("flattenCommand: if/for/while/case are exotic", async () => {
+  for (const cmd of [
+    "if true; then cmd; fi",
+    "for x in a b; do cmd; done",
+    "while true; do cmd; done",
+    "case x in a) cmd;; esac",
+  ]) {
+    const flat = await flattenCommand(cmd);
+    assertEquals(flat?.exotic, true, `should be exotic: ${cmd}`);
+  }
+});
+
+Deno.test("flattenCommand: parse error (here-string) returns null", async () => {
+  const flat = await flattenCommand(`cat <<< /h/.claude/plans/x`);
+  assertEquals(flat, null);
 });

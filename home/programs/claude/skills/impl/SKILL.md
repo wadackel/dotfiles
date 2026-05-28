@@ -29,6 +29,8 @@ Approval gate — confirm with the deterministic marker helper before starting w
 ~/.claude/scripts/plan-marker.ts require-active "$CLAUDE_CODE_SESSION_ID"
 ```
 
+ヘルパは standalone な Bash コマンドとして実行する。`cd <dir> &&` の前置はフラット列として許容されるが、subshell・コマンド置換 `$()`・redirect で囲むと plan-gate のマーカー保護に引っかかりブロックされる。
+
 The helper's stdout is the active plan path. Proceed only on exit 0.
 
 - **Helper exit 0**: read stdout (plan path) and proceed

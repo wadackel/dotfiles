@@ -177,6 +177,8 @@ Write the session-scoped **pending** marker. The active marker is created only w
 ~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
 ```
 
+ヘルパは standalone な Bash コマンドとして実行する。`cd <dir> &&` の前置はフラット列として許容されるが、subshell・コマンド置換 `$()`・redirect で囲むと plan-gate のマーカー保護に引っかかりブロックされる。
+
 Emit the full plan body inline so the user can approve without opening the file, then the metadata block:
 
 ```

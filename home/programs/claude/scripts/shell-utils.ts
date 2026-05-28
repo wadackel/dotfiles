@@ -187,54 +187,136 @@ export interface ParsedCommand {
   isCompound: boolean;
 }
 
-/**
- * Structured token view of a single non-compound shell command.
- * `name` is the AST Command name word (the executable token);
- * `args` are the positional Word suffix tokens in order.
- *
- * Use this when callers need to distinguish "the executable is X" from
- * "the string `X` appears somewhere in a quoted argument" — for example
- * `bash -c 'plan-marker.ts ...'` has name `bash` and args `["-c", "..."]`,
- * not name `plan-marker.ts`.
- */
-export interface SingleCommand {
-  name: string;
-  args: string[];
+/** A single redirect on a leaf Command node. `target` is the destination word
+ * text (`file.text`, e.g. `/dev/null`, `out.log`, `1` for an fd-dup, or a
+ * quoted/expanded form verbatim). `isFdDup` is true for `>&`/`<&` operators
+ * (AST op type `Greatand`/`Lessand`). Callers decide which redirects are safe;
+ * `flattenCommand` only reports them. */
+export interface CommandRedirect {
+  target: string | null;
+  isFdDup: boolean;
 }
 
 /**
- * Parse a single, non-compound shell command into `{name, args}`.
+ * Flattened view of a single leaf Command node.
  *
- * Returns `null` when the command is compound (`;`, `&&`, `||`, `|`,
- * `$(...)`, `` `...` ``, subshells, redirects, heredocs, loops, conditionals,
- * etc.), when the AST yields zero or multiple top-level commands, or when the
- * parser fails outright. The structural rejection is intentional — callers
- * relying on `parseSingleCommand` to decide "is this exactly a `foo bar baz`
- * call" must not have a fallback path that lets compounds through, because
- * regex over joined-segment text cannot distinguish `bash -c 'foo bar baz'`
- * from a direct `foo bar baz`.
+ * `redirects` covers BOTH `prefix` and `suffix` positions: `&>file` and
+ * `>file cmd` shapes place the Redirect in `prefix`, so a suffix-only scan
+ * (the private `hasRedirect` above) would miss them. It captures every
+ * redirect's target + fd-dup flag so callers can allow safe targets (e.g.
+ * `/dev/null`, fd-dups) while rejecting writes to a guarded path. `hasExpansion`
+ * is true when any word (name, prefix, or suffix) contains a CommandExpansion —
+ * `$(…)` — which lets callers reject command substitution wholesale.
  */
-export async function parseSingleCommand(
+export interface FlatCommand {
+  name: string | null;
+  args: string[];
+  redirects: CommandRedirect[];
+  hasExpansion: boolean;
+}
+
+/**
+ * Result of `flattenCommand`: the flat list of leaf Command node views, plus
+ * `exotic` — true when the AST contains any node type other than the four
+ * flat-sequence containers (Script / CompoundList / LogicalExpression /
+ * Pipeline) or a leaf Command. Subshell / For / While / Until / If / Case /
+ * Function and any unrecognized node type set `exotic`, so callers can
+ * fail-closed instead of silently skipping commands hidden inside them.
+ * CommandExpansion inner ASTs are intentionally NOT descended into — the
+ * enclosing Word's `.text` already carries the inner command string, and
+ * `hasExpansion` flags its presence.
+ */
+export interface FlattenedCommand {
+  commands: FlatCommand[];
+  exotic: boolean;
+}
+
+function isRedirectNode(item: any): boolean {
+  return item?.type === "Redirect" || item?.type === "Dless" ||
+    item?.type === "Dlessdash";
+}
+
+function wordHasCommandExpansion(word: any): boolean {
+  return (word?.expansion ?? []).some((e: any) =>
+    e?.type === "CommandExpansion"
+  );
+}
+
+function viewCommandNode(node: any): FlatCommand {
+  const prefix: any[] = node.prefix ?? [];
+  const suffix: any[] = node.suffix ?? [];
+
+  const args: string[] = [];
+  for (const s of suffix) {
+    if (s?.type === "Word" && typeof s.text === "string") args.push(s.text);
+  }
+
+  const redirects: CommandRedirect[] = [];
+  for (const item of [...prefix, ...suffix]) {
+    if (!isRedirectNode(item)) continue;
+    const opType = item.op?.type;
+    redirects.push({
+      target: typeof item.file?.text === "string" ? item.file.text : null,
+      isFdDup: opType === "Greatand" || opType === "Lessand",
+    });
+  }
+
+  const words = [node.name, ...prefix, ...suffix].filter(
+    (w: any) => w?.type === "Word",
+  );
+  const hasExpansion = words.some(wordHasCommandExpansion);
+
+  const name = typeof node.name?.text === "string" ? node.name.text : null;
+  return { name, args, redirects, hasExpansion };
+}
+
+function walkFlatten(
+  node: any,
+  acc: FlatCommand[],
+  state: { exotic: boolean },
+): void {
+  switch (node?.type) {
+    case "Script":
+    case "CompoundList":
+    case "Pipeline":
+      for (const c of node.commands ?? []) walkFlatten(c, acc, state);
+      return;
+    case "LogicalExpression":
+      walkFlatten(node.left, acc, state);
+      walkFlatten(node.right, acc, state);
+      return;
+    case "Command":
+      acc.push(viewCommandNode(node));
+      return;
+    default:
+      // Subshell / For / While / Until / If / Case / Function and any unknown
+      // node type: fail-closed. We do not recurse — `exotic` alone tells the
+      // caller to refuse the exemption.
+      state.exotic = true;
+      return;
+  }
+}
+
+/**
+ * Flatten a shell command into its leaf Command nodes for policy inspection.
+ *
+ * Returns `null` only when parsing fails outright (callers treat null as
+ * "cannot certify → block"). Otherwise returns every leaf Command node view
+ * plus the `exotic` flag. See `FlattenedCommand` for the descent rules.
+ */
+export async function flattenCommand(
   command: string,
-): Promise<SingleCommand | null> {
+): Promise<FlattenedCommand | null> {
   try {
     const preprocessed = stripHeredocs(command);
     const ast = await parseBash(preprocessed);
-    if (ast.type !== "Script" || ast.commands.length !== 1) return null;
-    const node = ast.commands[0];
-    if (node.type !== "Command") return null;
-    if (hasRedirect(node) || hasCommandExpansion(node)) return null;
-    const name: string | undefined = node.name?.text;
-    if (typeof name !== "string" || name.length === 0) return null;
-    const args: string[] = [];
-    for (const s of node.suffix ?? []) {
-      // Any non-Word suffix (Redirect, AssignmentWord with expansion, etc.)
-      // means the call is not a plain `name arg arg arg` shape. Bail.
-      if (s?.type !== "Word") return null;
-      if (typeof s.text !== "string") return null;
-      args.push(s.text);
+    if (ast?.type !== "Script") {
+      return { commands: [], exotic: true };
     }
-    return { name, args };
+    const commands: FlatCommand[] = [];
+    const state = { exotic: false };
+    walkFlatten(ast, commands, state);
+    return { commands, exotic: state.exotic };
   } catch {
     return null;
   }

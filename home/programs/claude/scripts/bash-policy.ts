@@ -15,7 +15,12 @@
 
 import { parse } from "jsr:@std/yaml";
 import { dirname, join } from "jsr:@std/path";
-import { getSegments, globToRegex, parseSingleCommand } from "./shell-utils.ts";
+import {
+  type CommandRedirect,
+  flattenCommand,
+  getSegments,
+  globToRegex,
+} from "./shell-utils.ts";
 import { PLAN_MARKER_SUBCOMMANDS } from "./plan-marker.ts";
 
 export interface Rule {
@@ -84,13 +89,19 @@ export function rawCommandTouchesPlansDir(command: string): boolean {
  *
  * The decision is AST-structural, not substring-based, to close the
  * `bash -c '/foo/plan-marker.ts activate-pending /x.md; touch <marker>'`
- * bypass: an outer `bash -c '...'` parses as a single non-compound Command
- * whose name is `bash`, and a regex matching the joined-segment text would
- * see the helper name inside the quoted argument. Inspecting `Command.name`
- * + Word suffixes distinguishes "the executable is X" from "the substring
- * `X` appears in a quoted argument".
+ * bypass: an outer `bash -c '...'` parses as a single Command whose name is
+ * `bash`, and a regex matching the joined-segment text would see the helper
+ * name inside the quoted argument. Inspecting `Command.name` + Word suffixes
+ * distinguishes "the executable is X" from "the substring `X` appears in a
+ * quoted argument".
  *
- * Exempted shapes:
+ * `isPlansGuardExempt` (below) applies this token recognizer per leaf Command
+ * node across a FLAT command sequence, so `cd <repo> && <helper>` and `;` / `|`
+ * chains are exempt while exotic structures (subshell / loop / if / case /
+ * function), redirects, and `$(…)` stay blocked. This recognizer itself
+ * answers only the single-command question.
+ *
+ * Exempted shapes (per node):
  *   - Direct: `[/path/]plan-marker.ts <subcommand> [args...]`
  *   - Via deno: `deno run [flags...] [/path/]plan-marker.ts <subcommand> [args...]`
  *
@@ -110,6 +121,45 @@ export function rawCommandTouchesPlansDir(command: string): boolean {
 const SUBCOMMAND_SET = new Set<string>(PLAN_MARKER_SUBCOMMANDS);
 
 /**
+ * Read-only commands allowed to reference the plans dir alongside the canonical
+ * helper / `cd`. Membership is load-bearing for the gate: every entry MUST be
+ * incapable of writing to an arbitrary file *on its own* — no write flag, no
+ * embedded language, and no arbitrary-subprocess capability. Combined with the
+ * redirect allow-list (`isRedirectSafe`), a node running one of these cannot
+ * forge a marker. Deliberately EXCLUDED because they can write / exec without a
+ * shell redirect: `awk` (`print > "f"`), `sed -i`, `sort -o`,
+ * `find -delete/-exec/-fprint`, `tee`, `cp`, `mv`, `dd`, `ln`, `install`,
+ * `truncate`, and `rg` (ripgrep's `--pre`/`-z` run an arbitrary command per
+ * file — `rg --pre touch '' <marker>` forges a marker with no redirect). `grep`
+ * has no such preprocessor and stays. Add here only after confirming the tool
+ * has neither a write-to-file flag nor a subprocess-exec flag.
+ */
+export const READ_ONLY_COMMANDS = new Set<string>([
+  "ls",
+  "cat",
+  "head",
+  "tail",
+  "stat",
+  "wc",
+  "file",
+  "date",
+  "echo",
+  "grep",
+]);
+
+/**
+ * A redirect is safe iff it cannot write into a guarded path: an fd-dup
+ * (`>&N` / `<&N`) targets a file descriptor, and `/dev/null` discards. Any
+ * other target — a real path, a relative name, or a `$VAR`-containing form like
+ * `"$P/plans/.active"` — is rejected (fail-closed), which also blocks `>|`
+ * (Clobber), `&>`, and `>>` to a non-null target since those carry a non-null,
+ * non-fd-dup `target`.
+ */
+function isRedirectSafe(r: CommandRedirect): boolean {
+  return r.isFdDup || r.target === "/dev/null";
+}
+
+/**
  * The exemption is only safe when the executed file IS the real plan-marker.ts
  * shipped under `~/.claude/scripts/`. An attacker who can write outside the
  * gate's protected paths (e.g. `/tmp/plan-marker.ts`, `~/work/plan-marker.ts`)
@@ -127,15 +177,22 @@ function tokenIsDenoFlag(token: string): boolean {
   return token.startsWith("-");
 }
 
-export async function isCanonicalPlanMarkerCommand(
-  command: string,
-): Promise<boolean> {
-  const cmd = await parseSingleCommand(command);
-  if (!cmd) return false;
-
+/**
+ * Token-level canonical-helper recognizer used per leaf node by
+ * `isPlansGuardExempt`. Pure: takes the already-extracted Command `name` +
+ * positional `args` and answers "is this exactly a canonical plan-marker.ts
+ * invocation". The structural guarantees a caller must establish before
+ * trusting this result (no redirect, no command expansion, the token really is
+ * the executable rather than a quoted substring) live in the caller — see
+ * `flattenCommand`.
+ */
+export function isCanonicalPlanMarkerTokens(
+  name: string,
+  args: string[],
+): boolean {
   // Shape 1: helper invoked directly.
-  if (tokenIsHelper(cmd.name)) {
-    return cmd.args.length > 0 && SUBCOMMAND_SET.has(cmd.args[0]);
+  if (tokenIsHelper(name)) {
+    return args.length > 0 && SUBCOMMAND_SET.has(args[0]);
   }
 
   // Shape 2: `deno run [flags...] <helper-path> <subcommand> [helper-args...]`.
@@ -143,13 +200,64 @@ export async function isCanonicalPlanMarkerCommand(
   // the canonical helper invocation shape, and only flag-shaped tokens may
   // precede the helper path so the helper-path token cannot be smuggled in
   // as a script-data argument to a different deno subcommand.
-  if (cmd.name !== "deno") return false;
-  if (cmd.args[0] !== "run") return false;
+  if (name !== "deno") return false;
+  if (args[0] !== "run") return false;
   let i = 1;
-  while (i < cmd.args.length && tokenIsDenoFlag(cmd.args[i])) i++;
-  if (i >= cmd.args.length - 1) return false;
-  if (!tokenIsHelper(cmd.args[i])) return false;
-  return SUBCOMMAND_SET.has(cmd.args[i + 1]);
+  while (i < args.length && tokenIsDenoFlag(args[i])) i++;
+  if (i >= args.length - 1) return false;
+  if (!tokenIsHelper(args[i])) return false;
+  return SUBCOMMAND_SET.has(args[i + 1]);
+}
+
+/**
+ * Decide whether a command is exempt from the gate's block. Walks a flat
+ * command sequence so `/plan` ACTIVATE and `/impl`'s approval gate can prefix
+ * the helper with `cd <repo> &&` (or chain with `;` / `|`), and so read-only
+ * inspection of the plans dir (`ls`, `cat`, `date && ls … 2>/dev/null | tail`)
+ * is allowed; a lone single command is just the one-node case.
+ *
+ * The accepted grammar is deliberately tiny and fail-closed — exempt ONLY when
+ * every leaf node clears all of:
+ *
+ *   - parse failure                    → not exempt (block)
+ *   - any exotic node (subshell, loop, → not exempt
+ *     if/case/function, unknown type)
+ *   - any command substitution `$(…)`  → not exempt (could hide a write)
+ *   - any redirect to an unsafe target → not exempt (only `/dev/null` + fd-dups
+ *     (`isRedirectSafe`)                 are safe; blocks `>`/`>>`/`>|`/`&>` into
+ *                                        a path or `$VAR`-indirected target)
+ *   - any command that is not the       → not exempt
+ *     canonical helper, `cd`, or a
+ *     member of READ_ONLY_COMMANDS
+ *
+ * Allow-listing commands is the load-bearing rule. The canonical helper is the
+ * ONLY write-capable command permitted; `cd` and the READ_ONLY_COMMANDS cannot
+ * write a marker (verified write-incapable, and any write-redirect they could
+ * carry is rejected by `isRedirectSafe`). Permitting arbitrary "harmless-looking"
+ * siblings would reopen a forge path: e.g. `P=…/.claude; <helper> …/plans/x.md;
+ * touch "$P/plans/.active-pwn"` keeps the literal `.claude/plans` (so the raw
+ * trigger still fires) inside the benign helper arg while a sibling forges the
+ * marker via runtime parameter expansion — invisible to any per-node substring
+ * check; `touch` is simply not on the allow-list. Substring-evasion that removes
+ * the literal from the raw command entirely is a separate, pre-existing
+ * limitation of the `rawCommandTouchesPlansDir` trigger, out of scope here.
+ */
+export async function isPlansGuardExempt(command: string): Promise<boolean> {
+  const flat = await flattenCommand(command);
+  if (!flat || flat.exotic) return false;
+
+  for (const node of flat.commands) {
+    if (node.hasExpansion) return false;
+    if (!node.redirects.every(isRedirectSafe)) return false;
+    if (node.name !== null && isCanonicalPlanMarkerTokens(node.name, node.args)) {
+      continue;
+    }
+    if (node.name === "cd") continue;
+    if (node.name !== null && READ_ONLY_COMMANDS.has(node.name)) continue;
+    return false;
+  }
+
+  return true;
 }
 
 /** Walk up from cwd to find .claude/bash-policy.yaml */
@@ -182,7 +290,7 @@ if (import.meta.main) {
 
   if (
     rawCommandTouchesPlansDir(command) &&
-    !(await isCanonicalPlanMarkerCommand(command))
+    !(await isPlansGuardExempt(command))
   ) {
     console.error(
       [
