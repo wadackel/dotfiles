@@ -175,6 +175,7 @@ function mkRow(agent: string): PaneRow {
     lastToolSubject: "",
     lastToolError: "",
     contextUsedPct: null,
+    userLabel: "",
   };
 }
 

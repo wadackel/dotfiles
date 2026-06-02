@@ -8,7 +8,7 @@ export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 // hooks) via `set-option -p -t <paneId> @pane_user_label <value>`. Empty
 // string means "no label" (= none). The label set takes display priority
 // over PaneStatus in row-1: see displayMeta() in components.tsx.
-export type UserLabel = "" | "review" | "wip" | "feedback" | "pending";
+export type UserLabel = "" | "review" | "parked" | "feedback" | "pending";
 
 // Agents whose sessions the picker surfaces. PaneRow.agent stays `string` because
 // `@pane_agent` is read verbatim from tmux and may legitimately be empty or any
@@ -81,9 +81,9 @@ export const STATUS_META = {
 export const USER_LABEL_META = {
   "": { color: "#9ea3c0", short: "", icon: " " },
   review: { color: "#929be5", short: "review", icon: "\u{F0996}" }, // nf-md-comment-eye
-  wip: { color: "#a8a384", short: "wip", icon: "\u{F1898}" }, // nf-md-progress-pencil
+  parked: { color: "#a8a384", short: "parked", icon: "\u{F051F}" }, // nf-md-timer-sand — external-blocked / waiting on CI / replies
   feedback: { color: "#ac8b83", short: "feedback", icon: "\u{F0CDE}" }, // nf-md-thumbs-up-down
-  pending: { color: "#545c8c", short: "pending", icon: "\u{F00C3}" }, // nf-md-bookmark-outline
+  pending: { color: "#a6afff", short: "pending", icon: "\u{F00C3}" }, // nf-md-bookmark-outline
 } as const;
 
 // Cycling order for `m` keypress in the picker. Length 5 so `(idx + 1) % 5`
@@ -94,7 +94,7 @@ export const USER_LABEL_META = {
 export const USER_LABEL_CYCLE: readonly UserLabel[] = [
   "",
   "review",
-  "wip",
+  "parked",
   "feedback",
   "pending",
 ] as const;

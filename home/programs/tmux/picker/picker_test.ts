@@ -111,7 +111,7 @@ Deno.test("parseRow: unknown userLabel normalized to empty string", () => {
 });
 
 Deno.test("parseRow: valid userLabel preserved", () => {
-  for (const label of ["review", "wip", "feedback", "pending"] as const) {
+  for (const label of ["review", "parked", "feedback", "pending"] as const) {
     const line = Array(23).fill("").map((v, i) =>
       i === 0 ? "%1" : i === 21 ? label : v
     ).join("\x1f");
@@ -186,10 +186,10 @@ Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
   assertEquals(parseRow(line)?.contextUsedPct, 75);
 });
 
-Deno.test("nextUserLabel: cycles none → review → wip → feedback → pending → none", () => {
+Deno.test("nextUserLabel: cycles none → review → parked → feedback → pending → none", () => {
   assertEquals(nextUserLabel(""), "review");
-  assertEquals(nextUserLabel("review"), "wip");
-  assertEquals(nextUserLabel("wip"), "feedback");
+  assertEquals(nextUserLabel("review"), "parked");
+  assertEquals(nextUserLabel("parked"), "feedback");
   assertEquals(nextUserLabel("feedback"), "pending");
   assertEquals(nextUserLabel("pending"), "");
 });

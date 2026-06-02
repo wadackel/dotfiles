@@ -1342,9 +1342,9 @@ Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async 
 });
 
 // S-N4: M keypress clears userLabel back to none. Counterpart to S-N2
-// (m cycles forward). Start with userLabel='wip' rendered, then send 'M'
+// (m cycles forward). Start with userLabel='parked' rendered, then send 'M'
 // and assert the label text disappears after the next tick + repaint.
-// 'wip' is chosen over 'review' because the Preview header text contains
+// 'parked' is chosen over 'review' because the Preview header text contains
 // the substring 'review' ("P[review]w"), which would make a naive
 // includes() assertion trivially true even after the label is cleared.
 Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
@@ -1352,16 +1352,16 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
   try {
     await createClaudePane({
       status: "running",
-      userLabel: "wip",
+      userLabel: "parked",
       prompt: "clear-me",
     });
     const picker = await spawnPicker();
     // Confirm the initial label is rendered before sending the reset key.
-    await waitFor(picker, (out) => out.includes("wip"));
+    await waitFor(picker, (out) => out.includes("parked"));
 
     await sendKey(picker, "M");
     // The label text disappears after the next 1s tick + repaint.
-    await waitFor(picker, (out) => !out.includes("wip"), 4000);
+    await waitFor(picker, (out) => !out.includes("parked"), 4000);
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1375,14 +1375,14 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
 // from the session the label was attached to (@pane_user_label_session =
 // "sess-old"), so parseRow drops the stale label and the picker renders the
 // automatic status instead. This is the core fix: stale labels are gated on
-// session identity, not on unreliable close hooks. 'wip' is used for the same
+// session identity, not on unreliable close hooks. 'parked' is used for the same
 // reason as S-N4 (the Preview header contains the substring 'review').
 Deno.test("S-N5: stale label from a closed session is not shown after a new session starts", async () => {
   await setupServer();
   try {
     await createClaudePane({
       status: "running", // automatic status that should surface instead
-      userLabel: "wip", // left over from the previous (closed) session
+      userLabel: "parked", // left over from the previous (closed) session
       userLabelSession: "sess-old", // session the label was bound to
       sessionId: "sess-new", // the freshly started session on this pane
       prompt: "stale-label-row",
@@ -1393,8 +1393,8 @@ Deno.test("S-N5: stale label from a closed session is not shown after a new sess
     const out = await captureOutput(picker);
     // The stale label must not render.
     assertFalse(
-      out.includes("wip"),
-      `stale label 'wip' leaked despite session change:\n${out}`,
+      out.includes("parked"),
+      `stale label 'parked' leaked despite session change:\n${out}`,
     );
     // The automatic status takes over now that the label is gated out.
     assertStringIncludes(out, "run");

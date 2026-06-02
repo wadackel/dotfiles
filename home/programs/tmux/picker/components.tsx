@@ -37,7 +37,7 @@ export interface TaskProgress {
 // Row-1 fixed-width overhead before the summary body:
 //   pointer(2) + icon(1) + " textPad"(1 + 9) + agentSlot(13) + " · "(3) + "  "(2) = 31
 // `textPad` holds either the pane-status short text (run/wait/idle/err) or
-// the user-defined label text (review/wip/feedback/pending), whichever
+// the user-defined label text (review/parked/feedback/pending), whichever
 // displayMeta() selects for the row. Padded to STATUS_OR_LABEL_TEXT_WIDTH
 // so repo column left-edge aligns across labeled and unlabeled rows. The
 // leading space sits on the textPad side (not appended to icon) because
