@@ -1586,6 +1586,7 @@ require("lazy").setup({
           parser = function(output, bufnr, linter_cwd)
             local has_oxlint = has_config_file(bufnr, {
               ".oxlintrc.json",
+              "oxlint.config.ts",
             })
             if has_oxlint then
               return oxlint.parser(output, bufnr, linter_cwd)
@@ -1685,6 +1686,7 @@ require("lazy").setup({
         }
 
         local OXFMT_CONFIGS = {
+          ".oxfmtrc.jsonc",
           ".oxfmtrc.json",
         }
 
