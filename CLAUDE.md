@@ -239,6 +239,15 @@ This repository includes comprehensive Claude Code configuration:
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
+### Figma skills sync
+
+`home/programs/agents/skills/figma-{use,generate-design,generate-library,use-slides}/` mirror upstream `figma/mcp-server-guide` and are reachable from Claude / Codex / opencode via the standard common-skill symlinks.
+
+- Re-sync: `./home/programs/agents/scripts/sync-figma-skills.ts`
+- Check for upstream drift without writing: `./home/programs/agents/scripts/sync-figma-skills.ts --check`
+- Each vendor root has a `.figma-source` recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
+- `.gitattributes` marks `figma-use/references/plugin-api-standalone.d.ts` as `-diff` so the 445KB typings file does not flood PR review UI
+
 ### picker-verify (tmux picker e2e)
 
 After changing `home/programs/tmux/picker/picker.tsx`, `home/programs/tmux/picker/picker_e2e_harness.ts`, or `home/programs/tmux/picker/picker_e2e_test.ts`, run `.claude/skills/picker-verify/picker-verify.ts` (or invoke the `/picker-verify` skill). It spins up an isolated `tmux -L picker-e2e-$PID` server, runs the 6 e2e scenarios (warm path ~3 s, 30 s budget), and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck picker into the sandbox. Do not claim picker changes are complete while `ok: false`.
