@@ -66,41 +66,27 @@ vim.g.loaded_ruby_provider = 0
 -- <Leader>を`,`に設定
 vim.g.mapleader = ","
 
--- 各種基本設定
-vim.opt.backup = false
-vim.opt.encoding = "utf-8"
+-- 各種基本設定（Neovim デフォルトと同値のものは省略）
 vim.opt.fileencoding = "utf-8"
 vim.opt.fileencodings = { "utf-8", "cp932", "iso-2022-jp", "sjis", "euc-jp", "latin1" }
 vim.opt.completeopt = { "menu", "menuone", "noselect" }
-vim.opt.autoread = true
 vim.opt.termguicolors = true
-vim.opt.hlsearch = true
-vim.opt.incsearch = true
 vim.opt.formatoptions:append("mM")
-vim.opt.display:append("lastline")
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
-vim.opt.wrapscan = true
 vim.opt.showmatch = true
 vim.opt.showmode = false
 vim.opt.title = true
-vim.opt.ruler = true
 vim.opt.tabstop = 2
 vim.opt.shiftwidth = 2
 vim.opt.signcolumn = "yes"
-vim.opt.autoindent = true
 vim.opt.smartindent = true
 vim.opt.expandtab = true
-vim.opt.wrap = true
 vim.opt.laststatus = 3
 vim.opt.clipboard = "unnamedplus"
-vim.opt.wildmenu = true
 vim.opt.wildmode = { "longest", "full" }
-vim.opt.iminsert = 0
 vim.opt.imsearch = 0
-vim.opt.backspace = { "indent", "eol", "start" }
 vim.opt.matchpairs:append("<:>")
-vim.opt.lazyredraw = true
 vim.opt.nrformats = ""
 vim.opt.guicursor = {
   "n-v-ve-o-r-c-cr-sm:block",
@@ -122,6 +108,7 @@ vim.opt.fillchars = {
   diff = "╱",
   eob = " ",
 }
+vim.opt.winborder = "rounded"
 
 -- 基本キーマップ
 -- leader を \ に退避
@@ -198,12 +185,12 @@ keymap({ "n" }, "\\w", ":<C-u>setl wrap! wrap?<CR>")
 local function toggle_syntax()
   if vim.g.syntax_on then
     vim.cmd("syntax off")
-    vim.cmd("TSDisable highlight")
+    vim.treesitter.stop()
     vim.cmd("redraw")
     print("syntax off")
   else
     vim.cmd("syntax on")
-    vim.cmd("TSEnable highlight")
+    pcall(vim.treesitter.start)
     vim.cmd("redraw")
     print("syntax on")
   end
@@ -233,9 +220,6 @@ keymap({ "n" }, "\\s", "", { callback = toggle_syntax })
 keymap({ "n" }, "\\n", "", { callback = toggle_number })
 keymap({ "n" }, "\\m", "", { callback = toggle_mouse })
 keymap({ "n" }, "\\h", ":<C-u>setl hlsearch!<CR>")
-
--- remap
-keymap({ "n" }, "<<", "<<", { noremap = true })
 
 -- 選択範囲内をExpressionレジスタで評価 -> 置換
 keymap({ "v" }, "Q", "y:g/^.*$//e")
@@ -329,38 +313,6 @@ vim.api.nvim_create_autocmd({ "QuickfixCmdPost" }, {
   pattern = { "make", "grep", "grepadd", "vimgrep", "vim" },
   nested = true,
   command = "if len(getqflist()) != 0 | copen | endif",
-})
-
--- ペースト時のオートインデントを無効化
-if vim.fn.has("term") == 1 then
-  vim.o.t_ti = vim.o.t_ti .. "\\e[?2004h"
-  vim.o.t_te = vim.o.t_te .. "\\e[?2004l"
-  vim.o.pastetoggle = "\\e[201~"
-
-  function XTermPasteBegin(ret)
-    vim.o.paste = true
-    return ret
-  end
-
-  vim.keymap.set("n", "<Esc>[200~", function()
-    return XTermPasteBegin("0i")
-  end, { expr = true })
-  vim.keymap.set("i", "<Esc>[200~", function()
-    return XTermPasteBegin("")
-  end, { expr = true })
-  vim.keymap.set("c", "<Esc>[200~", "<nop>")
-  vim.keymap.set("c", "<Esc>[201~", "<nop>")
-end
-
--- ファイルタイプショートカット
-vim.api.nvim_create_autocmd({ "FileType" }, {
-  pattern = "md",
-  command = "setlocal filetype=markdown",
-})
-
-vim.api.nvim_create_autocmd({ "FileType" }, {
-  pattern = "js",
-  command = "setlocal filetype=javascript",
 })
 
 -- カーソル位置の復元
@@ -919,8 +871,12 @@ local function lsp_on_attach(_, bufnr)
 
   -- Mappings
   keymap({ "n" }, "<Leader>ee", "<cmd>lua vim.diagnostic.open_float()<CR>")
-  keymap({ "n" }, "[g", "<cmd>lua vim.diagnostic.goto_prev()<CR>")
-  keymap({ "n" }, "]g", "<cmd>lua vim.diagnostic.goto_next()<CR>")
+  keymap({ "n" }, "[g", function()
+    vim.diagnostic.jump({ count = -1, float = true })
+  end)
+  keymap({ "n" }, "]g", function()
+    vim.diagnostic.jump({ count = 1, float = true })
+  end)
   keymap({ "n" }, "<Space>q", "<cmd>lua vim.diagnostic.setloclist()<CR>")
 
   kmap({ "n" }, "<C-]>", "<cmd>lua vim.lsp.buf.definition()<CR>")
@@ -931,7 +887,7 @@ local function lsp_on_attach(_, bufnr)
     vim.lsp.buf.type_definition()
   end)
   kmap({ "n" }, "<Leader>i", function()
-    vim.lsp.buf.hover({ border = "rounded" })
+    vim.lsp.buf.hover()
   end)
   kmap({ "n" }, "<C-^>", "<cmd>lua vim.lsp.buf.references()<CR>")
   kmap({ "n" }, "<Leader>r", "<cmd>lua vim.lsp.buf.rename()<CR>")
@@ -1049,11 +1005,8 @@ require("lazy").setup({
       "neovim/nvim-lspconfig",
       lazy = false,
       init = function()
-        require("lspconfig.ui.windows").default_options.border = "rounded"
-
         -- Base
         vim.diagnostic.config({
-          float = { border = "rounded" },
           virtual_text = {
             prefix = "",
             spacing = 0,
@@ -1107,7 +1060,24 @@ require("lazy").setup({
           },
         })
 
-        -- ts_ls: typescript-tools.nvim が管理
+        -- Deno プロジェクト（deno.json 等が root に存在）では denols が attach し、
+        -- vtsls は package.json/tsconfig.json を root marker とするため自然に排他される
+        vim.lsp.config("vtsls", {
+          workspace_required = true,
+          root_markers = {
+            "package.json",
+            "tsconfig.json",
+            "jsconfig.json",
+          },
+          settings = {
+            typescript = {
+              tsserver = {
+                maxTsServerMemory = 8192,
+              },
+            },
+          },
+        })
+
         -- rust_analyzer: rustaceanvim が管理
         vim.lsp.enable({
           "astro",
@@ -1117,35 +1087,7 @@ require("lazy").setup({
           "terraformls",
           "typos_lsp",
           "vimls",
-        })
-      end,
-    },
-
-    {
-      "pmizio/typescript-tools.nvim",
-      lazy = false,
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-        "neovim/nvim-lspconfig",
-      },
-      config = function()
-        local lspconfig = require("lspconfig")
-
-        require("typescript-tools").setup({
-          on_init = lsp_on_init,
-          on_attach = lsp_on_attach,
-          single_file_support = false,
-          -- TODO: migrate
-          -- root_dir = function(fname)
-          --   if lspconfig.util.root_pattern("deno.json", "deno.jsonc")(fname) then
-          --     return nil
-          --   end
-          --   return lspconfig.util.root_pattern("package.json")(fname)
-          -- end,
-          settings = {
-            expose_as_code_action = "all",
-            tsserver_max_memory = 8192,
-          },
+          "vtsls",
         })
       end,
     },
@@ -1181,7 +1123,6 @@ require("lazy").setup({
       commit = "818ad42b204cda5317baa399377ea30b35f6f8be",
       dependencies = {
         "nvim-lua/plenary.nvim",
-        "stevearc/dressing.nvim",
       },
       config = function()
         local dev_log_open_cmd = "rightbelow vertical split"
@@ -1274,7 +1215,9 @@ require("lazy").setup({
                 vim.api.nvim_win_close(win, true)
               end
 
-              keymap({ "n" }, "<Space>f", "<cmd>lua require('telescope').extensions.flutter.commands()<CR>")
+              keymap({ "n" }, "<Space>f", function()
+                Snacks.picker.commands({ pattern = "Flutter" })
+              end)
               keymap({ "n" }, "<Space>do", open_dev_log)
               keymap({ "n" }, "<Space>dc", close_dev_log)
 
@@ -1313,8 +1256,6 @@ require("lazy").setup({
             end,
           },
         })
-
-        require("telescope").load_extension("flutter")
       end,
     },
 
@@ -1327,7 +1268,6 @@ require("lazy").setup({
             "nvim-lua/plenary.nvim",
           },
         },
-        "Kaiser-Yang/blink-cmp-avante",
         "onsails/lspkind-nvim",
       },
       version = "1.*",
@@ -1361,7 +1301,9 @@ require("lazy").setup({
               "lsp",
               "path",
               "buffer",
-              -- "avante",
+            },
+            per_filetype = {
+              gitcommit = { "git", "buffer", "path" },
             },
             providers = {
               lazydev = {
@@ -1377,11 +1319,6 @@ require("lazy").setup({
               git = {
                 module = "blink-cmp-git",
                 name = "Git",
-                opts = {},
-              },
-              avante = {
-                module = "blink-cmp-avante",
-                name = "Avante",
                 opts = {},
               },
             },
@@ -1466,78 +1403,6 @@ require("lazy").setup({
           ["nvim-tree"] = {
             enable = true,
           },
-        },
-      },
-    },
-
-    {
-      "stevearc/dressing.nvim",
-      event = "LspAttach",
-      opts = {
-        input = {
-          enabled = true,
-          default_prompt = "Input:",
-          prompt_align = "left",
-          insert_only = true,
-          start_in_insert = true,
-          border = "rounded",
-          relative = "cursor",
-          prefer_width = 40,
-          width = nil,
-          max_width = { 140, 0.9 },
-          min_width = { 20, 0.2 },
-          buf_options = {},
-          win_options = {
-            winblend = 0,
-            wrap = false,
-          },
-          mappings = {
-            n = {
-              ["<Esc>"] = "Close",
-              ["<CR>"] = "Confirm",
-            },
-            i = {
-              ["<C-c>"] = "Close",
-              ["<C-b>"] = "<Left>",
-              ["<C-f>"] = "<Right>",
-              ["<C-a>"] = "<Home>",
-              ["<C-e>"] = "<End>",
-              ["<C-d>"] = "<Del>",
-              ["<CR>"] = "Confirm",
-              ["<C-p>"] = "HistoryPrev",
-              ["<Up>"] = "HistoryPrev",
-              ["<C-n>"] = "HistoryNext",
-              ["<Down>"] = "HistoryNext",
-            },
-          },
-          get_config = nil,
-        },
-        select = {
-          enabled = true,
-          backend = { "telescope", "builtin" },
-          trim_prompt = true,
-          telescope = nil,
-          builtin = {
-            border = "rounded",
-            relative = "editor",
-            buf_options = {},
-            win_options = {
-              winblend = 10,
-            },
-            width = nil,
-            max_width = { 140, 0.8 },
-            min_width = { 40, 0.2 },
-            height = nil,
-            max_height = 0.9,
-            min_height = { 10, 0.2 },
-            mappings = {
-              ["<Esc>"] = "Close",
-              ["<C-c>"] = "Close",
-              ["<CR>"] = "Confirm",
-            },
-          },
-          format_item_override = {},
-          get_config = nil,
         },
       },
     },
@@ -2055,162 +1920,6 @@ require("lazy").setup({
       end,
     },
 
-    -- {
-    --   "A7Lavinraj/fyler.nvim",
-    --   dependencies = {
-    --     "nvim-tree/nvim-web-devicons",
-    --   },
-    --   branch = "stable", -- Use stable branch for production
-    --   lazy = false, -- Necessary for `default_explorer` to work properly
-    --   keys = {
-    --     {
-    --       "<C-j>",
-    --       function()
-    --         require("fyler").toggle({ kind = "float" })
-    --       end,
-    --       mode = "n",
-    --       noremap = true,
-    --     },
-    --   },
-    --   opts = {
-    --     integrations = {
-    --       icon = "nvim_web_devicons",
-    --       winpick = {
-    --         provider = "snacks",
-    --         opts = {},
-    --       },
-    --     },
-    --     views = {
-    --       finder = {
-    --         default_explorer = true,
-    --         git_status = {
-    --           enabled = true,
-    --           symbols = {
-    --             Untracked = "?",
-    --             Added = "✓",
-    --             Modified = "●",
-    --             Deleted = "",
-    --             Renamed = "➜",
-    --             Copied = "~",
-    --             Conflict = "!",
-    --             Ignored = "◌",
-    --           },
-    --         },
-    --         icon = {
-    --           directory_collapsed = "",
-    --           directory_empty = "",
-    --           directory_expanded = "",
-    --         },
-    --         mappings = {
-    --           ["="] = false,
-    --           ["<BS>"] = false,
-    --           ["."] = false,
-    --           ["#"] = false,
-    --           ["q"] = "CloseView",
-    --           ["<CR>"] = "Select",
-    --           ["<C-t>"] = "SelectTab",
-    --           ["|"] = "SelectVSplit",
-    --           ["-"] = "SelectSplit",
-    --           ["^"] = "GotoParent",
-    --           ["~"] = "GotoCwd",
-    --           ["W"] = "CollapseAll",
-    --           ["yp"] = function(self)
-    --             vim.fn.setreg(vim.v.register, vim.fn.fnamemodify(self:cursor_node_entry().path, ":."))
-    --           end,
-    --           ["gx"] = function(self)
-    --             vim.ui.open(self:cursor_node_entry().path)
-    --           end,
-    --           ["K"] = function(self)
-    --             vim.print(self:cursor_node_entry())
-    --           end,
-    --           ["<C-l>"] = function(self)
-    --             self:synchronize()
-    --           end,
-    --           ["<C-h>"] = function(self)
-    --             local current_node = self:cursor_node_entry()
-    --             local parent_ref_id = self.files:find_parent(current_node.ref_id)
-    --             if not parent_ref_id then
-    --               return
-    --             end
-    --             if self.files.trie.value == parent_ref_id then
-    --               self:exec_action("n_goto_parent")
-    --             else
-    --               self:exec_action("n_collapse_node")
-    --             end
-    --           end,
-    --         },
-    --         win = {
-    --           border = "rounded",
-    --           buf_opts = {
-    --             filetype = "fyler",
-    --             syntax = "fyler",
-    --             buflisted = false,
-    --             buftype = "acwrite",
-    --             expandtab = true,
-    --             shiftwidth = 2,
-    --           },
-    --           kind = "replace",
-    --           kinds = {
-    --             float = {
-    --               height = "80%",
-    --               width = "94%",
-    --               top = "5%",
-    --               left = "2%",
-    --             },
-    --             replace = {},
-    --             split_above = {
-    --               height = "70%",
-    --             },
-    --             split_above_all = {
-    --               height = "70%",
-    --               win_opts = {
-    --                 winfixheight = true,
-    --               },
-    --             },
-    --             split_below = {
-    --               height = "70%",
-    --             },
-    --             split_below_all = {
-    --               height = "70%",
-    --               win_opts = {
-    --                 winfixheight = true,
-    --               },
-    --             },
-    --             split_left = {
-    --               width = "30%",
-    --             },
-    --             split_left_most = {
-    --               width = "30%",
-    --               win_opts = {
-    --                 winfixwidth = true,
-    --               },
-    --             },
-    --             split_right = {
-    --               width = "30%",
-    --             },
-    --             split_right_most = {
-    --               width = "30%",
-    --               win_opts = {
-    --                 winfixwidth = true,
-    --               },
-    --             },
-    --           },
-    --           win_opts = {
-    --             concealcursor = "nvic",
-    --             conceallevel = 3,
-    --             cursorline = false,
-    --             number = false,
-    --             relativenumber = false,
-    --             winhighlight = "Normal:FylerNormal,NormalNC:FylerNormalNC",
-    --             wrap = false,
-    --             signcolumn = "no",
-    --           },
-    --         },
-    --       },
-    --     },
-    --   },
-    -- },
-
     {
       "antosha417/nvim-lsp-file-operations",
       event = "LspAttach",
@@ -2289,7 +1998,7 @@ require("lazy").setup({
           scroll = { enabled = false },
           statuscolumn = { enabled = false },
           words = { enabled = false },
-          input = { enabled = false },
+          input = { enabled = true },
           picker = {
             enabled = true,
             layouts = {
@@ -2518,184 +2227,6 @@ require("lazy").setup({
           noremap = true,
         },
       },
-    },
-
-    {
-      "nvim-telescope/telescope.nvim",
-      event = "VeryLazy",
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-        { "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
-        "nvim-telescope/telescope-live-grep-args.nvim",
-        "rcarriga/nvim-notify",
-      },
-      config = function()
-        local telescope = require("telescope")
-        local action = require("telescope.actions")
-        local action_state = require("telescope.actions.state")
-        local action_layout = require("telescope.actions.layout")
-        local lga_actions = require("telescope-live-grep-args.actions")
-
-        local function action_yank()
-          local selection = action_state.get_selected_entry()
-          vim.fn.setreg("*", selection.value)
-          print("Yanked!")
-        end
-
-        local function wrap_dropdown_opts(opts)
-          opts = opts or {}
-          opts.theme = "dropdown"
-          opts.layout_config = {
-            width = 0.9,
-            height = 0.7,
-          }
-          return opts
-        end
-
-        telescope.setup({
-          defaults = {
-            prompt_prefix = "❯ ",
-            selection_caret = " ",
-            multi_icon = "󰄲 ",
-            path_display = { "truncate" },
-            layout_config = {
-              width = 0.8,
-              height = 0.6,
-            },
-            preview = {
-              hide_on_startup = false,
-            },
-            mappings = {
-              i = {
-                ["<C-u>"] = false,
-                ["<C-w>"] = false,
-                ["<C-d>"] = { "<Del>", type = "command" },
-                ["<C-h>"] = { "<BS>", type = "command" },
-                ["<C-a>"] = { "<Home>", type = "command" },
-                ["<C-e>"] = { "<End>", type = "command", opts = { nowait = true } },
-                ["<C-f>"] = { "<Right>", type = "command" },
-                ["<C-b>"] = { "<Left>", type = "command" },
-                ["<C-j>"] = "move_selection_next",
-                ["<C-k>"] = "move_selection_previous",
-                ["<C-p>"] = "cycle_history_prev",
-                ["<C-n>"] = "cycle_history_next",
-                ["<C-q>"] = action.smart_send_to_qflist + action.open_qflist,
-                ["<C-y>"] = action_yank,
-                ["<Up>"] = "preview_scrolling_up",
-                ["<Down>"] = "preview_scrolling_down",
-                ["<C-\\>"] = action_layout.toggle_preview,
-              },
-              n = {
-                ["<C-k>"] = "preview_scrolling_up",
-                ["<C-j>"] = "preview_scrolling_down",
-                ["<C-\\>"] = action_layout.toggle_preview,
-              },
-            },
-            vimgrep_arguments = {
-              "rg",
-              "--color=never",
-              "--no-heading",
-              "--with-filename",
-              "--line-number",
-              "--column",
-              "--smart-case",
-              "--trim",
-            },
-          },
-          pickers = {
-            find_files = wrap_dropdown_opts({
-              find_command = {
-                "fd",
-                "--type",
-                "f",
-                "--strip-cwd-prefix",
-                "--hidden",
-                "-E",
-                ".git",
-              },
-            }),
-            live_grep = wrap_dropdown_opts({
-              additional_args = function()
-                return {
-                  "--hidden",
-                  "-g",
-                  "!.git",
-                }
-              end,
-            }),
-            buffers = wrap_dropdown_opts({
-              only_cwd = true,
-              sort_lastused = true,
-              sort_mru = true,
-              ignore_current_buffer = true,
-            }),
-            commands = wrap_dropdown_opts({}),
-            command_history = wrap_dropdown_opts({
-              attach_mappings = function(_, map)
-                map({ "i" }, "<C-e>", function()
-                  local key = vim.api.nvim_replace_termcodes("<End>", true, true, true)
-                  vim.api.nvim_feedkeys(key, "m", true)
-                end, { nowait = true })
-
-                map({ "i" }, "<C-i>", action.edit_command_line)
-
-                return true
-              end,
-            }),
-            git_commits = {
-              mappings = {
-                i = {
-                  ["<C-y>"] = action_yank,
-                },
-              },
-            },
-            git_bcommits = {
-              mappings = {
-                i = {
-                  ["<C-y>"] = action_yank,
-                },
-              },
-            },
-            git_branches = {
-              show_remote_tracking_branches = false,
-              mappings = {
-                i = {
-                  ["<CR>"] = "git_checkout",
-                  ["<C-y>"] = action_yank,
-                  ["<C-m>"] = "git_merge_branch",
-                },
-              },
-            },
-          },
-          extensions = {
-            fzf = {
-              fuzzy = true,
-              override_generic_sorter = true,
-              override_file_sorter = true,
-              case_mode = "smart_case",
-            },
-            live_grep_args = wrap_dropdown_opts({
-              auto_quoting = true,
-              mappings = {
-                i = {
-                  ["<C-i>"] = lga_actions.quote_prompt(),
-                },
-              },
-              additional_args = function()
-                return {
-                  "--hidden",
-                  "-g",
-                  "!.git",
-                }
-              end,
-            }),
-          },
-        })
-
-        telescope.load_extension("fzf")
-        telescope.load_extension("live_grep_args")
-        telescope.load_extension("notify")
-      end,
     },
 
     -- =============================================================
@@ -4236,13 +3767,6 @@ require("lazy").setup({
     },
 
     {
-      "junegunn/vim-easy-align",
-      keys = {
-        -- { "ga", "<Plug>(LiveEasyAlign)", mode = { "n", "x" } },
-      },
-    },
-
-    {
       "nvim-mini/mini.align",
       lazy = false,
       opts = {
@@ -4351,24 +3875,30 @@ require("lazy").setup({
       end,
     },
 
+    -- コメントトグルは Neovim 0.10+ ビルトイン (gc) を使用。
+    -- ts-context-commentstring は commentstring の文脈解決のみ担当
     {
-      "numToStr/Comment.nvim",
-      dependencies = {
-        "JoosepAlviste/nvim-ts-context-commentstring",
-      },
+      "JoosepAlviste/nvim-ts-context-commentstring",
+      event = "VeryLazy",
       keys = {
-        { "<C-k>", "<Plug>(comment_toggle_linewise_current)", mode = "n", noremap = true, silent = true },
-        { "<C-k>", "<Plug>(comment_toggle_linewise_visual)", mode = "v", noremap = true, silent = true },
+        { "<C-k>", "gcc", mode = "n", remap = true, silent = true },
+        { "<C-k>", "gc", mode = "v", remap = true, silent = true },
       },
-      opts = {
-        mappings = {
-          basic = false,
-          extra = false,
-        },
-        pre_hook = function(ctx)
-          return require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook()(ctx)
-        end,
-      },
+      init = function()
+        vim.g.skip_ts_context_commentstring_module = true
+      end,
+      config = function()
+        require("ts_context_commentstring").setup({
+          enable_autocmd = false,
+        })
+
+        local get_option = vim.filetype.get_option
+        ---@diagnostic disable-next-line: duplicate-set-field
+        vim.filetype.get_option = function(filetype, option)
+          return option == "commentstring" and require("ts_context_commentstring.internal").calculate_commentstring()
+            or get_option(filetype, option)
+        end
+      end,
     },
 
     {

@@ -23,6 +23,7 @@
     terraform-ls
     typos-lsp
     vim-language-server
+    vtsls
 
     # Linters
     eslint_d
