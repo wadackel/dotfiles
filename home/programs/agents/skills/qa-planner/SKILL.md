@@ -138,6 +138,12 @@ If a browser command fails with `No such file or directory: .../main.json`, the 
 
 All QA evidence — recording, screenshots, and the Markdown report — is consolidated under `$PROJECT_ROOT/.wadackel/qa/<run-dir>/`. `.wadackel/` is already covered by the user's global gitignore, so no per-project ignore wiring is needed. Save to `/tmp/` is no longer used.
 
+**Mandatory first action of Step 4** — this Bash block MUST be the very first Bash tool call of Step 4. No `agent-browser`, `curl`, `record start`, `screenshot`, or any other test command may execute before `$RUN_DIR` is resolved and `mkdir -p "$RUN_DIR/screenshots"` succeeds. Skipping this block guarantees that recordings, screenshots, and `report.md` all fail to land on disk.
+
+If `mkdir -p` fails (permission denied, disk full, etc.), STOP Step 4 immediately and report the failure to the user — do not proceed with tests, because evidence would be unrecoverable.
+
+**Fresh-shell warning**: Claude Code's Bash tool spawns a new shell for every invocation, so the `RUN_DIR` shell variable does **not** persist across Bash calls. After the setup block prints `RUN_DIR=...`, treat the printed absolute path as a **literal string** and re-declare `RUN_DIR="<that literal path>"` at the top of every subsequent Bash invocation that references it (or inline the absolute path directly). Forgetting this is the most common cause of "I ran the tests but evidence was not saved" failures.
+
 Resolve `$RUN_DIR` once at Step 4 entry, before any record/screenshot/report command:
 
 ```bash
@@ -200,10 +206,12 @@ One continuous recording captures the entire session. Do not start/stop per test
 - Also capture **important intermediate states** (modal open, preview displayed, loading complete)
 - On FAIL: always capture the error state screenshot
 - Naming: `qa-{test-id}-{description}.png` (e.g., `qa-t1-home.png`, `qa-t4-upload-preview.png`)
+- Use **ASCII kebab-case** for `{description}` (no spaces, no Japanese, no `_`). Markdown link parsing breaks on non-ASCII or whitespace in some viewers. Good: `qa-t2-upload-error.png`. Bad: `qa-t2-アップロード失敗.png`, `qa-t2-upload error.png`.
 - Save to `$RUN_DIR/screenshots/`, e.g.:
   ```bash
   agent-browser --session "claude-$PPID" screenshot "$RUN_DIR/screenshots/qa-t1-home.png"
   ```
+- When embedding into report.md, use the **relative path** `screenshots/qa-{test-id}-{description}.png` (report.md lives in the same `$RUN_DIR/` as the screenshots, so a relative path resolves correctly in Markdown previewers).
 
 **WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation -- the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
 
@@ -232,77 +240,133 @@ After structured tests pass, run a brief exploratory session focused on high-ris
 **Mode A output:**
 
 ```
-## QA Test Plan
+## QA テスト計画
 
-### Risk Assessment
-- High risk areas: [identified risk areas with reasoning]
-- Change scope: [files/components affected]
+### リスク評価
+- 高リスク領域: [特定したリスク領域と理由]
+- 変更範囲: [影響を受けるファイル/コンポーネント]
 
-### Test Cases (N cases: X Critical, Y High, Z Medium)
+### テストケース (N 件: Critical X 件、High Y 件、Medium Z 件)
 
-| ID | Risk | Category | Description | Technique | Given | When | Then |
-|----|------|----------|-------------|-----------|-------|------|------|
-| T1 | Critical | Happy path | ... | - | ... | ... | ... |
-| T2 | High | Input validation | ... | BVA | ... | ... | ... |
+| ID | リスク | カテゴリ | 内容 | 設計技法 | 前提条件 | 操作 | 期待結果 |
+|----|------|----------|------|----------|----------|------|----------|
+| T1 | Critical | ハッピーパス | ... | - | ... | ... | ... |
+| T2 | High | 入力検証 | ... | BVA | ... | ... | ... |
 
-### Testing Approach
-- Tools: [which tools/skills will be used]
-- Scope: [N automated / M manual tests]
-- Coverage: [which categories are covered]
+### テスト方針
+- 使用ツール: [使用するツール/スキル]
+- 範囲: [自動 N 件 / 手動 M 件]
+- カバレッジ: [カバーするカテゴリ]
 ```
 
 **Mode B output:**
 
-Render the QA Verification Results in your chat reply **and** persist the same Markdown body to `$RUN_DIR/report.md` so the report sits alongside the recording and screenshots. The two contents must be identical — write the Markdown once, reuse it in both places.
+**Pre-flight gate (read before producing ANY Mode B output):** Before emitting either the chat-rendered report or the heredoc write, confirm that `$RUN_DIR` is known and points to a directory created by Step 4 setup. If `$RUN_DIR` is unset, unknown, or its literal value was lost (because Step 4 setup was skipped, or the previous Bash call's shell variable did not survive into a new Bash call), STOP and execute Step 4 "Run directory setup" first. Producing the Mode B report without a resolved `$RUN_DIR` guarantees the disk write will fail silently and the user will be left with a chat-only report — exactly the failure mode this gate exists to prevent.
+
+**Mode B execution order — these four substeps run in strict order. Do NOT reorder. Do NOT skip 1 or 2.**
+
+1. **Persist FIRST (Bash)** — write the Mode B body to `$RUN_DIR/report.md` via the heredoc below. This is a Bash tool call. **Do NOT emit the chat-rendered Mode B body yet.** The persist-first ordering exists because once Mode B results appear in chat, the cognitive temptation to declare "done" without persisting is overwhelming.
+2. **Verify on disk (Bash)** — run `ls -la "$RUN_DIR/report.md" && wc -l "$RUN_DIR/report.md"` so the file's existence and size appear in chat as proof. If this command fails or shows a zero-byte file, return to substep 1 — do not advance to substeps 3–4.
+3. **Render in chat reply** — emit the same Mode B body (same Markdown content used in substep 1) in your chat reply.
+4. **Saved Paths footer (chat reply only)** — append the chat-only footer specified at the end of this section.
+
+The Mode B Markdown body (used identically in substep 1 disk write and substep 3 chat render):
 
 ```
-## QA Verification Results
+## QA 検証結果
 
-### Summary
-- **Result**: X/Y passed, Z failed, W skipped
-- **Risk coverage**: N/N Critical passed, M/M High passed
-- **Categories tested**: [list]
+### サマリー
+- **結果**: X/Y 合格、Z 不合格、W スキップ
+- **リスクカバレッジ**: N/N Critical 合格、M/M High 合格
+- **カバーしたカテゴリ**: [一覧]
 
-### Results
+### 検証結果
 
-| ID | Risk | Description | Result | Notes |
-|----|------|-------------|--------|-------|
-| T1 | Critical | ... | PASS | ... |
-| T2 | High | ... | FAIL | ... |
+| ID | リスク | 内容 | 結果 | 備考 |
+|----|------|------|------|------|
+| T1 | Critical | ... | 合格 | ... |
+| T2 | High | ... | 不合格 | ... |
 
-### Failed Tests
+### 不合格テスト
 
-#### T2: [description]
-- **Severity**: [Critical/High/Medium/Low — based on actual impact observed]
-- **Expected**: ...
-- **Actual**: ...
-- **Evidence**: [screenshot path or response body]
-- **Root cause**: [analysis if determinable]
-- **Suggested fix**: [specific code change if identifiable]
+#### T2: [内容]
+- **重大度**: [Critical/High/Medium/Low — 実際に観測された影響度に基づく]
+- **期待値**: ...
+- **実際の値**: ...
+- **エビデンス**: 画像エビデンスがある場合は Markdown image 構文で埋め込み、コマンド出力 / レスポンス本文の場合はコードブロックで貼る。
 
-### Issues Found
-[bugs, concerns, or observations discovered during testing]
+  画像例:
 
-### Evidence
-- **Video**: `$RUN_DIR/recording.webm`
-- **Screenshots**:
-  - `$RUN_DIR/screenshots/qa-t1-home.png` — T1: [description]
-  - `$RUN_DIR/screenshots/qa-t2-error.png` — T2: [description]
-  - ...
-- **Report**: `$RUN_DIR/report.md` (this file)
+  ![T2 エラー状態](screenshots/qa-t2-error.png)
 
-### Recommendations
-[next steps: fix critical issues, add regression tests, etc.]
+  非画像例 (API レスポンス / stderr):
+
+  ```
+  HTTP/1.1 500 Internal Server Error
+  Content-Type: application/json
+
+  {"error": "internal_server_error", "message": "..."}
+  ```
+
+- **根本原因**: [特定できれば分析]
+- **修正案**: [特定できれば具体的なコード変更]
+
+### 発見事項
+[テスト中に発見したバグ、懸念点、所見]
+
+### エビデンス
+
+#### 動画
+
+(録画ありの場合のみ本サブセクションを書く。WebApp / Electron / Slack 以外で `record start` を行わなかった Mode B 実行ではこの `#### 動画` ごと省略する。パスは report.md からの相対パス。)
+
+<video src="recording.webm" controls width="800"></video>
+
+#### スクリーンショット
+
+(各スクリーンショットをキャプション + 相対パス Markdown image で列挙する。)
+
+**T1: [内容]**
+
+![T1 ホーム画面](screenshots/qa-t1-home.png)
+
+**T2: [内容]**
+
+![T2 エラー状態](screenshots/qa-t2-error.png)
+
+### 推奨事項
+[次のステップ: 重大な問題の修正、回帰テストの追加など]
 ```
 
-To write the same body to disk, use a quoted-delimiter heredoc so `$RUN_DIR` and other shell metacharacters in the report content are preserved literally:
+**Substep 1 — Persist FIRST (Bash).** Use a quoted-delimiter heredoc so any `$` or backticks inside the Markdown body are preserved literally. The template body uses report.md-relative paths only (no `$RUN_DIR` placeholders), so the quoted delimiter does not strand any variables. If a fresh Bash shell does not have `RUN_DIR` set (see fresh-shell warning in Step 4 Run directory setup), prepend `RUN_DIR="<the literal absolute path printed by Step 4 setup>"` before this command, or inline that literal path in place of `"$RUN_DIR/report.md"`:
 
 ```bash
 cat > "$RUN_DIR/report.md" <<'REPORT_EOF'
-# ... insert the FULL Mode B output template from above, verbatim ...
-# (Summary / Results table / Failed Tests / Issues Found / Evidence / Recommendations)
+# ... 上記の Mode B 出力テンプレート全文をそのまま挿入 ...
+# (サマリー / 検証結果表 / 不合格テスト / 発見事項 / エビデンス (#### 動画 + #### スクリーンショット) / 推奨事項)
 REPORT_EOF
 ```
+
+**Substep 2 — Verify on disk (Bash).** Confirm the file landed:
+
+```bash
+ls -la "$RUN_DIR/report.md" && wc -l "$RUN_DIR/report.md"
+```
+
+The output appears in chat as evidence. A `No such file or directory` error or a zero-line count means substep 1 was not executed in the expected shell — go back, re-declare `RUN_DIR` if needed, and re-run substep 1 before continuing.
+
+**Substep 3 — Render in chat reply.** Emit the same Mode B body (substep 1's content) directly in your chat reply.
+
+**Substep 4 — Saved Paths footer (chat reply only).** Append a short "Saved" footer to the chat reply so the user can immediately locate the run directory without scrolling back to the Step 4 setup output. **Do NOT include this footer inside the heredoc** — it is chat-only and must not appear in `report.md` (the report body uses relative paths intentionally; absolute paths belong in chat). Resolve `$RUN_DIR` to its literal value when emitting:
+
+```
+**Saved**:
+- Report: $RUN_DIR/report.md
+- Recording: $RUN_DIR/recording.webm
+- Screenshots: $RUN_DIR/screenshots/
+```
+
+Omit the `Recording` line for Mode B runs without `record start` (API Server / CLI Tool / Background Service / Library targets — anything that did not use `agent-browser record start`). Keep `Report` and `Screenshots` lines always.
 
 ## Tips
 
