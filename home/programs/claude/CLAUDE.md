@@ -91,6 +91,7 @@
 - Prefer function composition over inheritance.
 - Abstract common patterns early only when the abstraction is genuinely shared; use Rule of Three for domain-specific patterns.
 - Use descriptive names for exports and concise names for local variables.
+- Code comments must document "Why not" only — why an obvious alternative was rejected, or why the seemingly natural approach is a trap. Do not write comments that explain what the code does, restate obvious why, or describe current behavior.
 
 ### Coding Conventions
 
