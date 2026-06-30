@@ -62,6 +62,26 @@ git rebase origin/<base>
 - How to continue (`git rebase --continue`) or abort (`git rebase --abort`)
 - If changes were stashed, remind the user that the stash still needs to be popped after resolving conflicts
 
+If the conflict scope is **heavy** — 5+ files with conflicts, or `git status` shows many "both modified" entries — present the reset + cherry-pick fallback as an option alongside continue/abort:
+
+```
+Heavy conflict (N files). Two options beyond `--continue` / `--abort`:
+
+A. Resolve in-place: keep working on the rebase, `git rebase --continue` per commit.
+B. Reset and cherry-pick: abort the rebase, hard-reset the branch to origin/<base>,
+   then cherry-pick each original commit one-by-one so conflicts are resolved per
+   commit rather than per file. Useful when many small commits each touch the same
+   files and the in-place rebase keeps producing the same conflicts.
+
+   Steps for option B (do NOT run without confirmation):
+     git rebase --abort
+     ORIG=$(git rev-parse HEAD)          # remember original tip for reference
+     git reset --hard origin/<base>
+     git cherry-pick <commit1> <commit2> ...   # SHAs from `git log $ORIG --oneline`
+```
+
+Do NOT execute option B yourself. Stop and wait for the user to choose. If the user picks B, walk through the steps interactively (one cherry-pick at a time) so each conflict is contained.
+
 Then stop and wait for the user.
 
 ### 6. Restore stashed changes
