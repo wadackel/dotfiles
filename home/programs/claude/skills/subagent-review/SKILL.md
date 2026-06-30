@@ -137,6 +137,7 @@ Each reviewer agent already declares its own Out of Scope delegation in frontmat
 | `database-reviewer` | `.sql` / `migrations/` / `schema.(sql|prisma|ts)` in diff, OR `INSERT INTO` / `UPDATE … SET` / `DELETE FROM` / `CREATE TABLE` in app code |
 | `deno-reviewer` | `Deno.` API reference in diff OR `jsr:` / `npm:` specifier added in diff OR `deno.jsonc` / `deno.json` itself modified |
 | `cloud-architecture-reviewer` | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` |
+| `comment-reviewer` | `.rs` / `.go` / `.ts` / `.tsx` / `.jsx` / `.mts` / `.cts` / `.py` / `.rb` / `.lua` / `.nix` / `.sh` / `.dart` file in diff (reviewer self-no-ops if no added comment lines present) |
 
 All matches dispatch. No priority cutoff, no mutual exclusion.
 
@@ -160,6 +161,7 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(css|scss|html|jsx|tsx)$' && AGENTS+=(a11
 { printf '%s' "$DIFF_HUNKS" | rg -q '^\+.*(\bDeno\.|["'\'']jsr:|["'\'']npm:)' \
   || printf '%s\n' "$DIFF_FILES" | rg -q 'deno\.(json|jsonc)$'; } && AGENTS+=(deno-reviewer)
 printf '%s\n' "$DIFF_FILES" | rg -q '\.tf$|\.tfvars$|Dockerfile|docker-compose\.ya?ml$|serverless\.ya?ml$|\.github/workflows/.*\.ya?ml$' && AGENTS+=(cloud-architecture-reviewer)
+printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|sh|dart)$' && AGENTS+=(comment-reviewer)
 
 # For each agent in AGENTS, launch via the Agent tool in the SAME assistant turn (parallel tool calls in a single message).
 ```
