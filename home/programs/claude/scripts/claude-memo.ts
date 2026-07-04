@@ -25,6 +25,7 @@ interface ContentBlock {
 interface TranscriptEntry {
   type: string;
   subtype?: string;
+  isMeta?: boolean;
   message?: {
     content: string | ContentBlock[];
   };
@@ -33,15 +34,18 @@ interface TranscriptEntry {
 
 // --- Logging ---
 
-const LOG_FILE = `${Deno.env.get("TMPDIR") ?? "/tmp"}/claude-memo.log`;
+function logFilePath(): string {
+  return `${Deno.env.get("TMPDIR") ?? "/tmp"}/claude-memo.log`;
+}
 
 async function rotateLog(): Promise<void> {
+  const path = logFilePath();
   try {
-    const stat = await Deno.stat(LOG_FILE);
+    const stat = await Deno.stat(path);
     if (stat.size > 200 * 1024) {
-      const content = await Deno.readTextFile(LOG_FILE);
+      const content = await Deno.readTextFile(path);
       const lines = content.split("\n");
-      await Deno.writeTextFile(LOG_FILE, lines.slice(-500).join("\n") + "\n");
+      await Deno.writeTextFile(path, lines.slice(-500).join("\n") + "\n");
     }
   } catch {
     // ignore
@@ -50,7 +54,7 @@ async function rotateLog(): Promise<void> {
 
 async function log(msg: string): Promise<void> {
   const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  await Deno.writeTextFile(LOG_FILE, `[${ts}] ${msg}\n`, { append: true });
+  await Deno.writeTextFile(logFilePath(), `[${ts}] ${msg}\n`, { append: true });
 }
 
 // --- Transcript Parsing ---
@@ -73,7 +77,10 @@ function parseTranscript(path: string): TranscriptEntry[] {
 
 const NOISE_PATTERNS: RegExp[] = [
   /^Implement the following plan/,
-  /^<command-message>/,
+  /^<command-(name|message|args)>/,
+  /^<local-command-(caveat|stdout|stderr)>/,
+  /^<task-notification>/,
+  /^<bash-(input|stdout|stderr)>/,
   /^@\S+:\d+\s*$/,
   /^\/\w/,
   /^\[Request interrupted/,
@@ -93,10 +100,11 @@ function isNoise(text: string): boolean {
   return NOISE_PATTERNS.some((p) => p.test(t));
 }
 
-function extractUserTexts(entries: TranscriptEntry[]): string[] {
+export function extractUserTexts(entries: TranscriptEntry[]): string[] {
   const texts: string[] = [];
   for (const e of entries) {
     if (e.type !== "user") continue;
+    if (e.isMeta === true) continue;
     const content = e.message?.content;
     if (typeof content === "string") {
       texts.push(content);
@@ -141,13 +149,13 @@ function extractToolSummary(entries: TranscriptEntry[]): string {
     .join(", ");
 }
 
-function countUserMessages(entries: TranscriptEntry[]): number {
-  return entries.filter((e) => e.type === "user").length;
+export function countUserMessages(entries: TranscriptEntry[]): number {
+  return entries.filter((e) => e.type === "user" && e.isMeta !== true).length;
 }
 
 // --- Heuristic Summary ---
 
-function heuristicSummary(entries: TranscriptEntry[]): string {
+export function heuristicSummary(entries: TranscriptEntry[]): string {
   // 1. First non-noise user prompt
   const userTexts = extractUserTexts(entries);
   for (const text of userTexts) {
@@ -312,6 +320,8 @@ async function main(): Promise<void> {
   await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
 }
 
-main().catch(async (e) => {
-  await log(`FATAL: ${e}`);
-});
+if (import.meta.main) {
+  main().catch(async (e) => {
+    await log(`FATAL: ${e}`);
+  });
+}

@@ -175,7 +175,7 @@ export async function callGemini(
     "出力は要約のみ。説明や前置きは不要です。";
 
   let proc: Deno.ChildProcess | null = null;
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const cmd = new Deno.Command("gemini", {
       args: ["-m", "gemini-2.5-flash", "-o", "text"],
