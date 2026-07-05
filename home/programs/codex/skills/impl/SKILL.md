@@ -15,45 +15,41 @@ User-facing progress and final reports remain in the user's configured language.
 $impl              # Process every pending task in update_plan order
 ```
 
-## Approval gate
+## Start-of-run marker + plan resolution
 
-`$impl` reads the active plan from a cwd-hash marker that `$plan`'s ACTIVATE created **and that the user explicitly approved**.
+`$plan`'s ACTIVATE wrote a `.pending-<cwd-hash>` UI-pointer marker for this cwd. At the start of `$impl`, promote it to `.active-` and resolve the plan path. These markers are display pointers for the tmux picker — they do NOT gate edits.
 
 ```
 ACTIVE  = ~/.codex/plans/.active-<cwd-hash>
 PENDING = ~/.codex/plans/.pending-<cwd-hash>
 ```
 
-Markers are cwd-scoped: each repository checkout has a unique `<cwd-hash>` derived from `$PWD`. A marker held by a different cwd does not grant edit rights to the current cwd, so `$plan` must be re-run per checkout. The `codex-plan-gate.ts` PreToolUse hook blocks `apply_patch` under cwd when `.active-<hash>` is absent or expired.
-
-Approval gate — confirm with the deterministic marker helper before starting work. The agent must not assemble cwd-hash or marker paths inline in shell:
+Markers are cwd-scoped: each repository checkout has a unique `<cwd-hash>` derived from `$PWD`. Run both helper commands in order — `promote` first (moves `.pending-` → `.active-` so the picker shows this run as active), then `require-active` (prints the active plan path). The agent must not assemble cwd-hash or marker paths inline in shell:
 
 ```bash
+~/.codex/scripts/codex-plan-marker.ts promote "$PWD"
 ~/.codex/scripts/codex-plan-marker.ts require-active "$PWD"
 ```
 
-The helper's stdout is the active plan path. Proceed only on exit 0.
+`require-active` fails (exit 1) unless a fresh `.active-` marker exists, so it must follow `promote`. Its stdout is the plan path. Proceed only on exit 0.
 
 | State | Action |
 |---|---|
-| helper exits 0 | Read stdout as the plan path and proceed to Workflow |
-| `.active` expired | Show helper stderr `.active marker expired. Run $plan <request> again.` and stop |
-| pending only | Show helper stderr `Plan exists but is not approved. Type $impl as a top-level prompt to approve.` and stop |
-| pending expired | Show helper stderr `.pending marker expired. Run $plan <request> again.` and stop |
-| absent | Show helper stderr `Run $plan <request> first. No active plan for this cwd.` and stop |
-
-The only approval route is the UserPromptSubmit hook (`codex-impl-approval-tracker.ts`). Only when the user types `$impl` as a top-level prompt does the helper promote `.pending-` to `.active-`. AI self-chaining an `$impl`-equivalent action inside the same skill body does not fire that hook, so self-promotion is impossible.
+| both exit 0 | Read `require-active` stdout as the plan path and proceed to Workflow |
+| `promote` prints `no-pending` | No pending marker for this cwd — run `$plan <request>` first, then stop |
+| `promote` prints `expired` | The pending marker is stale — re-run `$plan <request>`, then stop |
+| `require-active` exits 1 | Show its stderr and stop (e.g. active marker expired → re-run `$plan`) |
 
 ## Workflow
 
-1. Use the `require-active` stdout from the approval gate as the plan file path
+1. Use the `require-active` stdout as the plan file path
 2. `Read` the plan file in full so subsequent tasks can follow **Files to Change** and **Patterns to Mirror** faithfully
 3. Normalize and read sidecar JSON `~/.codex/plans/<plan-basename>.evidence.json` through the helper. Compare Codex `update_plan` state with JSON `tasks[].status`. If drift exists, treat JSON as the source of truth and rebuild `update_plan` in one call. If JSON itself has a parse error, stop and warn the user that the sidecar is corrupted
 4. Process JSON `tasks` in ascending ID order, starting at `task-1`. Skip the final `Final Audit + Review` entry in this loop; the Final gate section executes it
 5. For each implementation task:
    1. Mark `in_progress` and record `baseline_sha` via `codex-plan-state.ts start`
    2. Transition the matching `update_plan` task to `in_progress` by resending the full task list in one `update_plan` call
-   3. **Implement** — follow the plan's **Files to Change** and **Patterns to Mirror** exactly. Match the naming, error handling, and conventions captured during EXPLORE. When Codex `apply_patch` runs, `codex-plan-gate.ts` checks for `.active-<hash>` and allows or blocks the edit; if the Approval gate passed, edits should pass the gate
+   3. **Implement** — follow the plan's **Files to Change** and **Patterns to Mirror** exactly. Match the naming, error handling, and conventions captured during EXPLORE
    4. **Run the acceptance-criteria verification commands**. Capture the **raw output verbatim** as evidence. Before running each command, confirm it is non-destructive and will not print, persist, or transmit secrets. If output contains a secret, token, or credential, replace the value with `[REDACTED]` before saving evidence or showing it in conversation. The final gate (built-in Audit + Review) consumes this evidence
    5. **Diff size check** via `git diff --stat <baseline_sha>`. If the diff is ≥ 20 files or ≥ 500 lines, dispatch the `code-simplifier` subagent (defined in `~/.codex/agents/code-simplifier.toml`). Inline the changed files + `git diff <baseline_sha>` + the project's `~/.codex/AGENTS.md` and repository `AGENTS.md` paths into the spawn message. Apply HIGH-confidence simplifications; present MEDIUM/LOW to the user
    6. Append evidence via `codex-plan-state.ts append-evidence` (reads from stdin, appends with `\n---\n` if evidence already exists)
@@ -110,14 +106,14 @@ If the user wants to revise the plan during `$impl`:
 2. On approval:
    - **Preserve** all `completed` tasks (including their evidence in the sidecar JSON)
    - **Delete** all `pending` and `in_progress` tasks from sidecar JSON and rebuild `update_plan`
-3. Re-run `$plan`. The new session creates a new `.pending-`; the user's next `$impl` keystroke promotes it. The main session uses a summary list of existing completed tasks as context so the new decomposition does not duplicate finished work
+3. Re-run `$plan`. The new session creates a new `.pending-`; the next `$impl` run promotes it at start. The main session uses a summary list of existing completed tasks as context so the new decomposition does not duplicate finished work
 4. After new tasks are created, resume `$impl`
 
 ## Recovery after compaction
 
 If context compaction occurs mid-`$impl`:
 
-1. Re-evaluate the Approval gate (`codex-plan-marker.ts require-active`)
+1. Re-resolve the active plan path with `codex-plan-marker.ts require-active "$PWD"` (the marker was already promoted to `.active-` at the start of this run, so `require-active` alone resolves it; if it exits 1, re-run `promote` first)
 2. Re-read sidecar JSON via the `normalize` helper
 3. Re-`Read` the plan file
 4. Resume from the lowest-ID `pending` (or stalled `in_progress`) task in `tasks[].status`

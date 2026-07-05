@@ -3,12 +3,12 @@ import { fromFileUrl } from "jsr:@std/path@1.1.4/from-file-url";
 import {
   activatePending,
   clearActive,
+  cwdHash,
   getStatus,
   promote,
   requireActive,
   run,
 } from "./codex-plan-marker.ts";
-import { cwdHash } from "./codex-plan-gate.ts";
 
 async function withHome<T>(
   run: (ctx: { home: string; cwd: string; hash: string }) => Promise<T>,
@@ -128,7 +128,7 @@ Deno.test("requireActive rejects pending-only marker", async () => {
     } catch (err) {
       message = (err as Error).message;
     }
-    assertStringIncludes(message, "not approved");
+    assertStringIncludes(message, "not promoted");
   });
 });
 
@@ -192,7 +192,7 @@ Deno.test("run command parser activates, requires, and clears markers", async ()
     } catch (err) {
       pendingError = (err as Error).message;
     }
-    assertStringIncludes(pendingError, "not approved");
+    assertStringIncludes(pendingError, "not promoted");
 
     const promoted = await promote(cwd);
     assertEquals(promoted.reason, "promoted");
@@ -229,7 +229,7 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
     assertEquals(absent.code, 1);
     assertStringIncludes(
       new TextDecoder().decode(absent.stderr),
-      "No active plan",
+      "no plan marker",
     );
 
     const activate = await new Deno.Command(scriptPath, {
@@ -243,7 +243,7 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
     assertEquals(pending.code, 1);
     assertStringIncludes(
       new TextDecoder().decode(pending.stderr),
-      "not approved",
+      "not promoted",
     );
 
     assertEquals((await promote(cwd)).reason, "promoted");
@@ -257,7 +257,7 @@ Deno.test("subprocess require-active validates absent, pending, active, and expi
     assertEquals(expired.code, 1);
     assertStringIncludes(
       new TextDecoder().decode(expired.stderr),
-      "active marker expired",
+      "active plan marker for this cwd is expired",
     );
   });
 });
@@ -316,7 +316,7 @@ Deno.test("activatePending rejects a symlinked plans directory", async () => {
   });
 });
 
-Deno.test("subprocess promote command is not exposed", async () => {
+Deno.test("subprocess promote command promotes a pending marker to active", async () => {
   const scriptPath = fromFileUrl(
     new URL("./codex-plan-marker.ts", import.meta.url),
   );
@@ -329,14 +329,27 @@ Deno.test("subprocess promote command is not exposed", async () => {
     return;
   }
 
-  await withHome(async ({ cwd }) => {
-    const output = await new Deno.Command(scriptPath, {
+  await withHome(async ({ home, cwd }) => {
+    const plan = await writePlan(home);
+
+    // No pending marker yet → promote reports no-pending.
+    const noPending = await new Deno.Command(scriptPath, {
       args: ["promote", cwd],
       stdout: "piped",
       stderr: "piped",
     }).output();
+    assertEquals(noPending.code, 0);
+    assertStringIncludes(new TextDecoder().decode(noPending.stdout), "no-pending");
 
-    assertEquals(output.code, 1);
-    assertStringIncludes(new TextDecoder().decode(output.stderr), "Usage:");
+    await run(["activate-pending", plan, cwd]);
+
+    const promoted = await new Deno.Command(scriptPath, {
+      args: ["promote", cwd],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(promoted.code, 0);
+    assertStringIncludes(new TextDecoder().decode(promoted.stdout), "promoted");
+    assertEquals((await getStatus(cwd)).state, "active");
   });
 });

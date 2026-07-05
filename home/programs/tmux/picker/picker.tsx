@@ -159,8 +159,8 @@ const CODEX_TASK_STATUSES = new Set([
   "completed",
 ]);
 
-// Mirrors codex-plan-gate.ts:canonical so picker hashes the same cwd string
-// as the edit gate even when the leaf path has disappeared.
+// Mirrors codex-plan-marker.ts:canonical so picker hashes the same cwd string
+// as the marker writer even when the leaf path has disappeared.
 async function canonical(p: string): Promise<string> {
   try {
     return await Deno.realPath(p);
@@ -391,7 +391,7 @@ function Preview(
     // header until the new capturePane resolves (~0–1 s).
     setContent(null);
     let cancelled = false;
-    let timerId: number | undefined;
+    let timerId: ReturnType<typeof setTimeout> | undefined;
     // Border consumes 1 col on each side (2 total); account for it when clamping lines.
     const innerCols = Math.max(10, width - 4);
     const innerRows = Math.max(3, height - 3);
@@ -480,7 +480,7 @@ function App({
 
   useEffect(() => {
     let cancelled = false;
-    let timerId: number | undefined;
+    let timerId: ReturnType<typeof setTimeout> | undefined;
     // Self-rescheduling setTimeout chain: at most one fetchPanes in-flight,
     // no out-of-order overwrite, and errors do not break the loop.
     const tick = async () => {

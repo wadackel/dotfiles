@@ -1,10 +1,56 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-import { cwdHash } from "./codex-plan-gate.ts";
+// Codex plan marker pointer writer. Records per-cwd plan state as marker files
+// under ~/.codex/plans so the tmux picker can display Codex task progress.
+// These markers are UI pointers only — they do NOT gate edits. `$plan` writes a
+// `.pending-<cwd-hash>` marker; `$impl` promotes it to `.active-<cwd-hash>` and
+// resolves the plan path via require-active; completion clears the active marker.
+//
+// The marker filename format (.active-/.pending- + cwd hash), the cwd-hash
+// derivation, and the 24h freshness window are a contract read independently by
+// home/programs/tmux/picker/picker.tsx (canonical / codexCwdHash) — keep them in
+// sync.
 
 // The shebang uses broad write permission because Deno shebang arguments cannot
 // expand HOME; all write paths are still constrained by markerPaths().
 const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Canonicalize a path even if its leaf does not yet exist. Walks up to the
+// nearest existing ancestor, canonicalizes that, then re-appends the unresolved
+// tail. This matters on macOS where /var/folders symlinks to /private/var/folders
+// — a non-canonical leaf would hash differently from the picker's canonical cwd.
+export async function canonical(p: string): Promise<string> {
+  try {
+    return await Deno.realPath(p);
+  } catch {
+    // fall through
+  }
+  const tail: string[] = [];
+  let cur = p;
+  while (cur.length > 1) {
+    const idx = cur.lastIndexOf("/");
+    if (idx < 0) break;
+    tail.unshift(cur.slice(idx + 1));
+    cur = idx === 0 ? "/" : cur.slice(0, idx);
+    try {
+      const real = await Deno.realPath(cur);
+      return real === "/" ? "/" + tail.join("/") : real + "/" + tail.join("/");
+    } catch {
+      // keep walking up
+    }
+  }
+  return p;
+}
+
+export async function cwdHash(cwd: string): Promise<string> {
+  const real = await canonical(cwd);
+  const data = new TextEncoder().encode(real);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
 
 export type MarkerState =
   | "active"
@@ -37,6 +83,7 @@ function usage(): never {
     [
       "Usage:",
       "  codex-plan-marker.ts activate-pending <plan-path> [cwd]",
+      "  codex-plan-marker.ts promote [cwd]",
       "  codex-plan-marker.ts status [cwd]",
       "  codex-plan-marker.ts require-active [cwd]",
       "  codex-plan-marker.ts clear-active [cwd]",
@@ -129,36 +176,6 @@ async function atomicWriteText(path: string, content: string): Promise<void> {
   }
 }
 
-async function atomicCreateTextNoClobber(
-  path: string,
-  content: string,
-): Promise<void> {
-  const slash = path.lastIndexOf("/");
-  if (slash < 1) {
-    throw new Error(`refusing to write marker outside a directory: ${path}`);
-  }
-  const dir = path.slice(0, slash);
-  const basename = path.slice(slash + 1);
-  const tmp = `${dir}/.${basename}.${crypto.randomUUID()}.tmp`;
-  try {
-    await Deno.writeTextFile(tmp, content, {
-      createNew: true,
-      mode: 0o600,
-    });
-    const info = await Deno.lstat(tmp);
-    if (!info.isFile || info.isSymlink) {
-      throw new Error("temporary marker is not a regular file");
-    }
-    await Deno.link(tmp, path);
-  } finally {
-    try {
-      await Deno.remove(tmp);
-    } catch {
-      // tmp may not exist if creation failed before it was written.
-    }
-  }
-}
-
 async function assertRegularFile(
   path: string,
   label: string,
@@ -245,7 +262,7 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
       state: fresh ? "pending" : "pending-expired",
       planPath: await readMarkerPlanPath(paths.pendingPath, realPlansDir),
       reason: fresh
-        ? "plan exists but is not approved"
+        ? "plan pending promotion to active"
         : "pending marker is expired",
     };
   } catch (err) {
@@ -286,17 +303,15 @@ export async function requireActive(cwd = Deno.cwd()): Promise<string> {
       }
       throw new Error("active marker did not contain a valid plan path");
     case "active-expired":
-      throw new Error(".active marker expired. Run `$plan <request>` again.");
+      throw new Error("active plan marker for this cwd is expired");
     case "pending":
       throw new Error(
-        "Plan exists but is not approved. Type `$impl` as a top-level prompt to approve.",
+        "pending plan marker for this cwd was not promoted to active",
       );
     case "pending-expired":
-      throw new Error(".pending marker expired. Run `$plan <request>` again.");
+      throw new Error("pending plan marker for this cwd is expired");
     case "absent":
-      throw new Error(
-        "Run `$plan <request>` first. No active plan for this cwd.",
-      );
+      throw new Error("no plan marker for this cwd");
     default:
       return assertNever(status.state);
   }
@@ -316,20 +331,6 @@ export async function clearActive(cwd = Deno.cwd()): Promise<boolean> {
 }
 
 export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
-  const paths = await markerPaths(cwd);
-  try {
-    await Deno.lstat(paths.activePath);
-    return { promoted: false, reason: "already-active" };
-  } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
-      return {
-        promoted: false,
-        reason: "io-error",
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
-
   let status: MarkerStatus;
   try {
     status = await getStatus(cwd);
@@ -358,16 +359,10 @@ export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
         };
       }
       try {
-        await atomicCreateTextNoClobber(
-          status.activePath,
-          `${status.planPath}\n`,
-        );
+        await atomicWriteText(status.activePath, `${status.planPath}\n`);
         await Deno.remove(status.pendingPath);
         return { promoted: true, reason: "promoted" };
       } catch (err) {
-        if (err instanceof Deno.errors.AlreadyExists) {
-          return { promoted: false, reason: "already-active" };
-        }
         return {
           promoted: false,
           reason: "io-error",
@@ -391,6 +386,12 @@ export async function run(args: string[]): Promise<void> {
     }
     const paths = await activatePending(first, second ?? Deno.cwd());
     console.log(paths.pendingPath);
+    return;
+  }
+
+  if (command === "promote") {
+    const result = await promote(first ?? Deno.cwd());
+    console.log(result.reason);
     return;
   }
 

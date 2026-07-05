@@ -28,7 +28,7 @@ crypto | encrypt | decrypt
 ```
 
 Match is case-insensitive substring on the full path. Examples that trigger:
-- `home/programs/claude/scripts/plan-gate.ts`
+- `home/programs/claude/scripts/bash-policy.ts`
 - `src/auth/login.ts`
 - `.github/workflows/oauth.yml`
 

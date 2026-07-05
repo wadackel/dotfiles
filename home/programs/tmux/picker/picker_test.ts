@@ -11,7 +11,7 @@ import {
   TMUX_FORMAT,
 } from "./picker.tsx";
 import { type Row2Seg, truncateTopSegBody } from "./components.tsx";
-import { cwdHash as gateCwdHash } from "../../codex/scripts/codex-plan-gate.ts";
+import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
 
 Deno.test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
@@ -484,11 +484,11 @@ Deno.test("readTaskProgressForRow: codex active marker aggregates evidence tasks
   });
 });
 
-Deno.test("codexCwdHash: matches codex-plan-gate cwdHash", async () => {
+Deno.test("codexCwdHash: matches codex-plan-marker cwdHash", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await Deno.mkdir(cwd, { recursive: true });
-    assertEquals(await codexCwdHash(cwd), await gateCwdHash(cwd));
+    assertEquals(await codexCwdHash(cwd), await markerCwdHash(cwd));
   });
 });
 

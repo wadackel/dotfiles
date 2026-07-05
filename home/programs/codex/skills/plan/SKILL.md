@@ -5,7 +5,7 @@ description: Codex design-first planning skill. Mirrors Claude `/plan`'s seven n
 
 # $plan
 
-Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>`. When the user types `$impl` in the next turn, the UserPromptSubmit hook (`codex-impl-approval-tracker.ts`) promotes `.pending-` to `.active-`.
+Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for the tmux picker. `$impl` promotes `.pending-` to `.active-` at the start of its run.
 
 Do not write code or create files until you have agreed on the design with the user and produced an approved plan. This applies to every request regardless of perceived difficulty.
 
@@ -416,7 +416,7 @@ Use the Claude version table as a reference: `~/.claude/skills/plan/SKILL.md`, w
 
 ## ACTIVATE
 
-Create only `.pending-<cwd-hash>`. Never create `.active-` directly. `.active-` is promoted by the `codex-impl-approval-tracker.ts` UserPromptSubmit hook when the user types `$impl` in the next turn.
+Write the `.pending-<cwd-hash>` UI-pointer marker so the tmux picker can show this cwd's plan/task progress. The marker is a display pointer only — it does not gate edits. `$impl` promotes `.pending-` to `.active-` at the start of its run (it calls the helper's `promote` subcommand); do not create `.active-` here.
 
 Delegate marker operations to the deterministic helper. Do not build cwd-hash or marker paths inline in shell.
 
@@ -424,7 +424,7 @@ Delegate marker operations to the deterministic helper. Do not build cwd-hash or
 ~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT>' "$PWD"
 ```
 
-`<PLAN_FILE_PATH from DRAFT>` is the absolute path decided in DRAFT and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash as `codex-plan-gate.ts`, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
+`<PLAN_FILE_PATH from DRAFT>` is the absolute path decided in DRAFT and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash the picker derives, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
 
 ### Output to user
 
@@ -483,8 +483,7 @@ If an xl plan body exceeds roughly 600 lines, replace `## Plan body` with a TOC 
 - `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): DEEPEN subagent prompts. `~/.codex/agents/{plan-critic,plan-adversarial}.toml` points to these shared workspace paths.
 - `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier,code-simplifier}.toml`: custom agent definitions required by DEEPEN and `$impl`. Dotfiles source is `home/programs/codex/agents/`.
 - `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE and finally emits `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its built-in Audit + Codex subagent review phase.
-- PreToolUse hook (`codex-plan-gate.ts`): blocks `apply_patch` under cwd when `.active-<hash>` is absent or expired. ACTIVATE writes only `.pending-` to pair with this gate.
-- Marker helper (`codex-plan-marker.ts`): owns ACTIVATE pending activation, `$impl` active requirement, active cleanup after final PASS, and UserPromptSubmit promotion.
+- Marker helper (`codex-plan-marker.ts`): writes the tmux picker's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes
 

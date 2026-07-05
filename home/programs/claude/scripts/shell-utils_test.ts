@@ -503,7 +503,7 @@ Deno.test("parseCommand: process substitution falls back gracefully", async () =
 
 // ===== flattenCommand =====
 
-const HELPER = "/h/.claude/scripts/plan-marker.ts";
+const HELPER = "/h/.claude/scripts/example-helper.ts";
 const PLAN = "/h/.claude/plans/b.md";
 
 Deno.test("flattenCommand: cd && helper yields two flat commands, no exotic", async () => {

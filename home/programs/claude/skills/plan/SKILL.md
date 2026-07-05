@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Design-first entrypoint. Conversational planning that agrees on direction before drafting. Seven phases (parse → agree → explore → draft → deepen → decompose → activate) end with a plan file in ~/.claude/plans/ and a session-hash gate marker that unlocks Edit/Write for the session.
+description: Design-first entrypoint. Conversational planning that agrees on direction before drafting. Seven phases (parse → agree → explore → draft → deepen → decompose → activate) end with a plan file in ~/.claude/plans/ that the user approves by typing /impl.
 argument-hint: "[feature description]"
 disable-model-invocation: true
 ---
@@ -171,13 +171,7 @@ The main session decomposes — no subagent dispatch.
 
 ## ACTIVATE
 
-Write the session-scoped **pending** marker. The active marker is created only when the user types `/impl` as a top-level prompt (the UserPromptSubmit hook promotes `.pending-` → `.active-`). See `~/.claude/scripts/plan-marker.ts` source for the two-marker rationale and session-hash derivation.
-
-```bash
-~/.claude/scripts/plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT, agent-substituted>' "$CLAUDE_CODE_SESSION_ID"
-```
-
-ヘルパは standalone な Bash コマンドとして実行する。`cd <dir> &&` の前置はフラット列として許容されるが、subshell・コマンド置換 `$()`・redirect で囲むと plan-gate のマーカー保護に引っかかりブロックされる。
+No side effects — do not write any state file. Approval is signalled purely by the user typing `/impl` as a top-level prompt in the next turn; `/impl` resolves this plan from conversation context (the `## Plan ready` File line below).
 
 Emit the full plan body inline so the user can approve without opening the file, then the metadata block:
 

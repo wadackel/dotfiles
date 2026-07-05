@@ -28,16 +28,6 @@
             "type": "command",
             "timeout": 5,
             "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" UserPromptSubmit'"
-          },
-          {
-            "type": "command",
-            "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/scripts/codex-impl-approval-tracker.ts\" UserPromptSubmit'"
-          },
-          {
-            "type": "command",
-            "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/scripts/codex-plan-marker-grant-tracker.ts\" UserPromptSubmit'"
           }
         ]
       }
@@ -55,16 +45,6 @@
             "type": "command",
             "timeout": 5,
             "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" PreToolUse'"
-          }
-        ]
-      },
-      {
-        "matcher": "apply_patch",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 5,
-            "command": "sh -c '\"$HOME/.codex/scripts/codex-plan-gate.ts\" PreToolUse'"
           }
         ]
       }

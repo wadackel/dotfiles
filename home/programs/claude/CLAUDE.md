@@ -33,7 +33,6 @@
 - During planning, resolve code-discoverable questions yourself and record reasonable assumptions when a default is safe.
 - Ask the user only for goals, hidden constraints, deadlines, terminology, or tradeoffs that materially change the plan.
 - `/impl` is the execution source of truth once a plan exists. Follow task order, verification requirements, and final-gate rules from `skills/impl/SKILL.md`.
-- Infra path allowances exist only to edit Claude infra itself. Do not use them as a shortcut to bypass `/plan` for normal implementation work.
 
 ### Question Triage
 

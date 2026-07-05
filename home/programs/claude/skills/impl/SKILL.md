@@ -14,36 +14,25 @@ Executes the plan produced by `/plan`, task by task. Sole source of truth for th
 
 ## Preconditions
 
-`/impl` reads the active plan from a session-hash marker that `/plan`'s Phase 6 created **and that the user explicitly approved**.
+`/impl` executes the plan that `/plan` produced **and that the user explicitly approved** by typing `/impl` as a top-level prompt. There is no state file — approval is the user's keystroke, and the plan is resolved from context.
 
-```
-ACTIVE  = ~/.claude/plans/.active-<session-hash:32hex>
-PENDING = ~/.claude/plans/.pending-<session-hash:32hex>
-```
+### Plan resolution
 
-Markers are session-scoped: each Claude session has a unique `<session-hash>` derived from the runtime's `session_id`. A marker held by a different session does not grant edit rights to the current session, so `/plan` must be re-run per session. `cwd` is intentionally NOT part of the marker key — Claude Code updates the hook payload's `cwd` to track Bash `cd`, so a cwd-bound marker would be invalidated by any subdirectory navigation mid-session.
+1. **Primary**: the plan file path from the most recent `/plan` output in the conversation — the `File:` line of its `## Plan ready` block.
+2. **Fallback** (context lost to compaction): the newest non-log plan file under `~/.claude/plans/`, resolved by mtime:
 
-Approval gate — confirm with the deterministic marker helper before starting work. The agent must not assemble session hash or marker paths by hand. `$CLAUDE_CODE_SESSION_ID` is the environment variable visible to the Bash tool (note the `CLAUDE_CODE_` prefix; this is different from the `CLAUDE_SESSION_ID` alias that is only exposed inside the `!` substitution syntax used by `/plan-marker-grant`):
+   ```bash
+   stat -f '%m %N' ~/.claude/plans/*.md | grep -v '\.log\.md$' | sort -rn | head -1 | cut -d' ' -f2-
+   ```
 
-```bash
-~/.claude/scripts/plan-marker.ts require-active "$CLAUDE_CODE_SESSION_ID"
-```
+   `stat` is used instead of `ls -t` on purpose: this environment intermittently annotates `ls` output with a trailing size column, which breaks a `\.log\.md$` line-anchored filter and can mis-select the `.log.md` sidecar. `stat -f '%m %N'` prints `<mtime-epoch> <path>` with the path last, so the anchor holds and the field is clean.
+3. **Fallback requires confirmation**: the `~/.claude/plans/` directory is shared across sessions and repositories, so a mechanical newest-pick can select another session's plan. When resolving via the fallback, present the resolved path and the plan's title heading to the user and get explicit confirmation that it is the intended plan **before** starting any edits. Do not self-approve.
 
-ヘルパは standalone な Bash コマンドとして実行する。`cd <dir> &&` の前置はフラット列として許容されるが、subshell・コマンド置換 `$()`・redirect で囲むと plan-gate のマーカー保護に引っかかりブロックされる。
-
-The helper's stdout is the active plan path. Proceed only on exit 0.
-
-- **Helper exit 0**: read stdout (plan path) and proceed
-- **`.active` expired**: reject with `.active marker expired. Run /plan <request> again.` Stop processing immediately
-- **pending only**: reject with `Plan exists but is not approved. Type /impl as a top-level prompt to approve.` Stop processing immediately. Do not attempt edits
-- **pending expired**: reject with `.pending marker expired. Run /plan <request> again.` Stop processing immediately
-- **absent**: reject with `Run /plan <request> first. No active plan for this session.`
-
-The approval signal is the user typing `/impl` as the leading slash command of a top-level user prompt. On detection, the hook performs a helper-backed `.pending-` → `.active-` promotion. An AI invoking the `/impl` skill via the Skill tool does NOT trigger UserPromptSubmit, so self-promotion is impossible.
+If no plan can be resolved, reject with `Run /plan <request> first. No plan to execute.`
 
 ## Workflow
 
-1. Use the `require-active` stdout from the approval gate as the plan file path
+1. Resolve the plan file path per **Preconditions → Plan resolution**
 2. `Read` the plan file in full so subsequent tasks can follow **Files to Change** and **Patterns to Mirror** faithfully
 3. `TaskList` → process tasks in **ascending ID order**. Skip tasks with a non-empty `blockedBy`
 4. For each task:
@@ -91,7 +80,7 @@ If the user wants to revise the plan during `/impl`:
 ## Recovery after compaction
 
 If context compaction occurs mid-`/impl`:
-1. Re-resolve the active plan path from the session-hash marker
+1. Re-resolve the plan path per **Preconditions → Plan resolution** (the fallback + confirmation rule applies whenever conversation context no longer carries the `## Plan ready` File line)
 2. `TaskList` → find tasks not yet `completed`
 3. Re-`Read` the plan file
 4. Resume from the lowest-ID `pending` (or stalled `in_progress`) task

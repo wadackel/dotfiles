@@ -19,13 +19,11 @@
       "Bash(* --version)",
       "Bash(* -h *)",
       "Bash(* -v)",
-      "Bash(*plan-marker-grant/plan-marker-grant.ts*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*retrospective-ledger.ts*)",
       "Bash(*migrate.ts*)",
       "Bash(*merge-settings/merge.ts*)",
       "Bash(*permission-review/permission-review.ts*)",
-      "Bash(*plan-marker.ts *)",
       "Bash(*session-retrospective/extract-session-history.ts*)",
       "Bash(//dev/null)",
       "Bash(7z *)",
@@ -538,15 +536,6 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/plan-gate.ts"
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -648,10 +637,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts UserPromptSubmit"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/plan-approval-tracker.ts"
           }
         ]
       }
