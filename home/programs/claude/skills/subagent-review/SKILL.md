@@ -1,6 +1,6 @@
 ---
 name: subagent-review
-description: "Final-gate review skill for /impl — runs Spec Compliance → Code Quality → parallel orthogonal Domain specialists → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
+description: "Final-gate review skill for /impl — runs a unified Spec & Quality review → parallel orthogonal Domain specialists → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
 ---
 
 # Subagent Review
@@ -24,7 +24,7 @@ Skip when:
 
 ## Language Policy
 
-All reviewer subagents dispatched by `/subagent-review` MUST follow this policy. The directive text below is the **canonical source** — Step 2 / Step 4 / Step 6 / Step 7 each inline the same block into their dispatch prompt so the reviewer reads it inside its own context.
+All reviewer subagents dispatched by `/subagent-review` MUST follow this policy. The directive text below is the **canonical source** — Step 2 / Step 4 / Step 5 each inline the same block into their dispatch prompt so the reviewer reads it inside its own context.
 
 ```
 ## Language
@@ -60,7 +60,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 ## Workflow
 
-> **Cross-cutting invariant**: All non-blocker findings (`NIT` / Security `MEDIUM`/`LOW` / Spec populated `### Issues` and `### Notes`) — plus any `SHOULD_FIX` / `HIGH` items the main session **intentionally deferred** (out-of-scope, follow-up issue, etc.) — from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission. Under the current policy `SHOULD_FIX` and `HIGH` are blockers, so a clean `PASS` exit normally yields zero of them in the final report.
+> **Cross-cutting invariant**: All non-blocker findings (`NIT` / Security `MEDIUM`/`LOW` / the Spec & Quality stage's populated `### Notes`) — plus any `SHOULD_FIX` / `HIGH` items the main session **intentionally deferred** (out-of-scope, follow-up issue, etc.) — from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission. Under the current policy `SHOULD_FIX` and `HIGH` are blockers, so a clean `PASS` exit normally yields zero of them in the final report.
 
 ### Step 1: Context Collection
 
@@ -72,54 +72,35 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
    - If baseline_sha unavailable (compaction): fallback to `git diff HEAD~1`
 4. **Changed files**: Extract with `git diff --name-only`
 
-### Step 2: Spec Compliance Review
+### Step 2: Spec & Quality Review (unified stage)
 
-Spawn a **fresh** `code-reviewer` subagent.
+Spawn a **fresh** `code-reviewer` subagent that covers spec compliance and code quality in one pass. A single dispatch replaces the former serial Spec → Quality two-stage chain — measured over a month of gates, the standalone Spec stage caught nearly nothing that the quality reviewer's combined read would not, while doubling the serial wall-clock.
 
-**Prompt construction** — load `references/spec-reviewer-prompt.md` and fill placeholders:
+**Prompt construction** — load `references/spec-quality-reviewer-prompt.md` and fill placeholders:
 - `{task_description}` — task spec from Step 1
 - `{plan_section}` — plan file section from Step 1
 - `{git_diff}` — diff output from Step 1
 - `{file_paths}` — changed file list from Step 1
+- `{claude_md_path}` — `~/.claude/CLAUDE.md`
 
 **What NOT to pass**: Any summary, status report, or interpretation from the main session. The reviewer must form its own judgment from spec + diff + actual code.
 
-**Expected output**: Structured issues list + `VERDICT: PASS` or `VERDICT: FAIL` as the final line.
+**Expected output**: Spec issues (`### Issues`, typed MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE) + quality issues (MUST_FIX / SHOULD_FIX / NIT) + a single `VERDICT: PASS` or `VERDICT: FAIL` as the final line.
 
-### Step 3: Handle Spec Review Result
+FAIL if any spec issue OR any MUST_FIX / SHOULD_FIX quality issue exists. NIT does not block. The template's Scope Discipline section caps findings outside the changed lines at NIT.
+
+### Step 3: Handle Spec & Quality Result
 
 | Result | Action |
 |--------|--------|
 | `VERDICT: PASS` | Proceed to Step 4 |
-| `VERDICT: FAIL` | Main session fixes issues → re-review with fresh subagent |
+| `VERDICT: FAIL` | Main session fixes spec issues + MUST_FIX + SHOULD_FIX → re-review with fresh subagent |
 | No VERDICT line | Treat as FAIL; present summary of subagent output + note VERDICT absence to user |
-| 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review spec 3x failed]`, report issues to user for decision |
+| 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review spec-quality 3x failed]`, report issues to user for decision |
 
-### Step 4: Code Quality Review
+### Step 4: Domain-Specific Reviewer Dispatch (parallel, orthogonal triggers)
 
-Spawn a **fresh** `code-reviewer` subagent. Only after Spec Compliance passes.
-
-**Prompt construction** — load `references/code-quality-reviewer-prompt.md` and fill placeholders:
-- `{file_paths}` — changed file list
-- `{claude_md_path}` — `~/.claude/CLAUDE.md`
-
-**Expected output**: Issues categorized by severity (MUST_FIX / SHOULD_FIX / NIT) + `VERDICT: PASS` or `VERDICT: FAIL`.
-
-FAIL if MUST_FIX OR SHOULD_FIX issues exist. NIT does not block.
-
-### Step 5: Handle Code Quality Result
-
-Same handling as Step 3:
-
-| Result | Action |
-|--------|--------|
-| `VERDICT: PASS` | Task review complete |
-| `VERDICT: FAIL` | Fix MUST_FIX + SHOULD_FIX issues → re-review with fresh subagent |
-| 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review quality 3x failed]`, report to user |
-
-### Step 6: Domain-Specific Reviewer Dispatch (parallel, orthogonal triggers)
-
-Only after Code Quality passes. Evaluate each specialist's trigger condition independently against the diff, and dispatch **all matches in parallel** in the same assistant turn (multiple Agent tool calls in a single message).
+Only after Spec & Quality passes. Evaluate each specialist's trigger condition independently against the diff, and dispatch **all matches in parallel** in the same assistant turn (multiple Agent tool calls in a single message).
 
 Each reviewer agent already declares its own Out of Scope delegation in frontmatter (e.g., `typescript-reviewer` delegates React concerns to `react-reviewer` and a11y concerns to `a11y-reviewer`). Because the scopes are orthogonal by design, parallel dispatch does not duplicate findings — it restores coverage that single-match dispatch was losing for stacks like `.tsx` (which legitimately needs typescript + react + a11y observations). The earlier "max 1 agent" design traded accuracy for subagent cost; this version reverses that trade-off because missed React/a11y findings were resurfacing as manual user review burden.
 
@@ -168,16 +149,18 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|s
 
 When constructing each Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
 
+Also append this scope-discipline line to each Agent prompt: "Findings on code outside the changed lines (pre-existing issues, adjacent refactor opportunities) MUST be reported as NIT (or LOW for the 4-tier schema), never SHOULD_FIX/HIGH — only defects introduced or directly touched by this diff may block."
+
 #### Handling results
 
 Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
 - A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX or SHOULD_FIX issue (CRITICAL or HIGH for the 4-tier schema).
 - On FAIL: fix the MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) items, then re-dispatch **only the FAILed specialist(s)** with a fresh agent instance (max 3 rounds per specialist). Specialists that already returned PASS are not re-dispatched.
-- Step 6 as a whole is PASS only when every dispatched specialist returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
+- Step 4 as a whole is PASS only when every dispatched specialist returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
 
-### Step 7: Security Dispatch Heuristic
+### Step 5: Security Dispatch Heuristic
 
-Evaluated after Code Quality / Domain steps complete. Replaces the former separate Security Sweep step in `/impl`'s final gate by absorbing the heuristic directly into this skill. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
+Evaluated after Spec & Quality / Domain steps complete. Replaces the former separate Security Sweep step in `/impl`'s final gate by absorbing the heuristic directly into this skill. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
 
 #### Summary of triggers
 
@@ -185,7 +168,7 @@ Evaluated after Code Quality / Domain steps complete. Replaces the former separa
 - **Content**: `child_process`, `exec`, `eval`, `new Function`, SQL DML, `password`, `process.env.XXX`, `os/exec`, `exec.Command`, template-literal `fetch()`, string-concat HTTP
 - **Config**: `settings.json`, `.claude/**`, `.env*`, `permissions.allow*`, `secrets*.{yml,yaml,json,toml}`
 
-When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 6. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
+When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 4. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
 
 #### Implementation
 
@@ -203,17 +186,18 @@ fi
 
 When constructing the Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
 
+Also append the same scope-discipline line as Step 4: out-of-scope findings cap at LOW (or NIT), never HIGH/SHOULD_FIX.
+
 ## Mandatory Final Output
 
-After all stages (Spec / Code Quality / Domain / Security) complete — regardless of overall verdict — `/subagent-review` MUST emit a single aggregated findings block as the last thing in its output. This is a non-skippable invariant: a `PASS` verdict on every stage does NOT exempt this emission.
+After all stages (Spec & Quality / Domain / Security) complete — regardless of overall verdict — `/subagent-review` MUST emit a single aggregated findings block as the last thing in its output. This is a non-skippable invariant: a `PASS` verdict on every stage does NOT exempt this emission.
 
 ### Extraction rule
 
 For each stage that ran, take its **last** subagent response (the final round's output, including the `PASS` round when the stage looped through `FAIL` → fix → re-review) and extract every populated section that did not cause that subagent's `FAIL` verdict:
 
-- Code Quality / Domain reviewers: populated `### SHOULD_FIX` and `### NIT` sections.
+- Spec & Quality / Domain reviewers: populated `### SHOULD_FIX` and `### NIT` sections, plus the Spec & Quality stage's populated `### Notes` (and `### Issues` in the anomalous case it is populated at `VERDICT: PASS` — under the unified template a populated Issues section normally forces FAIL).
 - Security: populated `MEDIUM` and `LOW` items (severity names preserved verbatim — do NOT translate to MUST/SHOULD/NIT).
-- Spec Compliance: populated `### Issues` (when stage `VERDICT: PASS`) and `### Notes`.
 - Any other populated non-blocker section emitted by a future reviewer — this rule is intentionally generalized.
 
 Copy each section **verbatim** (file:line, description, suggested fix). Do not paraphrase, summarize, or re-rank.
@@ -239,16 +223,16 @@ Do NOT emit per-stage `(none)` boilerplate.
 ```
 ## Final Findings Report
 
-### Spec — Issues (PASS verdict)
+### Spec & Quality — Issues (anomalous: populated at PASS verdict)
 - <verbatim items, or omit this subsection when empty>
 
-### Spec — Notes
+### Spec & Quality — Notes
 - <verbatim items, or omit this subsection when empty>
 
-### Code Quality — SHOULD_FIX
+### Spec & Quality — SHOULD_FIX
 - <verbatim items>
 
-### Code Quality — NIT
+### Spec & Quality — NIT
 - <verbatim items, 1 line per item, may be condensed for readability>
 
 ### Domain (<reviewer-name>) — SHOULD_FIX
@@ -270,13 +254,14 @@ This block is the canonical hand-off to `/impl`'s final report and MUST be trans
 
 ## Loop Limits
 
-- **Max 3 attempts per stage** (Spec Compliance and Code Quality independently)
+- **Max 3 attempts per stage** (Spec & Quality, each Domain specialist, and Security independently)
 - On 3rd failure: stop, mark task as blocked, escalate to user
 - Never retry with the same subagent — always spawn fresh
 
 ## Red Flags
 
-- Skipping Spec Compliance and jumping to Code Quality (order is mandatory)
+- Dropping either half of the unified Spec & Quality review (both spec adherence and quality concerns must be covered in the one dispatch)
+- Escalating a finding on untouched code to SHOULD_FIX/HIGH (Scope Discipline caps out-of-scope findings at NIT/LOW)
 - Passing main session's "what I implemented" summary to the reviewer
 - Accepting NIT / MEDIUM / LOW as a blocker (only MUST_FIX + SHOULD_FIX, and CRITICAL + HIGH for security, block)
 - Retrying the same subagent instead of spawning fresh

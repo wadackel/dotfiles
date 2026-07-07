@@ -1,6 +1,6 @@
 ---
 name: completion-audit
-description: "Mandatory completion audit gate. Run this skill ONCE as the final gate task before declaring all work complete. Audits whether implementation and verification evidence are sufficient for the plan's stated purpose. Do NOT run per-task — run only at the final gate. Skipping the completion audit is the #1 cause of false completion claims."
+description: "Mandatory completion audit gate. Run this skill ONCE as the final gate task before declaring all work complete. Audits whether implementation and verification evidence are sufficient for the plan's stated purpose. Default mode is a self-audit table by the main session; a fresh completion-auditor subagent is dispatched only when escalation conditions fire. Do NOT run per-task — run only at the final gate. Skipping the completion audit is the #1 cause of false completion claims."
 ---
 
 # Completion Audit
@@ -10,6 +10,8 @@ description: "Mandatory completion audit gate. Run this skill ONCE as the final 
 A completion claim without audit is a lie, not an optimization.
 
 **Core principle:** Evidence before claims, always. But evidence is gathered during implementation, not re-gathered at the gate.
+
+**Mode selection:** The default is a **self-audit** — the main session cross-checks every Completion Criteria item against the collected evidence and presents the table to the user. A fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (Step 3). This keeps the evidence discipline while removing a subagent round-trip that, measured over 18 gate executions, passed 94% of the time and never caught a functional defect — the discipline lives in `/impl`'s per-task raw-evidence rule, which is unchanged.
 
 ## Completion Audit Workflow
 
@@ -64,11 +66,42 @@ Each Completion Criteria item is tagged by `/plan` Phase 4 Step 8 with one of:
 - `[orchestrator-only]` — required host access the auditor's sandbox may lack; main session pre-runs and embeds verbatim output in evidence
 - `[outcome]` — **circular by design**, references post-audit state (e.g., `/subagent-review returns PASS`). Evaluated AFTER `/completion-audit` returns PASS, so no evidence exists at audit time
 
-When building the evidence document, preserve these tags verbatim from the plan. The auditor prompt (Step 2) must explicitly instruct the subagent to EXCLUDE `[outcome]`-tagged items from the verdict — otherwise the audit deadlocks (auditor demands evidence for `[outcome]` items that by design cannot exist yet, forcing a FAIL verdict, which blocks running the thing the `[outcome]` item references).
+When building the evidence document, preserve these tags verbatim from the plan. Both audit modes exclude `[outcome]`-tagged items from the verdict: the self-audit marks them NOT GATING (Step 2), and the escalated auditor prompt (Step 3) must explicitly instruct the subagent to EXCLUDE them — otherwise the audit deadlocks (auditor demands evidence for `[outcome]` items that by design cannot exist yet, forcing a FAIL verdict, which blocks running the thing the `[outcome]` item references).
 
-### Step 2: Spawn Completion Auditor
+### Step 2: Self-Audit (default)
 
-Dispatch a fresh `completion-auditor` subagent via the Agent tool:
+The main session performs the audit itself. For **every** Completion Criteria item, cross-check it against the Task Evidence and emit a table to the user:
+
+```
+## Self-Audit
+
+| # | Criterion | Tag | Evidence (task # / command) | Verdict |
+|---|-----------|-----|------------------------------|---------|
+| 1 | <criterion text> | [file-state] | Task 2: `deno test …` exit 0 | PASS |
+| 2 | <criterion text> | [orchestrator-only] | Task 3: raw output embedded | PASS |
+| 3 | <criterion text> | [outcome] | — (excluded: circular by design) | NOT GATING |
+| 4 | <criterion text> | [file-state] | 未実施 | FAIL |
+
+VERIFIED: PASS (self-audit)   ← or VERIFIED: FAIL (self-audit)
+```
+
+Rules:
+- `[outcome]`-tagged items are excluded from the verdict (NOT GATING) — same protocol as the subagent path
+- `[orchestrator-only]` items waived by explicit user decision count as satisfied (BLOCKED BY USER)
+- The verdict is `VERIFIED: PASS (self-audit)` only when every gating item is PASS. Any FAIL or `未実施` on a gating item → `VERIFIED: FAIL (self-audit)`: address the gap (run the missing verification), then redo this step
+- The `Evidence` column must point at concrete raw output already captured in task `metadata.evidence` — do not paraphrase results into the table; the table locates evidence, it does not restate it
+
+If no escalation condition (Step 3) fires, `VERIFIED: PASS (self-audit)` completes this skill's half of the gate — proceed to Step 4.
+
+### Step 3: Escalation — Spawn Completion Auditor (conditional)
+
+Dispatch a fresh `completion-auditor` subagent **only when at least one** of these conditions holds:
+
+1. Plan complexity is **large** or **xl** (from the plan's `## Plan ready` block or plan body)
+2. Any gating criterion's evidence is `未実施`, missing, or lacks raw command output after the self-audit fix loop (i.e., the self-audit cannot honestly reach PASS)
+3. The user explicitly requests a subagent audit
+
+When escalating, dispatch via the Agent tool:
 
 ```
 Agent tool:
@@ -100,7 +133,7 @@ Agent tool:
 
 **Do NOT pass:** full implementation history, your own assessment of quality, or results from prior audit attempts.
 
-### Step 3: Handle Result
+**Handling the auditor result (escalation path only):**
 
 **Relay the audit findings to the user.** The auditor's output is returned as an Agent tool result, which is not visible to the user. You MUST relay the auditor's complete findings — per-criterion assessments, dimension summaries, and verdict — before taking any action. Display the auditor's output in full; do not paraphrase or summarize into "audit passed" or similar.
 
@@ -119,7 +152,7 @@ Never retry with the same subagent — always spawn fresh.
 
 ### Step 4: Hand off to /subagent-review
 
-`VERIFIED: PASS` from this skill authorizes only the **evidence-sufficiency** half of the final gate — it does **not** by itself authorize a completion claim. The current `/impl` final gate requires `/subagent-review` to also return PASS against the aggregated diff before all work may be declared complete (see `~/.claude/skills/impl/SKILL.md` Final gate section).
+`VERIFIED: PASS` — whether from the self-audit (Step 2) or the escalated subagent audit (Step 3) — authorizes only the **evidence-sufficiency** half of the final gate — it does **not** by itself authorize a completion claim. The current `/impl` final gate requires `/subagent-review` to also return PASS against the aggregated diff before all work may be declared complete (see `~/.claude/skills/impl/SKILL.md` Final gate section).
 
 After `VERIFIED: PASS`:
 1. Hand off to `/subagent-review` (invoked by `/impl` automatically; manually invoke if running `/completion-audit` standalone).

@@ -9,11 +9,11 @@ Comprehensive deterministic verification system. Project-aware: detects what bui
 
 ## When to Use
 
-- **Opt-in only**: `/verification-loop` is no longer part of the default `/impl` final gate (the default is `/completion-audit` → `/santa-loop`, which audits per-task evidence without re-execution). Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes. It is not orchestrated by the final-gate task.
+- **Opt-in only**: `/verification-loop` is no longer part of the default `/impl` final gate (the default is `/completion-audit` → `/subagent-review`, which audits per-task evidence without re-execution). Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes. It is not orchestrated by the final-gate task.
 - **Manual**: before opening a PR / after refactoring / when the user asks "/verify" or "verify quality" or "検証して".
 
 Do NOT use for:
-- **Default `/impl` final gate** — use `/completion-audit` + `/santa-loop` instead (per-task verification already covers re-execution; the gate's value is evidence audit + adversarial review)
+- **Default `/impl` final gate** — use `/completion-audit` + `/subagent-review` instead (per-task verification already covers re-execution; the gate's value is evidence audit + fresh-context review)
 - Per-task quality verification (use the task's own acceptance criteria during `/impl`)
 - Semantic correctness review (use `/subagent-review` or `/santa-loop`)
 
@@ -162,7 +162,7 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 | Skill | Relationship |
 |---|---|
-| `/impl` (default flow) | Does NOT invoke `/verification-loop`. The default final gate is `/completion-audit` → `/santa-loop`. When deterministic re-execution is needed, users invoke `/verification-loop` manually outside the `/impl` orchestration |
+| `/impl` (default flow) | Does NOT invoke `/verification-loop`. The default final gate is `/completion-audit` → `/subagent-review`. When deterministic re-execution is needed, users invoke `/verification-loop` manually outside the `/impl` orchestration |
 | `/completion-audit` | The default final gate; audits per-task evidence without re-execution. `/verification-loop` is complementary opt-in re-execution when an audit-only gate is insufficient |
 | `/santa-loop` | Independent of `/verification-loop` in the default flow; runs after `/completion-audit` returns VERIFIED PASS |
 | `/subagent-review` | Per-task review during `/impl`. `/verification-loop` is end-of-implementation, not per-task |

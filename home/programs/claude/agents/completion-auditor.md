@@ -1,6 +1,6 @@
 ---
 name: completion-auditor
-description: Audits whether implementation and verification evidence are sufficient for the plan's stated purpose. Spawned by completion-audit skill at the final gate. Receives structured evidence and reads changed files to cross-check evidence consistency. Do NOT use directly — always invoke through /completion-audit.
+description: Audits whether implementation and verification evidence are sufficient for the plan's stated purpose. Spawned by the completion-audit skill at the final gate only when an escalation condition fires (large/xl plan, evidence gaps, or explicit user request) — the default gate path is the main session's self-audit. Receives structured evidence and reads changed files to cross-check evidence consistency. Do NOT use directly — always invoke through /completion-audit.
 tools: Read, Grep, Glob
 model: sonnet
 color: yellow

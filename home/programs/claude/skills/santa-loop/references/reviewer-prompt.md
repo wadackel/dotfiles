@@ -8,7 +8,7 @@ The orchestrator (santa-loop SKILL.md) substitutes the following placeholders be
 
 - `{task_spec}` — what the implementation was supposed to accomplish (plan summary or task description)
 - `{rubric}` — the criteria table built by the orchestrator (default rubric + file-type dynamic criteria)
-- `{audit_verdict_input}` — verbatim verdict + per-criterion summary from `/completion-audit`. Required for every supported invocation (santa-loop has no valid path without it). If empty, the orchestrator MUST abort with the unsupported-manual-invocation error (see "Absent → unsupported error" below) — do NOT proceed to dispatch reviewers.
+- `{audit_verdict_input}` — verbatim verdict + per-criterion summary from `/completion-audit` (either the default self-audit table ending in `VERIFIED: PASS (self-audit)` or the escalated subagent verdict). Required for every supported invocation (santa-loop has no valid path without it). If empty, the orchestrator MUST abort with the unsupported-manual-invocation error (see "Absent → unsupported error" below) — do NOT proceed to dispatch reviewers.
 - `{output_under_review}` — `git diff` output covering the changes to evaluate (file-by-file)
 - `{file_paths}` — list of changed file paths
 

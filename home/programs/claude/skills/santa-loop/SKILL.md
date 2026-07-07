@@ -22,7 +22,7 @@ Do NOT use for:
 
 ## Prerequisites
 
-`/santa-loop` expects `/completion-audit` to have returned `VERIFIED PASS`, with its verdict + per-criterion summary available as `Audit Verdict Input`. When invoked from `/impl`, the orchestrator runs `/completion-audit` first and embeds its verdict.
+`/santa-loop` expects `/completion-audit` to have returned `VERIFIED PASS`, with its verdict + per-criterion summary available as `Audit Verdict Input`. Both audit modes qualify: the default self-audit table (`VERIFIED: PASS (self-audit)`) and the escalated `completion-auditor` subagent verdict. When invoked from `/impl`, the orchestrator runs `/completion-audit` first and embeds its verdict.
 
 Manual standalone `/santa-loop` without `Audit Verdict Input` is **unsupported** — santa-loop aborts with the single-line error in Layer 2 "Absent → unsupported error". Run `/completion-audit` first, or invoke both via `/impl`.
 
@@ -319,7 +319,7 @@ When invoked from `/impl`, the orchestrator uses the final verdict to mark the g
 
 **Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision (different from ECC's santa-loop). NICE just unblocks the final task and surfaces the report.
 
-**Why Completeness is delegated to /completion-audit (accepting the SPOF trade-off)**: completion-audit owns evidence-audit; santa-loop owns code/design quality. Re-judging completeness duplicates reasoning. Trade-off: completion-audit false-PASS propagates to santa-loop unchecked, mitigated only by completion-auditor's anti-curation rule (raw output enforcement). Net trade: clarity + cost saving > rare unchecked false-PASS.
+**Why Completeness is delegated to /completion-audit (accepting the SPOF trade-off)**: completion-audit owns evidence-audit; santa-loop owns code/design quality. Re-judging completeness duplicates reasoning. Trade-off: completion-audit false-PASS propagates to santa-loop unchecked, mitigated only by completion-audit's anti-curation rule (raw output enforcement, applied in both self-audit and escalated-subagent modes). Net trade: clarity + cost saving > rare unchecked false-PASS.
 
 **Why max 3 rounds**: empirically the convergence rate after round 3 is too low to justify continued automation. Beyond that, the issue is usually a design gap, not a code gap — escalate to the user.
 
