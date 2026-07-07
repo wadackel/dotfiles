@@ -6,6 +6,9 @@
 exclude_commands = []
 
 [tee]
-# Save raw output on failure for debugging
+# Save raw output on failure for debugging.
+# rtk's TOML parser has no per-field defaults inside [tee]; all four fields are required.
 enabled = true
 mode = "failures"
+max_files = 20
+max_file_size = 1048576
