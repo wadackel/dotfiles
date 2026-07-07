@@ -514,7 +514,6 @@
       "/tmp"
     ]
   },
-  "model": "claude-opus-4-7",
   "hooks": {
     "PreToolUse": [
       {
