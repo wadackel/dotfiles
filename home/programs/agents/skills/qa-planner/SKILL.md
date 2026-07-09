@@ -136,15 +136,15 @@ If a browser command fails with `No such file or directory: .../main.json`, the 
 
 #### Run directory setup (mandatory for every Mode B run)
 
-All QA evidence — recording, screenshots, and the Markdown report — is consolidated under `$PROJECT_ROOT/.wadackel/qa/<run-dir>/`. `.wadackel/` is already covered by the user's global gitignore, so no per-project ignore wiring is needed. Save to `/tmp/` is no longer used.
+All QA evidence — screenshots and the Markdown report — is consolidated under `$PROJECT_ROOT/.wadackel/qa/<run-dir>/`. `.wadackel/` is already covered by the user's global gitignore, so no per-project ignore wiring is needed.
 
-**Mandatory first action of Step 4** — this Bash block MUST be the very first Bash tool call of Step 4. No `agent-browser`, `curl`, `record start`, `screenshot`, or any other test command may execute before `$RUN_DIR` is resolved and `mkdir -p "$RUN_DIR/screenshots"` succeeds. Skipping this block guarantees that recordings, screenshots, and `report.md` all fail to land on disk.
+**Mandatory first action of Step 4** — this Bash block MUST be the very first Bash tool call of Step 4. No `agent-browser`, `curl`, `screenshot`, or any other test command may execute before `$RUN_DIR` is resolved and `mkdir -p "$RUN_DIR/screenshots"` succeeds. Skipping this block guarantees that screenshots and `report.md` fail to land on disk.
 
 If `mkdir -p` fails (permission denied, disk full, etc.), STOP Step 4 immediately and report the failure to the user — do not proceed with tests, because evidence would be unrecoverable.
 
 **Fresh-shell warning**: Claude Code's Bash tool spawns a new shell for every invocation, so the `RUN_DIR` shell variable does **not** persist across Bash calls. After the setup block prints `RUN_DIR=...`, treat the printed absolute path as a **literal string** and re-declare `RUN_DIR="<that literal path>"` at the top of every subsequent Bash invocation that references it (or inline the absolute path directly). Forgetting this is the most common cause of "I ran the tests but evidence was not saved" failures.
 
-Resolve `$RUN_DIR` once at Step 4 entry, before any record/screenshot/report command:
+Resolve `$RUN_DIR` once at Step 4 entry, before any screenshot/report command:
 
 ```bash
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -163,14 +163,13 @@ Resulting layout:
 
 ```
 $PROJECT_ROOT/.wadackel/qa/2026-04-27_14-30_login-form-validation/
-├── recording.webm
 ├── screenshots/
 │   ├── qa-t1-home.png
 │   └── qa-t2-error.png
 └── report.md
 ```
 
-**Mode C — passing $RUN_DIR to subagents**: each Bash tool call gets a fresh shell, so subagents do **not** inherit shell variables from the Lead's shells (unlike `$PPID`, which is auto-inherited from the parent process). The Lead must resolve `$RUN_DIR` to a literal path string and embed it in any `SendMessage` prompt to the QA Tester. The QA Tester re-uses that literal path verbatim — it must not recompute its own `$RUN_DIR` or the recording, screenshots, and report will land in different directories.
+**Mode C — passing $RUN_DIR to subagents**: each Bash tool call gets a fresh shell, so subagents do **not** inherit shell variables from the Lead's shells (unlike `$PPID`, which is auto-inherited from the parent process). The Lead must resolve `$RUN_DIR` to a literal path string and embed it in any `SendMessage` prompt to the QA Tester. The QA Tester re-uses that literal path verbatim — it must not recompute its own `$RUN_DIR` or the screenshots and report will land in different directories.
 
 #### Tool Selection
 
@@ -190,16 +189,11 @@ $PROJECT_ROOT/.wadackel/qa/2026-04-27_14-30_login-form-validation/
 - On SKIP: document reason (user action required? environment missing?)
 - If an existing test suite covers a case, run it instead of duplicating
 
-#### Evidence Recording (WebApp)
+#### Evidence Capture (WebApp)
 
-Record evidence to prove test execution results. Commands reference `agent-browser` skill. All paths below are anchored on the `$RUN_DIR` resolved in the Run directory setup block above. Save to `/tmp/` is no longer used.
+Capture screenshot evidence to prove test execution results. Commands reference `agent-browser` skill. All paths below are anchored on the `$RUN_DIR` resolved in the Run directory setup block above.
 
-**Video recording (mandatory for every browser verification, no opt-out):**
-1. Before executing the first test case: `agent-browser --session "claude-$PPID" record start "$RUN_DIR/recording.webm"`
-2. Execute all test cases sequentially
-3. After the last test case completes: `agent-browser --session "claude-$PPID" record stop`
-
-One continuous recording captures the entire session. Do not start/stop per test case. If the verification touches a browser, video is recorded — there is no flag to skip it. Parallel Claude sessions are isolated by `$PPID` in the daemon name and by `$RUN_DIR` (different timestamp / different project root), so per-session collision is already prevented without filename suffixes.
+**Video recording is intentionally not used.** `agent-browser record start` (v0.31.x, 2026-07 現在) wipes the current tab's localStorage as a side effect — verified empirically on 2026-07-09: 50 ms after `record start`, `localStorage.keys` was `[]` even though the URL had not yet redirected. For localStorage-backed auth SPAs (KnowledgeWork recording など) this destroys the auth session and forces a `/auth/login` redirect. Since the QA workflow's real evidence value comes from screenshots + `report.md`, video is dropped entirely rather than worked around. Do NOT introduce `record start` / `record stop` back into this workflow.
 
 **Screenshot rules:**
 - Take a screenshot **after each test action** that produces a visible result
@@ -316,15 +310,7 @@ The Mode B Markdown body (used identically in substep 1 disk write and substep 3
 
 ### エビデンス
 
-#### 動画
-
-(録画ありの場合のみ本サブセクションを書く。WebApp / Electron / Slack 以外で `record start` を行わなかった Mode B 実行ではこの `#### 動画` ごと省略する。パスは report.md からの相対パス。)
-
-<video src="recording.webm" controls width="800"></video>
-
-#### スクリーンショット
-
-(各スクリーンショットをキャプション + 相対パス Markdown image で列挙する。)
+(各スクリーンショットをキャプション + 相対パス Markdown image で列挙する。パスは report.md からの相対パス。)
 
 **T1: [内容]**
 
@@ -343,7 +329,7 @@ The Mode B Markdown body (used identically in substep 1 disk write and substep 3
 ```bash
 cat > "$RUN_DIR/report.md" <<'REPORT_EOF'
 # ... 上記の Mode B 出力テンプレート全文をそのまま挿入 ...
-# (サマリー / 検証結果表 / 不合格テスト / 発見事項 / エビデンス (#### 動画 + #### スクリーンショット) / 推奨事項)
+# (サマリー / 検証結果表 / 不合格テスト / 発見事項 / エビデンス (スクリーンショット) / 推奨事項)
 REPORT_EOF
 ```
 
@@ -362,11 +348,10 @@ The output appears in chat as evidence. A `No such file or directory` error or a
 ```
 **Saved**:
 - Report: $RUN_DIR/report.md
-- Recording: $RUN_DIR/recording.webm
 - Screenshots: $RUN_DIR/screenshots/
 ```
 
-Omit the `Recording` line for Mode B runs without `record start` (API Server / CLI Tool / Background Service / Library targets — anything that did not use `agent-browser record start`). Keep `Report` and `Screenshots` lines always.
+For non-browser targets (API Server / CLI Tool / Background Service / Library) with no screenshots, omit the `Screenshots` line — keep `Report` always.
 
 ## Tips
 
