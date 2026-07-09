@@ -164,6 +164,7 @@ const DEFAULT_GEMINI_TIMEOUT_MS = 15000;
 export async function callGemini(
   condensed: string,
   agentLabel: string,
+  onStderr?: (msg: string) => Promise<void> | void,
   timeoutMs: number = DEFAULT_GEMINI_TIMEOUT_MS,
 ): Promise<LLMResult | null> {
   const prompt = `以下は${agentLabel}セッションの要約データです。` +
@@ -178,7 +179,7 @@ export async function callGemini(
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const cmd = new Deno.Command("gemini", {
-      args: ["-m", "gemini-2.5-flash", "-o", "text"],
+      args: ["-m", "gemini-2.5-flash-lite", "-o", "text"],
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
@@ -196,8 +197,14 @@ export async function callGemini(
     await writer.write(new TextEncoder().encode(`${prompt}\n\n${condensed}`));
     await writer.close();
 
-    const { code, stdout } = await proc.output();
-    if (code !== 0) return null;
+    const { code, stdout, stderr } = await proc.output();
+    if (code !== 0) {
+      if (onStderr) {
+        const msg = new TextDecoder().decode(stderr).trim().slice(0, 500);
+        await onStderr(msg);
+      }
+      return null;
+    }
     return parseLLMOutput(new TextDecoder().decode(stdout));
   } catch {
     return null;

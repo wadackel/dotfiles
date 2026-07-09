@@ -302,7 +302,11 @@ async function main(): Promise<void> {
     `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
   );
 
-  const llmResult = await callGemini(condensed, "Claude Code");
+  const llmResult = await callGemini(
+    condensed,
+    "Claude Code",
+    (msg) => log(`LLM ERROR: ${msg}`),
+  );
   if (!llmResult) {
     await log("LLM: no result, keeping heuristic entry");
     return;

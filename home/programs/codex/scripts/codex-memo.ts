@@ -12,23 +12,23 @@ import {
   upsertDailyNote,
 } from "./memo-shared.ts";
 
-interface TranscriptEnvelope {
-  type: string;
-  payload?: Record<string, unknown>;
+export interface HookLogEntry {
+  ts: string;
+  event: string;
+  session_id: string;
+  cwd: string;
+  tool_name: string;
+  payload: Record<string, unknown>;
 }
 
 interface HookData {
-  session_id?: string;
-  transcript_path?: string | null;
+  session_id: string;
   cwd?: string;
 }
 
 const LOG_FILE = `${Deno.env.get("HOME") ?? "."}/.codex/logs/codex-memo.log`;
+const HOOK_LOG_PATH = `${Deno.env.get("HOME") ?? "."}/.codex/logs/hooks.jsonl`;
 const MAX_LOG_LINES = 1000;
-
-function str(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
 
 function stripControls(raw: string): string {
   return Array.from(raw, (ch) => {
@@ -69,34 +69,44 @@ async function log(msg: string): Promise<void> {
   }
 }
 
-export function parseTranscript(path: string): TranscriptEnvelope[] {
-  const raw = Deno.readTextFileSync(path);
-  return raw
-    .split("\n")
-    .filter((line) => line.trim())
-    .flatMap((line) => {
-      try {
-        return [JSON.parse(line) as TranscriptEnvelope];
-      } catch {
-        return [];
-      }
-    });
+function isHookLogEntry(v: unknown): v is HookLogEntry {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const r = v as Record<string, unknown>;
+  return typeof r.ts === "string" &&
+    typeof r.event === "string" &&
+    typeof r.session_id === "string" &&
+    typeof r.cwd === "string" &&
+    typeof r.tool_name === "string" &&
+    !!r.payload && typeof r.payload === "object" && !Array.isArray(r.payload);
 }
 
-export function isSubagentTranscript(entries: TranscriptEnvelope[]): boolean {
-  for (const entry of entries) {
-    if (entry.type !== "session_meta") continue;
-    const payload = entry.payload;
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return false;
-    }
-    const source = (payload as Record<string, unknown>).source;
-    if (!source || typeof source !== "object" || Array.isArray(source)) {
-      return false;
-    }
-    return "subagent" in (source as Record<string, unknown>);
+export function readHookLogEntriesForSession(
+  logPath: string,
+  sessionId: string,
+  options?: { types?: string[] },
+): HookLogEntry[] {
+  let raw: string;
+  try {
+    raw = Deno.readTextFileSync(logPath);
+  } catch {
+    return [];
   }
-  return false;
+  const types = options?.types;
+  const out: HookLogEntry[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isHookLogEntry(parsed)) continue;
+    if (parsed.session_id !== sessionId) continue;
+    if (types && !types.includes(parsed.event)) continue;
+    out.push(parsed);
+  }
+  return out;
 }
 
 const NOISE_PATTERNS: RegExp[] = [
@@ -122,69 +132,43 @@ function isNoise(text: string): boolean {
   return NOISE_PATTERNS.some((p) => p.test(t));
 }
 
-function messageText(payload: Record<string, unknown>): string {
-  const content = payload.content;
-  if (!Array.isArray(content)) return "";
-  const texts: string[] = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    const b = block as Record<string, unknown>;
-    const text = str(b.text) || str(b.input_text) || str(b.output_text);
-    if (text) texts.push(text);
-  }
-  return texts.join("\n");
+function isTruncated(payload: Record<string, unknown>): boolean {
+  return payload._truncated === true;
 }
 
-export function extractUserTexts(entries: TranscriptEnvelope[]): string[] {
+export function extractUserTexts(entries: HookLogEntry[]): string[] {
   const texts: string[] = [];
-  const seen = new Set<string>();
-  const pushText = (text: string): void => {
-    if (!text || seen.has(text)) return;
-    seen.add(text);
-    texts.push(text);
-  };
   for (const entry of entries) {
-    const payload = entry.payload ?? {};
-    if (entry.type === "event_msg" && payload.type === "user_message") {
-      pushText(str(payload.message));
-      continue;
-    }
-    if (
-      entry.type === "response_item" &&
-      payload.type === "message" &&
-      payload.role === "user"
-    ) {
-      pushText(messageText(payload));
-    }
+    if (entry.event !== "UserPromptSubmit") continue;
+    const payload = entry.payload;
+    if (!payload || isTruncated(payload)) continue;
+    const prompt = payload.prompt;
+    if (typeof prompt !== "string" || !prompt) continue;
+    texts.push(prompt);
   }
   return texts;
 }
 
-export function extractAssistantTexts(entries: TranscriptEnvelope[]): string[] {
+export function extractAssistantTexts(entries: HookLogEntry[]): string[] {
   const texts: string[] = [];
   for (const entry of entries) {
-    const payload = entry.payload ?? {};
-    if (
-      entry.type === "response_item" &&
-      payload.type === "message" &&
-      payload.role === "assistant"
-    ) {
-      const text = messageText(payload).trim();
-      if (text) texts.push(text);
-    }
+    if (entry.event !== "Stop") continue;
+    const payload = entry.payload;
+    if (!payload || isTruncated(payload)) continue;
+    const msg = payload.last_assistant_message;
+    if (typeof msg !== "string" || !msg) continue;
+    texts.push(msg);
   }
   return texts;
 }
 
-export function extractToolSummary(entries: TranscriptEnvelope[]): string {
+export function extractToolSummary(entries: HookLogEntry[]): string {
   const counts = new Map<string, number>();
   for (const entry of entries) {
-    const payload = entry.payload ?? {};
-    if (entry.type !== "response_item" || payload.type !== "function_call") {
-      continue;
-    }
-    const name = str(payload.name);
-    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    if (entry.event !== "PreToolUse") continue;
+    const name = entry.tool_name;
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -193,11 +177,11 @@ export function extractToolSummary(entries: TranscriptEnvelope[]): string {
     .join(", ");
 }
 
-function countUserMessages(entries: TranscriptEnvelope[]): number {
+function countUserMessages(entries: HookLogEntry[]): number {
   return extractUserTexts(entries).filter((t) => !isNoise(t)).length;
 }
 
-export function heuristicSummary(entries: TranscriptEnvelope[]): string {
+export function heuristicSummary(entries: HookLogEntry[]): string {
   for (const text of extractUserTexts(entries)) {
     if (!isNoise(text)) {
       return stripControls(text).replace(/\s+/g, " ").slice(0, 100).trimEnd();
@@ -216,7 +200,7 @@ export function heuristicSummary(entries: TranscriptEnvelope[]): string {
   return "";
 }
 
-export function buildLLMInput(entries: TranscriptEnvelope[]): string {
+export function buildLLMInput(entries: HookLogEntry[]): string {
   const parts: string[] = [];
   const userTexts = extractUserTexts(entries).filter((t) => !isNoise(t));
   if (userTexts.length > 0) {
@@ -281,20 +265,17 @@ export function validateHookData(raw: unknown): HookData | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
   const sessionId = r.session_id;
-  const transcriptPath = r.transcript_path;
   const cwd = r.cwd;
   if (typeof sessionId !== "string" || !sessionId) return null;
-  if (typeof transcriptPath !== "string" || !transcriptPath) return null;
   if (cwd !== undefined && typeof cwd !== "string") return null;
   return {
     session_id: sessionId,
-    transcript_path: transcriptPath,
     cwd: cwd as string | undefined,
   };
 }
 
 interface PreparedContext {
-  entries: TranscriptEnvelope[];
+  entries: HookLogEntry[];
   dailyPath: string;
   repoName: string;
   timestamp: string;
@@ -306,26 +287,15 @@ async function prepareContext(
   input: HookData,
   logPrefix: "" | "WORKER ",
 ): Promise<PreparedContext | null> {
-  const sessionId = input.session_id ?? "";
+  const sessionId = input.session_id;
   const sessionShort = sessionId.slice(0, 8);
-  const transcriptPath = input.transcript_path ?? "";
   const cwd = input.cwd ?? Deno.cwd();
 
-  if (!sessionShort || !transcriptPath) {
-    await log(`${logPrefix}SKIP: missing session_id or transcript_path`);
-    return null;
-  }
-
-  let entries: TranscriptEnvelope[];
-  try {
-    entries = parseTranscript(transcriptPath);
-  } catch (e) {
-    await log(`${logPrefix}SKIP: cannot parse transcript: ${e}`);
-    return null;
-  }
-
-  if (isSubagentTranscript(entries)) {
-    await log(`${logPrefix}SKIP: subagent transcript`);
+  const entries = readHookLogEntriesForSession(HOOK_LOG_PATH, sessionId, {
+    types: ["UserPromptSubmit", "Stop", "PreToolUse"],
+  });
+  if (entries.length === 0) {
+    await log(`${logPrefix}SKIP: no session events in hooks.jsonl`);
     return null;
   }
 
@@ -367,9 +337,9 @@ async function mainHook(): Promise<void> {
   }
 
   await log(
-    `START: session=${
-      (hookData.session_id ?? "").slice(0, 8)
-    } transcript=${hookData.transcript_path}`,
+    `START: session=${hookData.session_id.slice(0, 8)} cwd=${
+      hookData.cwd ?? ""
+    }`,
   );
 
   const ctx = await prepareContext(hookData, "");
@@ -414,7 +384,7 @@ async function mainHook(): Promise<void> {
 
 async function mainWorker(workerInput: HookData): Promise<void> {
   await log(
-    `WORKER START: session=${(workerInput.session_id ?? "").slice(0, 8)}`,
+    `WORKER START: session=${workerInput.session_id.slice(0, 8)}`,
   );
 
   const ctx = await prepareContext(workerInput, "WORKER ");
@@ -424,7 +394,11 @@ async function mainWorker(workerInput: HookData): Promise<void> {
   await log(
     `WORKER LLM: calling gemini flash (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
   );
-  const llmResult = await callGemini(condensed, "Codex");
+  const llmResult = await callGemini(
+    condensed,
+    "Codex",
+    (msg) => log(`WORKER LLM ERROR: ${msg}`),
+  );
   if (!llmResult) {
     await log("WORKER LLM: no result, keeping heuristic entry");
     return;
