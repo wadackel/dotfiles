@@ -65,6 +65,7 @@
 
     # AI Coding Agents
     gemini-cli # Google Gemini AI CLI for the terminal
+    ctx # Search local coding-agent session history (ctxrs/ctx)
   ];
 
   # Shell-independent PATH additions

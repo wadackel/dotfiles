@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "installer": "ctx-cli",
+  "skill_name": "ctx-agent-history-search",
+  "skill_hash": "sha256:d76cd55f506f6d8605f2fed933a16e4ab995b3a4ab8e6d96bfd84d469872b3d6",
+  "ctx_cli_version": "0.24.0",
+  "installed_at": "2026-07-11T01:40:41.659117+00:00"
+}
