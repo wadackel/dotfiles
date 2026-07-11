@@ -128,7 +128,7 @@ Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
     "--allow-read",
     "--allow-write",
     "--allow-env=HOME,TMPDIR",
-    "--allow-run=git,gemini",
+    "--allow-run=git,claude,deno",
     scriptPath,
     "--worker",
     JSON.stringify(hookData),

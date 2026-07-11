@@ -185,7 +185,7 @@ function spawnMemoWorker(input: MemoDispatchInput): void {
         "--allow-read",
         "--allow-write",
         "--allow-env=HOME,TMPDIR",
-        "--allow-run=git,gemini,sqlite3",
+        "--allow-run=git,claude,sqlite3",
         workerPath,
       ],
       { stdin: "pipe", stdout: "ignore", stderr: "ignore" },

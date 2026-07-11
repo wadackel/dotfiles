@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   countUserMessages,
   extractUserTexts,
@@ -88,6 +88,35 @@ Deno.test("heuristicSummary: keeps prompts that mention Claude Code tags mid-tex
     heuristicSummary(entries),
     "バグ調査中に <command-name> について質問したい",
   );
+});
+
+Deno.test("main: CLAUDE_MEMO_SKIP=1 short-circuits before touching state", async () => {
+  const tmp = await Deno.makeTempDir();
+  const scriptPath = new URL("./claude-memo.ts", import.meta.url).pathname;
+
+  const cmd = new Deno.Command("deno", {
+    args: [
+      "run",
+      "--allow-read",
+      "--allow-write",
+      "--allow-env",
+      "--allow-run=git,claude",
+      scriptPath,
+    ],
+    env: { CLAUDE_MEMO_SKIP: "1", TMPDIR: tmp, HOME: tmp },
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const proc = cmd.spawn();
+  const writer = proc.stdin.getWriter();
+  await writer.write(new TextEncoder().encode("{}"));
+  await writer.close();
+  const { code } = await proc.output();
+  assertEquals(code, 0);
+
+  const log = await Deno.readTextFile(`${tmp}/claude-memo.log`);
+  assertStringIncludes(log, "SKIP: CLAUDE_MEMO_SKIP=1");
 });
 
 Deno.test("countUserMessages: excludes isMeta:true entries", () => {

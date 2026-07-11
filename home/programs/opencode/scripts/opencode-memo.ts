@@ -1,14 +1,14 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,gemini,sqlite3
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,claude,sqlite3
 
 // opencode session-end memo: bridges opencode sessions → Obsidian Daily Note.
 // Invoked by home/programs/opencode/plugin.ts on session.idle /
 // session.status:idle, via Bun.spawn with stdin = JSON {session_id, cwd}.
 // Plugin already detaches the worker (unref + ignored stdio), so this script
-// runs the heuristic-write → debounce → Gemini → upsert flow inline rather
+// runs the heuristic-write → debounce → Claude → upsert flow inline rather
 // than the two-stage mainHook/mainWorker structure used by codex-memo.
 
 import {
-  callGemini,
+  callClaude,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
@@ -321,12 +321,12 @@ async function main(): Promise<void> {
 
   const condensed = buildLLMInput(parsedRows);
   await log(
-    `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
+    `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
   );
-  const llmResult = await callGemini(
+  const llmResult = await callClaude(
     condensed,
     "opencode",
-    (msg) => log(`LLM ERROR: ${msg}`),
+    { onStderr: (msg) => log(`LLM ERROR: ${msg}`) },
   );
   if (!llmResult) {
     await log("LLM: no result, keeping heuristic entry");

@@ -1,7 +1,7 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,gemini,deno
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,claude,deno
 
 import {
-  callGemini,
+  callClaude,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
@@ -242,7 +242,7 @@ export function buildWorkerArgs(
     "--allow-read",
     "--allow-write",
     "--allow-env=HOME,TMPDIR",
-    "--allow-run=git,gemini",
+    "--allow-run=git,claude,deno",
     scriptPath,
     "--worker",
     JSON.stringify(hookData),
@@ -392,12 +392,12 @@ async function mainWorker(workerInput: HookData): Promise<void> {
 
   const condensed = buildLLMInput(ctx.entries);
   await log(
-    `WORKER LLM: calling gemini flash (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
+    `WORKER LLM: calling claude -p (haiku) (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
   );
-  const llmResult = await callGemini(
+  const llmResult = await callClaude(
     condensed,
     "Codex",
-    (msg) => log(`WORKER LLM ERROR: ${msg}`),
+    { onStderr: (msg) => log(`WORKER LLM ERROR: ${msg}`) },
   );
   if (!llmResult) {
     await log("WORKER LLM: no result, keeping heuristic entry");

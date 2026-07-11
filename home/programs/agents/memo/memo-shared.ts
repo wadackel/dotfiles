@@ -4,7 +4,7 @@
 //
 // Agent-specific concerns (transcript / DB parser, NOISE_PATTERNS,
 // heuristicSummary, buildLLMInput, log path, hook entry) stay in the agent
-// script. Shared concerns (Daily Note upsert, Gemini call, debounce I/O,
+// script. Shared concerns (Daily Note upsert, Claude call, debounce I/O,
 // repo-name resolution, LLM output parsing, Obsidian escape) live here.
 
 export interface LLMResult {
@@ -157,16 +157,24 @@ export function saveDebounceState(
   );
 }
 
-// --- Gemini call ---
+// --- Claude call ---
 
-const DEFAULT_GEMINI_TIMEOUT_MS = 15000;
+const DEFAULT_CLAUDE_TIMEOUT_MS = 45000;
+const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
-export async function callGemini(
+export interface CallClaudeOptions {
+  onStderr?: (msg: string) => Promise<void> | void;
+  timeoutMs?: number;
+  extraEnv?: Record<string, string>;
+}
+
+export async function callClaude(
   condensed: string,
   agentLabel: string,
-  onStderr?: (msg: string) => Promise<void> | void,
-  timeoutMs: number = DEFAULT_GEMINI_TIMEOUT_MS,
+  opts: CallClaudeOptions = {},
 ): Promise<LLMResult | null> {
+  const { onStderr, timeoutMs = DEFAULT_CLAUDE_TIMEOUT_MS, extraEnv } = opts;
+
   const prompt = `以下は${agentLabel}セッションの要約データです。` +
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
     "出力フォーマット:\n" +
@@ -178,8 +186,11 @@ export async function callGemini(
   let proc: Deno.ChildProcess | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const cmd = new Deno.Command("gemini", {
-      args: ["-m", "gemini-2.5-flash-lite", "-o", "text"],
+    const cmd = new Deno.Command("claude", {
+      args: ["-p", "--safe-mode", "--model", CLAUDE_MODEL],
+      // ANTHROPIC_API_KEY を空文字で上書きすることで、親環境にキーが設定されていても
+      // API 従量課金ではなくサブスク OAuth 経由の実行を強制する。
+      env: { ANTHROPIC_API_KEY: "", ...(extraEnv ?? {}) },
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",

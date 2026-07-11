@@ -1,7 +1,7 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,gemini
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,claude
 
 import {
-  callGemini,
+  callClaude,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
@@ -213,6 +213,14 @@ function buildLLMInput(entries: TranscriptEntry[]): string {
 // --- Main ---
 
 async function main(): Promise<void> {
+  // callClaude は子 `claude -p` セッションに --safe-mode を渡して hooks を止めているが、
+  // safe-mode を将来外した場合や他所から本 hook が発火する経路が生えた場合に備え、
+  // 親から伝播した env による早期 return を二段目の保険として残す。
+  if (Deno.env.get("CLAUDE_MEMO_SKIP") === "1") {
+    await log("SKIP: CLAUDE_MEMO_SKIP=1 (recursion guard)");
+    return;
+  }
+
   await rotateLog();
 
   const stdinData = await new Response(Deno.stdin.readable).text();
@@ -299,13 +307,16 @@ async function main(): Promise<void> {
 
   const condensed = buildLLMInput(entries);
   await log(
-    `LLM: calling gemini flash (userCount=${userCount}, condensed=${condensed.length} chars)`,
+    `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
   );
 
-  const llmResult = await callGemini(
+  const llmResult = await callClaude(
     condensed,
     "Claude Code",
-    (msg) => log(`LLM ERROR: ${msg}`),
+    {
+      onStderr: (msg) => log(`LLM ERROR: ${msg}`),
+      extraEnv: { CLAUDE_MEMO_SKIP: "1" },
+    },
   );
   if (!llmResult) {
     await log("LLM: no result, keeping heuristic entry");
