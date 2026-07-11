@@ -20,6 +20,26 @@
         "type": "github"
       }
     },
+    "ctx-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783740074,
+        "narHash": "sha256-gHX/q0aqPFyFrxCCLxnrDe4C2/T7NQDJ7xQWZMunmZ4=",
+        "owner": "wadackel",
+        "repo": "ctx-nix",
+        "rev": "a21efedf5713e4ff22ad4d02fabde5da2159e83e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wadackel",
+        "repo": "ctx-nix",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -155,6 +175,7 @@
     "root": {
       "inputs": {
         "codex-nix": "codex-nix",
+        "ctx-nix": "ctx-nix",
         "home-manager": "home-manager",
         "mise-nix": "mise-nix",
         "mo-nix": "mo-nix",

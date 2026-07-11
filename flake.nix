@@ -28,6 +28,10 @@
       url = "github:wadackel/codex-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    ctx-nix = {
+      url = "github:wadackel/ctx-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -41,6 +45,7 @@
       mo-nix,
       mise-nix,
       codex-nix,
+      ctx-nix,
       ...
     }:
     let
@@ -61,6 +66,7 @@
           mo-nix
           mise-nix
           codex-nix
+          ctx-nix
           ;
       };
 
@@ -72,6 +78,7 @@
         mo-nix.overlays.default
         mise-nix.overlays.default
         codex-nix.overlays.default
+        ctx-nix.overlays.default
         (final: prev: {
           mvfst = prev.mvfst.overrideAttrs (old: {
             disabledTests = (old.disabledTests or [ ]) ++ [
@@ -83,31 +90,6 @@
           # ハングする upstream issue を回避するため doCheck を無効化。
           direnv = prev.direnv.overrideAttrs (_old: {
             doCheck = false;
-          });
-          ctx = final.stdenvNoCC.mkDerivation (finalAttrs: {
-            pname = "ctx";
-            version = "0.24.0";
-
-            src = final.fetchurl {
-              url = "https://github.com/ctxrs/ctx/releases/download/v${finalAttrs.version}/ctx-macos-arm64";
-              hash = "sha256-p5kQ8t1uSlnmenu0td0VSUUHGQMUd/9fwE8EkxQkAuQ=";
-            };
-
-            dontUnpack = true;
-
-            installPhase = ''
-              runHook preInstall
-              install -Dm755 $src $out/bin/ctx
-              runHook postInstall
-            '';
-
-            meta = {
-              description = "Search the coding agent history already on your machine";
-              homepage = "https://github.com/ctxrs/ctx";
-              license = final.lib.licenses.asl20;
-              platforms = [ "aarch64-darwin" ];
-              mainProgram = "ctx";
-            };
           });
         })
       ];
