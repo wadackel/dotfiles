@@ -1,0 +1,13 @@
+# 実行時に CDN から自動取得されるアイコンキャッシュ
+.twemoji-cache/
+.lucide-cache/
+
+# Python
+__pycache__/
+*.pyc
+
+# 生成物（examples/ 内のサンプル SVG は追跡する）
+/*.svg
+/*.png
+out.svg
+out.png
