@@ -230,7 +230,10 @@ export function buildLLMInput(parsed: ParseResult): string {
   if (parsed.assistant.length > 1) {
     parts.push("\n[Last assistant response]");
     parts.push(
-      stripControls(parsed.assistant.at(-1)!).replace(/\s+/g, " ").slice(0, 300),
+      stripControls(parsed.assistant.at(-1)!).replace(/\s+/g, " ").slice(
+        0,
+        300,
+      ),
     );
   }
   const tools = formatToolSummary(parsed.toolCounts);

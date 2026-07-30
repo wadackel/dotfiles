@@ -11,7 +11,10 @@
       url = "github:LnL7/nix-darwin";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nix-claude-code = {
       url = "github:ryoppippi/nix-claude-code";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -79,7 +82,7 @@
         mise-nix.overlays.default
         codex-nix.overlays.default
         ctx-nix.overlays.default
-        (final: prev: {
+        (_final: prev: {
           mvfst = prev.mvfst.overrideAttrs (old: {
             disabledTests = (old.disabledTests or [ ]) ++ [
               "QuicClientTransportAfterStartTest.RecvOneRttAck"

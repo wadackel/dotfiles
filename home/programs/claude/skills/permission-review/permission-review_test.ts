@@ -1,15 +1,15 @@
 import {
-  assertEquals,
   assertArrayIncludes,
+  assertEquals,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
-  generalizeBashCommand,
-  extractNonBashExample,
-  isPatternCovered,
-  diagnoseReason,
   aggregatePatterns,
-  purgeResolvedEntries,
+  diagnoseReason,
+  extractNonBashExample,
+  generalizeBashCommand,
   isActionableTool,
+  isPatternCovered,
+  purgeResolvedEntries,
 } from "./permission-review.ts";
 
 // --- generalizeBashCommand ---
@@ -138,7 +138,10 @@ Deno.test("extractNonBashExample: object-only input shows key names", () => {
 // --- isPatternCovered ---
 
 Deno.test("isPatternCovered: exact match", () => {
-  assertEquals(isPatternCovered("Bash(git status)", ["Bash(git status)"]), true);
+  assertEquals(
+    isPatternCovered("Bash(git status)", ["Bash(git status)"]),
+    true,
+  );
 });
 
 Deno.test("isPatternCovered: suffix glob", () => {
@@ -216,21 +219,27 @@ Deno.test("isPatternCovered: git commit * does NOT cover git *", () => {
 
 Deno.test("diagnoseReason: compound command with pipe", () => {
   assertEquals(
-    diagnoseReason("git status | head -5", ["Bash(git status *)"], ["Bash(git status *)"]),
+    diagnoseReason("git status | head -5", ["Bash(git status *)"], [
+      "Bash(git status *)",
+    ]),
     "compound_command",
   );
 });
 
 Deno.test("diagnoseReason: compound command with &&", () => {
   assertEquals(
-    diagnoseReason("git add . && git commit -m msg", ["Bash(git add *)"], ["Bash(git *)"]),
+    diagnoseReason("git add . && git commit -m msg", ["Bash(git add *)"], [
+      "Bash(git *)",
+    ]),
     "compound_command",
   );
 });
 
 Deno.test("diagnoseReason: pattern gap — same tool registered but subcmd missing", () => {
   assertEquals(
-    diagnoseReason("git merge feature", ["Bash(git merge *)"], ["Bash(git commit *)"]),
+    diagnoseReason("git merge feature", ["Bash(git merge *)"], [
+      "Bash(git commit *)",
+    ]),
     "pattern_gap",
   );
 });
@@ -313,14 +322,37 @@ Deno.test("aggregatePatterns: subPatterns accumulated as union", () => {
 Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only", () => {
   const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
   const lines = [
-    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git commit -m test" }, cwd: "/tmp", project: "test" }),
-    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "whoami" }, cwd: "/tmp", project: "test" }),
-    JSON.stringify({ ts: "2025-01-03T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
+    JSON.stringify({
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git commit -m test" },
+      cwd: "/tmp",
+      project: "test",
+    }),
+    JSON.stringify({
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "whoami" },
+      cwd: "/tmp",
+      project: "test",
+    }),
+    JSON.stringify({
+      ts: "2025-01-03T00:00:00Z",
+      sid: "s1",
+      tool: "AskUserQuestion",
+      input: {},
+      cwd: "/tmp",
+      project: "test",
+    }),
   ];
   Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
-  const removed = purgeResolvedEntries(tmpFile, settings, ["Bash(git commit *)"]);
+  const removed = purgeResolvedEntries(tmpFile, settings, [
+    "Bash(git commit *)",
+  ]);
   assertEquals(removed, 1);
 
   // Remaining entries
@@ -332,7 +364,14 @@ Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only"
 Deno.test("purgeResolvedEntries: empty allowListOverride purges nothing", () => {
   const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
   const lines = [
-    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git status" }, cwd: "/tmp", project: "test" }),
+    JSON.stringify({
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git status" },
+      cwd: "/tmp",
+      project: "test",
+    }),
   ];
   Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
 
@@ -495,9 +534,30 @@ Deno.test("aggregatePatterns: backward compat — entry without event treated as
 Deno.test("purgeResolvedEntries: bulk purge removes non-actionable entries", () => {
   const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
   const lines = [
-    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git status" }, cwd: "/tmp", project: "test" }),
-    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
-    JSON.stringify({ ts: "2025-01-03T00:00:00Z", sid: "s1", tool: "ExitPlanMode", input: {}, cwd: "/tmp", project: "test" }),
+    JSON.stringify({
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git status" },
+      cwd: "/tmp",
+      project: "test",
+    }),
+    JSON.stringify({
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "AskUserQuestion",
+      input: {},
+      cwd: "/tmp",
+      project: "test",
+    }),
+    JSON.stringify({
+      ts: "2025-01-03T00:00:00Z",
+      sid: "s1",
+      tool: "ExitPlanMode",
+      input: {},
+      cwd: "/tmp",
+      project: "test",
+    }),
   ];
   Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
 
@@ -516,14 +576,30 @@ Deno.test("purgeResolvedEntries: bulk purge removes non-actionable entries", () 
 Deno.test("purgeResolvedEntries: selective purge does NOT remove non-actionable entries", () => {
   const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
   const lines = [
-    JSON.stringify({ ts: "2025-01-01T00:00:00Z", sid: "s1", tool: "Bash", input: { command: "git commit -m test" }, cwd: "/tmp", project: "test" }),
-    JSON.stringify({ ts: "2025-01-02T00:00:00Z", sid: "s1", tool: "AskUserQuestion", input: {}, cwd: "/tmp", project: "test" }),
+    JSON.stringify({
+      ts: "2025-01-01T00:00:00Z",
+      sid: "s1",
+      tool: "Bash",
+      input: { command: "git commit -m test" },
+      cwd: "/tmp",
+      project: "test",
+    }),
+    JSON.stringify({
+      ts: "2025-01-02T00:00:00Z",
+      sid: "s1",
+      tool: "AskUserQuestion",
+      input: {},
+      cwd: "/tmp",
+      project: "test",
+    }),
   ];
   Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
   // Selective purge (with allowListOverride) only purges matched patterns
-  const removed = purgeResolvedEntries(tmpFile, settings, ["Bash(git commit *)"]);
+  const removed = purgeResolvedEntries(tmpFile, settings, [
+    "Bash(git commit *)",
+  ]);
   assertEquals(removed, 1); // only Bash entry
 
   const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");

@@ -73,7 +73,9 @@ async function main(): Promise<number> {
 
   const cache = await runDeno(["cache", PICKER_PATH]);
   if (cache.code !== 0) {
-    errors.push(`deno cache failed (code ${cache.code}): ${cache.stderr.trim()}`);
+    errors.push(
+      `deno cache failed (code ${cache.code}): ${cache.stderr.trim()}`,
+    );
   }
 
   const home = Deno.env.get("HOME");

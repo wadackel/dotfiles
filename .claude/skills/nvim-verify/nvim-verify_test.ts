@@ -9,7 +9,10 @@ const ERROR_PATTERN = /E\d+:/;
 
 Deno.test("ERROR_PATTERN matches Neovim error codes", () => {
   assertEquals(ERROR_PATTERN.test("E5108: Error executing lua"), true);
-  assertEquals(ERROR_PATTERN.test("E5112: Error while creating lua chunk"), true);
+  assertEquals(
+    ERROR_PATTERN.test("E5112: Error while creating lua chunk"),
+    true,
+  );
   assertEquals(ERROR_PATTERN.test("E216: No such group or event"), true);
   assertEquals(ERROR_PATTERN.test("E1: some error"), true);
 });

@@ -25,8 +25,15 @@ const SUBCOMMAND_TOOLS = new Set([
 ]);
 
 export const ACTIONABLE_TOOLS = new Set([
-  "Bash", "Edit", "Write", "Read",
-  "Glob", "Grep", "Task", "WebFetch", "WebSearch",
+  "Bash",
+  "Edit",
+  "Write",
+  "Read",
+  "Glob",
+  "Grep",
+  "Task",
+  "WebFetch",
+  "WebSearch",
 ]);
 
 export function isActionableTool(toolName: string): boolean {
@@ -257,13 +264,18 @@ export function extractNonBashExample(
   return `${toolName}(${keys.join(", ")})`;
 }
 
-export function isPatternCovered(pattern: string, allowList: string[]): boolean {
+export function isPatternCovered(
+  pattern: string,
+  allowList: string[],
+): boolean {
   for (const allowed of allowList) {
     if (allowed === pattern) return true;
     // Tool(**) covers bare Tool (e.g. "Read(**)" covers "Read")
     if (allowed.endsWith("(**)")) {
       const toolName = allowed.slice(0, -4);
-      if (pattern === toolName || pattern.startsWith(toolName + "(")) return true;
+      if (pattern === toolName || pattern.startsWith(toolName + "(")) {
+        return true;
+      }
     }
     // Suffix glob: "Bash(git *)" covers "Bash(git push *)"
     if (allowed.endsWith("*)")) {
@@ -377,8 +389,7 @@ export function aggregatePatterns(
     info.projects.add(entry.project);
 
     if (event === "request") {
-      const hasSuggestion =
-        Array.isArray(entry.permission_suggestions) &&
+      const hasSuggestion = Array.isArray(entry.permission_suggestions) &&
         entry.permission_suggestions.length > 0;
       if (hasSuggestion) info.hasSuggestion = true;
       if (
@@ -453,7 +464,9 @@ function formatText(result: ReviewResult, top: number): string {
   lines.push("");
 
   if (result.allowCandidates.length > 0) {
-    lines.push(`## permissions.allow candidates (${result.allowCandidates.length} patterns)`);
+    lines.push(
+      `## permissions.allow candidates (${result.allowCandidates.length} patterns)`,
+    );
     lines.push("");
     lines.push(
       "   Req  Exec  Pattern                                    Last Seen    Projects",
@@ -567,7 +580,10 @@ export function purgeResolvedEntries(
   }
 
   if (removed > 0) {
-    Deno.writeTextFileSync(logFile, kept.length > 0 ? kept.join("\n") + "\n" : "");
+    Deno.writeTextFileSync(
+      logFile,
+      kept.length > 0 ? kept.join("\n") + "\n" : "",
+    );
   }
   return removed;
 }
@@ -626,12 +642,14 @@ if (import.meta.main) {
   }
 
   const settings = loadSettings();
-  const opts =
-    format === "json"
-      ? { maxExamples: 50, maxExampleLen: 2000 }
-      : { maxExamples: 5, maxExampleLen: 200 };
-  const { allowCandidates, reviewItems, stats } =
-    aggregatePatterns(entries, settings, opts);
+  const opts = format === "json"
+    ? { maxExamples: 50, maxExampleLen: 2000 }
+    : { maxExamples: 5, maxExampleLen: 200 };
+  const { allowCandidates, reviewItems, stats } = aggregatePatterns(
+    entries,
+    settings,
+    opts,
+  );
 
   const now = new Date();
   const from = new Date(now);

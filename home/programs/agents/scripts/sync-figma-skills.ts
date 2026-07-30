@@ -29,7 +29,11 @@ const decoder = new TextDecoder();
 
 type RunResult = { code: number; stdout: string; stderr: string };
 
-async function run(cmd: string, args: string[], cwd?: string): Promise<RunResult> {
+async function run(
+  cmd: string,
+  args: string[],
+  cwd?: string,
+): Promise<RunResult> {
   const child = new Deno.Command(cmd, {
     args,
     cwd,
@@ -44,7 +48,11 @@ async function run(cmd: string, args: string[], cwd?: string): Promise<RunResult
   };
 }
 
-async function mustRun(cmd: string, args: string[], cwd?: string): Promise<string> {
+async function mustRun(
+  cmd: string,
+  args: string[],
+  cwd?: string,
+): Promise<string> {
   const r = await run(cmd, args, cwd);
   if (r.code !== 0) {
     const msg = `Command failed (exit ${r.code}): ${cmd} ${args.join(" ")}`;
@@ -67,7 +75,10 @@ async function exists(path: string): Promise<boolean> {
 // Recursive copy that rejects symlinks anywhere in the tree.
 // Prevents a malicious upstream from smuggling `vendored/foo.md -> ~/.ssh/id_rsa`
 // into the agents' skill set (a supply-chain symlink-smuggling attack).
-async function copyTreeRejectingSymlinks(src: string, dest: string): Promise<void> {
+async function copyTreeRejectingSymlinks(
+  src: string,
+  dest: string,
+): Promise<void> {
   const stat = await Deno.lstat(src);
   if (stat.isSymlink) {
     throw new Error(
@@ -77,7 +88,10 @@ async function copyTreeRejectingSymlinks(src: string, dest: string): Promise<voi
   if (stat.isDirectory) {
     await Deno.mkdir(dest, { recursive: true });
     for await (const entry of Deno.readDir(src)) {
-      await copyTreeRejectingSymlinks(`${src}/${entry.name}`, `${dest}/${entry.name}`);
+      await copyTreeRejectingSymlinks(
+        `${src}/${entry.name}`,
+        `${dest}/${entry.name}`,
+      );
     }
     return;
   }
@@ -85,7 +99,9 @@ async function copyTreeRejectingSymlinks(src: string, dest: string): Promise<voi
     await Deno.copyFile(src, dest);
     return;
   }
-  throw new Error(`Refusing to copy non-regular entry: ${src} (not file, dir, or symlink)`);
+  throw new Error(
+    `Refusing to copy non-regular entry: ${src} (not file, dir, or symlink)`,
+  );
 }
 
 async function readSourceCommit(skill: string): Promise<string | null> {
@@ -130,10 +146,14 @@ async function checkMode(): Promise<number> {
 async function syncMode(): Promise<number> {
   // Deno.makeTempDir reads $TMPDIR internally and produces an OS-unique
   // name — no --allow-env=TMPDIR and no PID-collision risk.
-  const tmpDir = await Deno.makeTempDir({ prefix: "figma-mcp-server-guide-sync-" });
+  const tmpDir = await Deno.makeTempDir({
+    prefix: "figma-mcp-server-guide-sync-",
+  });
 
   // Hygiene: clear leftover staging from any prior interrupted run.
-  if (await exists(STAGING_DIR)) await Deno.remove(STAGING_DIR, { recursive: true });
+  if (await exists(STAGING_DIR)) {
+    await Deno.remove(STAGING_DIR, { recursive: true });
+  }
 
   try {
     console.log(`cloning ${UPSTREAM} (sparse, depth 1) → ${tmpDir}`);
@@ -147,7 +167,11 @@ async function syncMode(): Promise<number> {
       tmpDir,
     ]);
 
-    const sparseArgs = ["sparse-checkout", "set", ...SKILLS.map((s) => `skills/${s}`)];
+    const sparseArgs = [
+      "sparse-checkout",
+      "set",
+      ...SKILLS.map((s) => `skills/${s}`),
+    ];
     await mustRun("git", sparseArgs, tmpDir);
 
     const sha = (await mustRun("git", ["rev-parse", "HEAD"], tmpDir)).trim();
@@ -182,7 +206,8 @@ async function syncMode(): Promise<number> {
     const syncedAt = new Date().toISOString();
     for (const skill of SKILLS) {
       const sourceFile = `${SKILLS_DIR}/${skill}/.figma-source`;
-      const body = `upstream: ${UPSTREAM}\ncommit: ${sha}\nsynced_at: ${syncedAt}\n`;
+      const body =
+        `upstream: ${UPSTREAM}\ncommit: ${sha}\nsynced_at: ${syncedAt}\n`;
       await Deno.writeTextFile(sourceFile, body);
     }
 

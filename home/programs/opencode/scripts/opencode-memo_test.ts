@@ -5,10 +5,10 @@ import {
   formatToolSummary,
   heuristicSummary,
   isNoise,
-  parseRows,
-  validateHookData,
   type MessageRow,
+  parseRows,
   type PartRow,
+  validateHookData,
 } from "./opencode-memo.ts";
 import { upsertDailyNote } from "../../agents/memo/memo-shared.ts";
 
@@ -19,10 +19,20 @@ const messages: MessageRow[] = [
 ];
 
 const parts: PartRow[] = [
-  { message_id: "m1", type: "text", text: "opencodeのhooksを改善したい", tool: null },
+  {
+    message_id: "m1",
+    type: "text",
+    text: "opencodeのhooksを改善したい",
+    tool: null,
+  },
   { message_id: "m2", type: "step-start", text: null, tool: null },
   { message_id: "m2", type: "reasoning", text: "thinking quietly", tool: null },
-  { message_id: "m2", type: "text", text: "関連箇所を確認します。", tool: null },
+  {
+    message_id: "m2",
+    type: "text",
+    text: "関連箇所を確認します。",
+    tool: null,
+  },
   { message_id: "m2", type: "tool", text: null, tool: "glob" },
   { message_id: "m2", type: "tool", text: null, tool: "read" },
   { message_id: "m2", type: "step-finish", text: null, tool: null },
@@ -34,7 +44,10 @@ const parts: PartRow[] = [
 Deno.test("parseRows: groups by role, captures text + tool counts", () => {
   const out = parseRows(messages, parts);
   assertEquals(out.user, ["opencodeのhooksを改善したい"]);
-  assertEquals(out.assistant, ["関連箇所を確認します。", "実装が完了しました。"]);
+  assertEquals(out.assistant, [
+    "関連箇所を確認します。",
+    "実装が完了しました。",
+  ]);
   assertEquals(out.toolCounts.get("glob"), 2);
   assertEquals(out.toolCounts.get("read"), 1);
   assertEquals(out.toolCounts.size, 2);
@@ -107,7 +120,12 @@ Deno.test("buildLLMInput: includes user prompts, assistant text, tools", () => {
 Deno.test("countUserMessages: counts non-noise user prompts only", () => {
   const out = parseRows(messages, [
     { message_id: "m1", type: "text", text: "ok", tool: null },
-    { message_id: "m1", type: "text", text: "実装の質問が複数あります", tool: null },
+    {
+      message_id: "m1",
+      type: "text",
+      text: "実装の質問が複数あります",
+      tool: null,
+    },
   ]);
   assertEquals(countUserMessages(out), 1);
 });

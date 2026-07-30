@@ -127,7 +127,10 @@ export function upsertDailyNote(
 
 // --- Debounce ---
 
-export function debounceStatePath(prefix: string, sessionShort: string): string {
+export function debounceStatePath(
+  prefix: string,
+  sessionShort: string,
+): string {
   return `${
     Deno.env.get("TMPDIR") ?? "/tmp"
   }/${prefix}-memo-llm-${sessionShort}.json`;

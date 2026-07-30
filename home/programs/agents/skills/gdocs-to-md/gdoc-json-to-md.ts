@@ -33,10 +33,30 @@ interface Paragraph {
 }
 
 type ParagraphElement =
-  | { textRun: TextRun; person?: never; dateElement?: never; inlineObjectElement?: never }
-  | { person: PersonElement; textRun?: never; dateElement?: never; inlineObjectElement?: never }
-  | { dateElement: DateElement; textRun?: never; person?: never; inlineObjectElement?: never }
-  | { inlineObjectElement: InlineObjectElement; textRun?: never; person?: never; dateElement?: never };
+  | {
+    textRun: TextRun;
+    person?: never;
+    dateElement?: never;
+    inlineObjectElement?: never;
+  }
+  | {
+    person: PersonElement;
+    textRun?: never;
+    dateElement?: never;
+    inlineObjectElement?: never;
+  }
+  | {
+    dateElement: DateElement;
+    textRun?: never;
+    person?: never;
+    inlineObjectElement?: never;
+  }
+  | {
+    inlineObjectElement: InlineObjectElement;
+    textRun?: never;
+    person?: never;
+    dateElement?: never;
+  };
 
 interface TextRun {
   content: string;
@@ -92,8 +112,14 @@ const HEADING_LEVEL: Record<string, number> = {
 };
 
 const MONOSPACE_FONTS = new Set([
-  "Courier New", "Courier", "Consolas", "Menlo", "Monaco",
-  "Lucida Console", "DejaVu Sans Mono", "Source Code Pro",
+  "Courier New",
+  "Courier",
+  "Consolas",
+  "Menlo",
+  "Monaco",
+  "Lucida Console",
+  "DejaVu Sans Mono",
+  "Source Code Pro",
 ]);
 
 // --- Element extractors ---
@@ -102,8 +128,7 @@ function extractTextRun(run: TextRun): string {
   let text = run.content.replace(/\n$/, "");
   const ts = run.textStyle ?? {};
 
-  const isMonospace =
-    ts.weightedFontFamily?.fontFamily != null &&
+  const isMonospace = ts.weightedFontFamily?.fontFamily != null &&
     MONOSPACE_FONTS.has(ts.weightedFontFamily.fontFamily);
 
   if (isMonospace) {
@@ -145,17 +170,20 @@ function extractParagraphText(para: Paragraph): string {
 
 // --- Paragraph renderer ---
 
-function renderParagraph(para: Paragraph, lists: Record<string, GdocList>): string {
+function renderParagraph(
+  para: Paragraph,
+  lists: Record<string, GdocList>,
+): string {
   const style = para.paragraphStyle?.namedStyleType ?? "NORMAL_TEXT";
   const text = extractParagraphText(para).trimEnd();
   const bullet = para.bullet;
 
   if (bullet) {
     const nestingLevel = bullet.nestingLevel ?? 0;
-    const listDef = lists[bullet.listId]?.listProperties?.nestingLevels?.[nestingLevel];
+    const listDef = lists[bullet.listId]?.listProperties?.nestingLevels
+      ?.[nestingLevel];
     const glyphType = listDef?.glyphType;
-    const isOrdered =
-      glyphType != null &&
+    const isOrdered = glyphType != null &&
       ["DECIMAL", "ALPHA", "ROMAN", "UPPER_ROMAN", "UPPER_ALPHA"].some((t) =>
         glyphType.includes(t)
       );

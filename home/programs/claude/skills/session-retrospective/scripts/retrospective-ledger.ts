@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --allow-run
+#!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write
 
 /**
  * retrospective-ledger.ts — Outcome-tracking ledger for the session-retrospective skill.
@@ -20,7 +20,9 @@
  *   verify --transcript <path> [--dry-run]
  */
 
-const LEDGER_PATH = `${Deno.env.get("HOME")}/.claude/retrospective-ledger.jsonl`;
+const LEDGER_PATH = `${
+  Deno.env.get("HOME")
+}/.claude/retrospective-ledger.jsonl`;
 
 // --- Types ---
 
@@ -140,7 +142,10 @@ export function applyOutcome(
       if (entry.outcomes[i].result === "not-applicable") streak++;
       else break;
     }
-    if (streak >= NOT_APPLICABLE_STREAK_THRESHOLD && streak % NOT_APPLICABLE_STREAK_THRESHOLD === 0) {
+    if (
+      streak >= NOT_APPLICABLE_STREAK_THRESHOLD &&
+      streak % NOT_APPLICABLE_STREAK_THRESHOLD === 0
+    ) {
       delta = DELTA_NOT_APPLICABLE_STREAK;
     }
   }
@@ -179,7 +184,9 @@ function cmdAdd(args: string[]): void {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--rule" && i + 1 < args.length) rule = args[++i];
     else if (args[i] === "--domain" && i + 1 < args.length) domain = args[++i];
-    else if (args[i] === "--session" && i + 1 < args.length) session = args[++i];
+    else if (args[i] === "--session" && i + 1 < args.length) {
+      session = args[++i];
+    }
   }
 
   if (!rule) {
@@ -191,7 +198,9 @@ function cmdAdd(args: string[]): void {
   const similar = findSimilar(entries, rule);
 
   if (similar) {
-    console.log(`Similar entry found: ${similar.id} (confidence: ${similar.confidence})`);
+    console.log(
+      `Similar entry found: ${similar.id} (confidence: ${similar.confidence})`,
+    );
     console.log(`  "${similar.rule}"`);
     console.log(`Reinforcing instead of creating new.`);
     similar.confidence = clampConfidence(similar.confidence + 0.1);
@@ -246,7 +255,9 @@ function cmdReinforce(args: string[]): void {
   entry.confidence = clampConfidence(entry.confidence + 0.1);
   entry.last_reinforced = today();
   writeLedger(LEDGER_PATH, entries);
-  console.log(`Reinforced ${id}: confidence ${entry.confidence} ("${entry.rule}")`);
+  console.log(
+    `Reinforced ${id}: confidence ${entry.confidence} ("${entry.rule}")`,
+  );
 }
 
 function cmdList(args: string[]): void {
@@ -273,7 +284,9 @@ function cmdList(args: string[]): void {
     const status = e.status === "promoted" ? " [promoted]" : "";
     const props = e.proposals.length > 0 ? ` p=${e.proposals.length}` : "";
     const outs = e.outcomes.length > 0 ? ` o=${e.outcomes.length}` : "";
-    console.log(`${e.id} (${e.confidence})${status} [${e.domain}]${props}${outs}`);
+    console.log(
+      `${e.id} (${e.confidence})${status} [${e.domain}]${props}${outs}`,
+    );
     console.log(`  "${e.rule}"`);
   }
   console.log(`\nTotal: ${filtered.length} entries`);
@@ -317,7 +330,9 @@ function cmdPromote(_args: string[]): void {
     console.log(`  Sessions: ${e.source_sessions.length}`);
     console.log();
   }
-  console.log("To promote, add the rule to CLAUDE.md and run: retrospective-ledger.ts mark-promoted <id> <section>");
+  console.log(
+    "To promote, add the rule to CLAUDE.md and run: retrospective-ledger.ts mark-promoted <id> <section>",
+  );
 }
 
 function cmdMarkPromoted(args: string[]): void {
@@ -353,15 +368,23 @@ function cmdRecordProposal(args: string[]): void {
 
   for (let i = 0; i < args.length; i++) {
     if (i === 0 && !args[i].startsWith("--")) id = args[i];
-    else if (args[i] === "--layer" && i + 1 < args.length) layer = args[++i] as EnforcementLayer;
-    else if (args[i] === "--target" && i + 1 < args.length) target = args[++i];
-    else if (args[i] === "--plan" && i + 1 < args.length) planJson = args[++i];
-    else if (args[i] === "--expiry" && i + 1 < args.length) expiry = args[++i];
-    else if (args[i] === "--session" && i + 1 < args.length) session = args[++i];
+    else if (args[i] === "--layer" && i + 1 < args.length) {
+      layer = args[++i] as EnforcementLayer;
+    } else if (args[i] === "--target" && i + 1 < args.length) {
+      target = args[++i];
+    } else if (args[i] === "--plan" && i + 1 < args.length) {
+      planJson = args[++i];
+    } else if (args[i] === "--expiry" && i + 1 < args.length) {
+      expiry = args[++i];
+    } else if (args[i] === "--session" && i + 1 < args.length) {
+      session = args[++i];
+    }
   }
 
   if (!id || !layer || !target || !planJson) {
-    console.error("Error: record-proposal requires <id> --layer --target --plan");
+    console.error(
+      "Error: record-proposal requires <id> --layer --target --plan",
+    );
     Deno.exit(1);
   }
 
@@ -392,13 +415,18 @@ export function cmdVerify(args: string[]): void {
   let session = "unknown";
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--transcript" && i + 1 < args.length) transcript = args[++i];
-    else if (args[i] === "--dry-run") dryRun = true;
-    else if (args[i] === "--session" && i + 1 < args.length) session = args[++i];
+    if (args[i] === "--transcript" && i + 1 < args.length) {
+      transcript = args[++i];
+    } else if (args[i] === "--dry-run") dryRun = true;
+    else if (args[i] === "--session" && i + 1 < args.length) {
+      session = args[++i];
+    }
   }
 
   const entries = readLedger(LEDGER_PATH);
-  const active = entries.filter((e) => e.status === "active" && e.proposals.length > 0);
+  const active = entries.filter((e) =>
+    e.status === "active" && e.proposals.length > 0
+  );
 
   if (active.length === 0) {
     console.log("No active entries with proposals to verify.");
@@ -415,16 +443,23 @@ export function cmdVerify(args: string[]): void {
 
     if (plan.type === "transcript_grep") {
       if (!transcript) {
-        console.log(`${entry.id}: skipped (transcript_grep needs --transcript)`);
+        console.log(
+          `${entry.id}: skipped (transcript_grep needs --transcript)`,
+        );
         continue;
       }
       result = executeTranscriptGrep(plan, transcript);
-      evidence = `transcript_grep pattern=${plan.pattern} expected=${plan.expected}`;
+      evidence =
+        `transcript_grep pattern=${plan.pattern} expected=${plan.expected}`;
     } else if (plan.type === "git_log_grep") {
-      console.log(`${entry.id}: git_log_grep not yet implemented in v1 — treating as not-applicable`);
+      console.log(
+        `${entry.id}: git_log_grep not yet implemented in v1 — treating as not-applicable`,
+      );
       evidence = "git_log_grep not-implemented";
     } else if (plan.type === "file_exists") {
-      console.log(`${entry.id}: file_exists not yet implemented in v1 — treating as not-applicable`);
+      console.log(
+        `${entry.id}: file_exists not yet implemented in v1 — treating as not-applicable`,
+      );
       evidence = "file_exists not-implemented";
     }
 

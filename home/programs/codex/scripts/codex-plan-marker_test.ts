@@ -339,7 +339,10 @@ Deno.test("subprocess promote command promotes a pending marker to active", asyn
       stderr: "piped",
     }).output();
     assertEquals(noPending.code, 0);
-    assertStringIncludes(new TextDecoder().decode(noPending.stdout), "no-pending");
+    assertStringIncludes(
+      new TextDecoder().decode(noPending.stdout),
+      "no-pending",
+    );
 
     await run(["activate-pending", plan, cwd]);
 

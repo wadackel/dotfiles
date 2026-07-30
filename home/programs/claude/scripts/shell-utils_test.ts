@@ -507,7 +507,9 @@ const HELPER = "/h/.claude/scripts/example-helper.ts";
 const PLAN = "/h/.claude/plans/b.md";
 
 Deno.test("flattenCommand: cd && helper yields two flat commands, no exotic", async () => {
-  const flat = await flattenCommand(`cd /r && ${HELPER} activate-pending ${PLAN} s`);
+  const flat = await flattenCommand(
+    `cd /r && ${HELPER} activate-pending ${PLAN} s`,
+  );
   assertEquals(flat?.exotic, false);
   assertEquals(flat?.commands.length, 2);
   assertEquals(flat?.commands[0].name, "cd");
@@ -573,12 +575,14 @@ Deno.test("flattenCommand: subshell is exotic", async () => {
 });
 
 Deno.test("flattenCommand: if/for/while/case are exotic", async () => {
-  for (const cmd of [
-    "if true; then cmd; fi",
-    "for x in a b; do cmd; done",
-    "while true; do cmd; done",
-    "case x in a) cmd;; esac",
-  ]) {
+  for (
+    const cmd of [
+      "if true; then cmd; fi",
+      "for x in a b; do cmd; done",
+      "while true; do cmd; done",
+      "case x in a) cmd;; esac",
+    ]
+  ) {
     const flat = await flattenCommand(cmd);
     assertEquals(flat?.exotic, true, `should be exotic: ${cmd}`);
   }

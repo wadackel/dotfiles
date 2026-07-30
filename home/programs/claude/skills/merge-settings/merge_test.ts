@@ -143,7 +143,10 @@ Deno.test("calculateDiff: normalizes results", () => {
 
 Deno.test("mergeAllowRules: merges, deduplicates, and sorts", () => {
   assertEquals(
-    mergeAllowRules(["Bash(rg *)", "Bash(git *)"], ["Bash(tmux *)", "Bash(git *)"]),
+    mergeAllowRules(["Bash(rg *)", "Bash(git *)"], [
+      "Bash(tmux *)",
+      "Bash(git *)",
+    ]),
     ["Bash(git *)", "Bash(rg *)", "Bash(tmux *)"],
   );
 });
@@ -285,7 +288,9 @@ Deno.test("findSubsumingRule: nix-build is NOT subsumed by nix", () => {
 
 Deno.test("findSubsumingRule: non-Bash rule returns null", () => {
   assertEquals(
-    findSubsumingRule("WebFetch(domain:api.github.com)", ["WebFetch(domain:*.github.com)"]),
+    findSubsumingRule("WebFetch(domain:api.github.com)", [
+      "WebFetch(domain:*.github.com)",
+    ]),
     null,
   );
 });
@@ -310,9 +315,15 @@ Deno.test("findSubsumingRule: exact command (no wildcard in local) is subsumed",
 
 Deno.test("removeRulesFromSettings: removes specified rules", () => {
   const settings = {
-    permissions: { allow: ["Bash(git *)", "Bash(rg *)", "Bash(tmux *)"], deny: [] },
+    permissions: {
+      allow: ["Bash(git *)", "Bash(rg *)", "Bash(tmux *)"],
+      deny: [],
+    },
   };
-  const result = removeRulesFromSettings(settings, ["Bash(git *)", "Bash(tmux *)"]);
+  const result = removeRulesFromSettings(settings, [
+    "Bash(git *)",
+    "Bash(tmux *)",
+  ]);
   assertEquals(result, {
     permissions: { allow: ["Bash(rg *)"], deny: [] },
   });

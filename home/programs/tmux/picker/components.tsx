@@ -316,12 +316,14 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
 
   return (
     <Box flexDirection="column">
-      {/* Line 1: marker + icon + status-or-label + agent-chip + repo · branch + summary.
+      {
+        /* Line 1: marker + icon + status-or-label + agent-chip + repo · branch + summary.
           The icon and text are emitted as TWO sibling <Text> nodes (rather
           than concatenated as `icon + " "`) to dodge the Ink 5.2.1 supplementary-
           plane clipping bug — UserLabel icons live in the PUA, so the trailing
           space gets eaten if combined with the glyph inside one <Text>. Same
-          idiom as the row-2 segments below. */}
+          idiom as the row-2 segments below. */
+      }
       <Box>
         <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
         <Text color={display.color}>{display.icon}</Text>

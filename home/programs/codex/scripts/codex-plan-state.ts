@@ -60,7 +60,9 @@ async function canonicalExistingDir(path: string): Promise<string> {
   try {
     return await Deno.realPath(path);
   } catch (err) {
-    throw new Error(`failed to resolve directory ${path}: ${(err as Error).message}`);
+    throw new Error(
+      `failed to resolve directory ${path}: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -200,7 +202,9 @@ async function atomicWrite(path: string, data: PlanEvidence): Promise<void> {
     mode: 0o600,
   });
   try {
-    await file.write(new TextEncoder().encode(JSON.stringify(data, null, 2) + "\n"));
+    await file.write(
+      new TextEncoder().encode(JSON.stringify(data, null, 2) + "\n"),
+    );
   } finally {
     file.close();
   }

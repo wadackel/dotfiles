@@ -22,7 +22,7 @@ Phase 1 → Phase 2 Extract & Drill → Phase 3 Pair Design → Phase 4 Present 
 
 **Unit of work** is a **Behavior-Change Pair**, not a "proposal document". Each Pair has: observable Before, observable Target After, chosen Enforcement layer, machine-runnable Verification plan, Expiry condition. See [references/behavior-change-pair.md](references/behavior-change-pair.md).
 
-**Source of truth** is the ledger. The `retrospective-ledger.ts` CLI (at `~/.claude/skills/instinct-learner/scripts/retrospective-ledger.ts`) is the only way to mutate it.
+**Source of truth** is the ledger. The `retrospective-ledger.ts` CLI (at `~/.claude/skills/session-retrospective/scripts/retrospective-ledger.ts`) is the only way to mutate it.
 
 ## Quick Start
 
@@ -50,7 +50,7 @@ Captures the stdout path (something like `/tmp/claude-session-history-NNNN.md`).
 **Step 2 — Run verify**:
 
 ```bash
-~/.claude/skills/instinct-learner/scripts/retrospective-ledger.ts verify \
+~/.claude/skills/session-retrospective/scripts/retrospective-ledger.ts verify \
   --transcript /tmp/claude-session-history-NNNN.md \
   --session "$(cat /tmp/claude-session-id 2>/dev/null || echo unknown)"
 ```

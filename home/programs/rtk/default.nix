@@ -1,4 +1,4 @@
-{ config, dotfiles, ... }:
+{ dotfiles, ... }:
 {
   # rtk (Rust Token Killer) declarative configuration
   # - config file: rtk reads dirs::config_dir(), which on macOS is

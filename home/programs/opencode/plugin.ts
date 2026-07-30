@@ -159,7 +159,8 @@ function readMemoDispatch(
 
   const cwd = typeof data.cwd === "string"
     ? (data.cwd as string)
-    : (typeof (props?.info as Record<string, unknown> | undefined)?.directory ===
+    : (typeof (props?.info as Record<string, unknown> | undefined)
+        ?.directory ===
         "string"
       ? ((props!.info as Record<string, unknown>).directory as string)
       : process.cwd());

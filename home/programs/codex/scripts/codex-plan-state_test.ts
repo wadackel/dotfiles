@@ -162,7 +162,7 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "malformed output",
     "max 3 attempts",
     "Domain-Specific Reviewer Dispatch",
-    "Step 4 lifecycle budget",
+    "Review lifecycle budget",
     "agent_id / role / stage / attempt / status / closed",
     "close_agent",
     "agent thread limit reached",
@@ -172,7 +172,7 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "result-integrated reviewers",
     "Security Dispatch Heuristic",
     "Reviewer self-modification",
-    "User-facing progress and final reports should remain in the user's configured language",
+    "User-facing progress and final reports remain in the user's configured language",
   ];
 
   for (const text of required) {

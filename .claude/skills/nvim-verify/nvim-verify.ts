@@ -171,7 +171,10 @@ async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
     });
 
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), NVIM_TIMEOUT_MS);
+    const timeoutId = setTimeout(
+      () => abortController.abort(),
+      NVIM_TIMEOUT_MS,
+    );
 
     let proc;
     try {
@@ -188,7 +191,9 @@ async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
           check: "unknown",
           ok: false,
           details: { exit_code: output.code },
-          errors: stderr ? stderr.split("\n") : [`nvim exited with code ${output.code}`],
+          errors: stderr
+            ? stderr.split("\n")
+            : [`nvim exited with code ${output.code}`],
           warnings: [],
         };
       }
@@ -263,7 +268,9 @@ async function checkOptions(names: string[]): Promise<CheckResult> {
       check: "options",
       ok: false,
       details: {},
-      errors: ["No option names specified. Usage: nvim-verify.ts options <name> [name...]"],
+      errors: [
+        "No option names specified. Usage: nvim-verify.ts options <name> [name...]",
+      ],
       warnings: [],
     };
   }

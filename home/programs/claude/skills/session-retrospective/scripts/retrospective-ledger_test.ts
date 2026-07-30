@@ -166,7 +166,10 @@ Deno.test("applyOutcome - 5 consecutive not-applicable triggers -0.1 delta", () 
 
 Deno.test("executeTranscriptGrep - expected absent, pattern found => recurred", () => {
   cleanup();
-  Deno.writeTextFileSync(TEST_TRANSCRIPT, "some transcript with git -C invoked\n");
+  Deno.writeTextFileSync(
+    TEST_TRANSCRIPT,
+    "some transcript with git -C invoked\n",
+  );
   const plan = {
     type: "transcript_grep" as const,
     pattern: "git -C",
@@ -178,7 +181,10 @@ Deno.test("executeTranscriptGrep - expected absent, pattern found => recurred", 
 
 Deno.test("executeTranscriptGrep - expected absent, pattern not found => prevented", () => {
   cleanup();
-  Deno.writeTextFileSync(TEST_TRANSCRIPT, "clean transcript with cd && git usage\n");
+  Deno.writeTextFileSync(
+    TEST_TRANSCRIPT,
+    "clean transcript with cd && git usage\n",
+  );
   const plan = {
     type: "transcript_grep" as const,
     pattern: "git -C",
@@ -190,7 +196,10 @@ Deno.test("executeTranscriptGrep - expected absent, pattern not found => prevent
 
 Deno.test("executeTranscriptGrep - expected present, pattern found => prevented", () => {
   cleanup();
-  Deno.writeTextFileSync(TEST_TRANSCRIPT, "ran /verification-loop successfully\n");
+  Deno.writeTextFileSync(
+    TEST_TRANSCRIPT,
+    "ran /verification-loop successfully\n",
+  );
   const plan = {
     type: "transcript_grep" as const,
     pattern: "/verification-loop",

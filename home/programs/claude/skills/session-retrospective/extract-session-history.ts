@@ -41,7 +41,10 @@ export function formatSize(bytes: number): string {
 // --- Transcript Discovery ---
 
 export function encodeProjectDir(projectDir: string): string {
-  return projectDir.replace(/^\//, "").replaceAll("/", "-").replaceAll(".", "-");
+  return projectDir.replace(/^\//, "").replaceAll("/", "-").replaceAll(
+    ".",
+    "-",
+  );
 }
 
 function findTranscript(projectDir: string): string {
@@ -94,7 +97,9 @@ export function extractTimeline(
     if (entry.type === "system" && entry.subtype === "compact_boundary") {
       const m = entry.compactMetadata;
       lines.push(
-        `\n---\n**[COMPACT BOUNDARY]** (${m?.trigger ?? "?"}, ${m?.preTokens ?? "?"} tokens) — ${entry.timestamp ?? ""}\n---`,
+        `\n---\n**[COMPACT BOUNDARY]** (${m?.trigger ?? "?"}, ${
+          m?.preTokens ?? "?"
+        } tokens) — ${entry.timestamp ?? ""}\n---`,
       );
       continue;
     }

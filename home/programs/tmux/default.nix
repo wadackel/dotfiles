@@ -1,11 +1,33 @@
 {
-  config,
   lib,
   pkgs,
   dotfiles,
   ...
 }:
 
+let
+  # Computing the hash at Nix eval time instead of in the activation shell:
+  # a shell `find`-based enumeration can silently match zero files (path or
+  # expression bug) and hash an empty stream, pinning the stamp so recompiles
+  # are skipped forever — eval-time filtering with the assert below turns that
+  # failure class into a loud evaluation error.
+  # `./shared` is included wholesale even though only pane-shared.ts is a
+  # runtime dependency today; a spurious recompile costs seconds while a
+  # missed dependency ships a stale binary to `prefix+w`.
+  pickerSrcHash =
+    let
+      isSrc =
+        file:
+        (file.hasExt "ts" || file.hasExt "tsx")
+        && !(lib.hasSuffix "_test.ts" file.name)
+        && file.name != "picker_e2e_harness.ts";
+      files =
+        lib.fileset.toList (lib.fileset.fileFilter isSrc ./picker)
+        ++ lib.fileset.toList (lib.fileset.fileFilter isSrc ./shared);
+    in
+    assert lib.assertMsg (builtins.length files >= 8) "picker source fileset unexpectedly small";
+    builtins.hashString "sha256" (lib.concatMapStrings builtins.readFile files);
+in
 {
   home.packages = [ pkgs.tmux ];
 
@@ -46,16 +68,7 @@
     OUT="$HOME/.local/share/picker-tmux"
     BIN="$OUT/picker"
     STAMP="$OUT/.src-hash"
-    # Hash file contents only (not paths) so the Nix store path of `${./.}`
-    # does not dirty the hash whenever any sibling file in this dir changes.
-    HASH=$(/bin/cat \
-      "$SRC/picker/picker.tsx" \
-      "$SRC/picker/pane_row.ts" \
-      "$SRC/picker/ansi.ts" \
-      "$SRC/picker/cell_width.ts" \
-      "$SRC/picker/format_helpers.ts" \
-      "$SRC/picker/components.tsx" \
-      | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')
+    HASH="${pickerSrcHash}"
     # home-manager concatenates activation fragments into one shell script,
     # so `exit` here would abort later fragments. Gate the cold path with an
     # inverted if/else instead.

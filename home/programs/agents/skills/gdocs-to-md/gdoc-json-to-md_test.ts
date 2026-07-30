@@ -3,7 +3,10 @@ import { convertGdocToMarkdown } from "./gdoc-json-to-md.ts";
 import type { GdocDocument } from "./gdoc-json-to-md.ts";
 
 // Helper: minimal document wrapper
-function doc(content: GdocDocument["body"]["content"], lists?: GdocDocument["lists"]): GdocDocument {
+function doc(
+  content: GdocDocument["body"]["content"],
+  lists?: GdocDocument["lists"],
+): GdocDocument {
   return { title: "Test", body: { content }, lists };
 }
 
@@ -98,28 +101,42 @@ Deno.test("inline: italic", () => {
 
 Deno.test("inline: bold+italic", () => {
   assertEquals(
-    convertGdocToMarkdown(doc([para("word", "NORMAL_TEXT", { bold: true, italic: true })])),
+    convertGdocToMarkdown(
+      doc([para("word", "NORMAL_TEXT", { bold: true, italic: true })]),
+    ),
     "***word***\n",
   );
 });
 
 Deno.test("inline: strikethrough", () => {
   assertEquals(
-    convertGdocToMarkdown(doc([para("word", "NORMAL_TEXT", { strikethrough: true })])),
+    convertGdocToMarkdown(
+      doc([para("word", "NORMAL_TEXT", { strikethrough: true })]),
+    ),
     "~~word~~\n",
   );
 });
 
 Deno.test("inline: code (monospace weighted)", () => {
   assertEquals(
-    convertGdocToMarkdown(doc([para("code", "NORMAL_TEXT", { weightedFontFamily: { fontFamily: "Courier New" } })])),
+    convertGdocToMarkdown(
+      doc([
+        para("code", "NORMAL_TEXT", {
+          weightedFontFamily: { fontFamily: "Courier New" },
+        }),
+      ]),
+    ),
     "`code`\n",
   );
 });
 
 Deno.test("inline: link", () => {
   assertEquals(
-    convertGdocToMarkdown(doc([para("click", "NORMAL_TEXT", { link: { url: "https://example.com" } })])),
+    convertGdocToMarkdown(
+      doc([
+        para("click", "NORMAL_TEXT", { link: { url: "https://example.com" } }),
+      ]),
+    ),
     "[click](https://example.com)\n",
   );
 });
@@ -131,7 +148,9 @@ Deno.test("inline: empty text with bold -> no marker", () => {
       content: [{
         paragraph: {
           paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
-          elements: [{ textRun: { content: " \n", textStyle: { bold: true } } }],
+          elements: [{
+            textRun: { content: " \n", textStyle: { bold: true } },
+          }],
         },
       }],
     },
@@ -196,14 +215,50 @@ Deno.test("table: simple 2-column", () => {
           tableRows: [
             {
               tableCells: [
-                { content: [{ paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "Name\n", textStyle: {} } }] } }] },
-                { content: [{ paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "Age\n", textStyle: {} } }] } }] },
+                {
+                  content: [{
+                    paragraph: {
+                      paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+                      elements: [{
+                        textRun: { content: "Name\n", textStyle: {} },
+                      }],
+                    },
+                  }],
+                },
+                {
+                  content: [{
+                    paragraph: {
+                      paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+                      elements: [{
+                        textRun: { content: "Age\n", textStyle: {} },
+                      }],
+                    },
+                  }],
+                },
               ],
             },
             {
               tableCells: [
-                { content: [{ paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "Alice\n", textStyle: {} } }] } }] },
-                { content: [{ paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "30\n", textStyle: {} } }] } }] },
+                {
+                  content: [{
+                    paragraph: {
+                      paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+                      elements: [{
+                        textRun: { content: "Alice\n", textStyle: {} },
+                      }],
+                    },
+                  }],
+                },
+                {
+                  content: [{
+                    paragraph: {
+                      paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+                      elements: [{
+                        textRun: { content: "30\n", textStyle: {} },
+                      }],
+                    },
+                  }],
+                },
               ],
             },
           ],
@@ -226,7 +281,16 @@ Deno.test("table: pipe in cell is escaped", () => {
           tableRows: [
             {
               tableCells: [
-                { content: [{ paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "a|b\n", textStyle: {} } }] } }] },
+                {
+                  content: [{
+                    paragraph: {
+                      paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+                      elements: [{
+                        textRun: { content: "a|b\n", textStyle: {} },
+                      }],
+                    },
+                  }],
+                },
               ],
             },
           ],
@@ -249,7 +313,10 @@ Deno.test("person element: Name (email)", () => {
           paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
           elements: [{
             person: {
-              personProperties: { name: "Alice Smith", email: "alice@example.com" },
+              personProperties: {
+                name: "Alice Smith",
+                email: "alice@example.com",
+              },
               textStyle: {},
             },
           }, { textRun: { content: "\n", textStyle: {} } }],
@@ -303,7 +370,12 @@ Deno.test("sectionBreak: skipped", () => {
     body: {
       content: [
         { sectionBreak: { sectionStyle: {} } },
-        { paragraph: { paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, elements: [{ textRun: { content: "Hello\n", textStyle: {} } }] } },
+        {
+          paragraph: {
+            paragraphStyle: { namedStyleType: "NORMAL_TEXT" },
+            elements: [{ textRun: { content: "Hello\n", textStyle: {} } }],
+          },
+        },
       ],
     },
   };

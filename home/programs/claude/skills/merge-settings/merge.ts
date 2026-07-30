@@ -172,14 +172,14 @@ function writeJsonFile(path: string, data: unknown): void {
 
 type Result =
   | {
-      status: "proposal";
-      new_rules: string[];
-      new_rules_count: number;
-      subsumed_rules: Array<{ rule: string; subsumed_by: string }>;
-      subsumed_count: number;
-      project_path: string;
-      user_settings_path: string;
-    }
+    status: "proposal";
+    new_rules: string[];
+    new_rules_count: number;
+    subsumed_rules: Array<{ rule: string; subsumed_by: string }>;
+    subsumed_count: number;
+    project_path: string;
+    user_settings_path: string;
+  }
   | { status: "noop"; message: string }
   | { status: "applied"; applied_count: number; message: string }
   | { status: "cleaned"; cleaned_count: number; message: string }
@@ -209,7 +209,10 @@ function proposalMode(userSettingsPath: string): void {
 
   const localRules = extractAllowRules(localSettings);
   if (localRules.length === 0) {
-    die("no_local_rules", ".claude/settings.local.json に permissions.allow が見つかりません");
+    die(
+      "no_local_rules",
+      ".claude/settings.local.json に permissions.allow が見つかりません",
+    );
   }
 
   // Read global settings
@@ -298,7 +301,10 @@ function applyMode(rulesJsonArg: string, userSettingsPath: string): void {
   const updated = {
     ...(globalSettings as Record<string, unknown>),
     permissions: {
-      ...((globalSettings as Record<string, unknown>).permissions as Record<string, unknown> ?? {}),
+      ...((globalSettings as Record<string, unknown>).permissions as Record<
+        string,
+        unknown
+      > ?? {}),
       allow: merged,
     },
   };

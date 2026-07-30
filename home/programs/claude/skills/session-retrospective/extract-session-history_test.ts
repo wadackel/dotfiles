@@ -2,12 +2,12 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   collectErrorSummary,
   collectToolSummary,
+  type ContentBlock,
   encodeProjectDir,
   extractTimeline,
   formatSize,
-  truncate,
-  type ContentBlock,
   type TranscriptEntry,
+  truncate,
 } from "./extract-session-history.ts";
 
 // --- truncate ---
@@ -190,7 +190,10 @@ Deno.test("collectToolSummary: counts tools and sorts by frequency", () => {
     names.map((name) => ({ type: "tool_use", name }));
 
   const entries: TranscriptEntry[] = [
-    { type: "assistant", message: { content: blocks(["Read", "Read", "Bash"]) } },
+    {
+      type: "assistant",
+      message: { content: blocks(["Read", "Read", "Bash"]) },
+    },
     { type: "assistant", message: { content: blocks(["Read"]) } },
   ];
   const result = collectToolSummary(entries);
@@ -218,7 +221,11 @@ Deno.test("collectErrorSummary: extracts error content", () => {
     {
       type: "user",
       message: {
-        content: [{ type: "tool_result", is_error: true, content: "Command failed" }],
+        content: [{
+          type: "tool_result",
+          is_error: true,
+          content: "Command failed",
+        }],
       },
     },
   ];

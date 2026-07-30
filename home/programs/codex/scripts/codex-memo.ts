@@ -414,7 +414,10 @@ async function mainWorker(workerInput: HookData): Promise<void> {
   const llmLines = [mainLine, ...detailLines];
   upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
   await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
-  saveDebounceState(debounceStatePath("codex", ctx.sessionShort), ctx.userCount);
+  saveDebounceState(
+    debounceStatePath("codex", ctx.sessionShort),
+    ctx.userCount,
+  );
 }
 
 async function main(): Promise<void> {
