@@ -53,6 +53,13 @@ export interface PaneState {
   // SessionStart. Separates main-agent lifecycle from subagent activity so
   // status no longer conflates the two.
   mainStopped: boolean;
+  // @pane_wait_reason mirror. status="waiting" alone cannot distinguish
+  // user-blocking waits (permission / question / plan review) from an
+  // idle_prompt wait — only the latter may be overridden by subagent activity.
+  waitReason: string;
+  // @pane_last_activity_at mirror (epoch seconds, "" when unset). Freshness
+  // input for the subagent liveness heuristic in the idle_prompt branch.
+  lastActivityAt: string;
 }
 
 // --- Constants ---
@@ -180,8 +187,23 @@ function sanitizeListToken(raw: string): string {
   return raw.replace(/[|:]/g, "-");
 }
 
+// Same ":id" suffix convention as removeSubagent. Matching the full "Type:id"
+// entry instead would let SubagentStart and tool-event self-heal register the
+// same agent under different types (e.g. "Explore:a1" vs "subagent:a1"), and
+// removeSubagent only deletes one entry per id — the leftover would keep
+// count() > 0 and Stop deferring forever.
+export function hasSubagent(list: string, id: string): boolean {
+  if (!list || !id) return false;
+  const target = sanitizeListToken(id);
+  return list.split("|").some((e) => e.endsWith(`:${target}`));
+}
+
 // Append "Type:id" to a pipe-sep list. Returns the new list string.
+// Dedupe is id-based (see hasSubagent) so a sequential re-append — a
+// named agent re-Started under the same id, or SubagentStart arriving after
+// tool-event self-heal already registered the id — cannot double-register.
 export function appendSubagent(list: string, type: string, id: string): string {
+  if (hasSubagent(list, id)) return list;
   const t = sanitizeListToken(type);
   const i = sanitizeListToken(id);
   const entry = `${t}:${i}`;
@@ -223,17 +245,76 @@ function str(v: unknown): string {
 //     `state.subagents === ""` gate was over-conservative: it blocked main
 //     resume whenever any subagent was alive, even if the current event was
 //     unambiguously main.
-//   - SubagentStart / SubagentStop: never — subagent activity cannot be
-//     proxied as main-agent resume.
+//   - SubagentStart / SubagentStop and subagent-origin tool events: never —
+//     subagent activity cannot be proxied as main-agent resume. Pane-level
+//     recovery from idle-like states is subagentActivityStatusOps' job, which
+//     deliberately excludes user-blocking waits this helper would clear.
 // UserPromptSubmit already sets status directly and does not go through this
 // helper. @pane_wait_reason is cleared so row 1 summary stops showing the stale
 // reason.
+// idle is included in the resume set: teammate agents run as full sibling
+// sessions multiplexed onto the same pane, and their tool events are
+// main-shaped (no agent_id) with no preceding UserPromptSubmit — a tool event
+// arriving at status=idle proves the display is stale. The teammate's own
+// Stop (empty list) returns the pane to idle, so this cannot stick at running.
 export function resumeOpsIfStuck(state: PaneState): Op[] {
-  if (state.status !== "waiting" && state.status !== "error") return [];
+  if (
+    state.status !== "waiting" && state.status !== "error" &&
+    state.status !== "idle"
+  ) return [];
   return [
     { kind: "set", key: "@pane_status", value: "running" },
     { kind: "unset", key: "@pane_wait_reason" },
   ];
+}
+
+// Threshold for the idle_prompt liveness check. toolStartOps does NOT bump
+// @pane_last_activity_at (only PostToolUse/PostToolUseFailure and the
+// subagent-origin PreToolUse bump do), so a subagent inside a single tool call
+// longer than this window is misjudged stale and its list entry discarded —
+// the next PostToolUse self-heals, but the waiting display persists until the
+// tool completes. Lower values shrink ghost-entry retention; higher values
+// widen this misjudgment window.
+const SUBAGENT_STALE_SECONDS = 120;
+
+// Observed subagent activity flips the pane back to running only from
+// idle-like states. waiting for permission / elicitation / question /
+// plan review and error are user-blocking — a busy subagent must not hide
+// them, so resumeOpsIfStuck cannot be reused here (it clears any waiting).
+export function subagentActivityStatusOps(state: PaneState): Op[] {
+  const idleLike = state.status === "idle" ||
+    (state.status === "waiting" && state.waitReason === "idle prompt");
+  if (!idleLike) return [];
+  return [
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "unset", key: "@pane_wait_reason" },
+    // idle-like implies the main agent already stopped. Rebuild the marker so
+    // the last SubagentStop's existing drain logic can transition back to
+    // idle — without it the pane would stick at running forever.
+    { kind: "set", key: "@pane_main_stopped", value: "1" },
+  ];
+}
+
+// SubagentStart frequently never fires (observed 4 Starts vs 55 Stops in
+// production logs), leaving @pane_subagents empty while subagents run — Stop
+// then writes idle immediately. Any agent_id-carrying tool event proves the
+// subagent is alive, so repair the list from it.
+export function subagentSelfHealOps(state: PaneState, data: HookData): Op[] {
+  const id = str(data.agent_id);
+  const ops: Op[] = [];
+  if (!hasSubagent(state.subagents, id)) {
+    ops.push({
+      kind: "set",
+      key: "@pane_subagents",
+      value: appendSubagent(
+        state.subagents,
+        str(data.agent_type) || "subagent",
+        id,
+      ),
+    });
+  }
+  ops.push(...subagentActivityStatusOps(state));
+  return ops;
 }
 
 // Re-assert the pane belongs to a live Claude session. Called at the head of
@@ -342,13 +423,16 @@ export function eventToOps(
         // Schema: notification_type discriminator. No `message` / `title`
         // fields. Branches:
         //   permission_prompt   → waiting / "permission"
-        //   idle_prompt         → waiting / "idle prompt"
+        //   idle_prompt         → waiting / "idle prompt", but deferred while
+        //                          subagents are alive (see branch body)
         //   elicitation_dialog  → waiting / "elicitation"
         //   elicitation_complete | elicitation_response → unset wait_reason
         //                          (status preserved; resume is the next
         //                          PreToolUse / Stop's job)
         //   auth_success        → no-op (must not flip status to waiting)
         //   unknown / absent    → no-op
+        // permission_prompt / elicitation_dialog stay unconditional: they
+        // block on user input, so a busy subagent must not suppress them.
         const nt = str(data.notification_type);
         switch (nt) {
           case "permission_prompt":
@@ -356,11 +440,31 @@ export function eventToOps(
               { kind: "set", key: "@pane_status", value: "waiting" },
               { kind: "set", key: "@pane_wait_reason", value: "permission" },
             ];
-          case "idle_prompt":
+          case "idle_prompt": {
+            if (count(state.subagents) === 0) {
+              return [
+                { kind: "set", key: "@pane_status", value: "waiting" },
+                { kind: "set", key: "@pane_wait_reason", value: "idle prompt" },
+              ];
+            }
+            // Subagents alive: the main agent being idle does not make the
+            // pane idle — defer, like Stop does. But an entry whose
+            // SubagentStop never fired would defer forever, and the old
+            // unconditional overwrite was the accidental recovery path for
+            // exactly that leak. Keep the recovery: no recent activity means
+            // the list is a ghost — discard it and fall through to waiting.
+            const last = Number(state.lastActivityAt);
+            const nowSec = Math.floor(Date.now() / 1000);
+            const fresh = Number.isFinite(last) && last > 0 &&
+              nowSec - last < SUBAGENT_STALE_SECONDS;
+            if (fresh) return [];
             return [
+              { kind: "unset", key: "@pane_subagents" },
+              { kind: "unset", key: "@pane_main_stopped" },
               { kind: "set", key: "@pane_status", value: "waiting" },
               { kind: "set", key: "@pane_wait_reason", value: "idle prompt" },
             ];
+          }
           case "elicitation_dialog":
             return [
               { kind: "set", key: "@pane_status", value: "waiting" },
@@ -412,9 +516,19 @@ export function eventToOps(
             ...toolStartOps({ tool: toolName, subject: subject || undefined }),
           ];
         }
-        const resume = isMain ? resumeOpsIfStuck(state) : [];
+        // Subagent-origin Pre also bumps activity_at (toolStartOps does not):
+        // without it a single long-running subagent tool call looks stale to
+        // the idle_prompt liveness check for its entire duration.
+        const statusOps: Op[] = isMain ? resumeOpsIfStuck(state) : [
+          ...subagentSelfHealOps(state, data),
+          {
+            kind: "set",
+            key: "@pane_last_activity_at",
+            value: String(Math.floor(Date.now() / 1000)),
+          },
+        ];
         return [
-          ...resume,
+          ...statusOps,
           ...toolStartOps({ tool: toolName, subject: subject || undefined }),
         ];
       }
@@ -441,9 +555,11 @@ export function eventToOps(
         const now = String(Math.floor(Date.now() / 1000));
         // Resume only when main-attributable — matches PreToolUse policy.
         const isMain = !str(data.agent_id);
-        const resume = isMain ? resumeOpsIfStuck(state) : [];
+        const statusOps = isMain
+          ? resumeOpsIfStuck(state)
+          : subagentSelfHealOps(state, data);
         const ops: Op[] = [
-          ...resume,
+          ...statusOps,
           { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (!toolName) return ops;
@@ -524,9 +640,11 @@ export function eventToOps(
         const toolName = str(data.tool_name);
         const now = String(Math.floor(Date.now() / 1000));
         const isMain = !str(data.agent_id);
-        const resume = isMain ? resumeOpsIfStuck(state) : [];
+        const statusOps = isMain
+          ? resumeOpsIfStuck(state)
+          : subagentSelfHealOps(state, data);
         const ops: Op[] = [
-          ...resume,
+          ...statusOps,
           { kind: "set", key: "@pane_last_activity_at", value: now },
         ];
         if (!toolName) return ops;
@@ -567,12 +685,17 @@ export function eventToOps(
       case "SubagentStart": {
         // Hook stdin field names (verified via /tmp/claude-pane-hook.log dump):
         // `agent_id` (snake_case) and `agent_type` — NOT `subagent_*`.
-        // Subagent activity is never main-attributable, so no resume op here.
+        // No main-agent resume here — but a subagent starting while the pane
+        // sits at idle (or idle-prompt waiting) is pane-level activity, so
+        // recover via subagentActivityStatusOps. A permission wait survives.
         const type = str(data.agent_type) || "subagent";
         const id = str(data.agent_id) ||
           crypto.randomUUID().slice(0, 8);
         const next = appendSubagent(state.subagents, type, id);
-        return [{ kind: "set", key: "@pane_subagents", value: next }];
+        return [
+          ...subagentActivityStatusOps(state),
+          { kind: "set", key: "@pane_subagents", value: next },
+        ];
       }
 
       case "SubagentStop": {
@@ -801,12 +924,16 @@ async function readPaneState(pane: string): Promise<PaneState> {
     currentToolStdout,
     statusStdout,
     mainStoppedStdout,
+    waitReasonStdout,
+    lastActivityAtStdout,
   ] = await Promise.all([
     runShow("@pane_subagents"),
     runShow("@pane_pending_teardown"),
     runShow("@pane_current_tool"),
     runShow("@pane_status"),
     runShow("@pane_main_stopped"),
+    runShow("@pane_wait_reason"),
+    runShow("@pane_last_activity_at"),
   ]);
   return {
     subagents: subagentsStdout.trim(),
@@ -814,6 +941,8 @@ async function readPaneState(pane: string): Promise<PaneState> {
     currentTool: currentToolStdout.trim(),
     status: statusStdout.trim(),
     mainStopped: mainStoppedStdout.trim() === "1",
+    waitReason: waitReasonStdout.trim(),
+    lastActivityAt: lastActivityAtStdout.trim(),
   };
 }
 
