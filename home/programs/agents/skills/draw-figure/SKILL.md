@@ -1,6 +1,6 @@
 ---
-name: genfig
-description: Generates FigJam-style self-contained SVG concept figures by mapping natural-language descriptions onto image schemas (embodied spatial structures such as SOURCE-PATH-GOAL, CONTAINER, CYCLE) with twemoji as the actors. Use when inserting concept, architecture, or flow figures into documents or articles. Triggers include "/genfig <description>", "generate a concept figure", "draw a diagram for this explanation", "〜の図を作って", "この説明に図を入れて", "概念図を描いて".
+name: draw-figure
+description: Generates FigJam-style self-contained SVG concept figures by mapping natural-language descriptions onto image schemas (embodied spatial structures such as SOURCE-PATH-GOAL, CONTAINER, CYCLE) with twemoji as the actors. Use when inserting concept, architecture, or flow figures into documents or articles. Triggers include "/draw-figure <description>", "generate a concept figure", "draw a diagram for this explanation", "〜の図を作って", "この説明に図を入れて", "概念図を描いて".
 argument-hint: "[description]"
 license: MIT
 metadata:
@@ -11,7 +11,7 @@ metadata:
     repository: seekseep/genfig-skill
 ---
 
-# genfig — Image-Schema Figure Generator
+# draw-figure — Image-Schema Figure Generator
 
 Map a natural-language description onto **image schemas** (recurring spatial
 structures grounded in bodily experience — Johnson, *The Body in the Mind*;
