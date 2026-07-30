@@ -197,6 +197,7 @@
       "Bash(lsof *)",
       "Bash(lua-language-server *)",
       "Bash(luac *)",
+      "Bash(magick *)",
       "Bash(make *)",
       "Bash(man *)",
       "Bash(md5 *)",
@@ -491,6 +492,7 @@
       "/tmp"
     ]
   },
+  "model": "claude-opus-5",
   "hooks": {
     "PreToolUse": [
       {
@@ -731,7 +733,6 @@
     "document-skills@anthropic-agent-skills": true
   },
   "language": "japanese",
-  "model": "claude-opus-4-7",
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
