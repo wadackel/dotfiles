@@ -5,8 +5,8 @@
 
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
-import React, { useEffect, useRef, useState } from "npm:react@18.3.1";
-import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@5.2.1";
+import React, { useEffect, useRef, useState } from "npm:react@19.2.0";
+import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@7.1.1";
 
 // ---- Types + row parsing SSOT ----
 
@@ -640,6 +640,11 @@ function App({
   const totalRows = size.rows;
   const listWidth = Math.max(40, Math.floor(totalCols * 0.6));
   const previewWidth = Math.max(20, totalCols - listWidth - 1);
+  // A frame exactly as tall as the terminal is fine, but one TALLER is not:
+  // Ink falls back to clearing the whole terminal between frames once the
+  // output overflows the viewport, which inside a tmux popup blanks and
+  // repaints every cell on each tick. Ink clips output to the root box height,
+  // so pinning the root to totalRows is what keeps overflow impossible.
   const bodyHeight = Math.max(5, totalRows - 2);
   // The baseline title bar (icon + title + Enter / j/k / Esc hints) is ~61
   // cells, fitting on one line at the popup's typical 80%-of-screen width.
@@ -772,6 +777,14 @@ async function main(): Promise<void> {
         result.value = r;
       }}
     />,
+    {
+      // Opt-in per-line diffing. Ink's default renderer rewrites every line of
+      // the frame whenever any part of it changes, so the static title bar was
+      // being blanked and repainted on each 1s tick — inside a tmux popup that
+      // reads as flicker along the top edge. With this on, lines whose content
+      // is unchanged are never written, so tmux never marks them dirty.
+      incrementalRendering: true,
+    },
   );
   await waitUntilExit();
 

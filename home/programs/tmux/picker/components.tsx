@@ -10,8 +10,8 @@
 
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
-import React from "npm:react@18.3.1";
-import { Box, Text } from "npm:ink@5.2.1";
+import React from "npm:react@19.2.0";
+import { Box, Text } from "npm:ink@7.1.1";
 
 import { type PaneRow, STATUS_META, USER_LABEL_META } from "./pane_row.ts";
 import {
