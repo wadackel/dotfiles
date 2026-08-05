@@ -27,9 +27,28 @@ let
     in
     assert lib.assertMsg (builtins.length files >= 8) "picker source fileset unexpectedly small";
     builtins.hashString "sha256" (lib.concatMapStrings builtins.readFile files);
+
+  # Released tmux (3.7b) lets a repainting background pane draw over an open
+  # popup's top border row, so the border blinks out and back while an agent
+  # renders behind `prefix+w`. That is tmux issue 4920; 3.7 fixed most of it and
+  # 3.8 finishes the job ("Fix redraw issues around ... popups ..."). Verified
+  # against this exact repro: broken on 3.7b, clean on master.
+  # Drop this override and go back to pkgs.tmux once nixpkgs ships 3.8.
+  tmuxNext = pkgs.tmux.overrideAttrs (old: {
+    version = "next-3.8";
+    src = pkgs.fetchFromGitHub {
+      owner = "tmux";
+      repo = "tmux";
+      rev = "c9ae3f6a0207444292076c9ab74054115504858f";
+      hash = "sha256-KCFedowiNBICzBKBLSs5UhWvuPDl8rOfjkdLqai5mmA=";
+    };
+    # master's configure refuses to pick a malloc on darwin by itself.
+    buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.jemalloc ];
+    configureFlags = (old.configureFlags or [ ]) ++ [ "--enable-jemalloc" ];
+  });
 in
 {
-  home.packages = [ pkgs.tmux ];
+  home.packages = [ tmuxNext ];
 
   # Tmux configuration
   xdg.configFile."tmux/tmux.conf".source = dotfiles.linkHere ./. "config/tmux.conf";
