@@ -4,7 +4,7 @@ Decision aid referenced by the `plan` skill's AGREE Requirement Clarification. *
 
 ## Role and purpose
 
-- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through A1–A7 cadence with AskUserQuestion, Codex through the Blocking Interview Protocol with `$plan --answer`)
+- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through AskUserQuestion, Codex through the Blocking Interview Protocol with `$plan --answer`). In both, A1 and A5 are the blocking gates — A7 is a non-blocking direction statement, not a confirmation turn
 - Trigger: complexity is one of `small` / `medium` / `large` (trivial and xl are out of scope)
 - Purpose: solidify user intent to the level where implementation will not go wrong. Not protocol checklist completion.
 - Process control (the clarity loop, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md AGREE as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
@@ -198,7 +198,7 @@ At AGREE clarity-gate convergence, output the following subsections immediately 
 Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md AGREE / Blocking Interview Protocol Step E. Only the decision axes are here:
 
 - Ask count 0: if there are also zero additional-confirmation triggers, skip the user-confirmation turn itself
-- Ask count 1–4: bundle all into a single AskUserQuestion call (slot cap 4 = AskUserQuestion API hard cap; do not use an override slot)
+- Ask count 1–4: bundle all into a single AskUserQuestion call (slot cap 4 = AskUserQuestion API hard cap; do not use an override slot). This batching rule is calibrated for Codex's Blocking Interview, where ending a turn to ask is expensive, so questions are bundled up to the cap. Claude's AskUserQuestion round-trip is cheap, so its SKILL.md AGREE asks one question per call instead — the same principle (batch according to round-trip cost), two realizations. Carrying the restate or a scope rationale inside a question's own text is context, not a second question, and is allowed under both
 - Ask count 5+: by cost priority (Outcome > Boundary > Context > Definition; within a tier, ascending observation number), take the top 4; carry the rest into the head of the next clarification iteration's confirmation candidates
 - Every real question must carry an AI-recommended answer with a short rationale. If you cannot recommend, the state is one of insufficient investigation / question granularity too broad / user-only decision candidates not organized — narrow the question or do more research, and only ask once a recommendation and rationale can be attached
 

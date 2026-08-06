@@ -3,6 +3,45 @@ import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 const CWD_ROOT = new URL(`file://${Deno.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
+const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
+
+// The AGREE cadence is a cross-agent contract: the shared references assert
+// "A1 and A5 are the blocking gates, A7 is non-blocking" for both agents, so
+// pinning only one side would let the other regress while the suite stays green.
+const AGENT_PLANS: ReadonlyArray<readonly [string, string]> = [
+  ["Codex", CODEX_PLAN],
+  ["Claude", CLAUDE_PLAN],
+];
+
+// Needles are joined with their neighbouring text rather than kept as short
+// phrases: assertIncludesAll does not check adjacency, so a bare "(not a gate)"
+// would still match after A7 was re-gated and the phrase survived elsewhere.
+const AGREE_GATE_NEEDLES = [
+  "A1 Direction check",
+  "concrete options and a marked recommendation",
+  'Never ask a bare "is this right?" yes/no',
+  "has bought nothing. Wait for the user's response",
+  "**A5 Approve approach** (one question)",
+  "go with recommended / pick another / modify",
+  "**A7 Direction statement** (not a gate)",
+  "Do not wait",
+  "Proceeding with:",
+  "trivial, A1 is the single mandatory gate",
+  "no adjacent candidates",
+];
+
+// Outside the AGREE section, so asserted against the whole file.
+const PLAN_PREAMBLE_NEEDLES = [
+  "Complexity gates the *depth after agreement* (DEEPEN rounds, plan body size) — never the agreement itself.",
+  "if complexity is trivial, skip DEEPEN",
+  "Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation",
+];
+
+const AGREE_LEGACY_NEEDLES = [
+  "A1 Purpose check",
+  "A7 Summarise",
+  "Wait for the user's OK",
+];
 const SHARED_CHECKLIST =
   "home/programs/agents/shared/plan/references/requirement-checklist.md";
 const CRITIC_PROMPT =
@@ -116,6 +155,7 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
   assertIncludesAll(restate, [
     "restate of understanding",
     "does not replace an Ask",
+    "Do **not** emit it as a standalone message",
   ]);
   assertIncludesAll(clarification, [
     "Blocking Interview Protocol",
@@ -138,6 +178,19 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
     "operating limit",
   ]);
 });
+
+for (const [agent, path] of AGENT_PLANS) {
+  Deno.test(`${agent} AGREE keeps A1/A5 blocking and A7 non-blocking`, async () => {
+    const skill = await readRepoFile(path);
+
+    assertIncludesAll(section(skill, "## AGREE"), AGREE_GATE_NEEDLES);
+    assertIncludesAll(skill, PLAN_PREAMBLE_NEEDLES);
+    // Scoped to the whole file, not the AGREE section: legacy gate wording
+    // reintroduced under Phase overview or Design notes would slip past a
+    // section-scoped exclusion while still re-establishing the gate.
+    assertExcludesAll(skill, AGREE_LEGACY_NEEDLES);
+  });
+}
 
 Deno.test("Codex Approval Summary exposes approval decision details", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
@@ -289,8 +342,14 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
     "concrete `next:`",
     "choose an assumption / proceed as-is / continue clarifying / scope out",
     "slot cap 4 = AskUserQuestion API hard cap",
+    "A7 is a non-blocking direction statement",
+    "Claude's AskUserQuestion round-trip is cheap",
+    "asks one question per call instead",
+    "is context, not a second question",
   ]);
   assertExcludesAll(checklist, [
+    "A1–A7 cadence",
+    "A1-A7 cadence",
     "Round budget",
     "round budget",
     "Rounds:",
@@ -326,9 +385,12 @@ Deno.test("Critic prompt mandates regression findings for clarification failures
     "codebase-recoverable / technical discovery",
     "explicit user-selected assumption",
     "do not re-interview it solely because it is subjective",
+    "A7 is a non-blocking direction statement",
   ]);
   assertExcludesAll(prompt, [
     "subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the DEEPEN Consolidated Interview queue",
+    "A1–A7 cadence",
+    "A1-A7 cadence",
   ]);
 });
 

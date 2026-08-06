@@ -492,7 +492,7 @@
       "/tmp"
     ]
   },
-  "model": "claude-opus-5",
+  "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
       {

@@ -13,6 +13,8 @@ Do not write code or create files until you have agreed on the design with the u
 
 Every request goes through PARSE → AGREE. No exception for typo fixes, single config flips, or one-line copy edits. "Simple" requests are exactly where unverified assumptions cause the most wasted work. For trivial work the design body can be one or two sentences, but **presentation and agreement are mandatory**.
 
+Complexity gates the *depth after agreement* (DEEPEN rounds, plan body size) — never the agreement itself.
+
 ## Quick Start
 
 ```
@@ -68,7 +70,7 @@ Every real clarification question must include a recommended answer and a short 
 
 ### Restate
 
-Summarize the user's request in one sentence. This is a restate of understanding and does not replace an Ask.
+Form a one-sentence summary of the user's request. This is a restate of understanding and does not replace an Ask. Do **not** emit it as a standalone message — it is carried into A1's question text, or into A5's preamble when A1 is skipped. Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation.
 
 ### Complexity estimate
 
@@ -100,13 +102,16 @@ The Direction Agreement Gate. Conversational. Goal: agree on *Purpose* and *Appr
 
 **Steps A1–A7 (Codex realization via Blocking Interview Protocol):**
 
-- **A1 Purpose check** (one question): present the restate; ask "is this right + anything to add?". Wait for the user's response (natural-language turn or `$plan --answer`).
+- **A1 Direction check** (one question): the question text carries the restate (one sentence) **plus** a scope/boundary question with concrete options and a marked recommendation. Never ask a bare "is this right?" yes/no — a question that can be answered with "ok" and nothing else has bought nothing. Wait for the user's response (natural-language turn or `$plan --answer`).
+  - **Skipping is limited to small and above.** For trivial, A1 is the single mandatory gate: A3–A7 collapse into it, so the one question carries the restate, the one-line design, and proceed/adjust.
+  - For small+, A1 may be skipped only when BOTH hold: (1) the request names a closed, explicit scope (a specific file / value / behavior), and (2) the PARSE probes found no adjacent candidate that could plausibly be in scope — sibling configs, other call sites, related tests, same-named assets. If (2) fails, the adjacent candidates you found **are** the scope options; "no options could be formed" cannot be claimed while holding them.
+  - When skipping, open A5's preamble with the restate plus a one-line evidence record — `Scope: <X> only (no adjacent candidates; probed <what you searched>)` — and record the same finding in the plan body's `### Self-resolved` as `observation` / `value` / `source: <probe command + file:lines>`.
 - **A2 Re-ask**: if the answer is empty or ambiguous, stay in this phase and ask again — still one question per message.
 - **A3 List approaches**: 2-3 candidate approaches, each labelled with the tradeoff axis in one sentence.
 - **A4 Recommend**: name the AI's recommended approach and give 1-2 sentences of reasoning.
 - **A5 Approve approach** (one question): "go with recommended / pick another / modify". Wait for the user's response.
 - **A6 Companion consent** (only when upcoming questions are likely visual — UI mockups, layout comparisons, etc.): offer `/agent-browser` in a standalone message, once. Skip A6 entirely when no visual questions are anticipated.
-- **A7 Summarise**: one-sentence summary of the agreed direction. Wait for the user's OK; on OK, advance to EXPLORE.
+- **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` as prose and advance to EXPLORE immediately. Do not wait. The sentence survives compaction as a durable anchor and keeps EXPLORE/DEEPEN from drifting, but asking for an OK on a direction A5 just approved buys nothing.
 
 AGREE produces three subsections that get written into the plan body (preserving the downstream Critic parse contract): `### Assumptions`, `### Self-resolved`, `### Unresolved Items`. See `### AGREE output` below.
 
