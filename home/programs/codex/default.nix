@@ -15,8 +15,8 @@ let
   # those at runtime as the user trusts new project directories or dismisses
   # migration prompts.
   managed = {
-    model = "gpt-5.5";
-    model_reasoning_effort = "high";
+    model = "gpt-5.6-sol";
+    model_reasoning_effort = "xhigh";
     model_reasoning_summary = "concise";
     sandbox_mode = "danger-full-access";
     notify = [
