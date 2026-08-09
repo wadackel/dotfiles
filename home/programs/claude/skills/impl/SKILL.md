@@ -43,11 +43,11 @@ If no plan can be resolved, reject with `Run /plan <request> first. No plan to e
    5. **Diff size check** via `git diff --stat`. If the diff is ≥ 20 files or ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Inline the changed files + `git diff <baseline_sha>..HEAD` + the project's CLAUDE.md path into the prompt. Apply HIGH-confidence simplifications; present MEDIUM/LOW to the user
    6. Once all acceptance-criteria verifications succeed, `TaskUpdate` to `completed`. There is no per-task review gate — quality and security are judged at the final gate
 5. After all implementation tasks complete, the final `Run /completion-audit and /subagent-review` task unblocks automatically. Execute in this order:
-   1. Invoke `/completion-audit`. Its default mode is a **self-audit** (main session cross-checks Completion Criteria × evidence and emits the table); a fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (large/xl plan, evidence gaps, or explicit user request — see its SKILL.md). If the verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run. On 3 consecutive FAILs on the escalated subagent path, leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, and present the unresolved gap analysis to the user
+   1. Invoke `/completion-audit`. Its default mode is a **self-audit** (main session cross-checks Completion Criteria × evidence, records the full table in the gate sidecar, and reports the verdict); a fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (large/xl plan, evidence gaps, or explicit user request — see its SKILL.md). If the verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run. On 3 consecutive FAILs on the escalated subagent path, leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, and present the unresolved gap analysis to the user
    2. On **VERIFIED PASS** (self-audit or subagent), invoke `/subagent-review` against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`). `/subagent-review` runs a unified Spec & Quality review → parallel orthogonal Domain specialists → Security heuristic internally. The Security step replaces the previous standalone Security Sweep. It must return PASS (no open MUST_FIX) to close the gate
    3. If `/subagent-review` returns **PASS** → mark the gate task complete and emit the final report
    4. If `/subagent-review` returns **FAIL** after internal retry exhaustion (3 tries per stage) → leave the task `in_progress`, append `[BLOCKED: subagent-review escalated]` to the description, and present the unresolved MUST_FIX issues to the user
-6. Emit the final report: changed files / added tests / deviations / subagent-review verdict / **verbatim transcription of `/subagent-review`'s `## Mandatory Final Output` block (no paraphrasing or summarization, regardless of PASS or FAIL)** / suggested next steps. `/santa-loop` is NOT part of the default flow — run it manually if additional dual-reviewer (Claude + Codex) convergence is wanted before opening a PR
+6. Emit the final report per the **Final report template** below — outcome first, user-decision items listed individually, full record referenced by its gate-sidecar path. `/santa-loop` is NOT part of the default flow — run it manually if additional dual-reviewer (Claude + Codex) convergence is wanted before opening a PR
 
 ## Three-element rule (enforced per task description)
 
@@ -114,7 +114,24 @@ The "Run /completion-audit and /subagent-review" task that `/plan`'s Phase 5 (pa
 1. `/completion-audit` first — evidence-sufficiency audit (no re-execution; it reads per-task `metadata.evidence` against the plan's Completion Criteria). Default mode is a main-session **self-audit table**; a fresh `completion-auditor` subagent runs only on escalation (large/xl plan, evidence gaps, explicit user request). Must return **VERIFIED PASS** (self-audit or subagent) before continuing. On 3 consecutive FAILs on the escalated path, append `[BLOCKED: completion-audit escalated]` and present to the user
 2. `/subagent-review` second — runs against the aggregated diff (`git diff <first-task baseline_sha>..HEAD`). Internally runs a unified Spec & Quality review → parallel orthogonal Domain specialists (all matching triggers dispatched in the same turn) → Security heuristic. The Security step uses `~/.claude/skills/subagent-review/references/security-trigger-heuristic.md` and dispatches `security-auditor` only when a trigger fires. Must return **PASS** (no open MUST_FIX) to close the gate. On internal retry exhaustion (3 tries per stage), append `[BLOCKED: subagent-review escalated]` and present to the user
 
-**Mandatory user-facing transcription**: regardless of overall verdict (`PASS` or `FAIL`), the final report MUST include `/subagent-review`'s `## Mandatory Final Output` block transcribed verbatim. Do NOT paraphrase, summarize, re-rank, or omit it on a clean `PASS` — `SHOULD_FIX` / `NIT` / Spec Notes / Security `MEDIUM`/`LOW` items live in that block and must reach the user unfiltered. When the block is the zero-finding shortcut (`Non-blocker findings: none across all stages`), emit that single line as-is.
+**Final report template**: the final report is a reader document, not an audit dump. The full gate record (self-audit table, all review findings verbatim) lives in the gate sidecar `~/.claude/plans/<plan-slug>.gate.log.md`, written by `/completion-audit` and `/subagent-review`. The report follows this shape:
+
+```
+# 完了報告
+
+<成果: 何が変わり、何で検証したか。1〜3文>
+
+変更点: <意図ごとに散文でまとめる。網羅的なファイル列挙はしない>
+逸脱: <あれば散文で。なければ省略>
+
+判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
+- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を1件ずつ>
+
+次のステップ: <行動可能なもののみ。なければ省略>
+全記録: ~/.claude/plans/<plan-slug>.gate.log.md
+```
+
+Do not transcribe the review findings block into the report — reference the sidecar path and re-list only the user-decision items (individually, never as counts). If the sidecar was not written (write failure reported by the gate skills), fall back to including the full findings block inline — unless the gate skill already emitted it inline in its own reply, in which case reference that reply instead of repeating it.
 
 `/santa-loop` is **not** part of the default final gate. Invoke it manually when additional dual-reviewer (Claude + Codex) convergence is wanted for higher-risk changes, e.g. before opening a PR. `/santa-loop` requires `/completion-audit` to have already returned VERIFIED PASS (see its SKILL.md preconditions).
 

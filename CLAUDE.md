@@ -219,11 +219,14 @@ This repository includes comprehensive Claude Code configuration:
   - `claude-memo.ts`: Stop hook that writes session summaries to Obsidian daily notes. Debug: `$TMPDIR/claude-memo.log`
   - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory)
   - `claude-pane-status.ts`: Hook that writes session state to tmux pane options for the popup picker. Invoked per event by argv[0] (SessionStart/End/UserPromptSubmit/Stop/StopFailure/Notification/PermissionDenied/CwdChanged/Subagent*/Worktree*). Unknown events are a no-op. Debug: pipe JSON to stdin with `TMUX_PANE` set
+  - `writing-metrics/`: readability measurement tools for dialogue and generated documents (Japanese-English mixing density, reply volume percentiles, workflow-vocabulary contexts). Run every few weeks to compare Writing-norm metrics before and after
   - Running Claude script tests: `deno test --allow-env=HOME --allow-read --allow-write --allow-run home/programs/claude/scripts/<name>_test.ts` (`--allow-run` is required for test files that spawn the hook as a subprocess via `Deno.Command`, e.g. `bash-policy_test.ts`'s entry-point tests)
   - When adding new scripts, add `"Bash(*<script-name>*)"` to `permissions.allow` in `settings.json` (wildcard prefix handles full-path invocations by Claude. `Bash(<script-name>*)` does not match path-prefixed invocations)
   - Invocations with redirects (`2>/dev/null`, etc.) do not match `Bash()` patterns (known limitation), but `approve-piped-commands.ts` reads patterns from `settings.json` and auto-approves, so no additional work is needed
   - Exception: Scripts called from `hooks` are not Bash tool calls, so adding to `permissions.allow` is not required
   - When adding new scripts, grant execute permission with `chmod +x` (execute bit is required for hook execution. Git manages mode as 100644/100755, so a commit is also needed)
+- **Output styles**: `home/programs/claude/output-styles/` (symlinked to `~/.claude/output-styles`). `concise` is the global default via `settings.json`'s `outputStyle` key. Health check: `claude -p 'STYLE-CHECK' --settings '{"outputStyle":"concise"}'` must return `concise-active` — if not, the style is not being loaded
+- **Gate sidecar**: `/completion-audit` and `/subagent-review` write their full records (self-audit table, verbatim findings) to `~/.claude/plans/<plan-slug>.gate.log.md`; replies carry only the digest
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
 - **Skills layout**:
   - `home/programs/claude/skills/`: public Claude Code skills exposed as `~/.claude/skills`

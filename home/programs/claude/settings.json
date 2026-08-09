@@ -1,5 +1,6 @@
 {
   "skillListingBudgetFraction": 0.05,
+  "outputStyle": "concise",
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -21,6 +22,10 @@
       "Bash(* -h *)",
       "Bash(* -v)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
+      "Bash(*writing-metrics/baseline-mixing.ts*)",
+      "Bash(*writing-metrics/task-other.ts*)",
+      "Bash(*writing-metrics/task-src.ts*)",
+      "Bash(*writing-metrics/vocab-inventory.ts*)",
       "Bash(*retrospective-ledger.ts*)",
       "Bash(*merge-settings/merge.ts*)",
       "Bash(*permission-review/permission-review.ts*)",

@@ -14,6 +14,8 @@
 
   home.file.".claude/skills".source = dotfiles.linkHere ./. "skills";
 
+  home.file.".claude/output-styles".source = dotfiles.linkHere ./. "output-styles";
+
   # scripts ディレクトリのシンボリックリンク (ディレクトリ全体をリンク)
   home.file.".claude/scripts".source = dotfiles.linkHere ./. "scripts";
 

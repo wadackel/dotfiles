@@ -180,7 +180,7 @@ The main session decomposes — no subagent dispatch.
 
 No side effects — do not write any state file. Approval is signalled purely by the user typing `/impl` as a top-level prompt in the next turn; `/impl` resolves this plan from conversation context (the `## Plan ready` File line below).
 
-Emit the full plan body inline so the user can approve without opening the file, then the metadata block:
+Emit a design digest — the Approach skeleton (each design decision in one or two sentences), the Files to Change list, and the Task Outline — followed by the plan file path for the full text, then the metadata block. Do not inline the full plan body; the file is the review surface for detail.
 
 ```
 ## Plan ready
@@ -189,5 +189,3 @@ Emit the full plan body inline so the user can approve without opening the file,
 - Tasks: <count> (+ /completion-audit + /subagent-review gate)
 - Status: PENDING APPROVAL — type `/impl` to approve and execute
 ```
-
-xl fallback (plan body >~600 lines): replace the inline body with a TOC of `##` headers + the plan path.

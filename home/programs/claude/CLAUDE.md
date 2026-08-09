@@ -83,6 +83,16 @@
 - User conversation language never overrides an artifact language default. Switch languages only when the rule explicitly permits it (e.g., `ja` flag passed, CLAUDE.md Language section allows it).
 - Before submitting PR bodies, commit messages, release notes, or other artifacts covered by a language rule, verify the entire body is in the target language in one pass — not per section.
 
+### Writing
+
+- Replies carry only what changes the reader's next action. Full data (audit tables, raw findings, exhaustive lists) goes to a file, referenced by path.
+- Do not report workflow internals — which internal branch ran, which stage was skipped, how many rounds a loop took — unless it changes the reader's next action. Refer to a mechanism by its skill name when it must be named.
+  - As a sub-rule, keep workflow vocabulary (gate, escalation, self-audit, orchestrator, and similar skill-internal terms) out of prose; say the function in plain language instead.
+  - Exemption: severity labels (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values, and skill names are machine contract and may appear as-is.
+- This rule never changes which language an artifact is written in — Language Defaults above decides that. Within prose that is already Japanese: translate translatable English words; keep code identifiers, commands, file paths, product names, and skill names in their original form. When unsure whether to translate, keep the original.
+- Write complete sentences. Telegraphic fragments ("idx stable", "3 UF2 exit 0") do not belong in prose — put command results in code blocks or state them as sentences.
+- Define an uncommon technical term at first use, or choose the plain word.
+
 ### Design Principles
 
 - Single responsibility is context-dependent. Internal side effects are acceptable; prefer purity at public boundaries.

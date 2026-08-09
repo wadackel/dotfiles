@@ -11,7 +11,7 @@ A completion claim without audit is a lie, not an optimization.
 
 **Core principle:** Evidence before claims, always. But evidence is gathered during implementation, not re-gathered at the gate.
 
-**Mode selection:** The default is a **self-audit** — the main session cross-checks every Completion Criteria item against the collected evidence and presents the table to the user. A fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (Step 3). This keeps the evidence discipline while removing a subagent round-trip that, measured over 18 gate executions, passed 94% of the time and never caught a functional defect — the discipline lives in `/impl`'s per-task raw-evidence rule, which is unchanged.
+**Mode selection:** The default is a **self-audit** — the main session cross-checks every Completion Criteria item against the collected evidence, records the full table in the gate sidecar, and replies with the verdict line (see Step 2). A fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (Step 3). This keeps the evidence discipline while removing a subagent round-trip that, measured over 18 gate executions, passed 94% of the time and never caught a functional defect — the discipline lives in `/impl`'s per-task raw-evidence rule, which is unchanged.
 
 ## Completion Audit Workflow
 
@@ -70,7 +70,7 @@ When building the evidence document, preserve these tags verbatim from the plan.
 
 ### Step 2: Self-Audit (default)
 
-The main session performs the audit itself. For **every** Completion Criteria item, cross-check it against the Task Evidence and emit a table to the user:
+The main session performs the audit itself. For **every** Completion Criteria item, cross-check it against the Task Evidence and build the full table:
 
 ```
 ## Self-Audit
@@ -84,6 +84,18 @@ The main session performs the audit itself. For **every** Completion Criteria it
 
 VERIFIED: PASS (self-audit)   ← or VERIFIED: FAIL (self-audit)
 ```
+
+**Two-layer emission** — the full table goes to the gate sidecar, the reply stays short:
+
+- Sidecar: `~/.claude/plans/<plan-slug>.gate.log.md` (derived from the plan file path). Create it if it does not exist; append if it does — in the normal `/impl` flow this skill is the first writer and `/subagent-review` appends later, but on a re-run the file already holds earlier rounds. Append each run under a `### Round N` heading — read the existing file first to determine the next N. Never overwrite earlier rounds. When no plan file is resolvable (standalone invocation), write to the session scratchpad and state that path in the reply. If the write fails, emit the full table inline in the reply and report the failure.
+- Reply template:
+
+```
+監査結果: VERIFIED: PASS (self-audit) — gating 15項目すべて PASS
+全表: ~/.claude/plans/<plan-slug>.gate.log.md
+```
+
+Always state the gating item count (a shrunken audit should be detectable without opening the file). Any non-PASS row (`FAIL` / `未実施` / BLOCKED BY USER) appears in the reply as a table containing only those rows — gaps are exactly what the user acts on.
 
 Rules:
 - `[outcome]`-tagged items are excluded from the verdict (NOT GATING) — same protocol as the subagent path
@@ -135,9 +147,9 @@ Agent tool:
 
 **Handling the auditor result (escalation path only):**
 
-**Relay the audit findings to the user.** The auditor's output is returned as an Agent tool result, which is not visible to the user. You MUST relay the auditor's complete findings — per-criterion assessments, dimension summaries, and verdict — before taking any action. Display the auditor's output in full; do not paraphrase or summarize into "audit passed" or similar.
+**Relay the audit findings to the user.** The auditor's output is returned as an Agent tool result, which is not visible to the user. Write the auditor's complete output verbatim to the gate sidecar (same file and fallback rules as Step 2), and relay in the reply: the verdict, the dimension summaries, and the full gap analysis for every non-PASS criterion. The escalation path fires only under the riskiest conditions (large/xl plans, evidence gaps), so the dimension summaries stay in the reply — only per-criterion PASS detail moves to the sidecar. Never compress the relay to "audit passed".
 
-On re-runs (after FAIL), relay the new audit findings each time.
+On re-runs (after FAIL), relay the new audit findings each time under a new `### Round N` heading in the sidecar.
 
 Then take action based on the verdict:
 

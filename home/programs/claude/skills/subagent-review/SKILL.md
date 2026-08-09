@@ -60,7 +60,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 ## Workflow
 
-> **Cross-cutting invariant**: All non-blocker findings (`NIT` / Security `MEDIUM`/`LOW` / the Spec & Quality stage's populated `### Notes`) — plus any `SHOULD_FIX` / `HIGH` items the main session **intentionally deferred** (out-of-scope, follow-up issue, etc.) — from every stage MUST be aggregated and reported via the [Mandatory Final Output](#mandatory-final-output) section below, regardless of stage `VERDICT` (including `PASS`). Per-stage handling tables only govern flow control; they do not exempt findings from final emission. Under the current policy `SHOULD_FIX` and `HIGH` are blockers, so a clean `PASS` exit normally yields zero of them in the final report.
+> **Cross-cutting invariant**: All non-blocker findings (`NIT` / Security `MEDIUM`/`LOW` / the Spec & Quality stage's populated `### Notes`) — plus any `SHOULD_FIX` / `HIGH` items the main session **intentionally deferred** (out-of-scope, follow-up issue, etc.) — from every stage MUST be recorded verbatim in the gate sidecar file, and every **user-decision item** (deferred `SHOULD_FIX`/`HIGH`, Security `MEDIUM`+) MUST additionally appear individually in the user-facing reply — never compressed into a count. See [Mandatory Final Output](#mandatory-final-output). Per-stage handling tables only govern flow control; they do not exempt findings from sidecar recording. Under the current policy `SHOULD_FIX` and `HIGH` are blockers, so a clean `PASS` exit normally yields zero of them.
 
 ### Step 1: Context Collection
 
@@ -190,9 +190,36 @@ Also append the same scope-discipline line as Step 4: out-of-scope findings cap 
 
 ## Mandatory Final Output
 
-After all stages (Spec & Quality / Domain / Security) complete — regardless of overall verdict — `/subagent-review` MUST emit a single aggregated findings block as the last thing in its output. This is a non-skippable invariant: a `PASS` verdict on every stage does NOT exempt this emission.
+After all stages (Spec & Quality / Domain / Security) complete — regardless of overall verdict — `/subagent-review` MUST (1) write the full aggregated findings block to the **gate sidecar file**, and (2) emit a short two-layer reply to the user. This is a non-skippable invariant: a `PASS` verdict on every stage does NOT exempt either half.
 
-### Extraction rule
+### Gate sidecar file
+
+- Path: `~/.claude/plans/<plan-slug>.gate.log.md`, derived from the resolved plan file (`<plan>.md` → `<plan>.gate.log.md`). When no plan file is resolvable (ad-hoc invocation), write to the session scratchpad instead and state that path in the reply.
+- Create the file if it does not exist; append if it does (in the normal `/impl` flow, `/completion-audit` creates it first).
+- Each write appends under a `### Round N` heading — read the existing file first to determine the next N. Never overwrite earlier rounds.
+- If the write fails, fall back to the pre-sidecar behavior: emit the full findings block inline in the reply and report the write failure.
+
+### User-facing reply template
+
+The reply carries only what changes the user's next action:
+
+```
+## レビュー結果
+
+- Spec & Quality: PASS (1回)
+- Domain (nix-reviewer): PASS (2回)
+- Security: PASS (1回)
+
+判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
+- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を、1〜2文 + file:line で1件ずつ>
+
+NIT 6件: 命名3 / コメント2 / 型1   ← 主題別の件数1行 (ゼロなら省略)
+全記録: ~/.claude/plans/<slug>.gate.log.md
+```
+
+User-decision items (deferred `SHOULD_FIX`/`HIGH`, Security `MEDIUM`+) appear individually — compressing them into a count is a violation. `NIT` / `LOW` / Notes appear as one themed count line; their full text lives only in the sidecar.
+
+### Extraction rule (sidecar content)
 
 For each stage that ran, take its **last** subagent response (the final round's output, including the `PASS` round when the stage looped through `FAIL` → fix → re-review) and extract every populated section that did not cause that subagent's `FAIL` verdict:
 
@@ -200,7 +227,7 @@ For each stage that ran, take its **last** subagent response (the final round's 
 - Security: populated `MEDIUM` and `LOW` items (severity names preserved verbatim — do NOT translate to MUST/SHOULD/NIT).
 - Any other populated non-blocker section emitted by a future reviewer — this rule is intentionally generalized.
 
-Copy each section **verbatim** (file:line, description, suggested fix). Do not paraphrase, summarize, or re-rank.
+Copy each section into the sidecar **verbatim** (file:line, description, suggested fix). Do not paraphrase, summarize, or re-rank inside the sidecar — it is the audit-trail layer; selectivity happens only in the reply.
 
 ### Multi-round aggregation rule
 
@@ -210,15 +237,15 @@ Note: SHOULD_FIX (and HIGH) are blockers under the current policy, so a stage th
 
 ### Zero-finding shortcut
 
-If every stage has zero non-blocker findings after the union+dedupe pass, emit exactly one line:
+If every stage has zero non-blocker findings after the union+dedupe pass, the sidecar round entry is exactly one line:
 
 ```
 Non-blocker findings: none across all stages
 ```
 
-Do NOT emit per-stage `(none)` boilerplate.
+Do NOT emit per-stage `(none)` boilerplate. The reply then carries the stage verdicts and「なし」for user-decision items.
 
-### Output template (when at least one finding exists)
+### Sidecar template (when at least one finding exists)
 
 ```
 ## Final Findings Report
@@ -250,7 +277,7 @@ Do NOT emit per-stage `(none)` boilerplate.
 
 Only include subsections for stages/severities that produced findings. Stage-skipped reviewers (e.g. Domain reviewer not triggered because no matching file extension was in the diff) are simply absent from the block — do NOT add `(skipped)` rows.
 
-This block is the canonical hand-off to `/impl`'s final report and MUST be transcribed verbatim downstream.
+The sidecar is the canonical full record. `/impl`'s final report references the sidecar path and re-lists only the user-decision items — it does not transcribe this block.
 
 ## Loop Limits
 
@@ -266,7 +293,8 @@ This block is the canonical hand-off to `/impl`'s final report and MUST be trans
 - Accepting NIT / MEDIUM / LOW as a blocker (only MUST_FIX + SHOULD_FIX, and CRITICAL + HIGH for security, block)
 - Retrying the same subagent instead of spawning fresh
 - Proceeding to next task while review has open MUST_FIX or SHOULD_FIX (CRITICAL / HIGH) issues
-- Suppressing or summarizing NIT / Spec Notes / Security MEDIUM/LOW (and any intentionally deferred SHOULD_FIX / HIGH) findings in the user-facing report when overall verdict is PASS — these MUST flow through the [Mandatory Final Output](#mandatory-final-output) block verbatim
+- Compressing a user-decision item (deferred SHOULD_FIX / HIGH, Security MEDIUM+) into a count in the reply, or omitting any finding from the gate sidecar — the sidecar record is verbatim and complete, the reply lists every user-decision item individually
+- Skipping the sidecar write on a clean PASS ("nothing to record" is wrong — stage verdicts and the zero-finding line still go in)
 
 ## Relationship with codex-review
 
