@@ -3,6 +3,7 @@ import {
   basename,
   cwdBranchParts,
   formatElapsed,
+  formatRemaining,
   parseSubagents,
   renderSubagentTree,
   statusColor,
@@ -337,4 +338,34 @@ Deno.test("toolSegmentText: Edit-family with empty lastToolSubject (delegates to
     ),
     "Edit",
   );
+});
+
+Deno.test("formatRemaining: sub-minute renders <1m", () => {
+  assertEquals(formatRemaining(1059, 1000), "<1m");
+  assertEquals(formatRemaining(1001, 1000), "<1m");
+});
+
+Deno.test("formatRemaining: minutes below an hour", () => {
+  assertEquals(formatRemaining(1000 + 12 * 60, 1000), "12m");
+  assertEquals(formatRemaining(1000 + 60, 1000), "1m");
+  assertEquals(formatRemaining(1000 + 3599, 1000), "59m");
+});
+
+Deno.test("formatRemaining: hours carry minutes", () => {
+  assertEquals(formatRemaining(1000 + 3 * 3600 + 47 * 60, 1000), "3h47m");
+  assertEquals(formatRemaining(1000 + 3600, 1000), "1h");
+  assertEquals(formatRemaining(1000 + 86399, 1000), "23h59m");
+});
+
+Deno.test("formatRemaining: a past timestamp falls through to <1m", () => {
+  // UsageFooter screens expired windows out before calling this, so the value
+  // is never rendered — the case is pinned only so a future caller that skips
+  // that screening fails loudly in review rather than silently here.
+  assertEquals(formatRemaining(900, 1000), "<1m");
+  assertEquals(formatRemaining(1000, 1000), "<1m");
+});
+
+Deno.test("formatRemaining: a day or more renders whole days", () => {
+  assertEquals(formatRemaining(1000 + 86400, 1000), "1d");
+  assertEquals(formatRemaining(1000 + 2 * 86400 + 5 * 3600, 1000), "2d");
 });

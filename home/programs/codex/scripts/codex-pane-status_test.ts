@@ -11,6 +11,7 @@ import {
   countSubagents,
   eventToOps,
   extractEditFile,
+  extractRateLimits,
   extractTokenPct,
   extractToolError,
   extractToolSubject,
@@ -1343,6 +1344,52 @@ Deno.test("extractTokenPct: uses last usage instead of cumulative session total"
     import.meta.url,
   ).pathname;
   assertEquals(await extractTokenPct(path), 11);
+});
+
+const FIXTURE_RECORDED_AT = Math.floor(
+  Date.parse("2026-07-11T06:31:38.675Z") / 1000,
+);
+
+Deno.test("extractRateLimits: reads the latest rate_limits and rounds percentages", async () => {
+  const path = new URL("../fixtures/rate-limits-ok.jsonl", import.meta.url)
+    .pathname;
+  assertEquals(await extractRateLimits(path), {
+    windows: [
+      { label: "5h", usedPct: 32, resetsAt: 1783753470 },
+      { label: "7d", usedPct: 6, resetsAt: 1784356274 },
+    ],
+    // The record's own timestamp, not the clock at read time — a resumed
+    // session must not republish a days-old tail as current.
+    recordedAt: FIXTURE_RECORDED_AT,
+  });
+});
+
+Deno.test("extractRateLimits: survives a payload without model_context_window", async () => {
+  const path = new URL(
+    "../fixtures/rate-limits-no-context-window.jsonl",
+    import.meta.url,
+  ).pathname;
+  // extractTokenPct bails on this record; rate limits must not ride along.
+  assertEquals(await extractTokenPct(path), null);
+  assertEquals(await extractRateLimits(path), {
+    windows: [
+      { label: "5h", usedPct: 32, resetsAt: 1783753470 },
+      { label: "7d", usedPct: 6, resetsAt: 1784356274 },
+    ],
+    recordedAt: FIXTURE_RECORDED_AT,
+  });
+});
+
+Deno.test("extractRateLimits: token_count without rate_limits → null", async () => {
+  const path = new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
+  assertEquals(await extractRateLimits(path), null);
+});
+
+Deno.test("extractRateLimits: missing transcript → null", async () => {
+  assertEquals(await extractRateLimits(null), null);
+  const path = new URL("../fixtures/does-not-exist.jsonl", import.meta.url)
+    .pathname;
+  assertEquals(await extractRateLimits(path), null);
 });
 
 Deno.test("extractTokenPct: token_count missing / zero window / file missing return null", async () => {

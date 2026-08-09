@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  bodyHeightFor,
   codexCwdHash,
   isLivePaneCommand,
   nextUserLabel,
@@ -8,9 +9,18 @@ import {
   parseTarget,
   readTaskProgress,
   readTaskProgressForRow,
+  showUsageFooter,
   TMUX_FORMAT,
 } from "./picker.tsx";
-import { type Row2Seg, truncateTopSegBody } from "./components.tsx";
+import {
+  clampUsageTokens,
+  DOGRUN,
+  type Row2Seg,
+  truncateTopSegBody,
+  usageTokens,
+} from "./components.tsx";
+import { type AgentUsage } from "../shared/agent-usage.ts";
+import { stringCells } from "./cell_width.ts";
 import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
 
 Deno.test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
@@ -702,4 +712,143 @@ Deno.test("truncateTopSegBody: budget too small for `…)` → generic slice fal
   // maxBodyCells < 3 → paren-preservation guard fails, fall back to slice.
   const seg = mkSeg({ body: "Bash(x)" });
   assertEquals(truncateTopSegBody(seg, 4), "Ba");
+});
+
+// --- Usage footer ---
+
+const USAGE_NOW = 1786248126;
+
+function mkUsage(
+  agent: string,
+  overrides: Partial<AgentUsage> = {},
+): AgentUsage {
+  return {
+    agent,
+    updatedAt: USAGE_NOW,
+    windows: [
+      { label: "5h", usedPct: 42, resetsAt: USAGE_NOW + 6420 },
+      { label: "7d", usedPct: 13, resetsAt: USAGE_NOW + 500000 },
+    ],
+    ...overrides,
+  };
+}
+
+function usageText(usages: AgentUsage[], now = USAGE_NOW): string {
+  return usageTokens(usages, now).map((t) => t.text).join("");
+}
+
+Deno.test("showUsageFooter: hidden without data regardless of size", () => {
+  assertEquals(showUsageFooter(0, 200, 50), false);
+  assertEquals(showUsageFooter(1, 200, 50), true);
+});
+
+Deno.test("showUsageFooter: width threshold is 80", () => {
+  assertEquals(showUsageFooter(2, 79, 50), false);
+  assertEquals(showUsageFooter(2, 80, 50), true);
+});
+
+Deno.test("showUsageFooter: height threshold is 12", () => {
+  assertEquals(showUsageFooter(2, 200, 11), false);
+  assertEquals(showUsageFooter(2, 200, 12), true);
+});
+
+Deno.test("bodyHeightFor: footer costs two rows", () => {
+  assertEquals(bodyHeightFor(50, false), 48);
+  assertEquals(bodyHeightFor(50, true), 46);
+});
+
+Deno.test("bodyHeightFor: floor stays at 5", () => {
+  assertEquals(bodyHeightFor(8, true), 5);
+  assertEquals(bodyHeightFor(6, false), 5);
+});
+
+Deno.test("usageTokens: renders both agents with a 5h countdown only", () => {
+  assertEquals(
+    usageText([mkUsage("claude"), mkUsage("codex")]),
+    "claude 5h 42% ↻1h47m · 7d 13%    codex 5h 42% ↻1h47m · 7d 13%",
+  );
+});
+
+Deno.test("usageTokens: expired window renders -- with no countdown", () => {
+  const usage = mkUsage("claude", {
+    windows: [
+      { label: "5h", usedPct: 42, resetsAt: USAGE_NOW - 1 },
+      { label: "7d", usedPct: 13, resetsAt: USAGE_NOW + 500000 },
+    ],
+  });
+  assertEquals(usageText([usage]), "claude 5h -- · 7d 13%");
+});
+
+Deno.test("usageTokens: only a percentage at or above 80 takes the alert color", () => {
+  const usage = mkUsage("claude", {
+    windows: [
+      { label: "5h", usedPct: 80, resetsAt: USAGE_NOW + 6420 },
+      { label: "7d", usedPct: 79, resetsAt: USAGE_NOW + 500000 },
+    ],
+  });
+  const tokens = usageTokens([usage], USAGE_NOW);
+  assertEquals(
+    tokens.filter((t) => t.color === DOGRUN.err).map((t) => t.text),
+    ["80%"],
+  );
+  assertEquals(tokens.find((t) => t.text === "79%")?.color, DOGRUN.fgDim);
+});
+
+Deno.test("usageTokens: stale data carries an age suffix", () => {
+  const usage = mkUsage("codex", { updatedAt: USAGE_NOW - 29 * 86400 });
+  assertEquals(
+    usageText([usage]),
+    "codex 5h 42% ↻1h47m · 7d 13% (29d ago)",
+  );
+});
+
+Deno.test("usageTokens: fresh data carries no age suffix", () => {
+  const usage = mkUsage("claude", { updatedAt: USAGE_NOW - 14 * 60 });
+  assertEquals(usageText([usage]).includes("ago"), false);
+});
+
+Deno.test("usageTokens: agent with no windows is skipped entirely", () => {
+  assertEquals(usageText([mkUsage("claude", { windows: [] })]), "");
+  assertEquals(
+    usageText([mkUsage("claude", { windows: [] }), mkUsage("codex")]),
+    "codex 5h 42% ↻1h47m · 7d 13%",
+  );
+});
+
+Deno.test("clampUsageTokens: budget with slack keeps every token", () => {
+  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
+  assertEquals(clampUsageTokens(tokens, 200), tokens);
+});
+
+Deno.test("clampUsageTokens: trims the straddling token and drops the rest", () => {
+  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
+  const clamped = clampUsageTokens(tokens, 10);
+  const text = clamped.map((t) => t.text).join("");
+  assertEquals(text.length <= 10, true);
+  assertEquals(text.startsWith("claude"), true);
+});
+
+Deno.test("clampUsageTokens: zero budget yields nothing", () => {
+  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
+  assertEquals(clampUsageTokens(tokens, 0), []);
+});
+
+Deno.test("clampUsageTokens: the widest footer relies on the clamp at cols 80", () => {
+  const worst = (agent: string): AgentUsage => ({
+    agent,
+    updatedAt: USAGE_NOW - 29 * 86400,
+    windows: [
+      { label: "5h", usedPct: 100, resetsAt: USAGE_NOW + 17999 },
+      { label: "7d", usedPct: 100, resetsAt: USAGE_NOW + 500000 },
+    ],
+  });
+  const tokens = usageTokens([worst("claude"), worst("codex")], USAGE_NOW);
+  // Both agents, every window at 100%, both stale, both countdowns at their
+  // longest. The unclamped line overruns an 80-column terminal, so the footer
+  // fits by being trimmed — not by happening to be short enough.
+  assertEquals(stringCells(tokens.map((t) => t.text).join("")), 85);
+
+  const text = clampUsageTokens(tokens, 78).map((t) => t.text).join("");
+  assertEquals(stringCells(text), 78);
+  assertEquals(text.endsWith("…"), true);
 });

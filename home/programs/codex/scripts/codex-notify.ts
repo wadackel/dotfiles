@@ -339,7 +339,7 @@ export async function runCommand(
   args: string[],
   options: { timeoutMs?: number } = {},
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  let timeout: number | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const child = new Deno.Command(cmd, {
       args,

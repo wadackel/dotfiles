@@ -73,6 +73,9 @@ in
   # transition builder)。worktree 内では home/programs/codex/pane-shared.ts が
   # ../tmux/pane-shared.ts への in-worktree symlink。agent-presence.ts と同形。
   home.file.".codex/pane-shared.ts".source = dotfiles.linkHere ./. "pane-shared.ts";
+  # agent-usage.ts は pane-shared.ts と違い Deno.* を使うが、Bun で動く opencode
+  # plugin からは import されないため Web 標準 API 限定の制約に触れない。
+  home.file.".codex/agent-usage.ts".source = dotfiles.linkHere ./. "agent-usage.ts";
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a splice failure means ~/.codex/config.toml is in an unknown state, so

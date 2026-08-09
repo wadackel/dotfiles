@@ -67,7 +67,59 @@ import {
   ROW1_FIXED_OVERHEAD,
   type TaskProgress,
   TITLE_ICON,
+  UsageFooter,
 } from "./components.tsx";
+import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
+
+// ---- Usage footer layout gates ----
+
+// Same threshold as showFilterUI. Narrower than this the footer still renders
+// safely — clampUsageTokens trims rather than wrapping — but it sheds enough of
+// the second agent to stop being worth the two body rows it costs. For scale:
+// a typical render is ~64 cells, while the widest one (both agents, every
+// window at 100%, both stale) measures 85, so even at cols 80 the tail is
+// already being trimmed.
+const USAGE_FOOTER_MIN_COLS = 80;
+
+// The footer costs 2 rows (content + marginTop), which drags the bodyHeight
+// floor from totalRows < 7 up to totalRows < 9. Suppressing below 12 keeps
+// clear of that edge instead of letting Math.max clamp into an overflow.
+const USAGE_FOOTER_MIN_ROWS = 12;
+
+export function showUsageFooter(
+  usageCount: number,
+  totalCols: number,
+  totalRows: number,
+): boolean {
+  return usageCount > 0 && totalCols >= USAGE_FOOTER_MIN_COLS &&
+    totalRows >= USAGE_FOOTER_MIN_ROWS;
+}
+
+export function bodyHeightFor(
+  totalRows: number,
+  footerVisible: boolean,
+): number {
+  return Math.max(5, totalRows - (footerVisible ? 4 : 2));
+}
+
+// Both agents are read on every tick rather than cached: the files are a few
+// hundred bytes and are rewritten by other processes, so there is no local
+// signal that would tell the picker its copy went stale.
+export async function readAllAgentUsage(): Promise<AgentUsage[]> {
+  const home = Deno.env.get("HOME");
+  if (!home) return [];
+  const both = await Promise.all([
+    readAgentUsage(home, "claude"),
+    readAgentUsage(home, "codex"),
+  ]);
+  // Windowless entries are dropped here rather than at render time so the
+  // visibility gate and UsageFooter agree on what counts as a segment — a file
+  // with an empty windows array would otherwise cost two body rows and draw
+  // nothing into them.
+  return both.filter((u): u is AgentUsage =>
+    u !== null && u.windows.length > 0
+  );
+}
 
 // ---- tmux I/O (impure) ----
 
@@ -435,10 +487,12 @@ function Preview(
 function App({
   initialRows,
   initialSelectedPaneId,
+  initialUsages,
   onSelect,
 }: {
   initialRows: PaneRow[];
   initialSelectedPaneId: string;
+  initialUsages: AgentUsage[];
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
@@ -471,6 +525,7 @@ function App({
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
   >(new Map());
+  const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   const [filterEnabled, setFilterEnabled] = useState(false);
   // `now` re-reads Date.now() on every render; the periodic setRows below
@@ -510,6 +565,10 @@ function App({
           ),
         );
         if (!cancelled) setTaskProgressMap(new Map(entries));
+        // Sits after setRows so a throw from the usage files cannot take the
+        // pane list down with it — this tick body is one try block.
+        const nextUsages = await readAllAgentUsage();
+        if (!cancelled) setUsages(nextUsages);
       } catch (e) {
         console.error("picker: fetchPanes tick failed:", e);
       } finally {
@@ -645,7 +704,8 @@ function App({
   // output overflows the viewport, which inside a tmux popup blanks and
   // repaints every cell on each tick. Ink clips output to the root box height,
   // so pinning the root to totalRows is what keeps overflow impossible.
-  const bodyHeight = Math.max(5, totalRows - 2);
+  const footerVisible = showUsageFooter(usages.length, totalCols, totalRows);
+  const bodyHeight = bodyHeightFor(totalRows, footerVisible);
   // The baseline title bar (icon + title + Enter / j/k / Esc hints) is ~61
   // cells, fitting on one line at the popup's typical 80%-of-screen width.
   // The `w filter/clear` hint and the `[w] wait/idle` badge would push the
@@ -742,6 +802,9 @@ function App({
           </Box>
         )}
       </Box>
+      {footerVisible && (
+        <UsageFooter usages={usages} now={now} width={totalCols} />
+      )}
     </Box>
   );
 }
@@ -753,7 +816,12 @@ async function main(): Promise<void> {
     console.error("picker.tsx must run inside tmux");
     Deno.exit(2);
   }
-  const rows = await fetchPanes();
+  // Parallel with fetchPanes so the footer costs the popup no extra startup
+  // latency — the whole reason the picker is AOT-compiled in the first place.
+  const [rows, usages] = await Promise.all([
+    fetchPanes(),
+    readAllAgentUsage(),
+  ]);
 
   // tmux.conf bind-key w writes CC_PICKER_FROM_PANE to the session environment via
   // `set-environment` BEFORE display-popup runs; the popup process inherits the value at spawn.
@@ -773,6 +841,7 @@ async function main(): Promise<void> {
     <App
       initialRows={rows}
       initialSelectedPaneId={initialSelectedPaneId}
+      initialUsages={usages}
       onSelect={(r) => {
         result.value = r;
       }}

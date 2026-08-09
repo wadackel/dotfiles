@@ -5,6 +5,12 @@
 
 import { isEmbedded, parsePsLine, type PsRow } from "../agent-presence.ts";
 import {
+  labelFromWindowMinutes,
+  USAGE_LABEL_RE,
+  type UsageWindow,
+  writeAgentUsage,
+} from "../agent-usage.ts";
+import {
   ALL_PANE_OPTIONS_FOR_CODEX,
   CLAUDE_ONLY_KEYS,
   formatToolError,
@@ -490,6 +496,94 @@ export async function extractTokenPct(
   }
 }
 
+function rateLimitWindow(
+  v: unknown,
+  fallbackLabel: string,
+): UsageWindow | null {
+  const used = numberAt(v, "used_percent");
+  const minutes = numberAt(v, "window_minutes");
+  const resets = numberAt(v, "resets_at");
+  if (used === null || resets === null) return null;
+  const derived = minutes === null
+    ? fallbackLabel
+    : labelFromWindowMinutes(minutes);
+  return {
+    // A transcript carrying a nonsensical window_minutes (negative, fractional,
+    // enormous) would derive a label the reader's schema rejects, and rejection
+    // discards the whole file rather than the one window.
+    label: USAGE_LABEL_RE.test(derived) ? derived : fallbackLabel,
+    usedPct: Math.max(0, Math.min(100, Math.round(used))),
+    resetsAt: resets,
+  };
+}
+
+// The record's own timestamp, not the wall clock at publish time. A resumed
+// session replays a tail that can be days old, and stamping it with `now`
+// would make the picker's staleness rule read it as current.
+function recordedAtSec(payload: Record<string, unknown>): number | null {
+  const ts = payload.timestamp;
+  if (typeof ts !== "string") return null;
+  const ms = Date.parse(ts);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+// The tail scan duplicates extractTokenPct's rather than sharing it: that one
+// is called from inside eventToOps, whose Op[] return shape 96 test assertions
+// depend on, so widening it to carry rate limits would ripple through all of
+// them. Re-reading 64KB costs about a millisecond against a 5s hook timeout.
+export async function extractRateLimits(
+  transcriptPath: string | null | undefined,
+): Promise<{ windows: UsageWindow[]; recordedAt: number | null } | null> {
+  if (!transcriptPath) return null;
+  let file: Deno.FsFile | null = null;
+  try {
+    const stat = await Deno.stat(transcriptPath);
+    if (!stat.isFile || stat.size <= 0) return null;
+    const start = Math.max(0, stat.size - TOKEN_TAIL_BYTES);
+    const length = stat.size - start;
+    file = await Deno.open(transcriptPath, { read: true });
+    await file.seek(start, Deno.SeekMode.Start);
+    const buf = new Uint8Array(length);
+    const read = await file.read(buf);
+    if (read === null || read <= 0) return null;
+    const text = new TextDecoder().decode(buf.subarray(0, read));
+    for (const line of text.split("\n").reverse()) {
+      if (!line.trim()) continue;
+      try {
+        const payload = JSON.parse(line) as Record<string, unknown>;
+        const tokenPayload = tokenCountPayload(payload);
+        if (tokenPayload === null) continue;
+        const limits = tokenPayload.rate_limits;
+        if (!limits || typeof limits !== "object" || Array.isArray(limits)) {
+          continue;
+        }
+        const l = limits as Record<string, unknown>;
+        const windows = [
+          rateLimitWindow(l.primary, "5h"),
+          rateLimitWindow(l.secondary, "7d"),
+        ].filter((w): w is UsageWindow => w !== null);
+        // Stops here instead of scanning further back, unlike the missing-
+        // rate_limits branch above: a record carrying rate_limits with no
+        // usable window is malformed, and falling through would silently
+        // substitute an older snapshot for it.
+        if (windows.length === 0) return null;
+        return { windows, recordedAt: recordedAtSec(payload) };
+      } catch {
+        // tolerate partial tail lines / malformed historical records
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    try {
+      file?.close();
+    } catch {
+      // ignore close failure in hook context
+    }
+  }
+}
+
 function nowSec(): string {
   return String(Math.floor(Date.now() / 1000));
 }
@@ -762,7 +856,7 @@ export async function commandOutput(
     timeoutMs?: number;
   },
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  let timeout: number | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const child = new Deno.Command(cmd, {
       args,
@@ -1113,6 +1207,29 @@ async function appendRunLog(record: RunLog): Promise<void> {
   }
 }
 
+// Absent rate limits leave the previous file untouched rather than clearing it:
+// a 64KB tail that happens to contain no token_count says nothing about the
+// account, and the picker would rather show a stale number with its age than
+// drop the segment entirely.
+async function publishRateLimits(data: HookData): Promise<void> {
+  const home = Deno.env.get("HOME");
+  if (!home) return;
+  const transcript = typeof data.transcript_path === "string"
+    ? data.transcript_path
+    : null;
+  const result = await extractRateLimits(transcript);
+  if (result === null) return;
+  try {
+    await writeAgentUsage(home, "codex", {
+      agent: "codex",
+      updatedAt: result.recordedAt ?? Math.floor(Date.now() / 1000),
+      windows: result.windows,
+    });
+  } catch {
+    // hook stderr goes unread; the next event retries anyway
+  }
+}
+
 async function main(): Promise<void> {
   const event = Deno.args[0] ?? "";
   if (!event) {
@@ -1203,6 +1320,7 @@ async function main(): Promise<void> {
   const state = await readPaneState(pane);
   const ops = await eventToOps(event, data, state);
   for (const op of ops) await applyOp(pane, op);
+  await publishRateLimits(data);
   await appendRunLog(buildRunLog({
     event,
     data,

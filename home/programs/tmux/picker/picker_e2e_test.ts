@@ -6,6 +6,7 @@ import {
 import {
   captureOutput,
   createClaudePane,
+  sandboxHomePath,
   sendKey,
   setupServer,
   spawnPicker,
@@ -1398,6 +1399,178 @@ Deno.test("S-N5: stale label from a closed session is not shown after a new sess
     );
     // The automatic status takes over now that the label is gated out.
     assertStringIncludes(out, "run");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// --- Usage footer (S31–S35) ---
+//
+// Fixtures are built at test time with offsets from now, never with committed
+// absolute timestamps: a fixed resetsAt written today drifts into the past and
+// would silently turn the "normal render" case into the "expired" case with no
+// failure to announce it. Same reasoning as S8b's makeTempDir.
+
+interface UsageWindowFixture {
+  label: string;
+  usedPct: number;
+  resetsInSec: number;
+}
+
+async function writeUsageFixture(
+  agent: "claude" | "codex",
+  windows: UsageWindowFixture[],
+  updatedSecAgo = 0,
+): Promise<void> {
+  const dir = `${await sandboxHomePath()}/.local/state/agent-usage`;
+  await Deno.mkdir(dir, { recursive: true });
+  const now = Math.floor(Date.now() / 1000);
+  await Deno.writeTextFile(
+    `${dir}/${agent}.json`,
+    JSON.stringify({
+      agent,
+      updatedAt: now - updatedSecAgo,
+      windows: windows.map((w) => ({
+        label: w.label,
+        usedPct: w.usedPct,
+        resetsAt: now + w.resetsInSec,
+      })),
+    }),
+  );
+}
+
+function footerLines(out: string): string[] {
+  return out.split("\n").filter((l) => l.includes("claude 5h"));
+}
+
+Deno.test("S31: usage footer renders both agents on one line", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "footer-row-xxx" });
+    // 6450, not 6420: the assertion below pins "↻1h47m", and 6420 is the exact
+    // bottom of that bucket — one second of drift between writing the fixture
+    // and the first render would flip it to 1h46m. 6450 leaves 30s of slack.
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6450 },
+      { label: "7d", usedPct: 13, resetsInSec: 500000 },
+    ]);
+    await writeUsageFixture("codex", [
+      { label: "5h", usedPct: 7, resetsInSec: 3000 },
+      { label: "7d", usedPct: 2, resetsInSec: 400000 },
+    ]);
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+
+    const lines = footerLines(out);
+    assertEquals(lines.length, 1);
+    assertStringIncludes(lines[0], "claude 5h 42% ↻1h47m · 7d 13%");
+    assertStringIncludes(lines[0], "codex 5h 7%");
+    // The pane row has to survive the two rows the footer takes off bodyHeight.
+    assertStringIncludes(out, "footer-row-xxx");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S32: expired window renders -- instead of a percentage", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "expired-xxx" });
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: -10 },
+      { label: "7d", usedPct: 13, resetsInSec: 500000 },
+    ]);
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+
+    assertStringIncludes(footerLines(out)[0], "claude 5h -- · 7d 13%");
+    // An expired window drops its countdown along with its percentage.
+    assertFalse(footerLines(out)[0].includes("↻"));
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S33: no usage files → no footer, body keeps its rows", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "no-footer-xxx" });
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("no-footer-xxx"));
+
+    assertEquals(footerLines(out).length, 0);
+    assertFalse(out.includes("codex 5h"));
+    // The two rows the footer would have taken stay with the body: the pane's
+    // own row-2 renders below its row-1 rather than being clipped away.
+    assertStringIncludes(out, "no-footer-xxx");
+    assertStringIncludes(out, "(no activity)");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S34: narrow width suppresses the footer and keeps the title on one line", async () => {
+  await setupServer({ cols: 60, rows: 20 });
+  try {
+    await createClaudePane({ status: "running", prompt: "narrow-xxx" });
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6420 },
+      { label: "7d", usedPct: 13, resetsInSec: 500000 },
+    ]);
+    const picker = await spawnPicker();
+    // spawnPicker already waited for the title, so the frame is up. Give it two
+    // more ticks: a footer that only appeared on refresh would surface by now.
+    await new Promise((r) => setTimeout(r, 2200));
+    const out = await captureOutput(picker);
+
+    assertEquals(footerLines(out).length, 0);
+    // Title must still occupy exactly one line — the constraint the footer
+    // threshold exists to protect.
+    assertEquals(
+      out.split("\n").filter((l) => l.includes("AI Agents")).length,
+      1,
+    );
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S35: longest footer is clamped to one line at cols 80", async () => {
+  await setupServer({ cols: 80, rows: 20 });
+  try {
+    await createClaudePane({ status: "running", prompt: "widest-xxx" });
+    // Worst case the renderer can produce: both agents present, every window
+    // populated, and both carrying a staleness suffix.
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 100, resetsInSec: 17999 },
+      { label: "7d", usedPct: 100, resetsInSec: 500000 },
+    ], 29 * 86400);
+    await writeUsageFixture("codex", [
+      { label: "5h", usedPct: 100, resetsInSec: 17999 },
+      { label: "7d", usedPct: 100, resetsInSec: 500000 },
+    ], 29 * 86400);
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+
+    assertEquals(footerLines(out).length, 1);
+    // The prompt is width-truncated at cols 80, so the pane's target id is the
+    // stable marker that the row survived the footer's two rows.
+    assertStringIncludes(out, "test:1.0");
 
     await sendKey(picker, "Escape");
     await waitForExit();

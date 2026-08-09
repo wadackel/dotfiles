@@ -18,12 +18,18 @@ import {
   basename,
   cwdBranchParts,
   formatElapsed,
+  formatRemaining,
   parseSubagents,
   renderSubagentTree,
   summaryOf,
   toolSegmentText,
 } from "./format_helpers.ts";
-import { truncateToCells } from "./cell_width.ts";
+import { stringCells, truncateToCells } from "./cell_width.ts";
+import {
+  type AgentUsage,
+  isUsageStale,
+  isWindowExpired,
+} from "../shared/agent-usage.ts";
 
 // --- Shared types ---
 
@@ -376,6 +382,124 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
           : null}
         <Text color={DOGRUN.muted}>{row.target}</Text>
       </Box>
+    </Box>
+  );
+};
+
+// --- Usage footer ---
+
+export interface UsageToken {
+  text: string;
+  color: string;
+}
+
+// Only the percentage escalates, and only past this line. The per-pane context
+// % uses a three-tier gradient, but this row is reference material parked under
+// the list — colouring it on every render would keep pulling the eye back to a
+// number that rarely matters.
+const USAGE_ALERT_PCT = 80;
+
+// The countdown rides the 5h window alone. A 7d reset is days out and never
+// changes what the reader does next, and carrying a countdown on all four
+// windows pushes the line past 100 cells — wide enough to wrap even at cols 80.
+const COUNTDOWN_LABEL = "5h";
+
+// Neither sibling formatter fits: formatElapsed tops out at hours, so a
+// month-old file would read "696h", and formatRemaining counts down toward a
+// deadline rather than up from a timestamp.
+function formatAge(sec: number): string {
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
+  return `${Math.floor(sec / 86400)}d`;
+}
+
+// Flat token list rather than a formatted string: the percentage needs its own
+// colour, and colouring a pre-joined line would mean re-finding the number
+// inside it. Callers width-clamp by walking these in order.
+export function usageTokens(
+  usages: AgentUsage[],
+  nowSec: number,
+): UsageToken[] {
+  const out: UsageToken[] = [];
+  for (const usage of usages) {
+    if (usage.windows.length === 0) continue;
+    if (out.length > 0) out.push({ text: "    ", color: DOGRUN.muted });
+    out.push({ text: usage.agent, color: DOGRUN.fgDim });
+    usage.windows.forEach((w, i) => {
+      out.push({ text: i === 0 ? " " : " · ", color: DOGRUN.muted });
+      out.push({ text: `${w.label} `, color: DOGRUN.fgDim });
+      if (isWindowExpired(w, nowSec)) {
+        // An elapsed window says the quota reset, not that nothing was spent
+        // since — rendering 0% would assert something the file cannot support.
+        out.push({ text: "--", color: DOGRUN.fgDim });
+        return;
+      }
+      out.push({
+        text: `${w.usedPct}%`,
+        color: w.usedPct >= USAGE_ALERT_PCT ? DOGRUN.err : DOGRUN.fgDim,
+      });
+      if (w.label === COUNTDOWN_LABEL) {
+        out.push({
+          text: ` ↻${formatRemaining(w.resetsAt, nowSec)}`,
+          color: DOGRUN.fgDim,
+        });
+      }
+    });
+    if (isUsageStale(usage, nowSec)) {
+      out.push({
+        text: ` (${formatAge(nowSec - usage.updatedAt)} ago)`,
+        color: DOGRUN.muted,
+      });
+    }
+  }
+  return out;
+}
+
+// Ink clips against the root box height, so a wrapped footer would silently
+// eat the bottom pane row instead of overflowing visibly.
+export function clampUsageTokens(
+  tokens: UsageToken[],
+  budget: number,
+): UsageToken[] {
+  const kept: UsageToken[] = [];
+  let used = 0;
+  for (const t of tokens) {
+    const w = stringCells(t.text);
+    if (used + w <= budget) {
+      kept.push(t);
+      used += w;
+      continue;
+    }
+    const room = budget - used;
+    if (room > 0) kept.push({ ...t, text: truncateToCells(t.text, room) });
+    break;
+  }
+  return kept;
+}
+
+interface UsageFooterProps {
+  usages: AgentUsage[];
+  now: number;
+  width: number;
+}
+
+export const UsageFooter: React.FC<UsageFooterProps> = (
+  { usages, now, width }: UsageFooterProps,
+) => {
+  const kept = clampUsageTokens(
+    usageTokens(usages, now),
+    Math.max(0, width - 2),
+  );
+  return (
+    <Box marginTop={1}>
+      <Text>{"  "}</Text>
+      {kept.map((t, i) => (
+        // Ink 7 types Text's props as a closed object, so `key` on it fails
+        // type-check (TS2322) even though React treats key as reserved.
+        <React.Fragment key={i}>
+          <Text color={t.color}>{t.text}</Text>
+        </React.Fragment>
+      ))}
     </Box>
   );
 };

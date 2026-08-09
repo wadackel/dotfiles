@@ -312,6 +312,45 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   return paneId;
 }
 
+// Scenarios that name their own HOME keep it; everything else runs against
+// this empty one. Without it the picker reads the developer's real
+// ~/.local/state/agent-usage and paints live account numbers into the usage
+// footer — a value that differs per machine and is absent on CI, so any layout
+// assertion taken here would not reproduce anywhere else.
+let sandboxHome: string | null = null;
+
+// Exposed so a scenario can seed fixtures into the same HOME the picker will
+// read, without having to invent its own temp dir.
+export async function sandboxHomePath(): Promise<string> {
+  if (sandboxHome === null) {
+    // `dir: "/tmp"` is not cosmetic: picker-verify runs the suite under
+    // --allow-write=$HOME/.claude/tasks,/tmp, and makeTempDir's default lands
+    // in $TMPDIR (/var/folders/… on macOS), which that scope excludes.
+    sandboxHome = await Deno.makeTempDir({
+      dir: "/tmp",
+      prefix: "picker-e2e-home-",
+    });
+  }
+  return sandboxHome;
+}
+
+async function sandboxEnv(): Promise<Record<string, string>> {
+  const env: Record<string, string> = {
+    HOME: await sandboxHomePath(),
+    // A value left in the developer's shell collides with sandbox pane ids —
+    // every fresh tmux server reissues %0, %1, … — and silently moves the
+    // initial selection off the first row.
+    CC_PICKER_FROM_PANE: "",
+  };
+  // Replacing HOME orphans the Deno module cache, so aim it back at the real
+  // one. S8/S8b inject it inline for the same reason.
+  const realHome = Deno.env.get("HOME");
+  const denoDir = Deno.env.get("DENO_DIR") ??
+    (realHome ? `${realHome}/Library/Caches/deno` : undefined);
+  if (denoDir) env.DENO_DIR = denoDir;
+  return env;
+}
+
 // Spawn picker.tsx as the direct command of a new tmux window. tmux passes
 // the command to /bin/sh -c; picker.tsx is executable and carries its own
 // shebang (`#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run=tmux,git`),
@@ -340,8 +379,18 @@ export async function spawnPicker(
   // at spawn). Reserved `TMUX_PANE` is unsuitable — tmux clobbers it with
   // the spawned pane's own id when the process starts, so the originating-
   // pane id has to ride a non-reserved env var name.
+  const env: Record<string, string> = {
+    ...await sandboxEnv(),
+    ...opts.env,
+  };
+  if (opts.selfPane !== undefined) {
+    if (!/^%\d+$/.test(opts.selfPane)) {
+      throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);
+    }
+    env.CC_PICKER_FROM_PANE = opts.selfPane;
+  }
   const envArgs: string[] = [];
-  for (const [key, value] of Object.entries(opts.env ?? {})) {
+  for (const [key, value] of Object.entries(env)) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
       throw new Error(`invalid env key for tmux new-window: ${key}`);
     }
@@ -349,12 +398,6 @@ export async function spawnPicker(
       throw new Error(`env value for ${key} contains newline`);
     }
     envArgs.push("-e", `${key}=${value}`);
-  }
-  if (opts.selfPane !== undefined) {
-    if (!/^%\d+$/.test(opts.selfPane)) {
-      throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);
-    }
-    envArgs.push("-e", `CC_PICKER_FROM_PANE=${opts.selfPane}`);
   }
   await tmuxRun([
     "new-window",
@@ -442,4 +485,9 @@ export async function waitForExit(
 // do not collide; the OS reclaims /tmp on reboot.
 export async function teardown(): Promise<void> {
   await tmuxRunAllowFail(["kill-server"]);
+  if (sandboxHome !== null) {
+    const dir = sandboxHome;
+    sandboxHome = null;
+    await Deno.remove(dir, { recursive: true }).catch(() => {});
+  }
 }

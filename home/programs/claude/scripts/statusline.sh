@@ -70,6 +70,38 @@ if [ -n "$cwd" ]; then
   fi
 fi
 
+# --- Cross-session usage (picker footer) ---
+# Deliberately outside the context-usage block below: rate_limits and
+# context_window arrive independently, so gating one on the other would blank
+# the picker footer for a reason nothing in the UI would explain. Absolute
+# paths because the git block above has already cd'd into the workspace. Every
+# step is swallowed — under `set -e` one unguarded failure would abort the
+# script and leave the user with an empty statusline.
+usage_json=$(printf '%s' "$input" | jq -c '
+  def win($label):
+    select(. != null)
+    | select(.used_percentage != null and .resets_at != null)
+    | { label: $label,
+        usedPct: (.used_percentage | round
+                  | if . < 0 then 0 elif . > 100 then 100 else . end),
+        resetsAt: .resets_at };
+  [ (.rate_limits.five_hour | win("5h")), (.rate_limits.seven_day | win("7d")) ]
+  | select(length > 0)
+  | { agent: "claude", updatedAt: (now | floor), windows: . }
+' 2>/dev/null || true)
+if [ -n "$usage_json" ] && [ -n "${HOME:-}" ]; then
+  usage_dir="${HOME}/.local/state/agent-usage"
+  # The temp file sits next to the target so rename stays atomic on one
+  # filesystem, and carries $$ so concurrent statusline renders across sessions
+  # cannot truncate each other's partial write before it lands.
+  usage_tmp="$usage_dir/claude.json.$$.tmp"
+  {
+    mkdir -p "$usage_dir" &&
+      printf '%s\n' "$usage_json" >"$usage_tmp" &&
+      mv "$usage_tmp" "$usage_dir/claude.json"
+  } 2>/dev/null || rm -f "$usage_tmp" 2>/dev/null || true
+fi
+
 # --- Context usage ---
 if [ -n "$used_pct" ] && [ -n "$ctx_size" ]; then
   used_int=${used_pct%.*}

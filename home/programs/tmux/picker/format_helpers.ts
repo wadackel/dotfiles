@@ -19,6 +19,27 @@ export function formatElapsed(
   return `${Math.floor(d / 3600)}h`;
 }
 
+// formatElapsed is not reused here: its 1h granularity collapses the whole
+// last hour before a reset into "1h", and that hour is exactly when the
+// remaining time changes what the reader does next.
+// Callers screen out elapsed windows first (UsageFooter renders those as "--"),
+// so no past-timestamp branch lives here — a second source for that literal
+// would be one more place to keep in sync.
+export function formatRemaining(
+  resetsAtSec: number,
+  nowSec: number,
+): string {
+  const d = resetsAtSec - nowSec;
+  if (d < 60) return "<1m";
+  if (d < 3600) return `${Math.floor(d / 60)}m`;
+  if (d < 86400) {
+    const h = Math.floor(d / 3600);
+    const m = Math.floor((d % 3600) / 60);
+    return m === 0 ? `${h}h` : `${h}h${m}m`;
+  }
+  return `${Math.floor(d / 86400)}d`;
+}
+
 export function statusColor(status: PaneStatus): string {
   return STATUS_META[status].color;
 }
