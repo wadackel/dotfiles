@@ -22,6 +22,12 @@ description: >-
 
 Use the `obsidian` CLI to interact with a running Obsidian instance.
 
+## Out of scope: the vault's private directory
+
+`05_Private/` holds identity documents. `~/.claude/settings.json` denies `Read` and `Edit` there — but **those rules do not apply to this CLI**. It goes through Bash, and it resolves by note name rather than by path, so `obsidian read` reaches that directory exactly the way a wikilink does. `~/.claude/scripts/bash-policy.yaml` gates `obsidian read` and `obsidian search` for this reason.
+
+Never use this CLI to read, search, append to, or create anything under that directory, and never name one of its files in output. If a note turns out to live there, say so without naming it and move on.
+
 ## Prerequisites
 
 **Obsidian must be running.** The CLI communicates with the active Obsidian app. If Obsidian is not open, all commands will fail.

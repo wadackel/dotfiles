@@ -13,7 +13,8 @@
     "FORCE_AUTOUPDATE_PLUGINS": "true",
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_ERROR_REPORTING": "true",
-    "OTEL_LOG_TOOL_DETAILS": "1"
+    "OTEL_LOG_TOOL_DETAILS": "1",
+    "LLM_WIKI_VAULT_ROOT": "/Users/wadackel/Documents/Main"
   },
   "permissions": {
     "allow": [
@@ -472,6 +473,8 @@
       "Bash(sudo su *)",
       "Bash(sudo umount *)",
       "Bash(yarn publish *)",
+      "Read(//Users/wadackel/Documents/Main/05_Private/**)",
+      "Edit(//Users/wadackel/Documents/Main/05_Private/**)",
       "Edit(//bin/**)",
       "Edit(//boot/**)",
       "Edit(//dev/**)",

@@ -1,7 +1,19 @@
 rules:
   - pattern: "git -C *"
     message: "Do not use 'git -C <path>'. Use 'cd <path> && git <subcmd>' instead (see CLAUDE.md)."
-  # - pattern: "grep *"
-  #   message: "Use rg (ripgrep) instead of grep. Example: rg 'pattern' path/"
-  # - pattern: "find *"
-  #   message: "Use fd instead of find. Example: fd 'pattern' path/"
+
+  # Obsidian Vault の 05_Private/ は身元書類（住民票・マイナンバー・履歴書・宅配ボックスの暗証番号）を
+  # 置く場所で、permissions の deny で Read / Edit / Glob / Grep を塞いでいる。
+  # ただし deny は Bash に一切かからないため、シェル経由の読み出しはここで止める。
+  - pattern: "* 05_Private*"
+    message: "05_Private/ is out of scope for agents. Reading it via Bash bypasses the permission deny rules. If you hit a permission error on a vault note, that is the intended outcome — report it without naming the file and move on."
+  - pattern: "*05_Private/*"
+    message: "05_Private/ is out of scope for agents. Reading it via Bash bypasses the permission deny rules. If you hit a permission error on a vault note, that is the intended outcome — report it without naming the file and move on."
+
+  # obsidian CLI は稼働中の Obsidian に話しかけるため、ファイルパスではなくノート名で解決する。
+  # つまり wikilink と同じ名前解決で 05_Private/ に届き、パス指定の deny をすり抜ける。
+  # read / search / append / create は Vault 全体に到達しうるので、明示的に確認を挟む。
+  - pattern: "obsidian search *"
+    message: "obsidian search reaches the whole vault including 05_Private/, which the permission deny rules cannot cover (they do not apply to Bash). Scope the search, or use Grep on 02_Notes/ and 04_Literature/ instead."
+  - pattern: "obsidian read *"
+    message: "obsidian read resolves by note name, not path, so it can reach 05_Private/ the same way a wikilink does — bypassing the permission deny rules, which do not apply to Bash. Use the Read tool on an explicit path instead."
