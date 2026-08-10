@@ -76,8 +76,8 @@ import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
 // Same threshold as showFilterUI. Narrower than this the footer still renders
 // safely — clampUsageTokens trims rather than wrapping — but it sheds enough of
 // the second agent to stop being worth the two body rows it costs. For scale:
-// a typical render is ~64 cells, while the widest one (both agents, every
-// window at 100%, both stale) measures 85, so even at cols 80 the tail is
+// a typical render is ~66 cells, while the widest one (both agents, every
+// window at 100%, both stale) measures 87, so even at cols 80 the tail is
 // already being trimmed.
 const USAGE_FOOTER_MIN_COLS = 80;
 

@@ -86,9 +86,16 @@ export function summaryOf(row: PaneRow): string {
   return src || "·";
 }
 
-// Row-2 tool segment text: "<tool>[(<subject>)][ ✖ <error>]". Same text for
-// current and last tools — the caller distinguishes them by color (DOGRUN.sandy
-// for current, DOGRUN.fgDim for last). Returns "" when no tool has run.
+// Same glyph as STATUS_META.error.icon, deliberately not shared: that one marks
+// a pane's status in row 1, this one separates a tool name from its error text
+// in row 2, and either could change without the other. (U+2716 ✖ is absent from
+// CaskaydiaCove Nerd Font Mono, so the CJK fallback drew it double-width.)
+const ERROR_MARK = "\u{F0156}"; // nf-md-close
+
+// Row-2 tool segment text: "<tool>[(<subject>)][ <ERROR_MARK> <error>]". Same
+// text for current and last tools — the caller distinguishes them by color
+// (DOGRUN.sandy for current, DOGRUN.fgDim for last). Returns "" when no tool
+// has run.
 export function toolSegmentText(row: PaneRow): string {
   const tool = row.currentTool || row.lastTool;
   if (!tool) return "";
@@ -97,7 +104,7 @@ export function toolSegmentText(row: PaneRow): string {
     : row.lastToolSubject;
   const base = subject ? `${tool}(${subject})` : tool;
   if (!row.currentTool && row.lastToolError) {
-    return `${base} ✖ ${row.lastToolError}`;
+    return `${base} ${ERROR_MARK} ${row.lastToolError}`;
   }
   return base;
 }

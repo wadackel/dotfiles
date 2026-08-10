@@ -68,6 +68,7 @@ export interface PaneOpts {
   prompt?: string;
   currentTool?: string;
   lastTool?: string;
+  lastToolError?: string;
   lastEditFile?: string;
   lastActivityAtSec?: number;
   sessionId?: string;
@@ -281,6 +282,9 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.lastTool !== undefined) {
     pairs.push(["@pane_last_tool", opts.lastTool]);
+  }
+  if (opts.lastToolError !== undefined) {
+    pairs.push(["@pane_last_tool_error", opts.lastToolError]);
   }
   if (opts.lastEditFile !== undefined) {
     pairs.push(["@pane_last_edit_file", opts.lastEditFile]);

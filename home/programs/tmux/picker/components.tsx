@@ -404,6 +404,12 @@ const USAGE_ALERT_PCT = 80;
 // windows pushes the line past 100 cells — wide enough to wrap even at cols 80.
 const COUNTDOWN_LABEL = "5h";
 
+// U+21BB ↻ read better on paper but is absent from CaskaydiaCove Nerd Font Mono,
+// so it fell through to the CJK fallback and drew a double-width glyph inside one
+// cell, bleeding over the digit next to it. Nerd Font PUA glyphs are patched to a
+// single-cell advance and never leave the primary font.
+const COUNTDOWN_ICON = "\u{F0450}"; // nf-md-refresh
+
 // Neither sibling formatter fits: formatElapsed tops out at hours, so a
 // month-old file would read "696h", and formatRemaining counts down toward a
 // deadline rather than up from a timestamp.
@@ -439,8 +445,12 @@ export function usageTokens(
         color: w.usedPct >= USAGE_ALERT_PCT ? DOGRUN.err : DOGRUN.fgDim,
       });
       if (w.label === COUNTDOWN_LABEL) {
+        // Ink clips the tail of a <Text> holding "<supplementary-plane glyph>
+        // <body>" when a sibling <Text> follows, same as PaneRowLine's segments.
+        out.push({ text: " ", color: DOGRUN.fgDim });
+        out.push({ text: COUNTDOWN_ICON, color: DOGRUN.fgDim });
         out.push({
-          text: ` ↻${formatRemaining(w.resetsAt, nowSec)}`,
+          text: ` ${formatRemaining(w.resetsAt, nowSec)}`,
           color: DOGRUN.fgDim,
         });
       }

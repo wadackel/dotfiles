@@ -671,8 +671,8 @@ Deno.test("truncateTopSegBody: bare tool name (no paren) → generic slice", () 
 Deno.test("truncateTopSegBody: tool seg with error suffix → generic slice", () => {
   // Body ends with error text, not `)`, so paren-preservation does not fire.
   // budget 16 → maxBodyCells 14 → cut inside the error tail, no ellipsis.
-  const seg = mkSeg({ body: "Bash(test) ✖ Exit code 1" });
-  assertEquals(truncateTopSegBody(seg, 16), "Bash(test) ✖ E");
+  const seg = mkSeg({ body: "Bash(test) \u{F0156} Exit code 1" });
+  assertEquals(truncateTopSegBody(seg, 16), "Bash(test) \u{F0156} E");
 });
 
 Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", () => {
@@ -765,7 +765,7 @@ Deno.test("bodyHeightFor: floor stays at 5", () => {
 Deno.test("usageTokens: renders both agents with a 5h countdown only", () => {
   assertEquals(
     usageText([mkUsage("claude"), mkUsage("codex")]),
-    "claude 5h 42% ↻1h47m · 7d 13%    codex 5h 42% ↻1h47m · 7d 13%",
+    "claude 5h 42% \u{F0450} 1h47m · 7d 13%    codex 5h 42% \u{F0450} 1h47m · 7d 13%",
   );
 });
 
@@ -798,7 +798,7 @@ Deno.test("usageTokens: stale data carries an age suffix", () => {
   const usage = mkUsage("codex", { updatedAt: USAGE_NOW - 29 * 86400 });
   assertEquals(
     usageText([usage]),
-    "codex 5h 42% ↻1h47m · 7d 13% (29d ago)",
+    "codex 5h 42% \u{F0450} 1h47m · 7d 13% (29d ago)",
   );
 });
 
@@ -811,7 +811,7 @@ Deno.test("usageTokens: agent with no windows is skipped entirely", () => {
   assertEquals(usageText([mkUsage("claude", { windows: [] })]), "");
   assertEquals(
     usageText([mkUsage("claude", { windows: [] }), mkUsage("codex")]),
-    "codex 5h 42% ↻1h47m · 7d 13%",
+    "codex 5h 42% \u{F0450} 1h47m · 7d 13%",
   );
 });
 
@@ -846,7 +846,7 @@ Deno.test("clampUsageTokens: the widest footer relies on the clamp at cols 80", 
   // Both agents, every window at 100%, both stale, both countdowns at their
   // longest. The unclamped line overruns an 80-column terminal, so the footer
   // fits by being trimmed — not by happening to be short enough.
-  assertEquals(stringCells(tokens.map((t) => t.text).join("")), 85);
+  assertEquals(stringCells(tokens.map((t) => t.text).join("")), 87);
 
   const text = clampUsageTokens(tokens, 78).map((t) => t.text).join("");
   assertEquals(stringCells(text), 78);

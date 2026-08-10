@@ -67,7 +67,9 @@ export const STATUS_META = {
   running: { color: "#73c1a9", short: "run", icon: "●" },
   waiting: { color: "#ac8b83", short: "wait", icon: "◐" },
   idle: { color: "#545c8c", short: "idle", icon: "○" },
-  error: { color: "#ff9494", short: "err", icon: "✖" },
+  // ●◐○ are all in CaskaydiaCove Nerd Font Mono, but U+2716 ✖ is not — it fell
+  // through to the CJK fallback and drew double-width inside one cell.
+  error: { color: "#ff9494", short: "err", icon: "\u{F0156}" }, // nf-md-close
   "": { color: "#9ea3c0", short: "", icon: " " },
 } as const;
 

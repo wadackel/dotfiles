@@ -1450,7 +1450,7 @@ Deno.test("S31: usage footer renders both agents on one line", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "footer-row-xxx" });
-    // 6450, not 6420: the assertion below pins "↻1h47m", and 6420 is the exact
+    // 6450, not 6420: the assertion below pins "1h47m", and 6420 is the exact
     // bottom of that bucket — one second of drift between writing the fixture
     // and the first render would flip it to 1h46m. 6450 leaves 30s of slack.
     await writeUsageFixture("claude", [
@@ -1466,7 +1466,7 @@ Deno.test("S31: usage footer renders both agents on one line", async () => {
 
     const lines = footerLines(out);
     assertEquals(lines.length, 1);
-    assertStringIncludes(lines[0], "claude 5h 42% ↻1h47m · 7d 13%");
+    assertStringIncludes(lines[0], "claude 5h 42% \u{F0450} 1h47m · 7d 13%");
     assertStringIncludes(lines[0], "codex 5h 7%");
     // The pane row has to survive the two rows the footer takes off bodyHeight.
     assertStringIncludes(out, "footer-row-xxx");
@@ -1491,7 +1491,7 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
 
     assertStringIncludes(footerLines(out)[0], "claude 5h -- · 7d 13%");
     // An expired window drops its countdown along with its percentage.
-    assertFalse(footerLines(out)[0].includes("↻"));
+    assertFalse(footerLines(out)[0].includes("\u{F0450}"));
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1571,6 +1571,35 @@ Deno.test("S35: longest footer is clamped to one line at cols 80", async () => {
     // The prompt is width-truncated at cols 80, so the pane's target id is the
     // stable marker that the row survived the footer's two rows.
     assertStringIncludes(out, "test:1.0");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// --- Row-2 tool error (S36) ---
+
+// The known clipping condition is a glyph sharing one <Text> with the body that
+// follows it; every other call site dodges it by giving the glyph its own <Text>.
+// The error mark can do neither — it sits mid-string inside the tool body — so
+// the behaviour there is untested by construction. Asserting the text *after*
+// the glyph is what makes this a rendering test rather than a restatement of the
+// toolSegmentText unit test.
+Deno.test("S36: row-2 tool error keeps its text after the error mark", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "idle",
+      prompt: "tool-err-xxx",
+      lastTool: "Bash",
+      lastToolError: "Exit code 1",
+    });
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("tool-err-xxx"));
+
+    assertStringIncludes(out, "Bash \u{F0156} Exit code 1");
 
     await sendKey(picker, "Escape");
     await waitForExit();

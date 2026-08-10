@@ -93,7 +93,7 @@ Deno.test("statusIcon: known statuses", () => {
   assertEquals(statusIcon("running"), "●");
   assertEquals(statusIcon("waiting"), "◐");
   assertEquals(statusIcon("idle"), "○");
-  assertEquals(statusIcon("error"), "✖");
+  assertEquals(statusIcon("error"), "\u{F0156}");
   assertEquals(statusIcon(""), " ");
 });
 
@@ -287,16 +287,16 @@ Deno.test("toolSegmentText: lastTool with subject → `tool(subject)`", () => {
   );
 });
 
-Deno.test("toolSegmentText: lastTool with error (no subject) appends ` ✖ <error>`", () => {
+Deno.test("toolSegmentText: lastTool with error (no subject) appends ` <mark> <error>`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({ lastTool: "Bash", lastToolError: "Exit code 1" }),
     ),
-    "Bash ✖ Exit code 1",
+    "Bash \u{F0156} Exit code 1",
   );
 });
 
-Deno.test("toolSegmentText: lastTool with subject + error → `tool(subject) ✖ error`", () => {
+Deno.test("toolSegmentText: lastTool with subject + error → `tool(subject) <mark> error`", () => {
   assertEquals(
     toolSegmentText(
       mkRow({
@@ -305,7 +305,7 @@ Deno.test("toolSegmentText: lastTool with subject + error → `tool(subject) ✖
         lastToolError: "Exit code 1",
       }),
     ),
-    "Bash(pnpm test) ✖ Exit code 1",
+    "Bash(pnpm test) \u{F0156} Exit code 1",
   );
 });
 
