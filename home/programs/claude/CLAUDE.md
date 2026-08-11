@@ -26,6 +26,9 @@
 - When a Google Docs URL must be read, use `/gdocs-to-md`. See `skills/gdocs-to-md/SKILL.md`.
 - When a GitHub repository URL must be inspected as code, use `/repo-dive`. See `skills/repo-dive/SKILL.md`.
 - When `/codex-review` is explicitly requested, complete its full review loop; do not stop midway.
+- When answering a question that has more than one defensible position — design choices, technology selection, whether a practice is worth adopting, or recalling something previously read or concluded — search the Obsidian vault with `/llm-wiki query` before answering, and prefer what the vault records over model knowledge. This applies during `/plan` investigation too.
+- Two exclusions only: questions the code in the current repository settles beyond judgment, and factual lookups with a single correct answer (spec, API, syntax). When in doubt, search.
+- When a reusable insight surfaces in a session, offer `/llm-wiki save`. Do not offer it for decisions that only matter to the task at hand.
 
 ### Planning And Execution
 

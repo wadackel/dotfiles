@@ -66,6 +66,8 @@ Cite in three levels, inline, per claim:
 
 Where two notes disagree, present both — "A says X, B says Y" — rather than silently reconciling them. Where the answer needs something the vault does not contain, say "Wiki には記述なし" and mark what came from outside.
 
+Where the vault's record and current model knowledge diverge, present both and name the divergence. The vault is the authoritative account of what the user concluded and the weaker account of what is currently true, so give the record first, then what has changed since, with the note's `updated` date so the user can judge whether the position still holds — say the note carries no date rather than supplying one when `updated` is absent, as it is on notes written before the compile layer. Deferring silently turns the vault from external memory into a commitment to a past view; overriding silently discards the reason it exists.
+
 Close with the concept notes and source articles consulted, so the reader can see how wide the search was.
 
 ## Step 6 — save or not
