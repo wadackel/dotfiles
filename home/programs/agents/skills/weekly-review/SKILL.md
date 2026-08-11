@@ -77,11 +77,25 @@ Assess existing weekly note state:
 
 ### Step 4: Synthesize Content
 
-Generate 4 subsections in Japanese:
+Generate 4 subsections in Japanese.
+
+**Why Notes can be lossy**: every weekly note's `## History` embeds all 7 days' `## ✍️ Memo` verbatim through `![[YYYY-MM-DD#✍️ Memo]]`. Anything a daily Memo records stays reachable from inside the same note, so Notes does not have to preserve it. Notes is an index a human scans in 30 seconds; the detail already lives one section below. This does **not** extend past Memo — `## 📝 To-Do` and `## 🧑‍💻 Tasks` are not embedded, so their completion state has no other home.
+
+**Budget** — Step 6 enforces these mechanically and blocks the write. They are not advice.
+
+| Subsection | Limit |
+|---|---|
+| `1.今週やったこと` | 300 characters total |
+| `1.今週やったこと`, any single bullet | 40 characters |
+| `3.感想` | 120 characters total |
+| Anywhere in Notes | zero Issue / PR numbers, commit SHAs, file paths, item counts |
+
+Every body line inside `### 0.` … `### 3.` counts toward its subsection, bullet marker or not. Dropping the markers, switching to prose, or nesting under a deeper heading changes nothing — and a line that lands outside all four subsections fails the check outright.
 
 #### `0.今週やること`
 
 - Start from **all items** in previous week's "来週やること" (carry over even if not seen in daily notes)
+- Strip Issue / PR numbers and paths while carrying an item over — older notes contain them, and copying one in verbatim fails Step 6 on an item you did not write
 - Supplement with this week's To-Do items
 - Granularity: task-level (one bullet per planned task). The milestone rollup rules from `1.今週やったこと` do NOT apply here
 - **Merge mode**: respect existing content, add only new items; deduplicate against carryover items
@@ -89,40 +103,54 @@ Generate 4 subsections in Japanese:
 #### `1.今週やったこと`
 
 - Group completed To-Do `[x]` items and Memo achievements by project label
-- Project labels: use repo names (`P&L`, `dotfiles`, `concierge-app`, etc.) or `Misc`
-- **Granularity — human-readable milestone level**:
-  - **Target 5-10 bullets per project, hard cap 10**. If exceeding, roll up related items
-  - **Roll up multi-step workstreams into 1-2 milestone bullets**. "A / B / C を個別実装" ではなく「〇〇機能一式を実装（A / B / C）」のように一段抽象化
-  - **Do NOT emit standalone bullets for**: individual RPC names, file paths, PR numbers, commit SHAs, API endpoint names. Embed them as parenthetical details under a milestone bullet only when necessary for disambiguation
-  - **Sparse projects (1-2 daily mentions only)**: keep to 1-2 bullets; consider merging into `Misc` rather than padding
-  - **Rationale**: daily notes often contain Claude Code の自動要約で情報密度が高いため、そのまま箇条書き化すると細粒度になりすぎる。「その週に何をしたか」を人間が 30 秒で把握できる粒度に集約する
-- **Merge mode**: preserve existing manual entries unless they violate the granularity rules above (in which case roll them up first); after rollup, deduplicate (keep the more detailed version)
+- Project labels: use repo names, or `Misc` for everything else
+- One bullet states one milestone. When several items would exceed the budget, raise them to a single higher-level statement — do **not** chain them into one line with `、` `/` `+` to make them fit. A packed line satisfies the character count while defeating its purpose
+- Daily notes are dense because a Stop hook writes Claude Code auto-summaries into them. Aggregating them as-is always overshoots; compress before emitting, not after
+- **Merge mode**: keep existing human-written entries as they are and add only what is missing
+
+Aim for this shape:
+
+```
+- Atlas
+    - 認証基盤を OIDC へ移行
+    - 管理画面のリリース手順を整備
+- Beacon
+    - ドッグフーディング開始
+- Misc
+    - 健康診断
+```
 
 #### `2.来週やること`
 
 - Collect incomplete To-Do `[ ]` items + Tasks + "next week" mentions from Memo
-- **Group by project label** (same as "今週やったこと"): `P&L`, `concierge-app`, `dotfiles`, `Misc`, etc.
+- **Group by project label** (same as "今週やったこと"): repo names, or `Misc`
 - Use nested bullet format:
   ```
-  - P&L
-      - ex-proxy のリファクタ（Start/Resume を WS で実装）
+  - Atlas
+      - 認証プロキシのリファクタ
       - バックグラウンド切り替え対応
   - Misc
-      - FE スキル面接コンテンツの見直し・再設計
+      - 面接コンテンツの見直し
   ```
 - Carry over sub-item structure from To-Do where available
+- Strip Issue / PR numbers and paths from anything carried over, for the same reason as `0.今週やること`
 - Granularity: task-level (one bullet per planned task). The milestone rollup rules from `1.今週やったこと` do NOT apply here
 - **Merge mode**: respect existing content, add only new items
 
 #### `3.感想`
 
-- **3-6 bullets total**, structured as:
-  1. Lead bullet: emotion trend (only days with recorded values, e.g., `Mon 6 → Tue 8 → Wed 5 → Thu 7`). If all recorded values are 0 (= not recorded), skip this bullet and compensate by adding one more topic bullet so the total still lands in the 3-6 range
-  2. 1-4 middle bullets: notable events / pivotal topics of the week (meetings, milestones, decisions, collaborations)
-  3. Trailing bullet: overall tone / carry-forward reflection
-- Each event / project mention goes into **one bullet only** — do NOT spread one topic across multiple bullets
+- Lead with the emotion trend when values are recorded (e.g. `月 7 → 火 8 → 水 6`). Skip that bullet entirely when every recorded value is 0
+- Then the week's turning point — what actually moved, or what is carried forward
+- Each event or project appears in **one bullet only**
 - Write in first-person conversational Japanese
-- **Merge mode**: preserve existing reflections, add new insights from daily notes. When existing entries exceed 6 bullets, consolidate down to the structure above during merge
+- **Merge mode**: keep existing reflections and add only what is missing
+
+Aim for this shape:
+
+```
+- 月 7 → 火 8 → 水 6 → 木 7 → 金 7 と中盤に落ちたが持ち直した週
+- Atlas の移行が山場を越えた。来週は Beacon に寄せたい
+```
 
 ### Step 5: Fix History & Reading Dates (Conditional)
 
@@ -142,7 +170,35 @@ Only modify when corruption is detected. This addresses known Templater bugs.
 - If corrupted -> fix to correct Monday/Sunday values
 - If valid -> preserve as-is
 
-### Step 6: Rewrite Weekly Note
+### Step 6: Enforce the Budget
+
+A precondition for writing, not a review. Do not reach Step 7 until this passes.
+
+1. Write the fully composed note to a temporary file. Use a literal absolute path such as `/tmp/weekly-YYYY-WNN.md` — the Write tool does not expand `$TMPDIR`
+2. Run the checker:
+
+   ```
+   deno run --allow-read ~/.claude/skills/weekly-review/check-budget.ts /tmp/weekly-YYYY-WNN.md
+   ```
+
+   It reports `S1` / `S3` / `S1MAX` / `TOKENS` / `ORPHAN` against their limits, lists any forbidden tokens it found, and exits non-zero when anything fails.
+3. On `FAIL`, rewrite the offending subsection and repeat from 1. Compress it — reaching the limit by rewording the same content back to the same length is not a fix. Dropping bullet markers, switching to prose, or nesting under a deeper heading does not compress anything: every body line counts either way
+4. On `ORPHAN` above 0, a body line landed outside `### 0.` … `### 3.`. Move it into the subsection it belongs to
+5. On `RESULT:UNPARSEABLE`, the note structure itself is broken — `## 🦄 Notes` is missing, or one of the four `### 0.` … `### 3.` headings is absent or malformed. Restore them and repeat from 1. Never continue to Step 7 while this persists
+6. After two failed attempts, **stop**. Do not write to the vault. Report the checker output and say what is blocking further compression
+
+The file that passed is the artifact. Step 7 writes **that exact content** — if you touch Notes again after the check, the check no longer covers what you are writing, so come back here and re-run it.
+
+**Merge mode exception** — the one case that may proceed to Step 7 without a passing check. It covers **entries that were already in the note**, never what you are adding now:
+
+- Never delete a pre-existing entry to satisfy the checker
+- Compress what you add so that pre-existing + new still fits the budget
+- When the pre-existing entries alone already exceed it, add nothing, report the overage, and continue
+- This exception does not apply to `RESULT:UNPARSEABLE` or `ORPHAN`
+
+Otherwise re-running on the same week would let the previous run's output count as pre-existing, and the budget would stop applying from the second run onward.
+
+### Step 7: Rewrite Weekly Note
 
 Before writing, output a brief summary: section counts, major changes, merge/fresh mode.
 
@@ -151,27 +207,19 @@ Use the **Write tool** to write directly to the vault file path: `~/Documents/Ma
 > **Why not `obsidian create`?** The CLI escapes `!` to `\!` in content, breaking Obsidian embed syntax (`![[...]]`) and JS double negation (`!!`) in dataviewjs blocks. The Write tool bypasses shell escaping entirely.
 
 - **Frontmatter**: preserve existing values exactly
-- **`## Notes`**: Step 4 synthesized content (no `- tba`)
+- **`## Notes`**: byte-for-byte the content that passed Step 6 (no `- tba`). Do not recompose or re-edit it here
 - **`## Analysis`**: **verbatim copy** of existing dataviewjs blocks (do NOT paraphrase or modify)
 - **`## History`**: Step 5 result (fixed or preserved)
 - **`## Reading`**: Step 5 result (fixed or preserved)
 
-### Step 7: Open in Obsidian
+### Step 8: Open in Obsidian
 
 Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated weekly note.
 
 ## Content Style Guidelines
 
 - Generated Obsidian content is written in **Japanese**
-- Use project labels as prefixes: `P&L`, `dotfiles`, `concierge-app`, `Misc`, etc.
+- Use project labels as prefixes: repo names, or `Misc` for everything else
 - Bullet points only, no prose paragraphs
 - Feelings section uses first-person conversational Japanese
 - Missing or sparse Sat/Sun notes are normal (especially when running on Friday)
-
-### Granularity
-
-Weekly notes are read by a human scanning "what happened this week" in 30 seconds. Daily notes contain high-density Claude Code auto-summaries (Stop hook `claude-memo.ts`) that inflate detail when aggregated verbatim — always roll up before emitting.
-
-- Milestone-level rules for `1.今週やったこと` and `3.感想`: see Step 4's per-subsection guidance (single source of truth)
-- `0.今週やること` / `2.来週やること` stay task-level (one bullet per planned task) — milestone rollup does NOT apply
-- When rolling up: prefer "〇〇機能一式を実装（A / B / C）" over three separate bullets listing A, B, C

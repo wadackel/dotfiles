@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@1";
 import { computeIsoWeekDates } from "./iso-week.ts";
 
 Deno.test("W10 2026: Mon 03/02 - Sun 03/08", () => {
