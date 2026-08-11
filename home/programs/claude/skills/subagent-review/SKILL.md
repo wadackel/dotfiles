@@ -147,15 +147,30 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|s
 # For each agent in AGENTS, launch via the Agent tool in the SAME assistant turn (parallel tool calls in a single message).
 ```
 
-When constructing each Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
+**Prompt construction** — load [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) and fill placeholders:
+- `{repo_path}` — repository or worktree under review
+- `{branch}` — branch name, or `detached at <sha>`
+- `{baseline_sha}` — from Step 1
+- `{review_focus}` — this specialist's domain and any scope earlier stages already covered, in one or two sentences
 
-Also append this scope-discipline line to each Agent prompt: "Findings on code outside the changed lines (pre-existing issues, adjacent refactor opportunities) MUST be reported as NIT (or LOW for the 4-tier schema), never SHOULD_FIX/HIGH — only defects introduced or directly touched by this diff may block."
+Paste the template's `## Template` block **verbatim**. Do not summarise it and do not rewrite its `VERDICT:` line. A reviewer that is not told the verdict rule returns `PASS` while listing blocker-severity findings, and Step 3's flow control then advances past findings that were never fixed. The `reviewer-dispatch-policy` PreToolUse hook rejects dispatches whose prompt lacks the rule.
 
 #### Handling results
 
 Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
 - A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX or SHOULD_FIX issue (CRITICAL or HIGH for the 4-tier schema).
-- On FAIL: fix the MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) items, then re-dispatch **only the FAILed specialist(s)** with a fresh agent instance (max 3 rounds per specialist). Specialists that already returned PASS are not re-dispatched.
+- On FAIL, **always fix every MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) item** — the fix obligation does not depend on which re-review form follows.
+- The re-review form depends on the severities that caused the FAIL:
+
+  | FAIL contained | Re-review |
+  |---|---|
+  | At least one MUST_FIX (or CRITICAL) | Fresh **full** re-review — re-dispatch the specialist with [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) against the whole diff |
+  | Only SHOULD_FIX / HIGH | **Diagnostic** re-review — dispatch a fresh instance with [references/rereview-diagnostic-prompt.md](references/rereview-diagnostic-prompt.md), passing the previous findings and the fix diff |
+
+  A fix to a MUST_FIX-severity defect is the case most likely to disturb code the fix diff does not show, so it earns the full pass. A diagnostic round asks only whether the fix closed the reported findings.
+- A diagnostic round that returns `### Notes` containing `ESCALATE: fix introduced a new blocker` is treated as FAIL and its next round is a **full** re-review, not another diagnostic one.
+- **Both forms count against the same 3-round budget per specialist.** A specialist that has used 3 rounds in any combination is exhausted.
+- Specialists that already returned PASS are not re-dispatched.
 - Step 4 as a whole is PASS only when every dispatched specialist returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
 
 ### Step 5: Security Dispatch Heuristic
@@ -169,6 +184,8 @@ Evaluated after Spec & Quality / Domain steps complete. Replaces the former sepa
 - **Config**: `settings.json`, `.claude/**`, `.env*`, `permissions.allow*`, `secrets*.{yml,yaml,json,toml}`
 
 When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 4. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
+
+**Security always re-reviews in full.** Step 4's diagnostic path does not apply here: a HIGH-only failure still re-dispatches `security-auditor` against the whole diff. A security fix changes the shape of an attack surface rather than a single call site, so the narrower read is not worth its saving.
 
 #### Implementation
 
@@ -184,9 +201,9 @@ if [ "$DISPATCH_SECURITY" = "1" ]; then
 fi
 ```
 
-When constructing the Agent prompt, prepend the `## Language Policy` directive block from this SKILL.md verbatim so the reviewer follows the language directive.
+**Prompt construction** — use the same [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) as Step 4, filling `{review_focus}` with the security scope. There is no separate security template: the template's `VERDICT:` line is schema-neutral and covers the 4-tier severities, and `security-auditor` carries its own severity table in its agent definition (`~/.claude/agents/security-auditor.md`).
 
-Also append the same scope-discipline line as Step 4: out-of-scope findings cap at LOW (or NIT), never HIGH/SHOULD_FIX.
+Paste the template's `## Template` block **verbatim**, same as Step 4.
 
 ## Mandatory Final Output
 
@@ -232,6 +249,8 @@ Copy each section into the sidecar **verbatim** (file:line, description, suggest
 ### Multi-round aggregation rule
 
 When a stage looped through multiple rounds, take the **union of non-blocker findings across all rounds for that stage, deduped** (by file:line + description). Under the current policy, NIT / MEDIUM / LOW are the only non-blockers, so this rule effectively guards against structural loss of those items if the final-round reviewer omits them.
+
+Diagnostic re-review rounds (Step 4's SHOULD_FIX-only path) participate in the union like any other round: their `### Nits` are collected, and their `### Notes` — which carry the CLOSED / OPEN line per previous finding — are collected as Notes. Because a diagnostic round only reads the fix diff, its output is narrower than a full round's; the union is what keeps the earlier full round's non-blocker findings from being lost when a diagnostic round is the stage's last. Do not treat a diagnostic round's silence on a topic as the finding having been withdrawn. The `ESCALATE:` line is flow control, not a finding — it does not go in the sidecar's findings sections.
 
 Note: SHOULD_FIX (and HIGH) are blockers under the current policy, so a stage that exits with `PASS` already has zero remaining SHOULD_FIX / HIGH items. They should appear in the final report only when the main session **intentionally deferred** them (e.g. flagged as out-of-scope and recorded on the task) — in that case keep them verbatim. Otherwise treat a non-empty SHOULD_FIX / HIGH list at PASS as a contradiction worth surfacing to the user.
 

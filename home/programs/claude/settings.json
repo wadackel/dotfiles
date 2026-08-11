@@ -530,6 +530,15 @@
             "command": "~/.claude/hooks/rtk-rewrite.sh"
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/reviewer-dispatch-policy.ts"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
