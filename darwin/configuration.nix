@@ -93,8 +93,8 @@
       "xcodes-app"
       "imageoptim"
       "google-japanese-ime"
-    ]
-    ++ (if profile == "private" then [ "tailscale-app" ] else [ ]);
+      "tailscale-app"
+    ];
 
     # Cask installation arguments
     caskArgs = {
