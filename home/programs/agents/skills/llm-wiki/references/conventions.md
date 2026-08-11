@@ -195,7 +195,14 @@ views:
 ```
 ````
 
-The two Bases views are the genre catalog. They update themselves, so **no index file is ever created** and no page list is maintained by hand.
+The two Bases views are a self-updating convenience catalog, so **no separate index file is ever created**. They are not complete, and the difference matters when deciding where a new note has to be listed.
+
+`## Articles` is reliable — it filters on the `clip/*` tag, which every clipped article carries. `## Notes` is not: it filters on substrings of the filename, so a note whose title shares no keyword with the genre never appears no matter how central it is. A 2026-08-12 audit found `不変条件と整合性境界`, `機械強制できる担保とその境界`, and `律速の移動と待ち行列` all invisible in their parent's view for this reason.
+
+**`## 知識マップ` is therefore the authoritative catalog for concept notes**, and a new note that the `## Notes` filter does not match must be listed there or it is unreachable. Two fixes were tried and rejected:
+
+- *Extend the keyword list.* `エンジニアリング組織` is already at 19 keywords and grows with every note.
+- *Filter on `file.hasLink("<MOC>")` instead.* The parent link is a tree edge, not a genre label. Piloted on `アーキテクチャ`: it gained the 9 missing notes but dropped 37, including `Reactのコンポーネント設計` (parent `[[React]]`), `単一責任の原則` (parent `[[SOLID]]`), and the whole `プログラミングの原則・法則` family — genuine members of the genre that sit one hop further down. Grandchildren are invisible to `hasLink`.
 
 **Never wrap the knowledge map in a code fence.** Obsidian does not resolve `[[...]]` inside fenced blocks or inline code, so a fenced tree turns the genre's entire navigation into inert text — the opposite of what the map is for. Use nested bullets. The same rule is why [lint.md](lint.md) observation 7 excludes code spans when counting unresolved links.
 

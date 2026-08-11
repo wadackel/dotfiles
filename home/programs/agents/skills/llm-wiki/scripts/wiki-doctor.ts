@@ -85,6 +85,46 @@ const fmSeq = (fm: string, key: string) => {
 const fmLinks = (fm: string, key: string) =>
   [...fmSeq(fm, key).matchAll(/\[\[([^\]|#]+)/g)].map((m) => m[1].trim());
 
+// aliases / tags は YAML のブロックリストでもインラインでも書かれる。
+// 素朴な 1 行正規表現で読むと、ブロックリスト形式のノートを丸ごと取りこぼす
+// （孤立検出でこれを踏み、Obsidian/plugins タグの 7 本を見落とした）。
+const fmList = (fm: string, key: string): string[] => {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const line of fm.split("\n")) {
+    const head = line.match(new RegExp(`^${key}:\\s*(.*)$`));
+    if (head) {
+      const inline = head[1].trim();
+      if (inline) {
+        for (const part of inline.replace(/^\[|\]$/g, "").split(",")) {
+          const v = part.trim().replace(/^["']|["']$/g, "");
+          if (v) out.push(v);
+        }
+      } else inBlock = true;
+      continue;
+    }
+    if (!inBlock) continue;
+    const item = line.match(/^\s+-\s+(.*)$/);
+    if (item) {
+      const v = item[1].trim().replace(/^["']|["']$/g, "");
+      if (v) out.push(v);
+      continue;
+    }
+    if (/^\S/.test(line)) inBlock = false;
+  }
+  return out;
+};
+const aliasesOf = (fm: string) => fmList(fm, "aliases");
+const tagsOf = (fm: string) => fmList(fm, "tags");
+
+// Obsidian は [[X]] を、X という alias を宣言しているノートにも解決する。
+// ファイル名だけで解決可能集合を作ると、alias 経由のリンクを全て「未解決」と
+// 誤検出する。スタブを吸収して alias に寄せた直後に 17 件の偽陽性が出た。
+for (const [, body] of bodies) {
+  const fm = body.match(/^---\n([\s\S]*?)\n---/)?.[1];
+  if (fm) { for (const a of aliasesOf(fm)) resolvable.add(a); }
+}
+
 // ---- 1. 未解決 wikilink（日付リンクは仕様上の正常なので除外） ----
 {
   const isDate = (t: string) =>
@@ -472,6 +512,115 @@ const written = new Set<string>();
     "未コンパイル記事の本数を再帰的に数えている",
     [],
     `未コンパイル ${uncompiled} 本${note}`,
+  );
+}
+
+// ---- 13. alias が既存ファイル名を shadow していない ----
+// Obsidian は [[X]] を完全一致するファイル名へ優先的に解決するので、X.md が
+// 実在するのに別ノートが X を aliases に持つと、その alias は永久に到達しない。
+// 書いた本人は効いているつもりでいる、という壊れ方をする。
+// aliases は人間フィールドなので修正はユーザーの手に委ねるしかないが、
+// 検出まで人に任せると 8 件溜まってから気づくことになる（実際そうなった）。
+{
+  const noteNames = new Set(
+    mdFiles
+      .filter((p) => rel(p).startsWith("02_Notes/"))
+      .map((p) => p.split("/").pop()!.replace(/\.md$/, "")),
+  );
+  const bad: string[] = [];
+  for (const p of mdFiles) {
+    if (!rel(p).startsWith("02_Notes/")) continue;
+    const self = p.split("/").pop()!.replace(/\.md$/, "");
+    const fm = bodies.get(p)!.match(/^---\n([\s\S]*?)\n---/)?.[1];
+    if (!fm) continue;
+    for (const a of aliasesOf(fm)) {
+      if (a !== self && noteNames.has(a)) {
+        bad.push(`${a}: ${self} の alias だが 02_Notes/${a}.md が実在する`);
+      }
+    }
+  }
+  add(
+    "alias が既存ファイル名を shadow していない",
+    bad,
+    `alias 衝突なし`,
+  );
+}
+
+// ---- 14. 孤立ノートの本数（情報表示） ----
+// 孤立検出は毎回書き捨てのスクリプトでやっていて、同じバグを 2 回踏んだ。
+// 1 回目は Bases ビューを見ておらず、2 回目は frontmatter のタグ解析が不完全で、
+// 数字が 117 → 74 → 59 と動いた。優先順位をその数字の上で決めていたので、
+// ここへ移して唯一の権威とする。失敗にはしない — 旧資産の棚卸しは進行中の作業。
+//
+// 「辿れる」の判定は 3 経路。本文の wikilink、Bases の hasTag ビュー、
+// Bases の file.name ビュー。ログと proposals はリンク元から除く —
+// ログは ingest が触った全ノートを列挙するので、含めると孤立が永久に消える。
+{
+  const notesOf = (pred: (r: string) => boolean) =>
+    mdFiles.filter((p) => pred(rel(p)));
+
+  const incoming = new Set<string>();
+  for (const p of mdFiles) {
+    const r = rel(p);
+    if (r.startsWith("98_Maintenance/")) continue;
+    const self = p.split("/").pop()!.replace(/\.md$/, "");
+    for (const m of stripCode(bodies.get(p)!).matchAll(LINK)) {
+      const t = m[1].trim().split("/").pop()!.replace(/\.md$/, "");
+      if (t !== self) incoming.add(t);
+    }
+  }
+
+  // MOC が Bases で絞っているタグと名前キーを集める。
+  const viewTags = new Set<string>();
+  const viewNameKeys = new Set<string>();
+  for (const p of notesOf((r) => r.startsWith("02_Notes/"))) {
+    const t = bodies.get(p)!;
+    for (const m of t.matchAll(/hasTag\("([^"]+)"\)/g)) viewTags.add(m[1]);
+    for (
+      const m of t.matchAll(
+        /file\.name(?:\.lower\(\))?\.contains(?:Any)?\(([^)]*)\)/g,
+      )
+    ) {
+      for (const q of m[1].match(/"([^"]+)"/g) ?? []) {
+        viewNameKeys.add(q.replace(/"/g, "").toLowerCase());
+      }
+    }
+  }
+
+  let unreachable = 0;
+  let byView = 0;
+  const byType = new Map<string, number>();
+  for (const p of notesOf((r) => r.startsWith("02_Notes/"))) {
+    const name = p.split("/").pop()!.replace(/\.md$/, "");
+    if (incoming.has(name)) continue;
+    const fm = bodies.get(p)!.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+    const ty = fm.split("\n").find((l) => l.startsWith("type: "))?.slice(6) ??
+      "(なし)";
+    // MOC は Home 側から辿る前提なので被リンク 0 でも孤立ではない。
+    // record は規約上「知識パスから恒久的に除外」なので同じく対象外。
+    if (ty === "moc" || ty === "record") continue;
+    const tags = tagsOf(fm);
+    const hitTag = tags.some((tg) =>
+      [...viewTags].some((f) => tg === f || tg.startsWith(`${f}/`))
+    );
+    const hitName = [...viewNameKeys].some((k) =>
+      k.length >= 2 && name.toLowerCase().includes(k)
+    );
+    if (hitTag || hitName) {
+      byView++;
+      continue;
+    }
+    unreachable++;
+    byType.set(ty, (byType.get(ty) ?? 0) + 1);
+  }
+  const breakdown = [...byType].sort((a, b) => b[1] - a[1])
+    .map(([t, c]) => `${t} ${c}`).join(" / ");
+  add(
+    "どこからも辿れない概念ノートの本数",
+    [],
+    `${unreachable} 本（${
+      breakdown || "なし"
+    }）。Bases ビュー経由のみで辿れるものが別に ${byView} 本`,
   );
 }
 
