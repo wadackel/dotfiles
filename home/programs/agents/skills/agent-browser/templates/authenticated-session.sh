@@ -27,7 +27,8 @@ agent-browser --session "$SESSION" wait 2000
 CURRENT_URL=$(agent-browser --session "$SESSION" get url)
 if [[ "$CURRENT_URL" == *"login"* ]] || [[ "$CURRENT_URL" == *"signin"* ]]; then
     echo "Session expired (landed on $CURRENT_URL)." >&2
-    echo "Re-run 'ab-state-refresh' to refresh state from a logged-in Chrome." >&2
+    echo "Re-run 'ab-state-refresh $LOGIN_URL' against a logged-in Chrome." >&2
+    echo "If it still lands here, the SSO flow needs a third-party domain: retry with --all-cookies." >&2
     agent-browser --session "$SESSION" close 2>/dev/null || true
     exit 1
 fi

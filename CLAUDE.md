@@ -242,6 +242,15 @@ This repository includes comprehensive Claude Code configuration:
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created.
 
+### ab-state-refresh (agent-browser auth state import)
+
+`home/programs/agents/scripts/ab-state-refresh.ts` imports the running Chrome's cookies / localStorage / sessionStorage into `~/.agent-browser-state/main.json` for headless `agent-browser` replay. `home/programs/agents/default.nix` publishes the whole `scripts` directory at `~/.agents/scripts`, and `home/programs/zsh/init.zsh` wraps it in an `ab-state-refresh` zsh function.
+
+- Tests: `deno test --allow-read --allow-write --allow-env --allow-net=127.0.0.1 --allow-run home/programs/agents/scripts/ab-state-refresh_test.ts` (a mock CDP server over `Deno.upgradeWebSocket`; `--allow-run` covers spawning the script as a subprocess)
+- It speaks CDP directly and **never attaches to a target it did not create**. Do not replace this with `agent-browser connect`: that attaches to every page target and calls `Page.enable`, and Chrome's frozen background-tab renderers never answer, so the daemon hangs (`Resource temporarily unavailable (os error 35)`)
+- Cookies are narrowed to the tracked origins by RFC 6265 domain-match; `--all-cookies` disables it when SSO needs a third-party domain
+- `~/.agents/` is shared: `skills` is owned by `home/programs/codex/default.nix`, `scripts` by `home/programs/agents/default.nix`
+
 ### Figma skills sync
 
 `home/programs/agents/skills/figma-{use,generate-design,generate-library,use-slides}/` mirror upstream `figma/mcp-server-guide` and are reachable from Claude / Codex / opencode via the standard common-skill symlinks.

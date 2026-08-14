@@ -44,11 +44,11 @@ Do not export `AGENT_BROWSER_STATE`. If exported, the daemon may navigate to `or
 
 ## Initial setup (one-time per Claude session)
 
-Before the first agent-browser call, the state file must exist. The user populates it by running the host's `ab-state-refresh` zsh function (defined in `home/programs/zsh/init.zsh`), which connects to their running Chrome via CDP and saves cookies + localStorage to `~/.agent-browser-state/main.json` (mode 600).
+Before the first agent-browser call, the state file must exist. The user populates it by running the host's `ab-state-refresh` command (`home/programs/agents/scripts/ab-state-refresh.ts`, published at `~/.agents/scripts/` and wrapped by a zsh function in `home/programs/zsh/init.zsh`), which talks CDP to their running Chrome and saves cookies + localStorage + sessionStorage to `~/.agent-browser-state/main.json` (mode 600).
 
 If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`ab-state-refresh\` to import auth state from your Chrome.`
 
-`agent-browser state save` only captures localStorage for the focused tab plus its iframes (single Page Target constraint of CDP attach). When multiple origins are needed, `ab-state-refresh URL1 URL2 ...` opens one tab per URL and merges origins; `ab-state-refresh -i` picks from open tabs interactively. See [references/authentication.md](references/authentication.md) for the full architecture, edge cases, and troubleshooting.
+Each run captures storage only for the origins it is asked about: `ab-state-refresh URL1 URL2 ...` for specific origins, `ab-state-refresh -i` to pick from the open tabs, or no arguments for Chrome's active tab. Cookies are narrowed to those origins by default; `--all-cookies` is the escape hatch when an SSO flow needs a third-party domain. See [references/authentication.md](references/authentication.md) for the full architecture, edge cases, and troubleshooting.
 
 ## Sharing one daemon across main + subagents
 
@@ -83,7 +83,6 @@ agent-browser doctor --fix
 
 - Real-time interaction with the user's logged-in browser (e.g. observing in-flight OAuth popups they trigger manually).
 - Sites whose state lives in IndexedDB / Service Worker / Web SQL that the cookie+localStorage state file does not capture.
-- The `state save` operation itself (used internally by `ab-state-refresh`).
 
 When using `--auto-connect`, expect to share the user's window — coordinate with them to avoid collisions. Prefer state-import for everything else.
 

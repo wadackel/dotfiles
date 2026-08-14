@@ -1,6 +1,17 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  dotfiles,
+  ...
+}:
 
 {
+  # ~/.agents/ is shared between modules: skills come from
+  # home/programs/codex/default.nix, scripts from here. home.file entries are
+  # per-path, so this split is intentional — merging them under one module
+  # would break the other agent's publication.
+  home.file.".agents/scripts".source = dotfiles.linkHere ./. "scripts";
+
   # This directory is imported automatically by home/programs/default.nix.
   # Cross-agent assets live under ./skills, ./memo, and ./shared.
   # Agent-specific skill directories are still owned by each agent module, but

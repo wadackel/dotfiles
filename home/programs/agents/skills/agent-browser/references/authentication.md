@@ -27,12 +27,14 @@ This is the **default authentication strategy** in this environment. Cookies + l
 
 ```
 User's Chrome (headed)
-   ↑ CDP WebSocket attach (state save only — one-shot, brief)
+   ↑ direct CDP: Storage.getCookies (browser session) + a throwaway background tab
 ab-state-refresh  →  ~/.agent-browser-state/main.json (plaintext JSON, mode 600)
                                                   ↓ (--state "$HOME/.agent-browser-state/main.json" passed explicitly)
                           agent-browser open <url>  →  independent headless Chrome
                                                   + --session "claude-$PPID" isolates the daemon to this Claude session
 ```
+
+`ab-state-refresh` speaks CDP directly (`home/programs/agents/scripts/ab-state-refresh.ts`, published at `~/.agents/scripts/`) and **never attaches to a target it did not create**. Do not "simplify" it back to `agent-browser connect`: that command attaches to every page target and calls `Page.enable` on one of them, and Chrome freezes background-tab renderers, so a frozen tab never answers and the daemon blocks forever (`Failed to read: Resource temporarily unavailable (os error 35)`). On a working day with 40+ tabs open, a third of them are typically frozen.
 
 ### Required environment
 
@@ -47,34 +49,44 @@ No encryption key is involved. The state file matches the de facto convention fo
 Make sure the user's Chrome is running with `--remote-debugging-port=9222` (or the `chrome://inspect/#remote-debugging` toggle is on) **and is logged into the SaaS sites you want to automate**. Then:
 
 ```bash
-ab-state-refresh                                    # captures only the focused tab + its iframes
-ab-state-refresh https://app.example.com/dashboard  # captures a specific origin (opens a new tab)
+ab-state-refresh                                    # captures the origin of Chrome's active tab
+ab-state-refresh https://app.example.com/dashboard  # captures a specific origin
 ab-state-refresh https://app1.example.com/ \
                  https://app2.example.com/          # captures multiple origins and merges them
+ab-state-refresh -i                                 # pick origins from the open tabs with fzf
+ab-state-refresh --all-cookies https://app.example.com/  # skip the cookie narrowing
 ```
 
 This:
 
 1. Creates `~/.agent-browser-state/` with mode 700.
-2. Reads the CDP WebSocket URL from `~/Library/Application Support/Google/Chrome/DevToolsActivePort` and attaches via `agent-browser connect <ws-url>`. Chrome 127+ returns 404 on `/json/version` unless Origin is whitelisted, so HTTP-based discovery (used by plain `--auto-connect`) is unreliable on current Chrome — file-based discovery is the robust path.
-3. Calls `agent-browser state save $HOME/.agent-browser-state/main.json` (no-args path) or, when URL arguments are given, opens a new tab per URL via `agent-browser tab new`, waits 2000 ms for async XHR-driven auth state to land in localStorage, runs `state save` per tab into a temp file, and merges origins via `jq -s '{cookies: .[-1].cookies, origins: (map(.origins) | add | unique_by(.origin))}'` before writing the merged JSON to `main.json`.
-4. Sets the file to mode 600.
-5. Prints the resulting file path, size, and timestamp.
+2. Reads the CDP WebSocket URL from `~/Library/Application Support/Google/Chrome/DevToolsActivePort` (line 1 is the port, line 2 the browser path). Chrome 127+ returns 404 on `/json/version` unless Origin is whitelisted, so HTTP-based discovery is unreliable on current Chrome — file-based discovery is the robust path.
+3. For each requested URL, opens a **throwaway background tab** (`Target.createTarget` with `background: true`, then `Page.navigate`), waits for the load event, settles 2000 ms so async XHR-driven auth state lands in localStorage, reads `localStorage` / `sessionStorage` via `Runtime.evaluate`, and closes the tab. Every CDP request is time-boxed, so a slow or wedged page can never hang the run.
+4. Reads every cookie in one `Storage.getCookies` call on the browser session — no page is attached for this.
+5. Merges with the existing `main.json` (last-wins on `[name, domain, path]` for cookies and on `origin` for origins), then writes the result through a mode-600 temp file and `rename`, so no partially-written or world-readable state ever exists.
+6. Prints the resulting file path, size, and timestamp.
 
-#### Important: `state save` only captures the focused tab + its iframes
+An empty incoming `localStorage` / `sessionStorage` never replaces a stored non-empty value. A freshly opened tab has an empty `sessionStorage` by definition, so plain last-wins would erase a previously captured one on every run.
 
-`agent-browser state save` reads `localStorage` / `sessionStorage` only from the **single Page Target currently attached via CDP (≒ the focused tab)** plus its frame tree. Even when 29 tabs are open in Chrome, the origins of the 28 unfocused tabs do **not** appear in `origins[]`. By contrast, `cookies[]` is collected from the full browser context, so every visited domain is covered.
+#### Cookie narrowing
 
-This asymmetry is the typical root cause of the "cookies are present but the request still fails auth" symptom. Pick one of the following workarounds:
+By default only cookies that would be sent to a **tracked origin** are saved. Tracked origins are every origin in the merged `origins[]` — the ones captured this run plus the ones already in `main.json`. Matching is RFC 6265 domain-match, so for `https://lightdash.example.com` a `.example.com` cookie is kept but an `api.example.com` cookie is not (pass that URL too if you need it). The number of dropped cookies is printed to stderr.
 
-- **Focus the target app's tab in Chrome and run `ab-state-refresh` with no arguments.**
-- **Pass URLs as arguments when multiple origins are needed**: `ab-state-refresh URL1 URL2 ...` opens a new tab per URL, runs `state save` per tab into a temp file, and merges the origins. Note that port is part of the origin per [RFC 6454](https://datatracker.ietf.org/doc/html/rfc6454), so `https://host:3000` and `https://host:3001` are distinct origins and must be passed separately.
-- **Pick from open tabs interactively with `-i`**: `ab-state-refresh -i` opens an fzf list of the currently-open Chrome tabs (internal pages like `chrome://`, `about:`, `chrome-extension://`, `devtools://` are excluded). TAB to multi-select, Enter to confirm, ESC to cancel. The function then switches to each picked tab in turn via `agent-browser tab tN`, waits for state to settle, and runs `state save` per tab into a temp dir before merging via the same `jq -s` pipeline as the multi-URL path. No new tabs are created — picks come from tabs already open. The active tab on exit is the **last switched-to tab** rather than the one focused before the run; use Cmd+\` in Chrome to restore. Mixing `-i` with positional URL arguments is not supported (the function exits with usage error).
+Use `--all-cookies` when a site's SSO bounces through a domain you have not tracked (`accounts.google.com`, an Okta tenant, …) and the headless replay lands on a login page. That is the recovery path for "narrowing was too aggressive".
+
+#### What is and is not captured
+
+`localStorage` / `sessionStorage` come from the **main frame only**. A cross-origin auth iframe's origin is not picked up automatically — pass its URL explicitly if an app keeps tokens there. `cookies[]` is collected from the full browser context, so cookie coverage is never frame-limited.
+
+Note that port is part of the origin per [RFC 6454](https://datatracker.ietf.org/doc/html/rfc6454), so `https://host:3000` and `https://host:3001` are distinct origins and must be passed separately.
+
+`-i` lists the currently-open Chrome tabs (internal pages like `chrome://`, `about:`, `chrome-extension://`, `devtools://`, `file://` are excluded, and tabs sharing an origin collapse to one row). TAB to multi-select, Enter to confirm, ESC to cancel. Picked origins are harvested in a fresh background tab, not by switching to the existing one — an existing tab may be frozen, and switching would disturb the user's navigation. Rows are sorted by origin; there is no active-tab-first ordering, because the browser-level CDP session cannot tell which tab is focused. Mixing `-i` with positional URL arguments exits with a usage error.
+
+The no-argument path resolves the active tab through `osascript`, so the first run raises a macOS Automation permission prompt for the terminal. If it is denied or fails, the run warns and refreshes cookies only.
 
 Side effects:
-- Passing URL arguments opens one visible foreground tab per URL. Close them manually after the run — the function deliberately does not auto-close them, since the user's navigation history would otherwise be disturbed.
-- The `-i` interactive path does not create new tabs but does change the active tab to whichever was switched to last.
-- If any selected origin (from `-i` or URL args) ends up absent from the saved state — typical cause is a tab that resolved to `chrome-error://chromewebdata/`, e.g., a stopped local dev server — `ab-state-refresh` prints a single `selected origins not saved: …` line to stderr. The other origins are saved normally; re-run after fixing the affected tab.
+- Tabs opened for capture are created in the background and closed automatically, including on Ctrl-C (the run exits 130 after closing them). The user's tabs are never navigated or switched.
+- If any requested origin ends up absent from the saved state — a failed navigation, a page whose storage could not be read, or an SSO redirect that landed on a different origin — `ab-state-refresh` prints a single `selected origins not saved: …` line to stderr. Whatever did load is recorded under the origin that **actually** loaded, never relabelled as the requested one. The other origins are saved normally; re-run after fixing the affected site.
 
 ### Step 2: Use agent-browser normally
 
@@ -115,8 +127,9 @@ For those, fall back to a **persistent profile** (next section) — the user-dat
 
 - The state file is plaintext JSON with mode 600. Same-UID processes can read it; this matches the threat model of every other dev secret on the machine (SSH keys, AWS credentials, npm/GitHub tokens). At-rest protection comes from FileVault.
 - The state directory is mode 700 (`drwx------`), so other local users cannot read the file.
-- When URL arguments are passed, per-tab state is briefly written to a fresh `mktemp -d` directory under `$TMPDIR` (mode 700, files mode 600) and removed at the end of the run. If the function is killed mid-run (Ctrl-C / SIGTERM), the temp dir may persist until reboot — same-UID processes can still read mode-600 files, so this is mostly a forensics / backup-tool concern, not an active attacker upgrade.
-- `--remote-debugging-port=9222` exposes full browser control on localhost during the brief `state save` window. Only run `ab-state-refresh` on trusted machines.
+- Nothing is written outside `~/.agent-browser-state/`. The only intermediate file is a mode-600 temp file in that same directory, replaced by `rename` in the same run.
+- Cookie narrowing keeps unrelated sites' cookies (banking, personal accounts) out of `main.json` entirely. `--all-cookies` disables that; use it only when a specific SSO flow needs it, and re-run without the flag afterwards to prune again.
+- `--remote-debugging-port=9222` exposes full browser control on localhost while it is enabled. Only run `ab-state-refresh` on trusted machines.
 - Application-layer encryption was deliberately removed: env-var-derived keys provide no protection against same-UID readers, who can read the env directly. The added complexity (secret-manager lookups, encrypted-file suffix juggling, biometric prompts on shell startup) was not justified by the residual threat surface FileVault already covers.
 
 ## Persistent Profiles
