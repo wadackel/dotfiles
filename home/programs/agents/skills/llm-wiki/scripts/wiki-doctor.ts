@@ -59,6 +59,21 @@ const allFiles = await walk(VAULT);
 const rel = (p: string) => p.slice(VAULT.length + 1);
 const isPrivate = (p: string) => rel(p).startsWith("05_Private/");
 
+// 03_Books のコンパイル単位はインデックスノートだけ。章ノートは読み取り専用の本文。
+// 判定はパスで行う — 「frontmatter を持たないものが章ノート」は今たまたま成り立って
+// いるだけで、ユーザーが章ノートに 1 つプロパティを足した瞬間に壊れる。
+const isBookIndex = (p: string) => {
+  const seg = rel(p).split("/");
+  if (seg[0] !== "03_Books" || !seg[seg.length - 1].endsWith(".md")) {
+    return false;
+  }
+  if (seg.length === 2) return true;
+  return seg.length === 3 && seg[2] === `${seg[1]}.md`;
+};
+// ソースとして扱う集合。04_Literature の記事と 03_Books のインデックスノート。
+const isSource = (p: string) =>
+  rel(p).startsWith("04_Literature/") || isBookIndex(p);
+
 // 05_Private は読まない。ファイル名だけを索引に使う。
 const mdFiles = allFiles.filter((p) => p.endsWith(".md") && !isPrivate(p));
 const bodies = new Map<string, string>();
@@ -172,6 +187,33 @@ for (const [, body] of bodies) {
   );
 }
 
+// ---- 2b. 02_Notes のファイル名が 03_Books と衝突していない ----
+// 危険なのは既存の章ノートではなく、ingest が新規に作る概念ノートの方。章ノート名は
+// 「解像度を上げる 4 つの視点」のように概念的で、本から生成するノートと名前空間が
+// 近い。Obsidian は wikilink を vault 全域で解決するので、衝突すると本文リンクが
+// リンク先の分からないまま片方へ倒れる。
+// 範囲を vault 全域に広げないのは、02_Notes と 04_Literature に既存の衝突
+// （Figma.md）があり、全域検査にすると毎回それを踏むため。
+{
+  const books = new Map<string, string[]>();
+  for (const p of mdFiles) {
+    if (!rel(p).startsWith("03_Books/")) continue;
+    const name = p.split("/").pop()!;
+    const list = books.get(name) ?? [];
+    list.push(rel(p));
+    books.set(name, list);
+  }
+  const bad = mdFiles
+    .filter((p) => rel(p).startsWith("02_Notes/"))
+    .filter((p) => books.has(p.split("/").pop()!))
+    .map((p) =>
+      `${rel(p)} は ${
+        books.get(p.split("/").pop()!)!.join(", ")
+      } と同名（wikilink の解決先が不定）`
+    );
+  add("02_Notes と 03_Books のファイル名が衝突していない", bad, "衝突なし");
+}
+
 // ---- 3. 知識マップがコードフェンスで囲まれていない ----
 {
   const bad: string[] = [];
@@ -201,9 +243,11 @@ const written = new Set<string>();
   if (BASELINE_DIR) {
     for (const p of mdFiles) {
       const r = rel(p);
-      if (!r.startsWith("02_Notes/") && !r.startsWith("04_Literature/")) {
-        continue;
-      }
+      // 03_Books はインデックスノートだけ。章ノートはこのスキルが構造上一度も
+      // 書かないので、差分が出たならそれはユーザー自身の加筆であって成果物ではない。
+      const inScope = r.startsWith("02_Notes/") ||
+        r.startsWith("04_Literature/") || isBookIndex(p);
+      if (!inScope) continue;
       try {
         const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
         if (before !== bodies.get(p)) written.add(p);
@@ -212,6 +256,34 @@ const written = new Set<string>();
       }
     }
   }
+}
+
+// ---- 4b. 03_Books の章ノートが baseline とバイト一致 ----
+// 章ノートはユーザー自身の文章で、Vault に Git 履歴は無く、他所にも存在しない。
+// このスキルの中で最も損失の大きい不変条件でありながら、保証していたのは
+// SKILL.md と books.md の散文だけだった。決定可能なので機械で見る。
+// インデックスノートは frontmatter が変わるので対象外。
+{
+  const bad: string[] = [];
+  let checked = 0;
+  if (BASELINE_DIR) {
+    for (const p of mdFiles) {
+      const r = rel(p);
+      if (!r.startsWith("03_Books/") || isBookIndex(p)) continue;
+      checked++;
+      try {
+        const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
+        if (before !== bodies.get(p)) bad.push(`${r} が baseline と一致しない`);
+      } catch {
+        bad.push(`${r} は baseline に存在しない（章ノートが新規作成された）`);
+      }
+    }
+  }
+  add(
+    "03_Books の章ノートが baseline とバイト一致",
+    bad,
+    BASELINE_DIR ? `${checked} 本すべて無傷` : "--baseline 未指定のため未検証",
+  );
 }
 
 // ---- 4. lint の成果物が生の wikilink で監査対象を引用していない ----
@@ -337,7 +409,7 @@ const written = new Set<string>();
     .map((p) => bodies.get(p)!).join("\n");
   const bad: string[] = [];
   for (const [p, body] of bodies) {
-    if (!rel(p).startsWith("04_Literature/")) continue;
+    if (!isSource(p)) continue;
     const fm = body.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
     if (!/^type: source$/m.test(fm)) continue;
     const gp = fmLinks(fm, "generated_pages");
@@ -359,7 +431,7 @@ const written = new Set<string>();
   for (const [p, body] of bodies) {
     const fm = body.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
     const title = p.split("/").pop()!.replace(/\.md$/, "");
-    if (rel(p).startsWith("04_Literature/")) {
+    if (isSource(p)) {
       if (unlinkable.test(title)) continue; // ファイル名に [ ] ` # を含むと wikilink 不可（# は見出しアンカー扱い）
       for (const g of fmLinks(fm, "generated_pages")) fwd.add(`${title}|${g}`);
     } else if (rel(p).startsWith("02_Notes/")) {
@@ -491,16 +563,24 @@ const written = new Set<string>();
 // 失敗にはしない — 未コンパイルの記事が残っていること自体は正常な状態。
 {
   let uncompiled = 0;
+  let books = 0;
   const nested = new Set<string>();
   for (const p of mdFiles) {
     const r = rel(p);
-    if (!r.startsWith("04_Literature/")) continue;
+    const book = isBookIndex(p);
+    if (!r.startsWith("04_Literature/") && !book) continue;
     const fm = bodies.get(p)!.match(/^---\n([\s\S]*?)\n---/)?.[1];
-    if (!fm) continue;
-    const ty = fm.split("\n").find((l) => l.startsWith("type: "));
+    // frontmatter ブロックそのものが無いファイルは未コンパイル。以前は読み飛ばして
+    // いたが、03_Books には frontmatter を持たない本が実在し、除外すると
+    // 「数えていない対象は完了扱い」という最悪の壊れ方をする。
+    const ty = fm?.split("\n").find((l) => l.startsWith("type: "));
     // parked は「受け皿となる概念が無いので見送る」と判断済みの終端状態。
     // これが無いと、見送った記事が毎回トリアージ候補に戻り続ける。
     if (ty === "type: source" || ty === "type: parked") continue;
+    if (book) {
+      books++;
+      continue;
+    }
     uncompiled++;
     const dir = r.slice("04_Literature/".length, r.lastIndexOf("/"));
     if (dir) nested.add(dir);
@@ -509,9 +589,9 @@ const written = new Set<string>();
     ? `（うちサブディレクトリ: ${[...nested].join(", ")}）`
     : "";
   add(
-    "未コンパイル記事の本数を再帰的に数えている",
+    "未コンパイルのソース本数を再帰的に数えている",
     [],
-    `未コンパイル ${uncompiled} 本${note}`,
+    `未コンパイル: 記事 ${uncompiled} 本${note} / 書籍 ${books} 冊`,
   );
 }
 

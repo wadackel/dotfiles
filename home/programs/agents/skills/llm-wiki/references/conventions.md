@@ -71,9 +71,27 @@ generated_pages: ["[[概念ノートA]]", "[[概念ノートB]]"]
 
 `generated_pages` lists every concept note this source touched, whether created, updated, or split out. It is the reverse of the concept note's `sources` field, and `recompile` reads it to find what to re-process.
 
+### Books (`03_Books/`)
+
+```yaml
+---
+aliases:
+tags:
+  - memo/book
+date: YYYY-MM
+rating: N
+type: source
+generated_pages: ["[[概念ノートA]]", "[[概念ノートB]]"]
+---
+```
+
+`aliases`, `tags`, `date`, and `rating` are the user's — `rating` and `date` join the human set here, alongside the three that are human everywhere. `type` and `generated_pages` are added by `ingest`.
+
+**Only the index note carries them.** `03_Books/` is two levels deep: `03_Books/<name>.md` and `03_Books/<dir>/<dir>.md` are index notes, everything else is a chapter note whose frontmatter is never written. Some books have no frontmatter block at all; `ingest` creates one holding `type` and `generated_pages` only. See [books.md](books.md).
+
 ### `type` is the compile-completion marker
 
-For files under `04_Literature/`, the presence of `type: source` is the **only** signal of compile state. Do not grep the log for it — quoting and Unicode normalization make that unreliable.
+For files under `04_Literature/` and for index notes under `03_Books/`, the presence of `type: source` is the **only** signal of compile state. Do not grep the log for it — quoting and Unicode normalization make that unreliable.
 
 | State | `type` | Meaning |
 |---|---|---|
@@ -102,6 +120,8 @@ Consequences:
 - Alias display: `[[ノート名|表示テキスト]]`. Section: `[[ノート名#見出し]]`.
 - Both `02_Notes/` and `04_Literature/` are flat, and Obsidian resolves by filename, so the same syntax reaches either.
 
+**Chapter notes under `03_Books/` are the one exception.** That directory is not flat, and `はじめに.md` exists in two books, so a bare `[[はじめに]]` resolves to whichever copy sits nearest the linking file. Link to a chapter note path-qualified: `[[03_Books/解像度を上げる/はじめに|はじめに]]`, which is how the user already writes them. Index notes stay bare — their filenames are unique across the vault.
+
 ## Filenames
 
 Follow the `obsidian-notes` skill for filesystem-safe characters — the vault syncs to iOS and Android, where `< > : " / \ | ? *` break sync.
@@ -109,7 +129,7 @@ Follow the `obsidian-notes` skill for filesystem-safe characters — the vault s
 Beyond that:
 
 - Avoid spaces where a compound word reads fine without them; wikilinks are more stable that way.
-- `02_Notes/` is flat, so a new concept note can collide with one of the existing notes. Before creating, `Glob "$VAULT/02_Notes/<name>.md"`. On collision, disambiguate by qualifier rather than by number: `インデックス_RDB.md`, not `インデックス2.md`.
+- `02_Notes/` is flat, so a new concept note can collide with one of the existing notes. Before creating, `Glob` **both** `"$VAULT/02_Notes/<name>.md"` and `03_Books/` (`"$VAULT/03_Books/*.md"`, `"$VAULT/03_Books/*/*.md"`) — chapter-note titles sit in the same conceptual namespace a new note is named from, and `wiki-doctor` fails on that collision. Do not widen the check to the whole vault: `02_Notes/` and `04_Literature/` already collide on `Figma.md`. On collision, disambiguate by qualifier rather than by number: `インデックス_RDB.md`, not `インデックス2.md`.
 
 ## Concept note body
 
@@ -252,10 +272,11 @@ Never delete old entries. `curiosity` builds its exclusion set from these files,
 
 ## Prohibited
 
-- Writing to `aliases`, `tags`, or `description`
+- Writing to `aliases`, `tags`, or `description` — and, on books, `date` or `rating`
 - Writing into a source's `## Summary` or `## Memo`
+- Writing anything to a chapter note under `03_Books/` — frontmatter included
 - Creating an index file per genre (the Bases views are the catalog)
 - Creating genre subdirectories under `02_Notes/` or `04_Literature/` (existing Bases filter on `file.folder == "02_Notes"`)
-- Relative-path wikilinks
+- Relative-path wikilinks — **except** to a chapter note under `03_Books/`, where the path qualifier is required (see Wikilinks above)
 - Setting `type: source` anywhere other than the final step of `ingest` ([ingest.md](ingest.md) B-6) or `save` ([save.md](save.md) Step 8)
 - Writing a literal `[[wikilink]]` into prose that is *describing* link syntax rather than linking — wrap it in backticks, or the maintenance artifact creates the unresolved links it reports

@@ -48,6 +48,8 @@ Method: compare each note's `updated` against the `date` of the articles in its 
 
 Notes that predate this skill have no `updated` at all. Absence is not staleness — report those as "未計測" rather than as findings.
 
+Books carry `date` at `YYYY-MM` precision ([conventions.md](conventions.md)), not `YYYY-MM-DD`. Compare on the month: treat a book's `date` as the first of that month, so a note updated later in the same month does not read as stale.
+
 → `kind: stale-fix`, `risk_flags: [judgment-required]`, `confidence: medium`.
 
 ## Observation 5 — weak cross-referencing
@@ -82,10 +84,10 @@ Pairs that are clearly related in substance without sharing a title string. Extr
 
 Method:
 
-1. `Glob "$VAULT/04_Literature/*.md"` (or the genre's tagged articles).
+1. `Glob "$VAULT/04_Literature/*.md"` (or the genre's tagged articles), plus the book index notes — `Glob "$VAULT/03_Books/*.md"` and `"$VAULT/03_Books/*/*.md"`, keeping only those whose basename equals their parent directory ([books.md](books.md)). Chapter notes are body text and are never sources.
 2. Keep the ones with `type: source`.
 3. Read `generated_pages`. **An empty or missing `generated_pages` is itself the finding** — the completion marker is set but nothing records what it produced.
-4. Read `98_Maintenance/logs/<MOC> 操作ログ.md` and check that at least one of the article's `generated_pages` targets appears there.
+4. Read `98_Maintenance/logs/<MOC> 操作ログ.md` and check that at least one of the article's `generated_pages` targets appears there. A book has no single genre — check the log of every MOC its generated notes hang off, and require each of those logs to name the notes belonging to it.
 5. Report the ones failing step 3 or step 4.
 
 Matching on `generated_pages` rather than on the article's own title is deliberate. Batch runs write **one aggregated entry per genre** (see the batch form in [conventions.md](conventions.md)), so the article's title never appears in the log — only the notes it produced do. Matching on titles would report every batch-compiled article as incomplete.

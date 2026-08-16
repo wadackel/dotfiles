@@ -50,7 +50,7 @@ Steps 3 and 4 together add at most **3** more notes, for 8 total.
 
 Only when: no genre could be identified, the MOCs showed nothing relevant, or the notes read turned out to be insufficient. Otherwise skip to Step 5.
 
-Scope as tightly as possible (`$VAULT/02_Notes/*.md`, widening to `04_Literature/` only if the concept layer has nothing). `$VAULT/05_Private/` and `$VAULT/98_Maintenance/` are never searched — the first is out of scope entirely, the second holds unreviewed proposal drafts that must not be read as established knowledge. Try several forms of the keyword — Japanese, English, abbreviation, differing case.
+Scope as tightly as possible (`$VAULT/02_Notes/*.md`, widening to `04_Literature/` and `03_Books/` only if the concept layer has nothing). `03_Books/` is the user's own writing rather than clipped text, so a hit there is a direct answer in their words — but it is also the layer least likely to be phrased the way the question was, so try the concept layer first. `$VAULT/05_Private/` and `$VAULT/98_Maintenance/` are never searched — the first is out of scope entirely, the second holds unreviewed proposal drafts that must not be read as established knowledge. Try several forms of the keyword — Japanese, English, abbreviation, differing case.
 
 Heavy reliance on this fallback means the MOCs' knowledge maps are behind. Note it in the report; `lint` proposes fixes.
 
@@ -61,6 +61,8 @@ Cite in three levels, inline, per claim:
 1. **Concept note** — `[[ノート名]]` next to the claim it supports. Every specific fact, number, name, or date carries the note it came from. A citation list at the top is not a substitute.
 2. **Source article** — `[[記事タイトル]]` from the note's `sources` field when quoting a fact or a figure.
 3. **External URL** — for anything where currency matters, or for papers, announcements, and attributed statements.
+
+**A book stops at level 2.** Its `## URL` points at a store page, not at the text, so there is no level-3 hop to make. When a claim rests on a book, cite the index note and, where the reader would want to verify a specific passage, the chapter note path-qualified (`[[03_Books/解像度を上げる/はじめに|はじめに]]`). Say that the source is a book — the reader needs to know the trail ends at their own reading notes rather than at something they can open.
 
 **Source articles hold a Web Clipper summary, not the original text.** For a verbatim quote, a code sample, or a precise figure, the summary is not enough: follow the `[title](url)` on the article's first body line to the original and cite that. Say plainly when a claim rests on the summary alone.
 

@@ -39,7 +39,7 @@ Leave out: back-and-forth that got superseded, preference checks, command output
 
 ## Step 3 — title
 
-Use the argument when given. Otherwise name the central topic in 10–30 characters. Sanitize per the `obsidian-notes` skill. Check `04_Literature/` and `02_Notes/` for a collision and qualify with the date if needed (`LLM Wiki設計議論-<today>`).
+Use the argument when given. Otherwise name the central topic in 10–30 characters. Sanitize per the `obsidian-notes` skill. Check `04_Literature/`, `02_Notes/`, and `03_Books/` for a collision and qualify with the date if needed (`LLM Wiki設計議論-<today>`).
 
 ## Step 4 — genre
 

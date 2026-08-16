@@ -23,9 +23,11 @@ The path is required. There is no bulk mode — an unattended sweep across a com
 
 `Read` the file and confirm:
 
-- It is under `04_Literature/`. A path in `00_Inbox/` means the genre is undecided — point at `ingest` and stop.
+- It is under `04_Literature/`, or it is an index note under `03_Books/` ([books.md](books.md)). A path in `00_Inbox/` means the genre is undecided — point at `ingest` and stop. A chapter note is not a target.
 - `type: source` is present. Without it the file was never compiled — point at `ingest` and stop.
-- It carries a `clip/*` tag whose MOC exists. Without a MOC, run [init.md](init.md) first.
+- It carries a `clip/*` tag whose MOC exists. Without a MOC, run [init.md](init.md) first. Books carry no tag; check instead that the MOCs their `generated_pages` notes hang off still exist.
+
+Books are the common case for this verb rather than the rare one. A clipped article is fixed once saved, but a reading note grows every time the book is re-read — `recompile` is how those additions reach the concept layer. Never strip `type` to force a re-`ingest` instead: that discards `generated_pages`, which is exactly what step 1 below needs.
 
 ## Flow
 
@@ -60,7 +62,7 @@ Same triggers as [ingest.md](ingest.md) B-5, applied more strictly. `recompile` 
 
 ### 6. Source frontmatter
 
-Rewrite `generated_pages` to match reality and fix broken links in it. Sources carry no `updated` field ([conventions.md](conventions.md)) — do not add one. The body — `## Summary`, `## 議論`, `## Memo` — is not touched.
+Rewrite `generated_pages` to match reality and fix broken links in it. Sources carry no `updated` field ([conventions.md](conventions.md)) — do not add one. The body — `## Summary`, `## 議論`, `## Memo`, and for a book every chapter note — is not touched.
 
 The concept notes touched in step 4 do get their `updated` moved to today.
 

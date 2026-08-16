@@ -1,30 +1,42 @@
 # ingest — compile sources into concept notes
 
-`ingest [path|URL]` reads sources and produces concept notes. Internally it runs Phase A (land the source) and Phase B (compile it), but it is one command to the user.
+`ingest [path|URL|tag|books]` reads sources and produces concept notes. Internally it runs Phase A (land the source) and Phase B (compile it), but it is one command to the user.
 
 `type: source` is written only at the very end of Phase B, so an interrupted run leaves the source detectable as uncompiled and a re-run recovers it. The whole verb is idempotent.
 
 ## Detection
 
-Uncompiled means **no `type` in frontmatter**. Nothing else is consulted.
+Uncompiled means **no `type` in frontmatter**. Nothing else is consulted. Testing for `type != "source"` instead would drag every `type: parked` source back into the target set on each run — the exact thing `parked` exists to stop ([conventions.md](conventions.md)).
 
 ```python
 # Uncompiled targets
 inbox_targets  = glob("$VAULT/00_Inbox/*.md")                    # genre unknown -> triage
 source_targets = [p for p in glob("$VAULT/04_Literature/*.md")
-                  if parse_frontmatter(p).get("type") != "source"]
+                  if "type" not in parse_frontmatter(p)]
+
+# Books. Only on `ingest books` or an explicit path — never in a no-argument run.
+book_targets   = [p for p in glob("$VAULT/03_Books/*.md")
+                    + glob("$VAULT/03_Books/*/*.md")
+                  if is_book_index(p) and "type" not in parse_frontmatter(p)]
 ```
 
-Both directories are flat and scanned one level deep. `04_Literature/` has one subdirectory (`どうしてあなたの共通化は間違っているのか/`) that is a book's chapter notes, not clippings — skip subdirectories unless a path names one explicitly.
+`00_Inbox/` and `04_Literature/` are flat and scanned one level deep. `04_Literature/` has one subdirectory (`どうしてあなたの共通化は間違っているのか/`), a Qiita article series whose six files are all already compiled — skip subdirectories unless a path names one explicitly.
+
+`03_Books/` is two levels deep and needs the index predicate: a direct child `03_Books/<name>.md`, or the file whose basename equals its parent directory, `03_Books/<dir>/<dir>.md`. Everything else there is a chapter note — body text, never a target. See [books.md](books.md), which governs every book-specific decision below.
+
+**Books are excluded from a no-argument run.** The article backlog is nearly drained, so including them would make a bare `ingest` almost entirely a book backfill — and the 30-target guard below does not fire at the size of this shelf.
 
 ## Call modes
 
 | Call | Behavior |
 |---|---|
-| `/llm-wiki ingest` | Triage `00_Inbox/`, then compile every uncompiled article in `04_Literature/` |
+| `/llm-wiki ingest` | Triage `00_Inbox/`, then compile every uncompiled article in `04_Literature/`. Books are not included |
 | `/llm-wiki ingest <genre or tag>` | Compile only the articles carrying that `clip/*` tag. **The backfill mode** |
-| `/llm-wiki ingest <path>` | Compile that one file |
+| `/llm-wiki ingest books` | Compile uncompiled books in `03_Books/`, one book per batch ([books.md](books.md)) |
+| `/llm-wiki ingest <path>` | Compile that one file. A path under `03_Books/` must be an index note |
 | `/llm-wiki ingest <URL>` | Fetch, save to `04_Literature/`, then compile |
+
+**`books` is a reserved word in this slot and beats any tag or genre of the same name.** The argument otherwise takes a free-form genre or tag, and the vault already has a tier-1 MOC named `Books` — without this rule, `ingest Books` is ambiguous between "compile the `clip/Books` articles" and "start the book backfill", and the wrong reading starts a batch nobody asked for. To target that MOC's articles, name the tag explicitly (`ingest clip/Books`).
 
 A no-argument run over an uncompiled backlog of thousands is not something to start without saying so. When the scan finds more than 30 targets, report the count and the genre breakdown and ask which genre to take first rather than proceeding.
 
@@ -33,6 +45,7 @@ A no-argument run over an uncompiled backlog of thousands is not something to st
 ### A-1. Interpret the input
 
 - **Path under `04_Literature/`** — genre comes from the `clip/*` tag. Straight to Phase B.
+- **Path under `03_Books/`** — must resolve to an index note; a chapter note is not a target. Genre is inferred rather than tagged, and one book may carry up to three. Straight to Phase B, following [books.md](books.md).
 - **Path under `00_Inbox/`** — genre unknown. Go to A-2.
 - **Path elsewhere** — `Read` it, decide the genre (A-2), write it into `04_Literature/<slug>.md`, leave the original alone.
 - **URL** — `WebFetch`, then A-3, then A-2, then write.
@@ -108,7 +121,7 @@ Pull out the concepts, entities, conclusions, tensions, and open questions. For 
 
 Follow [decision-rules.md](decision-rules.md) for create / update / split.
 
-- **Create** — `$VAULT/02_Notes/<name>.md` from the conventions template. Check for a filename collision first; `02_Notes/` is flat.
+- **Create** — `$VAULT/02_Notes/<name>.md` from the conventions template. Check for a filename collision first, against **both `02_Notes/` and `03_Books/`**: `02_Notes/` is flat, and chapter-note titles like `解像度を上げる 4 つの視点` sit in the same conceptual namespace a new note is named from. Do not widen the check to the whole vault — `02_Notes/` and `04_Literature/` already collide on `Figma.md`, and a vault-wide check would trip on that every run.
 - **Update** — `Edit` the relevant section or append. Move `updated` to today.
 - **Split** — cut the section into a new note, leave a summary and `[[新ノート]]` behind.
 
@@ -127,6 +140,8 @@ A wikilink only resolves on an exact filename match, and some clipped titles car
 ### B-5. Knowledge map
 
 Update the MOC's `## 知識マップ` only when the genre's structure changed: a new category, a category worth subdividing, a split that promoted a parent concept, or a new tension for `## 横断テーマ`. A single note that fits an existing category is not a structural change. When unsure, leave it.
+
+**Book-ingest is an exception**: every concept note it creates is listed in the parent MOC's body in the same run. `wiki-doctor.ts` check 11 requires `type: concept` notes to be reachable from `Home.md` through body links alone, and a note no MOC body lists fails it. See [books.md](books.md).
 
 ### B-6. Finish, in this order
 
@@ -169,11 +184,11 @@ If B-3 finds a concept note that exists but has no log entry, it may be debris f
 
 ## Backfill mode
 
-Genre-at-a-time (`ingest <tag>`) is how the existing backlog gets compiled.
+Genre-at-a-time (`ingest <tag>`) is how the existing backlog gets compiled. Books use the same machinery at a different granularity — **one book per batch**, per [books.md](books.md), because a book has no `## Summary` standing in for its content and compiling one means reading every chapter note.
 
 - Process one genre per batch. Do not chain genres without checking in.
 - Report at the end of each genre: articles compiled, notes created, notes updated, and the medium/low-confidence genre calls.
-- The vault has no Git history. Before the first batch of a session, confirm a backup exists **covering `02_Notes/`, `04_Literature/`, `00_Inbox/`, and `98_Maintenance/`** — `ingest` mutates all four, and a backup of only the first two leaves the inbox unrecoverable.
+- The vault has no Git history. Before the first batch of a session, confirm a backup exists **covering `02_Notes/`, `04_Literature/`, `00_Inbox/`, `98_Maintenance/`, and `03_Books/`** — `ingest` mutates all five, and a backup of only the first two leaves the inbox unrecoverable. This skill's `allowed-tools` has no copy command, so the backup is taken outside it.
 - Reading only `## Summary` rather than full article text is what keeps this affordable. Do not fetch originals in bulk.
 - **Write one aggregated log entry for the batch, not one per article** — the batch form in [conventions.md](conventions.md). Per-article entries would run to hundreds of lines, and [lint.md](lint.md) observation 6 is built on the batch form.
 
