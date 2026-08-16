@@ -12,7 +12,7 @@ There is no prompt-injection concern here. There is a data-loss concern, and it 
 
 - **Never rewrite a body.** Not the index note's, not a chapter note's. Only the index note's frontmatter changes.
 - **Never touch a chapter note's frontmatter.** Chapter notes carry none at all today, and the QuickAdd workflow the user built assumes they never will.
-- This is the one rule `wiki-doctor` can settle mechanically: run it with `--baseline` and it fails if any chapter note drifted by a single byte. Without `--baseline` the check reports `未検証` — it does not pass, because nothing was compared.
+- This is the one rule `wiki-doctor` can settle mechanically: run it with `--baseline` and it fails if any chapter note drifted by a single byte, was added, or **was deleted** — the last being the loss no backup taken afterwards can undo. Without `--baseline` the check reports `SKIP` and leaves the denominator, because nothing was compared.
 - `rating`, `date`, `aliases`, `tags` are human fields ([conventions.md](conventions.md)). Read them; do not write them.
 
 ## The compile unit is the book

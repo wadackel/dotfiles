@@ -13,9 +13,17 @@
 // 渡さない場合は 98_Maintenance/ 配下だけが対象になり、生成した概念ノートは検査されない。
 
 const args = Deno.args;
+// フラグはあるのに値が無い場合に fallback へ落ちると、--baseline を渡したつもりの
+// 実行が黙って SKIP になる。渡し忘れと渡し損ねは実行者から区別できないので落とす。
 const argOf = (name: string, fallback: string) => {
   const i = args.indexOf(name);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+  if (i < 0) return fallback;
+  const v = args[i + 1];
+  if (!v || v.startsWith("--")) {
+    console.error(`${name} に値が指定されていません。`);
+    Deno.exit(2);
+  }
+  return v;
 };
 // 末尾スラッシュを落とす。残っていると rel() が 1 文字ずれて isPrivate() が全て false になる。
 const VAULT = argOf("--vault", Deno.env.get("LLM_WIKI_VAULT_ROOT") ?? "")
@@ -33,7 +41,37 @@ if (!VAULT) {
   Deno.exit(2);
 }
 
-type Check = { name: string; ok: boolean; detail: string[] };
+// 存在しない baseline を黙って受けると、全ファイルが「baseline に無い = 新規作成」
+// に落ちる。パスの打ち間違いが「ユーザーの手書きノートが改変された」という
+// 最も深刻な報告に化けるので、ここで止める。
+if (BASELINE_DIR) {
+  const st = await Deno.stat(BASELINE_DIR).catch(() => null);
+  if (!st?.isDirectory) {
+    console.error(
+      `--baseline のパスが存在しないかディレクトリではない: ${BASELINE_DIR}`,
+    );
+    Deno.exit(2);
+  }
+  // baseline に vault 自身を渡されると全比較が自明に一致し、検査 4b も 5 も
+  // 無言で green になる。誤ったパスより危険なのはこちら — 騒がずに通るため。
+  const [bp, vp] = await Promise.all([
+    Deno.realPath(BASELINE_DIR),
+    Deno.realPath(VAULT),
+  ]);
+  if (bp === vp || bp.startsWith(`${vp}/`)) {
+    console.error(
+      `--baseline が vault 自身かその配下を指している: ${BASELINE_DIR}`,
+    );
+    Deno.exit(2);
+  }
+}
+
+type Check = {
+  name: string;
+  ok: boolean;
+  detail: string[];
+  skipped?: boolean;
+};
 const checks: Check[] = [];
 const add = (name: string, bad: string[], okMsg: string) =>
   checks.push({
@@ -41,12 +79,20 @@ const add = (name: string, bad: string[], okMsg: string) =>
     ok: bad.length === 0,
     detail: bad.length ? bad : [okMsg],
   });
+// 実行しなかった検査を PASS に混ぜない。比較していないのに「一致」と読める
+// 出力は、この検査が守っている不変条件そのものを嘘にする。
+const skip = (name: string, reason: string) =>
+  checks.push({ name, ok: true, detail: [reason], skipped: true });
 
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
   try {
     for await (const e of Deno.readDir(dir)) {
       if (e.name === ".obsidian" || e.name === ".git") continue;
+      // symlink は isDirectory が false になるためファイルとして拾われ、
+      // 02_Notes/x.md -> 05_Private/... のようなリンクがあるとパス判定を
+      // すり抜けて実体が読まれる。隔離はパスで判定している以上ここで落とす。
+      if (e.isSymlink) continue;
       const p = `${dir}/${e.name}`;
       if (e.isDirectory) out.push(...await walk(p));
       else out.push(p);
@@ -70,7 +116,6 @@ const isBookIndex = (p: string) => {
   if (seg.length === 2) return true;
   return seg.length === 3 && seg[2] === `${seg[1]}.md`;
 };
-// ソースとして扱う集合。04_Literature の記事と 03_Books のインデックスノート。
 const isSource = (p: string) =>
   rel(p).startsWith("04_Literature/") || isBookIndex(p);
 
@@ -90,6 +135,12 @@ for (const p of allFiles) {
 const stripCode = (t: string) =>
   t.replace(/^(`{3,})[\s\S]*?^\1\s*$/gm, "").replace(/`[^`\n]*`/g, "");
 const LINK = /\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g;
+// 検査結果はエージェントが「決定的な事実」として読む。リンクターゲットは記事本文
+// 由来で改行を含みうるので、そのまま出すと [PASS] を騙る行を注入できてしまう。
+const oneLine = (s: string) => {
+  const flat = s.replace(/[\r\n\t\p{Cc}]/gu, " ").trim();
+  return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
+};
 
 // 記事タイトルに U+2028 が混じるファイルがあり、JS 正規表現の `.` と複数行 `$` は
 // そこで途切れる。frontmatter の flow sequence は行分割で読む。
@@ -151,7 +202,7 @@ for (const [, body] of bodies) {
       const t = m[1].trim().split("/").pop()!;
       if (isTemplate(t) || isDate(t)) continue;
       if (resolvable.has(t) || resolvable.has(t.replace(/\.md$/, ""))) continue;
-      bad.push(`${rel(p)} -> [[${t}]]`);
+      bad.push(`${rel(p)} -> [[${oneLine(t)}]]`);
     }
   }
   // 既存 Vault の債務なので件数で見る。増えたら失敗。
@@ -205,12 +256,12 @@ for (const [, body] of bodies) {
   }
   const bad = mdFiles
     .filter((p) => rel(p).startsWith("02_Notes/"))
-    .filter((p) => books.has(p.split("/").pop()!))
-    .map((p) =>
-      `${rel(p)} は ${
-        books.get(p.split("/").pop()!)!.join(", ")
-      } と同名（wikilink の解決先が不定）`
-    );
+    .flatMap((p) => {
+      const hit = books.get(p.split("/").pop()!);
+      return hit
+        ? [`${rel(p)} は ${hit.join(", ")} と同名（wikilink の解決先が不定）`]
+        : [];
+    });
   add("02_Notes と 03_Books のファイル名が衝突していない", bad, "衝突なし");
 }
 
@@ -251,39 +302,12 @@ const written = new Set<string>();
       try {
         const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
         if (before !== bodies.get(p)) written.add(p);
-      } catch {
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e;
         written.add(p); // baseline に無い = 新規作成
       }
     }
   }
-}
-
-// ---- 4b. 03_Books の章ノートが baseline とバイト一致 ----
-// 章ノートはユーザー自身の文章で、Vault に Git 履歴は無く、他所にも存在しない。
-// このスキルの中で最も損失の大きい不変条件でありながら、保証していたのは
-// SKILL.md と books.md の散文だけだった。決定可能なので機械で見る。
-// インデックスノートは frontmatter が変わるので対象外。
-{
-  const bad: string[] = [];
-  let checked = 0;
-  if (BASELINE_DIR) {
-    for (const p of mdFiles) {
-      const r = rel(p);
-      if (!r.startsWith("03_Books/") || isBookIndex(p)) continue;
-      checked++;
-      try {
-        const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
-        if (before !== bodies.get(p)) bad.push(`${r} が baseline と一致しない`);
-      } catch {
-        bad.push(`${r} は baseline に存在しない（章ノートが新規作成された）`);
-      }
-    }
-  }
-  add(
-    "03_Books の章ノートが baseline とバイト一致",
-    bad,
-    BASELINE_DIR ? `${checked} 本すべて無傷` : "--baseline 未指定のため未検証",
-  );
 }
 
 // ---- 4. lint の成果物が生の wikilink で監査対象を引用していない ----
@@ -315,6 +339,53 @@ const written = new Set<string>();
     "lint レポートと proposals が生の wikilink を含まない",
     bad,
     "全てコード表記",
+  );
+}
+
+// ---- 4b. 03_Books の章ノートが baseline とバイト一致 ----
+// 章ノートはユーザー自身の文章で、Vault に Git 履歴は無く、他所にも存在しない。
+// 散文の禁止事項では強制できないが、この不変条件は決定可能なので機械で見る。
+// インデックスノートは frontmatter が変わるので対象外。
+// written 側が同じ差分を「ユーザーの加筆」として除外するのと逆の判定に見えるが、
+// --baseline はスキル実行直前のスナップショットなので、その間に差分が出たなら
+// 書いたのはスキルしかいない。
+if (!BASELINE_DIR) {
+  skip(
+    "03_Books の章ノートが baseline とバイト一致",
+    "--baseline 未指定のため未検証",
+  );
+} else {
+  const bad: string[] = [];
+  const isChapter = (r: string, p: string) =>
+    r.startsWith("03_Books/") && !isBookIndex(p);
+  const now = new Set<string>();
+  for (const p of mdFiles) {
+    const r = rel(p);
+    if (!isChapter(r, p)) continue;
+    now.add(r);
+    try {
+      const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
+      if (before !== bodies.get(p)) bad.push(`${r} が baseline と一致しない`);
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e;
+      bad.push(`${r} は baseline に存在しない（章ノートが新規作成された）`);
+    }
+  }
+  // 現存ファイル側から走査するだけでは削除に気づけない。Vault に Git 履歴が
+  // 無い以上、削除は改変より復旧が難しく、この検査が本来守るべき筆頭にあたる。
+  const gone: string[] = [];
+  for (const b of await walk(`${BASELINE_DIR}/03_Books`)) {
+    const r = b.slice(BASELINE_DIR.length + 1);
+    if (!b.endsWith(".md") || isBookIndex(`${VAULT}/${r}`)) continue;
+    if (!now.has(r)) {
+      gone.push(`${r} が baseline にあるが Vault から消えている`);
+    }
+  }
+  bad.push(...gone);
+  add(
+    "03_Books の章ノートが baseline とバイト一致",
+    bad,
+    `${now.size} 本の章ノートすべて無傷（削除も無し）`,
   );
 }
 
@@ -570,9 +641,8 @@ const written = new Set<string>();
     const book = isBookIndex(p);
     if (!r.startsWith("04_Literature/") && !book) continue;
     const fm = bodies.get(p)!.match(/^---\n([\s\S]*?)\n---/)?.[1];
-    // frontmatter ブロックそのものが無いファイルは未コンパイル。以前は読み飛ばして
-    // いたが、03_Books には frontmatter を持たない本が実在し、除外すると
-    // 「数えていない対象は完了扱い」という最悪の壊れ方をする。
+    // frontmatter ブロックそのものが無い本が 03_Books に実在する。読み飛ばすと
+    // 「数えていない対象は完了扱い」という最悪の壊れ方をするので未コンパイルに数える。
     const ty = fm?.split("\n").find((l) => l.startsWith("type: "));
     // parked は「受け皿となる概念が無いので見送る」と判断済みの終端状態。
     // これが無いと、見送った記事が毎回トリアージ候補に戻り続ける。
@@ -706,17 +776,22 @@ const written = new Set<string>();
 
 // ---- 出力 ----
 let failed = 0;
+let skipped = 0;
 console.log("# wiki-doctor\n");
 console.log(`vault: ${VAULT}`);
 console.log(`skill: ${SKILL}\n`);
 for (const c of checks) {
-  const mark = c.ok ? "PASS" : "FAIL";
-  if (!c.ok) failed++;
+  const mark = c.skipped ? "SKIP" : c.ok ? "PASS" : "FAIL";
+  if (c.skipped) skipped++;
+  else if (!c.ok) failed++;
   console.log(`[${mark}] ${c.name}`);
   for (const d of c.detail.slice(0, 15)) console.log(`       ${d}`);
   if (c.detail.length > 15) {
     console.log(`       … 他 ${c.detail.length - 15} 件`);
   }
 }
-console.log(`\n${checks.length - failed}/${checks.length} PASS`);
+const graded = checks.length - skipped;
+console.log(
+  `\n${graded - failed}/${graded} PASS${skipped ? ` (${skipped} SKIP)` : ""}`,
+);
 Deno.exit(failed ? 1 : 0);
