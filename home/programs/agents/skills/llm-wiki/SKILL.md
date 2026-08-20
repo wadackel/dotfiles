@@ -31,7 +31,7 @@ This skill maps onto the vault's existing directories. It does **not** create a 
 
 ## Vault path
 
-The vault root comes from the `LLM_WIKI_VAULT_ROOT` environment variable, injected via `~/.claude/settings.json`'s `env` block. Referred to below as `$VAULT`.
+The vault root comes from the `LLM_WIKI_VAULT_ROOT` environment variable, defined as a home-manager session variable so every agent inherits it from the login shell. Referred to below as `$VAULT`.
 
 **Validate it before the first write**, every run:
 

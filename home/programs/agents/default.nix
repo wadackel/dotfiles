@@ -12,6 +12,14 @@
   # would break the other agent's publication.
   home.file.".agents/scripts".source = dotfiles.linkHere ./. "scripts";
 
+  # Claude / Codex / opencode all start from a login shell, so one session
+  # variable reaches all three. Per-agent config files would need three
+  # injection points, and Claude's settings.json expands neither $HOME nor
+  # ${HOME}.
+  home.sessionVariables = {
+    LLM_WIKI_VAULT_ROOT = "${config.home.homeDirectory}/Documents/Main";
+  };
+
   # This directory is imported automatically by home/programs/default.nix.
   # Cross-agent assets live under ./skills, ./memo, and ./shared.
   # Agent-specific skill directories are still owned by each agent module, but

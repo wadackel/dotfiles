@@ -12,8 +12,7 @@
     "FORCE_AUTOUPDATE_PLUGINS": "true",
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_ERROR_REPORTING": "true",
-    "OTEL_LOG_TOOL_DETAILS": "1",
-    "LLM_WIKI_VAULT_ROOT": "/Users/wadackel/Documents/Main"
+    "OTEL_LOG_TOOL_DETAILS": "1"
   },
   "permissions": {
     "allow": [
