@@ -16,6 +16,12 @@
 - Prefer Deno/TypeScript over Bash when a script needs parsing, state management, or branching logic.
 - Short one-off command chains are fine in Bash.
 
+### Subagent Dispatch
+
+- Standing request from the user: dispatch subagents with the Agent tool on your own judgement for investigation, broad search, and review work. It counts as already requested, so do not ask first.
+- Skills that dispatch subagents (`/subagent-review`, `/simplify-review`, `/completion-audit`, `/plan` critics) carry the same standing request; run their dispatches as defined.
+- This removes the need to ask, not the need to judge. A lookup you can answer directly still does not need a subagent.
+
 ### Workflow Entrypoints
 
 - Use `/plan <request>` as the default design-first entrypoint for implementation work. It supports trivial requests with a minimal path, so do not skip it just because the task looks small.
