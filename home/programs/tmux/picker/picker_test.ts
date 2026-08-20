@@ -9,12 +9,15 @@ import {
   parseTarget,
   readTaskProgress,
   readTaskProgressForRow,
+  row1Columns,
   showUsageFooter,
+  splitLayout,
   TMUX_FORMAT,
 } from "./picker.tsx";
 import {
   clampUsageTokens,
   DOGRUN,
+  ROW1_FIXED_OVERHEAD,
   type Row2Seg,
   truncateTopSegBody,
   usageTokens,
@@ -760,6 +763,57 @@ Deno.test("bodyHeightFor: footer costs two rows", () => {
 Deno.test("bodyHeightFor: floor stays at 5", () => {
   assertEquals(bodyHeightFor(8, true), 5);
   assertEquals(bodyHeightFor(6, false), 5);
+});
+
+Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
+  for (const cols of [20, 30, 41, 60, 61, 67, 80, 113, 150, 200]) {
+    const { listWidth, previewWidth } = splitLayout(cols);
+    const used = listWidth + (previewWidth > 0 ? 1 + previewWidth : 0);
+    assertEquals(
+      used <= cols,
+      true,
+      `cols=${cols} used=${used} (list=${listWidth} preview=${previewWidth})`,
+    );
+  }
+});
+
+Deno.test("splitLayout: cols 60 keeps the 40-cell list the e2e fixtures assume", () => {
+  assertEquals(splitLayout(60), { listWidth: 40, previewWidth: 19 });
+});
+
+Deno.test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () => {
+  assertEquals(splitLayout(150), { listWidth: 90, previewWidth: 59 });
+});
+
+Deno.test("row1Columns: repo plus branch never overflow the list column", () => {
+  for (const listWidth of [34, 36, 40, 45, 50, 67, 90, 118]) {
+    const { repoMax, branchMax } = row1Columns(listWidth, 8, 4);
+    assertEquals(
+      ROW1_FIXED_OVERHEAD + repoMax + branchMax <= listWidth,
+      true,
+      `listWidth=${listWidth} repo=${repoMax} branch=${branchMax}`,
+    );
+  }
+});
+
+Deno.test("row1Columns: a wide list seats both columns at their natural width", () => {
+  assertEquals(row1Columns(90, 8, 20), { repoMax: 8, branchMax: 20 });
+  assertEquals(row1Columns(90, 30, 40), { repoMax: 16, branchMax: 28 });
+});
+
+Deno.test("row1Columns: branch shrinks before repo when the summary is starved", () => {
+  assertEquals(row1Columns(60, 8, 20), { repoMax: 8, branchMax: 6 });
+});
+
+Deno.test("row1Columns: the 4-cell floors give way rather than overflow", () => {
+  assertEquals(row1Columns(40, 8, 4), { repoMax: 8, branchMax: 1 });
+  assertEquals(row1Columns(31, 8, 4), { repoMax: 0, branchMax: 0 });
+});
+
+Deno.test("splitLayout: preview drops once the remainder is too thin", () => {
+  assertEquals(splitLayout(30), { listWidth: 30, previewWidth: 0 });
+  assertEquals(splitLayout(54), { listWidth: 40, previewWidth: 0 });
+  assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 14 });
 });
 
 Deno.test("usageTokens: renders both agents with a 5h countdown only", () => {

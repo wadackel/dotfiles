@@ -102,6 +102,58 @@ export function bodyHeightFor(
   return Math.max(5, totalRows - (footerVisible ? 4 : 2));
 }
 
+// Gutter between the list and the preview, spent as the preview's marginLeft.
+const PREVIEW_GUTTER = 1;
+const MIN_LIST = 40;
+// clampPreview floors its inner width at Math.max(10, width - 4), so a preview
+// box narrower than this renders content wider than the box it sits in.
+const MIN_PREVIEW = 14;
+
+// Clamping listWidth and previewWidth against independent floors lets their sum
+// exceed totalCols on a narrow terminal (40 + 1 + 20 = 61 at cols 60), and Ink
+// wraps the overflow instead of clipping it. Cutting both out of one budget is
+// what keeps the row inside the frame; the preview is dropped outright once the
+// remainder is too thin to render honestly.
+export function splitLayout(totalCols: number): {
+  listWidth: number;
+  previewWidth: number;
+} {
+  const listWidth = Math.min(
+    Math.max(0, totalCols),
+    Math.max(MIN_LIST, Math.floor(totalCols * 0.6)),
+  );
+  const rest = totalCols - listWidth - PREVIEW_GUTTER;
+  return { listWidth, previewWidth: rest >= MIN_PREVIEW ? rest : 0 };
+}
+
+// Row-1 repo / branch column widths for a given list width. Both columns are
+// padEnd'd to these widths by PaneRowLine, so their sum plus
+// ROW1_FIXED_OVERHEAD is what row-1 actually occupies — overshoot it and Ink
+// wraps the row, pushing the following panes off-screen.
+//
+// Two budgets, because the 4-cell floors have to survive one of them and not
+// the other: `soft` keeps MIN_SUMMARY visible and is the target, while `hard`
+// is the width that physically exists. A list narrow enough to make `soft`
+// unaffordable used to leave the floors in place and overflow the box.
+export function row1Columns(
+  listWidth: number,
+  repoWant: number,
+  branchWant: number,
+): { repoMax: number; branchMax: number } {
+  const hard = Math.max(0, listWidth - ROW1_FIXED_OVERHEAD);
+  const soft = Math.max(0, hard - MIN_SUMMARY);
+  let repoMax = Math.min(REPO_CAP, Math.max(4, repoWant));
+  let branchMax = Math.min(BRANCH_CAP, Math.max(4, branchWant));
+  if (repoMax + branchMax > soft) {
+    branchMax = Math.max(4, soft - repoMax);
+  }
+  if (repoMax + branchMax > hard) {
+    branchMax = Math.max(0, hard - repoMax);
+    repoMax = Math.min(repoMax, hard);
+  }
+  return { repoMax, branchMax };
+}
+
 // Both agents are read on every tick rather than cached: the files are a few
 // hundred bytes and are rewritten by other processes, so there is no local
 // signal that would tell the picker its copy went stale.
@@ -697,8 +749,7 @@ function App({
   const current = derivedRows[index];
   const totalCols = size.columns;
   const totalRows = size.rows;
-  const listWidth = Math.max(40, Math.floor(totalCols * 0.6));
-  const previewWidth = Math.max(20, totalCols - listWidth - 1);
+  const { listWidth, previewWidth } = splitLayout(totalCols);
   // A frame exactly as tall as the terminal is fine, but one TALLER is not:
   // Ink falls back to clearing the whole terminal between frames once the
   // output overflows the viewport, which inside a tmux popup blanks and
@@ -720,21 +771,11 @@ function App({
   const rowsParts = derivedRows.map((r: PaneRow) =>
     cwdBranchParts(r.cwd || r.currentPath, r.worktreeBranch)
   );
-  const columnBudget = Math.max(
-    0,
-    listWidth - ROW1_FIXED_OVERHEAD - MIN_SUMMARY,
+  const { repoMax, branchMax } = row1Columns(
+    listWidth,
+    Math.max(0, ...rowsParts.map((p: { repo: string }) => p.repo.length)),
+    Math.max(0, ...rowsParts.map((p: { branch: string }) => p.branch.length)),
   );
-  const repoMax = Math.min(
-    REPO_CAP,
-    Math.max(4, ...rowsParts.map((p: { repo: string }) => p.repo.length)),
-  );
-  let branchMax = Math.min(
-    BRANCH_CAP,
-    Math.max(4, ...rowsParts.map((p: { branch: string }) => p.branch.length)),
-  );
-  if (repoMax + branchMax > columnBudget) {
-    branchMax = Math.max(4, columnBudget - repoMax);
-  }
 
   return (
     <Box flexDirection="column" width={totalCols} height={totalRows}>
@@ -792,8 +833,8 @@ function App({
             />
           ))}
         </Box>
-        {current && (
-          <Box marginLeft={1}>
+        {current && previewWidth > 0 && (
+          <Box marginLeft={PREVIEW_GUTTER}>
             <Preview
               target={current.target}
               width={previewWidth}
