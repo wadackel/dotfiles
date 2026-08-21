@@ -9,6 +9,7 @@
 
     extensions = [
       pkgs.gh-poi
+      pkgs.gh-stack
     ];
 
     settings = {
