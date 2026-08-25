@@ -854,6 +854,35 @@ local has_config_file = function(bufnr, files)
   return vim.fs.find(files, opts)[1] ~= nil
 end
 
+local function resolve_workspace_tsdk(root_dir)
+  local pkg = vim.fs.find("node_modules/typescript", {
+    path = root_dir,
+    upward = true,
+    type = "directory",
+  })[1]
+  if not pkg then
+    return nil
+  end
+
+  if vim.uv.fs_stat(pkg .. "/lib/tsserver.js") then
+    return pkg .. "/lib"
+  end
+
+  -- pnpm-workspace が typescript を npm:@typescript/typescript6 に alias している場合、
+  -- node_modules/typescript/lib は tsc.js と typescript.js だけの shim で tsserver.js を持たない。
+  -- 実体は同階層の @typescript/old 側にある。
+  local real = vim.uv.fs_realpath(pkg)
+  if not real then
+    return nil
+  end
+  local old = vim.fs.dirname(real) .. "/old/lib"
+  if vim.uv.fs_stat(old .. "/tsserver.js") then
+    return old
+  end
+
+  return nil
+end
+
 local function lsp_on_init(client)
   if client.server_capabilities then
     -- Disable LSP Semantic tokens
@@ -1076,6 +1105,19 @@ require("lazy").setup({
               },
             },
           },
+          before_init = function(_, config)
+            local tsdk = resolve_workspace_tsdk(config.root_dir)
+            if not tsdk then
+              return
+            end
+            -- config.settings ごと差し替えると Client.create が掴んだ client.settings の
+            -- 参照から外れて送信されないため、必ず in-place で書く
+            config.settings.vtsls = {
+              typescript = {
+                globalTsdk = tsdk,
+              },
+            }
+          end,
         })
 
         -- rust_analyzer: rustaceanvim が管理
