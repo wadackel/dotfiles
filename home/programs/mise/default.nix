@@ -27,6 +27,9 @@
       };
       settings = {
         idiomatic_version_file_enable_tools = [ "node" ];
+        # gh は keyring にトークンを置くため mise 既定の gh_cli_tokens
+        # (~/.config/gh/hosts.yml を読む) が空振りする。
+        github.credential_command = "gh auth token";
       };
     };
   };
