@@ -67,6 +67,8 @@ Does the plan design tests that actually observe the behavior it changes? Test o
 
 **Dimension 7 veto rule**: Any Critical Issue raised under MUST-check 1 or 2 blocks a `CONVERGED` verdict for this round regardless of other dimensions. The Critic must emit `ITERATE`.
 
+**Verdict criteria (stop decision)**: on Round 1, emit `ITERATE` unless Critical Issues are zero. On Round 2 and later, emit `CONVERGED` when no finding requires another review round — zero Critical Issues, or every remaining finding is either a self-resolvable fix that does not restructure the plan or a [USER] item bound for the Consolidated Interview; emit `ITERATE` only when at least one finding's fix restructures the plan enough to need re-review. A `CONVERGED` verdict never exempts findings from being reported in full. (The Adversarial agent's verdict intentionally uses a different criterion: falsification outcome.)
+
 ## Output Format
 
 Respond in this exact structure:
@@ -134,7 +136,7 @@ AGREE Requirement Clarification emits three structured subsections under the pla
 Round 1 Critic must treat these as mandatory checks:
 
 1. If a user-only, subjective, or high-cost Scope / Success / Failure uncertainty was silently self-resolved without a user Ask or explicit user-chosen assumption, raise a **Critical Issue [USER]**. Restate prose, approval wording, `### Requires User Confirmation`, or a downstream `next:` does not count for these blockers. `next:` is acceptable only for codebase-recoverable uncertainty.
-2. If the plan or AGREE subsections imply a Blocking Interview happened but the documented continuation lifecycle is missing or contradicted (for Codex: strict `$plan --answer` continuation parse, `.clarifying-<cwd-hash>.json` creation before Ask, answer-waiting end turn, and cleanup after successful plan creation; for Claude: `AskUserQuestion` call path), raise a **Critical Issue [TECH]**. Do not require a live `.clarifying-<cwd-hash>.json` after a successful continuation, because Codex deletes it during cleanup.
+2. If the plan or AGREE subsections imply a Blocking Interview happened but the documented continuation lifecycle is missing or contradicted (for Codex: strict `$plan --answer` continuation parse, `.clarifying-<cwd-hash>.json` creation before Ask, answer-waiting end turn, and cleanup after successful plan creation; for Claude: a blocking question turn — a text question ending the turn, or a structured question tool call for a simple confirmation — with the answer recorded), raise a **Critical Issue [TECH]**. Do not require a live `.clarifying-<cwd-hash>.json` after a successful continuation, because Codex deletes it during cleanup.
 3. If the plan advances because of a fixed round cap, default operating limit, or repeated-trigger cap while user-only / subjective / high-cost requirements remain unresolved, raise a **Critical Issue [USER]**. Count-based exhaustion is not a valid clarity condition.
 
 ### `### Unresolved Items` — semantic parse
@@ -164,7 +166,7 @@ Do **not** match on `Assumption: ... (user-overridden, flagged for DEEPEN Critic
 
 ### AGREE handoff
 
-Both Claude `/plan` and Codex `$plan` use a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible across both: the plan emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. Codex realizes AGREE through the Blocking Interview Protocol with `$plan --answer` continuation; Claude realizes it through `AskUserQuestion`. In both, A1 and A5 are the blocking gates and A7 is a non-blocking direction statement, so the absence of an A7 confirmation turn is not a defect. Both shapes are valid inputs.
+Both Claude `/plan` and Codex `$plan` use a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible across both: the plan emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. Codex realizes AGREE through the Blocking Interview Protocol with `$plan --answer` continuation; Claude realizes it through blocking text questions in the chat body (one per turn, each ending the turn). In both, A1 and A5 are the blocking gates and A7 is a non-blocking direction statement, so the absence of an A7 confirmation turn is not a defect. Both shapes are valid inputs.
 
 ---
 

@@ -94,11 +94,28 @@ Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to 
 
 The Direction Agreement Gate. Conversational. Goal: agree on *Purpose* and *Approach* before any plan body is drafted. Codex implements AGREE through the **Blocking Interview Protocol** because Codex CLI has no AskUserQuestion API; user answers arrive as natural-language turns or guaranteed `$plan --answer <answer>` continuations.
 
-**Key principles (apply throughout AGREE):**
+**Key principles (apply throughout AGREE and every later interview):**
 - **One question at a time.** Each turn asks a single question. Do not pack multiple questions into one message just because the format allows it.
-- **Multiple-choice preferred.** Present concrete options with the AI's recommended choice marked. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
+- **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first.
+- **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. Resolve lookups synchronously in the clarification pass (Step C), or treat the dependent question as outside the frontier and ask the next independent question first — do not keep interview subagents open across Ask turns. A pending investigation only delays its downstream questions.
+- **Text questions in the chat body.** Codex asks with the question format below (Codex CLI has no structured question tool). Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
 - **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
 - **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
+
+**Question format** (chat body; sample strings stay in the user's conversation language):
+
+```markdown
+### <質問文をそのまま見出しにする>
+
+<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
+
+- **A. <ラベル>** — <含意 1 行>
+- **B. <ラベル>** — <含意 1 行>
+
+> 推奨: A。<理由 1〜2 文>
+```
+
+The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions.
 
 **Steps A1–A7 (Codex realization via Blocking Interview Protocol):**
 
@@ -142,7 +159,7 @@ Each clarification pass:
 2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice.
 3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask.
 4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
-5. **Step E Ask issuance**: Combine remaining real questions by impact priority, maximum 4 questions per round. Every question must include a recommended answer and short rationale. Immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
+5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask exactly one question per Ask turn — a question that depends on another open answer waits for a later turn, and the remainder carries into the next clarification iteration. Every question must include a recommended answer and short rationale. Immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
 6. **Step F Wait**: Say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn.
 7. **Step G Answer handling**: Best-effort attach a natural-language next-turn answer to the latest `.clarifying-<cwd-hash>.json`. For guaranteed continuation, use `$plan --answer <answer>`. If the user chooses the recommended answer, record it. If the user explicitly says to proceed with a stated assumption, record user-judgment-bound observation in `### Assumptions` with `user-overridden: true`. Empty or ambiguous answers become re-Ask triggers.
 8. **Step H Cleanup**: When the clarity gate is satisfied, delete the marker and continue to EXPLORE. After successful plan creation, delete `.clarifying-<cwd-hash>.json`. If a new non-clarifying `$plan <request>` succeeds, also delete any old clarifying marker.
@@ -222,9 +239,9 @@ Plan body section contract (14 headers; Claude 12-row base plus Codex-specific `
 
 The AGREE-derived `### Requirement Clarification` / `### Assumptions` / `### Self-resolved` / `### Unresolved Items` subsections are written into the plan body just before `## Overview`.
 
-### Section-by-section confirmation
+### Draft handoff (one-way)
 
-After writing each non-trivial section, briefly ask "looks good so far?" in the user's configured language. For trivial / small plans, the whole body can be confirmed at once at the end. The goal is to catch direction drift before DEEPEN. In Codex, confirmation is a natural-language turn; there is no AskUserQuestion API.
+After writing the body, state the plan path, the section headings, and the key design decisions in at most 3 lines in the user's configured language, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job. For trivial plans (DEEPEN skipped), the ACTIVATE Approval Summary and the `$impl` approval gate are the review surface.
 
 Keep the plan body lightweight (target ~120-180 lines, excluding the Deepening Log).
 
@@ -294,6 +311,8 @@ The main session triages Critic output:
 - **Needs user input**: add to the Consolidated Interview queue
 - **Reject**: conflicts with a prior user decision or is irrelevant
 
+CONVERGED does not exempt the round's findings from triage; process every attached finding before leaving DEEPEN.
+
 Verdict extraction: `rg -m1 -A1 '^### Verdict$' <subagent-output>` and read the second line as `CONVERGED` or `ITERATE`. Append a Round N entry with verbatim subagent output to `<plan-basename>.log.md`.
 
 After triage, verdict extraction, and log append, close that round's `plan-critic` agent. Ensure the critic is closed before spawning the next round.
@@ -339,7 +358,7 @@ After the last Critic round and the Adversarial/Simplifier pair, do one inline p
 
 ### Consolidated Interview
 
-At round end, combine needs-user-input items from Critic triage, Adversarial findings, Simplifier MEDIUM/LOW proposals, and inline over-engineering flags into one text list, maximum 4 questions, then end the turn. Codex has no AskUserQuestion API here, so the user answers naturally next turn (or via `$plan --answer`). First show a `Self-resolved items:` block. Every real question follows the AGREE rule: recommended answer plus short rationale. If no recommendation is possible, narrow or investigate before asking. Items already resolved in AGREE do not re-enter unless the Critic surfaces them.
+At round end, collect needs-user-input items from Critic triage, Adversarial findings, Simplifier MEDIUM/LOW proposals, and inline over-engineering flags, then ask them one per Ask turn following AGREE's question format and frontier ordering, ending the turn after each question (the user answers naturally next turn, or via `$plan --answer`). The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Before the first question, show a `Self-resolved items:` block. Every real question follows the AGREE rule: recommended answer plus short rationale. If no recommendation is possible, narrow or investigate before asking. Items already resolved in AGREE do not re-enter unless the Critic surfaces them.
 
 ### Definition of Done pipeline
 

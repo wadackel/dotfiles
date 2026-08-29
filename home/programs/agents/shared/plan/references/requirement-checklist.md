@@ -4,7 +4,7 @@ Decision aid referenced by the `plan` skill's AGREE Requirement Clarification. *
 
 ## Role and purpose
 
-- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through AskUserQuestion, Codex through the Blocking Interview Protocol with `$plan --answer`). In both, A1 and A5 are the blocking gates — A7 is a non-blocking direction statement, not a confirmation turn
+- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through blocking text questions in the chat body, Codex through the Blocking Interview Protocol with `$plan --answer`). In both, A1 and A5 are the blocking gates — A7 is a non-blocking direction statement, not a confirmation turn
 - Trigger: complexity is one of `small` / `medium` / `large` (trivial and xl are out of scope)
 - Purpose: solidify user intent to the level where implementation will not go wrong. Not protocol checklist completion.
 - Process control (the clarity loop, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md AGREE as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
@@ -112,8 +112,8 @@ Subjective adjectives / degree adverbs / vague technical words (e.g. `野暮っ�
 - **Decision axis**: "Without settling this word, can DRAFT's Files to Change / Approach be written?" YES → central; NO → supportive
 
 **Calibration Probe (triggered only if judged central spec)**:
-- Present 3 concrete candidates as user-confirmation options (observable conditions or threshold values; tag one (Recommended) at the top and include Other at the end)
-- Counts toward the confirmation-batch Ask quota like a normal Ask (consumes slot 1)
+- Present 3 concrete candidates as options in the question body (observable conditions or threshold values; name the recommended one in the closing recommendation line — a text question always accepts a free-form answer, so no catch-all option is needed)
+- Counts as a normal Ask: one question, one turn
 - If 3 candidates cannot be defensibly researched, abandon Calibration Probe and downgrade to a free-text Ask
 - When the user's subjectivity itself is the central spec and candidate-ization would distort the meaning, either Ask to calibrate before artifact creation, or record an explicitly user-selected assumption and proceed. `### Unresolved Items` downstream `next:` deferral is only for codebase-recoverable uncertainty.
 
@@ -191,15 +191,14 @@ At AGREE clarity-gate convergence, output the following subsections immediately 
 
 **Subsection absence = zero entries**: when `### Unresolved Items` is not written, the DEEPEN Critic interprets unresolved as zero. To assert zero explicitly, write the subsection with the body `(none)`.
 
-**Self-resolved companion block**: when issuing an Ask, prepend a human-readable summary `Self-resolved earlier:` so misjudgments can be flagged immediately (the exact-token quotation requirement is retired; restating is fine). In a text-only runtime, end the turn after posting the questions and wait for the user's next reply before continuing.
+**Self-resolved companion block**: when issuing an Ask, prepend a human-readable summary `Self-resolved earlier:` so misjudgments can be flagged immediately (the exact-token quotation requirement is retired; restating is fine). On every runtime, the question is the last content in the turn: end the turn after posting it and wait for the user's next reply before continuing.
 
-## Ask issuance batch rules
+## Ask issuance rules
 
 Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md AGREE / Blocking Interview Protocol Step E. Only the decision axes are here:
 
 - Ask count 0: if there are also zero additional-confirmation triggers, skip the user-confirmation turn itself
-- Ask count 1–4: bundle all into a single AskUserQuestion call (slot cap 4 = AskUserQuestion API hard cap; do not use an override slot). This batching rule is calibrated for Codex's Blocking Interview, where ending a turn to ask is expensive, so questions are bundled up to the cap. Claude's AskUserQuestion round-trip is cheap, so its SKILL.md AGREE asks one question per call instead — the same principle (batch according to round-trip cost), two realizations. Carrying the restate or a scope rationale inside a question's own text is context, not a second question, and is allowed under both
-- Ask count 5+: by cost priority (Outcome > Boundary > Context > Definition; within a tier, ascending observation number), take the top 4; carry the rest into the head of the next clarification iteration's confirmation candidates
+- Ask count 1+: ask exactly one question per turn. Order by the frontier (a question whose prerequisites — prior answers or pending investigations — are unsettled waits) and by the impact priority below; carry the rest into later Ask turns. Both agents follow the same one-question cadence. Carrying the restate or a scope rationale inside a question's own text is context, not a second question, and is allowed under both
 - Every real question must carry an AI-recommended answer with a short rationale. If you cannot recommend, the state is one of insufficient investigation / question granularity too broad / user-only decision candidates not organized — narrow the question or do more research, and only ask once a recommendation and rationale can be attached
 
 When the same uncertainty keeps remaining, do NOT auto-advance by count; have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out". Only codebase-recoverable remainders may be delegated under `### Unresolved Items` with a concrete `next:` (do not use the legacy canonical-phrase form).
@@ -218,18 +217,18 @@ Behavior when activated:
 - Candidate-extraction sources: keywords in the request, the feature set of the reference-implementation URL, user-request context
 - Number extracted → user-confirmation form:
   - 0 candidates: skip
-  - 1 candidate: single-select, options = `[include in this scope / track in a separate plan / out of scope / Other]`
-  - 2–4 candidates: multiSelect; for 2–3 candidates use `each candidate + Other`; for 4 candidates use `each candidate` only (strict Option cap 4)
+  - 1 candidate: one question, options = `include in this scope / track in a separate plan / out of scope`
+  - 2–4 candidates: one question listing every candidate as an option; the user names the candidates to include — a text question accepts multiple selections and free-form additions in a single answer
 - When a reference-implementation URL is given, require delta analysis for 2–4 candidates
-- Selected candidates are "included in this scope"; non-selected candidates are **implicitly out of scope**. An `Other` selection is recorded as free-text
+- Selected candidates are "included in this scope"; non-selected candidates are **implicitly out of scope**. Free-form additions in the answer are recorded verbatim
 
 Activation limits:
 - Activates only in the first clarification pass
 - Derivative-feature consideration in subsequent passes is delegated to the DEEPEN Critic's Scope Appropriateness axis
 
-## Impact priority — reordering on Ask overflow
+## Impact priority — ordering Ask turns
 
-Used both to pick the top items when the Ask count exceeds the slots in a confirmation batch (normally 4 = AskUserQuestion API limit), and to determine the question order within a batch:
+Used to decide which frontier question is asked first when several Ask items are pending across turns:
 
 1. **Outcome layer** — Why / Success
 2. **Boundary layer** — Where / Failure

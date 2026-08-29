@@ -23,7 +23,7 @@ Interview the user until the requirements are clear enough that a third party ca
 
 Do not produce the final Issue, Markdown spec, PRD, ADR, bug report, or design document while user-intent decisions remain unresolved.
 
-Walk the decision tree one branch at a time. Ask the next question or tight question batch that resolves the highest-impact branch, then end the turn and wait for the user's answer.
+Walk the decision tree one branch at a time. Ask the single question that resolves the highest-impact branch, then end the turn and wait for the user's answer.
 
 For every real question, provide your recommended answer and briefly explain why. The user can override it, but you must not delegate judgment with an unsupported open question.
 
@@ -71,7 +71,7 @@ Setup has two dimensions. For each one, **triage before blocking-asking** -- the
 
 Skipping Phase 0 confirmation only skips confirmation of deliverable type and detail level. It does not skip the requirements interview.
 
-Never split Setup across multiple turns. When asking, phrase it in a way that lets the user also override the inferred value: "Deliverable = GitHub Issue と推定しました。違えば選択してください。Detail level はどうしますか？"
+Never split Setup across multiple turns. Setup is the one exception to the one-question-per-turn rule below: both Setup dimensions are closed, self-contained choices and may share one turn. When asking, phrase it in a way that lets the user also override the inferred value: "Deliverable = GitHub Issue と推定しました。違えば選択してください。Detail level はどうしますか？"
 
 ### Phase 1: Establish context
 
@@ -100,13 +100,28 @@ Group related ambiguities and prioritize — resolve the ones that affect scope 
 
 ### Phase 3: Interview
 
-Use the current agent's user-confirmation mechanism to resolve ambiguities. In text-only runtimes, ask concise questions, end the turn, and wait for the user's next response before continuing. Follow these principles:
+Ask questions in the chat body by default, using the question format below. The question is the last content in the turn; end the turn and do not advance until the answer arrives. A runtime's structured question tool (when available) is reserved for simple self-contained confirmations whose option labels need no background and invite no free-form answer.
 
-**Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts. Each option should include a short description of its implications. Use `preview` for visual/structural comparisons.
+**Question format** (sample strings stay in the user's conversation language):
 
-**Batch related questions carefully.** Group 2-3 tightly related low-friction questions per turn (max 4 questions per confirmation turn). Ask a single high-impact question by itself when that answer changes which branch of the decision tree should be explored next. Don't ask everything at once — it's overwhelming.
+```markdown
+### <質問文をそのまま見出しにする>
 
-**Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user.
+<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
+
+- **A. <ラベル>** — <含意 1 行>
+- **B. <ラベル>** — <含意 1 行>
+
+> 推奨: A。<理由 1〜2 文>
+```
+
+The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision — show visual/structural comparisons as fenced blocks inside the question body. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions. Follow these principles:
+
+**Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts, and a text question still accepts free-form answers when none of the options fit.
+
+**One question per turn, ordered by the frontier.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first — a single answer often reshapes the decision tree and would invalidate the rest of a batch.
+
+**Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user. When the lookup can run in the background, dispatch it and ask the next independent frontier question meanwhile; collect the result on the next turn. A pending investigation only delays its downstream questions.
 
 **Always provide a recommended answer.** Every real question in a confirmation turn must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase, narrow the question, or treat it as an Open question in a user-authorized draft. The user can override, but the AI never delegates judgment by asking with no recommendation.
 
@@ -120,7 +135,7 @@ Use the current agent's user-confirmation mechanism to resolve ambiguities. In t
 
 If any **User decision** remains, ask an interview question before drafting. Do not convert a User decision into a Draft assumption merely because a reasonable default exists. Desired behavior, scope boundaries, success criteria, priority, audience, and risk tolerance are never Draft assumptions unless the user explicitly authorizes drafting with assumptions.
 
-**Know when to stop.** After each round of answers, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If not, move to output. If yes, ask the next batch. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
+**Know when to stop.** After each answer, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If yes, ask the next frontier question. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
 
 **Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and ask whether to proceed with that default. Record it as an Assumption only when the user accepts the default or explicitly authorizes drafting with assumptions.
 

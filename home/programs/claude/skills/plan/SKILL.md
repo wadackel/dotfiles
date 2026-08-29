@@ -45,7 +45,7 @@ Estimate complexity with quick keyword + Grep/Glob probes (no Explore subagents 
 
 For `xl`, step out of the normal flow and ask the user whether to decompose into independently-scoped sub-projects before going further.
 
-**Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1–2 words with no signal), re-elicit through AskUserQuestion before entering AGREE.
+**Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1–2 words with no signal), re-elicit with a text question (AGREE's question format) before entering AGREE.
 
 **Trivial short-circuit**: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan (Context, Files to Change, Task Outline, Completion Criteria). AGREE is still mandatory — even trivial requests get a one-sentence direction confirmation.
 
@@ -53,11 +53,29 @@ For `xl`, step out of the normal flow and ask the user whether to decompose into
 
 The Direction Agreement Gate. Conversational. Replaces v1's Step A–F clarity loop. Goal: agree on *Purpose* and *Approach* before any plan body is drafted.
 
-**Key principles (apply throughout AGREE):**
-- **One question at a time.** Each AskUserQuestion call asks a single question. Do not pack multiple questions into one message just because the API allows it.
-- **Multiple-choice preferred.** Present concrete options with the AI's recommended choice marked. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
+**Key principles (apply throughout AGREE and every later interview):**
+- **Text questions by default.** Ask in the chat body using the question format below. Reserve the AskUserQuestion tool for simple self-contained confirmations whose option labels need no background and invite no free-form answer — the canonical example is A6's companion consent. Never use emoji in questions.
+- **One question at a time.** Each message asks a single question. Do not pack multiple questions into one message just because the format allows it. The question is the last content in the turn; end the turn and do not advance until the answer arrives.
+- **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first.
+- **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. When a question needs a fact from the codebase or environment, dispatch the lookup as a background subagent and ask the next independent frontier question in the same turn; collect the result at the top of the next turn. A pending investigation only delays its downstream questions.
+- **Recommended answer on every question.** Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
 - **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
 - **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
+
+**Question format** (chat body; sample strings stay in the user's conversation language):
+
+```markdown
+### <質問文をそのまま見出しにする>
+
+<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
+
+- **A. <ラベル>** — <含意 1 行>
+- **B. <ラベル>** — <含意 1 行>
+
+> 推奨: A。<理由 1〜2 文>
+```
+
+The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations).
 
 **Steps A1–A7:**
 
@@ -121,7 +139,7 @@ Write the plan to `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (slug ≤40 chars, l
 
 The AGREE-derived `### Assumptions` / `### Self-resolved` / `### Unresolved Items` subsections are written into the plan body just before `## Overview`.
 
-**Section-by-section confirmation**: after writing each non-trivial section, briefly ask "looks good so far?". For trivial / small plans, the whole body can be confirmed at once at the end. The goal is to catch direction drift before DEEPEN.
+**Draft handoff (one-way)**: when the body is written, state the plan path, the section headings, and the key design decisions in at most 3 lines, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job (Critic + Consolidated Interview). For trivial plans (DEEPEN skipped), the ACTIVATE digest and the `/impl` approval gate are the review surface.
 
 Keep the plan body lightweight (target ~120–150 lines, excluding the Deepening Log).
 
@@ -145,7 +163,7 @@ Agent({ subagent_type: "Plan", model: "opus",
 ```
 Template: `references/critic-prompt.md`. Max rounds: default 2, cap 5 (adjustable via argument-hint). Stop when verdict `CONVERGED` / max rounds reached / zero Critical Issues.
 
-Process each Critical Issue / Improvement Suggestion as one of: Self-resolvable (apply inline with `-- Why: …`), Needs user input (queue for the single end-of-phase interview), or Reject (in conflict with a previous user decision).
+Process each Critical Issue / Improvement Suggestion as one of: Self-resolvable (apply inline with `-- Why: …`), Needs user input (queue for the single end-of-phase interview), or Reject (in conflict with a previous user decision). CONVERGED does not exempt the round's findings from triage; process every attached finding before leaving DEEPEN.
 
 **Adversarial Falsification** (default, parallel with the first Critic round when feasible):
 ```
@@ -157,7 +175,7 @@ Template: `references/adversarial-prompt.md`. Skip only when there are no verifi
 **Inline over-engineering self-review** (default, main session, after the last Critic round):
 Read the plan once with YAGNI/KISS/DRY in mind. **Only flag — do not delete.** Annotate each suspect spot with `<!-- over-eng? -->` and surface them in the end-of-phase interview. Deep simplification subagent dispatch is **opt-in** via `/simplify-review plan`.
 
-**Consolidated Interview** (end of DEEPEN): collect all needs-user-input items, then ask them one per message in sequence (following AGREE's Key Principle). Items already resolved in AGREE do not re-enter unless the Critic surfaces them.
+**Consolidated Interview** (end of DEEPEN): collect all needs-user-input items, then ask them one per message following AGREE's question format and frontier ordering. When an item needs a fact, dispatch the lookup in the background and ask the next independent item meanwhile. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. When the same uncertainty keeps repeating, have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out" instead of looping. Items already resolved in AGREE do not re-enter unless the Critic surfaces them.
 
 ## DECOMPOSE
 

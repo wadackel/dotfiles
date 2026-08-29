@@ -35,15 +35,43 @@ const PLAN_PREAMBLE_NEEDLES = [
   "Complexity gates the *depth after agreement* (DEEPEN rounds, plan body size) — never the agreement itself.",
   "if complexity is trivial, skip DEEPEN",
   "Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation",
+  "state the plan path, the section headings, and the key design decisions in at most 3 lines",
+  "Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job",
+  "Do not pack multiple questions into one message just because the format allows it.",
 ];
 
 const AGREE_LEGACY_NEEDLES = [
   "A1 Purpose check",
   "A7 Summarise",
   "Wait for the user's OK",
+  "looks good so far",
+  "Section-by-section",
+  "maximum 4 questions",
+  "Multiple-choice preferred",
+  "Each AskUserQuestion call asks a single question",
 ];
 const SHARED_CHECKLIST =
   "home/programs/agents/shared/plan/references/requirement-checklist.md";
+const REQUIREMENTS_INTERVIEW =
+  "home/programs/agents/skills/requirements-interview/SKILL.md";
+
+// The interview cadence is shared prose across three skills. The sentences are
+// asserted whole-file and character-identical so a rewording in one file cannot
+// silently diverge from the others.
+const INTERVIEW_RULE_NEEDLES = [
+  "Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled.",
+  "A question that depends on an open answer or an in-flight investigation waits.",
+  "The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.",
+];
+// Codex is excluded: its Blocking Interview Protocol (Step F end-turn) already
+// enforces blocking, and the sentence would duplicate that contract.
+const BLOCKING_RULE_NEEDLE =
+  "The question is the last content in the turn; end the turn and do not advance until the answer arrives.";
+const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
+  ["Codex plan", CODEX_PLAN],
+  ["Claude plan", CLAUDE_PLAN],
+  ["requirements-interview", REQUIREMENTS_INTERVIEW],
+];
 const CRITIC_PROMPT =
   "home/programs/agents/shared/plan/references/critic-prompt.md";
 const REPRESENTATIVE_ARTIFACTS = [
@@ -191,6 +219,19 @@ for (const [agent, path] of AGENT_PLANS) {
     assertExcludesAll(skill, AGREE_LEGACY_NEEDLES);
   });
 }
+
+for (const [name, path] of INTERVIEW_SKILLS) {
+  Deno.test(`${name} carries the shared interview rule sentences verbatim`, async () => {
+    const skill = await readRepoFile(path);
+    assertIncludesAll(skill, INTERVIEW_RULE_NEEDLES);
+  });
+}
+
+Deno.test("text questions block the turn where no tool enforces it", async () => {
+  for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {
+    assertStringIncludes(await readRepoFile(path), BLOCKING_RULE_NEEDLE);
+  }
+});
 
 Deno.test("Codex Approval Summary exposes approval decision details", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
@@ -341,10 +382,10 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
     "codebase-recoverable",
     "concrete `next:`",
     "choose an assumption / proceed as-is / continue clarifying / scope out",
-    "slot cap 4 = AskUserQuestion API hard cap",
+    "ask exactly one question per turn",
     "A7 is a non-blocking direction statement",
-    "Claude's AskUserQuestion round-trip is cheap",
-    "asks one question per call instead",
+    "Both agents follow the same one-question cadence",
+    "a question whose prerequisites — prior answers or pending investigations — are unsettled waits",
     "is context, not a second question",
   ]);
   assertExcludesAll(checklist, [
@@ -359,6 +400,9 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
     "Max 3 real questions + 1 override question",
     "slot (normally 3)",
     "bundle into a single override",
+    "slot cap 4",
+    "Ask count 5+",
+    "bundle all into a single AskUserQuestion call",
   ]);
   const unresolvedExample = section(checklist, "### Unresolved Items");
   assertExcludesAll(unresolvedExample, [
@@ -371,6 +415,7 @@ Deno.test("Critic prompt mandates regression findings for clarification failures
   const prompt = await readRepoFile(CRITIC_PROMPT);
 
   assertIncludesAll(prompt, [
+    "Verdict criteria (stop decision)",
     "Blocking Interview regression checks",
     "silently self-resolved",
     "Critical Issue [USER]",
