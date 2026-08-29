@@ -55,7 +55,13 @@ in
 {
   home.packages = [ pkgs.codex ];
 
-  home.file.".codex/AGENTS.md".text = "@${config.home.homeDirectory}/.codex/RTK.md\n";
+  # Codex injects AGENTS.md verbatim into <INSTRUCTIONS> without expanding @file
+  # references (verified against session rollouts), so the conventions must be
+  # inlined as text rather than referenced; editing the source file therefore
+  # requires a darwin-rebuild.
+  home.file.".codex/AGENTS.md".text =
+    "@${config.home.homeDirectory}/.codex/RTK.md\n\n"
+    + builtins.readFile ../agents/shared/comment-conventions.md;
   home.file.".codex/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".codex/hooks.json".source = ./hooks.json;
   home.file.".codex/scripts".source = dotfiles.linkHere ./. "scripts";

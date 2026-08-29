@@ -115,6 +115,7 @@
   - Good vs bad example:
     - Bad: `// Why-Not: regex was suggested by the user but it does not handle escaped quotes, so use the JSON parser instead.`
     - Good: `// Regex matching breaks on escaped quotes inside string literals; rely on the JSON parser for correct token boundaries.`
+  - These comment rules are mirrored for Codex in `home/programs/agents/shared/comment-conventions.md` (dotfiles repo) — update both together.
 
 ### Coding Conventions
 

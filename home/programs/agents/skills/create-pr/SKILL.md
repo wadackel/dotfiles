@@ -127,6 +127,8 @@ Write the PR body to a temporary file using the **Write** tool:
 
 - File path: `/tmp/pr-body-<random>.md` (use a short random suffix, e.g. 6 alphanumeric chars, to avoid conflicts across parallel sessions)
 
+Before creating the PR, self-check the body with the **leave-no-trace** judgment (would it read naturally to someone who never saw the conversation?) and fix any conversation residue.
+
 Then create the PR referencing the file:
 
 ```bash
