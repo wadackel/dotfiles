@@ -56,11 +56,24 @@ Never stack two undefined terms in one clause; that multiplies decoding cost.
 
 ## Auditing a document or dialogue history
 
-1. Run the measurement scripts in `~/.claude/scripts/writing-metrics/` —
+1. Run the lint as the entry point — it detects norm-violation candidates
+   (workflow vocabulary, untranslated English in Japanese prose, arrow chains,
+   telegraphic fragments, paren chains) with line numbers:
+
+   ```
+   ~/.claude/scripts/writing-metrics/lint.ts <file.md> [--json]
+   ```
+
+   Input is one Japanese Markdown file per run. Findings are suspicions, not
+   orders: exit code is 0 regardless of count (1 only for input errors).
+2. Judge each finding against the rules above; only words used as ordinary
+   prose nouns are real findings. The allow/workflow dictionaries live in
+   [references/protected-terms.md](references/protected-terms.md) — extend the
+   `Additional allowlist` fence when a false positive names a real entity.
+3. For corpus-wide deep dives across the dialogue history (not single files),
+   use the measurement scripts in the same directory —
    `baseline-mixing.ts` (mixing density, reply volume percentiles),
    `vocab-inventory.ts` (per-word frequency with origin signals),
    `task-src.ts` / `task-other.ts` (workflow-vocabulary contexts).
-2. Read the flagged words against the vocabulary test above; only words used as
-   ordinary prose nouns are findings.
-3. Report a short list of rewrite candidates with one example sentence each —
+4. Report a short list of rewrite candidates with one example sentence each —
    not the full frequency table.

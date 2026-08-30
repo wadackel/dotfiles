@@ -43,3 +43,64 @@ Japanese:
 
 The right column is a starting point, not a fixed mapping — pick the word the
 sentence needs. When neither fits, keep the original (the norm's default).
+
+## Additional allowlist
+
+Machine-readable extension of the allow vocabulary, consumed by
+`writing-metrics/lint.ts` together with the Domain terms list, the
+"Established acronyms" line, and the table above. One word per line; `#` starts
+a comment. Keep this fence in sync with the prose sections when either changes.
+Seeded from the measured keep-as-is classes in `writing-metrics/vocab-mapping.md`.
+
+```allowlist
+# products / tools (vocab-mapping A-1)
+nix
+nixpkgs
+deno
+tmux
+zsh
+git
+github
+homebrew
+claude
+codex
+gemini
+tsc
+pnpm
+colima
+deadnix
+ubuntu
+macos
+darwin-rebuild
+plist
+tar
+gitignore
+localhost
+shebang
+cask
+# skills / repos (A-2, A-3; self-audit stays a finding — see table above)
+subagent-review
+completion-audit
+code-simplifier
+agent-browser
+picker-verify
+llm-wiki
+writing-clarity
+writing-metrics
+# established dev terms (A-5, A-6)
+lint
+patch
+fixture
+codegen
+clone
+assert
+allowlist
+vault
+wikilink
+feed
+note
+ctx
+# lint severity values (machine contract, like the labels above)
+warn
+info
+```

@@ -23,6 +23,7 @@
       "Bash(*ab-state-refresh*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",
+      "Bash(*writing-metrics/lint.ts*)",
       "Bash(*writing-metrics/task-other.ts*)",
       "Bash(*writing-metrics/task-src.ts*)",
       "Bash(*writing-metrics/vocab-inventory.ts*)",
