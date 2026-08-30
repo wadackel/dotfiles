@@ -16,7 +16,13 @@
         actionlint = "latest";
         go = "latest";
         node = "lts";
-        rust = "nightly";
+        rust = {
+          version = "nightly";
+          components = [
+            "rust-analyzer"
+            "rust-src"
+          ];
+        };
         usage = "latest";
         uv = "latest";
         yamllint = "latest";
