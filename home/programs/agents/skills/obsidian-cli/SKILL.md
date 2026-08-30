@@ -24,9 +24,13 @@ Use the `obsidian` CLI to interact with a running Obsidian instance.
 
 ## Out of scope: the vault's private directory
 
-`05_Private/` holds identity documents. `~/.claude/settings.json` denies `Read` and `Edit` there — but **those rules do not apply to this CLI**. It goes through Bash, and it resolves by note name rather than by path, so `obsidian read` reaches that directory exactly the way a wikilink does. `~/.claude/scripts/bash-policy.yaml` gates `obsidian read` and `obsidian search` for this reason.
+`05_Private/` holds identity documents. `~/.claude/settings.json` denies `Read` and `Edit` there, which also covers `Glob` and `Grep` — but **none of it applies to this CLI**. It goes through Bash, and it resolves by note name rather than by path, so `obsidian read` reaches that directory exactly the way a wikilink does.
 
-Never use this CLI to read, search, append to, or create anything under that directory, and never name one of its files in output. If a note turns out to live there, say so without naming it and move on.
+**Nothing stops you here.** There is no permission error to run into; the discipline is yours to keep.
+
+Never use this CLI to read, search, append to, or create anything under that directory. Above all, **never write one of its filenames into output** — an answer, a note, a log, a report, a commit message. The name is the exposure, and it is the one part of this a machine still checks (`llm-wiki`'s `wiki-doctor.ts`). If a note turns out to live there, say so without naming it and move on.
+
+When you already know a note's path, read it with `path=` rather than `file=`. `file=` resolves by name the way a wikilink does, so you cannot see which directory it lands in until the content is already back.
 
 ## Prerequisites
 

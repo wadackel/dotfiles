@@ -459,6 +459,8 @@
       "Bash(sudo su *)",
       "Bash(sudo umount *)",
       "Bash(yarn publish *)",
+      "Read(//Users/wadackel/Documents/Main/05_Private/**)",
+      "Edit(//Users/wadackel/Documents/Main/05_Private/**)",
       "Edit(//bin/**)",
       "Edit(//boot/**)",
       "Edit(//dev/**)",
