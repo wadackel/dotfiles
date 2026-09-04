@@ -1,0 +1,3 @@
+upstream: https://github.com/github/gh-stack.git
+commit: 2bd699a544a09cb5c45a013d03416e0894b0454e
+synced_at: 2026-09-04T12:44:18.745Z

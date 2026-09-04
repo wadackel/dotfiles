@@ -251,13 +251,18 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 - Cookies are narrowed to the tracked origins by RFC 6265 domain-match; `--all-cookies` disables it when SSO needs a third-party domain
 - `~/.agents/` is shared: `skills` is owned by `home/programs/codex/default.nix`, `scripts` by `home/programs/agents/default.nix`
 
-### Figma skills sync
+### Vendored skills sync
 
-`home/programs/agents/skills/figma-{use,generate-design,generate-library,use-slides}/` mirror upstream `figma/mcp-server-guide` and are reachable from Claude / Codex / opencode via the standard common-skill symlinks.
+Third-party SKILL.md sets are vendored under `home/programs/agents/skills/` and reachable from Claude / Codex / opencode via the standard common-skill symlinks. Vendors are declared in the `VENDORS` table of `home/programs/agents/scripts/sync-vendored-skills.ts`:
 
-- Re-sync: `./home/programs/agents/scripts/sync-figma-skills.ts`
-- Check for upstream drift without writing: `./home/programs/agents/scripts/sync-figma-skills.ts --check`
-- Each vendor root has a `.figma-source` recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
+- `figma`: `figma-{use,generate-design,generate-library,use-slides}/` mirror upstream `figma/mcp-server-guide`
+- `gh-stack`: `gh-stack/` mirrors upstream `github/gh-stack` (`skills/gh-stack`); the extension itself is installed via `pkgs.gh-stack` in `home/programs/gh/default.nix`
+
+Commands:
+
+- Re-sync all vendors: `./home/programs/agents/scripts/sync-vendored-skills.ts`; pass vendor names to limit (e.g. `... gh-stack`)
+- Check for upstream drift without writing: `./home/programs/agents/scripts/sync-vendored-skills.ts --check [vendor...]`
+- Each vendored skill root has a `.<vendor>-source` (`.figma-source`, `.gh-stack-source`) recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
 - `.gitattributes` marks `figma-use/references/plugin-api-standalone.d.ts` as `-diff` so the 445KB typings file does not flood PR review UI
 
 ### picker-verify (tmux picker e2e)
