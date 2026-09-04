@@ -98,6 +98,7 @@ The Direction Agreement Gate. Conversational. Goal: agree on *Purpose* and *Appr
 - **One question at a time.** Each turn asks a single question. Do not pack multiple questions into one message just because the format allows it.
 - **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first.
 - **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. Resolve lookups synchronously in the clarification pass (Step C), or treat the dependent question as outside the frontier and ask the next independent question first — do not keep interview subagents open across Ask turns. A pending investigation only delays its downstream questions.
+- **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
 - **Text questions in the chat body.** Codex asks with the question format below (Codex CLI has no structured question tool). Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
 - **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
 - **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
@@ -245,15 +246,18 @@ After writing the body, state the plan path, the section headings, and the key d
 
 Keep the plan body lightweight (target ~120-180 lines, excluding the Deepening Log).
 
-### Completion Criteria item tags (medium+)
+### Completion Criteria item tags
 
-Tag every Autonomous Verification item (`$impl` Audit consumes these):
+Tag every Autonomous Verification item at every complexity, trivial included (`$impl` Audit consumes these):
 
 - `[file-state]`: observable with Read / Grep / Glob
 - `[orchestrator-only]`: requires host access commands such as `nix flake check`, `darwin-rebuild`, or sudo; main session pre-runs and records evidence in the sidecar before the final gate
+- `[live]`: observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
 - `[outcome]`: circular by design (e.g. `$impl` built-in Review PASS); derived from the review's own verdict
 
 When unsure, default to `[orchestrator-only]`.
+
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` does not gate on `[live]`; the tag is recorded so the Claude-side `/completion-audit` and the shared plan critic read the same contract.
 
 `## Completion Criteria` is machine-consumed and must keep these subsection names:
 

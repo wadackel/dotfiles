@@ -61,11 +61,12 @@ Does the plan design tests that actually observe the behavior it changes? Test o
 **MUST-check (in order; do not drop under context pressure):**
 1. For `small+` plans with any behavior-change target, is a `## Test Strategy` section present? A missing section with at least one behavior-change target is a Critical Issue.
 2. If `## Test Strategy` lists `Tests to add / update`, does `## Task Outline` contain matching first-class test tasks? Mismatch is a Critical Issue.
+3. If the plan changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses), does `## Completion Criteria` carry at least one `[live]` item under Autonomous Verification? A missing `[live]` item is a Critical Issue. A `[live]` item placed under Requires User Confirmation without a one-line reason why the agent cannot bring up the environment is also a Critical Issue.
 
 **SHOULD-check:**
-3. Scrutinize Test Strategy content credibility: weak `No tests needed` reasons (e.g. "refactor only" when semantics actually change), mismatched test types (unit for an integration concern), and uncited `Existing coverage` claims are all weak-justification variants. Skill / hook / prompt markdown that the harness interprets counts as behavior change (see SKILL.md `### Test Strategy section`).
+4. Scrutinize Test Strategy content credibility: weak `No tests needed` reasons (e.g. "refactor only" when semantics actually change), mismatched test types (unit for an integration concern), and uncited `Existing coverage` claims are all weak-justification variants. Skill / hook / prompt markdown that the harness interprets counts as behavior change (see SKILL.md `### Test Strategy section`).
 
-**Dimension 7 veto rule**: Any Critical Issue raised under MUST-check 1 or 2 blocks a `CONVERGED` verdict for this round regardless of other dimensions. The Critic must emit `ITERATE`.
+**Dimension 7 veto rule**: Any Critical Issue raised under MUST-check 1, 2 or 3 blocks a `CONVERGED` verdict for this round regardless of other dimensions. The Critic must emit `ITERATE`.
 
 **Verdict criteria (stop decision)**: on Round 1, emit `ITERATE` unless Critical Issues are zero. On Round 2 and later, emit `CONVERGED` when no finding requires another review round — zero Critical Issues, or every remaining finding is either a self-resolvable fix that does not restructure the plan or a [USER] item bound for the Consolidated Interview; emit `ITERATE` only when at least one finding's fix restructures the plan enough to need re-review. A `CONVERGED` verdict never exempts findings from being reported in full. (The Adversarial agent's verdict intentionally uses a different criterion: falsification outcome.)
 

@@ -58,6 +58,7 @@ The Direction Agreement Gate. Conversational. Replaces v1's Step A–F clarity l
 - **One question at a time.** Each message asks a single question. Do not pack multiple questions into one message just because the format allows it. The question is the last content in the turn; end the turn and do not advance until the answer arrives.
 - **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first.
 - **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. When a question needs a fact from the codebase or environment, dispatch the lookup as a background subagent and ask the next independent frontier question in the same turn; collect the result at the top of the next turn. A pending investigation only delays its downstream questions.
+- **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
 - **Recommended answer on every question.** Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
 - **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
 - **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
@@ -99,12 +100,12 @@ If the user changes direction mid-AGREE, go back to A3 and restart the approach 
 
 ## EXPLORE
 
-Investigate the codebase as needed for the agreed direction. Spawn `Explore` subagents in parallel only when their search regions are clearly disjoint. For a small surface area, the main session reads/searches directly.
+Investigate the codebase as needed for the agreed direction. Spawn `Explore` subagents in parallel only when their search regions are clearly disjoint. For a small surface area, the main session reads/searches directly. Do not pass `name` to these dispatches (nor to the AGREE and Consolidated Interview lookups): an unnamed agent completes and vanishes, a named one stays idle until TaskStop.
 
 **Three discoveries** (everything else is noise):
 
 1. **Existing patterns to mirror** — naming, error handling, config style, test layout. Record `file:lines` + a snippet.
-2. **Execution path the change flows through** — entry points, data flow, state transitions, interface contracts. Knowing the path is how DRAFT decides what to change vs. leave alone.
+2. **Execution path the change flows through** — entry points, data flow, state transitions, interface contracts. List every caller and consumer of the interface being changed, including configuration combinations. Knowing the path is how DRAFT decides what to change vs. leave alone.
 3. **Existing behavior + tests** — how the target currently behaves and the existing tests that observe it (`file:lines`). DRAFT's Test Strategy quotes these.
 
 For revisions to existing behavior, also gather empirical signals ("what the spec says" and "what actually happens" are different questions): run the CLI, fire the hook, read effective config.
@@ -143,14 +144,17 @@ The AGREE-derived `### Assumptions` / `### Self-resolved` / `### Unresolved Item
 
 Keep the plan body lightweight (target ~120–150 lines, excluding the Deepening Log).
 
-### Completion Criteria item tags (medium+)
+### Completion Criteria item tags
 
-Tag every Autonomous Verification item (`/completion-audit` consumes these):
+Tag every Autonomous Verification item at every complexity, trivial included (`/completion-audit` consumes these):
 - `[file-state]` — verifiable with Read / Grep / Glob
 - `[orchestrator-only]` — needs host access the reviewer's sandbox lacks (`nix flake check`, docker, sudo, etc.); the main session runs it and embeds evidence before the final gate
+- `[live]` — observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
 - `[outcome]` — circular by design (e.g. `/subagent-review returns PASS`); derived from the review's own verdict
 
 When unsure, default to `[orchestrator-only]`.
+
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Tests and type checks are not a substitute: they show branch behavior, not that the surface works the way the user runs it. Only when the agent cannot bring up the environment itself does the `[live]` item move under Requires User Confirmation, with a one-line reason and the exact steps the user must run.
 
 ## DEEPEN
 
@@ -171,6 +175,8 @@ Agent({ subagent_type: "Explore",
         prompt: <adversarial-prompt template with plan + file paths> })
 ```
 Template: `references/adversarial-prompt.md`. Skip only when there are no verifiable technical claims (pure doc / comment-only edits).
+
+Dispatch the Critic and the Adversarial agent unnamed: each round is a fresh dispatch that is never messaged again, and a named agent stays idle until TaskStop.
 
 **Inline over-engineering self-review** (default, main session, after the last Critic round):
 Read the plan once with YAGNI/KISS/DRY in mind. **Only flag — do not delete.** Annotate each suspect spot with `<!-- over-eng? -->` and surface them in the end-of-phase interview. Deep simplification subagent dispatch is **opt-in** via `/simplify-review plan`.

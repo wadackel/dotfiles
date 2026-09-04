@@ -21,6 +21,9 @@
 - Standing request from the user: dispatch subagents with the Agent tool on your own judgement for investigation, broad search, and review work. It counts as already requested, so do not ask first.
 - Skills that dispatch subagents (`/subagent-review`, `/simplify-review`, `/completion-audit`, `/plan` critics) carry the same standing request; run their dispatches as defined.
 - This removes the need to ask, not the need to judge. A lookup you can answer directly still does not need a subagent.
+- Do not pass `name` to an Agent unless you plan to send it a follow-up message; an unnamed agent completes and vanishes, a named one stays idle until TaskStop.
+- When you did pass `name`, call TaskStop on it in the same turn you finish reading its result.
+- Ignore messages that carry only an idle notification and never relay them to the user.
 
 ### Workflow Entrypoints
 
@@ -57,6 +60,8 @@
 - When behavior changes and relevant tests already exist, add or update tests as part of the change unless the user explicitly says not to.
 - For Web UI changes, verify with `/agent-browser`: check screenshots/layout, console errors, and responsive behavior.
 - Trust concrete evidence over analysis or documentation when they disagree.
+- When a verification fails, suspect the observation method before the system.
+- Confirm delegated work from its artifacts (diff, files, command output), not from the delegate's self-report.
 - When running through `/impl`, do not claim completion until `/completion-audit` and `/subagent-review` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/subagent-review/SKILL.md`. `/santa-loop` is opt-in and only runs when the user invokes it explicitly.
 
 ### Bug Fixes
@@ -101,6 +106,7 @@
 - This rule never changes which language an artifact is written in — Language Defaults above decides that. Within prose that is already Japanese: translate translatable English words; keep code identifiers, commands, file paths, product names, and skill names in their original form. When unsure whether to translate, keep the original.
 - Write complete sentences. Telegraphic fragments ("idx stable", "3 UF2 exit 0") do not belong in prose — put command results in code blocks or state them as sentences.
 - Define an uncommon technical term at first use, or choose the plain word.
+- When asked to explain, give the smallest complete answer first and stop; add layers only when asked.
 
 ### Design Principles
 

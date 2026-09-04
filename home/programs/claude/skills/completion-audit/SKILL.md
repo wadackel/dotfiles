@@ -60,10 +60,11 @@ Performed by the main session (the implementer):
 
 **Verifier tag handling (mandatory when the plan uses `/plan` tags):**
 
-Each Completion Criteria item is tagged by `/plan` Phase 4 Step 8 with one of:
+Each Completion Criteria item is tagged by `/plan` DRAFT (`### Completion Criteria item tags`) with one of:
 
 - `[file-state]` — verifiable by Read / Grep / Glob
 - `[orchestrator-only]` — required host access the auditor's sandbox may lack; main session pre-runs and embeds verbatim output in evidence
+- `[live]` — observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER). A `[live]` item whose `Verified` field does not state the run method counts as `未実施`, however green the tests are
 - `[outcome]` — **circular by design**, references post-audit state (e.g., `/subagent-review returns PASS`). Evaluated AFTER `/completion-audit` returns PASS, so no evidence exists at audit time
 
 When building the evidence document, preserve these tags verbatim from the plan. Both audit modes exclude `[outcome]`-tagged items from the verdict: the self-audit marks them NOT GATING (Step 2), and the escalated auditor prompt (Step 3) must explicitly instruct the subagent to EXCLUDE them — otherwise the audit deadlocks (auditor demands evidence for `[outcome]` items that by design cannot exist yet, forcing a FAIL verdict, which blocks running the thing the `[outcome]` item references).
@@ -100,6 +101,7 @@ Always state the gating item count (a shrunken audit should be detectable withou
 Rules:
 - `[outcome]`-tagged items are excluded from the verdict (NOT GATING) — same protocol as the subagent path
 - `[orchestrator-only]` items waived by explicit user decision count as satisfied (BLOCKED BY USER)
+- `[live]` is gating at every complexity: `未実施` (including a `Verified` field that omits the run method) is FAIL, and the only waiver is BLOCKED BY USER by explicit user decision. Never move a `[live]` item out of the verdict on your own judgement — a static PASS with the surface untested is the failure this tag exists to catch
 - The verdict is `VERIFIED: PASS (self-audit)` only when every gating item is PASS. Any FAIL or `未実施` on a gating item → `VERIFIED: FAIL (self-audit)`: address the gap (run the missing verification), then redo this step
 - The `Evidence` column must point at concrete raw output already captured in task `metadata.evidence` — do not paraphrase results into the table; the table locates evidence, it does not restate it
 
@@ -135,9 +137,15 @@ Agent tool:
    "USER WAIVED" or equivalent) count as satisfied via the "Requires User Confirmation"
    alternative pathway. Treat as BLOCKED BY USER (legitimate skip), not as MISSING EVIDENCE.
 
-3. Evaluate only `[file-state]` and non-waived `[orchestrator-only]` items for PASS/FAIL. All
+3. Evaluate `[file-state]`, `[live]`, and non-waived `[orchestrator-only]` items for PASS/FAIL. All
    other items (outcome, user-waived) are excluded from the verdict.
+
+4. A `[live]` item is PASS only when its evidence records the run method (start command, mode,
+   target URL or PR, network condition, account role) and the observed result. Evidence that
+   shows only tests, type checks, or a description of what should happen is `未実施` → FAIL.
 ```
+
+Do not pass `name` to this Agent dispatch: the auditor answers once and is never messaged again, and an unnamed agent completes and vanishes while a named one stays idle until TaskStop.
 
 **Pass to the auditor:**
 - The Audit Protocol Clarification above (verbatim)

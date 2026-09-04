@@ -39,8 +39,8 @@ If no plan can be resolved, reject with `Run /plan <request> first. No plan to e
    1. `TaskGet` to retrieve the detailed description (target files / expected behavior / verification method)
    2. `TaskUpdate` to set `in_progress` and record `metadata.baseline_sha` (current `git rev-parse HEAD`)
    3. **Implement** — follow the plan's "Files to Change" and "Patterns to Mirror" exactly. Match the naming, error handling, and conventions captured by Phase 2 EXPLORE
-   4. **Run the acceptance-criteria verification commands**. Capture the **raw output verbatim** into `metadata.evidence` (summarizing or paraphrasing is forbidden). The final gate (`/completion-audit` + `/subagent-review`) consumes this evidence
-   5. **Diff size check** via `git diff --stat`. If the diff is ≥ 20 files or ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Inline the changed files + `git diff <baseline_sha>..HEAD` + the project's CLAUDE.md path into the prompt. Apply HIGH-confidence simplifications; present MEDIUM/LOW to the user
+   4. **Run the acceptance-criteria verification commands**. Capture the **raw output verbatim** into `metadata.evidence` (summarizing or paraphrasing is forbidden). The final gate (`/completion-audit` + `/subagent-review`) consumes this evidence. For a `[live]` item the evidence must record the run method (start command, mode, target URL or PR, network condition, account role) and the observed result. If the agent cannot bring up the environment itself, send the user one message with the exact steps (command, URL, role) and record either their observed result or their explicit waiver (BLOCKED BY USER) as the evidence — never mark a `[live]` item PASS from tests or type checks alone
+   5. **Diff size check** via `git diff --stat`. If the diff is ≥ 20 files or ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Inline the changed files + `git diff <baseline_sha>..HEAD` + the project's CLAUDE.md path into the prompt. Apply HIGH-confidence simplifications; present MEDIUM/LOW to the user. Do not pass `name` to this dispatch: the simplifier answers once, and an unnamed agent completes and vanishes while a named one stays idle until TaskStop
    6. Once all acceptance-criteria verifications succeed, `TaskUpdate` to `completed`. There is no per-task review gate — quality and security are judged at the final gate
 5. After all implementation tasks complete, the final `Run /completion-audit and /subagent-review` task unblocks automatically. Execute in this order:
    1. Invoke `/completion-audit`. Its default mode is a **self-audit** (main session cross-checks Completion Criteria × evidence, records the full table in the gate sidecar, and reports the verdict); a fresh `completion-auditor` subagent is dispatched only when an escalation condition fires (large/xl plan, evidence gaps, or explicit user request — see its SKILL.md). If the verdict is **VERIFIED FAIL**, address the surfaced gaps and re-run. On 3 consecutive FAILs on the escalated subagent path, leave the gate task `in_progress`, append `[BLOCKED: completion-audit escalated]` to the task description, and present the unresolved gap analysis to the user
@@ -125,7 +125,8 @@ The "Run /completion-audit and /subagent-review" task that `/plan`'s Phase 5 (pa
 逸脱: <あれば散文で。なければ省略>
 
 判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
-- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を1件ずつ>
+- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を1件ずつ。各項目に「ユーザー操作で何が起きるか」を 1 文添える。観測できる影響が無ければ「影響なし」>
+- 実機未確認（waiver）: <ユーザーが免除した [live] 項目を 1 件ずつ>。あなたの手順: <起動コマンド、URL、権限>
 
 次のステップ: <行動可能なもののみ。なければ省略>
 全記録: ~/.claude/plans/<plan-slug>.gate.log.md

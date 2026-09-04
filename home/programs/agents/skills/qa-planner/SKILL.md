@@ -271,6 +271,7 @@ The Mode B Markdown body (used identically in substep 1 disk write and substep 3
 
 ### サマリー
 - **結果**: X/Y 合格、Z 不合格、W スキップ
+- **実行方法**: 起動コマンド / モード / ネットワーク条件 / 権限（ユーザーが述べた手順と一致しない場合は「未検証（手順不一致）」と書き、結果を合格に数えない）
 - **リスクカバレッジ**: N/N Critical 合格、M/M High 合格
 - **カバーしたカテゴリ**: [一覧]
 

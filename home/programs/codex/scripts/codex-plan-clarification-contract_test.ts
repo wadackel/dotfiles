@@ -28,6 +28,7 @@ const AGREE_GATE_NEEDLES = [
   "Proceeding with:",
   "trivial, A1 is the single mandatory gate",
   "no adjacent candidates",
+  "**Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.",
 ];
 
 // Outside the AGREE section, so asserted against the whole file.
@@ -74,6 +75,13 @@ const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
 ];
 const CRITIC_PROMPT =
   "home/programs/agents/shared/plan/references/critic-prompt.md";
+const COMPLETION_AUDIT =
+  "home/programs/claude/skills/completion-audit/SKILL.md";
+// The tag list markers differ per file (`—` in Claude plan and completion-audit,
+// `:` in Codex plan), so only the definition text after the marker is pinned.
+const LIVE_TAG_DEFINITION =
+  "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
+const LIVE_TAG_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
 const REPRESENTATIVE_ARTIFACTS = [
   {
     path: "20260506T1750-redesign-cli-output-ui.md",
@@ -226,6 +234,14 @@ for (const [name, path] of INTERVIEW_SKILLS) {
     assertIncludesAll(skill, INTERVIEW_RULE_NEEDLES);
   });
 }
+
+Deno.test("[live] tag definition is present in plan skills and completion-audit", async () => {
+  for (const path of LIVE_TAG_FILES) {
+    const body = await readRepoFile(path);
+    assertStringIncludes(body, "`[live]`");
+    assertStringIncludes(body, LIVE_TAG_DEFINITION);
+  }
+});
 
 Deno.test("text questions block the turn where no tool enforces it", async () => {
   for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {

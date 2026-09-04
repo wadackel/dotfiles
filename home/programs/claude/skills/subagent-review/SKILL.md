@@ -85,6 +85,8 @@ Spawn a **fresh** `code-reviewer` subagent that covers spec compliance and code 
 
 **What NOT to pass**: Any summary, status report, or interpretation from the main session. The reviewer must form its own judgment from spec + diff + actual code.
 
+Do not pass `name` to any reviewer dispatch in this skill: re-reviews are always fresh dispatches, so no reviewer is ever messaged again, and an unnamed agent completes and vanishes while a named one stays idle until TaskStop.
+
 **Expected output**: Spec issues (`### Issues`, typed MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE) + quality issues (MUST_FIX / SHOULD_FIX / NIT) + a single `VERDICT: PASS` or `VERDICT: FAIL` as the final line.
 
 FAIL if any spec issue OR any MUST_FIX / SHOULD_FIX quality issue exists. NIT does not block. The template's Scope Discipline section caps findings outside the changed lines at NIT.
@@ -153,7 +155,7 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|s
 - `{baseline_sha}` — from Step 1
 - `{review_focus}` — this specialist's domain and any scope earlier stages already covered, in one or two sentences
 
-Paste the template's `## Template` block **verbatim**. Do not summarise it and do not rewrite its `VERDICT:` line. A reviewer that is not told the verdict rule returns `PASS` while listing blocker-severity findings, and Step 3's flow control then advances past findings that were never fixed. The `reviewer-dispatch-policy` PreToolUse hook rejects dispatches whose prompt lacks the rule.
+Paste the template's `## Template` block **verbatim**. Do not summarise it and do not rewrite its `VERDICT:` line. A reviewer that is not told the verdict rule returns `PASS` while listing blocker-severity findings, and Step 3's flow control then advances past findings that were never fixed. The `reviewer-dispatch-policy` PreToolUse hook rejects dispatches whose prompt lacks the rule. Dispatch every specialist unnamed (see Step 2); a named specialist stays idle until TaskStop.
 
 #### Handling results
 
@@ -203,7 +205,7 @@ fi
 
 **Prompt construction** — use the same [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) as Step 4, filling `{review_focus}` with the security scope. There is no separate security template: the template's `VERDICT:` line is schema-neutral and covers the 4-tier severities, and `security-auditor` carries its own severity table in its agent definition (`~/.claude/agents/security-auditor.md`).
 
-Paste the template's `## Template` block **verbatim**, same as Step 4.
+Paste the template's `## Template` block **verbatim**, same as Step 4, and dispatch unnamed, same as Step 2.
 
 ## Mandatory Final Output
 
@@ -228,7 +230,7 @@ The reply carries only what changes the user's next action:
 - Security: PASS (1回)
 
 判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
-- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を、1〜2文 + file:line で1件ずつ>
+- <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を、1〜2文 + file:line で1件ずつ。各項目に「ユーザー操作で何が起きるか」を 1 文添える。観測できる影響が無ければ「影響なし」と書く>
 
 NIT 6件: 命名3 / コメント2 / 型1   ← 主題別の件数1行 (ゼロなら省略)
 全記録: ~/.claude/plans/<slug>.gate.log.md
