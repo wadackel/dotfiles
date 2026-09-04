@@ -2,6 +2,7 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   debounceStatePath,
   escapeObsidianSyntax,
+  memoRunDir,
   parseLLMOutput,
   resolveRepoName,
   saveDebounceState,
@@ -121,6 +122,14 @@ Deno.test("upsertDailyNote: silently no-ops when Reading section is missing", as
   await Deno.writeTextFile(daily, original);
   upsertDailyNote(daily, "xxxxxxxx", ["- 11:00 - `(r/xxxxxxxx)` x"]);
   assertEquals(await Deno.readTextFile(daily), original);
+});
+
+Deno.test("memoRunDir: creates $HOME/.cache/claude-memo and is idempotent", async () => {
+  const home = await Deno.makeTempDir();
+  const dir = memoRunDir(home);
+  assertEquals(dir, `${home}/.cache/claude-memo`);
+  assertEquals(Deno.statSync(dir).isDirectory, true);
+  assertEquals(memoRunDir(home), dir);
 });
 
 Deno.test("debounceStatePath: composes prefix + sessionShort under TMPDIR", () => {

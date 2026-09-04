@@ -171,12 +171,37 @@ export interface CallClaudeOptions {
   extraEnv?: Record<string, string>;
 }
 
+// The summary `claude -p` must not inherit the hook's cwd: Claude Code files the
+// child's transcript under the project dir derived from cwd, so every `cd` a
+// session made spawned a fake project dir and real project dirs filled up with
+// summary sessions. `$HOME/.cache` is used instead of `XDG_CACHE_HOME` because
+// codex-memo and opencode-memo run with `--allow-env=HOME,TMPDIR`; reading any
+// other variable throws NotCapable.
+export function memoRunDir(home = Deno.env.get("HOME") ?? "/tmp"): string {
+  const dir = `${home}/.cache/claude-memo`;
+  Deno.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export async function callClaude(
   condensed: string,
   agentLabel: string,
   opts: CallClaudeOptions = {},
 ): Promise<LLMResult | null> {
   const { onStderr, timeoutMs = DEFAULT_CLAUDE_TIMEOUT_MS, extraEnv } = opts;
+
+  let cwd: string | undefined;
+  try {
+    cwd = memoRunDir();
+  } catch (e) {
+    try {
+      await onStderr?.(
+        `memoRunDir failed, falling back to inherited cwd: ${e}`,
+      );
+    } catch {
+      // A failing logger must not turn a cwd fallback into a lost summary.
+    }
+  }
 
   const prompt = `以下は${agentLabel}セッションの要約データです。` +
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
@@ -191,6 +216,7 @@ export async function callClaude(
   try {
     const cmd = new Deno.Command("claude", {
       args: ["-p", "--safe-mode", "--model", CLAUDE_MODEL],
+      cwd,
       // ANTHROPIC_API_KEY を空文字で上書きすることで、親環境にキーが設定されていても
       // API 従量課金ではなくサブスク OAuth 経由の実行を強制する。
       env: { ANTHROPIC_API_KEY: "", ...(extraEnv ?? {}) },
