@@ -5,6 +5,7 @@ import {
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  isThrowawaySession,
   nowTimestamp,
   repoNameFor,
   saveDebounceState,
@@ -132,21 +133,42 @@ function extractAssistantTexts(entries: TranscriptEntry[]): string[] {
   return texts;
 }
 
-function extractToolSummary(entries: TranscriptEntry[]): string {
+function toolUseCounts(entries: TranscriptEntry[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const e of entries) {
-    if (e.type !== "assistant" || !Array.isArray(e.message?.content)) continue;
-    for (const block of e.message!.content as ContentBlock[]) {
+    const content = e.message?.content;
+    if (e.type !== "assistant" || !Array.isArray(content)) continue;
+    for (const block of content) {
       if (block.type === "tool_use" && block.name) {
         counts.set(block.name, (counts.get(block.name) ?? 0) + 1);
       }
     }
   }
-  return [...counts.entries()]
+  return counts;
+}
+
+function extractToolSummary(entries: TranscriptEntry[]): string {
+  return [...toolUseCounts(entries).entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([name, count]) => `${name}: ${count}`)
     .join(", ");
+}
+
+export function countToolUses(entries: TranscriptEntry[]): number {
+  let count = 0;
+  for (const n of toolUseCounts(entries).values()) count += n;
+  return count;
+}
+
+function extractNonNoiseUserTexts(entries: TranscriptEntry[]): string[] {
+  return extractUserTexts(entries).filter((t) => !isNoise(t));
+}
+
+// countUserMessages は debounce 用で tool_result を含む user エントリまで数えるため、
+// 使い捨て判定には流用できない。
+export function countNonNoiseUserMessages(entries: TranscriptEntry[]): number {
+  return extractNonNoiseUserTexts(entries).length;
 }
 
 export function countUserMessages(entries: TranscriptEntry[]): number {
@@ -182,7 +204,7 @@ export function heuristicSummary(entries: TranscriptEntry[]): string {
 function buildLLMInput(entries: TranscriptEntry[]): string {
   const parts: string[] = [];
 
-  const userTexts = extractUserTexts(entries).filter((t) => !isNoise(t));
+  const userTexts = extractNonNoiseUserTexts(entries);
   if (userTexts.length > 0) {
     parts.push("[User prompts]");
     for (const t of userTexts) {
@@ -254,6 +276,14 @@ async function main(): Promise<void> {
     entries = parseTranscript(transcriptPath);
   } catch (e) {
     await log(`SKIP: cannot parse transcript: ${e}`);
+    return;
+  }
+
+  const nonNoiseUserCount = countNonNoiseUserMessages(entries);
+  if (isThrowawaySession(nonNoiseUserCount, countToolUses(entries))) {
+    await log(
+      `SKIP: throwaway session (nonNoiseUserCount=${nonNoiseUserCount})`,
+    );
     return;
   }
 

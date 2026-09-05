@@ -1,5 +1,7 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
+  countNonNoiseUserMessages,
+  countToolUses,
   countUserMessages,
   extractUserTexts,
   heuristicSummary,
@@ -127,4 +129,33 @@ Deno.test("countUserMessages: excludes isMeta:true entries", () => {
     userEntry("<local-command-caveat>...</local-command-caveat>", true),
   ];
   assertEquals(countUserMessages(entries), 2);
+});
+
+Deno.test("countNonNoiseUserMessages: differs from countUserMessages by noise filtering", () => {
+  const entries = [
+    userEntry("ok"),
+    userEntry("実装の質問が複数あります"),
+  ];
+  assertEquals(countUserMessages(entries), 2);
+  assertEquals(countNonNoiseUserMessages(entries), 1);
+});
+
+Deno.test("countToolUses: counts assistant tool_use blocks only", () => {
+  const entries = [
+    userEntry("prompt"),
+    {
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "working" },
+          { type: "tool_use", name: "Bash" },
+          { type: "tool_use", name: "Read" },
+          { type: "tool_use" },
+        ],
+      },
+    },
+  ];
+  assertEquals(countToolUses(entries), 2);
+  assertEquals(countToolUses([userEntry("prompt")]), 0);
 });

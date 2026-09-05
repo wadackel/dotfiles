@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   buildLLMInput,
+  countToolUses,
   countUserMessages,
   formatToolSummary,
   heuristicSummary,
@@ -128,6 +129,11 @@ Deno.test("countUserMessages: counts non-noise user prompts only", () => {
     },
   ]);
   assertEquals(countUserMessages(out), 1);
+});
+
+Deno.test("countToolUses: sums every tool invocation", () => {
+  assertEquals(countToolUses(parseRows(messages, parts)), 3);
+  assertEquals(countToolUses(parseRows(messages, [])), 0);
 });
 
 Deno.test("validateHookData: accepts valid ses_-prefixed session_id", () => {

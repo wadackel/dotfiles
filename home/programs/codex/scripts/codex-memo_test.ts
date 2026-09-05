@@ -2,6 +2,7 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
   buildLLMInput,
   buildWorkerArgs,
+  countToolUses,
   extractAssistantTexts,
   extractToolSummary,
   extractUserTexts,
@@ -9,6 +10,7 @@ import {
   type HookLogEntry,
   readHookLogEntriesForSession,
   validateHookData,
+  WORKER_COMMAND,
 } from "./codex-memo.ts";
 
 // Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
@@ -89,6 +91,20 @@ Deno.test("extractToolSummary: aggregates entry-level tool_name only", () => {
   assertEquals(extractToolSummary(mixed), "a: 2, b: 1");
 });
 
+Deno.test("countToolUses: counts PreToolUse entries with a tool_name", () => {
+  const mixed: HookLogEntry[] = [
+    makeEntry("PreToolUse", { tool_name: "buried_in_payload_ignored" }, {
+      tool_name: "a",
+    }),
+    makeEntry("PreToolUse", {}, { tool_name: "a" }),
+    makeEntry("PreToolUse", {}, { tool_name: "b" }),
+    makeEntry("PreToolUse", {}, { tool_name: "" }),
+    makeEntry("Stop", { last_assistant_message: "not counted" }),
+  ];
+  assertEquals(countToolUses(mixed), 3);
+  assertEquals(countToolUses([]), 0);
+});
+
 Deno.test("heuristicSummary: skips injected prompt noise", () => {
   assertEquals(
     heuristicSummary(entries),
@@ -128,11 +144,20 @@ Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
     "--allow-read",
     "--allow-write",
     "--allow-env=HOME,TMPDIR",
-    "--allow-run=git,claude,deno",
+    "--allow-run=git,claude",
     scriptPath,
     "--worker",
     JSON.stringify(hookData),
   ]);
+});
+
+Deno.test("spawnWorker: the launched command is covered by its own shebang --allow-run", async () => {
+  const src = await Deno.readTextFile(
+    new URL("./codex-memo.ts", import.meta.url),
+  );
+  const matched = src.split("\n")[0].match(/--allow-run=(\S+)/);
+  assertEquals(matched !== null, true);
+  assertEquals(matched![1].split(",").includes(WORKER_COMMAND), true);
 });
 
 Deno.test("validateHookData: session_id required, cwd optional, transcript_path irrelevant", () => {

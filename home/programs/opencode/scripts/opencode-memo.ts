@@ -12,6 +12,7 @@ import {
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  isThrowawaySession,
   nowTimestamp,
   repoNameFor,
   saveDebounceState,
@@ -248,6 +249,12 @@ export function countUserMessages(parsed: ParseResult): number {
   return parsed.user.filter((t) => !isNoise(t)).length;
 }
 
+export function countToolUses(parsed: ParseResult): number {
+  let count = 0;
+  for (const n of parsed.toolCounts.values()) count += n;
+  return count;
+}
+
 // --- Main ---
 
 async function main(): Promise<void> {
@@ -289,6 +296,13 @@ async function main(): Promise<void> {
   }
 
   const parsedRows = parseRows(rows.messages, rows.parts);
+
+  const userCount = countUserMessages(parsedRows);
+  if (isThrowawaySession(userCount, countToolUses(parsedRows))) {
+    await log(`SKIP: throwaway session (userCount=${userCount})`);
+    return;
+  }
+
   const heuristic = heuristicSummary(parsedRows);
   if (!heuristic) {
     await log("SKIP: no summary extractable");
@@ -297,7 +311,6 @@ async function main(): Promise<void> {
 
   const repoName = await repoNameFor(cwd);
   const timestamp = nowTimestamp();
-  const userCount = countUserMessages(parsedRows);
   const statePath = debounceStatePath("opencode", sessionShort);
 
   const dailyContent = Deno.readTextFileSync(dailyPath);

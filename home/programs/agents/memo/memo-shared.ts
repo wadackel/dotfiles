@@ -4,8 +4,9 @@
 //
 // Agent-specific concerns (transcript / DB parser, NOISE_PATTERNS,
 // heuristicSummary, buildLLMInput, log path, hook entry) stay in the agent
-// script. Shared concerns (Daily Note upsert, Claude call, debounce I/O,
-// repo-name resolution, LLM output parsing, Obsidian escape) live here.
+// script. Shared concerns (Daily Note upsert, throwaway-session filtering,
+// Claude call, debounce I/O, repo-name resolution, LLM output parsing,
+// Obsidian escape) live here.
 
 export interface LLMResult {
   summary: string;
@@ -92,6 +93,17 @@ export function parseLLMOutput(raw: string): LLMResult | null {
     .filter((line) => line.length > 0)
     .slice(0, 3);
   return { summary, details };
+}
+
+// --- Session filtering ---
+
+// ツール 0 件だけを条件にすると、ツールを使わない相談セッションまで落ちる。
+// プロンプト 1 件以下を重ねて、動作確認用の使い捨てセッションだけに絞る。
+export function isThrowawaySession(
+  nonNoiseUserCount: number,
+  toolUseCount: number,
+): boolean {
+  return toolUseCount === 0 && nonNoiseUserCount <= 1;
 }
 
 // --- Daily Note upsert ---

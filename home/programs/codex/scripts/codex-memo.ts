@@ -5,6 +5,7 @@ import {
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  isThrowawaySession,
   nowTimestamp,
   repoNameFor,
   saveDebounceState,
@@ -162,7 +163,7 @@ export function extractAssistantTexts(entries: HookLogEntry[]): string[] {
   return texts;
 }
 
-export function extractToolSummary(entries: HookLogEntry[]): string {
+function toolUseCounts(entries: HookLogEntry[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const entry of entries) {
     if (entry.event !== "PreToolUse") continue;
@@ -170,11 +171,21 @@ export function extractToolSummary(entries: HookLogEntry[]): string {
     if (!name) continue;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  return [...counts.entries()]
+  return counts;
+}
+
+export function extractToolSummary(entries: HookLogEntry[]): string {
+  return [...toolUseCounts(entries).entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([name, count]) => `${name}: ${count}`)
     .join(", ");
+}
+
+export function countToolUses(entries: HookLogEntry[]): number {
+  let count = 0;
+  for (const n of toolUseCounts(entries).values()) count += n;
+  return count;
 }
 
 function countUserMessages(entries: HookLogEntry[]): number {
@@ -233,6 +244,11 @@ export function buildLLMInput(entries: HookLogEntry[]): string {
   return parts.join("\n").slice(0, 3000);
 }
 
+// Deno は bare な --allow-run エントリを PATH 経由で解決するため、Deno.execPath() を
+// 渡すと PATH 上位のシムに解決された別パスと突き合わされて NotCapable になる。
+// shebang の許可リストと同じ bare 名で起動して一致させる。
+export const WORKER_COMMAND = "deno";
+
 export function buildWorkerArgs(
   scriptPath: string,
   hookData: HookData,
@@ -242,7 +258,9 @@ export function buildWorkerArgs(
     "--allow-read",
     "--allow-write",
     "--allow-env=HOME,TMPDIR",
-    "--allow-run=git,claude,deno",
+    // ワーカー経路が起動するのは repoNameFor の git と callClaude の claude だけで、
+    // spawnWorker を呼ぶのは mainHook に限られる。deno を残すと縮小の意図が消える。
+    "--allow-run=git,claude",
     scriptPath,
     "--worker",
     JSON.stringify(hookData),
@@ -251,7 +269,7 @@ export function buildWorkerArgs(
 
 function spawnWorker(hookData: HookData): void {
   const scriptPath = new URL(import.meta.url).pathname;
-  const child = new Deno.Command(Deno.execPath(), {
+  const child = new Deno.Command(WORKER_COMMAND, {
     args: buildWorkerArgs(scriptPath, hookData),
     stdin: "null",
     stdout: "null",
@@ -299,6 +317,12 @@ async function prepareContext(
     return null;
   }
 
+  const userCount = countUserMessages(entries);
+  if (isThrowawaySession(userCount, countToolUses(entries))) {
+    await log(`${logPrefix}SKIP: throwaway session (userCount=${userCount})`);
+    return null;
+  }
+
   const dailyPath = dailyNotePath();
   try {
     await Deno.stat(dailyPath);
@@ -309,7 +333,6 @@ async function prepareContext(
 
   const repoName = await repoNameFor(cwd);
   const timestamp = nowTimestamp();
-  const userCount = countUserMessages(entries);
 
   return {
     entries,

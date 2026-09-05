@@ -6,6 +6,7 @@ import {
 import {
   debounceStatePath,
   escapeObsidianSyntax,
+  isThrowawaySession,
   memoRunDir,
   parseLLMOutput,
   resolveRepoName,
@@ -13,6 +14,15 @@ import {
   shouldRunLLM,
   upsertDailyNote,
 } from "./memo-shared.ts";
+
+Deno.test("isThrowawaySession: tool use or a second prompt keeps the session", () => {
+  assertEquals(isThrowawaySession(0, 0), true);
+  assertEquals(isThrowawaySession(1, 0), true);
+  assertEquals(isThrowawaySession(2, 0), false);
+  assertEquals(isThrowawaySession(1, 1), false);
+  assertEquals(isThrowawaySession(0, 5), false);
+  assertEquals(isThrowawaySession(5, 0), false);
+});
 
 Deno.test("resolveRepoName: handles normal repos and worktrees", () => {
   assertEquals(resolveRepoName("/Users/me/repo", ".git"), "repo");
