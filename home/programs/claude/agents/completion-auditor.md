@@ -65,6 +65,15 @@ Evaluate three dimensions:
 
 ## Judgment Rules
 
+### Requires User Confirmation overrides
+
+These two rules take precedence over the general rules that follow:
+
+- Item with `Needed by: next real run <trigger>` whose trigger names an event this session could not produce → BLOCKED BY USER (excluded from the verdict; the plan approval deferred it). A trigger this session could have produced → USER CONFIRMATION PENDING (FAIL)
+- Item with `Needed by: final gate` / `task N` and no recorded user result that states the run method, and no waiver → USER CONFIRMATION PENDING (FAIL)
+
+### General rules
+
 - Criterion with no evidence → FAIL
 - Evidence that does not match the criterion → FAIL
 - Verification that tests the wrong thing (e.g., unit test when behavioral verification needed) → FAIL
@@ -78,7 +87,7 @@ Evaluate three dimensions:
 For each Completion Criteria item, state:
 - The criterion
 - Evidence found (or "MISSING")
-- Your assessment (supported / unsupported / independently verified)
+- Your assessment (supported / unsupported / independently verified; a Requires User Confirmation item may carry USER CONFIRMATION PENDING or BLOCKED BY USER instead)
 
 Then summarize findings for each audit dimension.
 

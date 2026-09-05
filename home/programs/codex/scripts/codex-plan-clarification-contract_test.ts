@@ -82,6 +82,12 @@ const COMPLETION_AUDIT =
 const LIVE_TAG_DEFINITION =
   "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
 const LIVE_TAG_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
+const RUC_TEMPLATE_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
+// Pinned byte-for-byte across the plan skills and completion-audit: plans are written
+// from this line and the audit table copies it back, so a reworded template in one
+// file silently breaks the handoff.
+const RUC_ITEM_TEMPLATE =
+  "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
 const REPRESENTATIVE_ARTIFACTS = [
   {
     path: "20260506T1750-redesign-cli-output-ui.md",
@@ -240,6 +246,20 @@ Deno.test("[live] tag definition is present in plan skills and completion-audit"
     const body = await readRepoFile(path);
     assertStringIncludes(body, "`[live]`");
     assertStringIncludes(body, LIVE_TAG_DEFINITION);
+  }
+});
+
+Deno.test("Requires User Confirmation item template is present in plan skills and completion-audit", async () => {
+  for (const path of RUC_TEMPLATE_FILES) {
+    const body = await readRepoFile(path);
+    assertStringIncludes(body, RUC_ITEM_TEMPLATE);
+  }
+  for (const [, path] of AGENT_PLANS) {
+    const body = await readRepoFile(path);
+    assertStringIncludes(
+      body,
+      "`Your steps` must not inline tokens, passwords, or credentialed URLs",
+    );
   }
 });
 

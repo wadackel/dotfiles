@@ -134,6 +134,8 @@ Loading the skill brings agent-browser's Default Flags into context. The default
 
 If a browser command fails with `No such file or directory: .../main.json`, the state file has not been imported yet. Stop and ask the user to run `ab-state-refresh` against a logged-in Chrome (see agent-browser `references/authentication.md`). Do not fall back to attaching the user's live Chrome — that re-introduces the collision risk this default eliminates.
 
+When the Step 2 input was a plan file, present its `### Requires User Confirmation` items (`Needs:` and `Your steps:`) to the user in one message before the first test command, so they can prepare the environment. This is a message, not a Bash call: the run-directory block below stays the first Bash call of Step 4. Without a plan file there is nothing to present.
+
 #### Run directory setup (mandatory for every Mode B run)
 
 All QA evidence — screenshots and the Markdown report — is consolidated under `$PROJECT_ROOT/.wadackel/qa/<run-dir>/`. `.wadackel/` is already covered by the user's global gitignore, so no per-project ignore wiring is needed.

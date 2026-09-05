@@ -257,7 +257,7 @@ Tag every Autonomous Verification item at every complexity, trivial included (`$
 
 When unsure, default to `[orchestrator-only]`.
 
-A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` does not gate on `[live]`; the tag is recorded so the Claude-side `/completion-audit` and the shared plan critic read the same contract.
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` does not gate on `[live]`; the tag is recorded so the Claude-side `/completion-audit` and the shared plan critic read the same contract. Items only the user can observe go under `### Requires User Confirmation` in the item format below.
 
 `## Completion Criteria` is machine-consumed and must keep these subsection names:
 
@@ -277,6 +277,16 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 ```
 
 `[outcome]` may appear under `### Autonomous Verification`, but `$impl` Audit excludes it as circular and checks it only after final Review. Verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Audit + Review.
+
+### Requires User Confirmation item format
+
+Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/completion-audit`, and the final report copy them verbatim:
+
+```
+- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
+```
+
+Questions for the user do not belong here — ask them in AGREE or list them under `### Unresolved Items`. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source (1Password item, env var) instead, because the line is copied into chat and the gate sidecar. Write `- None` when there is nothing to confirm. An item missing any field is not a valid item.
 
 ## DEEPEN
 

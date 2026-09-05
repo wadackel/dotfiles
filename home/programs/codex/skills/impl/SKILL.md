@@ -43,7 +43,7 @@ Markers are cwd-scoped: each repository checkout has a unique `<cwd-hash>` deriv
 ## Workflow
 
 1. Use the `require-active` stdout as the plan file path
-2. `Read` the plan file in full so subsequent tasks can follow **Files to Change** and **Patterns to Mirror** faithfully
+2. `Read` the plan file in full so subsequent tasks can follow **Files to Change** and **Patterns to Mirror** faithfully. If `### Requires User Confirmation` lists items, send the user one message before task 1 that lists every item as `Observe / Why not autonomous / Needs / Your steps / Needed by`, so they can judge the deferral and prepare sudo, auth, a dev server, or a real PR while implementation proceeds. Do not wait for a reply
 3. Normalize and read sidecar JSON `~/.codex/plans/<plan-basename>.evidence.json` through the helper. Compare Codex `update_plan` state with JSON `tasks[].status`. If drift exists, treat JSON as the source of truth and rebuild `update_plan` in one call. If JSON itself has a parse error, stop and warn the user that the sidecar is corrupted
 4. Process JSON `tasks` in ascending ID order, starting at `task-1`. Skip the final `Final Audit + Review` entry in this loop; the Final gate section executes it
 5. For each implementation task:
@@ -140,7 +140,7 @@ Evaluation targets — read `## Completion Criteria` from the plan file and eval
 
 - `### Autonomous Verification`: for each `[file-state]` / `[orchestrator-only]` item, find matching verification evidence in sidecar JSON `tasks[].evidence` and check it against EXPECTED output.
 - `[outcome]` items are circular and must be excluded from the Audit verdict. They are checked only after Review emits its final `REVIEW_VERDICT`.
-- `### Requires User Confirmation`: if present, note that manual user confirmation is required. This is informational and not part of PASS evaluation.
+- `### Requires User Confirmation`: not part of PASS evaluation; carry every item with its `Your steps` into the final report so the user sees what is still theirs to observe.
 - `### Baseline`: confirm each task ran verification and recorded evidence.
 
 If all checks pass, output exactly one line:

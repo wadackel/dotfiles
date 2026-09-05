@@ -154,7 +154,17 @@ Tag every Autonomous Verification item at every complexity, trivial included (`/
 
 When unsure, default to `[orchestrator-only]`.
 
-A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Tests and type checks are not a substitute: they show branch behavior, not that the surface works the way the user runs it. Only when the agent cannot bring up the environment itself does the `[live]` item move under Requires User Confirmation, with a one-line reason and the exact steps the user must run.
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Tests and type checks are not a substitute: they show branch behavior, not that the surface works the way the user runs it. Only when the agent cannot bring up the environment itself does the `[live]` item move under Requires User Confirmation, written in the item format below.
+
+### Requires User Confirmation item format
+
+Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `/impl`, `/completion-audit`, and the final report copy them verbatim:
+
+```
+- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
+```
+
+`Needed by: task N` and `final gate` items gate completion until the user reports the result or waives them. `next real run <trigger>` names an external event this session cannot produce (the next real PR, the next deploy); approving the plan with `/impl` is the user's decision to defer that item, and the audit counts it as BLOCKED BY USER only while the trigger is one this session could not have produced. Questions for the user do not belong here — ask them in AGREE or list them under `### Unresolved Items`. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source (1Password item, env var) instead, because the line is copied into chat and the gate sidecar. Write `- None` when there is nothing to confirm. An item missing any field is not a valid item.
 
 ## DEEPEN
 

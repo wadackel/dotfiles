@@ -69,6 +69,12 @@ Each Completion Criteria item is tagged by `/plan` DRAFT (`### Completion Criter
 
 When building the evidence document, preserve these tags verbatim from the plan. Both audit modes exclude `[outcome]`-tagged items from the verdict: the self-audit marks them NOT GATING (Step 2), and the escalated auditor prompt (Step 3) must explicitly instruct the subagent to EXCLUDE them — otherwise the audit deadlocks (auditor demands evidence for `[outcome]` items that by design cannot exist yet, forcing a FAIL verdict, which blocks running the thing the `[outcome]` item references).
 
+Items under `### Requires User Confirmation` arrive in the fixed item format that `/plan` mandates, and the self-audit table carries them in that form:
+
+```
+- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
+```
+
 ### Step 2: Self-Audit (default)
 
 The main session performs the audit itself. For **every** Completion Criteria item, cross-check it against the Task Evidence and build the full table:
@@ -82,6 +88,8 @@ The main session performs the audit itself. For **every** Completion Criteria it
 | 2 | <criterion text> | [orchestrator-only] | Task 3: raw output embedded | PASS |
 | 3 | <criterion text> | [outcome] | — (excluded: circular by design) | NOT GATING |
 | 4 | <criterion text> | [file-state] | 未実施 | FAIL |
+| 5 | <criterion text> | [live] Requires User Confirmation, Needed by: final gate | Your steps: <copied> | USER CONFIRMATION PENDING |
+| 6 | <criterion text> | [live] Requires User Confirmation, Needed by: next real run <trigger> | deferred at plan approval | BLOCKED BY USER |
 
 VERIFIED: PASS (self-audit)   ← or VERIFIED: FAIL (self-audit)
 ```
@@ -96,13 +104,14 @@ VERIFIED: PASS (self-audit)   ← or VERIFIED: FAIL (self-audit)
 全表: ~/.claude/plans/<plan-slug>.gate.log.md
 ```
 
-Always state the gating item count (a shrunken audit should be detectable without opening the file). Any non-PASS row (`FAIL` / `未実施` / BLOCKED BY USER) appears in the reply as a table containing only those rows — gaps are exactly what the user acts on.
+Always state the gating item count (a shrunken audit should be detectable without opening the file). Any non-PASS row (`FAIL` / `未実施` / BLOCKED BY USER / USER CONFIRMATION PENDING) appears in the reply as a table containing only those rows — gaps are exactly what the user acts on.
 
 Rules:
 - `[outcome]`-tagged items are excluded from the verdict (NOT GATING) — same protocol as the subagent path
 - `[orchestrator-only]` items waived by explicit user decision count as satisfied (BLOCKED BY USER)
 - `[live]` is gating at every complexity: `未実施` (including a `Verified` field that omits the run method) is FAIL, and the only waiver is BLOCKED BY USER by explicit user decision. Never move a `[live]` item out of the verdict on your own judgement — a static PASS with the surface untested is the failure this tag exists to catch
-- The verdict is `VERIFIED: PASS (self-audit)` only when every gating item is PASS. Any FAIL or `未実施` on a gating item → `VERIFIED: FAIL (self-audit)`: address the gap (run the missing verification), then redo this step
+- An item under `### Requires User Confirmation` (`[live]` or `[orchestrator-only]`) is decided by its `Needed by:`: `task N` / `final gate` with a recorded user result that states the run method is PASS, with an explicit waiver is BLOCKED BY USER, with neither is USER CONFIRMATION PENDING and the verdict is FAIL; `next real run <trigger>` is BLOCKED BY USER because approving the plan deferred it — but only when the trigger names an event this session could not produce; a trigger this session could have produced (trivial plans skip the critic that checks this) is treated as USER CONFIRMATION PENDING. USER CONFIRMATION PENDING is not agent-resolvable: emit the reply carrying `Your steps` and end the turn; do not re-run the audit until the user's result or waiver arrives
+- The verdict is `VERIFIED: PASS (self-audit)` only when every gating item is PASS. Any FAIL or `未実施` on a gating item → `VERIFIED: FAIL (self-audit)`: address the gap (run the missing verification), then redo this step — except a FAIL caused only by USER CONFIRMATION PENDING, which cannot be filled by the agent: reply with `Your steps` and end the turn instead
 - The `Evidence` column must point at concrete raw output already captured in task `metadata.evidence` — do not paraphrase results into the table; the table locates evidence, it does not restate it
 
 If no escalation condition (Step 3) fires, `VERIFIED: PASS (self-audit)` completes this skill's half of the gate — proceed to Step 4.
@@ -112,7 +121,7 @@ If no escalation condition (Step 3) fires, `VERIFIED: PASS (self-audit)` complet
 Dispatch a fresh `completion-auditor` subagent **only when at least one** of these conditions holds:
 
 1. Plan complexity is **large** or **xl** (from the plan's `## Plan ready` block or plan body)
-2. Any gating criterion's evidence is `未実施`, missing, or lacks raw command output after the self-audit fix loop (i.e., the self-audit cannot honestly reach PASS)
+2. Any gating criterion's evidence is `未実施`, missing, or lacks raw command output after the self-audit fix loop (i.e., the self-audit cannot honestly reach PASS). A FAIL caused only by USER CONFIRMATION PENDING rows does not escalate — the auditor cannot supply the user's result either
 3. The user explicitly requests a subagent audit
 
 When escalating, dispatch via the Agent tool:
@@ -143,6 +152,12 @@ Agent tool:
 4. A `[live]` item is PASS only when its evidence records the run method (start command, mode,
    target URL or PR, network condition, account role) and the observed result. Evidence that
    shows only tests, type checks, or a description of what should happen is `未実施` → FAIL.
+
+5. Refines item 3 for items under `### Requires User Confirmation`: decide them by `Needed by:`.
+   `task N` / `final gate` with a recorded user result that states the run method → PASS; with an explicit
+   waiver → BLOCKED BY USER; with neither → USER CONFIRMATION PENDING, which is FAIL. `next real run <trigger>`
+   → BLOCKED BY USER because approving the plan deferred it, but only when the trigger names an event this
+   session could not produce; otherwise USER CONFIRMATION PENDING. Never report such an item as MISSING EVIDENCE.
 ```
 
 Do not pass `name` to this Agent dispatch: the auditor answers once and is never messaged again, and an unnamed agent completes and vanishes while a named one stays idle until TaskStop.
