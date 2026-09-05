@@ -25,6 +25,8 @@ B. **Code quality** — evaluate readability, consistency with existing codebase
 
 ## Changes (git diff)
 
+Diff file: {diff_path} (the same content, for re-reading)
+
 {git_diff}
 
 ## Changed Files

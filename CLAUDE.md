@@ -188,6 +188,10 @@ Command to hot-reload after editing: `TMUX="" tmux source-file ~/.config/tmux/tm
 - ✗ `bind-key h if-shell -F cond 'cmd1 \; cmd2'` — `cmd1 \; cmd2` treated as a single command
 - ✓ `bind-key h if-shell -F cond 'cmd1' \; if-shell -F cond2 'cmd2'` — separated at top level
 
+### Session Variables and tmux
+
+A change to `home.sessionVariables` (for example `LLM_WIKI_VAULT_ROOT` in `home/programs/agents/default.nix`) does not reach a tmux server that was already running: new panes inherit the server's environment from when it started, so an agent launched inside tmux still sees the old value or none. Either push the variable into the server with `tmux set-environment -g VAR value` or restart the server. `/llm-wiki` asks before doing anything when the variable is empty rather than searching an empty path.
+
 ### Command Execution from launchd / macOS Notifications
 
 Scripts executed on macOS notification click (e.g., `terminal-notifier -execute`) run in the launchd environment where PATH is limited to `/usr/bin:/bin:/usr/sbin:/sbin`. When using Nix-managed commands (tmux, jq, etc.), full paths must be provided.
@@ -217,7 +221,9 @@ This repository includes comprehensive Claude Code configuration:
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`)
   - `claude-notify.ts`: terminal-notifier + tmux integration notifications. Debug: `~/.claude/scripts/claude-notify.ts debug`
   - `claude-memo.ts`: Stop hook that writes session summaries to Obsidian daily notes. Debug: `$TMPDIR/claude-memo.log`
-  - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory)
+  - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory). The `git push *renovate/*` rule exists because a direct push closes the Renovate PR; its message names the `stop-updating` label and the own-branch alternative instead of "push again", which the same rule would block
+  - `write-policy.ts`: `PreToolUse` hook on `Write|Edit|MultiEdit` that blocks a personal identifier (`wadackel`, `tsuyoshi.wada`, host names) from entering a test or fixture path. A file that already carries the identifier stays editable, and `write-policy: allow` in the new content is the explicit escape. Tests: `deno test --allow-read --allow-write --allow-run=deno home/programs/claude/scripts/write-policy_test.ts`
+  - `comment-metrics.ts <diff-file>`: counts added comment lines and comment blocks in a unified diff for `comment-reviewer`, which has no Bash; `/subagent-review` Step 4 appends its output to that reviewer's focus. Same file types and marker set as the reviewer's Scope; exit 0 whatever the diff contains, 2 only for a usage error. Tests: `deno test home/programs/claude/scripts/comment-metrics_test.ts`
   - `claude-pane-status.ts`: Hook that writes session state to tmux pane options for the popup picker. Invoked per event by argv[0] (SessionStart/End/UserPromptSubmit/Stop/StopFailure/Notification/PermissionDenied/CwdChanged/Subagent*/Worktree*). Unknown events are a no-op. Debug: pipe JSON to stdin with `TMUX_PANE` set
   - `writing-metrics/`: readability measurement tools for dialogue and generated documents (Japanese-English mixing density, reply volume percentiles, workflow-vocabulary contexts). Run every few weeks to compare Writing-norm metrics before and after. `lint.ts <file.md>` detects Writing-norm violations in a single Japanese Markdown file; `fire-rate.ts --from 2026-08-31` tracks per-category violation density across transcripts — compare against `fire-rate-baseline.md` (committed 2026-08-30 snapshot) to judge the concise-style sentence constraints
   - Running Claude script tests: `deno test --allow-env=HOME --allow-read --allow-write --allow-run home/programs/claude/scripts/<name>_test.ts` (`--allow-run` is required for test files that spawn the hook as a subprocess via `Deno.Command`, e.g. `bash-policy_test.ts`'s entry-point tests)
@@ -268,6 +274,14 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 - Tests: `deno test --allow-read --allow-write --allow-run=deno home/programs/agents/scripts/check-plan_test.ts` (fixtures are written to a temp dir at run time; no fixtures directory)
 - The required headings and the `Needs:` / `Needed by:` vocabulary are constants in the script and must be changed together with the section table in `home/programs/claude/skills/plan/SKILL.md` (mirrored in the Codex plan skill) and the item template line pinned by `codex-plan-clarification-contract_test.ts`; the `source:` template line is likewise pinned across both plan skills, `evidence-grades.md`, and `requirement-checklist.md`
 - It does not check line-number anchors or run any command from the plan: on real plans an anchor range check produced zero errors and dozens of warnings on deliberate path abbreviations, and the anchor mistakes that actually surface (bare `:N`, ranges pointing at the wrong prose) are not decidable from the file. Those stay with the DEEPEN critic and adversarial agent
+
+### config-lint (repository configuration lint in `nix flake check`)
+
+`home/programs/agents/scripts/config-lint.ts` is the second flake check next to `formatting` (`checks.config-lint` in `flake.nix` runs it with `deno run --no-remote --no-prompt`; the script has no import for that reason). Published at `~/.agents/scripts/config-lint.ts`; run it by hand as `config-lint.ts .` from the repository root.
+
+- Rules: `policy-parse` (error: a `- pattern:` line in the global `bash-policy.yaml` that is not `- pattern: "<glob>"`, or a policy with no rule), `skill-policy-conflict` (error: a command line inside a `bash` / `sh` / `shell` / `zsh` fence of a `SKILL.md` or `references/*.md` under `home/programs` that matches a bash-policy pattern; `<!-- config-lint: allow -->` on the line above the fence skips it, and vendored skill directories with a `.<vendor>-source` marker are skipped), `home-literal` (error: a `/Users/<name>` literal in `settings.json`, `hooks.json`, `*.nix`, `*.yaml`, `*.yml`, `*.json`; `$`, `*`, `{` after the slash are templates; `config-lint: allow` on the line or an entry in the script's `HOME_LITERAL_ALLOW` set exempts a line, the latter for strict JSON)
+- Not covered: untagged fences, inline code spans, `exclude:` in the policy, heredoc bodies, and `cd x && git -C y` compounds (the lint matches whole lines; the hook splits on the bash AST). The rule is preventive: at introduction no fence matched
+- Tests: `deno test --allow-read --allow-write --allow-run=deno home/programs/agents/scripts/config-lint_test.ts` (temp-dir fixtures)
 
 ### Vendored skills sync
 

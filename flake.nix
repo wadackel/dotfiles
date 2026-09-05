@@ -195,6 +195,18 @@
       # フォーマットチェック（CI用）
       checks.${system} = {
         formatting = treefmtEval.config.build.check self;
+        # Overlays are not applied here, same as treefmtEval; the lint only needs deno.
+        config-lint =
+          let
+            checkPkgs = nixpkgs.legacyPackages.${system};
+          in
+          checkPkgs.runCommand "config-lint" { nativeBuildInputs = [ checkPkgs.deno ]; } ''
+            cd "${self}"
+            export DENO_DIR=$TMPDIR/deno HOME=$TMPDIR
+            deno run --no-remote --no-prompt --allow-read=. \
+              home/programs/agents/scripts/config-lint.ts .
+            touch $out
+          '';
       };
 
       # Home Manager configurations (standalone, optional)

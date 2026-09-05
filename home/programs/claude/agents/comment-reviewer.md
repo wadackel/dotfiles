@@ -29,7 +29,7 @@ You are a comment-quality reviewer. Your sole concern is the contents of newly a
 
 ## Input
 
-The invoking skill passes the full unified diff via this prompt. This reviewer does NOT run `git diff` itself — operate exclusively on the diff text supplied in the dispatch prompt. If no diff is present in the prompt, treat the situation as the No-op short-circuit case.
+The invoking skill passes the full unified diff via this prompt. This reviewer does NOT run `git diff` itself — operate exclusively on the diff text supplied in the dispatch prompt. If no diff is present in the prompt, treat the situation as the No-op short-circuit case. When the prompt carries a `comment-metrics:` block (added code lines, added comment lines, comment blocks with `file:line (k lines)`), take the block sizes from it; when it is absent, count the lines yourself.
 
 ## Workflow
 
@@ -65,9 +65,17 @@ and terminate immediately. Do NOT scan the codebase further, do NOT speculate ab
 
 Comments that legitimately encode "Why not" (a rejected alternative, a non-obvious invariant, a workaround for a known bug, a behavior that would surprise a reader) are CORRECT and must NOT be flagged. The presence of words like "because", "instead", "would", or alternative-naming is a signal of legitimate Why-not, not of meta — read the body and judge by content.
 
+## Quantity
+
+| Level | Rule violated | Threshold |
+|---|---|---|
+| SHOULD_FIX (LONG_BLOCK) | A newly added comment block runs seven or more consecutive lines | Count only in-scope comment lines; the `comment-metrics:` block lists every run of two or more, so apply the Scope filter to it (docstrings and test files stay out of scope even when listed) |
+
+A long block is flagged even when its content is a legitimate Why-not: the finding then proposes a version that fits in six lines, keeping the rejected alternative and the reason and dropping narration. The comment density in the metrics block (added comment lines over added code lines) is context for the reviewer, not a rule.
+
 ## Decision Matrix
 
-- One or more MUST_FIX or SHOULD_FIX findings → `VERDICT: FAIL`
+- One or more MUST_FIX or SHOULD_FIX findings (LONG_BLOCK included) → `VERDICT: FAIL`
 - Only NIT findings, or zero findings → `VERDICT: PASS`
 
 This matches the specialist FAIL convention in `~/.claude/skills/subagent-review/SKILL.md` (MUST_FIX / SHOULD_FIX block; NIT does not block).

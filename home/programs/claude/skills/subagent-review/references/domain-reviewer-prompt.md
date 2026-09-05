@@ -31,8 +31,14 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 Repo: {repo_path} (branch {branch})
 Diff: `git diff {baseline_sha}..HEAD`
+Diff file: {diff_path} (the same content as the command above; if Read truncates, continue from the last offset until the end)
+Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
 
 {review_focus}
+
+## Diff
+
+{diff_body}
 
 ## Severity Boundary
 
@@ -81,7 +87,9 @@ VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and
 | `{repo_path}` | Absolute path to the repository or worktree under review |
 | `{branch}` | Branch name, or `detached at <sha>` |
 | `{baseline_sha}` | The first task's `baseline_sha` from `TaskUpdate` metadata |
-| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope the earlier stages already covered |
+| `{diff_path}` | The diff file Step 1 wrote (`~/.claude/plans/<plan-slug>.gate.diff`) |
+| `{diff_body}` | The diff text for `code-reviewer`, `security-auditor`, and `comment-reviewer`, which have no Bash; `(see Diff file)` for every other specialist |
+| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope the earlier stages already covered. For `comment-reviewer` only, it may end with a fenced `comment-metrics:` block |
 
 ## Usage
 

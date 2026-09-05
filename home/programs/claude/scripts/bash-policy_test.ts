@@ -74,3 +74,30 @@ Deno.test("entry point: non-Bash tool is ignored (exit 0)", async () => {
   });
   assertEquals(code, 0);
 });
+
+for (
+  const command of [
+    "git push origin renovate/foo",
+    "git push -f origin HEAD:renovate/foo",
+    "git push renovate/foo",
+  ]
+) {
+  Deno.test(`entry point: renovate rule blocks \`${command}\` (exit 2)`, async () => {
+    const { code, stderr } = await invokeHook({
+      tool_name: "Bash",
+      tool_input: { command },
+      cwd: "/tmp",
+    });
+    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+    assertStringIncludes(stderr, "stop-updating");
+  });
+}
+
+Deno.test("entry point: reading a renovate branch is not a push (exit 0)", async () => {
+  const { code, stderr } = await invokeHook({
+    tool_name: "Bash",
+    tool_input: { command: "git log --oneline renovate/foo" },
+    cwd: "/tmp",
+  });
+  assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
+});

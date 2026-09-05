@@ -39,6 +39,19 @@ const GUARDED = new Set([
   "comment-reviewer",
 ]);
 
+// Guarded reviewers whose agent definition has no Bash: they cannot run the
+// `git diff` line the template shows, so the dispatch must carry the diff as a
+// file path or inline hunks. Hand-copied from the `tools:` line of each
+// home/programs/claude/agents/<name>.md; update both when an agent gains Bash.
+const NO_BASH = new Set([
+  "code-reviewer",
+  "security-auditor",
+  "comment-reviewer",
+]);
+type Missing = "a diff file path" | "the read-only sentence";
+const READ_ONLY_SENTENCE = /do not create, modify, or delete files/i;
+const DIFF_REFERENCE = /\.gate\.diff\b|^diff --git /m;
+
 /** Subagent types whose dispatch must carry a verdict rule. */
 export function isReviewerAgent(subagentType: string | undefined): boolean {
   if (!subagentType) return false;
@@ -56,6 +69,38 @@ export function hasVerdictRule(prompt: string | undefined): boolean {
   if (!prompt) return false;
   return /FAIL otherwise/i.test(prompt) ||
     /"verdict"\s*:\s*"PASS"/.test(prompt);
+}
+
+/**
+ * Second requirement, applied only to the /subagent-review contract ("FAIL
+ * otherwise"): a reviewer without Bash needs the diff in the prompt, a reviewer
+ * with Bash needs the template's read-only sentence. The santa-loop JSON
+ * contract is left to its own reviewer-prompt.
+ */
+export function missingRequirement(
+  subagentType: string,
+  prompt: string | undefined,
+): Missing | null {
+  if (!prompt || !/FAIL otherwise/i.test(prompt)) return null;
+  if (NO_BASH.has(subagentType)) {
+    return DIFF_REFERENCE.test(prompt) ? null : "a diff file path";
+  }
+  return READ_ONLY_SENTENCE.test(prompt) ? null : "the read-only sentence";
+}
+
+export function requirementMessage(
+  subagentType: string,
+  missing: Missing,
+): string {
+  const line = missing === "a diff file path"
+    ? "  Diff file: ~/.claude/plans/<plan-slug>.gate.diff   (or paste the diff so a `diff --git` hunk is in the prompt)"
+    : "  Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.";
+  return [
+    `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
+    "",
+    "Add this line to the prompt (it comes from the /subagent-review template):",
+    line,
+  ].join("\n");
 }
 
 export function denialMessage(subagentType: string): string {
@@ -82,8 +127,15 @@ if (import.meta.main) {
 
   const subagentType = input.tool_input?.subagent_type;
   if (!subagentType || !isReviewerAgent(subagentType)) Deno.exit(0);
-  if (hasVerdictRule(input.tool_input?.prompt)) Deno.exit(0);
-
-  console.error(denialMessage(subagentType));
-  Deno.exit(2);
+  const prompt = input.tool_input?.prompt;
+  if (!hasVerdictRule(prompt)) {
+    console.error(denialMessage(subagentType));
+    Deno.exit(2);
+  }
+  const missing = missingRequirement(subagentType, prompt);
+  if (missing !== null) {
+    console.error(requirementMessage(subagentType, missing));
+    Deno.exit(2);
+  }
+  Deno.exit(0);
 }

@@ -25,6 +25,9 @@ async function runHook(
   return { code: out.code, stderr: new TextDecoder().decode(out.stderr) };
 }
 
+const READ_ONLY =
+  "Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.";
+
 const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
@@ -90,7 +93,7 @@ Deno.test("allows a reviewer dispatch carrying the verdict rule", async () => {
     tool_name: "Agent",
     tool_input: {
       subagent_type: "rust-reviewer",
-      prompt: `Rust 観点でレビューしてください。\n\n${RULE}`,
+      prompt: `Rust 観点でレビューしてください。\n\n${RULE}\n${READ_ONLY}`,
     },
   });
   assertEquals(code, 0);
@@ -160,4 +163,76 @@ Deno.test("applies to the Task tool name as well", async () => {
     },
   });
   assertEquals(code, 2);
+});
+
+// --- Diff and read-only requirements (subagent-review contract only) ---
+
+Deno.test("blocks a no-Bash reviewer dispatched without a diff", async () => {
+  const { code, stderr } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "code-reviewer",
+      prompt: `Review the change.\n\n${RULE}`,
+    },
+  });
+  assertEquals(code, 2);
+  assertStringIncludes(stderr, "dispatched without a diff file path");
+  assertStringIncludes(stderr, ".gate.diff");
+});
+
+Deno.test("allows a no-Bash reviewer given a .gate.diff path", async () => {
+  const { code } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "security-auditor",
+      prompt: `Diff file: ~/.claude/plans/20260905T2140-x.gate.diff\n\n${RULE}`,
+    },
+  });
+  assertEquals(code, 0);
+});
+
+Deno.test("allows a no-Bash reviewer given inline diff hunks", async () => {
+  const { code } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "comment-reviewer",
+      prompt: `## Diff\n\ndiff --git a/x.ts b/x.ts\n+// a\n\n${RULE}`,
+    },
+  });
+  assertEquals(code, 0);
+});
+
+Deno.test("blocks a Bash reviewer dispatched without the read-only sentence", async () => {
+  const { code, stderr } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "typescript-reviewer",
+      prompt: `Diff file: ~/.claude/plans/x.gate.diff\n\n${RULE}`,
+    },
+  });
+  assertEquals(code, 2);
+  assertStringIncludes(stderr, "dispatched without the read-only sentence");
+});
+
+Deno.test("allows a diagnostic-shaped dispatch (read-only sentence plus inline fix diff)", async () => {
+  const { code } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "typescript-reviewer",
+      prompt:
+        `Fix diff: \`git diff abc..HEAD\`\n${READ_ONLY}\n\ndiff --git a/x.ts b/x.ts\n+const a = 1;\n\nVERDICT: [PASS if every previous finding is CLOSED, FAIL otherwise]`,
+    },
+  });
+  assertEquals(code, 0);
+});
+
+Deno.test("leaves the santa-loop JSON contract without a diff alone", async () => {
+  const { code } = await runHook({
+    tool_name: "Agent",
+    tool_input: {
+      subagent_type: "code-reviewer",
+      prompt: 'Return JSON: {"verdict": "PASS" | "FAIL"}',
+    },
+  });
+  assertEquals(code, 0);
 });

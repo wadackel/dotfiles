@@ -23,6 +23,8 @@
       "Bash(*ab-state-refresh*)",
       "Bash(*rebase-guard*)",
       "Bash(*check-plan*)",
+      "Bash(*config-lint*)",
+      "Bash(*comment-metrics*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",
       "Bash(*writing-metrics/fire-rate.ts*)",
@@ -461,8 +463,8 @@
       "Bash(sudo su *)",
       "Bash(sudo umount *)",
       "Bash(yarn publish *)",
-      "Read(//Users/wadackel/Documents/Main/05_Private/**)",
-      "Edit(//Users/wadackel/Documents/Main/05_Private/**)",
+      "Read(~/Documents/Main/05_Private/**)",
+      "Edit(~/Documents/Main/05_Private/**)",
       "Edit(//bin/**)",
       "Edit(//boot/**)",
       "Edit(//dev/**)",
@@ -507,6 +509,15 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/bash-policy.ts"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/write-policy.ts"
           }
         ]
       },

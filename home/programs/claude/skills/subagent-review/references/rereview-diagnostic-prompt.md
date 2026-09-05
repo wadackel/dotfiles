@@ -42,6 +42,7 @@ Do NOT re-review the whole change. Do NOT hunt for new findings outside the fix 
 
 Repo: {repo_path}
 Fix diff: `git diff {fix_baseline_sha}..HEAD`
+Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
 
 {fix_diff}
 

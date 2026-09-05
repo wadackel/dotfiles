@@ -71,6 +71,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
    - At review time: `git diff <baseline_sha>..HEAD`
    - If baseline_sha unavailable (compaction): fallback to `git diff HEAD~1`
 4. **Changed files**: Extract with `git diff --name-only`
+5. **Diff file**: Write the diff from step 3 once to `~/.claude/plans/<plan-slug>.gate.diff` (`~/.claude/plans/<YYYYMMDDTHHmm>.gate.diff` when no plan file is resolvable) and pass that path to every dispatch below as `{diff_path}`. Reviewers that have Bash re-read it with `sed -n`; reviewers without Bash receive the body as well. Write it once per gate — Step 4 dispatches run in parallel and read it concurrently
 
 ### Step 2: Spec & Quality Review (unified stage)
 
@@ -80,6 +81,7 @@ Spawn a **fresh** `code-reviewer` subagent that covers spec compliance and code 
 - `{task_description}` — task spec from Step 1
 - `{plan_section}` — plan file section from Step 1
 - `{git_diff}` — diff output from Step 1
+- `{diff_path}` — the diff file from Step 1
 - `{file_paths}` — changed file list from Step 1
 - `{claude_md_path}` — `~/.claude/CLAUDE.md`
 
@@ -153,7 +155,11 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|s
 - `{repo_path}` — repository or worktree under review
 - `{branch}` — branch name, or `detached at <sha>`
 - `{baseline_sha}` — from Step 1
-- `{review_focus}` — this specialist's domain and any scope earlier stages already covered, in one or two sentences
+- `{diff_path}` — the diff file from Step 1
+- `{diff_body}` — the diff text itself for `code-reviewer`, `security-auditor`, and `comment-reviewer` (they have no Bash); `(see Diff file)` for every other specialist
+- `{review_focus}` — this specialist's domain and any scope earlier stages already covered, in one or two sentences. For `comment-reviewer`, end it with the output of `~/.claude/scripts/comment-metrics.ts {diff_path}` in a fenced block titled `comment-metrics:`, so the reviewer judges block length from counted numbers
+
+The template's read-only sentence (`do not create, modify, or delete files`) and its `Diff file:` line are machine contract: `reviewer-dispatch-policy.ts` rejects a dispatch to a Bash-capable specialist without the sentence, and one to a specialist without Bash that carries neither a `.gate.diff` path nor an inline `diff --git` hunk. Change the wording in the template and the hook together.
 
 Paste the template's `## Template` block **verbatim**. Do not summarise it and do not rewrite its `VERDICT:` line. A reviewer that is not told the verdict rule returns `PASS` while listing blocker-severity findings, and Step 3's flow control then advances past findings that were never fixed. The `reviewer-dispatch-policy` PreToolUse hook rejects dispatches whose prompt lacks the rule. Dispatch every specialist unnamed (see Step 2); a named specialist stays idle until TaskStop.
 
@@ -203,7 +209,7 @@ if [ "$DISPATCH_SECURITY" = "1" ]; then
 fi
 ```
 
-**Prompt construction** — use the same [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) as Step 4, filling `{review_focus}` with the security scope. There is no separate security template: the template's `VERDICT:` line is schema-neutral and covers the 4-tier severities, and `security-auditor` carries its own severity table in its agent definition (`~/.claude/agents/security-auditor.md`).
+**Prompt construction** — use the same [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) as Step 4, filling `{review_focus}` with the security scope and `{diff_body}` with the diff text (`security-auditor` has no Bash). There is no separate security template: the template's `VERDICT:` line is schema-neutral and covers the 4-tier severities, and `security-auditor` carries its own severity table in its agent definition (`~/.claude/agents/security-auditor.md`).
 
 Paste the template's `## Template` block **verbatim**, same as Step 4, and dispatch unnamed, same as Step 2.
 

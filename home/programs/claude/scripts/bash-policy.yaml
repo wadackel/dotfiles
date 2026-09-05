@@ -6,3 +6,5 @@
 rules:
   - pattern: "git -C *"
     message: "Do not use 'git -C <path>'. Use 'cd <path> && git <subcmd>' instead (see CLAUDE.md)."
+  - pattern: "git push *renovate/*"
+    message: "This push closes the Renovate PR (Renovate rebases its own branch). Either add the stop-updating label (gh pr edit <n> --add-label stop-updating) and run the push yourself from a terminal, or push the fix to your own branch and open a PR that targets the Renovate branch."
