@@ -54,6 +54,8 @@ Ensure you're not on `main` or `master`. If so, ask the user to create or switch
 git remote show origin | rg "HEAD branch"
 ```
 
+The result comes from the remote, so validate it against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$` before using it anywhere below (Branch Management, Post-Creation); a name that does not match is refused with a report to the user, never substituted into a command.
+
 ### 3. Analyze recent commits
 
 ```bash
@@ -85,16 +87,16 @@ Before creating the PR:
    git rebase origin/main
    ```
 
-2. **Refuse to push a parked WIP commit**: if `git log -1 --format=%s` prints `wip: auto-commit before rebase`, stop — the rebase skill left uncommitted work parked in a commit that must be unwound (its step 6) before anything is pushed.
+2. **Refuse to push a parked WIP commit**: if any subject in `git log --format=%s origin/<base>..HEAD` (the validated base from Gather Context step 2) is `wip: auto-commit before rebase`, or if that command exits non-zero (the guard fails closed), stop — the rebase skill left uncommitted work parked in a commit that must be unwound (its step 6) before anything is pushed. Check the whole range, not only HEAD: the Prerequisites Check above may have added a commit on top of the parked one.
 
-3. **Push changes**:
+3. **Push changes** with the literal branch name from Gather Context step 1, validated against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$` and unquoted, so the permission matcher can compare it with the deny rules (`HEAD` never matches them):
    ```bash
-   git push origin HEAD
+   git push origin <branch_name>
    ```
 
    If the branch was rebased:
    ```bash
-   git push origin HEAD --force-with-lease
+   git push --force-with-lease origin <branch_name>
    ```
 
 ## Create the Pull Request
@@ -153,7 +155,7 @@ After creating the PR:
    ```bash
    rm /tmp/pr-body-<random>.md
    ```
-4. **Watch CI once** (skip when `no-watch` was passed). Validate the base branch from Gather Context step 2 and the current branch name against `^[A-Za-z0-9._/-]+$` (both are embedded in commands; refuse and report otherwise), then compute the base inputs:
+4. **Watch CI once** (skip when `no-watch` was passed). Validate the current branch name against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$`, the PR URL's owner and repo against `^[A-Za-z0-9._][A-Za-z0-9._-]*$`, and the PR number against `^[0-9]+$` (the base was validated in Gather Context step 2; all are embedded in commands; refuse and report otherwise), then compute the base inputs:
    ```bash
    git fetch origin <base>
    git rev-list --count HEAD..origin/<base>                                            # {behind_count}
@@ -170,6 +172,6 @@ After creating the PR:
 ## Error Handling
 
 1. **No commits ahead of main**: Ask if the user meant to work on a different branch
-2. **Branch not pushed**: Push first with `git push -u origin HEAD` — after the same WIP-commit check as Branch Management step 2
+2. **Branch not pushed**: Push first with `git push -u origin <branch_name>` (literal, validated, unquoted) — after the same WIP-commit range check as Branch Management step 2
 3. **PR already exists**: Show existing PR with `gh pr view`, ask if they want to update it
 4. **Merge conflicts**: Guide user through resolving conflicts or rebasing
