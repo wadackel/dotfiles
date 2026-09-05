@@ -63,6 +63,10 @@
 - When a verification fails, suspect the observation method before the system.
 - Confirm delegated work from its artifacts (diff, files, command output), not from the delegate's self-report.
 - When running through `/impl`, do not claim completion until `/completion-audit` and `/subagent-review` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/subagent-review/SKILL.md`. `/santa-loop` is opt-in and only runs when the user invokes it explicitly.
+- In an investigation reply (how something behaves, why it happened, what a codebase does), grade each load-bearing claim — one whose falsity would change the conclusion — as [Direct] (you ran or read it here), [Supported] (one step from something you read, or a subagent's report), [Inferred] (a hedged guess, never asserted), or [Unknown] (you looked and could not tell).
+- Direct names the command or file:lines, Supported names what was read or who reported it (a web page or release note you read is Supported, not Direct), Unknown says what was tried, and a claim your recommendation depends on is re-read to [Direct] (two Supported exceptions live in the reference); definitions and wording rules: skills/plan/references/evidence-grades.md.
+- A reader treats an ungraded claim as Inferred, so grade every load-bearing claim.
+- When the reply will drive an edit, a command, or a decision and the recommended action depends on a claim graded Inferred or Unknown that the repository or this machine can settle, say so, dispatch an unnamed Explore agent to falsify it, correct and re-grade whatever it falsifies, and report what it found; when only the user can settle it, say what measurement or check would.
 
 ### Bug Fixes
 
@@ -102,8 +106,8 @@
 - Replies carry only what changes the reader's next action. Full data (audit tables, raw findings, exhaustive lists) goes to a file, referenced by path.
 - Do not report workflow internals — which internal branch ran, which stage was skipped, how many rounds a loop took — unless it changes the reader's next action. Refer to a mechanism by its skill name when it must be named.
   - As a sub-rule, keep workflow vocabulary (gate, escalation, self-audit, orchestrator, and similar skill-internal terms) out of prose; say the function in plain language instead.
-  - Exemption: severity labels (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values, and skill names are machine contract and may appear as-is.
-- This rule never changes which language an artifact is written in — Language Defaults above decides that. Within prose that is already Japanese: translate translatable English words; keep code identifiers, commands, file paths, product names, and skill names in their original form. When unsure whether to translate, keep the original.
+  - Exemption: severity labels (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values, skill names, and evidence grades ([Direct] / [Supported] / [Inferred] / [Unknown]) are machine contract and may appear as-is.
+- This rule never changes which language an artifact is written in — Language Defaults above decides that. Within prose that is already Japanese: translate translatable English words; keep code identifiers, commands, file paths, product names, skill names, and evidence grade tags in their original form. When unsure whether to translate, keep the original.
 - Write complete sentences. Telegraphic fragments ("idx stable", "3 UF2 exit 0") do not belong in prose — put command results in code blocks or state them as sentences.
 - Define an uncommon technical term at first use, or choose the plain word.
 - When asked to explain, give the smallest complete answer first and stop; add layers only when asked.

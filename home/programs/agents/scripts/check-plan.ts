@@ -50,6 +50,12 @@ const NEEDS_VOCAB = [
   "interactive session",
 ];
 const NEEDED_BY_PREFIXES = ["task ", "final gate", "next real run"];
+// Same three grades as the template line pinned in evidence-grades.md; [Unknown]
+// is deliberately absent because an unknown belongs under Unresolved Items.
+const EVIDENCE_GRADES = ["[Direct]", "[Supported]", "[Inferred]"] as const;
+type Grade = (typeof EVIDENCE_GRADES)[number];
+const SOURCE_TEMPLATE =
+  "source: [Direct|Supported|Inferred] <probe command + file:lines>";
 
 export type Severity = "error" | "warn";
 export type Finding = {
@@ -182,6 +188,46 @@ function checkRucItem(item: Line, findings: Finding[]): void {
   }
 }
 
+function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
+  // Backtick spans are blanked (not removed, so indices still map to the original
+  // text) before locating `source:`: a plan about plans quotes the template line
+  // in its value, and a probe string can contain the word, so neither the first
+  // nor the last occurrence is reliable — any occurrence outside backticks is.
+  const visible = item.text.replace(/`[^`]*`/g, (m) => " ".repeat(m.length));
+  let grade: Grade | undefined;
+  let after = 0;
+  let unknown = false;
+  for (const m of visible.matchAll(/source:\s*(\[[A-Za-z]+\])?/g)) {
+    const g = m[1];
+    if (g !== undefined && (EVIDENCE_GRADES as readonly string[]).includes(g)) {
+      grade = g as Grade;
+      after = m.index + m[0].length;
+      break;
+    }
+    if (g === "[Unknown]") unknown = true;
+  }
+  if (grade === undefined) {
+    findings.push({
+      line: item.no,
+      severity: "error",
+      rule: "self-resolved-grade",
+      message: unknown
+        ? "[Unknown] belongs under ### Unresolved Items with a next:"
+        : `entry needs \`${SOURCE_TEMPLATE}\``,
+    });
+    return;
+  }
+  if (grade === "[Inferred]") return;
+  if (!/`|:\d|(^|\s)(\$|\.\/|~\/)/.test(item.text.slice(after))) {
+    findings.push({
+      line: item.no,
+      severity: "error",
+      rule: "self-resolved-grade",
+      message: `${grade} needs a probe command or file:lines after the grade`,
+    });
+  }
+}
+
 export function checkPlan(source: string): Finding[] {
   const findings: Finding[] = [];
   const lines = outsideFences(source.split("\n"));
@@ -231,6 +277,13 @@ export function checkPlan(source: string): Finding[] {
     for (const item of items) {
       if (item.text === "None") continue;
       checkRucItem(item, findings);
+    }
+  }
+  const sr = section(lines, "### Self-resolved");
+  if (sr) {
+    for (const item of bullets(sr.body)) {
+      if (item.text === "None") continue;
+      checkSelfResolvedItem(item, findings);
     }
   }
   return findings.sort((a, b) => a.line - b.line);

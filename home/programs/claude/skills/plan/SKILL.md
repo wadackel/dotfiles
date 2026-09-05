@@ -83,7 +83,7 @@ The heading is the question itself. Background stays at 2–3 sentences, with co
 - **A1 Direction check** (one question): the question text carries the restate (one sentence) **plus** a scope/boundary question with concrete options and a marked recommendation. Never ask a bare "is this right?" yes/no — a question that can be answered with "ok" and nothing else has bought nothing. Wait for the user's response.
   - **Skipping is limited to small and above.** For trivial, A1 is the single mandatory gate: A3–A7 collapse into it, so the one question carries the restate, the one-line design, and proceed/adjust.
   - For small+, A1 may be skipped only when BOTH hold: (1) the request names a closed, explicit scope (a specific file / value / behavior), and (2) the PARSE probes found no adjacent candidate that could plausibly be in scope — sibling configs, other call sites, related tests, same-named assets. If (2) fails, the adjacent candidates you found **are** the scope options; "no options could be formed" cannot be claimed while holding them.
-  - When skipping, open A5's preamble with the restate plus a one-line evidence record — `Scope: <X> only (no adjacent candidates; probed <what you searched>)` — and record the same finding in the plan body's `### Self-resolved` as `observation` / `value` / `source: <probe command + file:lines>`.
+  - When skipping, open A5's preamble with the restate plus a one-line evidence record — `Scope: <X> only (no adjacent candidates; probed <what you searched>)` — and record the same finding in the plan body's `### Self-resolved` as `observation` / `value` / `source: [Direct] <probe command + file:lines>`.
 - **A2 Re-ask**: if the answer is empty or ambiguous, stay in this phase and ask again — still one question per message.
 - **A3 List approaches**: 2–3 candidate approaches, each labelled with the tradeoff axis in one sentence.
 - **A4 Recommend**: name the AI's recommended approach and give 1–2 sentences of reasoning.
@@ -93,7 +93,7 @@ The heading is the question itself. Background stays at 2–3 sentences, with co
 
 AGREE produces three subsections that get written into the plan body (preserving the downstream Critic parse contract):
 - `### Assumptions` — values the user explicitly chose, plus AI defaults agreed on
-- `### Self-resolved` — answers derived from the codebase, with `file:lines`
+- `### Self-resolved` — answers derived from the codebase, each ending with `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/evidence-grades.md`; `[Unknown]` never appears here (it belongs in `### Unresolved Items`), and a claim the Approach relies on must be Direct, or Supported only by an observed mechanism whose target does not exist yet or by a verbatim-recorded delegate observation (secrets, tokens, credentialed URLs, and personal data in it replaced by `<redacted: what it is>`)
 - `### Unresolved Items` — `item / reason / next:` triples. User-only blockers stay in AGREE until resolved; codebase-recoverable items may carry forward with a concrete `next:`
 
 If the user changes direction mid-AGREE, go back to A3 and restart the approach list. No penalty for revisiting.

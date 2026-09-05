@@ -88,6 +88,21 @@ const RUC_TEMPLATE_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
 // file silently breaks the handoff.
 const RUC_ITEM_TEMPLATE =
   "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
+const EVIDENCE_GRADES_DOC =
+  "home/programs/agents/shared/plan/references/evidence-grades.md";
+const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
+const SELF_RESOLVED_TEMPLATE_FILES = [
+  CLAUDE_PLAN,
+  CODEX_PLAN,
+  EVIDENCE_GRADES_DOC,
+  SHARED_CHECKLIST,
+  CHECK_PLAN_SCRIPT,
+];
+// Pinned across the plan skills, both references, and the lint's own message
+// constant: check-plan.ts rejects an entry without one of these three grades, so a
+// reworded template in any one file produces plans that fail the lint.
+const SELF_RESOLVED_SOURCE_TEMPLATE =
+  "source: [Direct|Supported|Inferred] <probe command + file:lines>";
 const REPRESENTATIVE_ARTIFACTS = [
   {
     path: "20260506T1750-redesign-cli-output-ui.md",
@@ -445,6 +460,18 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
     "DEEPEN Consolidated Interview で確定",
     "implementation 時に user 判断",
   ]);
+});
+
+Deno.test("Self-resolved source template is present in plan skills and shared references", async () => {
+  for (const path of SELF_RESOLVED_TEMPLATE_FILES) {
+    const body = await readRepoFile(path);
+    assertStringIncludes(body, SELF_RESOLVED_SOURCE_TEMPLATE);
+  }
+  // The redaction duty travels with the verbatim-delegate exception: a prompt that
+  // restates the exception without it invites tokens into plan bodies and logs.
+  for (const path of [CLAUDE_PLAN, CRITIC_PROMPT, EVIDENCE_GRADES_DOC]) {
+    assertStringIncludes(await readRepoFile(path), "<redacted:");
+  }
 });
 
 Deno.test("Critic prompt mandates regression findings for clarification failures", async () => {

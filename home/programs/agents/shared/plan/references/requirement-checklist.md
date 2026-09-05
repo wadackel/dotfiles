@@ -166,7 +166,7 @@ At AGREE clarity-gate convergence, output the following subsections immediately 
 
 - observation: What
   value: edit SKILL.md and three reference files
-  source: confirmed by an AGREE Grep probe
+  source: [Direct] `rg -n 'references/' home/programs/claude/skills/plan/SKILL.md` — SKILL.md:96,180,189
 
 ### Unresolved Items
 
@@ -183,7 +183,7 @@ At AGREE clarity-gate convergence, output the following subsections immediately 
 
 - `### Requirement Clarification` — clarity-gate summary. Human-readable is fine (Critic does not parse)
 - `### Assumptions` — non-blocking technical/default detail, OR an assumption the user has explicitly chosen. Each entry must state `observation` / `value` / `reason`. Entries derived from user judgment must carry the `user-overridden: true` flag (DEEPEN Critic walks `### Assumptions` and picks up `user-overridden`). Do NOT place a user decision here just because a reasonable default exists
-- `### Self-resolved` — items settled by an AGREE probe or by deferral to EXPLORE. Each entry must state `observation` / `value` / `source`
+- `### Self-resolved` — items settled by an AGREE probe or by deferral to EXPLORE. Each entry must state `observation` / `value` / `source: [Direct|Supported|Inferred] <probe command + file:lines>` (see `evidence-grades.md`)
 - `### Unresolved Items` — at clarity-loop termination, write only codebase-recoverable / technical-discovery items that could not be settled. Do NOT surface user-only / subjective blockers here; Ask before artifact creation, or record them as explicit user-selected assumptions in `### Assumptions`. Each entry requires **three fields**:
   - `item`: what is unsettled
   - `reason`: why it cannot be settled now (codebase-recoverable technical discovery / AGREE probe scope exceeded / information-gathering cost too high / etc.)
