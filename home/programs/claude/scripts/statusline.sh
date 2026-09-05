@@ -5,6 +5,7 @@ input=$(cat)
 
 # --- Model ---
 model=$(echo "$input" | jq -r '.model.display_name // empty')
+effort=$(echo "$input" | jq -r '.effort.level // empty')
 
 # --- Context ---
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
@@ -49,7 +50,11 @@ parts=()
 
 # --- Model ---
 if [ -n "$model" ]; then
-  parts+=("$(printf "${MAGENTA}${ICON_MODEL}${RST} ${DIM}${model}${RST}")")
+  model_label="$model"
+  if [ -n "$effort" ]; then
+    model_label="${model} · ${effort}"
+  fi
+  parts+=("$(printf "${MAGENTA}${ICON_MODEL}${RST} ${DIM}${model_label}${RST}")")
 fi
 
 # --- Repo + Branch (git only) ---

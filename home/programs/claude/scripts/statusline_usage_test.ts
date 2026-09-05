@@ -2,6 +2,10 @@
 // it from TypeScript, statusline.sh builds it with jq. Nothing else ties the
 // two together, so a typo in the jq expression would otherwise surface only in
 // the picker footer at runtime.
+//
+// The rendered-line assertions at the bottom pin the join logic only. The
+// fixture spells the effort path itself, so a renamed payload field would still
+// satisfy them — that drift is only observable against a captured live payload.
 
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { readAgentUsage } from "../../tmux/shared/agent-usage.ts";
@@ -11,7 +15,7 @@ const STATUSLINE = new URL("./statusline.sh", import.meta.url).pathname;
 async function runStatusline(
   home: string,
   stdin: string,
-): Promise<{ code: number; stderr: string }> {
+): Promise<{ code: number; stdout: string; stderr: string }> {
   const child = new Deno.Command("bash", {
     args: [STATUSLINE],
     // clearEnv stays off so PATH reaches the script without this test needing
@@ -21,14 +25,19 @@ async function runStatusline(
     // developer's live pane.
     env: { HOME: home, TMUX_PANE: "" },
     stdin: "piped",
-    stdout: "null",
+    stdout: "piped",
     stderr: "piped",
   }).spawn();
   const writer = child.stdin.getWriter();
   await writer.write(new TextEncoder().encode(stdin));
   await writer.close();
-  const { code, stderr } = await child.output();
-  return { code, stderr: new TextDecoder().decode(stderr) };
+  const { code, stdout, stderr } = await child.output();
+  const decoder = new TextDecoder();
+  return {
+    code,
+    stdout: decoder.decode(stdout),
+    stderr: decoder.decode(stderr),
+  };
 }
 
 async function withHome(fn: (home: string) => Promise<void>): Promise<void> {
@@ -156,5 +165,36 @@ Deno.test("statusline.sh clamps an out-of-range percentage", async () => {
     const usage = await readAgentUsage(home, "claude");
     assert(usage !== null, "clamping should keep the file schema-valid");
     assertEquals(usage.windows.map((w) => w.usedPct), [100, 0]);
+  });
+});
+
+Deno.test("statusline.sh appends the effort level to the model name", async () => {
+  await withHome(async (home) => {
+    const { code, stdout } = await runStatusline(
+      home,
+      input({ effort: { level: "high" } }),
+    );
+    assertEquals(code, 0);
+    assert(
+      stdout.includes("Opus 5 · high"),
+      `effort should be joined to the model name, got: ${stdout}`,
+    );
+  });
+});
+
+Deno.test("statusline.sh renders the model alone when effort is absent", async () => {
+  await withHome(async (home) => {
+    // Models without an effort parameter omit the field entirely, so the model
+    // segment has to survive the absence rather than render a dangling separator.
+    const { code, stdout } = await runStatusline(home, input({}));
+    assertEquals(code, 0);
+    assert(
+      stdout.includes("Opus 5"),
+      `the model name should still render, got: ${stdout}`,
+    );
+    assert(
+      !stdout.includes("·"),
+      `no separator should be emitted without effort, got: ${stdout}`,
+    );
   });
 });

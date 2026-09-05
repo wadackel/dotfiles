@@ -41,11 +41,12 @@ let
 
     tui = {
       status_line = [
-        "model"
+        "model-with-reasoning"
         "project-name"
         "git-branch"
         "context-used"
         "five-hour-limit"
+        "weekly-limit"
       ];
     };
   };
