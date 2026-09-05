@@ -21,9 +21,9 @@ Parse `$ARGUMENTS` for:
 
 ## Step 1: Create the PR
 
-Run the `/create-pr` skill. Pass through `$ARGUMENTS` exactly as-is — do not add flags that were not in the original arguments.
+Run the `/create-pr` skill as `/create-pr no-watch <$ARGUMENTS>`. `no-watch` is the only flag you add: it skips create-pr's post-creation CI watch because Step 2 watches CI itself, and watching twice wastes a SubAgent. Every other flag is passed through exactly as-is — do not add flags that were not in the original arguments.
 
-Example: if the user runs `/auto-pr draft`, invoke `/create-pr draft` — do NOT add `ja` or any other flags not present in the original `$ARGUMENTS`.
+Example: if the user runs `/auto-pr draft`, invoke `/create-pr no-watch draft` — do NOT add `ja` or any other flag not present in the original `$ARGUMENTS`.
 
 Do NOT duplicate create-pr's workflow here — invoke the skill and let it handle all PR creation logic.
 

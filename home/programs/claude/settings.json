@@ -21,6 +21,7 @@
       "Bash(* -h *)",
       "Bash(* -v)",
       "Bash(*ab-state-refresh*)",
+      "Bash(*rebase-guard*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",
       "Bash(*writing-metrics/fire-rate.ts*)",

@@ -1,7 +1,7 @@
 ---
 name: create-pr
 description: Creates a GitHub pull request following project conventions. Use when the user asks to create a PR, submit changes for review, or open a pull request. Handles commit analysis, branch management, and PR creation using the gh CLI tool.
-argument-hint: "[draft] [ja]"
+argument-hint: "[draft] [ja] [no-watch]"
 ---
 
 # Create Pull Request
@@ -15,6 +15,7 @@ Create a well-structured GitHub pull request.
 /create-pr draft
 /create-pr ja
 /create-pr draft ja
+/create-pr no-watch
 ```
 
 ## Argument Handling
@@ -22,6 +23,7 @@ Create a well-structured GitHub pull request.
 Parse `$ARGUMENTS` for the following flags (order-independent):
 - `draft` → create the PR as a draft
 - `ja` → write the PR title and body in Japanese. **Only apply when `ja` is explicitly present in `$ARGUMENTS`** — never infer from conversation language or user locale
+- `no-watch` → skip the post-creation CI watch (Post-Creation step 4). `/auto-pr` passes this because it runs `/iterate-pr` right after
 
 ## Prerequisites Check
 
@@ -83,7 +85,9 @@ Before creating the PR:
    git rebase origin/main
    ```
 
-2. **Push changes**:
+2. **Refuse to push a parked WIP commit**: if `git log -1 --format=%s` prints `wip: auto-commit before rebase`, stop — the rebase skill left uncommitted work parked in a commit that must be unwound (its step 6) before anything is pushed.
+
+3. **Push changes**:
    ```bash
    git push origin HEAD
    ```
@@ -149,10 +153,23 @@ After creating the PR:
    ```bash
    rm /tmp/pr-body-<random>.md
    ```
+4. **Watch CI once** (skip when `no-watch` was passed). Validate the base branch from Gather Context step 2 and the current branch name against `^[A-Za-z0-9._/-]+$` (both are embedded in commands; refuse and report otherwise), then compute the base inputs:
+   ```bash
+   git fetch origin <base>
+   git rev-list --count HEAD..origin/<base>                                            # {behind_count}
+   git diff --name-only "$(git merge-base HEAD origin/<base>)" origin/<base> | head -150   # {base_changed_files}; append "… and N more" with the total when truncated
+   ```
+   Fill [references/ci-watch-prompt.md](references/ci-watch-prompt.md) with `{owner}`, `{repo}`, `{pr_number}` (from the PR URL shown in step 1), `{branch_name}` (the current branch), `{base_branch}` (Gather Context step 2), `{behind_count}`, `{base_changed_files}` and dispatch it once as an **unnamed** Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`). The Agent runs in the background and its result arrives as a completion notification, so do not wait on it: tell the user in one line that CI is being watched, that the classified report will follow when it completes, and that the report only arrives while this session is open. Then end the turn.
+
+   When the notification arrives, relay the verdict, each failure's `CLASS:` / `run-id` / `facts` lines, and the Recommendation verbatim. Do not fix anything and do not rerun anything:
+   - `NEEDS_FIX` or `NEEDS_REBASE` → add "run `/iterate-pr` to enter the fix loop"
+   - `PENDING` → "the checks had not finished; run `/iterate-pr` later"
+   - `NO_CHECKS` → "no check was registered for this PR"
+   - `ALL_PASS` / `BLOCKED` → relay as-is
 
 ## Error Handling
 
 1. **No commits ahead of main**: Ask if the user meant to work on a different branch
-2. **Branch not pushed**: Push first with `git push -u origin HEAD`
+2. **Branch not pushed**: Push first with `git push -u origin HEAD` — after the same WIP-commit check as Branch Management step 2
 3. **PR already exists**: Show existing PR with `gh pr view`, ask if they want to update it
 4. **Merge conflicts**: Guide user through resolving conflicts or rebasing

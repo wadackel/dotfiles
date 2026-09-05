@@ -252,6 +252,14 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 - Cookies are narrowed to the tracked origins by RFC 6265 domain-match; `--all-cookies` disables it when SSO needs a third-party domain
 - `~/.agents/` is shared: `skills` is owned by `home/programs/codex/default.nix`, `scripts` by `home/programs/agents/default.nix`
 
+### rebase-guard (WIP-commit verification for the rebase skill)
+
+`home/programs/agents/scripts/rebase-guard.ts` is called by the `rebase` skill after a rebase: the skill parks uncommitted changes in a `wip: auto-commit before rebase` commit instead of `git stash`, unwinds it with `git reset --mixed HEAD~1` once the rebase is done, and then runs `rebase-guard.ts verify <wip-sha>` to confirm that every file of the WIP commit is still in the working tree. It is published at `~/.agents/scripts/rebase-guard.ts` like `ab-state-refresh.ts`.
+
+- Tests: `deno test --allow-read --allow-write --allow-env --allow-run home/programs/agents/scripts/rebase-guard_test.ts` (builds a bare origin plus clones under a temp dir and spawns the script as a subprocess)
+- Per file it reverse-applies the WIP patch with `git apply --reverse --check` and reports `PRESENT`, `IN_HEAD` (already committed, e.g. the base absorbed it and the rebase skipped the WIP commit), `LOST` (file or mode gone), or `UNCONFIRMED` (patch no longer reverse-applies, typically because the base changed adjacent lines). Exit 0 only when nothing is LOST or UNCONFIRMED; exit 2 means the guard could not run (not a WIP commit, rebase in progress, internal git error) and is never a loss verdict
+- It runs every git call from `git rev-parse --show-toplevel` and uses `--path-format=absolute --git-path` for the rebase-state check, so it works from subdirectories and inside linked worktrees; do not replace the reverse-apply with line-set comparison — a line that also exists elsewhere in the file would make a lost hunk look absorbed
+
 ### Vendored skills sync
 
 Third-party SKILL.md sets are vendored under `home/programs/agents/skills/` and reachable from Claude / Codex / opencode via the standard common-skill symlinks. Vendors are declared in the `VENDORS` table of `home/programs/agents/scripts/sync-vendored-skills.ts`:
