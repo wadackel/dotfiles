@@ -176,8 +176,13 @@ export interface CallClaudeOptions {
 // session made spawned a fake project dir and real project dirs filled up with
 // summary sessions. `$HOME/.cache` is used instead of `XDG_CACHE_HOME` because
 // codex-memo and opencode-memo run with `--allow-env=HOME,TMPDIR`; reading any
-// other variable throws NotCapable.
-export function memoRunDir(home = Deno.env.get("HOME") ?? "/tmp"): string {
+// other variable throws NotCapable. An empty or unset HOME throws instead of
+// falling back to /tmp: transcripts written there escape the 30-day cleanup and
+// callClaude already reports the failure and inherits the cwd.
+export function memoRunDir(home = Deno.env.get("HOME")): string {
+  if (!home) {
+    throw new Error("HOME is empty or not set; cannot place the memo run dir");
+  }
   const dir = `${home}/.cache/claude-memo`;
   Deno.mkdirSync(dir, { recursive: true });
   return dir;

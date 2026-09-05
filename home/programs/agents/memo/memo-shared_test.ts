@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import {
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from "jsr:@std/assert@^1";
 import {
   debounceStatePath,
   escapeObsidianSyntax,
@@ -130,6 +134,10 @@ Deno.test("memoRunDir: creates $HOME/.cache/claude-memo and is idempotent", asyn
   assertEquals(dir, `${home}/.cache/claude-memo`);
   assertEquals(Deno.statSync(dir).isDirectory, true);
   assertEquals(memoRunDir(home), dir);
+});
+
+Deno.test("memoRunDir: rejects an empty HOME instead of using /tmp", () => {
+  assertThrows(() => memoRunDir(""), Error, "HOME is empty or not set");
 });
 
 Deno.test("debounceStatePath: composes prefix + sessionShort under TMPDIR", () => {
