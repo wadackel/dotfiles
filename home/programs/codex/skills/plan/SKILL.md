@@ -88,7 +88,7 @@ For `xl`, step out of the normal flow and ask the user whether to decompose into
 
 **Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1-2 words with no signal), re-elicit through AGREE before drafting.
 
-Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan: Context, Files to Change, Verification Commands, Definition of Done, Completion Criteria, and one task. AGREE is still mandatory — even trivial requests get a one-sentence direction confirmation.
+Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan: Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. AGREE is still mandatory — even trivial requests get a one-sentence direction confirmation.
 
 ## AGREE
 
@@ -243,6 +243,8 @@ The AGREE-derived `### Requirement Clarification` / `### Assumptions` / `### Sel
 ### Draft handoff (one-way)
 
 After writing the body, state the plan path, the section headings, and the key design decisions in at most 3 lines in the user's configured language, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job. For trivial plans (DEEPEN skipped), the ACTIVATE Approval Summary and the `$impl` approval gate are the review surface.
+
+Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN as rows of the Round 1 triage table; for a trivial plan (no DEEPEN) carry them into the Approval Summary as one `Lint:` line.
 
 Keep the plan body lightweight (target ~120-180 lines, excluding the Deepening Log).
 
@@ -463,6 +465,8 @@ Delegate marker operations to the deterministic helper. Do not build cwd-hash or
 ```
 
 `<PLAN_FILE_PATH from DRAFT>` is the absolute path decided in DRAFT and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash the picker derives, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
+
+Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` cannot be activated — fix the plan file and re-run until it reports `0 errors`.
 
 ### Output to user
 

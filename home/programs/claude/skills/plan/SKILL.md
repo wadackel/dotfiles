@@ -142,6 +142,8 @@ The AGREE-derived `### Assumptions` / `### Self-resolved` / `### Unresolved Item
 
 **Draft handoff (one-way)**: when the body is written, state the plan path, the section headings, and the key design decisions in at most 3 lines, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job (Critic + Consolidated Interview). For trivial plans (DEEPEN skipped), the ACTIVATE digest and the `/impl` approval gate are the review surface.
 
+Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN as rows of the Round 1 triage table; for a trivial plan (no DEEPEN) carry them into the ACTIVATE digest as one `Lint:` line.
+
 Keep the plan body lightweight (target ~120–150 lines, excluding the Deepening Log).
 
 ### Completion Criteria item tags
@@ -213,6 +215,8 @@ The main session decomposes — no subagent dispatch.
 ## ACTIVATE
 
 No side effects — do not write any state file. Approval is signalled purely by the user typing `/impl` as a top-level prompt in the next turn; `/impl` resolves this plan from conversation context (the `## Plan ready` File line below).
+
+Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` cannot be activated — fix the plan file and re-run until it reports `0 errors`.
 
 Emit a design digest — the Approach skeleton (each design decision in one or two sentences), the Files to Change list, and the Task Outline — followed by the plan file path for the full text, then the metadata block. Do not inline the full plan body; the file is the review surface for detail.
 

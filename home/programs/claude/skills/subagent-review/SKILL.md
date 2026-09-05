@@ -64,7 +64,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 ### Step 1: Context Collection
 
-1. **Task spec**: Retrieve from `TaskGet` description. For ad-hoc invocation, use `$ARGUMENTS` or ask the user
+1. **Task spec**: Retrieve from `TaskGet` description. For ad-hoc invocation, use `$ARGUMENTS` or ask the user. When `/impl` is running without the Task tools, `TaskGet` and `metadata.evidence` resolve to the ledger row and its `### Task N evidence` block in `~/.claude/plans/<plan-slug>.tasks.log.md`
 2. **Plan section**: Locate the relevant section by matching the task subject against plan headings. If no clear match, include the full plan. Embed directly in the prompt
 3. **Diff baseline**:
    - At task start, record `{"baseline_sha": "<HEAD SHA>"}` in `TaskUpdate` metadata
@@ -229,14 +229,18 @@ The reply carries only what changes the user's next action:
 - Domain (nix-reviewer): PASS (2回)
 - Security: PASS (1回)
 
-判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
+Act on: <このラウンドで修正した blocker の件数と要約 1 行。ゼロなら「なし」>
+Consider（判断が必要な項目）:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
 - <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を、1〜2文 + file:line で1件ずつ。各項目に「ユーザー操作で何が起きるか」を 1 文添える。観測できる影響が無ければ「影響なし」と書く>
-
-NIT 6件: 命名3 / コメント2 / 型1   ← 主題別の件数1行 (ゼロなら省略)
+Dismissed:            ← 非 blocker のうち適用しないと判断した指摘。個別掲載。ゼロなら「なし」
+- <file と 1 行の理由を 1 件ずつ>
+Noted: NIT 6件: 命名3 / コメント2 / 型1   ← 残りの非 blocker の主題別の件数1行 (ゼロなら省略)
 全記録: ~/.claude/plans/<slug>.gate.log.md
 ```
 
-User-decision items (deferred `SHOULD_FIX`/`HIGH`, Security `MEDIUM`+) appear individually — compressing them into a count is a violation. `NIT` / `LOW` / Notes appear as one themed count line; their full text lives only in the sidecar.
+The four buckets are the Lead Judgment. **Act on** is what this round fixed. **Consider** is the user-decision list (deferred `SHOULD_FIX`/`HIGH`, Security `MEDIUM`+) — items appear individually; compressing them into a count is a violation. **Dismissed** holds only non-blockers (`NIT` / `LOW` / Notes) that the main session decided not to apply, each with its file and a one-line reason; a `SHOULD_FIX` / `HIGH` / `MEDIUM` finding can never be dismissed — it is either fixed (Act on) or handed to the user (Consider). **Noted** is the remaining non-blockers as one themed count line; their full text lives only in the sidecar.
+
+Promotion: before writing a round's Dismissed list, read the earlier rounds' `#### Dismissed` blocks in the same sidecar. A finding that was dismissed in an earlier round and re-surfaces now — same file, same gist; ignore the line number, which drifts after fixes — is promoted to Consider and is not dismissed again. (Duplicates inside one stage are already collapsed by the Multi-round aggregation rule; promotion is about findings that come back across rounds.)
 
 ### Extraction rule (sidecar content)
 
@@ -245,6 +249,7 @@ For each stage that ran, take its **last** subagent response (the final round's 
 - Spec & Quality / Domain reviewers: populated `### SHOULD_FIX` and `### NIT` sections, plus the Spec & Quality stage's populated `### Notes` (and `### Issues` in the anomalous case it is populated at `VERDICT: PASS` — under the unified template a populated Issues section normally forces FAIL).
 - Security: populated `MEDIUM` and `LOW` items (severity names preserved verbatim — do NOT translate to MUST/SHOULD/NIT).
 - Any other populated non-blocker section emitted by a future reviewer — this rule is intentionally generalized.
+- Dismissed findings: every non-blocker the main session dismissed, verbatim plus the one-line reason, under a `#### Dismissed` block inside the round entry (see the Sidecar template). Dismissing is a judgment the sidecar must preserve; the reply shows the same items individually.
 
 Copy each section into the sidecar **verbatim** (file:line, description, suggested fix). Do not paraphrase, summarize, or re-rank inside the sidecar — it is the audit-trail layer; selectivity happens only in the reply.
 
@@ -294,9 +299,12 @@ Do NOT emit per-stage `(none)` boilerplate. The reply then carries the stage ver
 
 ### Security — LOW
 - <verbatim items>
+
+#### Dismissed
+- <verbatim finding> — <one-line reason it was not applied>
 ```
 
-Only include subsections for stages/severities that produced findings. Stage-skipped reviewers (e.g. Domain reviewer not triggered because no matching file extension was in the diff) are simply absent from the block — do NOT add `(skipped)` rows.
+Only include subsections for stages/severities that produced findings; the `#### Dismissed` block is not a stage section — it is the main session's judgment for the round and is written whenever at least one finding was dismissed, because the promotion rule reads it back in later rounds. Stage-skipped reviewers (e.g. Domain reviewer not triggered because no matching file extension was in the diff) are simply absent from the block — do NOT add `(skipped)` rows.
 
 The sidecar is the canonical full record. `/impl`'s final report references the sidecar path and re-lists only the user-decision items — it does not transcribe this block.
 

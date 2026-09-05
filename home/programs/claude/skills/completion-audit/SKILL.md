@@ -24,7 +24,7 @@ Performed by the main session (the implementer):
 1. Read the plan file and extract:
    - **Plan Purpose** (Background/Context section)
    - **Completion Criteria** section
-2. For each completed implementation task, collect:
+2. For each completed implementation task (from the Task tools, or from `~/.claude/plans/<plan-slug>.tasks.log.md` when `/impl` ran without them), collect:
    - What was implemented (files changed, behaviors added/modified)
    - What was verified during the task (commands run, raw output observed, results)
 3. Run `git diff --name-only` against the baseline SHA to get the full changed file list
@@ -112,7 +112,7 @@ Rules:
 - `[live]` is gating at every complexity: `未実施` (including a `Verified` field that omits the run method) is FAIL, and the only waiver is BLOCKED BY USER by explicit user decision. Never move a `[live]` item out of the verdict on your own judgement — a static PASS with the surface untested is the failure this tag exists to catch
 - An item under `### Requires User Confirmation` (`[live]` or `[orchestrator-only]`) is decided by its `Needed by:`: `task N` / `final gate` with a recorded user result that states the run method is PASS, with an explicit waiver is BLOCKED BY USER, with neither is USER CONFIRMATION PENDING and the verdict is FAIL; `next real run <trigger>` is BLOCKED BY USER because approving the plan deferred it — but only when the trigger names an event this session could not produce; a trigger this session could have produced (trivial plans skip the critic that checks this) is treated as USER CONFIRMATION PENDING. USER CONFIRMATION PENDING is not agent-resolvable: emit the reply carrying `Your steps` and end the turn; do not re-run the audit until the user's result or waiver arrives
 - The verdict is `VERIFIED: PASS (self-audit)` only when every gating item is PASS. Any FAIL or `未実施` on a gating item → `VERIFIED: FAIL (self-audit)`: address the gap (run the missing verification), then redo this step — except a FAIL caused only by USER CONFIRMATION PENDING, which cannot be filled by the agent: reply with `Your steps` and end the turn instead
-- The `Evidence` column must point at concrete raw output already captured in task `metadata.evidence` — do not paraphrase results into the table; the table locates evidence, it does not restate it
+- The `Evidence` column must point at concrete raw output already captured in task `metadata.evidence` — do not paraphrase results into the table; the table locates evidence, it does not restate it. When `/impl` runs without the Task tools, `metadata.evidence` means the `### Task N evidence` block in `~/.claude/plans/<plan-slug>.tasks.log.md`
 
 If no escalation condition (Step 3) fires, `VERIFIED: PASS (self-audit)` completes this skill's half of the gate — proceed to Step 4.
 

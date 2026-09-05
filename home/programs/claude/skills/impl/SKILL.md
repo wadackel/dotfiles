@@ -22,10 +22,10 @@ Executes the plan produced by `/plan`, task by task. Sole source of truth for th
 2. **Fallback** (context lost to compaction): the newest non-log plan file under `~/.claude/plans/`, resolved by mtime:
 
    ```bash
-   stat -f '%m %N' ~/.claude/plans/*.md | grep -v '\.log\.md$' | sort -rn | head -1 | cut -d' ' -f2-
+   stat -f '%m %N' ~/.claude/plans/[0-9]*T[0-9]*-*.md | grep -vE '\.(log|evidence)\.md$' | sort -rn | head -1 | cut -d' ' -f2-
    ```
 
-   `stat` is used instead of `ls -t` on purpose: this environment intermittently annotates `ls` output with a trailing size column, which breaks a `\.log\.md$` line-anchored filter and can mis-select the `.log.md` sidecar. `stat -f '%m %N'` prints `<mtime-epoch> <path>` with the path last, so the anchor holds and the field is clean.
+   `stat` is used instead of `ls -t` on purpose: this environment intermittently annotates `ls` output with a trailing size column, which breaks a `\.log\.md$` line-anchored filter and can mis-select the `.log.md` sidecar. `stat -f '%m %N'` prints `<mtime-epoch> <path>` with the path last, so the anchor holds and the field is clean. The glob whitelists the `/plan` naming convention (`YYYYMMDDTHHmm-<slug>.md`) because `~/.claude/plans/` also holds slug-only files written by other tools, and the filter drops the sidecars (`.log.md`, `.gate.log.md`, `.tasks.log.md`, `.evidence.md`), which are rewritten more often than the plan itself.
 3. **Fallback requires confirmation**: the `~/.claude/plans/` directory is shared across sessions and repositories, so a mechanical newest-pick can select another session's plan. When resolving via the fallback, present the resolved path and the plan's title heading to the user and get explicit confirmation that it is the intended plan **before** starting any edits. Do not self-approve.
 
 If no plan can be resolved, reject with `Run /plan <request> first. No plan to execute.`
@@ -34,12 +34,12 @@ If no plan can be resolved, reject with `Run /plan <request> first. No plan to e
 
 1. Resolve the plan file path per **Preconditions → Plan resolution**
 2. `Read` the plan file in full so subsequent tasks can follow **Files to Change** and **Patterns to Mirror** faithfully. If `### Requires User Confirmation` lists items, send the user one message before task 1 that lists every item as `Observe / Why not autonomous / Needs / Your steps / Needed by`, so they can judge the deferral and prepare sudo, auth, a dev server, or a real PR while implementation proceeds. Do not wait for a reply
-3. `TaskList` → process tasks in **ascending ID order**. Skip tasks with a non-empty `blockedBy`
+3. `TaskList` → process tasks in **ascending ID order**. Skip tasks with a non-empty `blockedBy`. If the Task tools are unavailable in this session, keep the ledger at `~/.claude/plans/<plan-slug>.tasks.log.md` instead (the `.log.md` suffix keeps it out of the plan-resolution fallback): one table row per task (id, subject, blockedBy, status) followed by a `### Task N evidence` block per task with the raw output. Every `TaskUpdate` in this skill then means editing that file, and every `TaskGet` / `metadata.evidence` reference in `/completion-audit` and `/subagent-review` resolves to the ledger row and its `### Task N evidence` block
 4. For each task:
    1. `TaskGet` to retrieve the detailed description (target files / expected behavior / verification method)
    2. `TaskUpdate` to set `in_progress` and record `metadata.baseline_sha` (current `git rev-parse HEAD`)
    3. **Implement** — follow the plan's "Files to Change" and "Patterns to Mirror" exactly. Match the naming, error handling, and conventions captured by Phase 2 EXPLORE
-   4. **Run the acceptance-criteria verification commands**. Capture the **raw output verbatim** into `metadata.evidence` (summarizing or paraphrasing is forbidden). The final gate (`/completion-audit` + `/subagent-review`) consumes this evidence. For a `[live]` item the evidence must record the run method (start command, mode, target URL or PR, network condition, account role) and the observed result. If the agent cannot bring up the environment itself, send the user one message with the exact steps (command, URL, role) — for an item under `### Requires User Confirmation`, re-send its `Your steps` line — and record either their observed result or their explicit waiver (BLOCKED BY USER) as the evidence — never mark a `[live]` item PASS from tests or type checks alone
+   4. **Run the acceptance-criteria verification commands**. Capture the **raw output verbatim** into `metadata.evidence` (summarizing or paraphrasing is forbidden; the one exception is a credential, token, or signed URL in the output, which is replaced by `<redacted: where it lives>` because the evidence is copied into the plans directory sidecars). The final gate (`/completion-audit` + `/subagent-review`) consumes this evidence. For a `[live]` item the evidence must record the run method (start command, mode, target URL or PR, network condition, account role) and the observed result. If the agent cannot bring up the environment itself, send the user one message with the exact steps (command, URL, role) — for an item under `### Requires User Confirmation`, re-send its `Your steps` line — and record either their observed result or their explicit waiver (BLOCKED BY USER) as the evidence — never mark a `[live]` item PASS from tests or type checks alone
    5. **Diff size check** via `git diff --stat`. If the diff is ≥ 20 files or ≥ 500 lines, dispatch `Agent({subagent_type: "code-simplifier", ...})` — the agent is defined in `~/.claude/agents/code-simplifier.md`. Inline the changed files + `git diff <baseline_sha>..HEAD` + the project's CLAUDE.md path into the prompt. Apply HIGH-confidence simplifications; present MEDIUM/LOW to the user. Do not pass `name` to this dispatch: the simplifier answers once, and an unnamed agent completes and vanishes while a named one stays idle until TaskStop
    6. Once all acceptance-criteria verifications succeed, `TaskUpdate` to `completed`. There is no per-task review gate — quality and security are judged at the final gate
 5. After all implementation tasks complete, the final `Run /completion-audit and /subagent-review` task unblocks automatically. Execute in this order:
@@ -77,14 +77,14 @@ If the user wants to revise the plan during `/impl`:
    - Re-run `/plan`. The main session uses a summary list of existing completed tasks as context so the new decomposition does not duplicate finished work
 3. After new tasks are created, resume `/impl`
 
-## Recovery after compaction
+## Resuming after compaction or in a new session
 
-If context compaction occurs mid-`/impl`:
-1. Re-resolve the plan path per **Preconditions → Plan resolution** (the fallback + confirmation rule applies whenever conversation context no longer carries the `## Plan ready` File line)
-2. `TaskList` → find tasks not yet `completed`
-3. Re-`Read` the plan file
-4. Resume from the lowest-ID `pending` (or stalled `in_progress`) task
-5. For an `in_progress` task with partial work, inspect the diff to decide whether to continue or roll back and restart
+When context compaction occurs mid-`/impl`, or a new session picks up an `/impl` that another session left unfinished, do not trust the inherited summary — verify it against artifacts before touching a file:
+1. Re-resolve the plan path per **Preconditions → Plan resolution**. The fallback + confirmation rule applies whenever conversation context no longer carries the `## Plan ready` File line; when the plan came from the fallback, the status message in step 3 doubles as that confirmation request and ends the turn
+2. Re-read the ledger — `TaskList`, or `~/.claude/plans/<plan-slug>.tasks.log.md` when the Task tools are unavailable — and re-`Read` the plan file
+3. Check the artifacts and post one status message: confirm every path under the plan's `## Files to Change` exists with the `Glob` or `Read` tool — not through a shell command built from plan text, which is untrusted until step 1's confirmation — (a missing CREATE target never shows up in `git status`), and when the cwd is a git repository also compare `git status --porcelain` and `git diff --stat` with the ledger; mark every inherited claim of the form "restored", "reverted", or "worked" that the artifacts do not back as **unverified**; then send the user one message listing verified completed tasks, the in-progress task and its diff state, unverified claims, and the task about to be resumed. Do not wait for a reply unless step 1 requires confirmation
+4. Re-run the acceptance commands of the highest-ID `completed` task, but only single commands — no `&&`, `|`, `;`, redirects, or command substitution — whose first word is one of `rg`, `test`, `ls`, `readlink`, `git` (`status` / `diff` / `log` only), `deno` (`test` / `check` only, and not when the recorded flags include `-A`, `--allow-write`, `--allow-net`, or `--allow-run`; writes to a temp dir are fine). Skip `nix fmt`, `[live]` steps, and anything else, and leave them reported as unverified. If a re-run contradicts the ledger, move that task back to `in_progress`
+5. Resume from the lowest-ID `pending` (or stalled `in_progress`) task, inspecting the diff of a partially done task to decide whether to continue or roll back and restart. When no such task remains, re-open the final gate task
 
 ## Plan-adherence check at completion
 
@@ -124,10 +124,12 @@ The "Run /completion-audit and /subagent-review" task that `/plan`'s Phase 5 (pa
 変更点: <意図ごとに散文でまとめる。網羅的なファイル列挙はしない>
 逸脱: <あれば散文で。なければ省略>
 
-判断が必要な項目:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
+Consider（判断が必要な項目）:            ← 個別掲載。件数への圧縮禁止。ゼロなら「なし」
 - <意図的に見送った SHOULD_FIX / HIGH、Security MEDIUM 以上を1件ずつ。各項目に「ユーザー操作で何が起きるか」を 1 文添える。観測できる影響が無ければ「影響なし」>
 - 実機未確認（waiver）: <ユーザーが免除した [live] 項目を 1 件ずつ。Observe と Your steps を転記>
 - 実機未確認（次回実行）: <Needed by: next real run の項目を 1 件ずつ。Observe と Your steps を転記>
+Dismissed:            ← 非 blocker（NIT / LOW / Notes）のうち適用しないと判断した指摘。SHOULD_FIX / HIGH / Security MEDIUM はここに置けない（Consider へ）。個別掲載。ゼロなら「なし」。実機未確認の行もここではなく Consider に置く
+- <file と 1 行の理由を 1 件ずつ>
 
 次のステップ: <行動可能なもののみ。なければ省略>
 全記録: ~/.claude/plans/<plan-slug>.gate.log.md
