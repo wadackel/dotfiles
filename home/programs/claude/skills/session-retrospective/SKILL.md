@@ -169,7 +169,6 @@ Which proposals would you like to apply?
 - [references/outcome-verification.md](references/outcome-verification.md) — Verification plan grammar + confidence delta (Phase 1)
 - [references/learning-categories.md](references/learning-categories.md) — 3 archetypes (Phase 2)
 - [references/skill-opportunity-detection.md](references/skill-opportunity-detection.md) — Signals 1-6 for skill candidates (Phase 2)
-- `/cross-session-analysis` — 100+ session analysis via Gemini (separate scope; ledger remains local to this skill)
 
 ## Design decisions
 

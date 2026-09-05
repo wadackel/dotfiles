@@ -63,7 +63,6 @@
     watchman # File watching service
 
     # AI Coding Agents
-    gemini-cli # Google Gemini AI CLI for the terminal
     ctx # Search local coding-agent session history (ctxrs/ctx)
   ];
 

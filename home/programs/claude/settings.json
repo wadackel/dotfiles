@@ -115,7 +115,6 @@
       "Bash(gcloud logging *)",
       "Bash(gcloud projects *)",
       "Bash(gcloud version *)",
-      "Bash(gemini *)",
       "Bash(gh api *)",
       "Bash(gh auth *)",
       "Bash(gh issue *)",

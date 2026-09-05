@@ -88,7 +88,7 @@ First, determine if the skill requires conversation context:
 
 **Context-independent skills** (simple tests sufficient):
 - Skills that operate on explicit input (e.g., `ast-grep`)
-- Skills that fetch external data (e.g., `gemini-research`, `gws-docs`)
+- Skills that fetch external data (e.g., `gws-docs`, `repo-dive`)
 - Skills with self-contained workflows
 
 #### Test Scenario Types

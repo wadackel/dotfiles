@@ -164,7 +164,6 @@ The following categories are confirmed safe:
   - `Bash(nvim *)` - Neovim editor
   - `Bash(zellij *)` - Terminal workspace
   - `Bash(claude *)` - Claude CLI
-  - `Bash(gemini *)` - Gemini CLI
   - `Bash(gh *)` - GitHub CLI
   - `Bash(git *)` or specific git subcommands
   - `Bash(starship config *)`, `Bash(starship explain *)`

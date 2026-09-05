@@ -64,7 +64,6 @@ github
 homebrew
 claude
 codex
-gemini
 tsc
 pnpm
 colima

@@ -29,7 +29,7 @@ codex exec --full-auto --ephemeral "Reproduce and debug the test failure in ./te
 
 ## When Claude Should Use This Skill
 
-Use Codex when **sandbox execution** adds value beyond what Claude Code or Gemini can do alone:
+Use Codex when **sandbox execution** adds value beyond what Claude Code can do alone:
 
 1. **Error investigation** — Reproduce errors in a sandbox, run failing commands, inspect runtime behavior
 2. **Test execution and validation** — Run test suites, validate fixes, check coverage
@@ -37,15 +37,15 @@ Use Codex when **sandbox execution** adds value beyond what Claude Code or Gemin
 4. **Design second opinion** — Get an independent perspective on architecture or approach decisions
 5. **Security analysis** — Analyze code with execution capability (run static analysis tools, etc.)
 
-### When to Use Codex vs Gemini vs Claude Code Directly
+### When to Use Codex vs Claude Code Directly
 
 | Scenario | Tool |
 |---|---|
 | Sandbox execution needed (test running, error reproduction) | **Codex** |
-| Web search or current information needed | **Gemini** (gemini-research skill) |
-| Large codebase exploration (100+ files) | **Gemini** (`--include-directories`) |
+| Independent second opinion on a design or diagnosis | **Codex** |
+| Large codebase exploration (100+ files) | **Claude Code** (Explore subagent) |
 | Straightforward implementation, known stack | **Claude Code directly** |
-| Read-only analysis where either could work | **Gemini** (default tiebreaker) |
+| Read-only analysis where either could work | **Claude Code directly** (default tiebreaker) |
 
 ## Basic Usage Pattern
 

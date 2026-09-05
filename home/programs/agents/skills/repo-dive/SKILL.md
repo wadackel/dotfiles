@@ -65,8 +65,6 @@ Use Claude's native file tools on the cloned directory:
 - **Grep** for content search
 - **Agent** (subagent_type=Explore) for deep codebase exploration
 
-For large-scale analysis, use the **gemini-research** skill targeting the cloned directory.
-
 **Do NOT use `gh api` for file contents** — everything is local now.
 
 ### Step 3: Report

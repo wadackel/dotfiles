@@ -226,7 +226,7 @@ Propose a skill modification when:
 **Examples of skill modification proposals:**
 - ✅ skill-improver: Add "スキルを改善して" trigger phrase
 - ✅ qa-planner: Add note about WebApp timing caveat
-- ✅ gemini-research: Clarify that it's for research only, not implementation
+- ✅ repo-dive: Clarify that it's for read-only exploration, not implementation
 - ❌ Generic git usage: Not specific to any skill, goes to CLAUDE.md
 
 ## Edge Cases and Ambiguity

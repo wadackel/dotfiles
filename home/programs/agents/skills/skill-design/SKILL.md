@@ -73,7 +73,7 @@ argument-hint: "[target-name]"
 Do not document another skill's or tool's detailed usage (command flags, arguments, internal workflow) inside a skill. Instead, delegate:
 
 ```markdown
-Use the **gemini-research** skill for codebase analysis.
+Use the **repo-dive** skill to clone and explore a GitHub repository.
 ```
 
 Let the target skill's own documentation handle the details.

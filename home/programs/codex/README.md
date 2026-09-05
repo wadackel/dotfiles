@@ -16,8 +16,8 @@ used in this dotfiles repo.
   restores tmux/WezTerm activation behavior where tmux context is available.
   Debug with `~/.codex/scripts/codex-notify.ts debug`.
 - `codex-memo.ts`: records Codex Stop summaries to the Obsidian daily note,
-  first with a fast heuristic placeholder and then with a best-effort Gemini
-  refinement when it completes within the hook budget. Debug with
+  first with a fast heuristic placeholder and then with a best-effort
+  `claude -p` (Haiku) refinement when it completes within the hook budget. Debug with
   `~/.codex/logs/codex-memo.log`.
 - RTK instructions: `~/.codex/AGENTS.md` includes `~/.codex/RTK.md`, matching
   `rtk init -g --codex`. Codex does not get Claude's transparent Bash rewrite;

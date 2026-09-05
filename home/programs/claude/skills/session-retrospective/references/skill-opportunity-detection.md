@@ -123,7 +123,7 @@ A session consumed an external knowledge source (PDF, guide, specification, chec
 **Why existing signals miss this:** Signals 1/4/5 detect process characteristics (step count, tool types, structural similarity). Signal 6 detects a different dimension — the internalization of external knowledge into a reusable tool. A session that reads an API doc and makes API calls triggers Signal 1 but not Signal 6. A session that reads a design guide and creates an evaluation skill from it triggers both.
 
 **Indicators (require at least 2 of 4):**
-- External document was consumed (WebFetch, Read of external file, gemini-research)
+- External document was consumed (WebFetch, Read of external file, repo-dive)
 - Structured criteria, checklists, or evaluation dimensions were extracted from the document
 - Extracted content was written to `~/.claude/` files (skills/, agents/, scripts/, references/)
 - The resulting mechanism is domain-portable (replacing the source document with a different one would produce a useful tool for a different domain)
