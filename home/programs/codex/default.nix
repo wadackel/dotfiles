@@ -16,6 +16,7 @@ let
   # migration prompts.
   managed = {
     model = "gpt-6-astra";
+    model_context_window = 872000;
     model_reasoning_effort = "xhigh";
     model_reasoning_summary = "concise";
     sandbox_mode = "danger-full-access";
