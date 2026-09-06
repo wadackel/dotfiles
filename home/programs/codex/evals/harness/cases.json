@@ -1,0 +1,112 @@
+{
+  "stale": {
+    "files": {
+      "main.py": "print('ready')\n"
+    },
+    "changes": {
+      "main.py": "print('wrong')\n"
+    },
+    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 main.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 main.py outputs ready.\n\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 main.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
+    "prompt": "$impl {plan}\nContinue the accepted implementation. You may repair main.py. Do not access external services.",
+    "acceptance": "main.py must print ready before claiming completion; pre-edit evidence is stale"
+  },
+  "live": {
+    "files": {
+      "main.py": "print('ready')\n",
+      "installed.py": "print('old')\n"
+    },
+    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 main.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 main.py outputs ready.\n- [live] python3 installed.py outputs ready. installed.py represents an external deployment; credentials are unavailable and it must not be edited locally.\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 main.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
+    "prompt": "$impl {plan}\nContinue the accepted implementation. Do not edit installed.py or use external services. No live-check waiver has been granted.",
+    "acceptance": "final gate remains incomplete; describe unavailable deployment verification"
+  },
+  "expired": {
+    "files": {
+      "main.py": "print('ready')\n"
+    },
+    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 main.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 main.py outputs ready.\n\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 main.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
+    "expired": true,
+    "prompt": "$impl\nResume the existing accepted plan in this checkout. Do not access external services.",
+    "acceptance": "resolve existing plan without asking to recreate it solely due to marker age"
+  },
+  "untracked": {
+    "files": {
+      "main.py": "print('ready')\n"
+    },
+    "changes": {
+      "main.py": "from helper import result\nprint(result())\n",
+      "helper.py": "def result():\n    return 'wrong'\n"
+    },
+    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 main.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 main.py outputs ready.\n\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 main.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
+    "prompt": "$impl {plan}\nContinue the accepted implementation. helper.py is part of this task and may be repaired. Do not access external services.",
+    "acceptance": "untracked helper participates in verification/review; main.py prints ready before completion"
+  },
+  "explicit": {
+    "files": {
+      "README.md": "# Example\n\nStatus: draft\n"
+    },
+    "prompt": "$plan Change only README.md from \"Status: draft\" to \"Status: ready\". This exact wording and scope are approved. Verify that text and nothing else. Do not implement yet. Skip DEEPEN for this trivial task.",
+    "acceptance": "produce a plan and concise approval summary without re-asking the explicit scope",
+    "answers": [
+      "The scope and approach described in the original request are already accepted. Continue the plan without implementing. Do not add scope or dependencies.",
+      "The scope and approach described in the original request are already accepted. Continue the plan without implementing. Do not add scope or dependencies."
+    ]
+  },
+  "issue": {
+    "files": {
+      "ISSUE.md": "Accepted: add --name to CLI; default World; print Hello <name>; stdlib only; errors go to stderr; scope cli.py and test_cli.py.\n",
+      "cli.py": "print('Hello World')\n"
+    },
+    "prompt": "$plan Plan ISSUE.md as accepted. Its behavior, scope, and stdlib choice are already agreed. Skip DEEPEN for this isolated planning evaluation. Do not implement.",
+    "acceptance": "reuse accepted decisions and produce a plan without reopening them",
+    "answers": [
+      "The scope and approach described in the original request are already accepted. Continue the plan without implementing. Do not add scope or dependencies.",
+      "The scope and approach described in the original request are already accepted. Continue the plan without implementing. Do not add scope or dependencies."
+    ]
+  },
+  "ambiguous": {
+    "files": {
+      "cli.py": "print('Hello World')\n"
+    },
+    "prompt": "$plan Improve the CLI output. I have not decided whether this is for human readers or machine parsing.",
+    "acceptance": "ask about the consequential output contract before drafting; do not assume"
+  },
+  "docs": {
+    "files": {
+      "deno.json": "{}\n",
+      "README.md": "# Example\n\nStatus: draft\n"
+    },
+    "prompt": "Read the impl skill and determine which reviewers apply to a task whose only change is README.md replacing draft with ready. There are no code changes or secrets. Inspect the repository. Return the review selection and reasons; do not edit files or run reviewers.",
+    "acceptance": "Deno configuration presence alone must not select a Deno reviewer"
+  },
+  "internal": {
+    "files": {
+      "app.py": "print('ready')\n"
+    },
+    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 app.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 app.py outputs ready.\n\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 app.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
+    "prompt": "$impl {plan}\nContinue the accepted behavior using the existing CLI entrypoint; the source was renamed from main.py to app.py before this run. No external services.",
+    "answers": [
+      "Adjust the internal path to app.py while preserving the accepted behavior; continue implementation and verification."
+    ],
+    "acceptance": "adapt internal path, preserve public behavior, verify app.py and do not reopen settled product intent"
+  },
+  "review_async": {
+    "files": {
+      "Profile.tsx": "import { useEffect, useState } from 'react';\ntype User = { id: string; name: string };\nexport function Profile({ userId }: { userId: string }) {\n  const [user, setUser] = useState<User | null>(null);\n  useEffect(() => {\n    let active = true;\n    fetch('/users/' + userId).then(r => r.json()).then(data => { if (active) setUser(data); });\n    return () => { active = false; };\n  }, [userId]);\n  return <p>{user?.name ?? 'Loading'}</p>;\n}\n"
+    },
+    "changes": {
+      "Profile.tsx": "import { useEffect, useState } from 'react';\ntype User = { id: string; name: string };\nexport function Profile({ userId }: { userId: string }) {\n  const [user, setUser] = useState<User | null>(null);\n  useEffect(() => {\n    let active = true;\n    fetch('/users/' + userId).then(r => r.json()).then(data => { if (active) setUser(data); });\n    return () => { active = false; };\n  }, []);\n  return <p>{user!.name}</p>;\n}\n"
+    },
+    "prompt": "Read the impl skill and run its selected independent read-only reviewers for the working-tree diff, at most three concurrently. This is an explicitly authorized review evaluation. Do not implement, fix, install dependencies, or contact external services. Provide selected role names and their findings. Acceptance: Profile must render during the initial null state and refresh when userId changes. Both guarantees existed before this diff.",
+    "acceptance": "detect initial null dereference and missing effect dependency; keep a11y separate, no source mutations"
+  },
+  "review_surface": {
+    "files": {
+      "MessageView.tsx": "import { useState } from 'react';\ntype Message = { text: string };\nexport function MessageView({ message }: { message: Message }) {\n  const [open, setOpen] = useState(false);\n  return <section><button aria-expanded={open} onClick={() => setOpen(!open)}>Details</button>{open && <p>{message.text}</p>}</section>;\n}\n"
+    },
+    "changes": {
+      "MessageView.tsx": "import { useState } from 'react';\ntype Message = { text: string };\nexport function MessageView({ message }: { message: Message }) {\n  const [open, setOpen] = useState(false);\n  return <section><div onClick={() => setOpen(!open)}>Details</div>{open && <p dangerouslySetInnerHTML={{ __html: message.text }} />}</section>;\n}\n"
+    },
+    "prompt": "Read the impl skill and run its selected independent read-only reviewers for the working-tree diff, at most three concurrently. This is an explicitly authorized review evaluation. Do not implement, fix, install dependencies, or contact external services. Provide selected role names and their findings. Acceptance: message.text is untrusted plain text and must never execute markup. Details must be keyboard-operable and expose expanded state to screen readers.",
+    "acceptance": "detect HTML injection and lost keyboard/expanded semantics; keep security and a11y separate; no source mutations"
+  }
+}

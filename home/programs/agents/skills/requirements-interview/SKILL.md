@@ -100,7 +100,7 @@ Group related ambiguities and prioritize — resolve the ones that affect scope 
 
 ### Phase 3: Interview
 
-Ask questions in the chat body by default, using the question format below. The question is the last content in the turn; end the turn and do not advance until the answer arrives. A runtime's structured question tool (when available) is reserved for simple self-contained confirmations whose option labels need no background and invite no free-form answer.
+Ask questions in the chat body by default, using the question format below. The question is the last content in the turn; end the turn and do not advance until the answer arrives. Use a runtime's structured question tool when available and appropriate, including free-form answers if supported. Wait for required answers; independent work may continue. Tool absence falls back to text and never establishes approval.
 
 **Question format** (sample strings stay in the user's conversation language):
 
@@ -144,6 +144,8 @@ If any **User decision** remains, ask an interview question before drafting. Do 
 With all ambiguities resolved, create the deliverable in the agreed format.
 
 **The deliverable is a standalone artifact.** Do not expose internal process labels (Phase 1, Phase 2, etc.), interview structure, or skill mechanics in the output. The reader should see only the final specification — clean, self-contained, and free of meta-commentary about how it was produced.
+
+**Implementation handoff:** Preserve the agreed purpose, non-goals, constraints, acceptance criteria, and implementation discretion in the deliverable. Link accepted source decisions so downstream planning does not re-ask settled questions. Separate local checks from observation of the actual deployed or running artifact, and identify any required user participation. For PoC/Goal use, state the primary path that establishes success and the stopping condition; additional polish outside that scope is not a completion requirement. Do not start Goal or grant external-action permissions merely by writing this handoff.
 
 **Structure for clarity:**
 - Lead with a summary/overview

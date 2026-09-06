@@ -1,26 +1,20 @@
 ---
 name: plan
-description: Codex design-first planning skill. Mirrors Claude `/plan`'s seven named phases (PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan <request>`. Auto-loading is disabled by agents/openai.yaml.
+description: Codex design-first planning skill. Mirrors Claude `/plan`'s seven named phases (PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan` with a request. Auto-loading is disabled by agents/openai.yaml.
 ---
 
 # $plan
 
 Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for the tmux picker. `$impl` promotes `.pending-` to `.active-` at the start of its run.
 
-Do not write code or create files until you have agreed on the design with the user and produced an approved plan. This applies to every request regardless of perceived difficulty.
-
-## Anti-Pattern: "This Is Too Simple To Need A Design"
-
-Every request goes through PARSE → AGREE. No exception for typo fixes, single config flips, or one-line copy edits. "Simple" requests are exactly where unverified assumptions cause the most wasted work. For trivial work the design body can be one or two sentences, but **presentation and agreement are mandatory**.
-
-Complexity gates the *depth after agreement* (DEEPEN rounds, plan body size) — never the agreement itself.
+Resolve consequential user-intent decisions before drafting. Existing choices in the conversation or an accepted Issue count as agreement; a fully specified request does not need another confirmation. Do not implement code while planning.
 
 ## Quick Start
 
 ```
 $plan <feature description>
 $plan "make notifications API async to reduce error rate"
-$plan "typo fix in README"               # trivial still goes through AGREE — design body can be one sentence
+$plan "typo fix in README"               # fully specified — no redundant confirmation
 ```
 
 Once `$plan` ends with PENDING APPROVAL, the user types `$impl` as a top-level prompt to approve and execute.
@@ -29,7 +23,7 @@ Once `$plan` ends with PENDING APPROVAL, the user types `$impl` as a top-level p
 
 PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
 
-AGREE is conversational and is the Codex implementation of the Direction Agreement Gate (Codex has no AskUserQuestion API, so AGREE is realized through the Blocking Interview Protocol with `$plan --answer` continuation). DEEPEN keeps the Critic + Adversarial + Simplifier subagents as default safety nets, with an additional inline over-engineering flag-only self-review layer.
+AGREE resolves remaining intent decisions using the available question tool or the Blocking Interview Protocol with `$plan --answer` continuation. DEEPEN keeps the Critic + Adversarial + Simplifier subagents as default safety nets, with an additional inline over-engineering flag-only self-review layer.
 
 ## Argument extraction
 
@@ -50,7 +44,7 @@ DEEPEN depends on Codex subagent dispatch.
 - `~/.codex/agents/plan-critic.toml`
 - `~/.codex/agents/plan-adversarial.toml`
 - `~/.codex/agents/plan-simplifier.toml`
-- `~/.codex/agents/code-simplifier.toml` (used by `$impl` per-task on large diffs; see `$impl` SKILL.md)
+- `~/.codex/agents/code-simplifier.toml` (used by `$impl` once per aggregate target on large diffs; see `$impl` SKILL.md)
 
 ## Core behavior
 
@@ -88,20 +82,17 @@ For `xl`, step out of the normal flow and ask the user whether to decompose into
 
 **Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1-2 words with no signal), re-elicit through AGREE before drafting.
 
-Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan: Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. AGREE is still mandatory — even trivial requests get a one-sentence direction confirmation.
+Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan: Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
 
 ## AGREE
 
-The Direction Agreement Gate. Conversational. Goal: agree on *Purpose* and *Approach* before any plan body is drafted. Codex implements AGREE through the **Blocking Interview Protocol** because Codex CLI has no AskUserQuestion API; user answers arrive as natural-language turns or guaranteed `$plan --answer <answer>` continuations.
+Agree on purpose, constraints, acceptance criteria, and any consequential approach choices. Carry forward accepted Issue requirements and prior answers; do not require the user to approve them again.
 
-**Key principles (apply throughout AGREE and every later interview):**
-- **One question at a time.** Each turn asks a single question. Do not pack multiple questions into one message just because the format allows it.
-- **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first.
-- **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. Resolve lookups synchronously in the clarification pass (Step C), or treat the dependent question as outside the frontier and ask the next independent question first — do not keep interview subagents open across Ask turns. A pending investigation only delays its downstream questions.
-- **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
-- **Text questions in the chat body.** Codex asks with the question format below (Codex CLI has no structured question tool). Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
-- **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
-- **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
+- Resolve observable facts before asking. Related files discovered by a probe are not automatically alternative scope choices.
+- Ask the highest-impact unresolved decision first. Keep dependent questions sequential; independent decisions may share the runtime's supported question batch.
+- Prefer the runtime's structured question tool when available and suitable. Otherwise ask in chat using the format below and wait for the answer. Use only tools actually available in the current mode.
+- Explain the recommendation and tradeoff briefly. Continue independent investigation while a required answer is pending; no answer or elapsed time does not establish approval.
+- For a fully specified request, summarize the agreed direction and proceed without inventing a choice.
 
 **Question format** (chat body; sample strings stay in the user's conversation language):
 
@@ -118,18 +109,14 @@ The Direction Agreement Gate. Conversational. Goal: agree on *Purpose* and *Appr
 
 The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions.
 
-**Steps A1–A7 (Codex realization via Blocking Interview Protocol):**
+**Steps A1–A7:**
 
-- **A1 Direction check** (one question): the question text carries the restate (one sentence) **plus** a scope/boundary question with concrete options and a marked recommendation. Never ask a bare "is this right?" yes/no — a question that can be answered with "ok" and nothing else has bought nothing. Wait for the user's response (natural-language turn or `$plan --answer`).
-  - **Skipping is limited to small and above.** For trivial, A1 is the single mandatory gate: A3–A7 collapse into it, so the one question carries the restate, the one-line design, and proceed/adjust.
-  - For small+, A1 may be skipped only when BOTH hold: (1) the request names a closed, explicit scope (a specific file / value / behavior), and (2) the PARSE probes found no adjacent candidate that could plausibly be in scope — sibling configs, other call sites, related tests, same-named assets. If (2) fails, the adjacent candidates you found **are** the scope options; "no options could be formed" cannot be claimed while holding them.
-  - When skipping, open A5's preamble with the restate plus a one-line evidence record — `Scope: <X> only (no adjacent candidates; probed <what you searched>)` — and record the same finding in the plan body's `### Self-resolved` as `observation` / `value` / `source: [Direct] <probe command + file:lines>`.
-- **A2 Re-ask**: if the answer is empty or ambiguous, stay in this phase and ask again — still one question per message.
-- **A3 List approaches**: 2-3 candidate approaches, each labelled with the tradeoff axis in one sentence.
-- **A4 Recommend**: name the AI's recommended approach and give 1-2 sentences of reasoning.
-- **A5 Approve approach** (one question): "go with recommended / pick another / modify". Wait for the user's response.
-- **A6 Companion consent** (only when upcoming questions are likely visual — UI mockups, layout comparisons, etc.): offer `/agent-browser` in a standalone message, once. Skip A6 entirely when no visual questions are anticipated.
-- **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` as prose and advance to EXPLORE immediately. Do not wait. The sentence survives compaction as a durable anchor and keeps EXPLORE/DEEPEN from drifting, but asking for an OK on a direction A5 just approved buys nothing.
+- **A1 Direction check**: ask only if purpose or scope has a consequential unresolved branch. Existing explicit scope satisfies this step, including trivial requests.
+- **A2 Re-ask**: clarify an empty or ambiguous answer when the required decision is still unresolved.
+- **A3 List approaches** and **A4 Recommend**: compare alternatives only when they change the user's outcome or constraints; select routine reversible mechanics autonomously.
+- **A5 Approve approach**: ask only about a consequential approach choice not already accepted. Carry prior authorization forward.
+- **A6 Visual support**: use available visual tools when useful within the user's authorized scope; ask only for an actual missing decision or permission.
+- **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` and advance to EXPLORE. Do not ask for another OK.
 
 AGREE produces three subsections that get written into the plan body (preserving the downstream Critic parse contract): `### Assumptions`, `### Self-resolved`, `### Unresolved Items`. See `### AGREE output` below.
 
@@ -141,7 +128,7 @@ This subsection defines the **Blocking Interview Protocol** that backs AGREE for
 
 Use `home/programs/agents/shared/plan/references/requirement-checklist.md` (public path `~/.agents/skills/plan/references/requirement-checklist.md`) as the judgment lens.
 
-Clarity-gated loop: AGREE is clarity-gated. For small, medium, large, and xl requests, keep asking as needed until the request is clear enough to write an implementation plan. There is no fixed maximum number of clarification rounds. `trivial` short-circuits AGREE to a single A1 confirmation.
+Clarity-gated loop: AGREE is clarity-gated. For small, medium, large, and xl requests, keep asking as needed until the request is clear enough to write an implementation plan. There is no fixed maximum number of clarification rounds. A fully specified request has no remaining interview gate, regardless of complexity.
 
 Interview gate: every unresolved ambiguity must be classified before plan creation.
 
@@ -152,7 +139,7 @@ Interview gate: every unresolved ambiguity must be classified before plan creati
 | **Technical deferral** | Codebase-recoverable but too heavy for an AGREE lightweight probe | Record in `### Unresolved Items` with a concrete `next:` for EXPLORE, DEEPEN, or implementation. |
 | **Draft assumption** | User explicitly allowed proceeding with an assumption, or the detail is non-blocking technical/default behavior | Record in `### Assumptions` with a reason. |
 
-If any `User decision` remains, create no plan file, evidence sidecar, or pending marker in this turn. Ask and end the turn.
+If any `User decision` remains, create no plan file, evidence sidecar, or pending marker in this turn. Ask and wait for the answer before dependent work. End the turn when using text-only continuation; otherwise continue independent investigation.
 
 Each clarification pass:
 
@@ -160,8 +147,8 @@ Each clarification pass:
 2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice.
 3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/evidence-grades.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
 4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
-5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask exactly one question per Ask turn — a question that depends on another open answer waits for a later turn, and the remainder carries into the next clarification iteration. Every question must include a recommended answer and short rationale. Immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
-6. **Step F Wait**: Say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn.
+5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask the highest-impact decision; batch only independent questions if the available tool supports it. A question that depends on another open answer waits. Every question must include a recommended answer and short rationale. For text-only continuation, immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
+6. **Step F Wait**: Wait for required answers; continue independent work if the question tool allows it. For text-only continuation, say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn without executing dependent work.
 7. **Step G Answer handling**: Best-effort attach a natural-language next-turn answer to the latest `.clarifying-<cwd-hash>.json`. For guaranteed continuation, use `$plan --answer <answer>`. If the user chooses the recommended answer, record it. If the user explicitly says to proceed with a stated assumption, record user-judgment-bound observation in `### Assumptions` with `user-overridden: true`. Empty or ambiguous answers become re-Ask triggers.
 8. **Step H Cleanup**: When the clarity gate is satisfied, delete the marker and continue to EXPLORE. After successful plan creation, delete `.clarifying-<cwd-hash>.json`. If a new non-clarifying `$plan <request>` succeeds, also delete any old clarifying marker.
 
@@ -240,6 +227,12 @@ Plan body section contract (14 headers; Claude 12-row base plus Codex-specific `
 
 The AGREE-derived `### Requirement Clarification` / `### Assumptions` / `### Self-resolved` / `### Unresolved Items` subsections are written into the plan body just before `## Overview`.
 
+### Implementation handoff
+
+Under `## Approach`, record purpose, non-goals, constraints, acceptance criteria, and implementation discretion. Reuse accepted Issue or interview decisions with their source; ask only about newly discovered consequential gaps. Internal path or implementation adjustments may proceed when they preserve the agreed behavior, compatibility, dependencies, cost, and operating conditions. Changes to those commitments require user judgment.
+
+For PoC work, state the successful primary path and stopping condition so Goal does not continue with out-of-scope polish. Native Plan remains usable without this skill's phases or markers. Do not route a native plan through `$plan` unless requested.
+
 ### Draft handoff (one-way)
 
 After writing the body, state the plan path, the section headings, and the key design decisions in at most 3 lines in the user's configured language, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job. For trivial plans (DEEPEN skipped), the ACTIVATE Approval Summary and the `$impl` approval gate are the review surface.
@@ -259,7 +252,7 @@ Tag every Autonomous Verification item at every complexity, trivial included (`$
 
 When unsure, default to `[orchestrator-only]`.
 
-A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` does not gate on `[live]`; the tag is recorded so the Claude-side `/completion-audit` and the shared plan critic read the same contract. Items only the user can observe go under `### Requires User Confirmation` in the item format below.
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` gates on `[live]`, including required user observations, unless explicitly waived. Evidence must identify the actual runtime or deployed artifact; local source tests do not establish deployment or CI freshness. Items only the user can observe go under `### Requires User Confirmation` in the item format below.
 
 `## Completion Criteria` is machine-consumed and must keep these subsection names:
 
@@ -300,13 +293,13 @@ Explicit `$plan <request>` invocation is approval for the planning workflow incl
 
 This is the DEEPEN Subagent Lifecycle Budget. When DEEPEN starts subagents, keep a lightweight ledger: `agent_id / role / phase / status / closed`. After integrating a subagent result into the plan, Deepening Log, or Consolidated Interview queue, mark it result-integrated and close it with `close_agent` before the next step or round. Use `close_agent` only for result-integrated or terminal/known completed agents, not to interrupt running work.
 
-EXPLORE explorers are optional and not the main target of this lifecycle budget. In normal DEEPEN operation, keep live subagents bounded, with Adversarial + Simplifier as the usual true-parallel pair. Before DEEPEN, close any known completed but unclosed subagent.
+EXPLORE explorers are optional and not the main target of this lifecycle budget. In normal DEEPEN operation, keep live subagents bounded, with Adversarial + Simplifier as the usual true-parallel pair. Before DEEPEN, close any known completed but unclosed subagent if the runtime exposes a close operation. Its absence does not invalidate a completed review.
 
 If spawn fails with `agent thread limit reached`, close known completed / terminal agents, then retry the failed dispatch exactly once. If retry still fails, do not keep spawning; follow that step's failure/degrade rule.
 
 ### Critic Subagent (each round)
 
-Extract `max-rounds` from the argument hint if present, default 2 and cap 5, for example `$plan --max-rounds=3 ...`. Prepare the plan body written in DRAFT and project AGENTS context (`~/.codex/AGENTS.md` and this repository's AGENTS.md).
+Extract `max-rounds` from the argument hint if present, default 1 and cap 5, for example `$plan --max-rounds=3 ...`. A Round 1 `ITERATE` — a Dimension 7 veto or a fix that restructures the plan — earns exactly one more round even at the default; write one line `Extra round: earned — <the veto or the restructuring finding>` or `Extra round: not earned` into the Round 1 log entry when triaging it. Prepare the plan body written in DRAFT and project AGENTS context (`~/.codex/AGENTS.md` and this repository's AGENTS.md).
 
 For each round, spawn the `plan-critic` subagent:
 
@@ -336,7 +329,7 @@ After triage, verdict extraction, and log append, close that round's `plan-criti
 Continue to the next step if any of these is true:
 
 - Verdict is `CONVERGED`
-- max-rounds reached
+- max-rounds reached (a Round 1 `ITERATE` raises the effective budget from 1 to 2)
 - same issue repeats for 2 consecutive rounds
 - zero Critical Issues
 
@@ -404,7 +397,7 @@ Round entries begin with `### Round N`. Subsection structure is not machine-cons
 
 ## DECOMPOSE
 
-The main session registers tasks with Codex `update_plan` and initializes the evidence sidecar JSON. No subagent dispatch in DECOMPOSE.
+The main session initializes the evidence sidecar JSON and, when available, mirrors tasks with Codex `update_plan`. If that tool is unavailable, the sidecar remains authoritative; report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE.
 
 ### update_plan constraints
 
@@ -414,7 +407,7 @@ The main session registers tasks with Codex `update_plan` and initializes the ev
 
 ### 1-call DECOMPOSE
 
-Register tasks in one `update_plan` call as an ordered array. There is no Pass 1/2 split because no returned IDs means no stable `blockedBy` concept:
+When `update_plan` is available, register tasks in one call as an ordered array. There is no Pass 1/2 split because no returned IDs means no stable `blockedBy` concept:
 
 ```text
 update_plan({
@@ -433,7 +426,7 @@ update_plan({
 Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Do not depend on execute bits; use this permissioned command shape:
 
 ```bash
-deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts init /Users/$USER/.codex/plans/<basename>.evidence.json '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
+deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
 ```
 
 The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.
@@ -442,13 +435,13 @@ The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Aud
 
 ### Decomposition Rules
 
-1. One task equals one verifiable unit.
+1. One task equals one verifiable unit: one behavior with its red, green, and refactor steps inside the same task. A failing test is a step of a task, never a task of its own.
 2. Verification Commands are included in each implementation task. The only verification-only task allowed is `Final Audit + Review`.
 3. Keep separation of concerns.
 4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output.
 5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + Codex subagent Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
-`$impl` auto-spawns the `code-simplifier` subagent when a per-task diff is ≥ 20 files or ≥ 500 lines — do not create a standalone simplifier task in the plan.
+`$impl` auto-spawns the `code-simplifier` subagent once per aggregate target when the diff is ≥ 20 files or ≥ 500 lines — do not create a standalone simplifier task in the plan.
 
 ### Acceptance criteria by change type
 
@@ -456,7 +449,7 @@ Use the Claude version table as a reference: `~/.claude/skills/plan/SKILL.md`, w
 
 ## ACTIVATE
 
-Write the `.pending-<cwd-hash>` UI-pointer marker so the tmux picker can show this cwd's plan/task progress. The marker is a display pointer only — it does not gate edits. `$impl` promotes `.pending-` to `.active-` at the start of its run (it calls the helper's `promote` subcommand); do not create `.active-` here.
+Write the `.pending-<cwd-hash>` UI-pointer marker so the tmux picker can show this cwd's plan/task progress. The marker is a display pointer only — it does not gate edits. `$impl` promotes `.pending-` to `.active-` at the start of its run (its `resolve` call refreshes an unambiguous display pointer); do not create `.active-` here.
 
 Delegate marker operations to the deterministic helper. Do not build cwd-hash or marker paths inline in shell.
 
@@ -470,54 +463,16 @@ Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` ca
 
 ### Output to user
 
-The user must be able to decide whether to approve `$impl` without opening the plan file. First output an approval-ready summary, then the plan body and metadata block. `## Approval Summary` is extracted from plan sections and must show `Overview`, `Approach`, and `Files to Change` first. The summary is the approval decision surface, not a duplicate of the plan body, so keep it compact.
+The user must be able to decide whether to approve `$impl` from a compact Approval Summary. Include:
 
-````markdown
-## Plan
+- **Overview**: intended outcome and non-goals.
+- **Approach**: key decisions, constraints, and implementation discretion.
+- **Files to Change**: affected components and representative paths.
+- **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation.
+- **Test Strategy**: meaningful verification and known limits.
+- **Execution**: task count, important dependencies, and risks.
 
-## Approval Summary
-
-### Overview
-<2-4 bullets or a short paragraph that states what Codex understood and what will change. Source: ## Overview. If ## Overview is absent for trivial plans, use the request and ## Context.>
-
-### Approach
-<3-5 bullets describing the intended implementation direction, key design choices, and notable non-goals/tradeoffs. Source: ## Approach. If ## Approach is absent, derive only from ## Task Outline and ## NOT Building.>
-
-### Files to Change
-<tree-style code block showing only affected paths, annotated with CREATE / UPDATE / DELETE and one-line impact. Source: ## Files to Change. Collapse by directory and point to the plan file when the tree would exceed ~20 lines.>
-
-```text
-path/
-└── to/
-    └── file.ext  UPDATE: one-line impact
-```
-
-### Completion Criteria
-<compact bullets describing what must be true for the plan to be complete. Source: ## Completion Criteria plus task-level expected behavior / verification from ## Task Outline. Preserve the plan's Completion Criteria vocabulary; do not rename this to Acceptance Criteria.>
-
-### Test Strategy
-<compact bullets describing existing coverage, tests to add/update, and any justified omissions. Source: ## Test Strategy when present. If ## Test Strategy is absent, derive only from ## Verification Commands and ## Completion Criteria and state that no separate Test Strategy section exists for this plan.>
-
-### Execution
-- Task outline: <implementation task subjects, excluding Final Audit + Review; max 5 tasks, one line each> (source: ## Task Outline)
-- Verification: <commands and expected outcomes; max 3 commands, summarize if more> (source: ## Verification Commands)
-- Risks / open questions: <top 1-3 items, or `None` when the section is absent> (source: ## Risks + Open Questions)
-
-## Plan body
-<full plan body, verbatim unless xl fallback applies>
-
----
-
-## Plan ready
-- File: <plan path>
-- Complexity: <trivial/small/medium/large/xl>
-- Tasks: <count> (+ Final Audit + Review)
-- Status: PENDING APPROVAL - type `$impl` to approve and execute
-
-AI self-chaining `$impl` does not fire the UserPromptSubmit hook, so `.pending-` is not promoted to `.active-`. Approval is established only by the user's explicit top-level `$impl` keystroke.
-````
-
-If an xl plan body exceeds roughly 600 lines, replace `## Plan body` with a TOC of section headings plus the plan path. Do not omit Approval Summary.
+Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [plan-path]`. Display the full plan body only when requested. Do not duplicate the summary, body, and metadata. User authorization is established by the actual request, not by whether a marker hook fires; `$plan` alone does not authorize implementation. Preserve any broader execution authorization already given in the session.
 
 ## Integration with existing tooling
 
@@ -531,4 +486,4 @@ If an xl plan body exceeds roughly 600 lines, replace `## Plan body` with a TOC 
 
 - **EXPLORE is main-session owned exploration**: the main session fills discovery outcomes and may use explorer subagents only as helpers.
 - **DEEPEN subagent dispatch is normally mandatory**: `$plan <request>` includes approval for DEEPEN subagent deepening. Do not ask for extra user permission and do not replace it with local self-review without an explicit skip condition.
-- **DEEPEN Subagent Lifecycle Budget**: close result-integrated subagents with `close_agent` and keep live subagents bounded.
+- **DEEPEN Subagent Lifecycle Budget**: close result-integrated subagents when the runtime provides `close_agent`, and keep live subagents bounded.

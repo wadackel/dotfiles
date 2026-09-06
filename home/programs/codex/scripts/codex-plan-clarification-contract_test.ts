@@ -5,9 +5,8 @@ const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
 
-// The AGREE cadence is a cross-agent contract: the shared references assert
-// "A1 and A5 are the blocking gates, A7 is non-blocking" for both agents, so
-// pinning only one side would let the other regress while the suite stays green.
+// Codex may reuse prior agreement; imposing Claude's fixed cadence on both
+// would silently reintroduce redundant approval turns.
 const AGENT_PLANS: ReadonlyArray<readonly [string, string]> = [
   ["Codex", CODEX_PLAN],
   ["Claude", CLAUDE_PLAN],
@@ -240,8 +239,23 @@ for (const [agent, path] of AGENT_PLANS) {
   Deno.test(`${agent} AGREE keeps A1/A5 blocking and A7 non-blocking`, async () => {
     const skill = await readRepoFile(path);
 
-    assertIncludesAll(section(skill, "## AGREE"), AGREE_GATE_NEEDLES);
-    assertIncludesAll(skill, PLAN_PREAMBLE_NEEDLES);
+    if (agent === "Claude") {
+      assertIncludesAll(section(skill, "## AGREE"), AGREE_GATE_NEEDLES);
+      assertIncludesAll(skill, PLAN_PREAMBLE_NEEDLES);
+    } else {
+      assertIncludesAll(section(skill, "## AGREE"), [
+        "**A1 Direction check**",
+        "**A5 Approve approach**",
+        "**A7 Direction statement** (not a gate)",
+        "Existing explicit scope satisfies this step",
+        "Carry prior authorization forward",
+        "no answer or elapsed time does not establish approval",
+      ]);
+      assertExcludesAll(skill, [
+        "single mandatory gate",
+        "Codex CLI has no structured question tool",
+      ]);
+    }
     // Scoped to the whole file, not the AGREE section: legacy gate wording
     // reintroduced under Phase overview or Design notes would slip past a
     // section-scoped exclusion while still re-establishing the gate.
@@ -252,7 +266,15 @@ for (const [agent, path] of AGENT_PLANS) {
 for (const [name, path] of INTERVIEW_SKILLS) {
   Deno.test(`${name} carries the shared interview rule sentences verbatim`, async () => {
     const skill = await readRepoFile(path);
-    assertIncludesAll(skill, INTERVIEW_RULE_NEEDLES);
+    if (path === CODEX_PLAN) {
+      assertIncludesAll(skill, [
+        "Keep dependent questions sequential",
+        "continue independent work",
+        "Wait for required answers",
+      ]);
+    } else {
+      assertIncludesAll(skill, INTERVIEW_RULE_NEEDLES);
+    }
   });
 }
 
@@ -293,39 +315,19 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
   );
 
   assertIncludesAll(output, [
-    "## Approval Summary",
-    "### Overview",
-    "### Approach",
-    "### Files to Change",
-    "### Completion Criteria",
-    "### Test Strategy",
-    "### Execution",
-    "Source: ## Overview",
-    "Source: ## Approach",
-    "Source: ## Files to Change",
-    "Source: ## Completion Criteria",
-    "## Task Outline",
-    "Preserve the plan's Completion Criteria vocabulary",
-    "Source: ## Test Strategy when present",
-    "## Verification Commands and ## Completion Criteria",
-    "no separate Test Strategy section exists",
-    "source: ## Task Outline",
-    "source: ## Verification Commands",
-    "source: ## Risks + Open Questions",
-    "tree-style code block",
-    "CREATE / UPDATE / DELETE",
-    "Collapse by directory",
-    "Final Audit + Review",
+    "Approval Summary",
     "PENDING APPROVAL",
-    "Approval is established only by the user's explicit top-level `$impl` keystroke",
+    "$impl [plan-path]",
+    "full plan body only when requested",
+    "Preserve any broader execution authorization",
   ]);
   assertInOrder(output, [
-    "### Overview",
-    "### Approach",
-    "### Files to Change",
-    "### Completion Criteria",
-    "### Test Strategy",
-    "### Execution",
+    "**Overview**",
+    "**Approach**",
+    "**Files to Change**",
+    "**Completion Criteria**",
+    "**Test Strategy**",
+    "**Execution**",
   ]);
 });
 
@@ -434,8 +436,9 @@ Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate
     "concrete `next:`",
     "choose an assumption / proceed as-is / continue clarifying / scope out",
     "ask exactly one question per turn",
-    "A7 is a non-blocking direction statement",
-    "Both agents follow the same one-question cadence",
+    "In both, A7 is non-blocking.",
+    "Codex carries prior agreement forward without another approval, while Claude retains its skill-defined cadence.",
+    "Codex may batch independent questions",
     "a question whose prerequisites — prior answers or pending investigations — are unsettled waits",
     "is context, not a second question",
   ]);
@@ -493,7 +496,8 @@ Deno.test("Critic prompt mandates regression findings for clarification failures
     "codebase-recoverable / technical discovery",
     "explicit user-selected assumption",
     "do not re-interview it solely because it is subjective",
-    "A7 is a non-blocking direction statement",
+    "In both, A7 is non-blocking.",
+    "Codex carries prior agreement forward without another approval, while Claude retains its skill-defined cadence.",
   ]);
   assertExcludesAll(prompt, [
     "subjective preference, undisclosed domain knowledge, intent), treat it as a **Critical Issue [USER]** and recommend it re-enter the DEEPEN Consolidated Interview queue",

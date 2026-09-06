@@ -1,12 +1,18 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "jsr:@std/assert@1.0.19";
 import { fromFileUrl } from "jsr:@std/path@1.1.4/from-file-url";
 import {
   activatePending,
   clearActive,
+  clearMatching,
   cwdHash,
   getStatus,
   promote,
   requireActive,
+  resolvePlan,
   run,
 } from "./codex-plan-marker.ts";
 
@@ -41,9 +47,97 @@ function pendingPath(home: string, hash: string): string {
   return `${home}/.codex/plans/.pending-${hash}`;
 }
 
+Deno.test("marker mutations cannot replace a pointer during matching cleanup", async () => {
+  await withHome(async ({ home, cwd, hash }) => {
+    const first = await writePlan(home);
+    const second = await writePlan(home, "second.md");
+    await activatePending(first, cwd);
+    await resolvePlan(first, cwd);
+    const read = Deno.readTextFile;
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let paused = false;
+    Deno.readTextFile = async (path, options) => {
+      const result = await read(path, options);
+      if (String(path) === activePath(home, hash) && !paused) {
+        paused = true;
+        entered.resolve();
+        await release.promise;
+      }
+      return result;
+    };
+    const clearing = clearMatching(first, cwd);
+    try {
+      await entered.promise;
+      for (
+        const operation of [
+          () => activatePending(second, cwd),
+          () => resolvePlan(second, cwd),
+          () => clearActive(cwd),
+        ]
+      ) {
+        await assertRejects(operation, Error, "locked");
+      }
+      assertEquals((await promote(cwd)).reason, "io-error");
+    } finally {
+      release.resolve();
+      Deno.readTextFile = read;
+      await clearing;
+    }
+    await activatePending(second, cwd);
+    assertEquals(await clearMatching(first, cwd), false);
+    assertEquals((await getStatus(cwd)).planPath, second);
+  });
+});
+
+Deno.test("resolve accepts expired markers and pins explicit plans across another run", async () => {
+  await withHome(async ({ home, cwd, hash }) => {
+    const plan = await writePlan(home);
+    await activatePending(plan, cwd);
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await Deno.utime(pendingPath(home, hash), stale, stale);
+    assertEquals(await resolvePlan(undefined, cwd), plan);
+    assertEquals((await getStatus(cwd)).state, "active");
+    const other = await writePlan(home, "other.md");
+    await activatePending(other, cwd);
+    assertEquals(await resolvePlan(plan, cwd), plan);
+    assertEquals((await getStatus(cwd)).planPath, other);
+    await resolvePlan(undefined, cwd);
+    assertEquals(await clearMatching(plan, cwd), false);
+    assertEquals(await clearMatching(other, cwd), true);
+  });
+});
+
+Deno.test("resolve rejects ambiguous plans and explicit symlinks", async () => {
+  await withHome(async ({ home, cwd, hash }) => {
+    const first = await writePlan(home);
+    const second = await writePlan(home, "second.md");
+    await Deno.writeTextFile(activePath(home, hash), first);
+    await Deno.writeTextFile(pendingPath(home, hash), second);
+    await assertRejects(() => resolvePlan(undefined, cwd), Error, "ambiguous");
+    const link = `${home}/.codex/plans/link.md`;
+    await Deno.symlink(first, link);
+    await assertRejects(() => resolvePlan(link, cwd), Error, "regular file");
+  });
+});
+
 function activePath(home: string, hash: string): string {
   return `${home}/.codex/plans/.active-${hash}`;
 }
+
+Deno.test("explicit resolution promotes its own pending marker and clears completion", async () => {
+  await withHome(async ({ home, cwd }) => {
+    const plan = await writePlan(home);
+    await activatePending(plan, cwd);
+    assertEquals(await resolvePlan(plan, cwd), plan);
+    assertEquals((await getStatus(cwd)).state, "active");
+    assertEquals(await clearMatching(plan, cwd), true);
+    assertEquals((await getStatus(cwd)).state, "absent");
+    await activatePending(plan, cwd);
+    assertEquals(await clearMatching(plan, cwd), true);
+    assertEquals((await getStatus(cwd)).state, "absent");
+  });
+});
 
 async function writePlan(home: string, name = "plan.md"): Promise<string> {
   const path = `${home}/.codex/plans/${name}`;

@@ -4,7 +4,7 @@ Decision aid referenced by the `plan` skill's AGREE Requirement Clarification. *
 
 ## Role and purpose
 
-- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through blocking text questions in the chat body, Codex through the Blocking Interview Protocol with `$plan --answer`). In both, A1 and A5 are the blocking gates — A7 is a non-blocking direction statement, not a confirmation turn
+- Scope: `/plan` AGREE (the main agent performs the walk directly; Claude through blocking text questions in the chat body, Codex through the Blocking Interview Protocol with `$plan --answer`). A1 and A5 block unresolved consequential decisions; Codex carries prior agreement forward without another approval, while Claude retains its skill-defined cadence. In both, A7 is non-blocking. Do not flag a skipped redundant Codex approval as a defect.
 - Trigger: complexity is one of `small` / `medium` / `large` (trivial and xl are out of scope)
 - Purpose: solidify user intent to the level where implementation will not go wrong. Not protocol checklist completion.
 - Process control (the clarity loop, convergence judgment, and rules for issuing the user-confirmation turn) is owned by SKILL.md AGREE as source of truth. This lens owns **the decision aid (oversight prevention for observations and the axes for triage judgment)**.
@@ -198,7 +198,7 @@ At AGREE clarity-gate convergence, output the following subsections immediately 
 Issuance rules for items classified as Ask. The process-control source of truth is SKILL.md AGREE / Blocking Interview Protocol Step E. Only the decision axes are here:
 
 - Ask count 0: if there are also zero additional-confirmation triggers, skip the user-confirmation turn itself
-- Ask count 1+: ask exactly one question per turn. Order by the frontier (a question whose prerequisites — prior answers or pending investigations — are unsettled waits) and by the impact priority below; carry the rest into later Ask turns. Both agents follow the same one-question cadence. Carrying the restate or a scope rationale inside a question's own text is context, not a second question, and is allowed under both
+- Ask count 1+: ask exactly one question per turn. Order by the frontier (a question whose prerequisites — prior answers or pending investigations — are unsettled waits) and by the impact priority below; carry the rest into later Ask turns. Claude keeps one question per turn; Codex may batch independent questions when its available tool supports them, while dependent decisions stay sequential. Carrying the restate or a scope rationale inside a question's own text is context, not a second question, and is allowed under both
 - Every real question must carry an AI-recommended answer with a short rationale. If you cannot recommend, the state is one of insufficient investigation / question granularity too broad / user-only decision candidates not organized — narrow the question or do more research, and only ask once a recommendation and rationale can be attached
 
 When the same uncertainty keeps remaining, do NOT auto-advance by count; have the user explicitly pick one of "choose an assumption / proceed as-is / continue clarifying / scope out". Only codebase-recoverable remainders may be delegated under `### Unresolved Items` with a concrete `next:` (do not use the legacy canonical-phrase form).

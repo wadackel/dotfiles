@@ -23,10 +23,9 @@ async function tempEvidence(
   const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  const path = await Deno.makeTempFile({
-    dir: `${home}/.codex/plans`,
-    suffix: ".evidence.json",
-  });
+  const path = `${home}/.codex/plans/${
+    data.plan.replace(/\.md$/, ".evidence.json")
+  }`;
   await Deno.writeTextFile(path, JSON.stringify(data, null, 2));
   return path;
 }
@@ -133,7 +132,7 @@ Deno.test("documents the permissioned CLI invocation used by skills", async () =
     "home/programs/codex/skills/plan/SKILL.md",
   );
   const implSkill = await Deno.readTextFile(
-    "home/programs/codex/skills/impl/SKILL.md",
+    "home/programs/codex/skills/impl/references/evidence.md",
   );
 
   assertEquals(
@@ -153,26 +152,18 @@ Deno.test("impl skill documents the combined final review contract", async () =>
 
   const required = [
     "Combined Generic Review",
-    "SECTION_VERDICT: PASS (no diff and no untracked files)",
     "git ls-files --others --exclude-standard",
-    "REVIEW_FILES",
-    "untracked file contents",
     "Area: SPEC|QUALITY",
-    "No VERDICT",
-    "malformed output",
-    "max 3 attempts",
     "Domain-Specific Reviewer Dispatch",
     "Review lifecycle budget",
-    "agent_id / role / stage / attempt / status / closed",
-    "close_agent",
-    "agent thread limit reached",
-    "retry exactly once",
-    "max 3 concurrent",
-    "bounded batch",
-    "result-integrated reviewers",
     "Security Dispatch Heuristic",
     "Reviewer self-modification",
-    "User-facing progress and final reports remain in the user's configured language",
+    "same frozen target",
+    "at most three concurrently",
+    "reruns all selected reviewers",
+    "[live]",
+    "explicitly waived",
+    "clear-matching",
   ];
 
   for (const text of required) {
@@ -290,7 +281,7 @@ Deno.test("append-evidence reads multiline stdin and appends with separator", as
   assertEquals(data.tasks[0].evidence, "first\nline\n---\nsecond\nline");
 });
 
-Deno.test("complete normalizes legacy state before writing canonical v1 JSON", async () => {
+Deno.test("legacy completion is not accepted without current verification", async () => {
   const path = await tempEvidence({
     plan: "legacy.md",
     tasks: [
@@ -308,11 +299,15 @@ Deno.test("complete normalizes legacy state before writing canonical v1 JSON", a
     ],
   } as ReturnType<typeof initPlanEvidence>);
 
-  await run(["complete", path, "task-1"]);
+  await assertRejects(
+    () => run(["complete", path, "task-1"]),
+    Error,
+    "required checks",
+  );
 
-  const data = JSON.parse(await Deno.readTextFile(path));
+  const data = normalizePlanEvidence(JSON.parse(await Deno.readTextFile(path)));
   assertEquals(data.tasks[0].subject, "Legacy task");
-  assertEquals(data.tasks[0].status, "completed");
+  assertEquals(data.tasks[0].status, "pending");
   assertEquals(data.tasks[0].evidence, '{\n  "output": "ok"\n}');
 });
 

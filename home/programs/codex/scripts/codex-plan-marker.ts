@@ -1,15 +1,7 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-// Codex plan marker pointer writer. Records per-cwd plan state as marker files
-// under ~/.codex/plans so the tmux picker can display Codex task progress.
-// These markers are UI pointers only — they do NOT gate edits. `$plan` writes a
-// `.pending-<cwd-hash>` marker; `$impl` promotes it to `.active-<cwd-hash>` and
-// resolves the plan path via require-active; completion clears the active marker.
-//
-// The marker filename format (.active-/.pending- + cwd hash), the cwd-hash
-// derivation, and the 24h freshness window are a contract read independently by
-// home/programs/tmux/picker/picker.tsx (canonical / codexCwdHash) — keep them in
-// sync.
+// The picker reads the marker format and TTL independently; changing them here
+// would leave display behavior inconsistent with plan resolution.
 
 // The shebang uses broad write permission because Deno shebang arguments cannot
 // expand HOME; all write paths are still constrained by markerPaths().
@@ -87,6 +79,8 @@ function usage(): never {
       "  codex-plan-marker.ts status [cwd]",
       "  codex-plan-marker.ts require-active [cwd]",
       "  codex-plan-marker.ts clear-active [cwd]",
+      "  codex-plan-marker.ts resolve [plan-path|-] [cwd]",
+      "  codex-plan-marker.ts clear-matching <plan-path> [cwd]",
     ].join("\n"),
   );
   Deno.exit(1);
@@ -273,7 +267,7 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
   }
 }
 
-export async function activatePending(
+async function activatePendingUnlocked(
   planPath: string,
   cwd = Deno.cwd(),
 ): Promise<MarkerPaths> {
@@ -317,7 +311,7 @@ export async function requireActive(cwd = Deno.cwd()): Promise<string> {
   }
 }
 
-export async function clearActive(cwd = Deno.cwd()): Promise<boolean> {
+async function clearActiveUnlocked(cwd: string): Promise<boolean> {
   const paths = await markerPaths(cwd);
   try {
     await Deno.remove(paths.activePath);
@@ -330,7 +324,61 @@ export async function clearActive(cwd = Deno.cwd()): Promise<boolean> {
   }
 }
 
-export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
+async function resolvePlanUnlocked(
+  planPath?: string,
+  cwd = Deno.cwd(),
+): Promise<string> {
+  const paths = await markerPaths(cwd);
+  const dir = await existingPlansDir(paths.plansDir);
+  if (!dir) throw new Error("no plan directory; select or create a plan");
+  if (planPath) {
+    const selected = await validatePlanPath(planPath, dir);
+    const active = await readMarkerPlanPath(paths.activePath, dir);
+    const pending = await readMarkerPlanPath(paths.pendingPath, dir);
+    if (
+      (!active || active === selected) && (!pending || pending === selected)
+    ) {
+      await atomicWriteText(paths.activePath, `${selected}\n`);
+      if (pending === selected) await Deno.remove(paths.pendingPath);
+    }
+    return selected;
+  }
+  const candidates = await Promise.all([
+    readMarkerPlanPath(paths.activePath, dir),
+    readMarkerPlanPath(paths.pendingPath, dir),
+  ]);
+  const unique = [
+    ...new Set(candidates.filter((p): p is string => p !== null)),
+  ];
+  if (unique.length !== 1) {
+    throw new Error(
+      "select an explicit plan path; marker is absent or ambiguous",
+    );
+  }
+  await atomicWriteText(paths.activePath, `${unique[0]}\n`);
+  if (candidates[1]) await Deno.remove(paths.pendingPath);
+  return unique[0];
+}
+
+async function clearMatchingUnlocked(
+  planPath: string,
+  cwd = Deno.cwd(),
+): Promise<boolean> {
+  const paths = await markerPaths(cwd);
+  const dir = await existingPlansDir(paths.plansDir);
+  if (!dir) return false;
+  const expected = await validatePlanPath(planPath, dir);
+  let removed = false;
+  for (const path of [paths.activePath, paths.pendingPath]) {
+    if (await readMarkerPlanPath(path, dir) === expected) {
+      await Deno.remove(path);
+      removed = true;
+    }
+  }
+  return removed;
+}
+
+async function promoteUnlocked(cwd: string): Promise<PromoteResult> {
   let status: MarkerStatus;
   try {
     status = await getStatus(cwd);
@@ -374,6 +422,74 @@ export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
   }
 }
 
+async function withMarkerLock<T>(
+  cwd: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const paths = await markerPaths(cwd);
+  await ensurePlansDir(paths.plansDir);
+  const path = `${paths.plansDir}/.marker-lock-${paths.hash}`;
+  let lock: Deno.FsFile;
+  try {
+    lock = await Deno.open(path, { createNew: true, write: true, mode: 0o600 });
+  } catch (err) {
+    if (err instanceof Deno.errors.AlreadyExists) {
+      throw new Error(
+        `marker is locked; check the writer before recovering ${path}`,
+      );
+    }
+    throw err;
+  }
+  try {
+    await lock.write(
+      new TextEncoder().encode(
+        JSON.stringify({ pid: Deno.pid, started: new Date().toISOString() }),
+      ),
+    );
+    return await operation();
+  } finally {
+    lock.close();
+    await Deno.remove(path);
+  }
+}
+
+export function activatePending(
+  planPath: string,
+  cwd = Deno.cwd(),
+): Promise<MarkerPaths> {
+  return withMarkerLock(cwd, () => activatePendingUnlocked(planPath, cwd));
+}
+
+export function clearActive(cwd = Deno.cwd()): Promise<boolean> {
+  return withMarkerLock(cwd, () => clearActiveUnlocked(cwd));
+}
+
+export function resolvePlan(
+  planPath?: string,
+  cwd = Deno.cwd(),
+): Promise<string> {
+  return withMarkerLock(cwd, () => resolvePlanUnlocked(planPath, cwd));
+}
+
+export function clearMatching(
+  planPath: string,
+  cwd = Deno.cwd(),
+): Promise<boolean> {
+  return withMarkerLock(cwd, () => clearMatchingUnlocked(planPath, cwd));
+}
+
+export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
+  try {
+    return await withMarkerLock(cwd, () => promoteUnlocked(cwd));
+  } catch (err) {
+    return {
+      promoted: false,
+      reason: "io-error",
+      error: (err as Error).message,
+    };
+  }
+}
+
 export async function run(args: string[]): Promise<void> {
   const [command, first, second] = args;
   if (!command) {
@@ -408,6 +524,26 @@ export async function run(args: string[]): Promise<void> {
   if (command === "clear-active") {
     const removed = await clearActive(first ?? Deno.cwd());
     console.log(removed ? "active-cleared" : "active-absent");
+    return;
+  }
+
+  if (command === "resolve") {
+    console.log(
+      await resolvePlan(
+        first === "-" ? undefined : first,
+        second ?? Deno.cwd(),
+      ),
+    );
+    return;
+  }
+
+  if (command === "clear-matching") {
+    if (!first) usage();
+    console.log(
+      await clearMatching(first, second ?? Deno.cwd())
+        ? "active-cleared"
+        : "active-preserved",
+    );
     return;
   }
 

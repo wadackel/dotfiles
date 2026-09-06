@@ -3,6 +3,34 @@
 This module keeps the Codex CLI configuration close to the Claude Code workflow
 used in this dotfiles repo.
 
+## Development workflows
+
+| Work | Entry point |
+|---|---|
+| Small, well-defined changes | Native Plan mode |
+| Everyday development | `$plan` followed by `$impl [absolute-plan-path]` |
+| Proofs of concept | `requirements-interview`, then Goal with explicit acceptance and stopping conditions |
+
+Plan handoffs retain purpose, non-goals, constraints, acceptance criteria, and
+implementation discretion. Accepted decisions carry forward; material new
+decisions still require an answer.
+
+`$impl` records verification against the plan and current working tree, including
+untracked files and executable bits. Its final gate requires current acceptance
+checks, independent review verdicts, and fresh live observations. An unavailable
+required check remains incomplete unless an eligible explicit waiver is recorded.
+The helper compares live identities against a declared file digest, current Git
+HEAD, or an explicitly declared manual identity; it cannot attest that external
+state never changed after observation.
+
+Plan paths remain stable across compaction and expired picker markers. Legacy
+evidence remains readable and is revalidated before completion. Markers continue
+to control display only, with the picker's existing 24-hour freshness window.
+
+See the [evidence command contract](skills/impl/references/evidence.md) for
+sidecar compatibility, locking, and supported artifact types, and the
+[evaluation protocol](evals/harness/README.md) for model and harness comparisons.
+
 ## Implemented parity
 
 - `codex-pane-status.ts`: writes Codex lifecycle state to tmux `@pane_*` options
