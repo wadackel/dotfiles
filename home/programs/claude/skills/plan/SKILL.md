@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Design-first entrypoint. Conversational planning that agrees on direction before drafting. Seven phases (parse → agree → explore → draft → deepen → decompose → activate) end with a plan file in ~/.claude/plans/ that the user approves by typing /impl.
-argument-hint: "[feature description]"
+argument-hint: "[feature description] [--max-rounds=N]"
 disable-model-invocation: true
 ---
 
@@ -31,7 +31,7 @@ AGREE is conversational and completely replaces v1's Step A–F clarity loop. DE
 
 ## PARSE
 
-Form a one-sentence restatement of the request. Do **not** emit it as standalone prose — it is carried into A1's question text, or into A5's preamble when A1 is skipped. Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation.
+Strip a `--max-rounds=N` token from the request before restating it; it only sets the DEEPEN cap. Form a one-sentence restatement of the request. Do **not** emit it as standalone prose — it is carried into A1's question text, or into A5's preamble when A1 is skipped. Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation.
 
 Estimate complexity with quick keyword + Grep/Glob probes (no Explore subagents yet). The estimate is internal working state, not output. Record which regions you probed: A1's skip rule below consumes that record.
 
@@ -177,7 +177,7 @@ Iterative critique. Logs go to `<plan>.log.md` (separate from the plan body).
 Agent({ subagent_type: "Plan", model: "opus",
         prompt: <critic-prompt template with plan + CLAUDE.md summary + round> })
 ```
-Template: `references/critic-prompt.md`. Max rounds: default 2, cap 5 (adjustable via argument-hint). Stop when verdict `CONVERGED` / max rounds reached / zero Critical Issues.
+Template: `references/critic-prompt.md`. Max rounds: default 1, cap 5 (`--max-rounds=N` in the request). A Round 1 `ITERATE` — a Dimension 7 veto or a fix that restructures the plan — earns exactly one more round even at the default; write one line `Extra round: earned — <the veto or the restructuring finding>` or `Extra round: not earned` into the log's Round 1 entry when triaging it. Stop when the verdict is `CONVERGED` or the rounds are used up. Open Round 1 evidence-check items are triaged by the main session like any other finding.
 
 Process each Critical Issue / Improvement Suggestion as one of: Self-resolvable (apply inline with `-- Why: …`), Needs user input (queue for the single end-of-phase interview), or Reject (in conflict with a previous user decision). CONVERGED does not exempt the round's findings from triage; process every attached finding before leaving DEEPEN.
 
@@ -200,13 +200,13 @@ Read the plan once with YAGNI/KISS/DRY in mind. **Only flag — do not delete.**
 The main session decomposes — no subagent dispatch.
 
 **Rules:**
-1. One task = one verifiable unit.
+1. One task = one verifiable unit: one behavior with its red, green, and refactor steps inside the same task. A failing test is a step of a task, never a task of its own.
 2. Verification commands + expected output live inside the implementation task; no standalone verification tasks except the final gate.
 3. Different concerns → different tasks; files sharing one concern → one task.
 4. Task description must carry the three elements: (1) target files, (2) expected behavior after the change, (3) acceptance criteria (commands + expected output).
 5. The final-gate task `Run /completion-audit and /subagent-review` has every implementation task in its `blockedBy`.
 
-**Anti-patterns**: splitting verification out of implementation, "confirm X" without a command, missing `blockedBy` for prerequisites, missing the final gate task, missing `## Test Strategy` for behavior changes.
+**Anti-patterns**: splitting verification out of implementation, splitting red and green into separate tasks, "confirm X" without a command, missing `blockedBy` for prerequisites, missing the final gate task, missing `## Test Strategy` for behavior changes.
 
 **2-pass TaskCreate**: pass 1 creates every implementation task and collects IDs; pass 2 creates the final-gate task and calls `TaskUpdate(gateId, addBlockedBy: implTaskIds)`. Reason: `blockedBy` needs IDs that don't exist until pass 1 completes.
 

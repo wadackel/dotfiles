@@ -89,7 +89,7 @@ VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and
 | `{baseline_sha}` | The first task's `baseline_sha` from `TaskUpdate` metadata |
 | `{diff_path}` | The diff file Step 1 wrote (`~/.claude/plans/<plan-slug>.gate.diff`) |
 | `{diff_body}` | The diff text for `code-reviewer`, `security-auditor`, and `comment-reviewer`, which have no Bash; `(see Diff file)` for every other specialist |
-| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope the earlier stages already covered. For `comment-reviewer` only, it may end with a fenced `comment-metrics:` block |
+| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns. For `comment-reviewer` only, it may end with a fenced `comment-metrics:` block |
 
 ## Usage
 

@@ -1,6 +1,6 @@
 ---
 name: subagent-review
-description: "Final-gate review skill for /impl — runs a unified Spec & Quality review → parallel orthogonal Domain specialists → Security heuristic against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
+description: "Final-gate review skill for /impl — runs Spec & Quality, Domain specialists, and Security as one parallel wave, then one re-review wave, against the aggregated diff after /completion-audit returns VERIFIED PASS. Also fires on manual invocation / 'subagent review', 'タスクレビュー', 'サブエージェントレビュー'."
 ---
 
 # Subagent Review
@@ -71,9 +71,11 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
    - At review time: `git diff <baseline_sha>..HEAD`
    - If baseline_sha unavailable (compaction): fallback to `git diff HEAD~1`
 4. **Changed files**: Extract with `git diff --name-only`
-5. **Diff file**: Write the diff from step 3 once to `~/.claude/plans/<plan-slug>.gate.diff` (`~/.claude/plans/<YYYYMMDDTHHmm>.gate.diff` when no plan file is resolvable) and pass that path to every dispatch below as `{diff_path}`. Reviewers that have Bash re-read it with `sed -n`; reviewers without Bash receive the body as well. Write it once per gate — Step 4 dispatches run in parallel and read it concurrently
+5. **Diff file**: Write the diff from step 3 once to `~/.claude/plans/<plan-slug>.gate.diff` (`~/.claude/plans/<YYYYMMDDTHHmm>.gate.diff` when no plan file is resolvable) and pass that path to every wave dispatch below as `{diff_path}` (a re-review wave passes its own `.rereview-<n>.gate.diff` instead). Reviewers that have Bash re-read it with `sed -n`; reviewers without Bash receive the body as well. Write it once per gate — Step 4 dispatches run in parallel and read it concurrently
 
 ### Step 2: Spec & Quality Review (unified stage)
+
+Evaluate Step 4's triggers and Step 5's security heuristic against the Step 1 diff and its changed-file list in this same turn (run the Step 4 / Step 5 detection snippets during Step 1 if you need the shell), record which reviewers they selected (including "none") in the gate sidecar, and dispatch every selected reviewer in the same message as the Spec & Quality reviewer; in the measured 221-minute session the stages that waited behind Spec & Quality cost 15 minutes (Spec & Quality re-review 11, security 4).
 
 Spawn a **fresh** `code-reviewer` subagent that covers spec compliance and code quality in one pass. A single dispatch replaces the former serial Spec → Quality two-stage chain — measured over a month of gates, the standalone Spec stage caught nearly nothing that the quality reviewer's combined read would not, while doubling the serial wall-clock.
 
@@ -97,14 +99,14 @@ FAIL if any spec issue OR any MUST_FIX / SHOULD_FIX quality issue exists. NIT do
 
 | Result | Action |
 |--------|--------|
-| `VERDICT: PASS` | Proceed to Step 4 |
-| `VERDICT: FAIL` | Main session fixes spec issues + MUST_FIX + SHOULD_FIX → re-review with fresh subagent |
+| `VERDICT: PASS` | Wait for the wave's other reviewers, then go to Step 4 → Handling wave results |
+| `VERDICT: FAIL` | Fix every blocker from every reviewer in the wave, then run the re-review wave in Step 4 → Handling wave results |
 | No VERDICT line | Treat as FAIL; present summary of subagent output + note VERDICT absence to user |
 | 3 consecutive FAILs | Update task description with `[BLOCKED: subagent-review spec-quality 3x failed]`, report issues to user for decision |
 
 ### Step 4: Domain-Specific Reviewer Dispatch (parallel, orthogonal triggers)
 
-Only after Spec & Quality passes. Evaluate each specialist's trigger condition independently against the diff, and dispatch **all matches in parallel** in the same assistant turn (multiple Agent tool calls in a single message).
+Dispatched in the same turn as Step 2 against the Step 1 diff. Evaluate each specialist's trigger condition independently against the diff, and dispatch **all matches in parallel** in the same assistant turn (multiple Agent tool calls in a single message).
 
 Each reviewer agent already declares its own Out of Scope delegation in frontmatter (e.g., `typescript-reviewer` delegates React concerns to `react-reviewer` and a11y concerns to `a11y-reviewer`). Because the scopes are orthogonal by design, parallel dispatch does not duplicate findings — it restores coverage that single-match dispatch was losing for stacks like `.tsx` (which legitimately needs typescript + react + a11y observations). The earlier "max 1 agent" design traded accuracy for subagent cost; this version reverses that trade-off because missed React/a11y findings were resurfacing as manual user review burden.
 
@@ -157,33 +159,35 @@ printf '%s\n' "$DIFF_FILES" | rg -q '\.(rs|go|ts|tsx|jsx|mts|cts|py|rb|lua|nix|s
 - `{baseline_sha}` — from Step 1
 - `{diff_path}` — the diff file from Step 1
 - `{diff_body}` — the diff text itself for `code-reviewer`, `security-auditor`, and `comment-reviewer` (they have no Bash); `(see Diff file)` for every other specialist
-- `{review_focus}` — this specialist's domain and any scope earlier stages already covered, in one or two sentences. For `comment-reviewer`, end it with the output of `~/.claude/scripts/comment-metrics.ts {diff_path}` in a fenced block titled `comment-metrics:`, so the reviewer judges block length from counted numbers
+- `{review_focus}` — this specialist's domain and any scope another reviewer in the same wave owns, in one or two sentences. For `comment-reviewer`, end it with the output of `~/.claude/scripts/comment-metrics.ts {diff_path}` in a fenced block titled `comment-metrics:`, so the reviewer judges block length from counted numbers
 
 The template's read-only sentence (`do not create, modify, or delete files`) and its `Diff file:` line are machine contract: `reviewer-dispatch-policy.ts` rejects a dispatch to a Bash-capable specialist without the sentence, and one to a specialist without Bash that carries neither a `.gate.diff` path nor an inline `diff --git` hunk. Change the wording in the template and the hook together.
 
 Paste the template's `## Template` block **verbatim**. Do not summarise it and do not rewrite its `VERDICT:` line. A reviewer that is not told the verdict rule returns `PASS` while listing blocker-severity findings, and Step 3's flow control then advances past findings that were never fixed. The `reviewer-dispatch-policy` PreToolUse hook rejects dispatches whose prompt lacks the rule. Dispatch every specialist unnamed (see Step 2); a named specialist stays idle until TaskStop.
 
-#### Handling results
+#### Handling wave results
 
-Each specialist returns MUST_FIX / SHOULD_FIX / NIT + VERDICT independently:
-- A specialist is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX or SHOULD_FIX issue (CRITICAL or HIGH for the 4-tier schema).
-- On FAIL, **always fix every MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) item** — the fix obligation does not depend on which re-review form follows.
-- The re-review form depends on the severities that caused the FAIL:
+This subsection is the single re-review rule for the whole wave — the Spec & Quality reviewer from Step 2, the specialists from Step 4, and the security auditor from Step 5. Each reviewer returns its findings + VERDICT independently:
+- A reviewer is FAIL when its `VERDICT: FAIL` covers at least one MUST_FIX or SHOULD_FIX issue (CRITICAL or HIGH for the 4-tier schema), or, for Spec & Quality, any spec Issue (MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE).
+- On FAIL, **always fix every MUST_FIX + SHOULD_FIX (or CRITICAL + HIGH) item and every spec Issue from every reviewer in the wave** — the fix obligation does not depend on which re-review form follows.
+- Before the re-review wave, write the fix diff to `~/.claude/plans/<plan-slug>.rereview-<n>.gate.diff` (`~/.claude/plans/<YYYYMMDDTHHmm>.rereview-<n>.gate.diff` when no plan file is resolvable; `n` counts re-review waves from 1), re-evaluate Step 4's triggers and Step 5's heuristic against that fix diff, and re-dispatch **full** every Domain specialist or security auditor whose trigger fires on it — even one that returned PASS in the wave. Code written to fix a Spec & Quality finding would otherwise receive no domain review. `code-reviewer` is re-dispatched only on its own FAIL.
+- The re-review form for a FAILed reviewer depends on what caused the FAIL:
 
   | FAIL contained | Re-review |
   |---|---|
-  | At least one MUST_FIX (or CRITICAL) | Fresh **full** re-review — re-dispatch the specialist with [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) against the whole diff |
-  | Only SHOULD_FIX / HIGH | **Diagnostic** re-review — dispatch a fresh instance with [references/rereview-diagnostic-prompt.md](references/rereview-diagnostic-prompt.md), passing the previous findings and the fix diff |
+  | At least one MUST_FIX (or CRITICAL), or any spec Issue | Fresh **full** re-review — re-dispatch the specialist with [references/domain-reviewer-prompt.md](references/domain-reviewer-prompt.md) against the whole diff; for `code-reviewer`, re-dispatch [references/spec-quality-reviewer-prompt.md](references/spec-quality-reviewer-prompt.md) with the Step 2 placeholders |
+  | Only SHOULD_FIX / HIGH | **Diagnostic** re-review — dispatch a fresh instance with [references/rereview-diagnostic-prompt.md](references/rereview-diagnostic-prompt.md), passing the previous findings, the fix diff, and the `.rereview-<n>.gate.diff` path |
+  | `security-auditor`, any FAIL (this row takes precedence over the two above) | Fresh **full** re-review (see Step 5) |
 
   A fix to a MUST_FIX-severity defect is the case most likely to disturb code the fix diff does not show, so it earns the full pass. A diagnostic round asks only whether the fix closed the reported findings.
 - A diagnostic round that returns `### Notes` containing `ESCALATE: fix introduced a new blocker` is treated as FAIL and its next round is a **full** re-review, not another diagnostic one.
-- **Both forms count against the same 3-round budget per specialist.** A specialist that has used 3 rounds in any combination is exhausted.
-- Specialists that already returned PASS are not re-dispatched.
-- Step 4 as a whole is PASS only when every dispatched specialist returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
+- **Both forms count against the same 3-round budget per reviewer.** Each reviewer dispatched in a wave consumes one round; a re-dispatch caused only by another reviewer's fix hitting its trigger does not consume that reviewer's budget — only its own FAIL does. A reviewer that has used 3 rounds in any combination is exhausted.
+- Reviewers that already returned PASS and whose trigger does not fire on the fix diff are not re-dispatched.
+- The wave as a whole is PASS only when every dispatched reviewer returns PASS (or non-blocker findings only — NIT / MEDIUM / LOW) within its 3-round budget.
 
 ### Step 5: Security Dispatch Heuristic
 
-Evaluated after Spec & Quality / Domain steps complete. Replaces the former separate Security Sweep step in `/impl`'s final gate by absorbing the heuristic directly into this skill. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
+Dispatched in the same turn as Step 2 against the Step 1 diff. Replaces the former separate Security Sweep step in `/impl`'s final gate by absorbing the heuristic directly into this skill. See [references/security-trigger-heuristic.md](references/security-trigger-heuristic.md) for the full trigger conditions.
 
 #### Summary of triggers
 
@@ -191,7 +195,7 @@ Evaluated after Spec & Quality / Domain steps complete. Replaces the former sepa
 - **Content**: `child_process`, `exec`, `eval`, `new Function`, SQL DML, `password`, `process.env.XXX`, `os/exec`, `exec.Command`, template-literal `fetch()`, string-concat HTTP
 - **Config**: `settings.json`, `.claude/**`, `.env*`, `permissions.allow*`, `secrets*.{yml,yaml,json,toml}`
 
-When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 4. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
+When any trigger fires, dispatch `security-auditor` (existing agent). Same blocker handling + max 3 rounds as Step 4 → Handling wave results. For the 4-tier schema, CRITICAL + HIGH count as blockers (fix → re-dispatch); MEDIUM + LOW are non-blockers (reported only via Mandatory Final Output).
 
 **Security always re-reviews in full.** Step 4's diagnostic path does not apply here: a HIGH-only failure still re-dispatches `security-auditor` against the whole diff. A security fix changes the shape of an attack surface rather than a single call site, so the narrower read is not worth its saving.
 
@@ -222,6 +226,7 @@ After all stages (Spec & Quality / Domain / Security) complete — regardless of
 - Path: `~/.claude/plans/<plan-slug>.gate.log.md`, derived from the resolved plan file (`<plan>.md` → `<plan>.gate.log.md`). When no plan file is resolvable (ad-hoc invocation), write to the session scratchpad instead and state that path in the reply.
 - Create the file if it does not exist; append if it does (in the normal `/impl` flow, `/completion-audit` creates it first).
 - Each write appends under a `### Round N` heading — read the existing file first to determine the next N. Never overwrite earlier rounds.
+- Add one line `Round-2 check: inside | outside Round 1 findings` stating whether any MUST_FIX or spec Issue fell outside the plan's Round 1 Critic findings (`<plan>.log.md`); `/plan`'s DEEPEN default of one round is reverted to two if this reads `outside` in any of the next three plans (started 2026-09-06; revisit this line once three plans are recorded).
 - If the write fails, fall back to the pre-sidecar behavior: emit the full findings block inline in the reply and report the write failure.
 
 ### User-facing reply template

@@ -1,6 +1,6 @@
 # Re-review Diagnostic Prompt Template
 
-Use this template for the Step 4 re-review round when the specialist's `FAIL` carried **no** `MUST_FIX` (and no `CRITICAL`) — only `SHOULD_FIX` / `HIGH` items. Replace `{placeholders}` with actual values.
+Use this template for the re-review wave when a reviewer's `FAIL` carried **no** `MUST_FIX` (and no `CRITICAL`, and for Spec & Quality no spec Issue) — only `SHOULD_FIX` / `HIGH` items. Replace `{placeholders}` with actual values.
 
 What a fix can break lives mostly inside the fix diff, so this round looks at the fix diff and asks one question: did the fix close the reported findings?
 
@@ -21,6 +21,7 @@ Keep the following fields in **English** so downstream parsing works:
 
 - `VERDICT: PASS|FAIL` line
 - Severity labels: `MUST_FIX`, `SHOULD_FIX`, `NIT`, `MEDIUM`, `LOW`, `CRITICAL`, `HIGH`
+- Type labels: `MISSING`, `EXTRA`, `MISUNDERSTOOD`, `INCOMPLETE`
 - Section headers: `### Must Fix`, `### Should Fix`, `### Nits`, `### Notes`
 - Empty-section sentinels: `None`, `(none)`
 - Field labels: `File:Line`, `Severity`, `Category`, `Description`, `Suggestion`
@@ -42,6 +43,7 @@ Do NOT re-review the whole change. Do NOT hunt for new findings outside the fix 
 
 Repo: {repo_path}
 Fix diff: `git diff {fix_baseline_sha}..HEAD`
+Diff file: {diff_path}
 Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
 
 {fix_diff}
@@ -57,7 +59,7 @@ Read the fix diff in full and, where the fix's correctness depends on surroundin
 
 ## Escape hatch
 
-If the fix diff itself introduces a **new** `MUST_FIX` (or `CRITICAL`) defect, report it under `### Must Fix`, return `VERDICT: FAIL`, and add this line verbatim to `### Notes`:
+If the fix diff itself introduces a **new** `MUST_FIX` (or `CRITICAL`) defect, or a new spec Issue (MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE, reported under `### Must Fix` prefixed with its type), report it under `### Must Fix`, return `VERDICT: FAIL`, and add this line verbatim to `### Notes`:
 
   ESCALATE: fix introduced a new blocker — switch to a full re-review
 
@@ -90,6 +92,7 @@ VERDICT: [PASS if every previous finding is CLOSED and the fix introduced no MUS
 | `{repo_path}` | Absolute path to the repository or worktree |
 | `{fix_baseline_sha}` | HEAD as of immediately before the fix was applied |
 | `{fix_diff}` | Output of `git diff {fix_baseline_sha}..HEAD` |
+| `{diff_path}` | `~/.claude/plans/<plan-slug>.rereview-<n>.gate.diff` — the fix diff written by the main session before the re-review wave; it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
 
 ## Usage
 
