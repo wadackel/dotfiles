@@ -88,6 +88,12 @@
       }
     ];
 
+    # ~/.zshrc ではなく ~/.zshenv に置く。login / 非対話を含むすべての zsh 起動で
+    # 読まれるため、Claude Code をどこから起動しても継承される。
+    envExtra = ''
+      [[ -f "$HOME/.config/zsh/local.zsh" ]] && source "$HOME/.config/zsh/local.zsh"
+    '';
+
     initContent = lib.mkMerge [
       # zprof profiling (set ZPROF=1 to enable)
       (lib.mkBefore ''
