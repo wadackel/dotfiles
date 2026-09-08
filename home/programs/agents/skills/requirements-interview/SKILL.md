@@ -1,7 +1,7 @@
 ---
 name: requirements-interview
 description: |
-  Structured requirements elicitation through iterative interviews. Transforms vague user requests into well-defined specifications and deliverables (GitHub Issues, Markdown specs, PRDs, etc.).
+  Structured requirements elicitation through iterative interviews. Transforms vague user requests into well-defined specifications and deliverables (GitHub Issues, Markdown specs, PRDs, etc.), and verifies implementation-level drafts against the code with a fresh-context implementer review before handoff.
   Use this skill when the user asks to "要件を整理して", "Issueにまとめて", "仕様を書いて", "PRDを書いて", "要求を明確にして", "ヒアリングして", "spec-writer", "requirements-interview", or when producing any specification document, feature request, bug report, or design document from ambiguous input.
   Also use proactively when the user provides a vague feature request or bug description that needs clarification before action — even if they don't explicitly ask for an interview.
 argument-hint: "[rough requirement, target artifact, or issue/spec/PRD context]"
@@ -65,7 +65,7 @@ Setup has two dimensions. For each one, **triage before blocking-asking** -- the
 
 **Decision rule.**
 
-1. If BOTH dimensions are inferable -> **skip user confirmation**. Record the inferred values as an "Assumptions (Setup)" note at the top of the Phase 4 deliverable, so the user can override on review.
+1. If BOTH dimensions are inferable -> **skip user confirmation**. Record the inferred values as the first rows of the deliverable's Assumptions table (Phase 4), so the user can override on review. When the deliverable has a fixed format that leaves no room for such a table (an ADR, a commit message), put the note in the reply that presents the artifact, never inside the artifact body.
 2. If ONE dimension is inferable -> ask only the other in a single user-confirmation turn.
 3. If NEITHER is inferable -> ask both in a single user-confirmation turn (two questions, one turn).
 
@@ -84,6 +84,7 @@ With deliverable type and detail level decided, gather the requirements and unde
    - Use Explore agents, Grep, Glob, Read to understand current behavior, relevant code paths, configurations, and existing patterns
    - Resolve questions that become self-evident from reading the code — **do not ask the user what the code can tell you**
    - Feed research findings into Phase 2: ambiguities that were resolved by research should be excluded from the ambiguity list
+   - At detail level `implementation`, this overview research is not enough on its own. Once the interview has fixed what changes, build the **surface inventory** (call sites, entry points and modes, docs stating current behavior, fixtures, type shapes on the data path) from [references/implementation-readiness.md](references/implementation-readiness.md) Part 1 before drafting. The inventory can run in the background while the last interview questions are being answered.
 
    If the request is purely conceptual (e.g., writing a PRD for a new product), skip code research.
 
@@ -165,7 +166,26 @@ Heuristic: if you filled in a value and flagged it as "please confirm", it is an
 
 This Assumptions table does not override the Phase 3 Interview gate. A user-intent decision cannot become an Assumption only because the agent has a reasonable default. Put that default in the recommended answer to the user instead.
 
+**Decisions the user cannot be asked.** When the user has waived questions ("proceed with assumptions", "no questions", "use your recommendations"), the interview gate has no user to ask, so route each remaining decision as follows:
+
+| Decision | Bucket | How to record |
+|---|---|---|
+| User-intent decision with a defensible default (desired behavior, scope, priority) | Assumption, marked as intent-bearing | State the chosen default, the rejected alternative, and what in the deliverable changes if the user overrides it. Group these first in the table so a reviewer sees them before mechanical assumptions |
+| User-intent decision with no defensible default | Open question | Name who decides and by when; the deliverable's dependent parts say they wait on it |
+| Choice that changes no behavior (a flag name, a slug, a heading) | Assumption | One row; no alternative needed |
+| Premise of the request shown false by research (the feature already exists, the bug is elsewhere) | Corrected premise in the deliverable | State what was asked, what the code shows, and the close condition; specify only what remains valid. Do not specify the original request as if the premise held. When nothing of the request survives, the deliverable is the corrected premise plus the close condition, in the format the user asked for; whether to file it at all is the user's call, so say so in the reply |
+
+The same routing applies to Phase 0 Setup inferences and to the "When NOT to interview" path below. When the deliverable has a fixed format with no Assumptions table (an ADR, a commit message), every row above goes in the reply that presents the artifact, never inside the artifact body.
+
 **Self-check before output:** Re-read the deliverable and ask: "Could someone unfamiliar with this conversation understand and act on this?" If any part relies on context only present in the conversation, make it explicit in the deliverable.
+
+**Implementation-readiness gate (detail level `implementation` only).** The self-check above tests comprehension; it does not test whether the draft's claims about code are true or whether an implementer would get stuck. Those gaps are invisible to the draft's author, who shares the interview's assumptions, so close them with the procedure in [references/implementation-readiness.md](references/implementation-readiness.md):
+
+1. Apply the drafting rules (Part 2) while writing: no mechanism asserted at finer granularity than what was read, every `file:line` verified at draft time, no undecided alternatives in the body, every acceptance criterion names its observation, every new precondition states its failure path per entry point.
+2. Before presenting the draft, dispatch the implementer review (Part 3) — one fresh-context, read-only agent with the template prompt — and fold its MUST_FIX and SHOULD_FIX findings back into the draft. Re-dispatch once if any MUST_FIX was found.
+3. Present the draft together with what the review changed, grouped by failure class.
+
+Skip this gate for `decision` and `stakeholder` deliverables. The cost is one or two agent runs per deliverable; the alternative is the same findings arriving during implementation, when they cost a re-plan.
 
 ## Handling multiple items
 
@@ -190,6 +210,6 @@ Skip the interview only when one of these is true:
 - The request already includes concrete scope, target audience, success criteria, acceptance criteria, and relevant constraints
 - The task is a mechanical rewrite of already-specified content
 
-In these cases, proceed directly to the deliverable but still apply the self-check: would a third party understand this?
+In these cases, proceed directly to the deliverable but still apply the self-check (would a third party understand this?) and, at detail level `implementation`, the implementation-readiness gate. Skipping the interview removes the questions, not the verification of the draft against the code. Decisions that would have been questions follow "Decisions the user cannot be asked" in Phase 4.
 
 A vague request to create an Issue, Markdown spec, PRD, feature request, bug report, or design document is never fully specified merely because a reasonable implementation path exists.
