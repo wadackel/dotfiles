@@ -24,7 +24,7 @@ Two guards can route the workflow to **structural mode** (see `references/static
 
 ### Guard 1: Recursion (pre-flight, evaluated on the resolved target)
 
-Fires **before Step 3 (Scenario Design)**, on whichever invocation path resolves first:
+Fires **before Step 2.5 (description measurement)**, on whichever invocation path resolves first — structural mode replaces Step 2.5 and Step 3 alike:
 - at entry if `$ARGUMENTS == "skill-improver"`, OR
 - immediately after Step 1 if the user selected `skill-improver` from the interactive list.
 
@@ -72,7 +72,39 @@ If WebFetch fails (network, 404, rate limit): fall back to `references/specifica
 
 Detailed procedure: `references/static-review.md` "Iteration 0 Minimal".
 
-Apply any fixes before Step 3. Entering empirical iteration against a drifted skill produces false-positive accuracy scores (the dispatched subagent reinterprets the skill via its description).
+Apply any fixes before Step 2.5. Entering measurement or empirical iteration against a drifted skill produces false-positive accuracy scores (the dispatched subagent reinterprets the skill via its description).
+
+### Step 2.5: Measure description trigger accuracy
+
+The description decides whether the skill is ever reached, and it cannot be
+judged by reading: the competitors it loses to are invisible from inside the
+file. Measure it every session, on every skill.
+
+Design the eval set with the user the way Step 3 designs scenarios — Claude
+proposes, the user edits and confirms — then measure the current description:
+
+```bash
+~/.claude/skills/skill-improver/scripts/measure-trigger.ts \
+  --skill=<name> --eval=<eval.json> --runs=3
+```
+
+Run it from the project root when the target is a project skill: `claude -p`
+only sees `.claude/skills/` from there. Exit 0 means every query landed on the
+expected side more often than not; go to Step 3. Exit 1 names the ones that
+did not — read the raw counts next to them rather than the exit code alone.
+Write candidate descriptions aimed at those and compare them with
+`--description=<file>`, reusing the eval set unchanged: editing it between
+versions invalidates the comparison for the same reason a frozen scenario does.
+
+Each query is capped at one turn and cut off at its first tool call, so it
+costs seconds rather than a session. The cutoff races the call it just read,
+though, so a query whose first tool is `Bash` can still start one command. The
+child inherits your permission settings, so an allow-listed command runs
+unattended and is not confined to the working directory — see
+`references/description-optimization.md` before running a large eval set.
+
+`references/description-optimization.md` covers query selection, how to read
+fire counts against run-to-run noise, and the failures no description can fix.
 
 ### Step 3: Scenario Design
 
@@ -218,6 +250,7 @@ Numbers are guide values from empirical-prompt-tuning; eyeball when metrics are 
 | "Change the scenario if it keeps failing" | Invalidates cross-iteration comparison. Frozen means frozen. |
 | "Skip hold-out — we already converged" | Hold-out catches overfitting to the frozen set. Do not skip. |
 | "Defer to the skill author's judgment on unclear points I found" | You are the evaluator. Report everything observable. |
+| "The rule is written in the skill, so it gets followed" | Deterministic judgments written as prose get eyeballed instead. Seven fresh subagents skipped the same string-prefix rule. Move determinism into a script. |
 
 ## Self-application
 
@@ -231,7 +264,7 @@ Numbers are guide values from empirical-prompt-tuning; eyeball when metrics are 
 
 ## Related Skills
 
-- **skill-tester**: validates trigger / activation (does `description` match the user's prompt?). Complementary — run it before skill-improver to fix triggering, then skill-improver for content quality.
+- **skill-tester**: runs a skill end-to-end against a scripted scenario. Trigger accuracy is not delegated to it — Step 2.5 measures the description here.
 - **skill-creator**: for creating new skills from scratch. skill-improver assumes a pre-existing skill.
 
 ## References
@@ -240,4 +273,5 @@ Numbers are guide values from empirical-prompt-tuning; eyeball when metrics are 
 - [references/scenario-and-contract.md](references/scenario-and-contract.md) — Scenario design rules, subagent launch contract, dry-run convention, hold-out generation
 - [references/improvement-patterns.md](references/improvement-patterns.md) — Step 6 patch catalog (select one theme per iteration)
 - [references/specification-summary.md](references/specification-summary.md) — Step 2 WebFetch fallback (cached skill standard summary)
+- [references/description-optimization.md](references/description-optimization.md) — Step 2.5 measurement procedure, eval-set design rules, and what the fire counts mean
 - [references/troubleshooting.md](references/troubleshooting.md) — Agent dispatch failure, metrics N/A, frozen-scenario mid-run mistakes

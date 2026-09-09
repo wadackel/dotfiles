@@ -24,6 +24,7 @@
       "Bash(*rebase-guard*)",
       "Bash(*check-plan*)",
       "Bash(*config-lint*)",
+      "Bash(*skill-improver/scripts/measure-trigger.ts*)",
       "Bash(*comment-metrics*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",

@@ -34,7 +34,7 @@ Runs **before every empirical loop**. No subagent dispatch required. Catches des
 - **Frontmatter format violation** → fix to spec
 - **Broken / orphan link** → fix link or delete orphan
 
-Apply fixes **before** entering Step 3 (Scenario Design). Otherwise the empirical loop measures a moving target.
+Apply fixes **before** entering Step 2.5 (description measurement). Otherwise the empirical loop measures a moving target.
 
 ---
 
