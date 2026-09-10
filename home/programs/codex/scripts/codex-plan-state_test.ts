@@ -158,6 +158,8 @@ Deno.test("impl skill documents the combined final review contract", async () =>
     "Review lifecycle budget",
     "Security Dispatch Heuristic",
     "Reviewer self-modification",
+    "main-review",
+    'fork_turns: "none"',
     "same frozen target",
     "at most three concurrently",
     "reruns all selected reviewers",
@@ -175,6 +177,8 @@ Deno.test("impl skill documents the combined final review contract", async () =>
   }
 
   const removed = [
+    "Select every applicable specialist",
+    "at least 20 files or 500 added/deleted lines",
     "### Step 4b: Code Quality",
     "fresh `code-reviewer` subagent を再 spawn",
     "Spec Compliance PASS 後",

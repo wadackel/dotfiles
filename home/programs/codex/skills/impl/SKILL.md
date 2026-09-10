@@ -1,6 +1,6 @@
 ---
 name: impl
-description: Executes a plan created by `$plan`, verifies the final working tree, and runs independent Codex Audit and Review gates. Emits AUDIT_VERDICT / REVIEW_VERDICT. Runs only when explicitly invoked with `$impl`.
+description: Executes a plan created by `$plan`, verifies the final working tree, and runs main-session Audit with risk-selected Review. Emits AUDIT_VERDICT / REVIEW_VERDICT. Runs only when explicitly invoked with `$impl`.
 ---
 
 # $impl
@@ -32,9 +32,9 @@ At the first task, `start` binds the canonical repository. On resumption, use th
 
 ## Task loop
 
-1. Read the original purpose, constraints, non-goals, acceptance criteria, and implementation discretion alongside the plan. Preserve pre-existing user edits. Capture the initial dirty file list so an aggregate diff does not imply ownership of unrelated changes.
+1. Read the original purpose, constraints, non-goals, acceptance criteria, and implementation discretion alongside the plan. Preserve pre-existing user edits. Capture the initial dirty file list so an aggregate diff does not imply ownership of unrelated changes. When changing review or approval instructions, preserve the governing review rules before editing; the edited rules cannot reduce this run's required verification.
 2. Identify every required check, including `[live]` and items under Requires User Confirmation. Tell the user early about observations requiring their participation; continue independent work. A required observation stays blocked until evidence or explicit waiver arrives.
-3. For each implementation task, call `start` from the repository root and declare its acceptance checks with `require`. Each task needs target files, expected behavior, and a verification method. Recover missing technical detail from the repository; ask only if the missing information changes the agreed outcome.
+3. For each implementation task, call `start` from the repository root and declare its acceptance checks with `require`. Each task needs target files, expected behavior, and a verification method. If the approved plan assigns deployment or integration checks to the final task, declare them there from the outset; completing local implementation does not complete the overall outcome. Recover missing technical detail from the repository; ask only if the missing information changes the agreed outcome.
 4. Implement the behavior. For test-first work, keep `red (expected FAIL)` and `green (expected PASS)` outputs in the evidence; only the green result establishes acceptance. Do not introduce redundant tests for a low-impact edit.
 5. Before each acceptance check, obtain a `snapshot` token. Run the verification and `record` its raw output, command or observation method, status, and that token. Redact credentials from stored or displayed output. If verification changes the artifact or gate generation, rerun against the stable artifact; do not attach old output to a new token.
 6. Call `complete` only after all required checks succeed or the user explicitly waives an eligible check. A `blocked` result is not success. Repeat for the remaining implementation tasks, then run the final gate.
@@ -55,11 +55,11 @@ The trailing task is `Final Audit + Review`. Start it after implementation tasks
 
 ### Aggregate simplification
 
-Use the first implementation task's `baseline_sha` as the aggregate review baseline, never as a per-task change counter. Include untracked additions, deletions, and mode changes. If the aggregate diff is at least 20 files or 500 added/deleted lines, run `code-simplifier` once per target before the gate. Skip when explicitly requested or below threshold. Apply only behavior-preserving, high-confidence simplifications. Reverify after edits. Do not create automatic per-task commits to work around cumulative diffs.
+Use the first implementation task's `baseline_sha` as the aggregate review baseline, never as a per-task change counter. Include untracked additions, deletions, and mode changes. Review simplification in the main session before the gate. Diff size alone does not select an agent. Use `code-simplifier` only for an explicitly requested independent simplification review. Apply only behavior-preserving, high-confidence simplifications. Reverify after edits. Do not create automatic per-task commits to work around cumulative diffs.
 
 ### Built-in Audit
 
-Declare checks for every acceptance item on its implementation task; declare `audit` plus every selected reviewer on the final task. Requirements are additive. Audit the plan against the actual implementation and complete verification evidence:
+Declare checks for every acceptance item on its owning task; deployment/integration checks explicitly assigned to the final task remain required there. Declare `audit` plus every selected review on the final task. Requirements are additive. Audit the plan against the actual implementation and complete verification evidence:
 
 - `[file-state]`, `[orchestrator-only]`, and `[live]` all gate completion.
 - Requires User Confirmation items also gate completion unless explicitly waived. Preserve the user's authorization with the waiver.
@@ -73,53 +73,53 @@ Emit `AUDIT_VERDICT: PASS` or `AUDIT_VERDICT: FAIL <reason>`. Record the audit c
 
 Construct the review inputs using `git diff <first-task baseline_sha>` and `git ls-files --others --exclude-standard`. Include untracked files in both the scope and trigger analysis. Do not use a committed-only `<sha>..HEAD` diff. Inspect paths and regular files locally; do not follow untracked symlinks outside the repository or insert raw sensitive contents into prompts.
 
-If there is no tracked diff and no untracked file, record a review PASS with the empty-scope evidence; no agent is needed. Otherwise select all applicable reviewers below. Run Combined Generic Review, matched specialists, and triggered security review in the same bounded wave, at most three concurrently. Read-only reviewers inspect the same frozen target; the main session waits for all results before editing.
+Select review from the actual change and the original acceptance criteria. File extensions, line counts, and automatically loaded specialist skills do not independently select more agents.
 
-Give fresh reviewers the original purpose, constraints, acceptance criteria, plan, aggregate diff, changed file paths, and applicable AGENTS.md paths. Do not give the implementer's conclusions or other reviewers' findings before the initial pass. Use a fresh context when the runtime supports it; a new agent ID alone does not establish independence.
+- Empty scope: record an empty-scope review; no agent is needed.
+- Low-risk scope: the main session reviews mechanical prose, comments, formatting, and other changes with no behavioral or safety effect. Use a `main-review` check and `Review executor: main session`; inspect the original acceptance criteria and diff, and record the canonical MUST_FIX/verdict format below. Do not describe this as independent review.
+- Behavior changes or non-local correctness questions: select one `code-reviewer` for combined Spec Compliance, Code Quality, and relevant domain concerns. Agent instructions, permissions, and review/approval rules change behavior even when written as one-line Markdown; they require independent review.
+- Additional specialists: select only for a concrete concern the combined review cannot adequately cover, or an explicit user request. Record each extra role's distinct question. Apply the security criteria below separately.
+
+Run selected independent reviewers against the same frozen target, at most three concurrently; collect every result before editing. Start initial independent reviews with a fresh context (`fork_turns: "none"` when supported). Give them the original purpose, constraints, acceptance criteria, plan or its path, aggregate diff, changed file paths, necessary source references, and applicable AGENTS paths. Omit the implementer's conclusions and other reviewers' findings before the initial pass. If fresh context is unavailable, disclose the limitation and leave required independent review incomplete rather than substituting main-session Review.
 
 #### Combined Generic Review
 
-Use one `code-reviewer` for Spec Compliance and Code Quality. Findings include `Area: SPEC|QUALITY`, `MUST_FIX`, `SHOULD_FIX`, `NIT`, and a standalone final `VERDICT: PASS|FAIL`.
+When independent review is selected, use one `code-reviewer` for Spec Compliance and Code Quality plus the relevant domain concerns below. Findings include `Area: SPEC|QUALITY`, `MUST_FIX`, `SHOULD_FIX`, `NIT`, and a standalone final `VERDICT: PASS|FAIL`.
 
 Selectively full-read changed files when the diff cannot establish correctness; do not eagerly read every file in full. The Codex adapter's reading policy takes precedence over its Claude source. Review the original acceptance criteria as well as the implementation plan.
 
 #### Domain-Specific Reviewer Dispatch
 
-Select every applicable specialist; do not impose a single-reviewer cutoff. Check actual changes and untracked file contents, not just repository-wide configuration presence.
+Use this table as a checklist for the main session and combined reviewer. An extension or framework match identifies review concerns, not an instruction to spawn. Add the named specialist only when a distinct, concrete risk needs separate investigation; record that risk before dispatch.
 
-| Agent | Trigger |
+| Agent | Review concerns |
 |---|---|
-| `rust-reviewer` | `.rs` file in `REVIEW_FILES` |
-| `go-reviewer` | `.go` file in `REVIEW_FILES` |
-| `dart-reviewer` | `.dart` file in `REVIEW_FILES` |
-| `nix-reviewer` | `.nix` file in `REVIEW_FILES` |
-| `typescript-reviewer` | `.ts` / `.tsx` / `.mts` / `.cts` file in `REVIEW_FILES` |
-| `react-reviewer` | `.jsx` / `.tsx` file in `REVIEW_FILES` OR tracked diff / untracked file contents contains `from "react"` / `from "react-dom"` |
-| `a11y-reviewer` | `.css` / `.scss` / `.html` file in `REVIEW_FILES` OR `.jsx` / `.tsx` file in `REVIEW_FILES` |
-| `database-reviewer` | `.sql` / `migrations/` / `schema.(sql|prisma|ts)` in `REVIEW_FILES`, OR SQL DML/DDL in tracked diff / untracked file contents |
-| `deno-reviewer` | `Deno.` API reference in tracked diff / untracked file contents OR `jsr:` / `npm:` specifier added in tracked diff / untracked file contents OR `deno.jsonc` / `deno.json` modified |
-| `cloud-architecture-reviewer` | `.tf` / `*.tfvars` / k8s yaml / Helm chart / `Dockerfile` / `docker-compose.yml` / `serverless.yml` / `.github/workflows/*.yml` in `REVIEW_FILES` |
-
+| `rust-reviewer` | Ownership, unsafe code, Send/Sync, error flow, async behavior |
+| `go-reviewer` | Goroutines, context propagation, locking, interfaces, nil values |
+| `dart-reviewer` | Null safety, widget state, async cleanup, streams, platform channels |
+| `nix-reviewer` | Evaluation, package/module integration, activation and deployed configuration |
+| `typescript-reviewer` | Type safety, async correctness, module and runtime boundaries |
+| `react-reviewer` | Hooks, effects, rendering and state behavior |
+| `a11y-reviewer` | Semantics, keyboard flow, ARIA, contrast, screen reader behavior |
+| `database-reviewer` | Queries, schema changes, migrations, transactions and data integrity |
+| `deno-reviewer` | Runtime permissions, Deno APIs, module specifiers and configuration |
+| `cloud-architecture-reviewer` | Infrastructure changes, workflow permissions, deployment and service boundaries |
 
 #### Security Dispatch Heuristic
 
-Security participates in the same wave as generic and domain review. Evaluate paths and changes, including untracked control-plane files:
+Add `security-auditor` when changes alter permission or trust boundaries, secret/credential handling, authentication/authorization, or the handling of untrusted input reaching commands, SQL, evaluation, paths, or external requests. Inspect the actual data flow and changed behavior; a path such as `scripts/` or a word such as `spawn` alone is not a security trigger.
 
-- Path: `scripts/`, `hooks/`, `auth`, `session`, `cookie`, `credential`, `secret`, `token`, `api/`, `webhook`, `oauth`, `sso`, `crypto`, `encrypt`, `decrypt`
-- Content: `child_process`, `spawn`, `execFile`, `execFileSync`, `exec(`, `execSync`, `eval(`, `new Function(`, SQL DML, `.query(`, `.exec(`, `.run(`, `password`, `passwd`, `passphrase`, `process.env.XXX`, API key / secret key / access token, `os/exec`, `exec.Command`, Rust `unsafe`, `.unwrap()`, template-literal `fetch`, string-concat HTTP calls
-- Config / control plane: `settings.json`, `.claude/**`, `.codex/**`, `.env*`, `permissions.allow*`, `secrets*.{yml,yaml,json,toml}`, `auth*.config*`, `cors*.config*`, `home/programs/codex/hooks.json`, `home/programs/codex/default.nix`, `home/programs/codex/RTK.md`, `home/programs/claude/agents/**`, `home/programs/codex/agents/**`, `home/programs/agents/**`, `home/programs/claude/skills/**`, `home/programs/codex/skills/**`
-- Reviewer self-modification: if `REVIEW_FILES` touches a Claude reviewer Markdown file referenced by a Codex reviewer TOML, a Codex reviewer TOML, or a Codex/Claude skill that controls review or approval flow, security review MUST fire and treat the change as prompt/control-plane modification. If this path is not reviewed, Security section is FAIL.
-
+**Reviewer self-modification**: changes to agent review or approval instructions require security review. This includes meaningful changes to AGENTS.md, the source that generates it, Codex/Claude reviewer definitions, delegation policy, and skills controlling review or approval. Treat them as prompt/control-plane changes even when the diff is small or Markdown-only. Preserve this run's governing review requirements when those instructions are edited; do not use the new rules to reduce the current gate.
 
 #### Review lifecycle budget
 
-Keep a ledger of agent ID, role, target, attempt, and result. Collect every result before fixing. Use the runtime's close operation for completed agents when available; absence of that operation is not a failed review. If capacity is exhausted, collect outstanding results and retry dispatch once. Unavailable required review remains blocked; do not substitute an invented PASS or local self-review.
+Keep a ledger of executor, agent ID when applicable, role, target, attempt, and result. Collect every result before fixing. Reuse the same reviewers for rechecks; give them the updated artifact and relevant changes. Close them only when the review is finished and the runtime supports it; absence of that operation is not a failed review. Do not spawn nested agents. If capacity is exhausted, collect outstanding results and retry dispatch once. Unavailable required review remains blocked; do not substitute an invented PASS or local self-review.
 
-A successful reviewer output needs exactly one `### MUST_FIX` section containing `- None` and a final `VERDICT: PASS`. A malformed or missing verdict, non-empty MUST_FIX, or `VERDICT: FAIL` fails the review. Confirm each finding against the artifact and requirements; resolve actual blockers, and record rejected false positives with evidence. Report non-blocking suggestions without treating them as mandatory scope expansion.
+A successful review output, including main-session review, needs exactly one `### MUST_FIX` section containing `- None` and a final `VERDICT: PASS`. A malformed or missing verdict, non-empty MUST_FIX, or `VERDICT: FAIL` fails the review. Confirm each finding against the artifact and requirements; resolve actual blockers, and record rejected false positives with evidence. Report non-blocking suggestions without treating them as mandatory scope expansion.
 
-Use at most three review waves. A fix changes the target, so the next wave reruns all selected reviewers and required verification, including earlier PASS results. If only a response format was invalid and the target stayed identical, repeat only that response. After the limit, preserve the in-progress gate and report unresolved blockers.
+Use at most three review waves. A fix changes the target, so the next wave reruns all selected reviewers and required verification, including earlier PASS results; reuse the existing agents rather than creating fresh IDs. Never remove already-declared review requirements to accept fewer results. If only a response format was invalid and the target stayed identical, repeat only that response. After the limit, preserve the in-progress gate and report unresolved blockers.
 
-Record each reviewer result separately. Emit per-section `SECTION_VERDICT: PASS|FAIL`, then exactly one final `REVIEW_VERDICT: PASS` or `REVIEW_VERDICT: FAIL`. All required review checks must pass on the current target before closing the gate.
+Record each review result separately, distinguishing main-session checks from independent reviewer checks. Emit per-section `SECTION_VERDICT: PASS|FAIL`, then exactly one final `REVIEW_VERDICT: PASS` or `REVIEW_VERDICT: FAIL`. All required review checks must pass on the current target before closing the gate.
 
 ## Finish
 

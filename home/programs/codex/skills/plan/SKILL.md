@@ -23,7 +23,7 @@ Once `$plan` ends with PENDING APPROVAL, the user types `$impl` as a top-level p
 
 PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
 
-AGREE resolves remaining intent decisions using the available question tool or the Blocking Interview Protocol with `$plan --answer` continuation. DEEPEN keeps the Critic + Adversarial + Simplifier subagents as default safety nets, with an additional inline over-engineering flag-only self-review layer.
+AGREE resolves remaining intent decisions using the available question tool or the Blocking Interview Protocol with `$plan --answer` continuation. DEEPEN runs in the main session by default, with one combined independent reviewer when the risk selection below requires it.
 
 ## Argument extraction
 
@@ -39,12 +39,7 @@ Guaranteed continuation syntax is `$plan --answer <answer>`. If `$plan --answer`
 
 ## Prerequisites
 
-DEEPEN depends on Codex subagent dispatch.
-
-- `~/.codex/agents/plan-critic.toml`
-- `~/.codex/agents/plan-adversarial.toml`
-- `~/.codex/agents/plan-simplifier.toml`
-- `~/.codex/agents/code-simplifier.toml` (used by `$impl` once per aggregate target on large diffs; see `$impl` SKILL.md)
+Independent DEEPEN review uses `~/.codex/agents/plan-critic.toml`. Routine planning has no subagent prerequisite. Dedicated adversarial and simplifier agents remain available for explicit independent-review requests.
 
 ## Core behavior
 
@@ -80,9 +75,20 @@ Estimate complexity with quick `rg`/`fd` probes (no Explore subagents yet):
 
 For `xl`, step out of the normal flow and ask the user whether to decompose into independently-scoped sub-projects before going further.
 
+### Independent review selection
+
+Require independent review for changes involving:
+
+- Permissions or trust boundaries, data migrations, or destructive operations.
+- Concurrency correctness or architectural changes across compatibility boundaries.
+- Agent review or approval instructions, including one-line Markdown changes.
+- Unverified technical assumptions that determine the approach, after the main session's investigation.
+
+An explicit user request for independent review also selects it. Evaluate these risks before the trivial short-circuit; file size or extension does not establish low risk. Resolve unknown user intent in AGREE, not through reviewers. Preserve an explicit user instruction to skip independent review, and record that limitation without calling the result independent.
+
 **Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1-2 words with no signal), re-elicit through AGREE before drafting.
 
-Trivial short-circuit: if complexity is trivial, skip DEEPEN and go directly to DRAFT with a minimal plan: Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
+Trivial short-circuit: if complexity is trivial, skip DEEPEN only when independent review is not required. Write a minimal DRAFT (then DEEPEN when required): Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
 
 ## AGREE
 
@@ -164,7 +170,7 @@ Write these four subsections into the plan body immediately before `## Overview`
 
 ## EXPLORE
 
-Investigate the codebase as needed for the agreed direction. The main session owns these three discovery outcomes. Usually `rg`, `sed`, file reads, and other deterministic read-only commands are enough. Explorer subagents may be used as helpers when Codex judges them useful, but their use is **optional, not mandatory and not forbidden**. Evidence from file lines, snippets, and commands must be integrated by the main session into DRAFT: Mandatory Reading, Patterns to Mirror, Test Strategy, and Completion Criteria.
+Investigate the codebase as needed for the agreed direction. The main session owns these three discovery outcomes. Usually `rg`, `sed`, file reads, and other deterministic read-only commands are enough. Use an explorer only for a bounded, substantial investigation whose intermediate output benefits from isolation; explain that benefit and avoid duplicating work already assigned to a reviewer. Evidence from file lines, snippets, and commands must be integrated by the main session into DRAFT: Mandatory Reading, Patterns to Mirror, Test Strategy, and Completion Criteria.
 
 EXPLORE commands are for observation only. Do not use network access, package-manager install or run-script, shell eval, write operations, credential access, or destructive commands during EXPLORE discovery unless explicitly approved by the user.
 
@@ -285,115 +291,43 @@ Questions for the user do not belong here — ask them in AGREE or list them und
 
 ## DEEPEN
 
-Iterative critique. Logs go to `<plan-basename>.log.md` (separate from the plan body). Prompts live in `~/.agents/skills/plan/references/`. DEEPEN subagents are predefined in `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier}.toml`.
+Review the plan against the original request and observed evidence. Logs go to `<plan-basename>.log.md`. Record the review selection and its concrete reason: `Review executor: main session` or `Review executor: independent plan-critic`.
 
-Explicit `$plan <request>` invocation is approval for the planning workflow including DEEPEN subagent deepening. Do not ask the user again for permission to start `plan-critic`, `plan-adversarial`, or `plan-simplifier`. This approval is limited to spawning named review agents. It does not grant write, network, credential, shell, or any tool permission beyond active Codex policy. Skip DEEPEN only for trivial short-circuit, missing prerequisites, unavailable spawn tool, or explicit user instruction to skip deepening/subagent review. If spawn is unavailable, record the reason in the Deepening Log and user output; do not treat local self-review as successful subagent deepening. Do not replace required subagent deepening with local self-review only because additional user permission was not requested.
+### Main-session review
 
-### Subagent Lifecycle Budget
+Check requirement alignment, technical evidence, failure behavior, verification coverage, and unnecessary complexity. Apply behavior-preserving simplifications directly; do not expand scope to satisfy optional suggestions. Use the shared checklist and specialist guidance as reading lenses without automatically dispatching their agents.
 
-This is the DEEPEN Subagent Lifecycle Budget. When DEEPEN starts subagents, keep a lightweight ledger: `agent_id / role / phase / status / closed`. After integrating a subagent result into the plan, Deepening Log, or Consolidated Interview queue, mark it result-integrated and close it with `close_agent` before the next step or round. Use `close_agent` only for result-integrated or terminal/known completed agents, not to interrupt running work.
+Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item.
 
-EXPLORE explorers are optional and not the main target of this lifecycle budget. In normal DEEPEN operation, keep live subagents bounded, with Adversarial + Simplifier as the usual true-parallel pair. Before DEEPEN, close any known completed but unclosed subagent if the runtime exposes a close operation. Its absence does not invalidate a completed review.
+When independent review is not selected, this pass completes DEEPEN. Record findings and their resolution as main-session review; do not report subagent approval.
 
-If spawn fails with `agent thread limit reached`, close known completed / terminal agents, then retry the failed dispatch exactly once. If retry still fails, do not keep spawning; follow that step's failure/degrade rule.
+### Independent review
 
-### Critic Subagent (each round)
+When PARSE's risk selection requires it, dispatch one `plan-critic` to combine critique with factual falsification. `$plan <request>` authorizes this selected review; do not ask again for permission to spawn. That authorization does not grant write, network, credential, shell, or any tool permission beyond active Codex policy.
 
-Extract `max-rounds` from the argument hint if present, default 1 and cap 5, for example `$plan --max-rounds=3 ...`. A Round 1 `ITERATE` — a Dimension 7 veto or a fix that restructures the plan — earns exactly one more round even at the default; write one line `Extra round: earned — <the veto or the restructuring finding>` or `Extra round: not earned` into the Round 1 log entry when triaging it. Prepare the plan body written in DRAFT and project AGENTS context (`~/.codex/AGENTS.md` and this repository's AGENTS.md).
+Start in a fresh context (`fork_turns: "none"` when supported). Give the reviewer the original request, constraints, acceptance criteria, the full plan or its path, applicable AGENTS paths, and necessary source references. Let it read the artifacts; omit the main session's conclusions and conversation history. The adapter reads the shared Critic prompt and adds claim verification. Do not routinely spawn separate adversarial or simplifier agents.
 
-For each round, spawn the `plan-critic` subagent:
+If the required agent, spawn tool, or independent context is unavailable, record the specific limitation and leave independent review incomplete. Do not activate the plan on a substituted self-review unless the user explicitly changes that requirement.
 
-```text
-Spawn the plan-critic subagent.
-plan-critic input:
-  {plan_content}: <full plan body>
-  {project_context}: <CLAUDE.md summary + repo facts>
-  {prior_log}: <previous round entries from <basename>.log.md, or "first round">
-Wait for its response.
-```
+The Critic returns `CONVERGED` or `ITERATE` immediately after `### Verdict`, and claim checks tagged `VERIFIED`, `FALSIFIED`, or `UNVERIFIED`. Process every finding even when the verdict is CONVERGED:
 
-The Critic contract returns `CONVERGED` or `ITERATE` on the line immediately after `### Verdict`. Even if a `Reasoning:` line follows, read only that next verdict line.
+- Resolve technical findings from code and evidence; reject false positives with evidence.
+- Resolve FALSIFIED claims before activation. For UNVERIFIED claims the approach depends on, obtain evidence or revise the approach to remove that dependency; a favorable verdict does not clear them.
+- Return consequential user-intent decisions to AGREE. Do not invent agreement from a reviewer's recommendation.
 
-The main session triages Critic output:
+Use one review round by default. A finding requiring structural revision or a test-coverage veto earns one more round; honor an explicit `--max-rounds` within a cap of five. Reuse the same reviewer for fixes and rechecks, supplying the updated artifact and relevant changes. Obtain a current review after substantive plan changes. At the limit, leave actual blockers unresolved and report them; do not convert exhaustion into approval.
 
-- **Self-resolvable**: resolve by grep/read and apply to the plan with `-- Why: ...` rationale
-- **Needs user input**: add to the Consolidated Interview queue
-- **Reject**: conflicts with a prior user decision or is irrelevant
+### Review lifecycle
 
-CONVERGED does not exempt the round's findings from triage; process every attached finding before leaving DEEPEN.
-
-Verdict extraction: `rg -m1 -A1 '^### Verdict$' <subagent-output>` and read the second line as `CONVERGED` or `ITERATE`. Append a Round N entry with verbatim subagent output to `<plan-basename>.log.md`.
-
-After triage, verdict extraction, and log append, close that round's `plan-critic` agent. Ensure the critic is closed before spawning the next round.
-
-Continue to the next step if any of these is true:
-
-- Verdict is `CONVERGED`
-- max-rounds reached (a Round 1 `ITERATE` raises the effective budget from 1 to 2)
-- same issue repeats for 2 consecutive rounds
-- zero Critical Issues
-
-Otherwise start a fresh critic for the next round.
-
-### Adversarial + Simplifier (true parallel)
-
-Spawn `plan-adversarial` and `plan-simplifier` in parallel in the same message:
-
-```text
-Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel.
-
-plan-adversarial input:
-  {plan_content}: <full plan body>
-  {project_context}: <CLAUDE.md summary + repo facts>
-  {file_paths}: <list of key file paths referenced in the plan>
-
-plan-simplifier input:
-  {plan_content}: <full plan body>
-  {original_user_request}: <the user's original request that drove the plan>
-  {project_design_principles}: <CLAUDE.md YAGNI/KISS/DRY framing>
-
-Wait for both, then return their findings together.
-```
-
-Adversarial returns findings tagged `(FALSIFIED|UNVERIFIED|VERIFIED|DESIGN_QUESTION)`. Simplifier returns proposals tagged `(HIGH|MEDIUM|LOW)` confidence. Auto-apply only HIGH subtractive proposals; send MEDIUM/LOW to the Consolidated Interview queue.
-
-Before Adversarial + Simplifier dispatch, verify result-integrated subagents in the ledger are closed. After reflecting Adversarial/Simplifier results into the plan or queue, close both.
-
-Parallel dispatch failure: if one side is missing despite same-message spawn, treat the missing side as ITERATE for Adversarial or no proposals for Simplifier. Do not re-fire in that round. If the reason is `agent thread limit reached`, clean up as defined above and retry the missing side exactly once.
-
-### Inline over-engineering self-review
-
-After the last Critic round and the Adversarial/Simplifier pair, do one inline pass with YAGNI/KISS/DRY in mind. **Only flag — do not delete.** Annotate each suspect spot with `<!-- over-eng? -->` and surface them in the Consolidated Interview. Deep simplification subagent dispatch (`plan-simplifier`) is already done in the previous step; this inline self-review is an additional flag-only layer that the main session runs without spawning a subagent.
+Keep `agent_id / role / target / result` in the log. Collect each result before changing its target. Reuse the reviewer until the review is finished, then close it when the runtime supports closing. No close operation is not a review failure. On capacity exhaustion, collect outstanding work and retry dispatch once; a required review that remains unavailable is incomplete. Do not spawn nested agents.
 
 ### Consolidated Interview
 
-At round end, collect needs-user-input items from Critic triage, Adversarial findings, Simplifier MEDIUM/LOW proposals, and inline over-engineering flags, then ask them one per Ask turn following AGREE's question format and frontier ordering, ending the turn after each question (the user answers naturally next turn, or via `$plan --answer`). The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Before the first question, show a `Self-resolved items:` block. Every real question follows the AGREE rule: recommended answer plus short rationale. If no recommendation is possible, narrow or investigate before asking. Items already resolved in AGREE do not re-enter unless the Critic surfaces them.
-
-### Definition of Done pipeline
-
-Design Completion Criteria using the `[file-state]` / `[orchestrator-only]` / `[outcome]` tag scheme defined in DRAFT. Cross-check that every implementation task's Verification Commands have a matching `[file-state]` or `[orchestrator-only]` row.
+Collect only consequential user decisions from the review and follow AGREE's question format and frontier ordering. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Each real question needs a recommendation and rationale. Technical corrections and optional style suggestions do not need another user approval. Preserve decisions already settled in AGREE.
 
 ### Deepening Log artifact
 
-Append verbatim round output to `~/.codex/plans/<plan-basename>.log.md`. Redact secrets, tokens, and credentials as `[REDACTED]`; never save raw secrets.
-
-```markdown
-### Round 1
-
-### Critic
-<verbatim subagent stdout>
-
-### Adversarial
-<verbatim subagent stdout>
-
-### Simplifier
-<verbatim subagent stdout>
-
-### Applied changes
-- <bullet 1>: <Why>
-```
-
-Round entries begin with `### Round N`. Subsection structure is not machine-consumed; paste subagent formats as returned. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
+Append main-session observations, verbatim independent reviewer output when used, and finding resolutions to `<plan-basename>.log.md`. Redact credentials. Start entries with `### Round N`; distinguish main and independent review. Record the agent and current target for any follow-up. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
 
 ## DECOMPOSE
 
@@ -431,7 +365,7 @@ deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt
 
 The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.
 
-The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Audit and fresh Codex subagent Review phase. It is not an implementation task.
+The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Audit and risk-selected Review phase. It is not an implementation task.
 
 ### Decomposition Rules
 
@@ -439,9 +373,9 @@ The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Aud
 2. Verification Commands are included in each implementation task. The only verification-only task allowed is `Final Audit + Review`.
 3. Keep separation of concerns.
 4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output.
-5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + Codex subagent Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
+5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + risk-selected Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
-`$impl` auto-spawns the `code-simplifier` subagent once per aggregate target when the diff is ≥ 20 files or ≥ 500 lines — do not create a standalone simplifier task in the plan.
+`$impl` performs routine simplification in the main session. Do not create a separate simplifier task or use diff size alone to request an agent.
 
 ### Acceptance criteria by change type
 
@@ -477,13 +411,13 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 ## Integration with existing tooling
 
 - `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex public path `~/.agents/skills/plan/references/requirement-checklist.md`, Claude public path `~/.claude/skills/plan/references/requirement-checklist.md`): shared with the Claude version through whole-dir linking. AGREE judgment lens.
-- `home/programs/agents/shared/plan/references/critic-prompt.md` / `adversarial-prompt.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): DEEPEN subagent prompts. `~/.codex/agents/{plan-critic,plan-adversarial}.toml` points to these shared workspace paths.
-- `~/.codex/agents/{plan-critic,plan-adversarial,plan-simplifier,code-simplifier}.toml`: custom agent definitions required by DEEPEN and `$impl`. Dotfiles source is `home/programs/codex/agents/`.
-- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE and finally emits `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its built-in Audit + Codex subagent review phase.
+- `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
+- `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
+- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE and finally emits `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its built-in Audit + risk-selected review phase.
 - Marker helper (`codex-plan-marker.ts`): writes the tmux picker's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes
 
-- **EXPLORE is main-session owned exploration**: the main session fills discovery outcomes and may use explorer subagents only as helpers.
-- **DEEPEN subagent dispatch is normally mandatory**: `$plan <request>` includes approval for DEEPEN subagent deepening. Do not ask for extra user permission and do not replace it with local self-review without an explicit skip condition.
-- **DEEPEN Subagent Lifecycle Budget**: close result-integrated subagents when the runtime provides `close_agent`, and keep live subagents bounded.
+- **Main-session ownership**: ordinary exploration, DEEPEN checks, and simplification stay in the main session across Codex models.
+- **Independent review follows risk**: check risk before complexity-based shortcuts. One combined reviewer verifies important design assumptions without duplicating specialist investigations.
+- **Review integrity**: preserve explicit user delegation, truthful attribution, current-artifact evidence, and bounded reuse of existing reviewers.

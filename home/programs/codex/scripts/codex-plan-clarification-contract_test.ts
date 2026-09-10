@@ -344,78 +344,51 @@ Deno.test("Codex plan skill preserves user-facing output language", async () => 
   ]);
 });
 
-Deno.test("Codex plan skill uses optional EXPLORE explorer and mandatory DEEPEN subagents", async () => {
+Deno.test("Codex plan selects independent review before the trivial bypass", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
-  const explore = section(skill, "## EXPLORE");
+  const parse = section(skill, "## PARSE");
+  const selection = section(skill, "### Independent review selection");
   const deepen = section(skill, "## DEEPEN");
-  const designNotes = section(skill, "## Design notes");
+  const riskIndex = parse.indexOf("### Independent review selection");
+  const bypassIndex = parse.indexOf("Trivial short-circuit");
 
-  assertIncludesAll(explore, [
-    "main session",
-    "discovery outcomes",
-    "may be used as helpers",
-    "optional, not mandatory and not forbidden",
-    "integrated by the main session",
-    "deterministic read-only commands",
-    "network access",
-    "package-manager install or run-script",
-    "shell eval",
-    "write",
-    "credential access",
-    "destructive command",
-    "explicitly approved by the user",
-    "Existing patterns",
-    "Execution paths and boundaries",
-    "Existing behavior, constraints, verification conditions",
-    "Unified Discovery Table",
-  ]);
-  assertExcludesAll(explore, [
-    "subagent は起動しない",
-    "Codex 版では explorer subagent へ委譲せず",
-    "Spawn three explorer",
-    "[explorer 1]",
-    "[explorer 2]",
-    "[explorer 3]",
-    "3 件すべてを `close_agent`",
+  assert(riskIndex >= 0 && bypassIndex > riskIndex);
+  assertIncludesAll(selection, [
+    "trust boundaries",
+    "review or approval instructions",
+    "one-line",
   ]);
   assertIncludesAll(deepen, [
-    "$plan <request>",
-    "DEEPEN subagent deepening",
-    "approval for the planning workflow",
-    "Do not ask the user again for permission",
-    "spawning named review agents",
+    "### Main-session review",
+    "one `plan-critic`",
+    'fork_turns: "none"',
+    "FALSIFIED",
+    "UNVERIFIED",
     "does not grant write, network, credential, shell, or any tool permission beyond active Codex policy",
-    "Skip DEEPEN only for",
-    "record the reason in the Deepening Log and user output",
-    "successful subagent deepening",
-    "Do not replace required subagent deepening with local self-review",
-    "DEEPEN Subagent Lifecycle Budget",
-    "agent_id / role / phase / status / closed",
-    "close that round's `plan-critic` agent",
-    "plan-adversarial",
-    "plan-simplifier",
-    "Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel",
-    "result-integrated subagents",
-    "close both",
-    "retry the missing side exactly once",
   ]);
-  assertExcludesAll(deepen, [
-    "permission policy",
-    "user-explicit policy",
-    "追加のユーザー許可待ち",
-    "Subagent-based DEEPEN was not dispatched",
-    "active Codex tool policy",
-    "self-review fallback",
-  ]);
-  assertIncludesAll(designNotes, [
-    "EXPLORE is main-session owned exploration",
-    "may use explorer subagents only as helpers",
+  assertExcludesAll(skill, [
     "DEEPEN subagent dispatch is normally mandatory",
-    "Do not ask for extra user permission",
-    "do not replace it with local self-review",
-    "DEEPEN Subagent Lifecycle Budget",
-    "bounded",
+    "Spawn the plan-adversarial subagent and the plan-simplifier subagent in parallel",
+    "Otherwise start a fresh critic for the next round",
+    "auto-spawns the `code-simplifier`",
   ]);
+});
+
+Deno.test("Codex delegation policy is deployed without model or size gates", async () => {
+  const policy = await readRepoFile("home/programs/codex/subagent-policy.md");
+  const nix = await readRepoFile("home/programs/codex/default.nix");
+  assertStringIncludes(nix, "builtins.readFile ./subagent-policy.md");
+  assertStringIncludes(
+    nix,
+    "builtins.readFile ../agents/shared/comment-conventions.md",
+  );
+  assertIncludesAll(policy, [
+    "main session",
+    "shared skills",
+    "explicit",
+    'fork_turns: "none"',
+  ]);
+  assert(!/gpt-\d|Astra|20 files|500 lines/i.test(policy));
 });
 
 Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate", async () => {

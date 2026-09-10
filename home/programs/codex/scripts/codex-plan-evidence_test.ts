@@ -99,6 +99,43 @@ Deno.test("completion rejects missing verification and preserves legacy evidence
   });
 });
 
+Deno.test("non-empty low-risk work completes with explicit main-session review evidence", async () => {
+  await fixture(async (path) => {
+    await Deno.writeTextFile("main.txt", "corrected prose\n");
+    await declare(path);
+    const observed = await Deno.readTextFile("main.txt");
+    assertEquals(observed, "corrected prose\n");
+    await record(path, { output: observed });
+    await run(["complete", path, "task-1"]);
+    await run(["start", path, "task-2"]);
+    await run(
+      ["require", path, "task-2"],
+      input([
+        { id: "audit", kind: "audit" },
+        { id: "main-review", kind: "review" },
+      ]),
+    );
+    await record(path, { id: "audit" }, "task-2");
+    await assertRejects(
+      () => run(["complete", path, "task-2"]),
+      Error,
+      "missing verification",
+    );
+    const output =
+      "Review executor: main session\nArea: SPEC|QUALITY\n### MUST_FIX\n- None\nVERDICT: PASS";
+    await record(path, {
+      id: "main-review",
+      command: "main-session review of the prose correction",
+      output,
+    }, "task-2");
+    await run(["complete", path, "task-2"]);
+    const final = JSON.parse(await Deno.readTextFile(path)).tasks[1];
+    assertEquals(final.status, "completed");
+    assertEquals(final.checks.at(-1).id, "main-review");
+    assertEquals(final.checks.at(-1).output, output);
+  });
+});
+
 Deno.test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS", async () => {
   await fixture(async (path) => {
     await declare(path);

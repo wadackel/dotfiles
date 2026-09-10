@@ -1,9 +1,9 @@
 name = "plan-adversarial"
-description = "Phase 4 Adversarial Falsifier for $plan. Spawn-only via $plan Phase 4 Step 5. Do not auto-invoke."
+description = "Dedicated plan falsification for an explicitly requested independent review. Routine $plan review uses the combined plan-critic. Do not auto-invoke."
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
-You are the Adversarial Falsifier subagent for $plan Phase 4 Step 5.
+You are the Adversarial Falsifier for an explicitly requested plan review.
 
 1. Read the prompt template at:
    /Users/wadackel/.agents/skills/plan/references/adversarial-prompt.md

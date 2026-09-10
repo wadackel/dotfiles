@@ -63,7 +63,9 @@ in
   # requires a darwin-rebuild.
   home.file.".codex/AGENTS.md".text =
     "@${config.home.homeDirectory}/.codex/RTK.md\n\n"
-    + builtins.readFile ../agents/shared/comment-conventions.md;
+    + builtins.readFile ../agents/shared/comment-conventions.md
+    + "\n"
+    + builtins.readFile ./subagent-policy.md;
   home.file.".codex/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".codex/hooks.json".source = ./hooks.json;
   home.file.".codex/scripts".source = dotfiles.linkHere ./. "scripts";
