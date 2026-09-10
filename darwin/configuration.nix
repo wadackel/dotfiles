@@ -247,6 +247,12 @@
       showMissionControlGestureEnabled = true; # Mission Control ジェスチャー
       showDesktopGestureEnabled = true; # デスクトップ表示ジェスチャー
       showLaunchpadGestureEnabled = true; # Launchpad ジェスチャー
+
+      # ホットコーナー設定（1 = 無効、14 = クイックメモ）
+      wvous-tl-corner = 1;
+      wvous-tr-corner = 1;
+      wvous-bl-corner = 1;
+      wvous-br-corner = 1; # 標準ではクイックメモが割り当てられている
     };
 
     # スクリーンショット設定
