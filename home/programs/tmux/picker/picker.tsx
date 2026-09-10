@@ -74,17 +74,16 @@ import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
 // ---- Usage footer layout gates ----
 
 // Same threshold as showFilterUI. Narrower than this the footer still renders
-// safely — clampUsageTokens trims rather than wrapping — but it sheds enough of
-// the second agent to stop being worth the two body rows it costs. For scale:
-// a typical render is ~66 cells, while the widest one (both agents, every
-// window at 100%, both stale) measures 87, so even at cols 80 the tail is
-// already being trimmed.
+// safely — clampUsageTokens trims rather than wrapping — but a bar-less row
+// still spends 42 cells before the tail starts disappearing, and what is left
+// stops being worth the body rows it costs.
 const USAGE_FOOTER_MIN_COLS = 80;
 
-// The footer costs 2 rows (content + marginTop), which drags the bodyHeight
-// floor from totalRows < 7 up to totalRows < 9. Suppressing below 12 keeps
-// clear of that edge instead of letting Math.max clamp into an overflow.
-const USAGE_FOOTER_MIN_ROWS = 12;
+// One agent costs 2 rows (content + marginTop) and each further agent one more,
+// so bodyHeightFor's Math.max floor engages below totalRows 8 + agents.
+// Suppressing below 11 + agents leaves three rows of clearance rather than
+// letting the clamp turn into an overflow.
+const USAGE_FOOTER_ROW_HEADROOM = 11;
 
 export function showUsageFooter(
   usageCount: number,
@@ -92,14 +91,19 @@ export function showUsageFooter(
   totalRows: number,
 ): boolean {
   return usageCount > 0 && totalCols >= USAGE_FOOTER_MIN_COLS &&
-    totalRows >= USAGE_FOOTER_MIN_ROWS;
+    totalRows >= USAGE_FOOTER_ROW_HEADROOM + usageCount;
 }
 
+// The constant 2 is the title bar and its marginBottom; the conditional 1 is
+// the footer's marginTop, which Yoga does not collapse into the row above.
 export function bodyHeightFor(
   totalRows: number,
-  footerVisible: boolean,
+  footerRows: number,
 ): number {
-  return Math.max(5, totalRows - (footerVisible ? 4 : 2));
+  return Math.max(
+    5,
+    totalRows - 2 - footerRows - (footerRows > 0 ? 1 : 0),
+  );
 }
 
 // Gutter between the list and the preview, spent as the preview's marginLeft.
@@ -756,7 +760,10 @@ function App({
   // repaints every cell on each tick. Ink clips output to the root box height,
   // so pinning the root to totalRows is what keeps overflow impossible.
   const footerVisible = showUsageFooter(usages.length, totalCols, totalRows);
-  const bodyHeight = bodyHeightFor(totalRows, footerVisible);
+  const bodyHeight = bodyHeightFor(
+    totalRows,
+    footerVisible ? usages.length : 0,
+  );
   // The baseline title bar (icon + title + Enter / j/k / Esc hints) is ~61
   // cells, fitting on one line at the popup's typical 80%-of-screen width.
   // The `w filter/clear` hint and the `[w] wait/idle` badge would push the

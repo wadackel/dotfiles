@@ -16,6 +16,7 @@ import {
   waitForExit,
 } from "./picker_e2e_harness.ts";
 import { codexCwdHash } from "./picker.tsx";
+import { stringCells } from "./cell_width.ts";
 
 // Helper: resolve a paneId (%N) to its "session:window.pane" target string.
 async function paneTarget(paneId: string): Promise<string> {
@@ -1442,11 +1443,26 @@ async function writeUsageFixture(
   );
 }
 
+// Footer rows are the only lines that open with exactly two spaces and an
+// agent name: pane row-1 leads with the pointer and a status glyph, row-2 with
+// a segment icon, and the preview starts past listWidth. A bare
+// includes("claude") would also match a pane summary.
 function footerLines(out: string): string[] {
-  return out.split("\n").filter((l) => l.includes("claude 5h"));
+  return out.split("\n").filter((l) => /^ {2}(claude|codex)\b/.test(l));
 }
 
-Deno.test("S31: usage footer renders both agents on one line", async () => {
+// The countdown glyph is a supplementary-plane code point, so a raw indexOf
+// reports the claude row one unit further right than the codex row even when
+// the two are perfectly aligned.
+function columnStart(line: string, label: string): number {
+  const at = line.indexOf(label);
+  // split()[0] on a missing label returns the whole line, which would let two
+  // rows that never carry the label compare equal.
+  if (at < 0) throw new Error(`no ${label} column in line: ${line}`);
+  return stringCells(line.slice(0, at));
+}
+
+Deno.test("S31: usage footer gives each agent its own row with aligned columns", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "footer-row-xxx" });
@@ -1462,13 +1478,18 @@ Deno.test("S31: usage footer renders both agents on one line", async () => {
       { label: "7d", usedPct: 2, resetsInSec: 400000 },
     ]);
     const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
 
     const lines = footerLines(out);
-    assertEquals(lines.length, 1);
-    assertStringIncludes(lines[0], "claude 5h 42% \u{F0450} 1h47m · 7d 13%");
-    assertStringIncludes(lines[0], "codex 5h 7%");
-    // The pane row has to survive the two rows the footer takes off bodyHeight.
+    assertEquals(lines.length, 2);
+    assertStringIncludes(lines[0], "claude");
+    assertStringIncludes(lines[0], `42% \u{F0450} 1h47m`);
+    assertStringIncludes(lines[1], "codex");
+    // At cols 200 the row budget carries bars.
+    assertStringIncludes(lines[0], "\u2588");
+    assertStringIncludes(lines[1], "\u2588");
+    assertEquals(columnStart(lines[0], "7d"), columnStart(lines[1], "7d"));
+    // The pane row has to survive the rows the footer takes off bodyHeight.
     assertStringIncludes(out, "footer-row-xxx");
 
     await sendKey(picker, "Escape");
@@ -1487,11 +1508,15 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
       { label: "7d", usedPct: 13, resetsInSec: 500000 },
     ]);
     const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+    const out = await waitFor(picker, (o) => footerLines(o).length === 1);
 
-    assertStringIncludes(footerLines(out)[0], "claude 5h -- · 7d 13%");
-    // An expired window drops its countdown along with its percentage.
-    assertFalse(footerLines(out)[0].includes("\u{F0450}"));
+    const line = footerLines(out)[0];
+    assertStringIncludes(line, "--");
+    assertStringIncludes(line, "13%");
+    // An expired window drops its countdown and its bar along with its
+    // percentage, but keeps both slots so 7d does not slide left.
+    assertFalse(line.includes("\u{F0450}"));
+    assertEquals(columnStart(line, "7d"), 46);
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1508,8 +1533,7 @@ Deno.test("S33: no usage files → no footer, body keeps its rows", async () => 
     const out = await waitFor(picker, (o) => o.includes("no-footer-xxx"));
 
     assertEquals(footerLines(out).length, 0);
-    assertFalse(out.includes("codex 5h"));
-    // The two rows the footer would have taken stay with the body: the pane's
+    // The rows the footer would have taken stay with the body: the pane's
     // own row-2 renders below its row-1 rather than being clipped away.
     assertStringIncludes(out, "no-footer-xxx");
     assertStringIncludes(out, "(no activity)");
@@ -1550,7 +1574,7 @@ Deno.test("S34: narrow width suppresses the footer and keeps the title on one li
   }
 });
 
-Deno.test("S35: longest footer is clamped to one line at cols 80", async () => {
+Deno.test("S35: cols 80 drops the bars and keeps one line per agent", async () => {
   await setupServer({ cols: 80, rows: 20 });
   try {
     await createClaudePane({ status: "running", prompt: "widest-xxx" });
@@ -1565,12 +1589,49 @@ Deno.test("S35: longest footer is clamped to one line at cols 80", async () => {
       { label: "7d", usedPct: 100, resetsInSec: 500000 },
     ], 29 * 86400);
     const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("claude 5h"));
+    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
 
-    assertEquals(footerLines(out).length, 1);
+    const lines = footerLines(out);
+    assertEquals(lines.length, 2);
+    // The bar row needs 80 cells and the budget here is 78, so the layout falls
+    // back to numbers while keeping the per-agent rows and the column grid.
+    assertFalse(lines[0].includes("\u2588"));
+    assertFalse(lines[0].includes("\u2591"));
+    assertEquals(columnStart(lines[0], "7d"), columnStart(lines[1], "7d"));
     // The prompt is width-truncated at cols 80, so the pane's target id is the
-    // stable marker that the row survived the footer's two rows.
+    // stable marker that the row survived the footer's rows.
     assertStringIncludes(out, "test:1.0");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S37: an agent missing a window leaves the column blank, not shifted", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "asymmetric-xxx" });
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6450 },
+      { label: "7d", usedPct: 13, resetsInSec: 500000 },
+    ]);
+    // Codex's current upstream shape: primary is the 7d window and secondary
+    // is null, so the picker sees one window where claude has two.
+    await writeUsageFixture("codex", [
+      { label: "7d", usedPct: 17, resetsInSec: 400000 },
+    ]);
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
+
+    const [claude, codex] = footerLines(out);
+    assertStringIncludes(claude, "5h");
+    // The gap is what makes the missing window legible; a left-packed codex row
+    // would put its 7d where claude's 5h sits.
+    assertFalse(codex.includes("5h"));
+    assertEquals(columnStart(claude, "7d"), columnStart(codex, "7d"));
+    assertStringIncludes(out, "asymmetric-xxx");
 
     await sendKey(picker, "Escape");
     await waitForExit();

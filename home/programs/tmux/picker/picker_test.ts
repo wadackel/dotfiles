@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   bodyHeightFor,
   codexCwdHash,
@@ -20,7 +20,10 @@ import {
   ROW1_FIXED_OVERHEAD,
   type Row2Seg,
   truncateTopSegBody,
-  usageTokens,
+  usageLayout,
+  usageRows,
+  usageRowWidth,
+  type UsageToken,
 } from "./components.tsx";
 import { type AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
@@ -736,8 +739,33 @@ function mkUsage(
   };
 }
 
-function usageText(usages: AgentUsage[], now = USAGE_NOW): string {
-  return usageTokens(usages, now).map((t) => t.text).join("");
+// Codex's current upstream shape: one 7d window, no 5h.
+function mkCodex7d(overrides: Partial<AgentUsage> = {}): AgentUsage {
+  return mkUsage("codex", {
+    windows: [{ label: "7d", usedPct: 17, resetsAt: USAGE_NOW + 500000 }],
+    ...overrides,
+  });
+}
+
+// Wide enough that every layout keeps its bars.
+const WIDE = 200;
+
+// Same literal the e2e assertions use; components.tsx keeps its own copy
+// private.
+const COUNTDOWN_ICON = "\u{F0450}";
+
+function rowText(row: UsageToken[]): string {
+  return row.map((t) => t.text).join("");
+}
+
+function colStart(row: UsageToken[], label: string): number {
+  const text = rowText(row);
+  const at = text.indexOf(label);
+  // split()[0] on a missing label returns the whole row, so two rows that never
+  // carry the label would compare equal and the alignment assertion would pass
+  // without observing anything.
+  if (at < 0) throw new Error(`no ${label} column in row: ${text}`);
+  return stringCells(text.slice(0, at));
 }
 
 Deno.test("showUsageFooter: hidden without data regardless of size", () => {
@@ -750,19 +778,22 @@ Deno.test("showUsageFooter: width threshold is 80", () => {
   assertEquals(showUsageFooter(2, 80, 50), true);
 });
 
-Deno.test("showUsageFooter: height threshold is 12", () => {
-  assertEquals(showUsageFooter(2, 200, 11), false);
-  assertEquals(showUsageFooter(2, 200, 12), true);
+Deno.test("showUsageFooter: the height threshold follows the agent count", () => {
+  assertEquals(showUsageFooter(1, 200, 11), false);
+  assertEquals(showUsageFooter(1, 200, 12), true);
+  assertEquals(showUsageFooter(2, 200, 12), false);
+  assertEquals(showUsageFooter(2, 200, 13), true);
 });
 
-Deno.test("bodyHeightFor: footer costs two rows", () => {
-  assertEquals(bodyHeightFor(50, false), 48);
-  assertEquals(bodyHeightFor(50, true), 46);
+Deno.test("bodyHeightFor: the footer costs its margin plus one row per agent", () => {
+  assertEquals(bodyHeightFor(50, 0), 48);
+  assertEquals(bodyHeightFor(50, 1), 46);
+  assertEquals(bodyHeightFor(50, 2), 45);
 });
 
 Deno.test("bodyHeightFor: floor stays at 5", () => {
-  assertEquals(bodyHeightFor(8, true), 5);
-  assertEquals(bodyHeightFor(6, false), 5);
+  assertEquals(bodyHeightFor(8, 1), 5);
+  assertEquals(bodyHeightFor(6, 0), 5);
 });
 
 Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
@@ -816,93 +847,173 @@ Deno.test("splitLayout: preview drops once the remainder is too thin", () => {
   assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 14 });
 });
 
-Deno.test("usageTokens: renders both agents with a 5h countdown only", () => {
-  assertEquals(
-    usageText([mkUsage("claude"), mkUsage("codex")]),
-    "claude 5h 42% \u{F0450} 1h47m · 7d 13%    codex 5h 42% \u{F0450} 1h47m · 7d 13%",
-  );
+Deno.test("usageRowWidth: the sub-slot sum is 80 with bars and 42 without", () => {
+  const base = { cols: ["5h", "7d"], agentW: 8, labelW: 2 };
+  assertEquals(usageRowWidth({ ...base, bars: true }), 80);
+  assertEquals(usageRowWidth({ ...base, bars: false }), 42);
 });
 
-Deno.test("usageTokens: expired window renders -- with no countdown", () => {
-  const usage = mkUsage("claude", {
+Deno.test("usageLayout: bars survive at the exact row width and drop one cell under", () => {
+  const usages = [mkUsage("claude"), mkCodex7d()];
+  assertEquals(usageLayout(usages, 80)?.bars, true);
+  assertEquals(usageLayout(usages, 79)?.bars, false);
+});
+
+Deno.test("usageLayout: columns are the union in encounter order", () => {
+  assertEquals(usageLayout([mkCodex7d(), mkUsage("claude")], WIDE)?.cols, [
+    "7d",
+    "5h",
+  ]);
+  assertEquals(usageLayout([mkUsage("claude"), mkCodex7d()], WIDE)?.cols, [
+    "5h",
+    "7d",
+  ]);
+});
+
+Deno.test("usageLayout: agent and label columns size to their widest member", () => {
+  const layout = usageLayout([mkUsage("claude"), mkCodex7d()], WIDE);
+  assertEquals(layout?.agentW, 8);
+  assertEquals(layout?.labelW, 2);
+});
+
+Deno.test("usageLayout: no agent with windows yields no layout", () => {
+  assertEquals(usageLayout([], WIDE), null);
+  assertEquals(usageLayout([mkUsage("claude", { windows: [] })], WIDE), null);
+});
+
+Deno.test("usageRows: one row per agent, agents without windows skipped", () => {
+  const rows = usageRows(
+    [mkUsage("claude"), mkUsage("opencode", { windows: [] }), mkCodex7d()],
+    USAGE_NOW,
+    WIDE,
+  );
+  assertEquals(rows.length, 2);
+  assertEquals(rowText(rows[0]).startsWith("claude"), true);
+  assertEquals(rowText(rows[1]).startsWith("codex"), true);
+});
+
+Deno.test("usageRows: a missing window leaves a same-width gap so 7d stays aligned", () => {
+  const [claude, codex] = usageRows(
+    [mkUsage("claude"), mkCodex7d()],
+    USAGE_NOW,
+    WIDE,
+  );
+  assertEquals(colStart(claude, "7d"), 44);
+  assertEquals(colStart(codex, "7d"), 44);
+});
+
+Deno.test("usageRows: the 7d column stays aligned once bars are dropped", () => {
+  const [claude, codex] = usageRows(
+    [mkUsage("claude"), mkCodex7d()],
+    USAGE_NOW,
+    79,
+  );
+  assertEquals(colStart(claude, "7d"), 25);
+  assertEquals(colStart(codex, "7d"), 25);
+});
+
+Deno.test("usageRows: bars appear only when the row width fits the budget", () => {
+  const withBars = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  const without = usageRows([mkUsage("claude")], USAGE_NOW, 79);
+  assertEquals(rowText(withBars[0]).includes("█"), true);
+  assertEquals(rowText(withBars[0]).includes("░"), true);
+  assertEquals(rowText(without[0]).includes("█"), false);
+  assertEquals(rowText(without[0]).includes("░"), false);
+});
+
+Deno.test("usageRows: a countdown rides the 5h window alone", () => {
+  const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  const text = rowText(row);
+  assertEquals(text.split(COUNTDOWN_ICON).length - 1, 1);
+  assertStringIncludes(text, `${COUNTDOWN_ICON} 1h47m`);
+});
+
+Deno.test("usageRows: a used window lights at least one cell", () => {
+  const barOf = (pct: number) => {
+    const usage = mkUsage("claude", {
+      windows: [{ label: "5h", usedPct: pct, resetsAt: USAGE_NOW + 6420 }],
+    });
+    return rowText(usageRows([usage], USAGE_NOW, WIDE)[0]);
+  };
+  assertStringIncludes(barOf(1), "▏█░░░░░░░░░░░░░░░▕");
+  assertStringIncludes(barOf(0), "▏░░░░░░░░░░░░░░░░▕");
+  assertStringIncludes(barOf(100), "▏████████████████▕");
+});
+
+Deno.test("usageRows: an expired window drops its bar and countdown but keeps the slots", () => {
+  const expired = mkUsage("claude", {
     windows: [
-      { label: "5h", usedPct: 42, resetsAt: USAGE_NOW - 1 },
+      { label: "5h", usedPct: 42, resetsAt: USAGE_NOW - 10 },
       { label: "7d", usedPct: 13, resetsAt: USAGE_NOW + 500000 },
     ],
   });
-  assertEquals(usageText([usage]), "claude 5h -- · 7d 13%");
+  const [row] = usageRows([expired, mkCodex7d()], USAGE_NOW, WIDE);
+  const text = rowText(row);
+  assertStringIncludes(text, "--");
+  assertEquals(text.includes(COUNTDOWN_ICON), false);
+  // The reserved bar and countdown slots keep the later column in place.
+  assertEquals(colStart(row, "7d"), 44);
 });
 
-Deno.test("usageTokens: only a percentage at or above 80 takes the alert color", () => {
+Deno.test("usageRows: only a percentage at or above 80 takes the alert color", () => {
   const usage = mkUsage("claude", {
     windows: [
-      { label: "5h", usedPct: 80, resetsAt: USAGE_NOW + 6420 },
-      { label: "7d", usedPct: 79, resetsAt: USAGE_NOW + 500000 },
+      { label: "5h", usedPct: 79, resetsAt: USAGE_NOW + 6420 },
+      { label: "7d", usedPct: 80, resetsAt: USAGE_NOW + 500000 },
     ],
   });
-  const tokens = usageTokens([usage], USAGE_NOW);
-  assertEquals(
-    tokens.filter((t) => t.color === DOGRUN.err).map((t) => t.text),
-    ["80%"],
+  const [row] = usageRows([usage], USAGE_NOW, WIDE);
+  const alerted = row.filter((t) => t.color === DOGRUN.err).map((t) => t.text);
+  assertEquals(alerted, ["█████████████", " 80%"]);
+  assertEquals(row.find((t) => t.text === " 79%")?.color, DOGRUN.fgDim);
+});
+
+Deno.test("usageRows: the unused track is dimmer than the filled run", () => {
+  const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  const track = row.find((t) => t.text.startsWith("░"));
+  const filled = row.find((t) => t.text.startsWith("█"));
+  assertEquals(track?.color, DOGRUN.dim);
+  assertEquals(filled?.color, DOGRUN.fgDim);
+});
+
+Deno.test("usageRows: stale data carries an age suffix, fresh data does not", () => {
+  const stale = mkUsage("claude", { updatedAt: USAGE_NOW - 29 * 86400 });
+  assertStringIncludes(
+    rowText(usageRows([stale], USAGE_NOW, WIDE)[0]),
+    "(29d ago)",
   );
-  assertEquals(tokens.find((t) => t.text === "79%")?.color, DOGRUN.fgDim);
-});
-
-Deno.test("usageTokens: stale data carries an age suffix", () => {
-  const usage = mkUsage("codex", { updatedAt: USAGE_NOW - 29 * 86400 });
   assertEquals(
-    usageText([usage]),
-    "codex 5h 42% \u{F0450} 1h47m · 7d 13% (29d ago)",
-  );
-});
-
-Deno.test("usageTokens: fresh data carries no age suffix", () => {
-  const usage = mkUsage("claude", { updatedAt: USAGE_NOW - 14 * 60 });
-  assertEquals(usageText([usage]).includes("ago"), false);
-});
-
-Deno.test("usageTokens: agent with no windows is skipped entirely", () => {
-  assertEquals(usageText([mkUsage("claude", { windows: [] })]), "");
-  assertEquals(
-    usageText([mkUsage("claude", { windows: [] }), mkUsage("codex")]),
-    "codex 5h 42% \u{F0450} 1h47m · 7d 13%",
+    rowText(usageRows([mkUsage("claude")], USAGE_NOW, WIDE)[0]).includes("ago"),
+    false,
   );
 });
 
 Deno.test("clampUsageTokens: budget with slack keeps every token", () => {
-  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
-  assertEquals(clampUsageTokens(tokens, 200), tokens);
+  const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  assertEquals(clampUsageTokens(row, 200), row);
 });
 
 Deno.test("clampUsageTokens: trims the straddling token and drops the rest", () => {
-  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
-  const clamped = clampUsageTokens(tokens, 10);
+  const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  const clamped = clampUsageTokens(row, 10);
   const text = clamped.map((t) => t.text).join("");
-  assertEquals(text.length <= 10, true);
+  assertEquals(stringCells(text) <= 10, true);
   assertEquals(text.startsWith("claude"), true);
 });
 
 Deno.test("clampUsageTokens: zero budget yields nothing", () => {
-  const tokens = usageTokens([mkUsage("claude")], USAGE_NOW);
-  assertEquals(clampUsageTokens(tokens, 0), []);
+  const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
+  assertEquals(clampUsageTokens(row, 0), []);
 });
 
-Deno.test("clampUsageTokens: the widest footer relies on the clamp at cols 80", () => {
-  const worst = (agent: string): AgentUsage => ({
-    agent,
-    updatedAt: USAGE_NOW - 29 * 86400,
-    windows: [
-      { label: "5h", usedPct: 100, resetsAt: USAGE_NOW + 17999 },
-      { label: "7d", usedPct: 100, resetsAt: USAGE_NOW + 500000 },
-    ],
-  });
-  const tokens = usageTokens([worst("claude"), worst("codex")], USAGE_NOW);
-  // Both agents, every window at 100%, both stale, both countdowns at their
-  // longest. The unclamped line overruns an 80-column terminal, so the footer
-  // fits by being trimmed — not by happening to be short enough.
-  assertEquals(stringCells(tokens.map((t) => t.text).join("")), 87);
-
-  const text = clampUsageTokens(tokens, 78).map((t) => t.text).join("");
-  assertEquals(stringCells(text), 78);
+Deno.test("clampUsageTokens: a row one cell over budget is truncated, not wrapped", () => {
+  // usageRows reserves the stale suffix on every row but only emits it when the
+  // file is actually stale, so the over-budget case has to be built by hand.
+  const stale = mkUsage("claude", { updatedAt: USAGE_NOW - 29 * 86400 });
+  const [row] = usageRows([stale], USAGE_NOW, 80);
+  const full = stringCells(rowText(row));
+  assertEquals(full, 80);
+  const text = clampUsageTokens(row, full - 1).map((t) => t.text).join("");
+  assertEquals(stringCells(text), full - 1);
   assertEquals(text.endsWith("…"), true);
 });

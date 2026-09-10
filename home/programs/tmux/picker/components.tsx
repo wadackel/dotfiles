@@ -393,15 +393,14 @@ export interface UsageToken {
   color: string;
 }
 
-// Only the percentage escalates, and only past this line. The per-pane context
-// % uses a three-tier gradient, but this row is reference material parked under
-// the list — colouring it on every render would keep pulling the eye back to a
-// number that rarely matters.
+// Only the percentage and the filled run of the bar escalate, and only past
+// this line. The per-pane context % uses a three-tier gradient, but this row is
+// reference material parked under the list — colouring it on every render would
+// keep pulling the eye back to a number that rarely matters.
 const USAGE_ALERT_PCT = 80;
 
-// The countdown rides the 5h window alone. A 7d reset is days out and never
-// changes what the reader does next, and carrying a countdown on all four
-// windows pushes the line past 100 cells — wide enough to wrap even at cols 80.
+// The countdown rides the shortest window alone. A 7d reset is days out and
+// never changes what the reader does next.
 const COUNTDOWN_LABEL = "5h";
 
 // U+21BB ↻ read better on paper but is absent from CaskaydiaCove Nerd Font Mono,
@@ -409,6 +408,32 @@ const COUNTDOWN_LABEL = "5h";
 // cell, bleeding over the digit next to it. Nerd Font PUA glyphs are patched to a
 // single-cell advance and never leave the primary font.
 const COUNTDOWN_ICON = "\u{F0450}"; // nf-md-refresh
+
+// Sub-slot widths. The row width is their sum, and the bar threshold is derived
+// from that sum rather than written as its own literal — a literal would keep
+// the old threshold when one of these constants moves.
+const AGENT_PAD = 2;
+const BAR_CELLS = 16;
+const BAR_BLOCK_W = BAR_CELLS + 2; // end caps
+const PCT_W = 4; // "100%" / "  1%" / "  --"
+const REMAIN_W = 5; // formatRemaining tops out at "4h59m"
+const COUNTDOWN_W = 3 + REMAIN_W; // " " + icon + " " + remaining
+const COL_GAP = 2;
+// Reserved on every row whether or not the file is currently stale. Staleness
+// flips with elapsed time, so deriving the row width from the actual suffix
+// would make the bar appear and vanish as a usage file crosses 15 minutes.
+// Sized for a two-digit age; past 99d the suffix runs one cell long and
+// clampUsageTokens trims its tail, which costs nothing that a column depends on
+// because the suffix is last on the row.
+const STALE_W = 10; // " (29d ago)"
+
+// Block Elements are East Asian Ambiguous, which charCells and tmux's utf8proc
+// both resolve to one cell; they are also present in the primary font, so no
+// CJK fallback widens them.
+const BAR_FILLED = "█";
+const BAR_TRACK = "░";
+const BAR_CAP_L = "▏";
+const BAR_CAP_R = "▕";
 
 // Neither sibling formatter fits: formatElapsed tops out at hours, so a
 // month-old file would read "696h", and formatRemaining counts down toward a
@@ -419,53 +444,171 @@ function formatAge(sec: number): string {
   return `${Math.floor(sec / 86400)}d`;
 }
 
-// Flat token list rather than a formatted string: the percentage needs its own
-// colour, and colouring a pre-joined line would mean re-finding the number
-// inside it. Callers width-clamp by walking these in order.
-export function usageTokens(
-  usages: AgentUsage[],
-  nowSec: number,
-): UsageToken[] {
-  const out: UsageToken[] = [];
-  for (const usage of usages) {
-    if (usage.windows.length === 0) continue;
-    if (out.length > 0) out.push({ text: "    ", color: DOGRUN.muted });
-    out.push({ text: usage.agent, color: DOGRUN.fgDim });
-    usage.windows.forEach((w, i) => {
-      out.push({ text: i === 0 ? " " : " · ", color: DOGRUN.muted });
-      out.push({ text: `${w.label} `, color: DOGRUN.fgDim });
-      if (isWindowExpired(w, nowSec)) {
-        // An elapsed window says the quota reset, not that nothing was spent
-        // since — rendering 0% would assert something the file cannot support.
-        out.push({ text: "--", color: DOGRUN.fgDim });
-        return;
-      }
-      out.push({
-        text: `${w.usedPct}%`,
-        color: w.usedPct >= USAGE_ALERT_PCT ? DOGRUN.err : DOGRUN.fgDim,
-      });
-      if (w.label === COUNTDOWN_LABEL) {
-        // Ink clips the tail of a <Text> holding "<supplementary-plane glyph>
-        // <body>" when a sibling <Text> follows, same as PaneRowLine's segments.
-        out.push({ text: " ", color: DOGRUN.fgDim });
-        out.push({ text: COUNTDOWN_ICON, color: DOGRUN.fgDim });
-        out.push({
-          text: ` ${formatRemaining(w.resetsAt, nowSec)}`,
-          color: DOGRUN.fgDim,
-        });
-      }
-    });
-    if (isUsageStale(usage, nowSec)) {
-      out.push({
-        text: ` (${formatAge(nowSec - usage.updatedAt)} ago)`,
-        color: DOGRUN.muted,
-      });
-    }
+export interface UsageLayout {
+  cols: string[];
+  agentW: number;
+  labelW: number;
+  bars: boolean;
+}
+
+// Union in encounter order rather than by parsed window duration. Both writers
+// already emit shortest-window-first, and USAGE_LABEL_RE admits any
+// [0-9a-z]{1,8}, so a parser would owe an ordering for labels it cannot rank.
+function usageColumns(usages: AgentUsage[]): string[] {
+  const out: string[] = [];
+  for (const u of usages) {
+    for (const w of u.windows) if (!out.includes(w.label)) out.push(w.label);
   }
   return out;
 }
 
-// Ink clips against the root box height, so a wrapped footer would silently
+// The renderer and the bar threshold must agree on this to the cell: a second
+// copy would let a cap or label change move the drawn row without moving the
+// width the threshold reasons about, and the result is a wrapped row rather
+// than a type error.
+function usageCellW(layout: UsageLayout): number {
+  return layout.labelW + 1 + (layout.bars ? BAR_BLOCK_W + 1 : 0) + PCT_W;
+}
+
+export function usageRowWidth(layout: UsageLayout): number {
+  const { cols, agentW } = layout;
+  const cellW = usageCellW(layout);
+  let w = agentW;
+  cols.forEach((label, i) => {
+    if (i > 0) w += COL_GAP;
+    w += cellW;
+    if (label === COUNTDOWN_LABEL) w += COUNTDOWN_W;
+  });
+  return w + STALE_W;
+}
+
+// Both entry points narrow to the same set; two copies of the predicate would
+// let agentW be sized off a different roster than the rows actually drawn.
+function agentsWithWindows(usages: AgentUsage[]): AgentUsage[] {
+  return usages.filter((u) => u.windows.length > 0);
+}
+
+export function usageLayout(
+  usages: AgentUsage[],
+  innerWidth: number,
+): UsageLayout | null {
+  const present = agentsWithWindows(usages);
+  if (present.length === 0) return null;
+  const cols = usageColumns(present);
+  const withBars: UsageLayout = {
+    cols,
+    agentW: Math.max(...present.map((u) => u.agent.length)) + AGENT_PAD,
+    labelW: Math.max(...cols.map((l) => l.length)),
+    bars: true,
+  };
+  return usageRowWidth(withBars) <= innerWidth
+    ? withBars
+    : { ...withBars, bars: false };
+}
+
+function barTokens(pct: number, alert: boolean): UsageToken[] {
+  // A window that has been touched at all keeps one lit cell: plain rounding
+  // draws 1% and 0% identically, and "have I started spending this" is the
+  // first question the bar exists to answer.
+  const filled = Math.min(
+    BAR_CELLS,
+    pct > 0 ? Math.max(1, Math.round(pct / 100 * BAR_CELLS)) : 0,
+  );
+  return [
+    { text: BAR_CAP_L, color: DOGRUN.muted },
+    {
+      text: BAR_FILLED.repeat(filled),
+      color: alert ? DOGRUN.err : DOGRUN.fgDim,
+    },
+    { text: BAR_TRACK.repeat(BAR_CELLS - filled), color: DOGRUN.dim },
+    { text: BAR_CAP_R, color: DOGRUN.muted },
+  ].filter((t) => t.text.length > 0);
+}
+
+function usageRowTokens(
+  usage: AgentUsage,
+  layout: UsageLayout,
+  nowSec: number,
+): UsageToken[] {
+  const { cols, agentW, labelW, bars } = layout;
+  const cellW = usageCellW(layout);
+  const byLabel = new Map(usage.windows.map((w) => [w.label, w]));
+  const out: UsageToken[] = [
+    { text: usage.agent.padEnd(agentW), color: DOGRUN.fgDim },
+  ];
+  cols.forEach((label, i) => {
+    if (i > 0) out.push({ text: " ".repeat(COL_GAP), color: DOGRUN.muted });
+    const w = byLabel.get(label);
+    if (w === undefined) {
+      out.push({ text: " ".repeat(cellW), color: DOGRUN.muted });
+      if (label === COUNTDOWN_LABEL) {
+        out.push({ text: " ".repeat(COUNTDOWN_W), color: DOGRUN.muted });
+      }
+      return;
+    }
+    const expired = isWindowExpired(w, nowSec);
+    const alert = !expired && w.usedPct >= USAGE_ALERT_PCT;
+    out.push({ text: label.padEnd(labelW) + " ", color: DOGRUN.fgDim });
+    if (bars) {
+      // An elapsed window says the quota reset, not that nothing was spent
+      // since — an empty track would assert 0%, which the file cannot support.
+      out.push(
+        ...(expired
+          ? [{ text: " ".repeat(BAR_BLOCK_W), color: DOGRUN.muted }]
+          : barTokens(w.usedPct, alert)),
+      );
+      out.push({ text: " ", color: DOGRUN.muted });
+    }
+    out.push({
+      text: (expired ? "--" : `${w.usedPct}%`).padStart(PCT_W),
+      color: alert ? DOGRUN.err : DOGRUN.fgDim,
+    });
+    if (label !== COUNTDOWN_LABEL) return;
+    if (expired) {
+      // The slot stays reserved: collapsing it would slide only this row's
+      // later columns eight cells left.
+      out.push({ text: " ".repeat(COUNTDOWN_W), color: DOGRUN.muted });
+      return;
+    }
+    // Ink clips the tail of a <Text> holding "<supplementary-plane glyph>
+    // <body>" when a sibling <Text> follows, same as PaneRowLine's segments.
+    out.push({ text: " ", color: DOGRUN.fgDim });
+    out.push({ text: COUNTDOWN_ICON, color: DOGRUN.fgDim });
+    out.push({
+      // padEnd alone widens the slot when the writer reports a reset further out
+      // than the window name implies, and the columns after it slide right.
+      text: " " +
+        truncateToCells(formatRemaining(w.resetsAt, nowSec), REMAIN_W)
+          .padEnd(REMAIN_W),
+      color: DOGRUN.fgDim,
+    });
+  });
+  if (isUsageStale(usage, nowSec)) {
+    out.push({
+      text: ` (${formatAge(nowSec - usage.updatedAt)} ago)`,
+      color: DOGRUN.muted,
+    });
+  }
+  return out;
+}
+
+// One row per agent, columns keyed on the union of window labels so an agent
+// that lacks a window leaves a gap the eye can land on. Flat token lists rather
+// than formatted strings: the percentage and the filled run need their own
+// colour, and colouring a pre-joined line would mean re-finding them inside it.
+export function usageRows(
+  usages: AgentUsage[],
+  nowSec: number,
+  innerWidth: number,
+): UsageToken[][] {
+  const layout = usageLayout(usages, innerWidth);
+  if (layout === null) return [];
+  return agentsWithWindows(usages).map((u) =>
+    usageRowTokens(u, layout, nowSec)
+  );
+}
+
+// Ink clips against the root box height, so a wrapped row would silently
 // eat the bottom pane row instead of overflowing visibly.
 export function clampUsageTokens(
   tokens: UsageToken[],
@@ -496,19 +639,25 @@ interface UsageFooterProps {
 export const UsageFooter: React.FC<UsageFooterProps> = (
   { usages, now, width }: UsageFooterProps,
 ) => {
-  const kept = clampUsageTokens(
-    usageTokens(usages, now),
-    Math.max(0, width - 2),
-  );
+  // The two leading cells are drawn per row, so the drawable budget is two
+  // narrower than the width the footer is handed.
+  const budget = Math.max(0, width - 2);
+  const rows = usageRows(usages, now, budget);
   return (
-    <Box marginTop={1}>
-      <Text>{"  "}</Text>
-      {kept.map((t, i) => (
-        // Ink 7 types Text's props as a closed object, so `key` on it fails
-        // type-check (TS2322) even though React treats key as reserved.
-        <React.Fragment key={i}>
-          <Text color={t.color}>{t.text}</Text>
-        </React.Fragment>
+    // Column direction is what makes the footer occupy exactly
+    // marginTop(1) + rows.length, which is the reservation bodyHeightFor makes.
+    <Box flexDirection="column" marginTop={1}>
+      {rows.map((row, ri) => (
+        <Box key={ri}>
+          <Text>{"  "}</Text>
+          {clampUsageTokens(row, budget).map((t, i) => (
+            // Ink 7 types Text's props as a closed object, so `key` on it fails
+            // type-check (TS2322) even though React treats key as reserved.
+            <React.Fragment key={i}>
+              <Text color={t.color}>{t.text}</Text>
+            </React.Fragment>
+          ))}
+        </Box>
       ))}
     </Box>
   );
