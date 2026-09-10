@@ -649,6 +649,14 @@ local function ap_resolve_file(bufnr)
     end
   end
 
+  -- The working-tree side is a real file buffer, so only the revision side
+  -- needs unwrapping. The root is kept so the result stays cwd-relative like
+  -- the plain-file branch below, rather than repo-relative.
+  local codediff_root, codediff_path = bufname:match("^codediff:///(.-)///[^/]+/(.+)$")
+  if codediff_path then
+    return vim.fn.fnamemodify(codediff_root .. "/" .. codediff_path, ":.")
+  end
+
   if bufname:match("^fugitive://") then
     local ok2, real = pcall(vim.fn.FugitiveReal, bufname)
     if ok2 and real ~= "" then
@@ -2890,6 +2898,8 @@ require("lazy").setup({
       },
     },
 
+    -- 消さずに残すのは、codediff.nvim から戻す判断があり得るため。
+    --[[
     {
       "sindrets/diffview.nvim",
       keys = {
@@ -3552,6 +3562,165 @@ require("lazy").setup({
               { "n", "q", actions.close, { desc = "Close help menu" } },
             },
           },
+        })
+      end,
+    },
+    ]]
+
+    {
+      "esmuellert/codediff.nvim",
+      cmd = "CodeDiff",
+      keys = {
+        { "<Leader>gD", "<cmd>CodeDiff<CR>", mode = "n", noremap = true },
+        { "<Leader>gh", "<cmd>CodeDiff history<CR>", mode = "n", noremap = true },
+        {
+          "<Leader>go",
+          function()
+            Snacks.picker.git_log({
+              confirm = function(picker)
+                local item = picker:current()
+                picker:close()
+                if item and item.commit then
+                  vim.cmd("CodeDiff " .. item.commit)
+                end
+              end,
+            })
+          end,
+          mode = "n",
+          noremap = true,
+          desc = "Git log → CodeDiff",
+        },
+      },
+      opts = function()
+        local cols = vim.o.columns
+        return {
+          explorer = {
+            view_mode = "tree",
+            -- explorer.width takes a number, not a function, so the panel
+            -- cannot track window resizes; fix it at startup width instead.
+            width = cols < 140 and math.max(20, math.floor(cols * 0.15)) or 40,
+          },
+          history = {
+            height = 16,
+          },
+        }
+      end,
+      config = function(_, opts)
+        require("codediff").setup(opts)
+
+        -- codediff exposes no panel keymap slot for scrolling the diff, so the
+        -- binding is attached from outside instead of through setup().
+        local function scroll_diff_pane(frac)
+          return function()
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+              local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+              if name:match("^codediff:///") then
+                local lines = math.max(1, math.floor(vim.api.nvim_win_get_height(win) * math.abs(frac)))
+                -- win_call rather than a window switch: the cursor has to stay
+                -- in the panel, and scrollbind carries the move to the other pane.
+                vim.api.nvim_win_call(win, function()
+                  vim.cmd("normal! " .. lines .. vim.keycode(frac > 0 and "<C-e>" or "<C-y>"))
+                end)
+                return
+              end
+            end
+          end
+        end
+
+        -- The panel has no counterpart to the view's focus_explorer, so <Leader>e
+        -- only works one way without this; two <C-w>l is the alternative.
+        local function focus_right_pane()
+          local target
+          for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+            local buf = vim.api.nvim_win_get_buf(win)
+            local name = vim.api.nvim_buf_get_name(buf)
+            -- Rightmost by column rather than by buftype: in history mode both
+            -- sides are revisions, so neither is a plain file buffer.
+            if name ~= "" and not name:match("CodeDiff %u%a+ %[") then
+              if not target or vim.api.nvim_win_get_position(win)[2] > vim.api.nvim_win_get_position(target)[2] then
+                target = win
+              end
+            end
+          end
+          if target then
+            vim.api.nvim_set_current_win(target)
+          end
+        end
+
+        -- The Explorer keeps its tree private, so the path under the cursor is
+        -- only reachable by letting codediff select the entry and reading the
+        -- path back off the event it emits.
+        local open_in_tab_pending = false
+
+        vim.api.nvim_create_autocmd("User", {
+          pattern = "CodeDiffFileSelect",
+          callback = function(event)
+            if not open_in_tab_pending then
+              return
+            end
+            open_in_tab_pending = false
+
+            local root
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(event.data.tabpage)) do
+              local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+              root = root or name:match("^codediff:///(.-)///")
+            end
+            if not root then
+              return
+            end
+
+            local target = root .. "/" .. event.data.path
+            if not vim.uv.fs_stat(target) then
+              vim.notify(event.data.path .. " is not in the working tree", vim.log.levels.WARN)
+              return
+            end
+            -- Deferred because the select this ran from is still rendering.
+            vim.schedule(function()
+              vim.cmd("tabedit " .. vim.fn.fnameescape(target))
+            end)
+          end,
+        })
+
+        local function open_entry_in_tab()
+          open_in_tab_pending = true
+          vim.api.nvim_feedkeys(vim.keycode("<CR>"), "mx", false)
+          -- Nothing fires when the cursor sits on a group or directory row.
+          open_in_tab_pending = false
+        end
+
+        vim.api.nvim_create_autocmd("User", {
+          pattern = "CodeDiffOpen",
+          callback = function(event)
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(event.data.tabpage)) do
+              local buf = vim.api.nvim_win_get_buf(win)
+              if vim.api.nvim_buf_get_name(buf):match("CodeDiff %u%a+ %[") then
+                vim.keymap.set(
+                  "n",
+                  "<C-f>",
+                  scroll_diff_pane(0.25),
+                  { buffer = buf, nowait = true, desc = "Scroll the diff down" }
+                )
+                vim.keymap.set(
+                  "n",
+                  "<C-b>",
+                  scroll_diff_pane(-0.25),
+                  { buffer = buf, nowait = true, desc = "Scroll the diff up" }
+                )
+                vim.keymap.set(
+                  "n",
+                  "<Leader>e",
+                  focus_right_pane,
+                  { buffer = buf, nowait = true, desc = "Focus the right diff pane" }
+                )
+                vim.keymap.set(
+                  "n",
+                  "<C-t>",
+                  open_entry_in_tab,
+                  { buffer = buf, nowait = true, desc = "Open the entry in a new tab" }
+                )
+              end
+            end
+          end,
         })
       end,
     },
