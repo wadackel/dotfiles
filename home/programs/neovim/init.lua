@@ -634,6 +634,10 @@ end
 local function ap_resolve_file(bufnr)
   local bufname = vim.api.nvim_buf_get_name(bufnr)
 
+  if vim.b[bufnr].diffreel_root and vim.b[bufnr].diffreel_path then
+    return vim.fn.fnamemodify(vim.b[bufnr].diffreel_root .. "/" .. vim.b[bufnr].diffreel_path, ":.")
+  end
+
   -- diffview: only when the buffer itself belongs to the diffview view.
   -- view:infer_cur_file() ignores bufnr, so we must gate on the bufname.
   if bufname:match("^diffview://") then
@@ -3568,28 +3572,42 @@ require("lazy").setup({
     ]]
 
     {
+      name = "diffreel.nvim",
+      main = "diffreel",
+      dir = "~/develop/github.com/wadackel/diffreel.nvim",
+      build = "nix build .#default",
+      cmd = {
+        "Diffreel",
+        "DiffreelClose",
+        "DiffreelRefresh",
+        "DiffreelLayout",
+        "DiffreelInstall",
+        "DiffreelPRCacheClear",
+      },
+      init = function()
+        vim.keymap.set("n", "<Leader>gD", "<cmd>Diffreel<CR>", { desc = "Review worktree with diffreel" })
+        vim.keymap.set("n", "<Leader>go", function()
+          Snacks.picker.git_log({
+            confirm = function(picker)
+              local item = picker:current()
+              picker:close()
+              if item and item.commit then
+                vim.api.nvim_cmd({ cmd = "Diffreel", args = { item.commit } }, {})
+              end
+            end,
+          })
+        end, { desc = "Git log → diffreel" })
+      end,
+      opts = function(plugin)
+        return { daemon = plugin.dir .. "/result/bin/diffreel-daemon" }
+      end,
+    },
+
+    {
       "esmuellert/codediff.nvim",
       cmd = "CodeDiff",
       keys = {
-        { "<Leader>gD", "<cmd>CodeDiff<CR>", mode = "n", noremap = true },
         { "<Leader>gh", "<cmd>CodeDiff history<CR>", mode = "n", noremap = true },
-        {
-          "<Leader>go",
-          function()
-            Snacks.picker.git_log({
-              confirm = function(picker)
-                local item = picker:current()
-                picker:close()
-                if item and item.commit then
-                  vim.cmd("CodeDiff " .. item.commit)
-                end
-              end,
-            })
-          end,
-          mode = "n",
-          noremap = true,
-          desc = "Git log → CodeDiff",
-        },
       },
       opts = function()
         local cols = vim.o.columns
