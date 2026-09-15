@@ -60,6 +60,7 @@ The Direction Agreement Gate. Conversational. Replaces v1's Step A–F clarity l
 - **Non-blocking fact-finding.** Finding facts is the session's job, never the user's. When a question needs a fact from the codebase or environment, dispatch the lookup as a background subagent and ask the next independent frontier question in the same turn; collect the result at the top of the next turn. A pending investigation only delays its downstream questions.
 - **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
 - **Recommended answer on every question.** Present concrete options and close with the recommended choice plus 1–2 sentences of reasoning. Open-ended only when no recommendation can be formed — and if no recommendation can be formed, push the question back to self-resolve first.
+- **Decide when the recommendation is settled.** When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`. Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.
 - **State the tradeoff in one sentence.** When listing approaches, name the axis in one sentence (e.g. "existing-asset reuse vs. clean-slate freedom"). Do not pad with pros/cons bullets.
 - **No trivial exception.** Even trivial requests go through AGREE. The design body can be one sentence, but agreement is mandatory.
 
@@ -68,7 +69,7 @@ The Direction Agreement Gate. Conversational. Replaces v1's Step A–F clarity l
 ```markdown
 ### <質問文をそのまま見出しにする>
 
-<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
+<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>
 
 - **A. <ラベル>** — <含意 1 行>
 - **B. <ラベル>** — <含意 1 行>
@@ -76,7 +77,7 @@ The Direction Agreement Gate. Conversational. Replaces v1's Step A–F clarity l
 > 推奨: A。<理由 1〜2 文>
 ```
 
-The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations).
+The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations).
 
 **Steps A1–A7:**
 
@@ -85,9 +86,9 @@ The heading is the question itself. Background stays at 2–3 sentences, with co
   - For small+, A1 may be skipped only when BOTH hold: (1) the request names a closed, explicit scope (a specific file / value / behavior), and (2) the PARSE probes found no adjacent candidate that could plausibly be in scope — sibling configs, other call sites, related tests, same-named assets. If (2) fails, the adjacent candidates you found **are** the scope options; "no options could be formed" cannot be claimed while holding them.
   - When skipping, open A5's preamble with the restate plus a one-line evidence record — `Scope: <X> only (no adjacent candidates; probed <what you searched>)` — and record the same finding in the plan body's `### Self-resolved` as `observation` / `value` / `source: [Direct] <probe command + file:lines>`.
 - **A2 Re-ask**: if the answer is empty or ambiguous, stay in this phase and ask again — still one question per message.
-- **A3 List approaches**: 2–3 candidate approaches, each labelled with the tradeoff axis in one sentence.
+- **A3 List approaches**: compare 2–3 candidate approaches only when their difference changes the user's outcome or constraints, each labelled with the tradeoff axis in one sentence. Routine reversible mechanics are chosen autonomously, recorded under `### Assumptions`, and listed in one line under `### Alternatives Considered` as the mechanics that were not compared.
 - **A4 Recommend**: name the AI's recommended approach and give 1–2 sentences of reasoning.
-- **A5 Approve approach** (one question): "go with recommended / pick another / modify". Wait for the user's response.
+- **A5 Approve approach** (one question): "go with recommended / pick another / modify". Wait for the user's response. Skip A5 only when A1 was asked and its answer already chose the approach, or when A1 was asked and A3 made no comparison because the candidates' difference changes nothing for the user; when A1 was skipped, A5 always fires. A skipped A5 is recorded in A7's `Proceeding with:` as the approach and why it was not asked.
 - **A6 Companion consent** (only when upcoming questions are likely visual — UI mockups, layout comparisons, etc.): offer `/agent-browser` in a **standalone message**, once (no other content in that turn). Skip A6 entirely when no visual questions are anticipated. Per-question decision afterwards: visual → browser, conceptual → terminal.
 - **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` as prose and advance to EXPLORE immediately. Do not wait. The sentence survives compaction as a durable anchor and keeps EXPLORE/DEEPEN from drifting, but asking for an OK on a direction A5 just approved buys nothing.
 

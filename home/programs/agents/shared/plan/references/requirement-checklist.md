@@ -138,7 +138,7 @@ Triage for NotClear items is decided NOT by per-observation fixed defaults but b
 | Low cost, high recoverability | **Self-resolve** (AGREE lightweight probe) or **Draft assumption** (only for non-blocking technical/default detail) |
 | High cost, high recoverability | Prefer **Self-resolve**; if probing is impossible, **Ask** |
 
-**Handling of How**: do not adopt the "unconditionally assume" hard default. How is judged on the same two axes as every other observation. It typically lands in "low cost × high recoverability" and becomes a Draft assumption as a non-blocking technical/default detail, but when there is a signal that the user has an explicit preference, Ask is also a valid call.
+**Handling of How**: do not adopt the "unconditionally assume" hard default. How is judged on the same two axes as every other observation. It typically lands in "low cost × high recoverability" and becomes a Draft assumption as a non-blocking technical/default detail, but when there is a signal that the user holds a preference that differs from the settled convention, Ask is also a valid call. When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.
 
 **Restrictions on Assumptions**: `Assume` / `Draft assumption` are only for non-blocking technical/default detail, or for assumptions the user has explicitly chosen. Desired behavior, scope boundaries, success criteria, priority, audience, risk tolerance, and trade-off acceptance are treated as user decisions even when they look light.
 

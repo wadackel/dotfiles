@@ -108,7 +108,7 @@ Ask questions in the chat body by default, using the question format below. The 
 ```markdown
 ### <質問文をそのまま見出しにする>
 
-<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
+<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>
 
 - **A. <ラベル>** — <含意 1 行>
 - **B. <ラベル>** — <含意 1 行>
@@ -116,7 +116,7 @@ Ask questions in the chat body by default, using the question format below. The 
 > 推奨: A。<理由 1〜2 文>
 ```
 
-The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision — show visual/structural comparisons as fenced blocks inside the question body. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions. Follow these principles:
+The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions. Follow these principles:
 
 **Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts, and a text question still accepts free-form answers when none of the options fit.
 

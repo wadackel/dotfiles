@@ -67,6 +67,21 @@ const INTERVIEW_RULE_NEEDLES = [
 // enforces blocking, and the sentence would duplicate that contract.
 const BLOCKING_RULE_NEEDLE =
   "The question is the last content in the turn; end the turn and do not advance until the answer arrives.";
+// The question-background rules and the "decide when settled" rule are shared
+// prose like the cadence sentences above; each is pinned character-identical in
+// the files listed with it so those copies cannot drift apart. Codex plan is
+// excluded: its question format keeps the older background wording on purpose,
+// and it reaches the settled-decision rule through the shared checklist.
+const QUESTION_BACKGROUND_NEEDLES = [
+  "Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back.",
+  "When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready.",
+  "<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>",
+];
+const DECIDE_WHEN_SETTLED_NEEDLE =
+  "When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.";
+// Pinned on its own so the carve-out cannot be dropped while the rule survives.
+const DECIDE_WHEN_SETTLED_CARVE_OUT =
+  "Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.";
 const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["Codex plan", CODEX_PLAN],
   ["Claude plan", CLAUDE_PLAN],
@@ -304,6 +319,22 @@ Deno.test("text questions block the turn where no tool enforces it", async () =>
   for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {
     assertStringIncludes(await readRepoFile(path), BLOCKING_RULE_NEEDLE);
   }
+});
+
+Deno.test("question background carries the premise and option samples", async () => {
+  for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {
+    assertIncludesAll(await readRepoFile(path), QUESTION_BACKGROUND_NEEDLES);
+  }
+});
+
+Deno.test("settled recommendations are decided, not asked", async () => {
+  for (const path of [CLAUDE_PLAN, SHARED_CHECKLIST]) {
+    assertStringIncludes(await readRepoFile(path), DECIDE_WHEN_SETTLED_NEEDLE);
+  }
+  assertStringIncludes(
+    await readRepoFile(CLAUDE_PLAN),
+    DECIDE_WHEN_SETTLED_CARVE_OUT,
+  );
 });
 
 Deno.test("Codex Approval Summary exposes approval decision details", async () => {
