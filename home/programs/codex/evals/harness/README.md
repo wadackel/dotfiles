@@ -79,7 +79,7 @@ raw events and interrupt unanswered required questions without sending approval.
 
 ```sh
 rtk proxy python3 -m unittest discover -s home/programs/codex/evals/harness -p '*_test.py'
-rtk proxy deno test --allow-read --allow-write --allow-env --allow-run home/programs/codex/scripts/codex-plan-state_test.ts home/programs/codex/scripts/codex-plan-evidence_test.ts home/programs/codex/scripts/codex-plan-marker_test.ts home/programs/codex/scripts/codex-plan-clarification-contract_test.ts
+rtk proxy deno test --allow-read --allow-write --allow-env --allow-run home/programs/agents/scripts/plan-state_test.ts home/programs/agents/scripts/plan-evidence_test.ts home/programs/codex/scripts/codex-plan-marker_test.ts home/programs/codex/scripts/codex-plan-clarification-contract_test.ts
 ```
 
 Keep reliability changes separate from review/effort configuration. Revert an

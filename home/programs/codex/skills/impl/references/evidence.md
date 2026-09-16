@@ -3,7 +3,7 @@
 Use the existing helper; do not assemble sidecars or hashes inline. Every command takes an absolute `.evidence.json` path under the real `~/.codex/plans` directory. Run from the bound repository. The file's `plan` is the matching `.md` basename.
 
 ```bash
-rtk proxy deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
+rtk proxy deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.agents/scripts/plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
 ```
 
 Replace `normalize` with the command below, retaining the permission flags:
@@ -15,6 +15,7 @@ Replace `normalize` with the command below, retaining the permission flags:
 | `snapshot` | `<path>` | Print a verification token binding the artifact hash to the current gate generation |
 | `record` | `<path> task-N`; JSON object on stdin | Append result only if target still matches |
 | `append-evidence` | `<path> task-N`; text on stdin | Append narrative or expected-red evidence, without establishing PASS |
+| `coverage` | `<path>` | Exit 1 listing every `### Autonomous Verification` bullet whose `cc-<n>` id no task requires |
 | `complete` | `<path> task-N` | Reject absent, stale, failed, or blocked required checks |
 | `reconcile` | `<path>` | Reopen stale completed tasks while retaining evidence |
 
@@ -26,7 +27,7 @@ Declare each acceptance criterion, including required user observations. Use sta
 
 For live checks, declare `expected` as a repository-relative `file` (helper derives its SHA-256), `{"git_head":true}` (helper reads current HEAD for CI), or `{"identity":"<approved runtime identity>"}` for a manually observed surface. The record must match that source as well as the observed artifact. A manually declared identity is not independent deployment attestation.
 
-Kinds: `file-state`, `orchestrator-only`, `live`, `audit`, `review`. The final task requires an audit and at least one review check; declare each selected review role separately. For low-risk main-session Review, use `main-review` and include `Review executor: main session` in its output. For independent review, identify the agent and role. The helper validates evidence and verdicts, not who performed the review; record that attribution honestly. With an empty review scope, use a review check documenting the empty diff. The final gate validates current checks across all implementation tasks too.
+Kinds: `file-state`, `orchestrator-only`, `live`, `audit`, `review`. The final task requires at least one review check; `audit` is accepted but not required, because `complete` re-verifies every implementation task against the current artifact and `coverage` checks that every Autonomous Verification bullet has a declared check. Declare each selected review role separately. For low-risk main-session Review, use `main-review` and include `Review executor: main session` in its output. For independent review, identify the agent and role. The helper validates evidence and verdicts, not who performed the review; record that attribution honestly. With an empty review scope, use a review check documenting the empty diff. The final gate validates current checks across all implementation tasks too.
 
 Capture `snapshot` before running a check, then submit:
 
@@ -42,4 +43,4 @@ Schema v2 adds `version`, `repository`, and optional per-task `required` / `chec
 
 Mutations acquire an exclusive sibling `.lock` containing writer PID and start time. On a lock error, check that writer before any recovery; never delete another active writer's lock or automatically age it out. Initialization refuses to overwrite an existing sidecar.
 
-At final completion, live, audit, and review records must belong to the current gate generation. The helper validates the pre-check token, then stores the artifact hash as `target` and adds the generation; do not submit the generation yourself. A result begun before a new gate is rejected even when files are unchanged. Already recorded local checks remain reusable for an unchanged artifact. Starting the final task again requires fresh external observations and verdicts. Audit output must end in `AUDIT_VERDICT: PASS`. Each review output must contain exactly one `### MUST_FIX` section with `- None`, and end in `VERDICT: PASS`; missing/malformed verdicts and open blockers cannot be recorded as PASS. Main-session Review uses that same canonical format; it is not an independent reviewer PASS. For an empty diff, record that empty-scope observation followed by the same canonical review format. This binds observed evidence to a verification attempt; it cannot prove external state never changed after observation.
+At final completion, live, audit, and review records must belong to the current gate generation. The helper validates the pre-check token, then stores the artifact hash as `target` and adds the generation; do not submit the generation yourself. A result begun before a new gate is rejected even when files are unchanged. Already recorded local checks remain reusable for an unchanged artifact. Starting the final task again requires fresh external observations and verdicts. An `audit` record, when used, must end in `AUDIT_VERDICT: PASS`. Each review output must contain exactly one `### MUST_FIX` section with `- None`, and end in `VERDICT: PASS`; missing/malformed verdicts and open blockers cannot be recorded as PASS. Main-session Review uses that same canonical format; it is not an independent reviewer PASS. For an empty diff, record that empty-scope observation followed by the same canonical review format. This binds observed evidence to a verification attempt; it cannot prove external state never changed after observation.

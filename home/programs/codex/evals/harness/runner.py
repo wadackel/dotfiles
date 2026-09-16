@@ -141,6 +141,7 @@ def run(args):
         codex_home = home / ".codex"
         plans = codex_home / "plans"
         plans.mkdir(parents=True)
+        (home / ".claude/plans").mkdir(parents=True)
         skills = home / ".agents/skills"
         skills.mkdir(parents=True)
         codex_source = source / "home/programs/codex"
@@ -157,9 +158,14 @@ def run(args):
         copy_tree(source / "home/programs/agents/skills/requirements-interview", skills / "requirements-interview")
         agent_scripts = home / ".agents/scripts"
         agent_scripts.mkdir()
-        shutil.copyfile(Path(args.root) / "home/programs/agents/scripts/check-plan.ts", agent_scripts / "check-plan.ts")
-        for name in ("check-plan.ts",):
+        for name in ("check-plan.ts", "plan-state.ts", "plan-evidence.ts"):
+            shutil.copyfile(Path(args.root) / "home/programs/agents/scripts" / name, agent_scripts / name)
+        for name in ("check-plan.ts", "plan-state.ts"):
             (agent_scripts / name).chmod(0o755)
+        if args.setup_only:
+            (work / "manifest.json").write_text(json.dumps(dict(status="setup-only", case=args.case, variant=args.variant)))
+            print(json.dumps(dict(status="setup-only", work=str(work), agent_scripts=sorted(p.name for p in agent_scripts.iterdir()))), flush=True)
+            return
         auth = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
         if auth.exists():
             (codex_home / "auth.json").symlink_to(auth)
@@ -275,4 +281,5 @@ if __name__ == "__main__":
     parser.add_argument("--effort", choices=("high", "xhigh"), default="xhigh")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--prior-sessions", type=int, default=1)
+    parser.add_argument("--setup-only", action="store_true", help="build the sandbox and exit without launching Codex")
     run(parser.parse_args())

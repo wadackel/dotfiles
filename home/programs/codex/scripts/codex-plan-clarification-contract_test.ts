@@ -4,6 +4,15 @@ const CWD_ROOT = new URL(`file://${Deno.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
+const REQUIREMENTS_INTERVIEW =
+  "home/programs/agents/skills/requirements-interview/SKILL.md";
+const CONTRACT = "home/programs/agents/shared/plan/references/contract.md";
+const INTERVIEW = "home/programs/agents/shared/plan/references/interview.md";
+const CRITIC_PROMPT =
+  "home/programs/agents/shared/plan/references/critic-prompt.md";
+const ADVERSARIAL_PROMPT =
+  "home/programs/agents/shared/plan/references/adversarial-prompt.md";
+const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
 
 // Codex may reuse prior agreement; imposing Claude's fixed cadence on both
 // would silently reintroduce redundant approval turns.
@@ -19,25 +28,10 @@ const AGREE_GATE_NEEDLES = [
   "A1 Direction check",
   "concrete options and a marked recommendation",
   'Never ask a bare "is this right?" yes/no',
-  "has bought nothing. Wait for the user's response",
   "**A5 Approve approach** (one question)",
   "go with recommended / pick another / modify",
   "**A7 Direction statement** (not a gate)",
-  "Do not wait",
   "Proceeding with:",
-  "trivial, A1 is the single mandatory gate",
-  "no adjacent candidates",
-  "**Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.",
-];
-
-// Outside the AGREE section, so asserted against the whole file.
-const PLAN_PREAMBLE_NEEDLES = [
-  "Complexity gates the *depth after agreement* (DEEPEN rounds, plan body size) — never the agreement itself.",
-  "if complexity is trivial, skip DEEPEN",
-  "Emitting it twice is what makes PARSE and AGREE read as duplicate confirmation",
-  "state the plan path, the section headings, and the key design decisions in at most 3 lines",
-  "Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job",
-  "Do not pack multiple questions into one message just because the format allows it.",
 ];
 
 const AGREE_LEGACY_NEEDLES = [
@@ -50,73 +44,102 @@ const AGREE_LEGACY_NEEDLES = [
   "Multiple-choice preferred",
   "Each AskUserQuestion call asks a single question",
 ];
-const SHARED_CHECKLIST =
-  "home/programs/agents/shared/plan/references/requirement-checklist.md";
-const REQUIREMENTS_INTERVIEW =
-  "home/programs/agents/skills/requirements-interview/SKILL.md";
 
-// The interview cadence is shared prose across three skills. The sentences are
-// asserted whole-file and character-identical so a rewording in one file cannot
-// silently diverge from the others.
+// The interview cadence is defined once in interview.md; the three skills that
+// interview a user point at it instead of restating it, so a rewording cannot
+// diverge between them.
 const INTERVIEW_RULE_NEEDLES = [
   "Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled.",
   "A question that depends on an open answer or an in-flight investigation waits.",
   "The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.",
-];
-// Codex is excluded: its Blocking Interview Protocol (Step F end-turn) already
-// enforces blocking, and the sentence would duplicate that contract.
-const BLOCKING_RULE_NEEDLE =
-  "The question is the last content in the turn; end the turn and do not advance until the answer arrives.";
-// The question-background rules and the "decide when settled" rule are shared
-// prose like the cadence sentences above; each is pinned character-identical in
-// the files listed with it so those copies cannot drift apart. Codex plan is
-// excluded: its question format keeps the older background wording on purpose,
-// and it reaches the settled-decision rule through the shared checklist.
-const QUESTION_BACKGROUND_NEEDLES = [
+  "The question is the last content in the turn; end the turn and do not advance until the answer arrives.",
+  "Do not pack multiple questions into one message just because the format allows it.",
+  "**Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.",
   "Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back.",
   "When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready.",
   "<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>",
+  "When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.",
+  // Pinned on its own so the carve-out cannot be dropped while the rule survives.
+  "Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.",
+  "Facts can be inferred from observation; user intent cannot.",
+  "A reasonable default does not turn it into an assumption",
+  "choose an assumption / proceed as-is / continue clarifying / scope out",
 ];
-const DECIDE_WHEN_SETTLED_NEEDLE =
-  "When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.";
-// Pinned on its own so the carve-out cannot be dropped while the rule survives.
-const DECIDE_WHEN_SETTLED_CARVE_OUT =
-  "Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.";
+const INTERVIEW_LEGACY_NEEDLES = [
+  "Round budget",
+  "round budget",
+  "default operating limit",
+  "3 round",
+  "operating limit",
+  "Max 3 real questions",
+  "Self-resolved earlier:",
+];
 const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["Codex plan", CODEX_PLAN],
   ["Claude plan", CLAUDE_PLAN],
   ["requirements-interview", REQUIREMENTS_INTERVIEW],
 ];
-const CRITIC_PROMPT =
-  "home/programs/agents/shared/plan/references/critic-prompt.md";
-const COMPLETION_AUDIT =
-  "home/programs/claude/skills/completion-audit/SKILL.md";
-// The tag list markers differ per file (`—` in Claude plan and completion-audit,
-// `:` in Codex plan), so only the definition text after the marker is pinned.
+
+// Contract entries: the string, and every file that must carry it verbatim.
+// contract.md is the definition; a skill or script that carries the string
+// too is a deliberate mirror (check-plan.ts constants, plan skills that show
+// the template to the writer). Reference-only files carry `references/contract.md`.
 const LIVE_TAG_DEFINITION =
   "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
-const LIVE_TAG_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
-const RUC_TEMPLATE_FILES = [CLAUDE_PLAN, CODEX_PLAN, COMPLETION_AUDIT];
-// Pinned byte-for-byte across the plan skills and completion-audit: plans are written
-// from this line and the audit table copies it back, so a reworded template in one
-// file silently breaks the handoff.
 const RUC_ITEM_TEMPLATE =
   "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
-const EVIDENCE_GRADES_DOC =
-  "home/programs/agents/shared/plan/references/evidence-grades.md";
-const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
-const SELF_RESOLVED_TEMPLATE_FILES = [
-  CLAUDE_PLAN,
-  CODEX_PLAN,
-  EVIDENCE_GRADES_DOC,
-  SHARED_CHECKLIST,
-  CHECK_PLAN_SCRIPT,
-];
-// Pinned across the plan skills, both references, and the lint's own message
-// constant: check-plan.ts rejects an entry without one of these three grades, so a
-// reworded template in any one file produces plans that fail the lint.
 const SELF_RESOLVED_SOURCE_TEMPLATE =
   "source: [Direct|Supported|Inferred] <probe command + file:lines>";
+const FINAL_TASK_SUBJECT = "Final Audit + Review";
+const PLAN_READY_LINES = [
+  "## Plan ready",
+  "- File: <plan path>",
+  "- Status: PENDING APPROVAL — type `/impl` to approve and execute",
+];
+const REQUIRED_SECTIONS = [
+  "## Context",
+  "## Files to Change",
+  "## Task Outline",
+  "## Completion Criteria",
+  "### Autonomous Verification",
+  "### Requires User Confirmation",
+  "### Baseline",
+];
+const CC_TAGS = ["[file-state]", "[orchestrator-only]", "[live]", "[outcome]"];
+const REVIEWER_VOCAB = [
+  "do not create, modify, or delete files",
+  "FAIL otherwise",
+  "`MUST_FIX`",
+  "`SHOULD_FIX`",
+  "`### MUST_FIX`",
+  "`VERDICT: PASS`",
+  "ITERATE",
+  "CONVERGED",
+  "#### Falsified (CRITICAL)",
+];
+const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
+  [LIVE_TAG_DEFINITION, [CONTRACT]],
+  [RUC_ITEM_TEMPLATE, [CONTRACT]],
+  [SELF_RESOLVED_SOURCE_TEMPLATE, [
+    CONTRACT,
+    CLAUDE_PLAN,
+    CODEX_PLAN,
+    CHECK_PLAN_SCRIPT,
+  ]],
+  [FINAL_TASK_SUBJECT, [CONTRACT, CODEX_PLAN, CLAUDE_PLAN]],
+  ["`Your steps` must not inline tokens, passwords, or credentialed URLs", [
+    CONTRACT,
+  ]],
+  ["<redacted:", [CONTRACT, CLAUDE_PLAN, CRITIC_PROMPT]],
+];
+const CONTRACT_REFERRERS = [
+  CLAUDE_PLAN,
+  CODEX_PLAN,
+  CRITIC_PROMPT,
+  ADVERSARIAL_PROMPT,
+];
+const INTERVIEW_REFERRERS = [CLAUDE_PLAN, CODEX_PLAN, REQUIREMENTS_INTERVIEW];
+
 const REPRESENTATIVE_ARTIFACTS = [
   {
     path: "20260506T1750-redesign-cli-output-ui.md",
@@ -238,6 +261,7 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
     "interviewId",
     "Best-effort",
     "no-ask reason",
+    "references/interview.md",
   ]);
   assertExcludesAll(clarification, [
     "MVP",
@@ -247,6 +271,7 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
     "3 rounds",
     "3 round",
     "operating limit",
+    "requirement-checklist",
   ]);
 });
 
@@ -256,7 +281,6 @@ for (const [agent, path] of AGENT_PLANS) {
 
     if (agent === "Claude") {
       assertIncludesAll(section(skill, "## AGREE"), AGREE_GATE_NEEDLES);
-      assertIncludesAll(skill, PLAN_PREAMBLE_NEEDLES);
     } else {
       assertIncludesAll(section(skill, "## AGREE"), [
         "**A1 Direction check**",
@@ -278,63 +302,92 @@ for (const [agent, path] of AGENT_PLANS) {
   });
 }
 
+Deno.test("interview.md carries the shared interview rules and no round caps", async () => {
+  const interview = await readRepoFile(INTERVIEW);
+  assertIncludesAll(interview, INTERVIEW_RULE_NEEDLES);
+  assertExcludesAll(interview, INTERVIEW_LEGACY_NEEDLES);
+});
+
 for (const [name, path] of INTERVIEW_SKILLS) {
-  Deno.test(`${name} carries the shared interview rule sentences verbatim`, async () => {
+  Deno.test(`${name} points at interview.md instead of restating it`, async () => {
     const skill = await readRepoFile(path);
+    assertStringIncludes(skill, "references/interview.md");
+    assertExcludesAll(skill, INTERVIEW_LEGACY_NEEDLES);
     if (path === CODEX_PLAN) {
       assertIncludesAll(skill, [
         "Keep dependent questions sequential",
         "continue independent work",
         "Wait for required answers",
       ]);
-    } else {
-      assertIncludesAll(skill, INTERVIEW_RULE_NEEDLES);
     }
   });
 }
 
-Deno.test("[live] tag definition is present in plan skills and completion-audit", async () => {
-  for (const path of LIVE_TAG_FILES) {
-    const body = await readRepoFile(path);
-    assertStringIncludes(body, "`[live]`");
-    assertStringIncludes(body, LIVE_TAG_DEFINITION);
-  }
+Deno.test("contract.md defines every fixed string once", async () => {
+  const contract = await readRepoFile(CONTRACT);
+  assertIncludesAll(contract, [
+    ...REQUIRED_SECTIONS,
+    ...CC_TAGS,
+    ...PLAN_READY_LINES,
+    ...REVIEWER_VOCAB,
+    "PENDING APPROVAL — $impl [plan-path]",
+    "`cc-<n>`",
+    ".evidence.json",
+    ".gate.log.md",
+    ".gate.diff",
+    ".rereview-<n>.gate.diff",
+    "[BLOCKED: gate escalated]",
+    "BLOCKED BY USER",
+  ]);
 });
 
-Deno.test("Requires User Confirmation item template is present in plan skills and completion-audit", async () => {
-  for (const path of RUC_TEMPLATE_FILES) {
+for (const [needle, files] of CONTRACT_MIRRORS) {
+  Deno.test(`contract string is carried verbatim: ${needle.slice(0, 40)}`, async () => {
+    for (const path of files) {
+      assertStringIncludes(await readRepoFile(path), needle, path);
+    }
+  });
+}
+
+Deno.test("skills and prompts reference contract.md rather than deleted references", async () => {
+  for (const path of CONTRACT_REFERRERS) {
     const body = await readRepoFile(path);
-    assertStringIncludes(body, RUC_ITEM_TEMPLATE);
+    assertStringIncludes(body, "references/contract.md", path);
+    assertExcludesAll(body, ["evidence-grades.md", "requirement-checklist.md"]);
   }
-  for (const [, path] of AGENT_PLANS) {
-    const body = await readRepoFile(path);
+  for (const path of INTERVIEW_REFERRERS) {
     assertStringIncludes(
-      body,
-      "`Your steps` must not inline tokens, passwords, or credentialed URLs",
+      await readRepoFile(path),
+      "references/interview.md",
+      path,
     );
   }
+  const checkPlan = await readRepoFile(CHECK_PLAN_SCRIPT);
+  assertExcludesAll(checkPlan, ["evidence-grades.md"]);
 });
 
-Deno.test("text questions block the turn where no tool enforces it", async () => {
-  for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {
-    assertStringIncludes(await readRepoFile(path), BLOCKING_RULE_NEEDLE);
+Deno.test("check-plan.ts mirrors the contract vocabulary", async () => {
+  const checkPlan = await readRepoFile(CHECK_PLAN_SCRIPT);
+  const contract = await readRepoFile(CONTRACT);
+  for (const heading of REQUIRED_SECTIONS) {
+    assertStringIncludes(checkPlan, `"${heading}"`, heading);
   }
-});
-
-Deno.test("question background carries the premise and option samples", async () => {
-  for (const path of [CLAUDE_PLAN, REQUIREMENTS_INTERVIEW]) {
-    assertIncludesAll(await readRepoFile(path), QUESTION_BACKGROUND_NEEDLES);
+  for (const tag of CC_TAGS) assertStringIncludes(checkPlan, `"${tag}"`);
+  for (
+    const needs of [
+      "sudo",
+      "auth",
+      "dialog",
+      "role switch",
+      "dev server",
+      "real PR",
+      "device",
+      "interactive session",
+    ]
+  ) {
+    assertStringIncludes(checkPlan, `"${needs}"`);
+    assertStringIncludes(contract, needs);
   }
-});
-
-Deno.test("settled recommendations are decided, not asked", async () => {
-  for (const path of [CLAUDE_PLAN, SHARED_CHECKLIST]) {
-    assertStringIncludes(await readRepoFile(path), DECIDE_WHEN_SETTLED_NEEDLE);
-  }
-  assertStringIncludes(
-    await readRepoFile(CLAUDE_PLAN),
-    DECIDE_WHEN_SETTLED_CARVE_OUT,
-  );
 });
 
 Deno.test("Codex Approval Summary exposes approval decision details", async () => {
@@ -420,65 +473,6 @@ Deno.test("Codex delegation policy is deployed without model or size gates", asy
     'fork_turns: "none"',
   ]);
   assert(!/gpt-\d|Astra|20 files|500 lines/i.test(policy));
-});
-
-Deno.test("shared checklist distinguishes Ask from restate and uses clarity gate", async () => {
-  const checklist = await readRepoFile(SHARED_CHECKLIST);
-
-  assertIncludesAll(checklist, [
-    "Clarity gate: no fixed confirmation cap",
-    "keep confirming as needed until the requirement is clear",
-    "Definition of Ask",
-    "an interaction that waits for the user's next answer",
-    "Restating, prose for understanding-check, or recording under `### Requires User Confirmation` is NOT a substitute for an Ask",
-    "the user's subjectivity itself is the central spec",
-    "Ask to calibrate",
-    "before artifact creation",
-    "`### Unresolved Items` downstream `next:` deferral is only for codebase-recoverable uncertainty",
-    "Do NOT surface user-only / subjective blockers here",
-    "codebase-recoverable",
-    "concrete `next:`",
-    "choose an assumption / proceed as-is / continue clarifying / scope out",
-    "ask exactly one question per turn",
-    "In both, A7 is non-blocking.",
-    "Codex carries prior agreement forward without another approval, while Claude retains its skill-defined cadence.",
-    "Codex may batch independent questions",
-    "a question whose prerequisites — prior answers or pending investigations — are unsettled waits",
-    "is context, not a second question",
-  ]);
-  assertExcludesAll(checklist, [
-    "A1–A7 cadence",
-    "A1-A7 cadence",
-    "Round budget",
-    "round budget",
-    "Rounds:",
-    "default operating limit",
-    "3 round",
-    "operating limit",
-    "Max 3 real questions + 1 override question",
-    "slot (normally 3)",
-    "bundle into a single override",
-    "slot cap 4",
-    "Ask count 5+",
-    "bundle all into a single AskUserQuestion call",
-  ]);
-  const unresolvedExample = section(checklist, "### Unresolved Items");
-  assertExcludesAll(unresolvedExample, [
-    "DEEPEN Consolidated Interview で確定",
-    "implementation 時に user 判断",
-  ]);
-});
-
-Deno.test("Self-resolved source template is present in plan skills and shared references", async () => {
-  for (const path of SELF_RESOLVED_TEMPLATE_FILES) {
-    const body = await readRepoFile(path);
-    assertStringIncludes(body, SELF_RESOLVED_SOURCE_TEMPLATE);
-  }
-  // The redaction duty travels with the verbatim-delegate exception: a prompt that
-  // restates the exception without it invites tokens into plan bodies and logs.
-  for (const path of [CLAUDE_PLAN, CRITIC_PROMPT, EVIDENCE_GRADES_DOC]) {
-    assertStringIncludes(await readRepoFile(path), "<redacted:");
-  }
 });
 
 Deno.test("Critic prompt mandates regression findings for clarification failures", async () => {

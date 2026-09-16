@@ -1,8 +1,10 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   denialMessage,
+  GUARDED,
   hasVerdictRule,
   isReviewerAgent,
+  TEMPLATE,
 } from "./reviewer-dispatch-policy.ts";
 
 const SCRIPT =
@@ -37,7 +39,7 @@ const SANTA_LOOP_CONTRACT = `Return JSON:
   "issues": []
 }`;
 
-Deno.test("isReviewerAgent matches the reviewers /subagent-review dispatches", () => {
+Deno.test("isReviewerAgent matches the reviewers /gate dispatches", () => {
   assertEquals(isReviewerAgent("rust-reviewer"), true);
   assertEquals(isReviewerAgent("typescript-reviewer"), true);
   assertEquals(isReviewerAgent("security-auditor"), true);
@@ -165,7 +167,7 @@ Deno.test("applies to the Task tool name as well", async () => {
   assertEquals(code, 2);
 });
 
-// --- Diff and read-only requirements (subagent-review contract only) ---
+// --- Diff and read-only requirements (gate contract only) ---
 
 Deno.test("blocks a no-Bash reviewer dispatched without a diff", async () => {
   const { code, stderr } = await runHook({
@@ -235,4 +237,18 @@ Deno.test("leaves the santa-loop JSON contract without a diff alone", async () =
     },
   });
   assertEquals(code, 0);
+});
+
+// The hook names files it never opens: the template path lands in a rejection
+// message and the reviewer names select agent definitions. A rename that lands
+// in only one place fails silently, so both are checked against the repository.
+Deno.test("template path and every guarded reviewer exist in the repository", async () => {
+  const repoRoot = new URL("../../../../", import.meta.url);
+  const template = TEMPLATE.replace(/^~\/\.claude\//, "home/programs/claude/");
+  await Deno.stat(new URL(template, repoRoot));
+  for (const name of GUARDED) {
+    await Deno.stat(
+      new URL(`home/programs/claude/agents/${name}.md`, repoRoot),
+    );
+  }
 });

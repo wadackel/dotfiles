@@ -1,6 +1,6 @@
 ---
 name: comment-reviewer
-description: Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Auto-dispatched by /subagent-review when matching source files are detected. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).
+description: Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Auto-dispatched by /gate when matching source files are detected. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).
 tools: Read, Grep, Glob
 model: opus
 color: cyan
@@ -78,7 +78,7 @@ A long block is flagged even when its content is a legitimate Why-not: the findi
 - One or more MUST_FIX or SHOULD_FIX findings (LONG_BLOCK included) → `VERDICT: FAIL`
 - Only NIT findings, or zero findings → `VERDICT: PASS`
 
-This matches the specialist FAIL convention in `~/.claude/skills/subagent-review/SKILL.md` (MUST_FIX / SHOULD_FIX block; NIT does not block).
+This matches the specialist FAIL convention in `~/.claude/skills/gate/SKILL.md` (MUST_FIX / SHOULD_FIX block; NIT does not block).
 
 ## Output Format
 

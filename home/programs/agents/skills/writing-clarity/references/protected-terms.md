@@ -10,7 +10,7 @@ where no judgment is needed.
 - Commands and their arguments: `git rebase`, `darwin-rebuild switch`, `deno fmt --check`
 - File paths and extensions: `home/programs/claude/CLAUDE.md`, `.jsonl`
 - Product, tool, and service names: Claude Code, nix-darwin, home-manager, GitHub Actions, tmux
-- Skill and agent names: `/completion-audit`, `subagent-review`, `code-simplifier`
+- Skill and agent names: `/gate`, `plan-state`, `code-simplifier`
 - Machine-contract labels: severity (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values (PASS / FAIL / VERIFIED / ITERATE / CONVERGED), status values (pending / in_progress / completed)
 - Established acronyms: API, CLI, PR, CI, URL, JSON, YAML, AST, LSP
 
@@ -78,8 +78,7 @@ localhost
 shebang
 cask
 # skills / repos (A-2, A-3; self-audit stays a finding — see table above)
-subagent-review
-completion-audit
+plan-state
 code-simplifier
 agent-browser
 picker-verify

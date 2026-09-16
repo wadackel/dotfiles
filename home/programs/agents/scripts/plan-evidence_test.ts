@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@^1";
-import { run } from "./codex-plan-state.ts";
+import { run } from "./plan-state.ts";
 
 const input = (value: unknown) => new Blob([JSON.stringify(value)]).stream();
 
@@ -46,7 +46,7 @@ async function fixture(test: (path: string) => Promise<void>) {
 }
 
 async function target(path: string): Promise<string> {
-  const { snapshot } = await import("./codex-plan-evidence.ts");
+  const { snapshot } = await import("./plan-evidence.ts");
   return await snapshot(path, JSON.parse(await Deno.readTextFile(path)));
 }
 
@@ -436,7 +436,7 @@ Deno.test("a verification begun before a new gate cannot be recorded into it", a
 });
 
 Deno.test("malformed CLI mutations release their lock", async () => {
-  const script = new URL("./codex-plan-state.ts", import.meta.url).pathname;
+  const script = new URL("./plan-state.ts", import.meta.url).pathname;
   await fixture(async (path) => {
     for (const command of ["start", "init", "require", "record", "complete"]) {
       const result = await new Deno.Command(Deno.execPath(), {
@@ -458,5 +458,108 @@ Deno.test("malformed CLI mutations release their lock", async () => {
       );
     }
     await declare(path);
+  });
+});
+
+Deno.test("final task completes with a review check alone; audit is optional", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await record(path);
+    await run(["complete", path, "task-1"]);
+    await run(["start", path, "task-2"]);
+    await run(
+      ["require", path, "task-2"],
+      input([{ id: "generic", kind: "review" }]),
+    );
+    await record(path, { id: "generic" }, "task-2");
+    await run(["complete", path, "task-2"]);
+    const final = JSON.parse(await Deno.readTextFile(path)).tasks[1];
+    assertEquals(final.status, "completed");
+  });
+});
+
+Deno.test("final task without any review check cannot complete", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await record(path);
+    await run(["complete", path, "task-1"]);
+    await run(["start", path, "task-2"]);
+    await run(
+      ["require", path, "task-2"],
+      input([{ id: "audit", kind: "audit" }]),
+    );
+    await record(path, { id: "audit" }, "task-2");
+    await assertRejects(
+      () => run(["complete", path, "task-2"]),
+      Error,
+      "requires a review check",
+    );
+  });
+});
+
+Deno.test("coverage lists Autonomous Verification bullets without a cc-<n> check", async () => {
+  await fixture(async (path) => {
+    const plan = path.replace(/\.evidence\.json$/, ".md");
+    await Deno.writeTextFile(
+      plan,
+      [
+        "## Completion Criteria",
+        "",
+        "```markdown",
+        "### Autonomous Verification",
+        "- [file-state] a template sample before the real section",
+        "```",
+        "",
+        "### Autonomous Verification",
+        "- [file-state] main.txt says corrected",
+        "```",
+        "# a heading inside a command example must not end the scan",
+        "- [live] Observe: sample line inside a fence is not a bullet",
+        "```",
+        "  - [orchestrator-only] deno test passes",
+        "- [outcome] /gate returns PASS",
+        "",
+        "### Requires User Confirmation",
+        "- None",
+        "",
+      ].join("\n"),
+    );
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "cc-1", kind: "file-state" }]),
+    );
+    await assertRejects(
+      () => run(["coverage", path]),
+      Error,
+      "cc-2",
+    );
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "cc-2", kind: "orchestrator-only" }]),
+    );
+    await run(["coverage", path]);
+  });
+});
+
+Deno.test("coverage rejects a bullet declared with another check kind", async () => {
+  await fixture(async (path) => {
+    const plan = path.replace(/\.evidence\.json$/, ".md");
+    await Deno.writeTextFile(
+      plan,
+      [
+        "### Autonomous Verification",
+        "- [live] the CLI prints hello on the real surface",
+        "",
+      ].join("\n"),
+    );
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "cc-1", kind: "file-state" }]),
+    );
+    await assertRejects(
+      () => run(["coverage", path]),
+      Error,
+      "cc-1: file-state for [live]",
+    );
   });
 });

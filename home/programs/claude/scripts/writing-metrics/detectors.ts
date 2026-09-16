@@ -443,3 +443,54 @@ export function detectAll(text: string, dict: Dictionaries): Finding[] {
     ...detectParenChain(lines),
   ].sort((a, b) => a.line - b.line || a.category.localeCompare(b.category));
 }
+
+export interface ProseStats {
+  sentences: number;
+  /** 文の総字数。平均から復元すると丸めが二重に入るので生の合計を持つ */
+  sentenceChars: number;
+  /** 。区切りの文の平均字数（地の文のみ、fence と表は除く） */
+  meanSentenceLength: number;
+  /** 箇条書きとラベル行の総数 */
+  itemLines: number;
+  /** そのうち句点で終わらない行（`**ラベル**: 断片` や backtick 終わり） */
+  labelFragmentLines: number;
+  labelFragmentRatio: number;
+}
+
+// 2026-09 の transcript 比較で Claude と Codex を分けたのは矢印や括弧ではなく、
+// 文の長さ（65 字 vs 50 字）と句点で終わらない箇条書きの割合（32% vs 17%）だった。
+// fire-rate の既存カテゴリは床に達しているので、この 2 つを別枠で数える。
+export function proseStats(text: string): ProseStats {
+  let sentences = 0;
+  let sentenceChars = 0;
+  let itemLines = 0;
+  let labelFragmentLines = 0;
+  for (const line of analyzeLines(text)) {
+    if (
+      line.kind === "fence" || line.kind === "table" || line.kind === "blank"
+    ) {
+      continue;
+    }
+    if (line.kind === "prose" || line.kind === "boldLabel") {
+      const prose = line.prose.replace(/^\s*(?:[-*+]|\d+\.)\s+/, "");
+      for (const s of splitSentences(prose)) {
+        if (!JA_CHAR.test(s)) continue;
+        sentences++;
+        sentenceChars += s.length;
+      }
+    }
+    if (line.isListItem || line.kind === "boldLabel") {
+      itemLines++;
+      const body = line.raw.trim().replace(/^(?:[-*+]|\d+\.)\s+/, "");
+      if (!/[。．！？」』）)]\s*$/.test(body)) labelFragmentLines++;
+    }
+  }
+  return {
+    sentences,
+    sentenceChars,
+    meanSentenceLength: sentences === 0 ? 0 : sentenceChars / sentences,
+    itemLines,
+    labelFragmentLines,
+    labelFragmentRatio: itemLines === 0 ? 0 : labelFragmentLines / itemLines,
+  };
+}

@@ -1,6 +1,6 @@
 ---
 name: verification-loop
-description: "Opt-in project-aware deterministic verification gate. Detects the project type (Nix flake, Deno, Node, Python) and runs build / typecheck / lint / test / security scan / diff-review. Outputs a READY / NOT READY verdict. Not invoked by the default /impl final gate (that default is /completion-audit → /subagent-review). Invoke explicitly when deterministic re-execution is genuinely required. Triggers include /verification-loop / /verify / verification gate / pre-PR check / 検証ループ."
+description: "Opt-in project-aware deterministic verification gate. Detects the project type (Nix flake, Deno, Node, Python) and runs build / typecheck / lint / test / security scan / diff-review. Outputs a READY / NOT READY verdict. Not invoked by the default /impl final gate (that default is /gate). Invoke explicitly when deterministic re-execution is genuinely required. Triggers include /verification-loop / /verify / verification gate / pre-PR check / 検証ループ."
 ---
 
 # Verification Loop
@@ -9,13 +9,13 @@ Comprehensive deterministic verification system. Project-aware: detects what bui
 
 ## When to Use
 
-- **Opt-in only**: `/verification-loop` is no longer part of the default `/impl` final gate (the default is `/completion-audit` → `/subagent-review`, which audits per-task evidence without re-execution). Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes. It is not orchestrated by the final-gate task.
+- **Opt-in only**: `/verification-loop` is no longer part of the default `/impl` final gate (the default is `/gate`, which audits per-task evidence with `plan-state.ts` and reviews the diff without re-execution). Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes. It is not orchestrated by the final-gate task.
 - **Manual**: before opening a PR / after refactoring / when the user asks "/verify" or "verify quality" or "検証して".
 
 Do NOT use for:
-- **Default `/impl` final gate** — use `/completion-audit` + `/subagent-review` instead (per-task verification already covers re-execution; the gate's value is evidence audit + fresh-context review)
+- **Default `/impl` final gate** — use `/gate` instead (per-task verification already covers re-execution; the gate's value is evidence audit + fresh-context review)
 - Per-task quality verification (use the task's own acceptance criteria during `/impl`)
-- Semantic correctness review (use `/subagent-review` or `/santa-loop`)
+- Semantic correctness review (use `/gate` or `/santa-loop`)
 
 ## Project Detection
 
@@ -102,7 +102,7 @@ rg -n 'console\.log' --type-add 'cprog:*.{ts,tsx,js,jsx}' --type cprog \
   $(git diff --name-only HEAD)
 ```
 
-Surface findings with file:line; do NOT block automatically — these are signals, not gates (the dedicated `security-auditor` agent dispatched by `/subagent-review` does the deep check).
+Surface findings with file:line; do NOT block automatically — these are signals, not gates (the dedicated `security-auditor` agent dispatched by `/gate` does the deep check).
 
 ### Phase 6: Diff review
 
@@ -153,7 +153,7 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 ## Anti-Patterns
 
-- Paraphrasing tool output ("tests pass") instead of pasting raw stdout — `/completion-audit` (the default final gate) requires raw evidence; `/santa-loop` trusts the audit verdict and does not re-judge completeness
+- Paraphrasing tool output ("tests pass") instead of pasting raw stdout — `/gate` (the default final gate) requires raw evidence; `/santa-loop` trusts the audit verdict and does not re-judge completeness
 - Running phases serially when they're independent (Build / Lint / Tests can usually parallelize on a single toolchain — but watch for resource contention)
 - Treating Security or Diff flags as blocking — they are signals, not gates; over-blocking causes users to lose trust in the gate
 - Auto-applying `--fix` flags within this skill — verification reads, doesn't write. Auto-fix belongs in `/impl` per-task work, not in the gate
@@ -162,10 +162,9 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 | Skill | Relationship |
 |---|---|
-| `/impl` (default flow) | Does NOT invoke `/verification-loop`. The default final gate is `/completion-audit` → `/subagent-review`. When deterministic re-execution is needed, users invoke `/verification-loop` manually outside the `/impl` orchestration |
-| `/completion-audit` | The default final gate; audits per-task evidence without re-execution. `/verification-loop` is complementary opt-in re-execution when an audit-only gate is insufficient |
-| `/santa-loop` | Independent of `/verification-loop` in the default flow; runs after `/completion-audit` returns VERIFIED PASS |
-| `/subagent-review` | Per-task review during `/impl`. `/verification-loop` is end-of-implementation, not per-task |
+| `/impl` (default flow) | Does NOT invoke `/verification-loop`. The default final gate is `/gate`. When deterministic re-execution is needed, users invoke `/verification-loop` manually outside the `/impl` orchestration |
+| `/gate` | The default final gate; audits evidence with `plan-state.ts` and reviews the diff without re-execution. `/verification-loop` is complementary opt-in re-execution when that is insufficient |
+| `/santa-loop` | Independent of `/verification-loop` in the default flow; runs after `/gate` returns PASS |
 | `/codex-review` | Coexists; `/codex-review` is a single-external code review, `/verification-loop` is deterministic toolchain checks — orthogonal purposes |
 
 ## Design Decisions
@@ -176,6 +175,6 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 **Why no auto-fix**: a verification gate that mutates the code creates a "ratchet" — every run might rewrite something the user didn't expect. Strict separation: this skill reads, `/impl` writes.
 
-**Why raw output is captured verbatim**: the verbatim output is what `/completion-audit` (the default final gate) consumes for evidence audit; `/santa-loop` then receives the audit verdict and re-uses the same evidence trail without re-judging completeness.
+**Why raw output is captured verbatim**: the verbatim output is what `/gate` (the default final gate) consumes for evidence audit; `/santa-loop` then receives the audit verdict and re-uses the same evidence trail without re-judging completeness.
 
 **Why opt-in (no longer the default `/impl` final gate)**: empirical 5-plan analysis showed 0 catches by gate re-execution that per-task verification missed. Default re-execution duplicates cost without catching anything new. Opt-in preserves the deterministic re-run capability for cases that genuinely require it via manual invocation (`/verify`, pre-PR sanity check, standalone post-`/impl` step). No orchestration hook is exposed — users invoke this skill directly.

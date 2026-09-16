@@ -12,6 +12,7 @@
 import {
   detectAll,
   loadDictionaries,
+  proseStats,
   resolveProtectedTermsPath,
 } from "./detectors.ts";
 
@@ -44,10 +45,12 @@ try {
   fail(e instanceof Error ? e.message : String(e));
 }
 
-const findings = detectAll(await Deno.readTextFile(path), dict);
+const text = await Deno.readTextFile(path);
+const findings = detectAll(text, dict);
+const stats = proseStats(text);
 
 if (asJson) {
-  console.log(JSON.stringify(findings, null, 2));
+  console.log(JSON.stringify({ findings, stats }, null, 2));
 } else {
   for (const f of findings) {
     console.log(
@@ -58,5 +61,12 @@ if (asJson) {
     findings.length === 0
       ? "findings なし"
       : `${findings.length} findings（疑いの提示であり、全修正の指示ではない）`,
+  );
+  console.log(
+    `文平均長 ${
+      stats.meanSentenceLength.toFixed(1)
+    } 字（${stats.sentences} 文）、ラベル断片 ${stats.labelFragmentLines}/${stats.itemLines} 行（${
+      (stats.labelFragmentRatio * 100).toFixed(0)
+    }%）`,
   );
 }

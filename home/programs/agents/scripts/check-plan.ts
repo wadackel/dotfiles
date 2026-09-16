@@ -38,7 +38,7 @@ const RUC_LABELS = [
   "Needed by:",
 ] as const;
 type RucLabel = (typeof RUC_LABELS)[number];
-// Same vocabulary as the item template pinned in plan/SKILL.md; change both.
+// Same vocabulary as the item template pinned in contract.md; change both.
 const NEEDS_VOCAB = [
   "sudo",
   "auth",
@@ -50,7 +50,7 @@ const NEEDS_VOCAB = [
   "interactive session",
 ];
 const NEEDED_BY_PREFIXES = ["task ", "final gate", "next real run"];
-// Same three grades as the template line pinned in evidence-grades.md; [Unknown]
+// Same three grades as the template line pinned in contract.md; [Unknown]
 // is deliberately absent because an unknown belongs under Unresolved Items.
 const EVIDENCE_GRADES = ["[Direct]", "[Supported]", "[Inferred]"] as const;
 type Grade = (typeof EVIDENCE_GRADES)[number];

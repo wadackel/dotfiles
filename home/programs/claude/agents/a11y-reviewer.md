@@ -1,6 +1,6 @@
 ---
 name: a11y-reviewer
-description: Accessibility specialist reviewer. Use for code changes touching .css/.scss/.html or .jsx/.tsx with JSX markup. Based on WCAG 2.2 and WAI-ARIA APG. Focuses on semantic HTML, ARIA correctness, keyboard navigation, color contrast, screen reader support, responsive design, and dynamic content announcements. Auto-dispatched by /subagent-review when matching files are detected. Does NOT cover React component design (use react-reviewer) or TS types (use typescript-reviewer).
+description: Accessibility specialist reviewer. Use for code changes touching .css/.scss/.html or .jsx/.tsx with JSX markup. Based on WCAG 2.2 and WAI-ARIA APG. Focuses on semantic HTML, ARIA correctness, keyboard navigation, color contrast, screen reader support, responsive design, and dynamic content announcements. Auto-dispatched by /gate when matching files are detected. Does NOT cover React component design (use react-reviewer) or TS types (use typescript-reviewer).
 tools: Read, Grep, Glob, Bash
 model: opus
 color: pink
@@ -109,8 +109,8 @@ VERDICT: PASS | FAIL
 
 - PASS only when no MUST_FIX. SHOULD_FIX and NIT do not block.
 - WCAG SC suffix is optional — append when applicable, omit if not clearly mapped to a single SC.
-- Good Practices lines start with `✓ ` to disambiguate from findings in subagent-review's first-80-chars dedup.
-- Manual Verification items are informational. subagent-review merge logic does not treat them as blocking; the user reads them as follow-up items.
+- Good Practices lines start with `✓ ` to disambiguate from findings in gate's first-80-chars dedup.
+- Manual Verification items are informational. gate merge logic does not treat them as blocking; the user reads them as follow-up items.
 
 ## Key Principles
 

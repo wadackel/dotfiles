@@ -101,42 +101,11 @@ Group related ambiguities and prioritize — resolve the ones that affect scope 
 
 ### Phase 3: Interview
 
-Ask questions in the chat body by default, using the question format below. The question is the last content in the turn; end the turn and do not advance until the answer arrives. Use a runtime's structured question tool when available and appropriate, including free-form answers if supported. Wait for required answers; independent work may continue. Tool absence falls back to text and never establishes approval.
+Ask in the chat body, one question per turn, following `references/interview.md`: its question format, frontier ordering, non-blocking fact-finding, recommended answer on every question, and the observed-fact / user-decision / technical-deferral / draft-assumption classification. Read it before the first question. A structured question tool, when the runtime has one, is for self-contained confirmations only; tool absence never establishes approval.
 
-**Question format** (sample strings stay in the user's conversation language):
+Before producing the deliverable, classify every unresolved ambiguity with that table. If any user decision remains, ask before drafting; a reasonable default never converts a user decision into a draft assumption.
 
-```markdown
-### <質問文をそのまま見出しにする>
-
-<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>
-
-- **A. <ラベル>** — <含意 1 行>
-- **B. <ラベル>** — <含意 1 行>
-
-> 推奨: A。<理由 1〜2 文>
-```
-
-The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions. Follow these principles:
-
-**Ask with options, not open-ended questions.** Concrete choices are faster to evaluate than blank prompts, and a text question still accepts free-form answers when none of the options fit.
-
-**One question per turn, ordered by the frontier.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Among frontier questions, ask the highest-impact one first — a single answer often reshapes the decision tree and would invalidate the rest of a batch.
-
-**Research before asking.** The main domain research happens in Phase 1. If a new question arises during the interview that can be answered by reading code or documentation, investigate before asking the user. When the lookup can run in the background, dispatch it and ask the next independent frontier question meanwhile; collect the result on the next turn. A pending investigation only delays its downstream questions.
-
-**Always provide a recommended answer.** Every real question in a confirmation turn must include the AI's own recommended answer (grill-me P5). If no recommendation is defensible, the question is malformed — investigate the codebase, narrow the question, or treat it as an Open question in a user-authorized draft. The user can override, but the AI never delegates judgment by asking with no recommendation.
-
-**Interview gate.** Before producing the deliverable, classify every unresolved ambiguity into exactly one bucket:
-
-| Bucket | Meaning | Action |
-|---|---|---|
-| **Observed fact** | Can be verified from code, relevant logs, docs, existing issues, or the current conversation | Research it; do not ask the user; redact sensitive log data |
-| **User decision** | Depends on desired behavior, priority, scope, audience, risk tolerance, success criteria, or acceptance of trade-offs | Ask the user |
-| **Draft assumption** | User explicitly allowed drafting with assumptions, or the detail is a non-blocking setup/detail-level inference | State it as an assumption in the deliverable |
-
-If any **User decision** remains, ask an interview question before drafting. Do not convert a User decision into a Draft assumption merely because a reasonable default exists. Desired behavior, scope boundaries, success criteria, priority, audience, and risk tolerance are never Draft assumptions unless the user explicitly authorizes drafting with assumptions.
-
-**Know when to stop.** After each answer, re-evaluate: are there remaining ambiguities that would block a third party from acting on the deliverable? If yes, ask the next frontier question. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Before stopping, restate the user's intent in one sentence so they can confirm or redirect (silent acceptance pattern).
+**Know when to stop.** After each answer, re-evaluate whether a remaining ambiguity would block a third party from acting on the deliverable; if so, ask the next frontier question. Before stopping, restate the user's intent in one sentence so they can confirm or redirect.
 
 **Handle "I don't know" gracefully.** If the user is unsure about something, suggest a reasonable default and ask whether to proceed with that default. Record it as an Assumption only when the user accepts the default or explicitly authorizes drafting with assumptions.
 

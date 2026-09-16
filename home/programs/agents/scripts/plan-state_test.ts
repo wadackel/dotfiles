@@ -1,9 +1,5 @@
 import { assertEquals, assertMatch, assertRejects } from "jsr:@std/assert@^1";
-import {
-  initPlanEvidence,
-  normalizePlanEvidence,
-  run,
-} from "./codex-plan-state.ts";
+import { initPlanEvidence, normalizePlanEvidence, run } from "./plan-state.ts";
 
 const SUBJECTS = ["State helper", "Final Audit + Review"];
 const SKILL_HELPER_COMMAND = [
@@ -14,13 +10,13 @@ const SKILL_HELPER_COMMAND = [
   "--allow-write",
   "--allow-run=git",
   "--no-prompt",
-  "~/.codex/scripts/codex-plan-state.ts",
+  "~/.agents/scripts/plan-state.ts",
 ].join(" ");
 
 async function tempEvidence(
   data = initPlanEvidence("plan.md", SUBJECTS),
 ): Promise<string> {
-  const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
   const path = `${home}/.codex/plans/${
@@ -108,7 +104,7 @@ Deno.test("normalizePlanEvidence rejects unknown status instead of reopening cor
 });
 
 Deno.test("run init writes canonical JSON through the command surface", async () => {
-  const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
   const path = `${home}/.codex/plans/plan.evidence.json`;
@@ -196,7 +192,7 @@ Deno.test("impl skill documents the combined final review contract", async () =>
 });
 
 Deno.test("rejects writes outside the Codex plans evidence namespace", async () => {
-  const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
 
@@ -239,7 +235,7 @@ Deno.test("rejects writes outside the Codex plans evidence namespace", async () 
 });
 
 Deno.test("rejects symlink evidence paths", async () => {
-  const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
   const target = `${home}/target.evidence.json`;
@@ -255,7 +251,7 @@ Deno.test("rejects symlink evidence paths", async () => {
 });
 
 Deno.test("atomic writes do not follow predictable sibling tmp symlinks", async () => {
-  const home = await Deno.makeTempDir({ prefix: "codex-plan-state-home-" });
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
   Deno.env.set("HOME", home);
   await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
   const path = `${home}/.codex/plans/plan.evidence.json`;
@@ -337,5 +333,55 @@ Deno.test("missing task rejects mutation commands", async () => {
     () => run(["complete", path, "task-404"]),
     Error,
     "task not found: task-404",
+  );
+});
+
+Deno.test("accepts evidence under ~/.claude/plans when it is the only plans dir", async () => {
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
+  Deno.env.set("HOME", home);
+  await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
+  const path = `${home}/.claude/plans/plan.evidence.json`;
+
+  await run(["init", path, "plan.md", JSON.stringify(SUBJECTS)]);
+
+  const data = JSON.parse(await Deno.readTextFile(path));
+  assertEquals(data.tasks.length, 2);
+});
+
+Deno.test("rejects evidence outside both plans dirs and names both", async () => {
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
+  Deno.env.set("HOME", home);
+  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
+  await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
+  const outside = await Deno.makeTempDir();
+
+  const error = await assertRejects(
+    () =>
+      run([
+        "init",
+        `${outside}/plan.evidence.json`,
+        "plan.md",
+        JSON.stringify(SUBJECTS),
+      ]),
+    Error,
+    "evidence path must be under",
+  );
+  assertMatch(error.message, /\.codex\/plans or .*\.claude\/plans/);
+});
+
+Deno.test("refuses to run when neither plans dir exists", async () => {
+  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
+  Deno.env.set("HOME", home);
+
+  await assertRejects(
+    () =>
+      run([
+        "init",
+        `${home}/plan.evidence.json`,
+        "plan.md",
+        JSON.stringify(SUBJECTS),
+      ]),
+    Error,
+    "neither",
   );
 });

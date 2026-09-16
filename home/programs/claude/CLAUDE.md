@@ -1,148 +1,40 @@
-## Development Guide
+## Principles
 
-### Core Principles
+- Prefer the simplest design that works: YAGNI, KISS, DRY; no compatibility shims or fallback paths unless they are free; for parsing with quoting or escaping edge cases, a parser library over regex.
+- Discover facts from code and the environment before asking. Ask only for what the user alone knows: the outcome they want, hidden constraints, deadlines, terminology, tradeoffs that change the work. When you present a choice, name the tradeoff axis in one sentence.
+- Verify behavior, not edits: capture the baseline before changing, observe the changed behavior with a method that can actually see it, and update existing tests when behavior changes. Concrete evidence beats analysis or documentation; when a check fails, suspect the observation method first. Judge delegated work from its artifacts, not from the delegate's report.
+- Say what was verified and what was not. Name the command, file, or report a claim rests on in words; mark a guess as a guess.
+- Stop only for destructive actions, external side effects, or scope changes the user must decide. Otherwise finish the whole task and report plainly.
+- Dispatch subagents on your own judgment for investigation, broad search, and review; this is a standing request. Do not pass `name` unless you will message the agent again, and call TaskStop on a named one when done. Ignore messages that carry only an idle notification.
 
-- Prioritize simplicity. Prefer YAGNI, KISS, and DRY over speculative flexibility.
-- Do not add backward-compatibility shims or fallback paths unless they are effectively free.
-- For parsing work, prefer dedicated parser libraries over regex when quoting or escaping edge cases matter.
-- Discover facts from code and the environment before asking the user. Ask only for user-only knowledge, constraints, or tradeoff decisions.
-- When presenting choices to the user, state the tradeoff axis in one sentence instead of listing pros/cons without framing.
-- Follow rules as written. "This is too small to follow the process" and "verification can be skipped" are rationalization red flags.
+## Entrypoints
 
-### Tooling Defaults
+- `/plan <request>` for implementation work; it sizes the process to the request, so use it for small requests too. `/impl` executes the approved plan and ends with `/gate`.
+- `/systematic-debugging` for bugs: observe the symptom directly, treat the fix as a hypothesis to falsify, and present both the minimal workaround and the root-cause fix when both exist.
+- `/qa-planner` for QA-style verification, `/agent-browser` for browser or UI checks (screenshots, console, responsive), `/gdocs-to-md` for Google Docs URLs, `/repo-dive` for GitHub repository code, `/obsidian-cli` for vault notes.
+- Questions with more than one defensible answer (design, technology choice, whether to adopt a practice, recalling a prior conclusion): search the vault with `/llm-wiki query` first and prefer its record; skip only for what the current repository settles or single-answer facts. Offer `/llm-wiki save` when a reusable insight surfaces.
+- When `/codex-review` is requested, complete its full loop.
 
-- Use `fd` for file search.
-- Use `rg` for content search.
-- Prefer Deno/TypeScript over Bash when a script needs parsing, state management, or branching logic.
-- Short one-off command chains are fine in Bash.
+## Tooling
 
-### Subagent Dispatch
+- `fd` for files, `rg` for content. Deno/TypeScript for scripts that parse, hold state, or branch; short one-off chains may stay in Bash.
+- GitHub issue and PR URLs may be private: use `gh`. Inspect repository code locally via `/repo-dive`, not WebFetch.
 
-- Standing request from the user: dispatch subagents with the Agent tool on your own judgement for investigation, broad search, and review work. It counts as already requested, so do not ask first.
-- Skills that dispatch subagents (`/subagent-review`, `/simplify-review`, `/completion-audit`, `/plan` critics) carry the same standing request; run their dispatches as defined.
-- This removes the need to ask, not the need to judge. A lookup you can answer directly still does not need a subagent.
-- Do not pass `name` to an Agent unless you plan to send it a follow-up message; an unnamed agent completes and vanishes, a named one stays idle until TaskStop.
-- When you did pass `name`, call TaskStop on it in the same turn you finish reading its result.
-- Ignore messages that carry only an idle notification and never relay them to the user.
+## Gotchas
 
-### Workflow Entrypoints
+- Before `git add -A` or `git add .`, run `git status --porcelain` and check for unintended files. For an unrelated fix, branch from the intended base and verify with `git diff <base>...HEAD`.
+- Bash quoting: wrap uncertain `$'...'` pipelines in `bash -c`; put `set +H &&` before a command with a literal `!` in double quotes; avoid BSD `sed` for bulk replacements containing `!`, `$`, or backticks; in `just` recipes shell variables are `$var`.
+- Start long-running processes with the tool's background mode, not `&`. Emit Private Use Area glyphs at runtime with `printf` rather than embedding them.
+- Deno 2.x: read stdin with `new Response(Deno.stdin.readable).text()`; inline code is `deno eval` (`deno run -e` does not exist); script directory is `new URL(".", import.meta.url).pathname`; on `Deno.Command` failures pipe and read `stderr`.
+- Pin GitHub Actions to full commit SHAs.
 
-- Use `/plan <request>` as the default design-first entrypoint for implementation work. It supports trivial requests with a minimal path, so do not skip it just because the task looks small.
-- Use `/impl` after `/plan` to execute the task list faithfully. `/impl` details live in `skills/impl/SKILL.md`.
-- When QA-style verification is requested, load `/qa-planner` before planning. See `skills/qa-planner/SKILL.md`.
-- For browser interaction or UI verification, load `/agent-browser` before planning. See `skills/agent-browser/SKILL.md`.
-- For debugging or bug-fix work, load `/systematic-debugging`. See `skills/systematic-debugging/SKILL.md`.
-- When a Google Docs URL must be read, use `/gdocs-to-md`. See `skills/gdocs-to-md/SKILL.md`.
-- When a GitHub repository URL must be inspected as code, use `/repo-dive`. See `skills/repo-dive/SKILL.md`.
-- When `/codex-review` is explicitly requested, complete its full review loop; do not stop midway.
-- When answering a question that has more than one defensible position — design choices, technology selection, whether a practice is worth adopting, or recalling something previously read or concluded — search the Obsidian vault with `/llm-wiki query` before answering, and prefer what the vault records over model knowledge. This applies during `/plan` investigation too.
-- Two exclusions only: questions the code in the current repository settles beyond judgment, and factual lookups with a single correct answer (spec, API, syntax). When in doubt, search.
-- When a reusable insight surfaces in a session, offer `/llm-wiki save`. Do not offer it for decisions that only matter to the task at hand.
+## Code
 
-### Planning And Execution
+- Group three or more related arguments into an object; compose functions rather than inherit; abstract early only what is genuinely shared, Rule of Three for the rest; descriptive names for exports, concise ones for locals. Arrange files in dependency order without circular references.
+- Comments explain only why an obvious alternative was rejected or why the natural approach is a trap. No `Why:` / `Note:` labels, no conversational residue ("as requested", PR numbers, revision history); those belong in commits and PR bodies. Mirrored for Codex in `home/programs/agents/shared/comment-conventions.md`; update both together.
 
-- `/plan` is the design-first entrypoint. Keep `CLAUDE.md` high-level; detailed plan mechanics belong in `skills/plan/SKILL.md`.
-- During planning, resolve code-discoverable questions yourself and record reasonable assumptions when a default is safe.
-- Ask the user only for goals, hidden constraints, deadlines, terminology, or tradeoffs that materially change the plan.
-- `/impl` is the execution source of truth once a plan exists. Follow task order, verification requirements, and final-gate rules from `skills/impl/SKILL.md`.
+## Generated artifacts
 
-### Question Triage
-
-- Self-resolve via code or environment first: when a question's answer can be derived from existing behavior, file structure, current implementation, or other discoverable facts, investigate the codebase **instead** of asking. Pre-empting the question is the goal.
-- Ask now: user-only knowledge that the codebase cannot reveal — goals, hidden constraints, deadlines, preferences, or tradeoffs requiring judgment.
-- Document as an assumption: when a reasonable default is safe and can be validated later.
-
-### Verification
-
-- Capture the pre-change baseline before editing: current output, config values, screenshots, or other observable state.
-- Verify changed behavior after implementation. "Code changed" is not evidence that the change works.
-- Choose a verification method that can actually observe the behavior you changed. When tests cannot observe it, use a better method and state the limitation.
-- When behavior changes and relevant tests already exist, add or update tests as part of the change unless the user explicitly says not to.
-- For Web UI changes, verify with `/agent-browser`: check screenshots/layout, console errors, and responsive behavior.
-- Trust concrete evidence over analysis or documentation when they disagree.
-- When a verification fails, suspect the observation method before the system.
-- Confirm delegated work from its artifacts (diff, files, command output), not from the delegate's self-report.
-- When running through `/impl`, do not claim completion until `/completion-audit` and `/subagent-review` pass. Details live in `skills/completion-audit/SKILL.md` and `skills/subagent-review/SKILL.md`. `/santa-loop` is opt-in and only runs when the user invokes it explicitly.
-- In an investigation reply (how something behaves, why it happened, what a codebase does), grade each load-bearing claim — one whose falsity would change the conclusion — as [Direct] (you ran or read it here), [Supported] (one step from something you read, or a subagent's report), [Inferred] (a hedged guess, never asserted), or [Unknown] (you looked and could not tell).
-- Direct names the command or file:lines, Supported names what was read or who reported it (a web page or release note you read is Supported, not Direct), Unknown says what was tried, and a claim your recommendation depends on is re-read to [Direct] (two Supported exceptions live in the reference); definitions and wording rules: skills/plan/references/evidence-grades.md.
-- A reader treats an ungraded claim as Inferred, so grade every load-bearing claim.
-- When the reply will drive an edit, a command, or a decision and the recommended action depends on a claim graded Inferred or Unknown that the repository or this machine can settle, say so, dispatch an unnamed Explore agent to falsify it, correct and re-grade whatever it falsifies, and report what it found; when only the user can settle it, say what measurement or check would.
-
-### Bug Fixes
-
-- For bug-fix work, `CLAUDE.md` Bug Fixes rules are authoritative; `/systematic-debugging` adds procedure on top of them.
-- Include direct observation in the plan and investigation: logs, repro commands, measurements, or other evidence that shows the symptom and where it occurs.
-- Treat the proposed fix as a hypothesis that must be falsified. Consider why it could be wrong and gather evidence that rules alternatives out before committing to it.
-- When both a minimal workaround and a root-cause fix exist, present both options and prefer the root-cause fix when it retires known debt safely.
-- Use the baseline -> implement -> re-measure -> compare -> conclude loop for bug fixes and other behavior revisions.
-
-### Git And Shell Hard Rules
-
-- Before `git add -A` or `git add .`, run `git status --porcelain` and confirm no sensitive or unintended files are included.
-- Do not use `git -C <path>`. Change directories and run `git` from the target repo instead.
-- When creating an unrelated fix branch, branch from the intended base branch, then verify with `git diff <base-branch>...HEAD`.
-- If Bash quoting behavior is uncertain, especially with `$'...'` inside pipes, wrap the command in `bash -c`.
-- Disable history expansion with `set +H &&` before commands containing literal `!` inside double quotes.
-- In `just` recipes, shell variables are `$var`, not `$$var`.
-- Avoid BSD `sed` for bulk replacements involving special characters such as `!`, `$`, or backticks.
-- Start long-running background processes with the tool's background mode rather than shell `&` chaining.
-- If Private Use Area glyphs are needed in generated files, emit them at runtime with `printf` instead of embedding them directly.
-
-### External Resource Handling
-
-- GitHub Issue and PR URLs may be private. Use `gh` to retrieve their data.
-- GitHub repository code should be inspected locally via `/repo-dive`, not via WebFetch or `gh api`.
-- Google Docs content should be converted with `/gdocs-to-md` before use.
-- For Obsidian notes, use `/obsidian-cli` rather than direct file access when iCloud path behavior is unreliable.
-
-### Language Defaults For Generated Artifacts
-
-- When a skill, CLAUDE.md, or command argument specifies a language default (e.g., `/create-pr` "English by default unless `ja` is explicit", project CLAUDE.md "English-only for commits/docs"), the scope is the entire generated artifact. Do not mix the conversation language into Summary, introduction, or conceptual sections while keeping the rest in the default language.
-- User conversation language never overrides an artifact language default. Switch languages only when the rule explicitly permits it (e.g., `ja` flag passed, CLAUDE.md Language section allows it).
-- Before submitting PR bodies, commit messages, release notes, or other artifacts covered by a language rule, verify the entire body is in the target language in one pass — not per section.
-
-### Writing
-
-- Replies carry only what changes the reader's next action. Full data (audit tables, raw findings, exhaustive lists) goes to a file, referenced by path.
-- Do not report workflow internals — which internal branch ran, which stage was skipped, how many rounds a loop took — unless it changes the reader's next action. Refer to a mechanism by its skill name when it must be named.
-  - As a sub-rule, keep workflow vocabulary (gate, escalation, self-audit, orchestrator, and similar skill-internal terms) out of prose; say the function in plain language instead.
-  - Exemption: severity labels (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values, skill names, and evidence grades ([Direct] / [Supported] / [Inferred] / [Unknown]) are machine contract and may appear as-is.
-- This rule never changes which language an artifact is written in — Language Defaults above decides that. Within prose that is already Japanese: translate translatable English words; keep code identifiers, commands, file paths, product names, skill names, and evidence grade tags in their original form. When unsure whether to translate, keep the original.
-- Write complete sentences. Telegraphic fragments ("idx stable", "3 UF2 exit 0") do not belong in prose — put command results in code blocks or state them as sentences.
-- Define an uncommon technical term at first use, or choose the plain word.
-- When asked to explain, give the smallest complete answer first and stop; add layers only when asked.
-
-### Design Principles
-
-- Single responsibility is context-dependent. Internal side effects are acceptable; prefer purity at public boundaries.
-- Group three or more related arguments into an object.
-- Prefer function composition over inheritance.
-- Abstract common patterns early only when the abstraction is genuinely shared; use Rule of Three for domain-specific patterns.
-- Use descriptive names for exports and concise names for local variables.
-- Code comments must document "Why not" only — why an obvious alternative was rejected, or why the seemingly natural approach is a trap. Do not write comments that explain what the code does, restate obvious why, or describe current behavior.
-  - Do not prefix comments with `Why-Not:`, `Why:`, `Note:`, or similar machine-like labels. The comment body itself is the explanation; a label only adds noise.
-  - Do not preserve conversational context in comments: phrases like "as the user requested", "per the conversation", "added for the task", "fix from the feedback", references to PR/Issue numbers, individual names, or descriptions of the revision history all belong in the commit message or PR body, not in code.
-  - Good vs bad example:
-    - Bad: `// Why-Not: regex was suggested by the user but it does not handle escaped quotes, so use the JSON parser instead.`
-    - Good: `// Regex matching breaks on escaped quotes inside string literals; rely on the JSON parser for correct token boundaries.`
-  - These comment rules are mirrored for Codex in `home/programs/agents/shared/comment-conventions.md` (dotfiles repo) — update both together.
-
-### Coding Conventions
-
-#### GitHub Actions Security
-
-- Pin GitHub Actions to full commit SHAs, not version tags.
-
-#### Deno Scripts
-
-- Read stdin with `new Response(Deno.stdin.readable).text()` on Deno 2.x.
-- Use `deno eval` for inline execution; `deno run -e` does not exist.
-- Get a script directory with `new URL(".", import.meta.url).pathname`.
-- When diagnosing `Deno.Command` failures, pipe and inspect `stderr`.
-
-#### File Organization
-
-- Arrange files in dependency order so helper definitions appear before the logic that uses them.
-- Avoid circular references.
+- A language default set by a skill or a project (for example English-only commit messages and PR bodies) covers the entire artifact; the conversation language never overrides it. Check the whole artifact in one pass before submitting.
 
 @RTK.md

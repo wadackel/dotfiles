@@ -1,4 +1,4 @@
-import type { PlanEvidence, PlanTask } from "./codex-plan-state.ts";
+import type { PlanEvidence, PlanTask } from "./plan-state.ts";
 
 export interface Requirement {
   id: string;

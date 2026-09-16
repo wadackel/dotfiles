@@ -70,7 +70,7 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 - `/plan` Phase 4 Step 6 dispatches `plan-simplifier` directly via the Agent tool (canonical prompt shape lives there).
 - `/impl` Step 4.5 (diff ≥ 20 files or ≥ 500 lines) dispatches `code-simplifier` directly via the Agent tool (canonical prompt shape lives there).
-- `/subagent-review` is complementary: it checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/subagent-review` → next task.
+- `/gate` is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/gate`.
 
 ## Simplification Heuristics
 

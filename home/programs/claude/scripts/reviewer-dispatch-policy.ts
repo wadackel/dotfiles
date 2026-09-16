@@ -7,7 +7,7 @@
 // listing blocker-severity findings in 45% of cases — the gate then advanced
 // past findings that were never fixed.
 //
-// The prose instruction in subagent-review/SKILL.md is what failed to land, so
+// The prose instruction in the gate skill is what failed to land, so
 // a stronger prose instruction is not the fix; this check is.
 
 interface HookInput {
@@ -15,15 +15,15 @@ interface HookInput {
   tool_input: { subagent_type?: string; prompt?: string };
 }
 
-const TEMPLATE =
-  "~/.claude/skills/subagent-review/references/domain-reviewer-prompt.md";
+export const TEMPLATE =
+  "~/.claude/skills/gate/references/domain-reviewer-prompt.md";
 
 /**
- * The reviewers /subagent-review dispatches, listed explicitly. A `-reviewer$`
+ * The reviewers /gate dispatches, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer` and `skill-guide-reviewer`,
  * which belong to other workflows and have no template to satisfy the check.
  */
-const GUARDED = new Set([
+export const GUARDED: ReadonlySet<string> = new Set([
   "code-reviewer",
   "security-auditor",
   "rust-reviewer",
@@ -59,7 +59,7 @@ export function isReviewerAgent(subagentType: string | undefined): boolean {
 }
 
 /**
- * Two output contracts are in use. The /subagent-review templates end their
+ * Two output contracts are in use. The /gate templates end their
  * VERDICT line with "FAIL otherwise"; /santa-loop dispatches `code-reviewer`
  * with a JSON contract carrying a `"verdict"` field and its own verdict rules.
  * Accepting either keeps the guard on both without forcing one workflow's
@@ -72,7 +72,7 @@ export function hasVerdictRule(prompt: string | undefined): boolean {
 }
 
 /**
- * Second requirement, applied only to the /subagent-review contract ("FAIL
+ * Second requirement, applied only to the /gate contract ("FAIL
  * otherwise"): a reviewer without Bash needs the diff in the prompt, a reviewer
  * with Bash needs the template's read-only sentence. The santa-loop JSON
  * contract is left to its own reviewer-prompt.
@@ -98,7 +98,7 @@ export function requirementMessage(
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
     "",
-    "Add this line to the prompt (it comes from the /subagent-review template):",
+    "Add this line to the prompt (it comes from the /gate template):",
     line,
   ].join("\n");
 }
@@ -107,7 +107,7 @@ export function denialMessage(subagentType: string): string {
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without the verdict rule.`,
     "",
-    "The prompt must state how PASS and FAIL are decided. For /subagent-review,",
+    "The prompt must state how PASS and FAIL are decided. For /gate,",
     "load the template and paste its `## Template` block verbatim — do not",
     "summarise it and do not rewrite the VERDICT line:",
     `  ${TEMPLATE}`,

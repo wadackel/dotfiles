@@ -23,14 +23,17 @@ Deno.test("lint.ts: findings があっても exit 0 で、text 形式で出力�
   assert(r.stdout.includes("[info] telegraphic_fragment:"));
 });
 
-Deno.test("lint.ts: --json は Finding 配列を返す", async () => {
+Deno.test("lint.ts: --json は findings 配列と stats を返す", async () => {
   const r = await runLint([badPath, "--json"]);
   assertEquals(r.code, 0);
-  const findings = JSON.parse(r.stdout);
+  const { findings, stats } = JSON.parse(r.stdout);
   assert(Array.isArray(findings));
   const f = findings[0];
   for (const key of ["category", "severity", "line", "matched", "excerpt"]) {
     assert(key in f, `missing key: ${key}`);
+  }
+  for (const key of ["sentences", "meanSentenceLength", "labelFragmentRatio"]) {
+    assert(key in stats, `missing stats key: ${key}`);
   }
 });
 

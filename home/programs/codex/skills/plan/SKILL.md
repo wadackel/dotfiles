@@ -100,20 +100,7 @@ Agree on purpose, constraints, acceptance criteria, and any consequential approa
 - Explain the recommendation and tradeoff briefly. Continue independent investigation while a required answer is pending; no answer or elapsed time does not establish approval.
 - For a fully specified request, summarize the agreed direction and proceed without inventing a choice.
 
-**Question format** (chat body; sample strings stay in the user's conversation language):
-
-```markdown
-### <質問文をそのまま見出しにする>
-
-<背景 2〜3 文。必要なときだけコードブロックや file:lines を添える>
-
-- **A. <ラベル>** — <含意 1 行>
-- **B. <ラベル>** — <含意 1 行>
-
-> 推奨: A。<理由 1〜2 文>
-```
-
-The heading is the question itself. Background stays at 2–3 sentences, with code blocks or `file:lines` only when they help the decision. Each option label carries a one-line implication. The closing blockquote names the recommended answer with brief reasoning (`> Recommendation:` in English conversations). Never use emoji in questions.
+**Question format**: the block in `references/interview.md`, which also holds the frontier ordering and the ask-or-decide judgment. Never use emoji in questions.
 
 **Steps A1–A7:**
 
@@ -132,18 +119,11 @@ If the user changes direction mid-AGREE, go back to A3 and restart the approach 
 
 This subsection defines the **Blocking Interview Protocol** that backs AGREE for non-trivial `$plan` requests.
 
-Use `home/programs/agents/shared/plan/references/requirement-checklist.md` (public path `~/.agents/skills/plan/references/requirement-checklist.md`) as the judgment lens.
+Read `references/interview.md` (public path `~/.agents/skills/plan/references/interview.md`) before the first question; it holds the question format and the ask-or-decide judgment. `references/contract.md` holds the strings the plan file must carry.
 
 Clarity-gated loop: AGREE is clarity-gated. For small, medium, large, and xl requests, keep asking as needed until the request is clear enough to write an implementation plan. There is no fixed maximum number of clarification rounds. A fully specified request has no remaining interview gate, regardless of complexity.
 
-Interview gate: every unresolved ambiguity must be classified before plan creation.
-
-| Bucket | Meaning | Action |
-|---|---|---|
-| **Observed fact** | Observable from codebase, logs, docs, existing issues, or current conversation | Self-resolve with lightweight grep/read. Do not record secrets, tokens, or credentials in plans or logs. |
-| **User decision** | Depends on desired behavior, priority, scope boundary, audience, risk tolerance, success criteria, or trade-off acceptance | Ask the user. Do not convert to Draft assumption just because a reasonable default exists. |
-| **Technical deferral** | Codebase-recoverable but too heavy for an AGREE lightweight probe | Record in `### Unresolved Items` with a concrete `next:` for EXPLORE, DEEPEN, or implementation. |
-| **Draft assumption** | User explicitly allowed proceeding with an assumption, or the detail is non-blocking technical/default behavior | Record in `### Assumptions` with a reason. |
+Interview gate: classify every unresolved ambiguity with the observed-fact / user-decision / technical-deferral / draft-assumption table in `references/interview.md` before plan creation.
 
 If any `User decision` remains, create no plan file, evidence sidecar, or pending marker in this turn. Ask and wait for the answer before dependent work. End the turn when using text-only continuation; otherwise continue independent investigation.
 
@@ -151,7 +131,7 @@ Each clarification pass:
 
 1. **Step A Walk**: Walk the 8 observations: Why, What, Who, When, Where, How, Success, Failure. Apply prior answers, then identify NotClear items. Restate is not a substitute for Ask.
 2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice.
-3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/evidence-grades.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
 4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
 5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask the highest-impact decision; batch only independent questions if the available tool supports it. A question that depends on another open answer waits. Every question must include a recommended answer and short rationale. For text-only continuation, immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
 6. **Step F Wait**: Wait for required answers; continue independent work if the question tool allows it. For text-only continuation, say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn without executing dependent work.
@@ -166,7 +146,7 @@ Convergence conditions, any one:
 
 ### AGREE output
 
-Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/evidence-grades.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
 
 ## EXPLORE
 
@@ -274,14 +254,14 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 
 ### Baseline
 - Each implementation task has raw verification evidence recorded in the sidecar JSON.
-- The reserved `Final Audit + Review` task is completed only after `$impl` emits `AUDIT_VERDICT: PASS` and `REVIEW_VERDICT: PASS`.
+- The reserved `Final Audit + Review` task is completed only after `$impl` records `REVIEW_VERDICT: PASS` and `plan-state.ts complete` accepts the final task.
 ```
 
-`[outcome]` may appear under `### Autonomous Verification`, but `$impl` Audit excludes it as circular and checks it only after final Review. Verdict format `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Audit + Review.
+`[outcome]` may appear under `### Autonomous Verification`, but `plan-state.ts coverage` never requires it and `$impl` checks it only after final Review. Verdict format `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Review; the audit is `plan-state.ts coverage` / `complete`.
 
 ### Requires User Confirmation item format
 
-Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/completion-audit`, and the final report copy them verbatim:
+Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/gate`, and the final report copy them verbatim:
 
 ```
 - [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
@@ -360,7 +340,7 @@ update_plan({
 Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Do not depend on execute bits; use this permissioned command shape:
 
 ```bash
-deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.codex/scripts/codex-plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
+deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.agents/scripts/plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
 ```
 
 The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.
@@ -410,10 +390,10 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 
 ## Integration with existing tooling
 
-- `home/programs/agents/shared/plan/references/requirement-checklist.md` (Codex public path `~/.agents/skills/plan/references/requirement-checklist.md`, Claude public path `~/.claude/skills/plan/references/requirement-checklist.md`): shared with the Claude version through whole-dir linking. AGREE judgment lens.
+- `home/programs/agents/shared/plan/references/contract.md` and `interview.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): shared with the Claude version through whole-dir linking. Fixed strings and the interview judgment.
 - `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
 - `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
-- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE and finally emits `^(AUDIT|SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its built-in Audit + risk-selected review phase.
+- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, runs `plan-state.ts coverage` / `complete` as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
 - Marker helper (`codex-plan-marker.ts`): writes the tmux picker's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes

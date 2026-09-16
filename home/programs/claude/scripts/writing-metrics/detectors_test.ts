@@ -9,6 +9,7 @@ import {
   detectWorkflowVocab,
   type Dictionaries,
   loadDictionaries,
+  proseStats,
   resolveProtectedTermsPath,
 } from "./detectors.ts";
 
@@ -306,4 +307,36 @@ Deno.test("fixture: bad.md の行番号がフェンスを跨いで正しい", ()
 
 Deno.test("fixture: good.md は全カテゴリ0件（誤検出4形を含む）", () => {
   assertEquals(countBy(good, realDict), {});
+});
+
+// --- 集計指標 ---------------------------------------------------------------
+
+Deno.test("proseStats: 文平均長は fence と表を除いた地の文の 。区切りで数える", () => {
+  const text = [
+    "短い文です。もう少し長い文をここに置きます。",
+    "```",
+    "code line that is not a sentence at all。",
+    "```",
+    "| 表 | 行 |",
+    "|---|---|",
+    "| これは表なので数えない。 | x |",
+  ].join("\n");
+  const s = proseStats(text);
+  assertEquals(s.sentences, 2);
+  // 「短い文です。」6 字 + 「もう少し長い文をここに置きます。」16 字 = 22 / 2
+  assertEquals(s.meanSentenceLength, 11);
+});
+
+Deno.test("proseStats: 句点で終わらない箇条書きとラベル行を断片として数える", () => {
+  const text = [
+    "- **設定**: `enabled = true` で有効",
+    "- 完全な文で書かれた項目です。",
+    "- `magick` で変換する",
+    "**端末層**: headless では false",
+    "1. 番号付きも文なら断片ではない。",
+  ].join("\n");
+  const s = proseStats(text);
+  assertEquals(s.itemLines, 5);
+  assertEquals(s.labelFragmentLines, 3);
+  assertEquals(s.labelFragmentRatio, 0.6);
 });

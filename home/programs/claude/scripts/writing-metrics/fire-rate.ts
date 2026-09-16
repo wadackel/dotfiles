@@ -14,6 +14,7 @@
 import {
   detectAll,
   loadDictionaries,
+  proseStats,
   resolveProtectedTermsPath,
 } from "./detectors.ts";
 
@@ -56,6 +57,41 @@ let n = 0;
 let chars = 0;
 const fired = new Map<string, number>();
 const findings = new Map<string, number>();
+let sentenceChars = 0;
+let sentences = 0;
+let itemLines = 0;
+let labelFragmentLines = 0;
+// 文体の差はスキル文脈に集中していた（plan 790 字 vs 文脈なし 191 字）ので、
+// 全体平均だけでは施策の効果が見えない。/plan や /impl が現れた時点から次の
+// マーカーまでを同じ文脈として数える: スキル実行中の質問応答も同じ文脈に属する
+type Context = "plan" | "impl" | "none";
+const byContext: Record<Context, number[]> = { plan: [], impl: [], none: [] };
+
+function userText(r: Record<string, unknown>): string | null {
+  const m = r.message as { role?: string; content?: unknown } | undefined;
+  if (r.type !== "user" || !m) return null;
+  if (typeof m.content === "string") return m.content;
+  if (Array.isArray(m.content)) {
+    const texts: string[] = [];
+    for (const b of m.content) {
+      if (
+        b && typeof b === "object" && (b as { type?: unknown }).type === "text"
+      ) {
+        const text = (b as { text?: unknown }).text;
+        if (typeof text === "string") texts.push(text);
+      }
+    }
+    return texts.length ? texts.join("\n") : null;
+  }
+  return null;
+}
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
 
 async function* files(dir: string): AsyncGenerator<string> {
   for await (const e of Deno.readDir(dir)) {
@@ -72,6 +108,7 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
   } catch {
     continue;
   }
+  let context: Context = "none";
   for (const line of content.split("\n")) {
     if (!line.trim()) continue;
     let r: Record<string, unknown>;
@@ -80,7 +117,18 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
     } catch {
       continue;
     }
-    if (r.isSidechain || r.type !== "assistant") continue;
+    if (r.isSidechain) continue;
+    // isMeta のユーザー行は skill 本文の展開で、/plan や /impl の文字列を含むが
+    // ユーザーの発話ではない。assistant 行の母集団は 08-30 の baseline と揃えて
+    // isMeta を見ない
+    if (r.type === "user" && r.isMeta) continue;
+    const u = userText(r);
+    if (u !== null) {
+      if (/(^|\s|>)\/plan(\s|$|<)/.test(u)) context = "plan";
+      else if (/(^|\s|>)\/impl(\s|$|<)/.test(u)) context = "impl";
+      continue;
+    }
+    if (r.type !== "assistant") continue;
     const blocks =
       (r.message as { content?: Array<{ type: string; text?: string }> })
         ?.content;
@@ -96,6 +144,12 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
     if (Number.isNaN(ts) || ts < fromMs) continue;
     n++;
     chars += text.length;
+    byContext[context].push(text.length);
+    const st = proseStats(text);
+    sentences += st.sentences;
+    sentenceChars += st.sentenceChars;
+    itemLines += st.itemLines;
+    labelFragmentLines += st.labelFragmentLines;
     const cats = new Set<string>();
     for (const f of detectAll(text, dict)) {
       cats.add(f.category);
@@ -123,4 +177,19 @@ for (const c of CATS) {
   const rate = ((fired.get(c) ?? 0) / n * 100).toFixed(1);
   const dens = ((findings.get(c) ?? 0) / chars * 1000).toFixed(2);
   console.log(`${c.padEnd(22)} ${rate.padStart(5)}%   ${dens.padStart(8)}`);
+}
+console.log(
+  `\n文平均長 ${
+    (sentences ? sentenceChars / sentences : 0).toFixed(1)
+  } 字（${sentences.toLocaleString()} 文）、ラベル断片 ${
+    itemLines ? (labelFragmentLines / itemLines * 100).toFixed(1) : "0.0"
+  }%（${labelFragmentLines.toLocaleString()}/${itemLines.toLocaleString()} 行）`,
+);
+console.log("\nスキル文脈別 文字数（応答数 / 中央値）");
+for (const [ctx, xs] of Object.entries(byContext)) {
+  console.log(
+    `${ctx.padEnd(6)} ${String(xs.length).padStart(6)} / ${
+      median(xs).toFixed(0).padStart(6)
+    }`,
+  );
 }

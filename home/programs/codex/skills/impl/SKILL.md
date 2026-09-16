@@ -1,6 +1,6 @@
 ---
 name: impl
-description: Executes a plan created by `$plan`, verifies the final working tree, and runs main-session Audit with risk-selected Review. Emits AUDIT_VERDICT / REVIEW_VERDICT. Runs only when explicitly invoked with `$impl`.
+description: Executes a plan created by `$plan`, verifies the final working tree with `plan-state.ts coverage` / `complete`, and runs risk-selected Review. Emits REVIEW_VERDICT. Runs only when explicitly invoked with `$impl`.
 ---
 
 # $impl
@@ -59,15 +59,12 @@ Use the first implementation task's `baseline_sha` as the aggregate review basel
 
 ### Built-in Audit
 
-Declare checks for every acceptance item on its owning task; deployment/integration checks explicitly assigned to the final task remain required there. Declare `audit` plus every selected review on the final task. Requirements are additive. Audit the plan against the actual implementation and complete verification evidence:
+The audit is the helper, not a verdict you write. Declare checks for every acceptance item on its owning task with ids `cc-<n>` matching the order of the plan's `### Autonomous Verification` bullets (contract.md); deployment/integration checks explicitly assigned to the final task remain required there. Requirements are additive. Before review:
 
-- `[file-state]`, `[orchestrator-only]`, and `[live]` all gate completion.
-- Requires User Confirmation items also gate completion unless explicitly waived. Preserve the user's authorization with the waiver.
+- `[file-state]`, `[orchestrator-only]`, and `[live]` all gate completion. Requires User Confirmation items also gate completion unless explicitly waived; preserve the user's authorization with the waiver.
 - Reuse a local check only if `reconcile` confirms its stored artifact hash is current; rerun stale checks. Repeat external observations at the final gate.
 - `[outcome]` verdicts are circular: evaluate them after Review, never as substitutes for acceptance evidence.
-- Confirm all implementation tasks have current evidence before recording the audit result.
-
-Emit `AUDIT_VERDICT: PASS` or `AUDIT_VERDICT: FAIL <reason>`. Record the audit check against the current target. On failure, investigate and fix the evidence gap before review. A waiver cannot replace Audit or Review.
+- Run `coverage`; it exits 1 listing every bullet without a declared check. Fix the declarations or the evidence gap before review. An `audit` record is optional; `complete` on the final task re-verifies every implementation task itself. A waiver cannot replace Review.
 
 ### Built-in Review
 

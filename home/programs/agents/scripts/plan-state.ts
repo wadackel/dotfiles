@@ -1,5 +1,10 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt
 
+// Shared by Codex `$impl` and Claude `/impl`. Refusing `complete` without current
+// evidence is the audit; an LLM-written `audit` record on top of it caught no
+// defect in 18 measured gates, so `audit` is accepted but not required and the
+// final task needs only a review.
+
 import {
   artifactSnapshot,
   assertLive,
@@ -13,7 +18,7 @@ import {
   requirements,
   snapshot,
   verificationSnapshot,
-} from "./codex-plan-evidence.ts";
+} from "./plan-evidence.ts";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
@@ -42,15 +47,16 @@ function usage(): never {
   throw new Error(
     [
       "Usage:",
-      "  codex-plan-state.ts init <path> <plan-basename> <subjects-json>",
-      "  codex-plan-state.ts normalize <path>",
-      "  codex-plan-state.ts start <path> <task-id>",
-      "  codex-plan-state.ts append-evidence <path> <task-id>",
-      "  codex-plan-state.ts complete <path> <task-id>",
-      "  codex-plan-state.ts require <path> <task-id>  # requirements JSON on stdin",
-      "  codex-plan-state.ts record <path> <task-id>   # check JSON on stdin",
-      "  codex-plan-state.ts snapshot <path>",
-      "  codex-plan-state.ts reconcile <path>",
+      "  plan-state.ts init <path> <plan-basename> <subjects-json>",
+      "  plan-state.ts normalize <path>",
+      "  plan-state.ts start <path> <task-id>",
+      "  plan-state.ts append-evidence <path> <task-id>",
+      "  plan-state.ts complete <path> <task-id>",
+      "  plan-state.ts require <path> <task-id>  # requirements JSON on stdin",
+      "  plan-state.ts record <path> <task-id>   # check JSON on stdin",
+      "  plan-state.ts snapshot <path>",
+      "  plan-state.ts reconcile <path>",
+      "  plan-state.ts coverage <path>",
     ].join("\n"),
   );
 }
@@ -89,6 +95,26 @@ async function canonicalExistingDir(path: string): Promise<string> {
   }
 }
 
+// Each agent keeps its own plans directory and a machine may have only one of
+// them (Codex not installed, or a fresh Claude setup), so a missing directory is
+// skipped rather than treated as an error.
+async function plansDirs(home: string): Promise<string[]> {
+  const dirs: string[] = [];
+  for (const agent of [".codex", ".claude"]) {
+    try {
+      dirs.push(await Deno.realPath(`${home}/${agent}/plans`));
+    } catch (err) {
+      if (!(err instanceof Deno.errors.NotFound)) throw err;
+    }
+  }
+  if (dirs.length === 0) {
+    throw new Error(
+      `neither ${home}/.codex/plans nor ${home}/.claude/plans exists`,
+    );
+  }
+  return dirs;
+}
+
 async function assertEvidencePath(path: string): Promise<void> {
   if (!path.endsWith(".evidence.json")) {
     throw new Error("evidence path must end with .evidence.json");
@@ -98,7 +124,7 @@ async function assertEvidencePath(path: string): Promise<void> {
   if (!home) {
     throw new Error("HOME is not set");
   }
-  const plansDir = await canonicalExistingDir(`${home}/.codex/plans`);
+  const dirs = await plansDirs(home);
   if (!path.startsWith("/")) {
     throw new Error("evidence path must be absolute");
   }
@@ -112,8 +138,8 @@ async function assertEvidencePath(path: string): Promise<void> {
     throw new Error("evidence path must not be a dotfile marker");
   }
   const realDir = await canonicalExistingDir(dir);
-  if (realDir !== plansDir) {
-    throw new Error(`evidence path must be under ${plansDir}`);
+  if (!dirs.includes(realDir)) {
+    throw new Error(`evidence path must be under ${dirs.join(" or ")}`);
   }
 
   try {
@@ -229,6 +255,37 @@ export function initPlanEvidence(
     };
   });
   return normalizePlanEvidence({ plan, tasks });
+}
+
+// The n-th bullet must have a required check id `cc-<n>` somewhere in the plan
+// (contract.md). Fence lines are dropped before the heading is searched, the way
+// check-plan.ts does it: a plan that quotes the heading or a `- [live]` sample
+// inside a fenced example would otherwise anchor the scan on the example.
+// `[outcome]` bullets are numbered but never required — they are the review
+// verdict itself, which the gate records under its own `review-<n>` id.
+export function autonomousBullets(
+  plan: string,
+): { tag: string; text: string }[] {
+  const lines: string[] = [];
+  let inFence = false;
+  for (const line of plan.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) lines.push(line);
+  }
+  const start = lines.findIndex((line) =>
+    /^### Autonomous Verification\s*$/.test(line)
+  );
+  if (start < 0) return [];
+  const bullets: { tag: string; text: string }[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,3} /.test(line)) break;
+    const m = line.match(/^\s*-[ \t]+(\[[a-z-]+\])\s*(.*)$/);
+    if (m) bullets.push({ tag: m[1], text: m[2].trim() });
+  }
+  return bullets;
 }
 
 async function readEvidence(path: string): Promise<PlanEvidence> {
@@ -406,11 +463,8 @@ async function execute(
     const target = await artifactSnapshot(path, data);
     if (task === data.tasks.at(-1)) {
       if (!data.gate) throw new Error("start the final gate before completion");
-      if (
-        !task.required.some((r) => r.kind === "audit") ||
-        !task.required.some((r) => r.kind === "review")
-      ) {
-        throw new Error("final gate requires audit and review checks");
+      if (!task.required.some((r) => r.kind === "review")) {
+        throw new Error("final gate requires a review check");
       }
       for (const implementation of data.tasks.slice(0, -1)) {
         await assertVerified(implementation, target, data.gate);
@@ -427,6 +481,65 @@ async function execute(
     task.status = "completed";
     await atomicWrite(path, data);
     console.log(`completed ${taskOrPlan}`);
+    return;
+  }
+
+  if (command === "coverage") {
+    if (!path) usage();
+    const data = await readEvidence(path);
+    const planPath = `${path.slice(0, path.lastIndexOf("/"))}/${data.plan}`;
+    let plan: string;
+    try {
+      const file = await Deno.open(planPath);
+      try {
+        if (!(await file.stat()).isFile) {
+          throw new Error("plan must be a regular file");
+        }
+        plan = await new Response(file.readable).text();
+      } finally {
+        try {
+          file.close();
+        } catch {
+          // readable already consumed and closed the handle
+        }
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`failed to read plan ${planPath}: ${reason}`);
+    }
+    const bullets = autonomousBullets(plan);
+    const declared = new Map<string, string>();
+    for (const task of data.tasks) {
+      for (const r of task.required ?? []) declared.set(r.id, r.kind);
+    }
+    const numbered = bullets.map((bullet, index) => ({
+      id: `cc-${index + 1}`,
+      ...bullet,
+    })).filter((bullet) => bullet.tag !== "[outcome]");
+    const missing = numbered.filter((bullet) => !declared.has(bullet.id));
+    // A `[live]` bullet declared as `file-state` would pass `complete` without
+    // any live observation, which is the downgrade this command exists to catch.
+    const mismatched = numbered.filter((bullet) =>
+      declared.has(bullet.id) &&
+      declared.get(bullet.id) !== bullet.tag.slice(1, -1)
+    ).map((bullet) => ({ ...bullet, declared: declared.get(bullet.id) }));
+    console.log(
+      JSON.stringify({ bullets: bullets.length, missing, mismatched }),
+    );
+    if (bullets.length === 0) {
+      throw new Error("plan has no ### Autonomous Verification bullets");
+    }
+    if (missing.length > 0 || mismatched.length > 0) {
+      throw new Error(
+        `${missing.length} bullet(s) without a required check (${
+          missing.map((m) => m.id).join(", ") || "-"
+        }), ${mismatched.length} declared with another kind (${
+          mismatched.map((m) => `${m.id}: ${m.declared} for ${m.tag}`).join(
+            ", ",
+          ) || "-"
+        })`,
+      );
+    }
     return;
   }
 

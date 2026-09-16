@@ -8,16 +8,16 @@ The orchestrator (santa-loop SKILL.md) substitutes the following placeholders be
 
 - `{task_spec}` — what the implementation was supposed to accomplish (plan summary or task description)
 - `{rubric}` — the criteria table built by the orchestrator (default rubric + file-type dynamic criteria)
-- `{audit_verdict_input}` — verbatim verdict + per-criterion summary from `/completion-audit` (either the default self-audit table ending in `VERIFIED: PASS (self-audit)` or the escalated subagent verdict). Required for every supported invocation (santa-loop has no valid path without it). If empty, the orchestrator MUST abort with the unsupported-manual-invocation error (see "Absent → unsupported error" below) — do NOT proceed to dispatch reviewers.
+- `{audit_verdict_input}` — verbatim verdict line and coverage output from `/gate`. Required for every supported invocation (santa-loop has no valid path without it). If empty, the orchestrator MUST abort with the unsupported-manual-invocation error (see "Absent → unsupported error" below) — do NOT proceed to dispatch reviewers.
 - `{output_under_review}` — `git diff` output covering the changes to evaluate (file-by-file)
 - `{file_paths}` — list of changed file paths
 
 ## Absent → unsupported error
 
-If `{audit_verdict_input}` is empty (manual `/santa-loop` invoked without a prior `/completion-audit`), the orchestrator emits this exact one-line error and aborts BEFORE dispatching reviewers:
+If `{audit_verdict_input}` is empty (manual `/santa-loop` invoked without a prior `/gate`), the orchestrator emits this exact one-line error and aborts BEFORE dispatching reviewers:
 
 ```
-santa-loop: Audit Verdict Input is required. Run /completion-audit first, or invoke both via /impl.
+santa-loop: Audit Verdict Input is required. Run /gate first, or invoke both via /impl.
 ```
 
 The reviewer template below assumes a non-empty `{audit_verdict_input}` and is fixed at 5 criteria. There is no runtime branching to a 6-criteria fallback.
@@ -34,11 +34,11 @@ Be rigorous. Vague approvals like "looks good" or "seems correct" are forbidden.
 
 {task_spec}
 
-## Audit Verdict Input (from /completion-audit — trusted, do NOT re-judge)
+## Audit Verdict Input (from /gate — trusted, do NOT re-judge)
 
 {audit_verdict_input}
 
-The verdict above was produced by `/completion-audit` and is authoritative for completeness/requirement-coverage. Your job is code/design quality only — do NOT re-evaluate whether the plan's Completion Criteria are met.
+The verdict above was produced by `/gate` and is authoritative for completeness/requirement-coverage. Your job is code/design quality only — do NOT re-evaluate whether the plan's Completion Criteria are met.
 
 ## Evaluation Rubric
 
