@@ -1,9 +1,7 @@
 # Security reviewer triggers
 
-`/gate` dispatches `security-auditor` when any of these match the diff. Over-triggering is cheap and under-triggering ships a vulnerability, so the lists are broad; tune here, not in SKILL.md.
+`/gate` dispatches `security-auditor` when the added or removed lines alter permission or trust boundaries (`permissions.allow`, hooks, bash-policy), secret or credential handling, authentication or authorization, or the handling of untrusted input reaching commands, SQL, evaluation, paths, or external requests. Inspect the data flow and changed behavior; a path such as `scripts/` or a word such as `spawn` alone is not a security trigger.
 
-- **Path** (case-insensitive substring): `scripts/`, `hooks/`, `auth`, `session`, `cookie`, `credential`, `secret`, `token`, `jwt`, `api/`, `webhook`, `oauth`, `sso`, `crypto`, `encrypt`, `decrypt`.
-- **Added or removed lines** (regex): `child_process|spawn|execFile|execSync|execFileSync|exec\(|eval\(|new Function\(|Deno\.Command|Deno\.run|SELECT .* FROM|INSERT INTO|UPDATE .* SET|DELETE FROM|\.query\(|\.run\(|password|passwd|passphrase|process\.env\.[A-Z_]+|api[_-]?key|secret[_-]?key|access[_-]?token|os/exec|exec\.Command|unsafe\b|\.unwrap\(\)|fetch\([^)]*\$\{|http\.(Get|Post)\(.*\+`.
-- **Configuration files**: `settings.json`, `.claude/**`, `permissions.allow*`, `.env*`, `auth*.config*`, `cors*.config*`, `secrets*.{yml,yaml,json,toml}`.
+Not a trigger: the Markdown part of a diff, a sink call that only moved or was renamed, tests and fixtures. When you can name the input and the sink but not whether the sink is reachable, dispatch; when you can name neither, do not.
 
-Security re-reviews are always full: a security fix changes the shape of an attack surface, not one call site. `CRITICAL` / `HIGH` block; `MEDIUM` / `LOW` go to the reader as decisions. A dotfiles repository changes `~/.claude/scripts/` and `settings.json` constantly; those are exactly the surfaces this list protects, so a "known safe" exclusion is a future blind spot.
+Security re-reviews are always full: a fix reshapes the attack surface. `CRITICAL` / `HIGH` block; `MEDIUM` / `LOW` go to the reader as decisions.

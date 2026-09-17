@@ -27,7 +27,7 @@ Two modes. **Plan mode** (default under `/impl`): the plan path from `## Plan re
 | `deno-reviewer` | `Deno.` API, `jsr:` / `npm:` specifier, or `deno.json(c)` |
 | `cloud-architecture-reviewer` | `.tf` `.tfvars`, k8s / Helm yaml, `Dockerfile`, `docker-compose`, `serverless`, `.github/workflows/*.yml` |
 | `comment-reviewer` | any `.rs .go .ts .tsx .jsx .mts .cts .py .rb .lua .nix .sh .dart` (self-no-ops without added comments) |
-| `security-auditor` | any trigger in `references/security-triggers.md` |
+| `security-auditor` | a data-flow trigger in `references/security-triggers.md` |
 
 Skip the wave only for a diff that touches `.md` / `.txt` alone; record that decision in the sidecar.
 

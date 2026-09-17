@@ -167,11 +167,11 @@ CLAUDE_CONFIG_DIR=$HOME/.claude-old claude -p '<prompt>' --settings '{"outputSty
 | output-styles/concise.md | 241（26 行） | — |
 | skills/plan/SKILL.md | 1,053 | 1,500 |
 | skills/impl/SKILL.md | 822 | 800（22 語超過） |
-| skills/gate/SKILL.md | 936 | 1,200 |
+| skills/gate/SKILL.md | 937 | 1,200 |
 | shared/plan/references/contract.md | 1,142 | — |
 | shared/plan/references/interview.md | 657 | 600（57 語超過） |
 | plan + interview + contract | 2,852 | 2,800（52 語超過） |
 | impl 単体（contract は語彙の参照先で必読にしない） | 822 | 1,500（contract 込みなら 1,964） |
-| gate + contract + security-triggers + domain-reviewer-prompt | 2,997 | 3,000 |
+| gate + contract + security-triggers + domain-reviewer-prompt | 2,999 | 3,000 |
 
-旧版との比較: plan 3,545 + refs 7,821 → 1,053 + 1,799、impl 2,411 → 822、completion-audit 2,634 + subagent-review 7,079 → gate 936 + refs 2,061、グローバル CLAUDE.md 2,091 → 697、concise 236 → 241。
+旧版との比較: plan 3,545 + refs 7,821 → 1,053 + 1,799、impl 2,411 → 822、completion-audit 2,634 + subagent-review 7,079 → gate 937 + refs 920、グローバル CLAUDE.md 2,091 → 697、concise 236 → 241。
