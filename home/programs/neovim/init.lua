@@ -911,7 +911,6 @@ local function lsp_on_attach(_, bufnr)
   vim.bo[bufnr].omnifunc = "v:lua.vim.lsp.omnifunc"
 
   -- Mappings
-  keymap({ "n" }, "<Leader>ee", "<cmd>lua vim.diagnostic.open_float()<CR>")
   keymap({ "n" }, "[g", function()
     vim.diagnostic.jump({ count = -1, float = true })
   end)
@@ -3599,7 +3598,13 @@ require("lazy").setup({
         end, { desc = "Git log → diffreel" })
       end,
       opts = function(plugin)
-        return { daemon = plugin.dir .. "/result/bin/diffreel-daemon" }
+        return {
+          daemon = plugin.dir .. "/result/bin/diffreel-daemon",
+          keymaps = {
+            explorer = { ["<C-j>"] = "toggle_explorer", ["<Leader>b"] = false },
+            diff = { ["<C-j>"] = "toggle_explorer", ["<Leader>b"] = false },
+          },
+        }
       end,
     },
 
@@ -3620,6 +3625,11 @@ require("lazy").setup({
           },
           history = {
             height = 16,
+          },
+          keymaps = {
+            view = {
+              toggle_explorer = "<C-j>",
+            },
           },
         }
       end,
