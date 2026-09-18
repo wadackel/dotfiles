@@ -300,8 +300,10 @@ return {
       action = wezterm.action_callback(function(window)
         local config = window:get_config_overrides() or {}
         if not config.text_background_opacity then
-          config.window_background_opacity = 0.9
-          config.text_background_opacity = 0.9
+          -- tmux が全セルを明示 bg で塗るので、セルの alpha は text + window * (1 - text) になる。
+          -- 0.9 / 0.9 だと 0.99 まで不透明に寄るため、この組でセルを 0.9 に揃える（padding は 0.7）
+          config.window_background_opacity = 0.7
+          config.text_background_opacity = 2 / 3
         else
           config.window_background_opacity = nil
           config.text_background_opacity = nil
