@@ -566,13 +566,13 @@ async function harvestInTarget(
   const nav = await client.send("Page.navigate", { url }, sessionId);
   if (nav.errorText) {
     console.error(
-      `ab-state-refresh: navigation failed for ${url}: ${nav.errorText}`,
+      `abr: navigation failed for ${url}: ${nav.errorText}`,
     );
     return null;
   }
   if (!(await loaded)) {
     console.error(
-      `ab-state-refresh: load event not seen for ${url}; evaluating anyway.`,
+      `abr: load event not seen for ${url}; evaluating anyway.`,
     );
   }
   if (SETTLE_MS > 0) await sleep(SETTLE_MS);
@@ -584,7 +584,7 @@ async function harvestInTarget(
   }, sessionId);
   if (evaluated.exceptionDetails) {
     console.error(
-      `ab-state-refresh: could not read storage for ${url}: ${
+      `abr: could not read storage for ${url}: ${
         JSON.stringify(evaluated.exceptionDetails)
       }`,
     );
@@ -594,7 +594,7 @@ async function harvestInTarget(
   const result = evaluated.result as { value?: unknown } | undefined;
   const state = normalizeOrigin(result?.value);
   if (!state || originOf(state.origin) === null) {
-    console.error(`ab-state-refresh: no usable origin for ${url}.`);
+    console.error(`abr: no usable origin for ${url}.`);
     return null;
   }
   return state;
@@ -682,7 +682,7 @@ async function readSeed(statePath: string): Promise<unknown | null> {
     return JSON.parse(text);
   } catch {
     console.error(
-      `ab-state-refresh: existing ${statePath} is not valid JSON; ignoring and rebuilding.`,
+      `abr: existing ${statePath} is not valid JSON; ignoring and rebuilding.`,
     );
     return null;
   }
@@ -720,7 +720,7 @@ async function writeState(
 // Entry point
 // ---------------------------------------------------------------------------
 
-const USAGE = "usage: ab-state-refresh [-i | URL [URL ...]] [--all-cookies]";
+const USAGE = "usage: abr [-i | URL [URL ...]] [--all-cookies]";
 
 function discoverWsUrl(home: string): string {
   const portFile = `${home}/${DEVTOOLS_PORT_FILE}`;
@@ -729,13 +729,13 @@ function discoverWsUrl(home: string): string {
     text = Deno.readTextFileSync(portFile);
   } catch {
     console.error(
-      `ab-state-refresh: DevToolsActivePort not found at ${portFile}.`,
+      `abr: DevToolsActivePort not found at ${portFile}.`,
     );
     console.error(
       "  Start Chrome with --remote-debugging-port=9222 (or enable it via chrome://inspect/#remote-debugging),",
     );
     console.error(
-      "  log in to your target sites, then re-run ab-state-refresh.",
+      "  log in to your target sites, then re-run abr.",
     );
     throw new SilentExit(1);
   }
@@ -743,7 +743,7 @@ function discoverWsUrl(home: string): string {
   const port = lines[0]?.trim();
   const path = lines[1]?.trim() ?? "";
   if (!port) {
-    console.error(`ab-state-refresh: ${portFile} has no port.`);
+    console.error(`abr: ${portFile} has no port.`);
     throw new SilentExit(1);
   }
   return `ws://127.0.0.1:${port}${path}`;
@@ -761,7 +761,7 @@ async function main(): Promise<number> {
     parsed = parseArgs(Deno.args);
   } catch (e) {
     if (e instanceof UsageError) {
-      console.error(`ab-state-refresh: ${e.message}`);
+      console.error(`abr: ${e.message}`);
       console.error(`  ${USAGE}`);
       return 1;
     }
@@ -771,7 +771,7 @@ async function main(): Promise<number> {
   if (parsed.mode === "interactive") {
     if (!Deno.stdin.isTerminal()) {
       console.error(
-        "ab-state-refresh -i: requires TTY (fzf cannot run on piped stdin)",
+        "abr -i: requires TTY (fzf cannot run on piped stdin)",
       );
       return 1;
     }
@@ -783,7 +783,7 @@ async function main(): Promise<number> {
       })
         .output();
     } catch {
-      console.error("ab-state-refresh -i: fzf not found in PATH");
+      console.error("abr -i: fzf not found in PATH");
       return 1;
     }
   }
@@ -801,7 +801,7 @@ async function main(): Promise<number> {
     client = await CdpClient.connect(wsUrl);
   } catch (e) {
     console.error(
-      `ab-state-refresh: failed to connect to ${wsUrl}: ${
+      `abr: failed to connect to ${wsUrl}: ${
         e instanceof Error ? e.message : String(e)
       }`,
     );
@@ -836,7 +836,7 @@ async function main(): Promise<number> {
         const rows = await listTabs(client);
         if (rows.length === 0) {
           console.error(
-            "ab-state-refresh: no eligible tabs to pick (all internal pages?).",
+            "abr: no eligible tabs to pick (all internal pages?).",
           );
           return 1;
         }
@@ -849,7 +849,7 @@ async function main(): Promise<number> {
         const url = await activeTabUrl();
         if (url === null) {
           console.error(
-            "ab-state-refresh: could not resolve the active tab (grant Automation permission, or pass the URL explicitly); refreshing cookies only.",
+            "abr: could not resolve the active tab (grant Automation permission, or pass the URL explicitly); refreshing cookies only.",
           );
           requested = [];
         } else {
@@ -868,9 +868,7 @@ async function main(): Promise<number> {
         state = await harvestOrigin(client, url);
       } catch (e) {
         console.error(
-          `ab-state-refresh: ${url}: ${
-            e instanceof Error ? e.message : String(e)
-          }`,
+          `abr: ${url}: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
       if (state === null) {
@@ -888,7 +886,7 @@ async function main(): Promise<number> {
 
     if (cookies.length === 0 && captured.length === 0) {
       console.error(
-        "ab-state-refresh: no new state captured; main.json unchanged.",
+        "abr: no new state captured; main.json unchanged.",
       );
       return 1;
     }
@@ -903,7 +901,7 @@ async function main(): Promise<number> {
       const dropped = before - merged.cookies.length;
       if (dropped > 0) {
         console.error(
-          `ab-state-refresh: dropped ${dropped} cookie${
+          `abr: dropped ${dropped} cookie${
             dropped === 1 ? "" : "s"
           } outside tracked origins (use --all-cookies to keep them)`,
         );
@@ -914,7 +912,7 @@ async function main(): Promise<number> {
 
     if (notCaptured.length > 0) {
       console.error(
-        `ab-state-refresh: selected origins not saved: ${
+        `abr: selected origins not saved: ${
           [...new Set(notCaptured)].join(", ")
         }`,
       );
@@ -938,7 +936,7 @@ if (import.meta.main) {
   } catch (e) {
     if (e instanceof SilentExit) Deno.exit(e.code);
     console.error(
-      `ab-state-refresh: ${e instanceof Error ? e.message : String(e)}`,
+      `abr: ${e instanceof Error ? e.message : String(e)}`,
     );
     Deno.exit(1);
   }

@@ -25,7 +25,7 @@ The rest of this file describes only the environment-specific defaults you must 
 This environment runs agent-browser in **state-import + headless** mode by default. Pass two flags on every invocation:
 
 - `--session "claude-$PPID"` — a daemon isolated to this Claude session. `$PPID` in a Bash subshell points at the Claude main process, so all calls within one Claude session (main + any subagents) share the same daemon.
-- `--state "$HOME/.agent-browser-state/main.json"` — load the plaintext state file produced by `ab-state-refresh`. Required on the **first** call of the session (whichever subcommand starts the daemon). Subsequent calls within the same session can omit it because the daemon already has the state loaded.
+- `--state "$HOME/.agent-browser-state/main.json"` — load the plaintext state file produced by `abr`. Required on the **first** call of the session (whichever subcommand starts the daemon). Subsequent calls within the same session can omit it because the daemon already has the state loaded.
 
 ```bash
 # First call: include both flags
@@ -44,11 +44,11 @@ Do not export `AGENT_BROWSER_STATE`. If exported, the daemon may navigate to `or
 
 ## Initial setup (one-time per Claude session)
 
-Before the first agent-browser call, the state file must exist. The user populates it by running the host's `ab-state-refresh` command (`home/programs/agents/scripts/ab-state-refresh.ts`, published at `~/.agents/scripts/` and wrapped by a zsh function in `home/programs/zsh/init.zsh`), which talks CDP to their running Chrome and saves cookies + localStorage + sessionStorage to `~/.agent-browser-state/main.json` (mode 600).
+Before the first agent-browser call, the state file must exist. The user populates it by running the host's `abr` command (`home/programs/agents/scripts/abr.ts`, published at `~/.agents/scripts/` and wrapped by a zsh function in `home/programs/zsh/init.zsh`), which talks CDP to their running Chrome and saves cookies + localStorage + sessionStorage to `~/.agent-browser-state/main.json` (mode 600).
 
-If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`ab-state-refresh\` to import auth state from your Chrome.`
+If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`abr\` to import auth state from your Chrome.`
 
-Each run captures storage only for the origins it is asked about: `ab-state-refresh URL1 URL2 ...` for specific origins, `ab-state-refresh -i` to pick from the open tabs, or no arguments for Chrome's active tab. Cookies are narrowed to those origins by default; `--all-cookies` is the escape hatch when an SSO flow needs a third-party domain. See [references/authentication.md](references/authentication.md) for the full architecture, edge cases, and troubleshooting.
+Each run captures storage only for the origins it is asked about: `abr URL1 URL2 ...` for specific origins, `abr -i` to pick from the open tabs, or no arguments for Chrome's active tab. Cookies are narrowed to those origins by default; `--all-cookies` is the escape hatch when an SSO flow needs a third-party domain. See [references/authentication.md](references/authentication.md) for the full architecture, edge cases, and troubleshooting.
 
 ## Sharing one daemon across main + subagents
 
@@ -94,7 +94,7 @@ For state-replay bootstrap that respects the `--session "claude-$PPID"` / `$HOME
 ./templates/authenticated-session.sh <login-url>
 ```
 
-It loads the saved state, verifies the session by checking the current URL for `login`/`signin` markers, and prompts the user to re-run `ab-state-refresh` when the state is expired. See [templates/authenticated-session.sh](templates/authenticated-session.sh) for the full script.
+It loads the saved state, verifies the session by checking the current URL for `login`/`signin` markers, and prompts the user to re-run `abr` when the state is expired. See [templates/authenticated-session.sh](templates/authenticated-session.sh) for the full script.
 
 ## Specialized skills
 

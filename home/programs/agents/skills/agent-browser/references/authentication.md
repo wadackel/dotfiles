@@ -28,13 +28,13 @@ This is the **default authentication strategy** in this environment. Cookies + l
 ```
 User's Chrome (headed)
    ↑ direct CDP: Storage.getCookies (browser session) + a throwaway background tab
-ab-state-refresh  →  ~/.agent-browser-state/main.json (plaintext JSON, mode 600)
+abr               →  ~/.agent-browser-state/main.json (plaintext JSON, mode 600)
                                                   ↓ (--state "$HOME/.agent-browser-state/main.json" passed explicitly)
                           agent-browser open <url>  →  independent headless Chrome
                                                   + --session "claude-$PPID" isolates the daemon to this Claude session
 ```
 
-`ab-state-refresh` speaks CDP directly (`home/programs/agents/scripts/ab-state-refresh.ts`, published at `~/.agents/scripts/`) and **never attaches to a target it did not create**. Do not "simplify" it back to `agent-browser connect`: that command attaches to every page target and calls `Page.enable` on one of them, and Chrome freezes background-tab renderers, so a frozen tab never answers and the daemon blocks forever (`Failed to read: Resource temporarily unavailable (os error 35)`). On a working day with 40+ tabs open, a third of them are typically frozen.
+`abr` speaks CDP directly (`home/programs/agents/scripts/abr.ts`, published at `~/.agents/scripts/`) and **never attaches to a target it did not create**. Do not "simplify" it back to `agent-browser connect`: that command attaches to every page target and calls `Page.enable` on one of them, and Chrome freezes background-tab renderers, so a frozen tab never answers and the daemon blocks forever (`Failed to read: Resource temporarily unavailable (os error 35)`). On a working day with 40+ tabs open, a third of them are typically frozen.
 
 ### Required environment
 
@@ -49,12 +49,12 @@ No encryption key is involved. The state file matches the de facto convention fo
 Make sure the user's Chrome is running with `--remote-debugging-port=9222` (or the `chrome://inspect/#remote-debugging` toggle is on) **and is logged into the SaaS sites you want to automate**. Then:
 
 ```bash
-ab-state-refresh                                    # captures the origin of Chrome's active tab
-ab-state-refresh https://app.example.com/dashboard  # captures a specific origin
-ab-state-refresh https://app1.example.com/ \
+abr                                    # captures the origin of Chrome's active tab
+abr https://app.example.com/dashboard  # captures a specific origin
+abr https://app1.example.com/ \
                  https://app2.example.com/          # captures multiple origins and merges them
-ab-state-refresh -i                                 # pick origins from the open tabs with fzf
-ab-state-refresh --all-cookies https://app.example.com/  # skip the cookie narrowing
+abr -i                                 # pick origins from the open tabs with fzf
+abr --all-cookies https://app.example.com/  # skip the cookie narrowing
 ```
 
 This:
@@ -86,7 +86,7 @@ The no-argument path resolves the active tab through `osascript`, so the first r
 
 Side effects:
 - Tabs opened for capture are created in the background and closed automatically, including on Ctrl-C (the run exits 130 after closing them). The user's tabs are never navigated or switched.
-- If any requested origin ends up absent from the saved state — a failed navigation, a page whose storage could not be read, or an SSO redirect that landed on a different origin — `ab-state-refresh` prints a single `selected origins not saved: …` line to stderr. Whatever did load is recorded under the origin that **actually** loaded, never relabelled as the requested one. The other origins are saved normally; re-run after fixing the affected site.
+- If any requested origin ends up absent from the saved state — a failed navigation, a page whose storage could not be read, or an SSO redirect that landed on a different origin — `abr` prints a single `selected origins not saved: …` line to stderr. Whatever did load is recorded under the origin that **actually** loaded, never relabelled as the requested one. The other origins are saved normally; re-run after fixing the affected site.
 
 ### Step 2: Use agent-browser normally
 
@@ -109,9 +109,9 @@ State files don't have a fixed lifetime — they fail when the SaaS rotates the 
 
 - `agent-browser snapshot` returns the login page instead of the dashboard.
 - `agent-browser get url` shows `/login` or `/signin` after `open <protected-url>`.
-- `No such file or directory: .../main.json` — the state file was never created or was deleted; run `ab-state-refresh` first.
+- `No such file or directory: .../main.json` — the state file was never created or was deleted; run `abr` first.
 
-Recovery is always the same: re-run `ab-state-refresh` against a freshly-logged-in Chrome.
+Recovery is always the same: re-run `abr` against a freshly-logged-in Chrome.
 
 ### Sites this approach does not cover
 
@@ -129,7 +129,7 @@ For those, fall back to a **persistent profile** (next section) — the user-dat
 - The state directory is mode 700 (`drwx------`), so other local users cannot read the file.
 - Nothing is written outside `~/.agent-browser-state/`. The only intermediate file is a mode-600 temp file in that same directory, replaced by `rename` in the same run.
 - Cookie narrowing keeps unrelated sites' cookies (banking, personal accounts) out of `main.json` entirely. `--all-cookies` disables that; use it only when a specific SSO flow needs it, and re-run without the flag afterwards to prune again.
-- `--remote-debugging-port=9222` exposes full browser control on localhost while it is enabled. Only run `ab-state-refresh` on trusted machines.
+- `--remote-debugging-port=9222` exposes full browser control on localhost while it is enabled. Only run `abr` on trusted machines.
 - Application-layer encryption was deliberately removed: env-var-derived keys provide no protection against same-UID readers, who can read the env directly. The added complexity (secret-manager lookups, encrypted-file suffix juggling, biometric prompts on shell startup) was not justified by the residual threat surface FileVault already covers.
 
 ## Persistent Profiles

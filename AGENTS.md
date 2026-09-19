@@ -250,18 +250,18 @@ This repository includes comprehensive Claude Code configuration:
 
 Editing existing Claude Code config files (settings.json, skills, etc.) is immediately reflected — no `darwin-rebuild` needed (they are symlinked). Only run `darwin-rebuild` when adding *new* files that need new symlinks created. One exception: a running session keeps the agent definition it loaded at start. Claude Code watches `~/.claude/agents/` for edits, but that directory is a symlink into the Nix store whose entries are symlinks into this repository, so an edit to `home/programs/claude/agents/<name>.md` never reaches the watcher; the next `Agent` dispatch in the same session still uses the old definition, and only a new session (or `claude -p`) picks up the change.
 
-### ab-state-refresh (agent-browser auth state import)
+### abr (agent-browser auth state import)
 
-`home/programs/agents/scripts/ab-state-refresh.ts` imports the running Chrome's cookies / localStorage / sessionStorage into `~/.agent-browser-state/main.json` for headless `agent-browser` replay. `home/programs/agents/default.nix` publishes the whole `scripts` directory at `~/.agents/scripts`, and `home/programs/zsh/init.zsh` wraps it in an `ab-state-refresh` zsh function.
+`home/programs/agents/scripts/abr.ts` imports the running Chrome's cookies / localStorage / sessionStorage into `~/.agent-browser-state/main.json` for headless `agent-browser` replay. `home/programs/agents/default.nix` publishes the whole `scripts` directory at `~/.agents/scripts`, and `home/programs/zsh/init.zsh` wraps it in an `abr` zsh function.
 
-- Tests: `deno test --allow-read --allow-write --allow-env --allow-net=127.0.0.1 --allow-run home/programs/agents/scripts/ab-state-refresh_test.ts` (a mock CDP server over `Deno.upgradeWebSocket`; `--allow-run` covers spawning the script as a subprocess)
+- Tests: `deno test --allow-read --allow-write --allow-env --allow-net=127.0.0.1 --allow-run home/programs/agents/scripts/abr_test.ts` (a mock CDP server over `Deno.upgradeWebSocket`; `--allow-run` covers spawning the script as a subprocess)
 - It speaks CDP directly and **never attaches to a target it did not create**. Do not replace this with `agent-browser connect`: that attaches to every page target and calls `Page.enable`, and Chrome's frozen background-tab renderers never answer, so the daemon hangs (`Resource temporarily unavailable (os error 35)`)
 - Cookies are narrowed to the tracked origins by RFC 6265 domain-match; `--all-cookies` disables it when SSO needs a third-party domain
 - `~/.agents/` is shared: `skills` is owned by `home/programs/codex/default.nix`, `scripts` by `home/programs/agents/default.nix`
 
 ### rebase-guard (WIP-commit verification for the rebase skill)
 
-`home/programs/agents/scripts/rebase-guard.ts` is called by the `rebase` skill after a rebase: the skill parks uncommitted changes in a `wip: auto-commit before rebase` commit instead of `git stash`, unwinds it with `git reset --mixed HEAD~1` once the rebase is done, and then runs `rebase-guard.ts verify <wip-sha>` to confirm that every file of the WIP commit is still in the working tree. It is published at `~/.agents/scripts/rebase-guard.ts` like `ab-state-refresh.ts`.
+`home/programs/agents/scripts/rebase-guard.ts` is called by the `rebase` skill after a rebase: the skill parks uncommitted changes in a `wip: auto-commit before rebase` commit instead of `git stash`, unwinds it with `git reset --mixed HEAD~1` once the rebase is done, and then runs `rebase-guard.ts verify <wip-sha>` to confirm that every file of the WIP commit is still in the working tree. It is published at `~/.agents/scripts/rebase-guard.ts` like `abr.ts`.
 
 - Tests: `deno test --allow-read --allow-write --allow-env --allow-run home/programs/agents/scripts/rebase-guard_test.ts` (builds a bare origin plus clones under a temp dir and spawns the script as a subprocess)
 - Per file it reverse-applies the WIP patch with `git apply --reverse --check` and reports `PRESENT`, `IN_HEAD` (already committed, e.g. the base absorbed it and the rebase skipped the WIP commit), `LOST` (file or mode gone), or `UNCONFIRMED` (patch no longer reverse-applies, typically because the base changed adjacent lines). Exit 0 only when nothing is LOST or UNCONFIRMED; exit 2 means the guard could not run (not a WIP commit, rebase in progress, internal git error) and is never a loss verdict

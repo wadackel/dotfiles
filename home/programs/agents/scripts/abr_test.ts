@@ -10,9 +10,9 @@ import {
   parseArgs,
   projectCookie,
   UsageError,
-} from "./ab-state-refresh.ts";
+} from "./abr.ts";
 
-const SCRIPT = new URL("./ab-state-refresh.ts", import.meta.url).pathname;
+const SCRIPT = new URL("./abr.ts", import.meta.url).pathname;
 
 // ---------------------------------------------------------------------------
 // Mock CDP server
@@ -242,7 +242,7 @@ function startMockCdp(cfg: MockConfig = {}): Promise<MockServer> {
 type RunOutcome = { code: number; stdout: string; stderr: string };
 
 async function makeFakeHome(server?: MockServer): Promise<string> {
-  const home = await Deno.makeTempDir({ prefix: "ab-state-refresh-test-" });
+  const home = await Deno.makeTempDir({ prefix: "abr-test-" });
   if (server) {
     const dir = `${home}/Library/Application Support/Google/Chrome`;
     await Deno.mkdir(dir, { recursive: true });

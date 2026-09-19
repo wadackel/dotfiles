@@ -323,12 +323,10 @@ fi
 # agent-browser state import (state-import + headless default)
 # ====================================================
 
-# Implementation lives in home/programs/agents/scripts/ab-state-refresh.ts,
-# published at ~/.agents/scripts by home/programs/agents/default.nix.
-ab-state-refresh() {
-  local script="$HOME/.agents/scripts/ab-state-refresh.ts"
+abr() {
+  local script="$HOME/.agents/scripts/abr.ts"
   if [[ ! -x "$script" ]]; then
-    print -u2 "ab-state-refresh: $script not found or not executable."
+    print -u2 "abr: $script not found or not executable."
     print -u2 "  Run: cd ~/dotfiles && sudo darwin-rebuild switch --flake .#work"
     return 1
   fi
