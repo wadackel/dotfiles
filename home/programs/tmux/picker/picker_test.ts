@@ -8,6 +8,7 @@ import {
   nextUserLabel,
   nextWaitingIndex,
   type PaneRow,
+  parsePrefixKey,
   parseRow,
   parseTarget,
   readTaskProgress,
@@ -1185,4 +1186,13 @@ Deno.test("visibleWindow: compact cards plus indicators never exceed the height"
     const rows = 2 + view.count * 3 - 1;
     assertEquals(rows <= height, true, `height=${height} rows=${rows}`);
   }
+});
+
+Deno.test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {
+  assertEquals(parsePrefixKey("C-s\n"), "s");
+  assertEquals(parsePrefixKey("C-b"), "b");
+  assertEquals(parsePrefixKey("C-m"), null);
+  assertEquals(parsePrefixKey("M-a"), null);
+  assertEquals(parsePrefixKey("None"), null);
+  assertEquals(parsePrefixKey(""), null);
 });

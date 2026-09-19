@@ -1856,3 +1856,59 @@ Deno.test("S43: a short popup drops the card padding and starts at the top row",
     await teardown();
   }
 });
+
+// S44/S45: inside a popup tmux hands every key to the picker, so the
+// `prefix w` that opened it arrives as two keys. The harness server runs with
+// `-f /dev/null`, so the prefix is read back instead of assuming C-b.
+Deno.test("S44: prefix then w closes the picker instead of toggling the filter", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running" });
+    const picker = await spawnPicker();
+    const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
+
+    await sendKey(picker, prefix);
+    await sendKey(picker, "w");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S45: prefix then another key keeps the picker open and handles the key", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a-xxx" });
+    await createClaudePane({ status: "waiting", prompt: "row-b-yyy" });
+    const picker = await spawnPicker();
+    const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
+
+    await sendKey(picker, prefix);
+    await sendKey(picker, "j");
+    await waitFor(picker, selectedIncludes("row-b-yyy"));
+
+    await sendKey(picker, "w");
+    await waitFor(picker, (o) => o.includes("wait/idle"));
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// One send-keys call writes both keys back to back, so they usually reach the
+// picker in a single read — the unsplit-chunk path S44 rarely takes.
+Deno.test("S46: prefix and w sent together still close the picker", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running" });
+    const picker = await spawnPicker();
+    const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
+
+    await tmux(["send-keys", "-t", picker, prefix, "w"]);
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

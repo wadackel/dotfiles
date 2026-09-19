@@ -590,6 +590,20 @@ export function parseTarget(target: string): {
   };
 }
 
+// A popup takes every key before tmux's prefix table sees it, so the
+// `prefix w` that opened the picker has to be recognised here to close it.
+// Only the Ctrl+letter form is supported; anything else disables the chord.
+// C-h/i/j/m are excluded because Ink reports them as backspace/tab/enter/return
+// without the ctrl flag.
+export function parsePrefixKey(raw: string): string | null {
+  return /^C-([a-gk-ln-z])$/.exec(raw.trim())?.[1] ?? null;
+}
+
+async function readPrefixKey(): Promise<string | null> {
+  const { stdout } = await tmuxRun(["show-options", "-gv", "prefix"]);
+  return parsePrefixKey(stdout);
+}
+
 async function jumpTo(target: string): Promise<void> {
   const { session, window } = parseTarget(target);
   await tmuxRun(["switch-client", "-t", session]);
@@ -676,11 +690,13 @@ function App({
   initialRows,
   initialSelectedPaneId,
   initialUsages,
+  prefixKey,
   onSelect,
 }: {
   initialRows: PaneRow[];
   initialSelectedPaneId: string;
   initialUsages: AgentUsage[];
+  prefixKey: string | null;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
@@ -713,6 +729,10 @@ function App({
   // First visible pane of a scrolled list. Kept across renders so moving the
   // selection inside the window does not shift it.
   const listOffset = useRef(0);
+  const prefixPending = useRef(false);
+  const prefixByte = prefixKey === null
+    ? null
+    : String.fromCharCode(prefixKey.charCodeAt(0) & 0x1f);
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
   >(new Map());
@@ -827,7 +847,26 @@ function App({
     });
   };
 
-  useInput((input, key) => {
+  useInput((chunk, key) => {
+    let input = chunk;
+    // Keys that reach stdin in one read arrive as a single unsplit chunk
+    // (`\x13w`), so the prefix byte is peeled off here rather than relying on
+    // Ink to report it as its own Ctrl keypress.
+    if (prefixByte !== null && chunk.length > 1 && chunk[0] === prefixByte) {
+      prefixPending.current = true;
+      input = chunk.slice(1);
+    }
+    if (prefixPending.current) {
+      prefixPending.current = false;
+      if (input === "w") {
+        onSelect(null);
+        exit();
+        return;
+      }
+    } else if (key.ctrl && input === prefixKey) {
+      prefixPending.current = true;
+      return;
+    }
     if (key.escape || input === "q") {
       onSelect(null);
       exit();
@@ -993,9 +1032,10 @@ async function main(): Promise<void> {
   }
   // Parallel with fetchPanes so the footer costs the popup no extra startup
   // latency — the whole reason the picker is AOT-compiled in the first place.
-  const [rows, usages] = await Promise.all([
+  const [rows, usages, prefixKey] = await Promise.all([
     fetchPanes(),
     readAllAgentUsage(),
+    readPrefixKey(),
   ]);
 
   // tmux.conf bind-key w writes CC_PICKER_FROM_PANE to the session environment via
@@ -1017,6 +1057,7 @@ async function main(): Promise<void> {
       initialRows={rows}
       initialSelectedPaneId={initialSelectedPaneId}
       initialUsages={usages}
+      prefixKey={prefixKey}
       onSelect={(r) => {
         result.value = r;
       }}
