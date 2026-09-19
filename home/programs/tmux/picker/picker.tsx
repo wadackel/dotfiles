@@ -241,6 +241,81 @@ export function visibleWindow(
   };
 }
 
+export interface ListGeometry {
+  listWidth: number;
+  previewWidth: number;
+  topRows: number;
+  bodyHeight: number;
+  card: CardShape;
+  view: ListWindow;
+}
+
+// Shared by the render and the mouse handler so a click is hit-tested against
+// the same rows the frame was drawn with.
+export function listGeometry(opts: {
+  columns: number;
+  rows: number;
+  total: number;
+  selected: number;
+  prevOffset: number;
+}): ListGeometry {
+  const { listWidth, previewWidth } = splitLayout(opts.columns);
+  const topRows = topRowsFor(opts.rows);
+  const bodyHeight = bodyHeightFor(opts.rows);
+  const card = isCompact(opts.rows) ? COMPACT_CARD : FULL_CARD;
+  const view = visibleWindow(
+    opts.total,
+    opts.selected,
+    bodyHeight,
+    opts.prevOffset,
+    card,
+  );
+  return { listWidth, previewWidth, topRows, bodyHeight, card, view };
+}
+
+export const MOUSE_LEFT = 0;
+export const MOUSE_RIGHT = 2;
+export const MOUSE_WHEEL_UP = 64;
+export const MOUSE_WHEEL_DOWN = 65;
+
+export interface MouseReport {
+  button: number;
+  x: number;
+  y: number;
+  press: boolean;
+}
+
+// An SGR (1006) report as useInput hands it over: Ink strips the leading ESC.
+// Coordinates on the wire are 1-based.
+const SGR_MOUSE_RE = /^\[<(\d+);(\d+);(\d+)([Mm])$/;
+
+export function parseMouse(input: string): MouseReport | null {
+  const m = SGR_MOUSE_RE.exec(input);
+  if (!m) return null;
+  return {
+    button: Number(m[1]),
+    x: Number(m[2]) - 1,
+    y: Number(m[3]) - 1,
+    press: m[4] === "M",
+  };
+}
+
+// Index into derivedRows of the card under (x, y), or null for the preview,
+// the scroll indicators, compact gaps, and the hint bar.
+export function cardIndexAt(
+  geometry: ListGeometry,
+  point: { x: number; y: number },
+): number | null {
+  const { listWidth, topRows, card, view } = geometry;
+  if (point.x < 0 || point.x >= listWidth) return null;
+  const r = point.y - topRows - (view.scrolling ? 1 : 0);
+  if (r < 0) return null;
+  const stride = card.rows + card.gap;
+  const i = Math.floor(r / stride);
+  if (i >= view.count || r % stride >= card.rows) return null;
+  return view.offset + i;
+}
+
 // Index `n` moves to: the first waiting row after `from`, wrapping past the
 // end. `from` itself when no row is waiting, so the key is a no-op then.
 export function nextWaitingIndex(rows: PaneRow[], from: number): number {
@@ -718,6 +793,16 @@ function App({
       stdout.off("resize", handler);
     };
   }, [stdout]);
+  // Written to the stream directly: useStdout().write erases and redraws the
+  // whole frame around its payload, undoing incrementalRendering for bytes
+  // that draw nothing. tmux forwards popup mouse events only while this is on.
+  useEffect(() => {
+    if (!stdout) return;
+    stdout.write("\x1b[?1000h\x1b[?1006h");
+    return () => {
+      stdout.write("\x1b[?1006l\x1b[?1000l");
+    };
+  }, [stdout]);
   const [rows, setRows] = useState(initialRows);
   // Pending `m`/`M` writes the tmux SSOT has not yet acknowledged. The fetch
   // tick (≤ TICK_INTERVAL_MS) can race ahead of an in-flight tmuxRun and read
@@ -847,7 +932,55 @@ function App({
     });
   };
 
+  const handleMouse = (mouse: MouseReport) => {
+    if (derivedRows.length === 0) return;
+    const geometry = listGeometry({
+      columns: size.columns,
+      rows: size.rows,
+      total: derivedRows.length,
+      selected: index,
+      prevOffset: listOffset.current,
+    });
+    if (
+      mouse.button === MOUSE_WHEEL_UP || mouse.button === MOUSE_WHEEL_DOWN
+    ) {
+      if (mouse.x >= geometry.listWidth) return;
+      // Clamped rather than wrapped like j/k: one trackpad fling delivers a
+      // burst of wheel events, and wrapping would spin the selection around.
+      const step = mouse.button === MOUSE_WHEEL_UP ? -1 : 1;
+      const nextIdx = Math.min(
+        derivedRows.length - 1,
+        Math.max(0, index + step),
+      );
+      setSelectedPaneId(derivedRows[nextIdx].paneId);
+      return;
+    }
+    const hit = cardIndexAt(geometry, mouse);
+    if (hit === null) return;
+    const target = derivedRows[hit];
+    if (mouse.button === MOUSE_LEFT) {
+      if (hit === index) {
+        onSelect(target);
+        exit();
+      } else {
+        setSelectedPaneId(target.paneId);
+      }
+    } else if (mouse.button === MOUSE_RIGHT) {
+      setSelectedPaneId(target.paneId);
+      writeUserLabel(
+        target.paneId,
+        nextUserLabel(target.userLabel),
+        target.sessionId,
+      );
+    }
+  };
+
   useInput((chunk, key) => {
+    const mouse = parseMouse(chunk);
+    if (mouse) {
+      if (mouse.press) handleMouse(mouse);
+      return;
+    }
     let input = chunk;
     // Keys that reach stdin in one read arrive as a single unsplit chunk
     // (`\x13w`), so the prefix byte is peeled off here rather than relying on
@@ -931,28 +1064,25 @@ function App({
 
   const current = derivedRows[index];
   const totalCols = size.columns;
-  const totalRows = size.rows;
-  const { listWidth, previewWidth } = splitLayout(totalCols);
   // A frame exactly as tall as the terminal is fine, but one TALLER is not:
   // Ink falls back to clearing the whole terminal between frames once the
   // output overflows the viewport, which inside a tmux popup blanks and
   // repaints every cell on each tick. Ink clips output to the root box height,
   // so pinning the root to totalRows is what keeps overflow impossible.
-  const bodyHeight = bodyHeightFor(totalRows);
+  const totalRows = size.rows;
+  const { listWidth, previewWidth, topRows, bodyHeight, card, view } =
+    listGeometry({
+      columns: totalCols,
+      rows: totalRows,
+      total: derivedRows.length,
+      selected: index,
+      prevOffset: listOffset.current,
+    });
   // The preview column starts on the same row as the list and runs to the
   // bottom row so the Usage card sits beside the hints.
-  const topRows = topRowsFor(totalRows);
-  const card = isCompact(totalRows) ? COMPACT_CARD : FULL_CARD;
   const columnHeight = totalRows - topRows;
   const usageVisible = previewWidth > 0 &&
     showUsageCard(usages, previewWidth, columnHeight);
-  const view = visibleWindow(
-    derivedRows.length,
-    index,
-    bodyHeight,
-    listOffset.current,
-    card,
-  );
   listOffset.current = view.offset;
   const previewHeight = columnHeight -
     (usageVisible ? usageCardRows(usages.length) : 0);

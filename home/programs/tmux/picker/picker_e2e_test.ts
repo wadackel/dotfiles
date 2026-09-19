@@ -1912,3 +1912,144 @@ Deno.test("S46: prefix and w sent together still close the picker", async () => 
     await teardown();
   }
 });
+
+// Mouse reports are written straight to the picker's pty, which is what tmux
+// does for a popup once the picker turns mouse mode on. Coordinates are the
+// 0-based cells the unit tests for cardIndexAt use; press and release go out
+// in one write, the way a terminal reports a click.
+async function sendClick(
+  target: string,
+  button: number,
+  cell: { x: number; y: number },
+): Promise<void> {
+  const at = `${cell.x + 1};${cell.y + 1}`;
+  const seq = `\x1b[<${button};${at}M\x1b[<${button};${at}m`;
+  const hex = [...new TextEncoder().encode(seq)].map((b) =>
+    b.toString(16).padStart(2, "0")
+  );
+  await tmux(["send-keys", "-t", target, "-H", ...hex]);
+}
+
+// At 200×50 with no scrolling, card 0 spans rows 1-4 and card 1 rows 5-8.
+const CARD_0 = { x: 2, y: 2 };
+const CARD_1 = { x: 2, y: 6 };
+
+Deno.test("S47: the picker turns on SGR mouse reporting", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running" });
+    const picker = await spawnPicker();
+    const flags = await tmux([
+      "display-message",
+      "-t",
+      picker,
+      "-p",
+      "#{mouse_standard_flag}#{mouse_sgr_flag}",
+    ]);
+    assertEquals(flags.trim(), "11");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S48: clicking a card selects it and clicking it again jumps", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
+    const picker = await spawnPicker();
+
+    await sendClick(picker, 0, CARD_1);
+    await waitFor(picker, selectedIncludes("row-b"));
+
+    await sendClick(picker, 0, CARD_1);
+    await waitForExit();
+
+    const active = await tmux([
+      "display-message",
+      "-t",
+      paneB,
+      "-p",
+      "#{pane_active}#{window_active}",
+    ]);
+    assertEquals(active.trim(), "11");
+  } finally {
+    await teardown();
+  }
+});
+
+// A wheel event past either end must leave the selection where it is, which a
+// waitFor cannot observe, so those steps check the screen after a settle delay
+// long enough for a wrap-around render to have landed.
+Deno.test("S49: the wheel moves the selection and stops at both ends", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await createClaudePane({ status: "running", prompt: "row-b" });
+    await createClaudePane({ status: "running", prompt: "row-c" });
+    const picker = await spawnPicker();
+    const settle = () => new Promise((r) => setTimeout(r, 500));
+
+    await sendClick(picker, 64, CARD_0);
+    await settle();
+    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-a");
+
+    await sendClick(picker, 65, CARD_0);
+    await waitFor(picker, selectedIncludes("row-b"));
+    await sendClick(picker, 65, CARD_0);
+    await waitFor(picker, selectedIncludes("row-c"));
+
+    await sendClick(picker, 65, CARD_0);
+    await settle();
+    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-c");
+
+    await sendClick(picker, 64, CARD_0);
+    await waitFor(picker, selectedIncludes("row-b"));
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S50: right-clicking a card selects it and cycles its label", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
+    const picker = await spawnPicker();
+
+    await sendClick(picker, 2, CARD_1);
+    await waitFor(picker, selectedIncludes("row-b"));
+    await waitFor(picker, (out) => out.includes("review"), 4000);
+    // The screen shows the label optimistically, ahead of the tmux write.
+    let label = "";
+    for (let i = 0; i < 40 && label !== "review"; i++) {
+      label = (await tmux([
+        "show-options",
+        "-p",
+        "-t",
+        paneB,
+        "-v",
+        "@pane_user_label",
+      ])).trim();
+      if (label !== "review") await new Promise((r) => setTimeout(r, 50));
+    }
+    assertEquals(label, "review");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

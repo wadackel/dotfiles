@@ -1,13 +1,20 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   bodyHeightFor,
+  cardIndexAt,
   codexCwdHash,
   COMPACT_CARD,
   isCompact,
   isLivePaneCommand,
+  listGeometry,
+  MOUSE_LEFT,
+  MOUSE_RIGHT,
+  MOUSE_WHEEL_DOWN,
+  MOUSE_WHEEL_UP,
   nextUserLabel,
   nextWaitingIndex,
   type PaneRow,
+  parseMouse,
   parsePrefixKey,
   parseRow,
   parseTarget,
@@ -1195,4 +1202,72 @@ Deno.test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", (
   assertEquals(parsePrefixKey("M-a"), null);
   assertEquals(parsePrefixKey("None"), null);
   assertEquals(parsePrefixKey(""), null);
+});
+
+// --- mouse ---
+
+Deno.test("parseMouse: an SGR report becomes a 0-based press or release", () => {
+  assertEquals(parseMouse("[<0;3;6M"), {
+    button: MOUSE_LEFT,
+    x: 2,
+    y: 5,
+    press: true,
+  });
+  assertEquals(parseMouse("[<0;3;6m")?.press, false);
+  assertEquals(parseMouse("[<65;1;1M")?.button, MOUSE_WHEEL_DOWN);
+  assertEquals(parseMouse("[<64;1;1M")?.button, MOUSE_WHEEL_UP);
+  assertEquals(parseMouse("[<2;1;1M")?.button, MOUSE_RIGHT);
+});
+
+Deno.test("parseMouse: anything but a whole SGR report is not a mouse event", () => {
+  assertEquals(parseMouse("m"), null);
+  assertEquals(parseMouse("M"), null);
+  assertEquals(parseMouse("[<0;3;6"), null);
+  assertEquals(parseMouse("[M !!"), null);
+  assertEquals(parseMouse("[A"), null);
+});
+
+// The three sizes below are the ones the e2e scenarios render at, so the
+// expected rows match what S41 / S42 / S43 see on screen.
+const geometryAt = (
+  columns: number,
+  rows: number,
+  total: number,
+  selected = 0,
+) => listGeometry({ columns, rows, total, selected, prevOffset: 0 });
+
+Deno.test("cardIndexAt: full cards own their padding rows", () => {
+  const g = geometryAt(200, 50, 2);
+  assertEquals(cardIndexAt(g, { x: 0, y: 0 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 1 }), 0);
+  assertEquals(cardIndexAt(g, { x: 0, y: 4 }), 0);
+  assertEquals(cardIndexAt(g, { x: 0, y: 5 }), 1);
+  assertEquals(cardIndexAt(g, { x: 0, y: 8 }), 1);
+  assertEquals(cardIndexAt(g, { x: 0, y: 9 }), null);
+  // Hint bar on the last row.
+  assertEquals(cardIndexAt(g, { x: 0, y: 49 }), null);
+});
+
+Deno.test("cardIndexAt: the preview column and the gutter are not cards", () => {
+  const g = geometryAt(200, 50, 2);
+  assertEquals(cardIndexAt(g, { x: g.listWidth - 1, y: 1 }), 0);
+  assertEquals(cardIndexAt(g, { x: g.listWidth, y: 1 }), null);
+});
+
+Deno.test("cardIndexAt: a scrolled list skips the indicators and adds the offset", () => {
+  const g = geometryAt(200, 50, 20, 15);
+  assertEquals(g.view.offset, 5);
+  assertEquals(cardIndexAt(g, { x: 0, y: 1 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 2 }), 5);
+  assertEquals(cardIndexAt(g, { x: 0, y: 45 }), 15);
+  assertEquals(cardIndexAt(g, { x: 0, y: 46 }), null);
+});
+
+Deno.test("cardIndexAt: compact gap rows belong to no card", () => {
+  const g = geometryAt(150, 24, 2);
+  assertEquals(cardIndexAt(g, { x: 0, y: 0 }), 0);
+  assertEquals(cardIndexAt(g, { x: 0, y: 1 }), 0);
+  assertEquals(cardIndexAt(g, { x: 0, y: 2 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 3 }), 1);
+  assertEquals(cardIndexAt(g, { x: 0, y: 5 }), null);
 });
