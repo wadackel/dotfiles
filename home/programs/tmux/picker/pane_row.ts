@@ -58,6 +58,11 @@ export interface PaneRow {
   lastToolError: string;
   contextUsedPct: number | null;
   userLabel: UserLabel;
+  // Filled by picker.tsx's fetchPanes from a git lookup, never by parseRow:
+  // the tmux row carries only the cwd, and parseRow stays a pure parser that
+  // picker-doctor shares.
+  repoName?: string;
+  worktreeName?: string;
 }
 
 // Status → display metadata. Mirrors bash tmux-window-picker.sh:59-78 (icon + short text).

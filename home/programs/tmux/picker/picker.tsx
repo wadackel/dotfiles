@@ -43,7 +43,7 @@ export {
 // Row-1 repo/branch column width caps for the dynamic layout. App computes
 // per-render repoMax / branchMax by scanning visible rows and clamps to these
 // upper bounds so a single long branch cannot starve the summary slot.
-const REPO_CAP = 16;
+const REPO_CAP = 24;
 const BRANCH_CAP = 28;
 // Minimum visible summary width the layout must preserve after repo + branch.
 const MIN_SUMMARY = 15;
@@ -57,57 +57,64 @@ const TICK_INTERVAL_MS = 1000;
 // ---- Pure helpers (extracted to sibling modules for unit testability) ----
 
 import { sanitizeAnsi, truncateAnsiLine } from "./ansi.ts";
-import { cwdBranchParts } from "./format_helpers.ts";
+import { stringCells, truncateToCells } from "./cell_width.ts";
+import {
+  basename,
+  type GitLocation,
+  locationParts,
+  parseGitLocation,
+} from "./format_helpers.ts";
 
 import {
+  Card,
+  CARD_CHROME_COLS,
   DOGRUN,
+  HintBar,
   PaneRowLine,
-  PILL_LEFT,
-  PILL_RIGHT,
   ROW1_FIXED_OVERHEAD,
   type TaskProgress,
-  TITLE_ICON,
-  UsageFooter,
+  UsageCard,
+  usageCardRows,
+  usageLayout,
+  usageRowWidth,
 } from "./components.tsx";
 import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
 
 // ---- Usage footer layout gates ----
 
-// Same threshold as showFilterUI. Narrower than this the footer still renders
-// safely — clampUsageTokens trims rather than wrapping — but a bar-less row
-// still spends 42 cells before the tail starts disappearing, and what is left
-// stops being worth the body rows it costs.
-const USAGE_FOOTER_MIN_COLS = 80;
+// The preview card keeps at least this many rows under the Usage card; below
+// that the capture is too short to show a permission prompt, which is what the
+// preview is mostly opened for.
+const MIN_PREVIEW_CARD_ROWS = 8;
 
-// One agent costs 2 rows (content + marginTop) and each further agent one more,
-// so bodyHeightFor's Math.max floor engages below totalRows 8 + agents.
-// Suppressing below 11 + agents leaves three rows of clearance rather than
-// letting the clamp turn into an overflow.
-const USAGE_FOOTER_ROW_HEADROOM = 11;
-
-export function showUsageFooter(
-  usageCount: number,
-  totalCols: number,
-  totalRows: number,
+// The Usage card sits under the preview, so it needs a preview column wide
+// enough for a bar-less row (42 cells for the 5h / 7d labels) and tall enough
+// to leave the preview its minimum. Anything narrower would clip the columns
+// the rows are laid out on.
+export function showUsageCard(
+  usages: AgentUsage[],
+  previewWidth: number,
+  columnHeight: number,
 ): boolean {
-  return usageCount > 0 && totalCols >= USAGE_FOOTER_MIN_COLS &&
-    totalRows >= USAGE_FOOTER_ROW_HEADROOM + usageCount;
+  const inner = previewWidth - CARD_CHROME_COLS;
+  const layout = usageLayout(usages, inner);
+  return layout !== null && usageRowWidth(layout) <= inner &&
+    columnHeight >= usageCardRows(usages.length) + MIN_PREVIEW_CARD_ROWS;
 }
 
-// The constant 2 is the title bar and its marginBottom; the conditional 1 is
-// the footer's marginTop, which Yoga does not collapse into the row above.
-export function bodyHeightFor(
-  totalRows: number,
-  footerRows: number,
-): number {
-  return Math.max(
-    5,
-    totalRows - 2 - footerRows - (footerRows > 0 ? 1 : 0),
-  );
+// Blank rows above the list and the preview column: one keeps the first card
+// off the popup border, and a short popup spends it on panes instead.
+export function topRowsFor(totalRows: number): number {
+  return isCompact(totalRows) ? 0 : 1;
+}
+
+// The list also gives up 2 rows to the key-hint bar and its marginTop.
+export function bodyHeightFor(totalRows: number): number {
+  return Math.max(5, totalRows - topRowsFor(totalRows) - 2);
 }
 
 // Gutter between the list and the preview, spent as the preview's marginLeft.
-const PREVIEW_GUTTER = 1;
+const PREVIEW_GUTTER = 2;
 const MIN_LIST = 40;
 // clampPreview floors its inner width at Math.max(10, width - 4), so a preview
 // box narrower than this renders content wider than the box it sits in.
@@ -169,12 +176,79 @@ export async function readAllAgentUsage(): Promise<AgentUsage[]> {
     readAgentUsage(home, "codex"),
   ]);
   // Windowless entries are dropped here rather than at render time so the
-  // visibility gate and UsageFooter agree on what counts as a segment — a file
+  // visibility gate and UsageCard agree on what counts as a segment — a file
   // with an empty windows array would otherwise cost two body rows and draw
   // nothing into them.
   return both.filter((u): u is AgentUsage =>
     u !== null && u.windows.length > 0
   );
+}
+
+export interface ListWindow {
+  offset: number;
+  count: number;
+  above: number;
+  below: number;
+  scrolling: boolean;
+}
+
+export interface CardShape {
+  rows: number;
+  gap: number;
+}
+
+// A four-row card: the two content rows between blank padding rows.
+export const FULL_CARD: CardShape = { rows: 4, gap: 0 };
+// A short popup drops the padding and keeps one blank row between panes.
+export const COMPACT_CARD: CardShape = { rows: 2, gap: 1 };
+
+// Below this many rows the popup switches to COMPACT_CARD and starts the list
+// on the top row, trading the padding for panes.
+const COMPACT_BELOW_ROWS = 30;
+
+export function isCompact(totalRows: number): boolean {
+  return totalRows < COMPACT_BELOW_ROWS;
+}
+
+// Which panes fit in `height` rows given the card shape.
+// On overflow the `↑ N more` / `↓ N more` lines are reserved even at count 0,
+// so the window does not resize as the selection moves. Letting Yoga shrink
+// an overflowing list instead collapses rows unevenly and overlaps each pane's
+// rows.
+export function visibleWindow(
+  total: number,
+  selected: number,
+  height: number,
+  prevOffset: number,
+  card: CardShape = FULL_CARD,
+): ListWindow {
+  if (total * card.rows + Math.max(0, total - 1) * card.gap <= height) {
+    return { offset: 0, count: total, above: 0, below: 0, scrolling: false };
+  }
+  const count = Math.max(
+    1,
+    Math.floor((height - 2 + card.gap) / (card.rows + card.gap)),
+  );
+  let offset = Math.min(Math.max(0, prevOffset), total - count);
+  if (selected < offset) offset = selected;
+  else if (selected >= offset + count) offset = selected - count + 1;
+  return {
+    offset,
+    count,
+    above: offset,
+    below: total - offset - count,
+    scrolling: true,
+  };
+}
+
+// Index `n` moves to: the first waiting row after `from`, wrapping past the
+// end. `from` itself when no row is waiting, so the key is a no-op then.
+export function nextWaitingIndex(rows: PaneRow[], from: number): number {
+  for (let d = 1; d <= rows.length; d++) {
+    const i = (from + d) % rows.length;
+    if (rows[i].status === "waiting") return i;
+  }
+  return from;
 }
 
 // ---- tmux I/O (impure) ----
@@ -213,6 +287,43 @@ async function gitBranch(cwd: string): Promise<string> {
   } catch {
     return "";
   }
+}
+
+// A directory's toplevel and common dir cannot change while the popup is open,
+// so each is resolved once; the branch is not cached because a checkout inside
+// the pane moves it.
+const gitLocationCache = new Map<string, GitLocation>();
+
+// Falls back to the directory's basename when git has nothing to say (not a
+// repository, a bare repository, or a cwd that no longer exists), so the
+// column still names the directory.
+async function gitLocation(dir: string): Promise<GitLocation> {
+  const cached = gitLocationCache.get(dir);
+  if (cached) return cached;
+  let location: GitLocation | null = null;
+  try {
+    const { code, stdout } = await new Deno.Command("git", {
+      args: [
+        "rev-parse",
+        "--path-format=absolute",
+        "--show-toplevel",
+        "--git-dir",
+        "--git-common-dir",
+      ],
+      cwd: dir,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    if (code === 0) {
+      location = parseGitLocation(new TextDecoder().decode(stdout));
+    }
+  } catch {
+    // Deno.Command throws when cwd does not exist.
+  }
+  const resolved = location ?? { repo: basename(dir), worktree: "" };
+  gitLocationCache.set(dir, resolved);
+  return resolved;
 }
 
 // Allowed shape for a session id when used as a filesystem path segment.
@@ -435,15 +546,21 @@ async function fetchPanes(): Promise<PaneRow[]> {
       rows.push(row);
     }
   }
-  // Fill in missing worktreeBranch from the pane's cwd (falling back to
-  // pane_current_path when @pane_cwd is unset, e.g. when the latest hook event
-  // for a Claude pane carried no cwd payload) in parallel.
+  // Resolve the repository location and fill in a missing worktreeBranch from
+  // the pane's cwd (falling back to pane_current_path when @pane_cwd is unset,
+  // e.g. when the latest hook event for a Claude pane carried no cwd payload)
+  // in parallel.
   await Promise.all(
     rows.map(async (row) => {
-      if (!row.worktreeBranch) {
-        const source = row.cwd || row.currentPath;
-        if (source) row.worktreeBranch = await gitBranch(source);
-      }
+      const source = row.cwd || row.currentPath;
+      if (!source) return;
+      const [location, branch] = await Promise.all([
+        gitLocation(source),
+        row.worktreeBranch || gitBranch(source),
+      ]);
+      row.repoName = location.repo;
+      row.worktreeName = location.worktree;
+      row.worktreeBranch = branch;
     }),
   );
   return rows;
@@ -489,19 +606,30 @@ function clampPreview(text: string, maxCols: number, maxLines: number): string {
   return tail.map((line) => truncateAnsiLine(line, maxCols)).join("\n");
 }
 
+// Shown under the card title so the selected pane's full location is readable
+// even where the list column truncates it.
+function displayPath(path: string): string {
+  const home = Deno.env.get("HOME");
+  return home && (path === home || path.startsWith(home + "/"))
+    ? "~" + path.slice(home.length)
+    : path;
+}
+
 function Preview(
-  { target, width, height }: { target: string; width: number; height: number },
+  { row, width, height }: { row: PaneRow; width: number; height: number },
 ) {
+  const target = row.target;
   const [content, setContent] = useState<string | null>(null);
   useEffect(() => {
     // Reset content the moment target changes — without this, a stale capture
-    // of the previous target keeps rendering under the new "Preview: <target>"
-    // header until the new capturePane resolves (~0–1 s).
+    // of the previous target keeps rendering under the new card title until
+    // the new capturePane resolves (~0–1 s).
     setContent(null);
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | undefined;
-    // Border consumes 1 col on each side (2 total); account for it when clamping lines.
-    const innerCols = Math.max(10, width - 4);
+    // The card spends CARD_CHROME_COLS on border and padding, and three rows on
+    // its top edge, bottom border, and the path line.
+    const innerCols = Math.max(10, width - CARD_CHROME_COLS);
     const innerRows = Math.max(3, height - 3);
     // Self-rescheduling setTimeout (not setInterval) guarantees at most one
     // in-flight capturePane per target and prevents out-of-order completions
@@ -522,21 +650,25 @@ function Preview(
       if (timerId !== undefined) clearTimeout(timerId);
     };
   }, [target, width, height]);
+  const { repo, worktree, branch } = locationParts(row);
+  const title = [
+    { text: repo, color: DOGRUN.fg },
+    ...(worktree ? [{ text: `(${worktree})`, color: DOGRUN.fgDim }] : []),
+    ...(branch
+      ? [
+        { text: " · ", color: DOGRUN.muted },
+        { text: branch, color: DOGRUN.accent },
+      ]
+      : []),
+  ];
+  const path = displayPath(row.cwd || row.currentPath);
   return (
-    <Box
-      flexDirection="column"
-      width={width}
-      borderStyle="single"
-      borderLeft
-      borderRight={false}
-      borderTop={false}
-      borderBottom={false}
-      borderColor={DOGRUN.dim}
-      paddingLeft={1}
-    >
-      <Text color={DOGRUN.accent}>Preview: {target}</Text>
+    <Card title={title} width={width} height={height}>
+      <Text color={DOGRUN.fgDim}>
+        {truncateToCells(path, Math.max(0, width - CARD_CHROME_COLS))}
+      </Text>
       <Text>{content ?? "(loading...)"}</Text>
-    </Box>
+    </Card>
   );
 }
 
@@ -555,7 +687,7 @@ function App({
   const { stdout } = useStdout();
   // useStdout() does not re-render on resize; subscribe to stdout's 'resize'
   // event so that totalCols/totalRows (and everything derived: listWidth,
-  // previewWidth, bodyHeight, showFilterUI) follow tmux popup / window resizes.
+  // previewWidth, bodyHeight, hint bar width) follow tmux popup / window resizes.
   const [size, setSize] = useState({
     columns: stdout?.columns ?? 120,
     rows: stdout?.rows ?? 30,
@@ -578,6 +710,9 @@ function App({
   // SSOT catches up. useRef (not useState) because mutations are always
   // paired with a setRows call that drives the re-render.
   const pendingLabelWrites = useRef<Map<string, UserLabel>>(new Map());
+  // First visible pane of a scrolled list. Kept across renders so moving the
+  // selection inside the window does not shift it.
+  const listOffset = useRef(0);
   const [taskProgressMap, setTaskProgressMap] = useState<
     Map<string, TaskProgress | null>
   >(new Map());
@@ -713,6 +848,11 @@ function App({
       const nextId = derivedRows[nextIdx]?.paneId;
       if (nextId !== undefined) setSelectedPaneId(nextId);
     }
+    if (input === "n") {
+      const nextId = derivedRows[nextWaitingIndex(derivedRows, index)]?.paneId;
+      if (nextId !== undefined) setSelectedPaneId(nextId);
+      return;
+    }
     if (input === "w") {
       setFilterEnabled((v: boolean) => !v);
       return;
@@ -759,99 +899,86 @@ function App({
   // output overflows the viewport, which inside a tmux popup blanks and
   // repaints every cell on each tick. Ink clips output to the root box height,
   // so pinning the root to totalRows is what keeps overflow impossible.
-  const footerVisible = showUsageFooter(usages.length, totalCols, totalRows);
-  const bodyHeight = bodyHeightFor(
-    totalRows,
-    footerVisible ? usages.length : 0,
+  const bodyHeight = bodyHeightFor(totalRows);
+  // The preview column starts on the same row as the list and runs to the
+  // bottom row so the Usage card sits beside the hints.
+  const topRows = topRowsFor(totalRows);
+  const card = isCompact(totalRows) ? COMPACT_CARD : FULL_CARD;
+  const columnHeight = totalRows - topRows;
+  const usageVisible = previewWidth > 0 &&
+    showUsageCard(usages, previewWidth, columnHeight);
+  const view = visibleWindow(
+    derivedRows.length,
+    index,
+    bodyHeight,
+    listOffset.current,
+    card,
   );
-  // The baseline title bar (icon + title + Enter / j/k / Esc hints) is ~61
-  // cells, fitting on one line at the popup's typical 80%-of-screen width.
-  // The `w filter/clear` hint and the `[w] wait/idle` badge would push the
-  // total past narrow-tmux widths (cols=60 in S10/S14/S15 fixtures) and force
-  // the title to wrap, which breaks spawnPicker's `AI Agents` waitFor.
-  // Suppress both decorations below this threshold; users on narrow widths
-  // can still discover the `w` shortcut from CLAUDE.md / tmux.conf.
-  const showFilterUI = totalCols >= 80;
-
+  listOffset.current = view.offset;
+  const previewHeight = columnHeight -
+    (usageVisible ? usageCardRows(usages.length) : 0);
   // Dynamic repo/branch column widths: scan visible rows, clamp to caps, and
   // shrink branch first if the combined width would starve the summary slot.
-  const rowsParts = derivedRows.map((r: PaneRow) =>
-    cwdBranchParts(r.cwd || r.currentPath, r.worktreeBranch)
+  const rowsParts: ReturnType<typeof locationParts>[] = derivedRows.map(
+    (r: PaneRow) => locationParts(r),
   );
   const { repoMax, branchMax } = row1Columns(
     listWidth,
-    Math.max(0, ...rowsParts.map((p: { repo: string }) => p.repo.length)),
-    Math.max(0, ...rowsParts.map((p: { branch: string }) => p.branch.length)),
+    Math.max(
+      0,
+      ...rowsParts.map((p) =>
+        stringCells(p.worktree ? `${p.repo}(${p.worktree})` : p.repo)
+      ),
+    ),
+    Math.max(0, ...rowsParts.map((p) => p.branch.length)),
   );
 
   return (
-    <Box flexDirection="column" width={totalCols} height={totalRows}>
-      <Box marginBottom={1}>
-        <Text color={DOGRUN.accent}>{TITLE_ICON + "  "}</Text>
-        <Text color={DOGRUN.accent} bold>AI Agents</Text>
-        {showFilterUI && filterEnabled
-          ? (
-            <>
-              <Text>{"  "}</Text>
-              <Text color={DOGRUN.muted}>{PILL_LEFT}</Text>
-              <Text color={DOGRUN.fg} backgroundColor={DOGRUN.muted}>
-                {" wait/idle "}
-              </Text>
-              <Text color={DOGRUN.muted}>{PILL_RIGHT}</Text>
-            </>
-          )
-          : null}
-        <Box flexGrow={1} />
-        <Text color={DOGRUN.accent}>Enter</Text>
-        <Text color={DOGRUN.fg}>{" jump  "}</Text>
-        <Text color={DOGRUN.muted}>·</Text>
-        <Text color={DOGRUN.accent}>{"  j/k ↑↓"}</Text>
-        <Text color={DOGRUN.fg}>{" move  "}</Text>
-        {showFilterUI
-          ? (
-            <>
-              <Text color={DOGRUN.muted}>·</Text>
-              <Text color={DOGRUN.accent}>{"  w"}</Text>
-              <Text color={DOGRUN.fg}>
-                {filterEnabled ? " clear  " : " filter  "}
-              </Text>
-              <Text color={DOGRUN.muted}>·</Text>
-              <Text color={DOGRUN.accent}>{"  m/M"}</Text>
-              <Text color={DOGRUN.fg}>{" label  "}</Text>
-            </>
-          )
-          : null}
-        <Text color={DOGRUN.muted}>·</Text>
-        <Text color={DOGRUN.accent}>{"  Esc q"}</Text>
-        <Text color={DOGRUN.fg}>{" cancel"}</Text>
-      </Box>
-      <Box flexDirection="row" height={bodyHeight}>
-        <Box flexDirection="column" width={listWidth} gap={1}>
-          {derivedRows.map((row: PaneRow, i: number) => (
-            <PaneRowLine
-              key={row.paneId}
-              row={row}
-              now={now}
-              selected={i === index}
-              taskProgress={taskProgressMap.get(row.paneId) ?? null}
-              listWidth={listWidth}
-              repoMax={repoMax}
-              branchMax={branchMax}
-            />
-          ))}
-        </Box>
-        {current && previewWidth > 0 && (
-          <Box marginLeft={PREVIEW_GUTTER}>
-            <Preview
-              target={current.target}
-              width={previewWidth}
-              height={bodyHeight}
-            />
+    <Box flexDirection="row" width={totalCols} height={totalRows}>
+      <Box flexDirection="column" width={listWidth}>
+        <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
+          {view.scrolling && (
+            <Text color={DOGRUN.muted}>
+              {view.above > 0 ? `  ↑ ${view.above} more` : " "}
+            </Text>
+          )}
+          <Box flexDirection="column" gap={card.gap}>
+            {derivedRows
+              .slice(view.offset, view.offset + view.count)
+              .map((row: PaneRow, i: number) => (
+                <PaneRowLine
+                  key={row.paneId}
+                  row={row}
+                  now={now}
+                  selected={view.offset + i === index}
+                  taskProgress={taskProgressMap.get(row.paneId) ?? null}
+                  listWidth={listWidth}
+                  repoMax={repoMax}
+                  branchMax={branchMax}
+                  padded={card === FULL_CARD}
+                />
+              ))}
           </Box>
-        )}
+          {view.scrolling && (
+            <Text color={DOGRUN.muted}>
+              {view.below > 0 ? `  ↓ ${view.below} more` : " "}
+            </Text>
+          )}
+        </Box>
+        <HintBar filterEnabled={filterEnabled} width={listWidth} />
       </Box>
-      {footerVisible && (
-        <UsageFooter usages={usages} now={now} width={totalCols} />
+      {current && previewWidth > 0 && (
+        <Box
+          marginLeft={PREVIEW_GUTTER}
+          marginTop={topRows}
+          flexDirection="column"
+          height={columnHeight}
+        >
+          <Preview row={current} width={previewWidth} height={previewHeight} />
+          {usageVisible && (
+            <UsageCard usages={usages} now={now} width={previewWidth} />
+          )}
+        </Box>
       )}
     </Box>
   );

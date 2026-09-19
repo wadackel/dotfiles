@@ -2,21 +2,27 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   bodyHeightFor,
   codexCwdHash,
+  COMPACT_CARD,
+  isCompact,
   isLivePaneCommand,
   nextUserLabel,
+  nextWaitingIndex,
   type PaneRow,
   parseRow,
   parseTarget,
   readTaskProgress,
   readTaskProgressForRow,
   row1Columns,
-  showUsageFooter,
+  showUsageCard,
   splitLayout,
   TMUX_FORMAT,
+  topRowsFor,
+  visibleWindow,
 } from "./picker.tsx";
 import {
   clampUsageTokens,
   DOGRUN,
+  hintTokens,
   ROW1_FIXED_OVERHEAD,
   type Row2Seg,
   truncateTopSegBody,
@@ -720,7 +726,7 @@ Deno.test("truncateTopSegBody: budget too small for `…)` → generic slice fal
   assertEquals(truncateTopSegBody(seg, 4), "Ba");
 });
 
-// --- Usage footer ---
+// --- Usage card ---
 
 const USAGE_NOW = 1786248126;
 
@@ -768,38 +774,37 @@ function colStart(row: UsageToken[], label: string): number {
   return stringCells(text.slice(0, at));
 }
 
-Deno.test("showUsageFooter: hidden without data regardless of size", () => {
-  assertEquals(showUsageFooter(0, 200, 50), false);
-  assertEquals(showUsageFooter(1, 200, 50), true);
+Deno.test("showUsageCard: hidden without data regardless of size", () => {
+  assertEquals(showUsageCard([], 74, 48), false);
+  assertEquals(showUsageCard([mkUsage("claude")], 74, 48), true);
 });
 
-Deno.test("showUsageFooter: width threshold is 80", () => {
-  assertEquals(showUsageFooter(2, 79, 50), false);
-  assertEquals(showUsageFooter(2, 80, 50), true);
+Deno.test("showUsageCard: needs an inner width that fits a bar-less row", () => {
+  const usages = [mkUsage("claude"), mkCodex7d()];
+  // Preview 46 leaves 42 inside the card, the bar-less row width.
+  assertEquals(showUsageCard(usages, 45, 48), false);
+  assertEquals(showUsageCard(usages, 46, 48), true);
 });
 
-Deno.test("showUsageFooter: the height threshold follows the agent count", () => {
-  assertEquals(showUsageFooter(1, 200, 11), false);
-  assertEquals(showUsageFooter(1, 200, 12), true);
-  assertEquals(showUsageFooter(2, 200, 12), false);
-  assertEquals(showUsageFooter(2, 200, 13), true);
+Deno.test("showUsageCard: the preview keeps 8 rows under the card", () => {
+  assertEquals(showUsageCard([mkUsage("claude")], 74, 10), false);
+  assertEquals(showUsageCard([mkUsage("claude")], 74, 11), true);
+  assertEquals(showUsageCard([mkUsage("claude"), mkCodex7d()], 74, 11), false);
+  assertEquals(showUsageCard([mkUsage("claude"), mkCodex7d()], 74, 12), true);
 });
 
-Deno.test("bodyHeightFor: the footer costs its margin plus one row per agent", () => {
-  assertEquals(bodyHeightFor(50, 0), 48);
-  assertEquals(bodyHeightFor(50, 1), 46);
-  assertEquals(bodyHeightFor(50, 2), 45);
+Deno.test("bodyHeightFor: a top blank row plus the key-hint bar and its margin take three rows", () => {
+  assertEquals(bodyHeightFor(50), 47);
 });
 
 Deno.test("bodyHeightFor: floor stays at 5", () => {
-  assertEquals(bodyHeightFor(8, 1), 5);
-  assertEquals(bodyHeightFor(6, 0), 5);
+  assertEquals(bodyHeightFor(6), 5);
 });
 
 Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
   for (const cols of [20, 30, 41, 60, 61, 67, 80, 113, 150, 200]) {
     const { listWidth, previewWidth } = splitLayout(cols);
-    const used = listWidth + (previewWidth > 0 ? 1 + previewWidth : 0);
+    const used = listWidth + (previewWidth > 0 ? 2 + previewWidth : 0);
     assertEquals(
       used <= cols,
       true,
@@ -809,11 +814,11 @@ Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
 });
 
 Deno.test("splitLayout: cols 60 keeps the 40-cell list the e2e fixtures assume", () => {
-  assertEquals(splitLayout(60), { listWidth: 40, previewWidth: 19 });
+  assertEquals(splitLayout(60), { listWidth: 40, previewWidth: 18 });
 });
 
 Deno.test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () => {
-  assertEquals(splitLayout(150), { listWidth: 90, previewWidth: 59 });
+  assertEquals(splitLayout(150), { listWidth: 90, previewWidth: 58 });
 });
 
 Deno.test("row1Columns: repo plus branch never overflow the list column", () => {
@@ -829,7 +834,11 @@ Deno.test("row1Columns: repo plus branch never overflow the list column", () => 
 
 Deno.test("row1Columns: a wide list seats both columns at their natural width", () => {
   assertEquals(row1Columns(90, 8, 20), { repoMax: 8, branchMax: 20 });
-  assertEquals(row1Columns(90, 30, 40), { repoMax: 16, branchMax: 28 });
+  assertEquals(row1Columns(112, 30, 40), { repoMax: 24, branchMax: 28 });
+});
+
+Deno.test("row1Columns: the 152-column popup keeps repo(worktree) whole and narrows branch", () => {
+  assertEquals(row1Columns(90, 30, 40), { repoMax: 24, branchMax: 20 });
 });
 
 Deno.test("row1Columns: branch shrinks before repo when the summary is starved", () => {
@@ -843,20 +852,20 @@ Deno.test("row1Columns: the 4-cell floors give way rather than overflow", () => 
 
 Deno.test("splitLayout: preview drops once the remainder is too thin", () => {
   assertEquals(splitLayout(30), { listWidth: 30, previewWidth: 0 });
-  assertEquals(splitLayout(54), { listWidth: 40, previewWidth: 0 });
-  assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 14 });
+  assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 0 });
+  assertEquals(splitLayout(56), { listWidth: 40, previewWidth: 14 });
 });
 
-Deno.test("usageRowWidth: the sub-slot sum is 80 with bars and 42 without", () => {
+Deno.test("usageRowWidth: the sub-slot sum is 60 with bars and 42 without", () => {
   const base = { cols: ["5h", "7d"], agentW: 8, labelW: 2 };
-  assertEquals(usageRowWidth({ ...base, bars: true }), 80);
+  assertEquals(usageRowWidth({ ...base, bars: true }), 60);
   assertEquals(usageRowWidth({ ...base, bars: false }), 42);
 });
 
 Deno.test("usageLayout: bars survive at the exact row width and drop one cell under", () => {
   const usages = [mkUsage("claude"), mkCodex7d()];
-  assertEquals(usageLayout(usages, 80)?.bars, true);
-  assertEquals(usageLayout(usages, 79)?.bars, false);
+  assertEquals(usageLayout(usages, 60)?.bars, true);
+  assertEquals(usageLayout(usages, 59)?.bars, false);
 });
 
 Deno.test("usageLayout: columns are the union in encounter order", () => {
@@ -898,15 +907,15 @@ Deno.test("usageRows: a missing window leaves a same-width gap so 7d stays align
     USAGE_NOW,
     WIDE,
   );
-  assertEquals(colStart(claude, "7d"), 44);
-  assertEquals(colStart(codex, "7d"), 44);
+  assertEquals(colStart(claude, "7d"), 34);
+  assertEquals(colStart(codex, "7d"), 34);
 });
 
 Deno.test("usageRows: the 7d column stays aligned once bars are dropped", () => {
   const [claude, codex] = usageRows(
     [mkUsage("claude"), mkCodex7d()],
     USAGE_NOW,
-    79,
+    59,
   );
   assertEquals(colStart(claude, "7d"), 25);
   assertEquals(colStart(codex, "7d"), 25);
@@ -914,11 +923,11 @@ Deno.test("usageRows: the 7d column stays aligned once bars are dropped", () => 
 
 Deno.test("usageRows: bars appear only when the row width fits the budget", () => {
   const withBars = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
-  const without = usageRows([mkUsage("claude")], USAGE_NOW, 79);
-  assertEquals(rowText(withBars[0]).includes("█"), true);
-  assertEquals(rowText(withBars[0]).includes("░"), true);
-  assertEquals(rowText(without[0]).includes("█"), false);
-  assertEquals(rowText(without[0]).includes("░"), false);
+  const without = usageRows([mkUsage("claude")], USAGE_NOW, 59);
+  assertEquals(rowText(withBars[0]).includes("━"), true);
+  assertEquals(rowText(withBars[0]).includes("─"), true);
+  assertEquals(rowText(without[0]).includes("━"), false);
+  assertEquals(rowText(without[0]).includes("─"), false);
 });
 
 Deno.test("usageRows: a countdown rides the 5h window alone", () => {
@@ -935,9 +944,9 @@ Deno.test("usageRows: a used window lights at least one cell", () => {
     });
     return rowText(usageRows([usage], USAGE_NOW, WIDE)[0]);
   };
-  assertStringIncludes(barOf(1), "▏█░░░░░░░░░░░░░░░▕");
-  assertStringIncludes(barOf(0), "▏░░░░░░░░░░░░░░░░▕");
-  assertStringIncludes(barOf(100), "▏████████████████▕");
+  assertStringIncludes(barOf(1), "5h ━─────── ");
+  assertStringIncludes(barOf(0), "5h ──────── ");
+  assertStringIncludes(barOf(100), "5h ━━━━━━━━ ");
 });
 
 Deno.test("usageRows: an expired window drops its bar and countdown but keeps the slots", () => {
@@ -952,7 +961,7 @@ Deno.test("usageRows: an expired window drops its bar and countdown but keeps th
   assertStringIncludes(text, "--");
   assertEquals(text.includes(COUNTDOWN_ICON), false);
   // The reserved bar and countdown slots keep the later column in place.
-  assertEquals(colStart(row, "7d"), 44);
+  assertEquals(colStart(row, "7d"), 34);
 });
 
 Deno.test("usageRows: only a percentage at or above 80 takes the alert color", () => {
@@ -964,14 +973,14 @@ Deno.test("usageRows: only a percentage at or above 80 takes the alert color", (
   });
   const [row] = usageRows([usage], USAGE_NOW, WIDE);
   const alerted = row.filter((t) => t.color === DOGRUN.err).map((t) => t.text);
-  assertEquals(alerted, ["█████████████", " 80%"]);
+  assertEquals(alerted, ["━━━━━━", " 80%"]);
   assertEquals(row.find((t) => t.text === " 79%")?.color, DOGRUN.fgDim);
 });
 
 Deno.test("usageRows: the unused track is dimmer than the filled run", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
-  const track = row.find((t) => t.text.startsWith("░"));
-  const filled = row.find((t) => t.text.startsWith("█"));
+  const track = row.find((t) => t.text.startsWith("─"));
+  const filled = row.find((t) => t.text.startsWith("━"));
   assertEquals(track?.color, DOGRUN.dim);
   assertEquals(filled?.color, DOGRUN.fgDim);
 });
@@ -1010,10 +1019,170 @@ Deno.test("clampUsageTokens: a row one cell over budget is truncated, not wrappe
   // usageRows reserves the stale suffix on every row but only emits it when the
   // file is actually stale, so the over-budget case has to be built by hand.
   const stale = mkUsage("claude", { updatedAt: USAGE_NOW - 29 * 86400 });
-  const [row] = usageRows([stale], USAGE_NOW, 80);
+  const [row] = usageRows([stale], USAGE_NOW, 60);
   const full = stringCells(rowText(row));
-  assertEquals(full, 80);
+  assertEquals(full, 60);
   const text = clampUsageTokens(row, full - 1).map((t) => t.text).join("");
   assertEquals(stringCells(text), full - 1);
   assertEquals(text.endsWith("…"), true);
+});
+
+// --- nextWaitingIndex ---
+
+function statusRows(...statuses: PaneRow["status"][]): PaneRow[] {
+  return statuses.map((status, i) => ({
+    ...parseRow(`%${i}${"\x1f".repeat(22)}`)!,
+    status,
+  }));
+}
+
+Deno.test("nextWaitingIndex: skips non-waiting rows forward", () => {
+  const rows = statusRows("running", "idle", "waiting", "waiting");
+  assertEquals(nextWaitingIndex(rows, 0), 2);
+  assertEquals(nextWaitingIndex(rows, 2), 3);
+});
+
+Deno.test("nextWaitingIndex: wraps past the end", () => {
+  assertEquals(
+    nextWaitingIndex(statusRows("waiting", "idle", "running"), 1),
+    0,
+  );
+});
+
+Deno.test("nextWaitingIndex: the only waiting row selected stays put", () => {
+  assertEquals(nextWaitingIndex(statusRows("idle", "waiting"), 1), 1);
+});
+
+Deno.test("nextWaitingIndex: no waiting row → no move", () => {
+  assertEquals(nextWaitingIndex(statusRows("running", "idle"), 1), 1);
+  assertEquals(nextWaitingIndex([], 0), 0);
+});
+
+// --- hintTokens ---
+
+const hintText = (filter: boolean) =>
+  hintTokens(filter).map((t) => t.text).join("");
+
+Deno.test("hintTokens: jump leads so a right-side clip never removes it", () => {
+  const text = hintText(false);
+  assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
+  assertEquals(
+    clampUsageTokens(hintTokens(false), 20).map((t) => t.text).join("")
+      .includes("jump"),
+    true,
+  );
+});
+
+Deno.test("hintTokens: the wait/idle pill and `clear` appear only with the filter on", () => {
+  assertEquals(hintText(false).includes("wait/idle"), false);
+  assertStringIncludes(hintText(false), " filter");
+  assertStringIncludes(hintText(true), "wait/idle");
+  assertStringIncludes(hintText(true), " clear");
+});
+
+Deno.test("hintTokens: key chips carry the chip fill", () => {
+  const chip = hintTokens(false).find((t) => t.text === "n")!;
+  assertEquals(chip.backgroundColor, DOGRUN.bgChip);
+});
+
+// --- visibleWindow ---
+
+Deno.test("visibleWindow: a list that fits shows every card without indicators", () => {
+  assertEquals(visibleWindow(0, 0, 10, 0), {
+    offset: 0,
+    count: 0,
+    above: 0,
+    below: 0,
+    scrolling: false,
+  });
+  // 5 cards × 4 rows = 20.
+  assertEquals(visibleWindow(5, 4, 20, 0).scrolling, false);
+  assertEquals(visibleWindow(5, 4, 20, 0).count, 5);
+});
+
+Deno.test("visibleWindow: one row short scrolls and reserves both indicators", () => {
+  // 19 rows: 2 indicators + 4 cards (16 rows).
+  assertEquals(visibleWindow(5, 0, 19, 0), {
+    offset: 0,
+    count: 4,
+    above: 0,
+    below: 1,
+    scrolling: true,
+  });
+});
+
+Deno.test("visibleWindow: the cards plus indicators never exceed the height", () => {
+  for (let height = 6; height <= 60; height++) {
+    const view = visibleWindow(40, 0, height, 0);
+    const rows = 2 + view.count * 4;
+    assertEquals(rows <= height, true, `height=${height} rows=${rows}`);
+  }
+});
+
+Deno.test("visibleWindow: capacity covers each remainder of (height - 2) / 4", () => {
+  assertEquals(visibleWindow(20, 0, 22, 0).count, 5);
+  assertEquals(visibleWindow(20, 0, 23, 0).count, 5);
+  assertEquals(visibleWindow(20, 0, 24, 0).count, 5);
+  assertEquals(visibleWindow(20, 0, 25, 0).count, 5);
+  assertEquals(visibleWindow(20, 0, 26, 0).count, 6);
+});
+
+Deno.test("visibleWindow: selecting the last card scrolls just far enough", () => {
+  assertEquals(visibleWindow(20, 19, 48, 0), {
+    offset: 9,
+    count: 11,
+    above: 9,
+    below: 0,
+    scrolling: true,
+  });
+});
+
+Deno.test("visibleWindow: moving inside the window keeps the offset", () => {
+  assertEquals(visibleWindow(20, 12, 48, 5).offset, 5);
+  assertEquals(visibleWindow(20, 4, 48, 5).offset, 4);
+});
+
+Deno.test("visibleWindow: a shrinking list clamps a stale offset", () => {
+  // Offset 10 was valid for 30 cards; with 15 the window can start at 4 at most.
+  assertEquals(visibleWindow(15, 5, 48, 10).offset, 4);
+});
+
+Deno.test("visibleWindow: a tiny height still shows the selected card", () => {
+  const view = visibleWindow(10, 7, 3, 0);
+  assertEquals(view.count, 1);
+  assertEquals(view.offset, 7);
+});
+
+// --- compact layout ---
+
+Deno.test("isCompact: a popup under 30 rows uses the compact layout", () => {
+  assertEquals(isCompact(29), true);
+  assertEquals(isCompact(30), false);
+});
+
+Deno.test("topRowsFor / bodyHeightFor: the compact layout starts on the top row", () => {
+  assertEquals(topRowsFor(24), 0);
+  assertEquals(bodyHeightFor(24), 22);
+  assertEquals(topRowsFor(50), 1);
+  assertEquals(bodyHeightFor(50), 47);
+});
+
+Deno.test("visibleWindow: compact cards cost two rows plus a gap between them", () => {
+  // 5 compact cards = 5 × 2 + 4 gaps = 14.
+  assertEquals(visibleWindow(5, 0, 14, 0, COMPACT_CARD).scrolling, false);
+  assertEquals(visibleWindow(5, 0, 13, 0, COMPACT_CARD), {
+    offset: 0,
+    count: 4,
+    above: 0,
+    below: 1,
+    scrolling: true,
+  });
+});
+
+Deno.test("visibleWindow: compact cards plus indicators never exceed the height", () => {
+  for (let height = 5; height <= 40; height++) {
+    const view = visibleWindow(40, 0, height, 0, COMPACT_CARD);
+    const rows = 2 + view.count * 3 - 1;
+    assertEquals(rows <= height, true, `height=${height} rows=${rows}`);
+  }
 });

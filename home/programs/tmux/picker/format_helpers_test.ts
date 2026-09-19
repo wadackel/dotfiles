@@ -1,11 +1,14 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   basename,
-  cwdBranchParts,
+  elapsedSource,
   formatElapsed,
   formatRemaining,
+  locationParts,
+  parseGitLocation,
   parseSubagents,
   renderSubagentTree,
+  repoLabel,
   statusColor,
   statusIcon,
   statusShort,
@@ -142,32 +145,117 @@ Deno.test("summaryOf: preserves full CJK prompt (caller truncates by width)", ()
   assertEquals(summaryOf(mkRow({ prompt: jp })), jp);
 });
 
-// --- cwdBranchParts ---
+// --- parseGitLocation ---
 
-Deno.test("cwdBranchParts: cwd + branch → both fields populated", () => {
+Deno.test("parseGitLocation: main checkout has no worktree", () => {
   assertEquals(
-    cwdBranchParts("/Users/wadackel/dotfiles", "main"),
-    { repo: "dotfiles", branch: "main" },
+    parseGitLocation("/src/dotfiles\n/src/dotfiles/.git\n/src/dotfiles/.git\n"),
+    { repo: "dotfiles", worktree: "" },
   );
 });
 
-Deno.test("cwdBranchParts: cwd only → branch empty", () => {
+Deno.test("parseGitLocation: linked worktree names the repo after the common dir", () => {
   assertEquals(
-    cwdBranchParts("/Users/wadackel/dotfiles", ""),
-    { repo: "dotfiles", branch: "" },
+    parseGitLocation(
+      "/src/dotfiles-worktrees/obsidian\n" +
+        "/src/dotfiles/.git/worktrees/obsidian\n/src/dotfiles/.git\n",
+    ),
+    { repo: "dotfiles", worktree: "obsidian" },
   );
 });
 
-Deno.test("cwdBranchParts: branch only → repo empty", () => {
-  assertEquals(cwdBranchParts("", "main"), { repo: "", branch: "main" });
+Deno.test("parseGitLocation: bare repo.git with a linked worktree drops .git", () => {
+  assertEquals(
+    parseGitLocation(
+      "/src/wt\n/src/repo.git/worktrees/wt\n/src/repo.git\n",
+    ),
+    { repo: "repo", worktree: "wt" },
+  );
 });
 
-Deno.test("cwdBranchParts: both empty → middle dot in repo, branch empty", () => {
-  assertEquals(cwdBranchParts("", ""), { repo: "·", branch: "" });
+Deno.test("parseGitLocation: .bare layout names the repo after its parent", () => {
+  assertEquals(
+    parseGitLocation(
+      "/src/repo/main\n/src/repo/.bare/worktrees/main\n/src/repo/.bare\n",
+    ),
+    { repo: "repo", worktree: "main" },
+  );
 });
 
-Deno.test("cwdBranchParts: root path basename is /", () => {
-  assertEquals(cwdBranchParts("/", "main"), { repo: "/", branch: "main" });
+Deno.test("parseGitLocation: submodule is named after its module dir", () => {
+  assertEquals(
+    parseGitLocation(
+      "/src/qmk/lib/chibios\n/src/qmk/.git/modules/lib/chibios\n" +
+        "/src/qmk/.git/modules/lib/chibios\n",
+    ),
+    { repo: "chibios", worktree: "" },
+  );
+});
+
+Deno.test("parseGitLocation: fewer than three lines → null", () => {
+  assertEquals(parseGitLocation(""), null);
+  assertEquals(parseGitLocation("/src/a\n/src/a/.git\n"), null);
+});
+
+// --- locationParts ---
+
+Deno.test("locationParts: git lookup result wins over the cwd basename", () => {
+  assertEquals(
+    locationParts(mkRow({
+      cwd: "/src/dotfiles/home/programs",
+      repoName: "dotfiles",
+      worktreeName: "",
+      worktreeBranch: "main",
+    })),
+    { repo: "dotfiles", worktree: "", branch: "main" },
+  );
+});
+
+Deno.test("locationParts: without a lookup the cwd basename stands in", () => {
+  assertEquals(
+    locationParts(mkRow({ cwd: "/src/dotfiles", worktreeBranch: "main" })),
+    { repo: "dotfiles", worktree: "", branch: "main" },
+  );
+});
+
+Deno.test("locationParts: pane_current_path covers an unset @pane_cwd", () => {
+  assertEquals(
+    locationParts(mkRow({ currentPath: "/src/notes" })).repo,
+    "notes",
+  );
+});
+
+Deno.test("locationParts: nothing known → middle dot in repo", () => {
+  assertEquals(locationParts(mkRow()), { repo: "·", worktree: "", branch: "" });
+});
+
+// --- repoLabel ---
+
+Deno.test("repoLabel: fits → unchanged", () => {
+  assertEquals(repoLabel("storycap-testrun", "t3", 24), {
+    head: "storycap-testrun",
+    suffix: "(t3)",
+  });
+});
+
+Deno.test("repoLabel: over budget keeps the worktree and cuts the repo", () => {
+  const label = repoLabel("storycap-testrun", "t3", 12);
+  assertEquals(label, { head: "storyca…", suffix: "(t3)" });
+  assertEquals(label.head.length + label.suffix.length, 12);
+});
+
+Deno.test("repoLabel: a suffix that alone fills the budget is cut with the name", () => {
+  assertEquals(repoLabel("repo", "a-very-long-worktree", 10), {
+    head: "repo(a-ve…",
+    suffix: "",
+  });
+});
+
+Deno.test("repoLabel: no worktree → plain truncation", () => {
+  assertEquals(repoLabel("storycap-testrun", "", 8), {
+    head: "storyca…",
+    suffix: "",
+  });
 });
 
 // --- parseSubagents ---
@@ -368,4 +456,43 @@ Deno.test("formatRemaining: a past timestamp falls through to <1m", () => {
 Deno.test("formatRemaining: a day or more renders whole days", () => {
   assertEquals(formatRemaining(1000 + 86400, 1000), "1d");
   assertEquals(formatRemaining(1000 + 2 * 86400 + 5 * 3600, 1000), "2d");
+});
+
+// --- formatElapsed (days) / elapsedSource ---
+
+Deno.test("formatElapsed: a day or more renders whole days", () => {
+  assertEquals(formatElapsed(0, 86399), "23h");
+  assertEquals(formatElapsed(0, 86400), "1d");
+  assertEquals(formatElapsed(0, 86400 * 12 + 5), "12d");
+});
+
+Deno.test("formatElapsed: days cap at 99d so the 3-cell column never widens", () => {
+  assertEquals(formatElapsed(0, 86400 * 99), "99d");
+  assertEquals(formatElapsed(0, 86400 * 400), "99d");
+});
+
+Deno.test("elapsedSource: running counts from the prompt", () => {
+  assertEquals(
+    elapsedSource(
+      mkRow({ status: "running", startedAtSec: 100, lastActivityAtSec: 200 }),
+    ),
+    100,
+  );
+});
+
+Deno.test("elapsedSource: waiting / idle / error / unknown count from last activity", () => {
+  for (const status of ["waiting", "idle", "error", ""] as const) {
+    assertEquals(
+      elapsedSource(
+        mkRow({ status, startedAtSec: 100, lastActivityAtSec: 200 }),
+      ),
+      200,
+      status,
+    );
+  }
+});
+
+Deno.test("elapsedSource: missing timestamp → null", () => {
+  assertEquals(elapsedSource(mkRow({ status: "running" })), null);
+  assertEquals(elapsedSource(mkRow({ status: "idle" })), null);
 });

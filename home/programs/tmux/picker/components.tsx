@@ -3,9 +3,9 @@
 // renderer can be reasoned about independently of the App-level state
 // machine (selection, filter, fetchPanes, useInput).
 //
-// Visual tokens (DOGRUN, PILL_LEFT, PILL_RIGHT, TITLE_ICON, ROW1_FIXED_OVERHEAD,
-// TaskProgress) live here too — picker.tsx re-imports them so the App-level
-// chrome (title bar, filter chip, summary budget, task-progress shape) shares
+// Visual tokens (DOGRUN, ROW1_FIXED_OVERHEAD, TaskProgress) and the bottom
+// key-hint bar live here too — picker.tsx re-imports them so the App-level
+// chrome (hint bar, filter chip, summary budget, task-progress shape) shares
 // a single source.
 
 /** @jsx React.createElement */
@@ -16,11 +16,13 @@ import { Box, Text } from "npm:ink@7.1.1";
 import { type PaneRow, STATUS_META, USER_LABEL_META } from "./pane_row.ts";
 import {
   basename,
-  cwdBranchParts,
+  elapsedSource,
   formatElapsed,
   formatRemaining,
+  locationParts,
   parseSubagents,
   renderSubagentTree,
+  repoLabel,
   summaryOf,
   toolSegmentText,
 } from "./format_helpers.ts";
@@ -41,7 +43,7 @@ export interface TaskProgress {
 // --- Layout constants ---
 
 // Row-1 fixed-width overhead before the summary body:
-//   pointer(2) + icon(1) + " textPad"(1 + 9) + agentSlot(13) + " · "(3) + "  "(2) = 31
+//   marker(2) + icon(1) + " textPad"(1 + 9) + agentSlot(13) + " · "(3) + "  "(2) = 31
 // `textPad` holds either the pane-status short text (run/wait/idle/err) or
 // the user-defined label text (review/parked/feedback/pending), whichever
 // displayMeta() selects for the row. Padded to STATUS_OR_LABEL_TEXT_WIDTH
@@ -81,8 +83,7 @@ export interface Row2Seg {
 const ROW2_SEP = " · ";
 
 // Row-2 placeholder rendered when no segments are available (fresh session
-// with no tool history / subagents / edits / tasks and no idle activity
-// timestamp). Without this the row collapses to an indent-only blank line
+// with no tool history / subagents / edits / tasks). Without this the row collapses to an indent-only blank line
 // that reads as a bug or data-load failure.
 const ROW2_EMPTY_TEXT = "(no activity)";
 
@@ -117,9 +118,30 @@ const ROW2_ICONS = {
   tree: "󱙺", // nf-md-graph-outline
   file: "󰈔", // nf-md-file-document-outline
   progress: "󰄱", // nf-md-checkbox-multiple-marked-outline
-  idle: "󰏤", // nf-md-sleep
-  token: "\u{F01BC}", // nf-md-database — mirrors statusline's nf-fa-database
 } as const;
+
+// Row-2 right block, fixed so the elapsed time and the context gauge line up
+// down the list whether or not a pane has values: gap(2) + elapsed(3) + gap(2)
+// + gauge(GAUGE_CELLS) + percent(5, " 100%").
+const ELAPSED_CELLS = 3;
+const GAUGE_CELLS = 8;
+const PCT_CELLS = 5;
+const ROW2_RIGHT_CELLS = 2 + ELAPSED_CELLS + 2 + GAUGE_CELLS + PCT_CELLS;
+
+// Box Drawing heavy/light horizontals: one cell in charCells and in tmux, and
+// present in the primary font, so the gauge never falls back to a wide glyph.
+const GAUGE_FILLED = "━";
+const GAUGE_TRACK = "─";
+
+// Lit cells for a percentage. A window that has been touched at all keeps one
+// lit cell: plain rounding draws 1% and 0% identically, and "have I started
+// spending this" is the first question a gauge exists to answer.
+function gaugeFill(pct: number): number {
+  return Math.min(
+    GAUGE_CELLS,
+    pct > 0 ? Math.max(1, Math.round(pct / 100 * GAUGE_CELLS)) : 0,
+  );
+}
 
 // Powerline rounded segment endcaps (Nerd Font: nf-pl-left_soft_divider /
 // nf-pl-right_soft_divider). PUA code points are emitted via \u{} escapes per
@@ -128,13 +150,12 @@ const ROW2_ICONS = {
 // CaskaydiaCove Nerd Font Mono and inherits the foreground color of the Text
 // node — matching that color to the adjacent badge backgroundColor produces
 // the pill silhouette without a literal background fill on the endcap itself.
-export const PILL_LEFT = "\u{E0B6}";
-export const PILL_RIGHT = "\u{E0B4}";
+const PILL_LEFT = "\u{E0B6}";
+const PILL_RIGHT = "\u{E0B4}";
 
-// Title bar icon + dogrun-derived palette. See vim-dogrun
+// Dogrun-derived palette. See vim-dogrun
 // (github.com/wadackel/vim-dogrun colors/dogrun.vim) — keys name the dogrun
 // highlight role they derive from, not an abstract severity level.
-export const TITLE_ICON = "󱚤"; // nf-md-robot-outline, 1 cell
 export const DOGRUN = {
   fg: "#9ea3c0", // Normal — primary text / summary / repo label
   fgDim: "#757aa5", // StatusLine fg — row2 auxiliary segments
@@ -142,8 +163,12 @@ export const DOGRUN = {
   muted: "#545c8c", // Comment — separators / low-strength labels
   dim: "#4b4e6d", // StatusLineNC — preview border / target id / last tool
   bgChip: "#2a2c3f", // ColorColumn / CursorLine — agent-chip fill (terminal-bg adjacent)
-  accent: "#929be5", // Function — title / branch / key name / preview title
-  search: "#a6afff", // Search — selected pointer marker
+  // On the selection band the regular chip fill is darker than the band and
+  // reads as a hole cut into it, so the chip steps one shade lighter there.
+  bgChipOnBand: "#444a70",
+  fgChipOnBand: "#a4a8c8",
+  accent: "#929be5", // Function — branch / key name / selection bar
+  band: "#33385a", // selected pane background — between CursorLine and Visual
   sandy: "#a8a384", // Type — current (running) tool segment
   warn: "#ac8b83", // Keyword — empty-state notice / token 50-75% threshold
   ok: "#6ba291", // token <50% threshold — desaturated from STATUS_META.running
@@ -156,7 +181,7 @@ export const DOGRUN = {
 // user-defined label (row.userLabel non-empty) the label's meta wins; the
 // pane's automatic PaneStatus (run/wait/idle/err) is hidden in row-1 in
 // that case. This helper is **row-1 only** — row-2 segments (lastTool,
-// subagents, file, progress, idle-elapsed) continue to derive from
+// subagents, file, progress) and the elapsed column continue to derive from
 // PaneStatus through format_helpers.ts.
 //
 // Returns the raw label text without padding; callers pad to
@@ -182,6 +207,9 @@ interface PaneRowLineProps {
   listWidth: number;
   repoMax: number;
   branchMax: number;
+  // Blank rows above and below that make the pane a four-row card; dropped on
+  // a short popup so more panes fit.
+  padded: boolean;
 }
 
 export const PaneRowLine: React.FC<PaneRowLineProps> = (
@@ -193,20 +221,23 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     listWidth,
     repoMax,
     branchMax,
+    padded,
   }: PaneRowLineProps,
 ) => {
   const display = displayMeta(row);
-  const pointer = selected ? "❯ " : "  ";
+  const marker = selected ? "▌ " : "  ";
   // Pad text to fixed width so repo column left-edge stays aligned across
   // labeled and unlabeled rows. Trailing space in each padded column
   // produces inter-column gaps without extra spacer <Text> nodes.
   const textPad = display.text.padEnd(STATUS_OR_LABEL_TEXT_WIDTH);
-  const { repo, branch: branchName } = cwdBranchParts(
-    row.cwd || row.currentPath,
-    row.worktreeBranch,
+  const { repo, worktree, branch: branchName } = locationParts(row);
+  const repoText = repoLabel(repo, worktree, repoMax);
+  const repoPad = " ".repeat(
+    Math.max(0, repoMax - stringCells(repoText.head + repoText.suffix)),
   );
-  const repoCol = repo.slice(0, repoMax).padEnd(repoMax);
-  const branchCol = branchName.slice(0, branchMax).padEnd(branchMax);
+  const branchText = truncateToCells(branchName, branchMax);
+  const branchCol = branchText +
+    " ".repeat(Math.max(0, branchMax - stringCells(branchText)));
   const separator = repo && branchName ? " · " : "   ";
   const summary = summaryOf(row);
   // Truncate so CJK prompts (each char = 2 cells) do not wrap the row into a
@@ -263,14 +294,6 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
       color: DOGRUN.fgDim,
     });
   }
-  if (row.status === "idle" && row.lastActivityAtSec !== null) {
-    segs.push({
-      key: "idle",
-      icon: ROW2_ICONS.idle,
-      body: `idle ${formatElapsed(row.lastActivityAtSec, now)}`,
-      color: DOGRUN.fgDim,
-    });
-  }
 
   // Cell width = icon(1) + space(1) + body code points. Accurate while icons
   // stay supplementary-plane (1 cell) and bodies stay ASCII-heavy. CJK bodies
@@ -278,18 +301,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
   const segCells = (s: Row2Seg): number =>
     SEG_PREFIX_CELLS + Array.from(s.body).length;
 
-  // Budget = listWidth minus 2-space indent minus the flex-pushed row.target
-  // on the right minus the token slot (icon + space + "NN%" + 2-space gap).
-  // Target is ASCII (tmux "session:W.P"), so target.length equals its cell width.
-  // row.contextUsedPct is sourced from the @pane_context_used_pct tmux option
-  // (written by statusline.sh, read via pane_row.ts's TMUX_FORMAT).
-  const tokenSlotCells = row.contextUsedPct != null
-    ? SEG_PREFIX_CELLS + Array.from(`${row.contextUsedPct}%`).length + 2
-    : 0;
-  const budget = Math.max(
-    0,
-    listWidth - 2 - row.target.length - tokenSlotCells,
-  );
+  const budget = Math.max(0, listWidth - 2 - ROW2_RIGHT_CELLS);
   let totalCells = segs.length > 0 ? segCells(segs[0]) : 0;
   for (let i = 1; i < segs.length; i++) {
     totalCells += ROW2_SEP.length + segCells(segs[i]);
@@ -319,9 +331,36 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     ? "codex"
     : "claude";
   const agentTrailingPad = " ".repeat(9 - agentLabel.length);
+  const chipFill = selected ? DOGRUN.bgChipOnBand : DOGRUN.bgChip;
+  const chipText = selected ? DOGRUN.fgChipOnBand : DOGRUN.fgChip;
+
+  const since = elapsedSource(row);
+  const elapsed = since === null || since > now
+    ? ""
+    : formatElapsed(since, now);
+  // row.contextUsedPct is sourced from the @pane_context_used_pct tmux option
+  // (written by statusline.sh, read via pane_row.ts's TMUX_FORMAT).
+  const pct = row.contextUsedPct;
+  const pctColor = pct === null
+    ? DOGRUN.muted
+    : pct < 50
+    ? DOGRUN.ok
+    : pct < 75
+    ? DOGRUN.warn
+    : DOGRUN.err;
+  const lit = pct === null ? 0 : gaugeFill(pct);
 
   return (
-    <Box flexDirection="column">
+    <Box
+      flexDirection="column"
+      backgroundColor={selected ? DOGRUN.band : undefined}
+    >
+      {
+        /* A blank row above and below makes each pane a four-row card; they
+          are Text rather than paddingY so the selection marker runs down the
+          whole card. */
+      }
+      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
       {
         /* Line 1: marker + icon + status-or-label + agent-chip + repo · branch + summary.
           The icon and text are emitted as TWO sibling <Text> nodes (rather
@@ -331,28 +370,34 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
           idiom as the row-2 segments below. */
       }
       <Box>
-        <Text color={selected ? DOGRUN.search : DOGRUN.dim}>{pointer}</Text>
+        <Text color={DOGRUN.accent}>{marker}</Text>
         <Text color={display.color}>{display.icon}</Text>
         <Text color={display.color}>{" " + textPad}</Text>
-        <Text color={DOGRUN.bgChip}>{PILL_LEFT}</Text>
-        <Text color={DOGRUN.fgChip} backgroundColor={DOGRUN.bgChip}>
+        <Text color={chipFill}>{PILL_LEFT}</Text>
+        <Text color={chipText} backgroundColor={chipFill}>
           {" " + agentLabel + " "}
         </Text>
-        <Text color={DOGRUN.bgChip}>{PILL_RIGHT}</Text>
+        <Text color={chipFill}>{PILL_RIGHT}</Text>
         <Text>{agentTrailingPad}</Text>
-        <Text color={DOGRUN.fg}>{repoCol}</Text>
+        <Text color={DOGRUN.fg}>{repoText.head}</Text>
+        {repoText.suffix
+          ? <Text color={DOGRUN.fgDim}>{repoText.suffix}</Text>
+          : null}
+        <Text>{repoPad}</Text>
         <Text color={DOGRUN.muted}>{separator}</Text>
         <Text color={DOGRUN.accent}>{branchCol}</Text>
-        <Text color={DOGRUN.fg}>{"  " + renderedSummary}</Text>
+        <Text color={DOGRUN.fg} bold={selected}>
+          {"  " + renderedSummary}
+        </Text>
       </Box>
       {
-        /* Line 2: indent + priority-ordered segments + target (right-align).
+        /* Line 2: marker + priority-ordered segments + fixed right block.
           Each segment emits icon and body as TWO <Text> siblings; combining
           them into one <Text> triggers an Ink 5.2.1 flex-layout bug that eats
           the tail character when a sibling Text follows. */
       }
       <Box>
-        <Text>{"  "}</Text>
+        <Text color={DOGRUN.accent}>{marker}</Text>
         {segs.length === 0
           ? <Text color={DOGRUN.muted}>{ROW2_EMPTY_TEXT}</Text>
           : segs.map((s, i) => (
@@ -363,40 +408,38 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
             </React.Fragment>
           ))}
         <Box flexGrow={1} />
-        {row.contextUsedPct != null
-          ? (() => {
-            const pct = row.contextUsedPct;
-            const tokenColor = pct < 50
-              ? DOGRUN.ok
-              : pct < 75
-              ? DOGRUN.warn
-              : DOGRUN.err;
-            return (
-              <>
-                <Text color={tokenColor}>{ROW2_ICONS.token}</Text>
-                <Text color={tokenColor}>{` ${pct}%`}</Text>
-                <Text>{"  "}</Text>
-              </>
-            );
-          })()
-          : null}
-        <Text color={DOGRUN.muted}>{row.target}</Text>
+        <Text color={DOGRUN.fgDim}>
+          {"  " + elapsed.padStart(ELAPSED_CELLS) + "  "}
+        </Text>
+        {pct === null ? <Text>{" ".repeat(GAUGE_CELLS + PCT_CELLS)}</Text> : (
+          <>
+            <Text color={pctColor}>{GAUGE_FILLED.repeat(lit)}</Text>
+            <Text color={DOGRUN.dim}>
+              {GAUGE_TRACK.repeat(GAUGE_CELLS - lit)}
+            </Text>
+            <Text color={pctColor}>
+              {`${pct}%`.padStart(PCT_CELLS)}
+            </Text>
+          </>
+        )}
       </Box>
+      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
     </Box>
   );
 };
 
-// --- Usage footer ---
+// --- Usage rows ---
 
 export interface UsageToken {
   text: string;
   color: string;
+  backgroundColor?: string;
 }
 
 // Only the percentage and the filled run of the bar escalate, and only past
-// this line. The per-pane context % uses a three-tier gradient, but this row is
-// reference material parked under the list — colouring it on every render would
-// keep pulling the eye back to a number that rarely matters.
+// this line. The per-pane context % uses a three-tier gradient, but this card is
+// reference material parked under the preview — colouring it on every render
+// would keep pulling the eye back to a number that rarely matters.
 const USAGE_ALERT_PCT = 80;
 
 // The countdown rides the shortest window alone. A 7d reset is days out and
@@ -413,8 +456,6 @@ const COUNTDOWN_ICON = "\u{F0450}"; // nf-md-refresh
 // from that sum rather than written as its own literal — a literal would keep
 // the old threshold when one of these constants moves.
 const AGENT_PAD = 2;
-const BAR_CELLS = 16;
-const BAR_BLOCK_W = BAR_CELLS + 2; // end caps
 const PCT_W = 4; // "100%" / "  1%" / "  --"
 const REMAIN_W = 5; // formatRemaining tops out at "4h59m"
 const COUNTDOWN_W = 3 + REMAIN_W; // " " + icon + " " + remaining
@@ -427,17 +468,9 @@ const COL_GAP = 2;
 // because the suffix is last on the row.
 const STALE_W = 10; // " (29d ago)"
 
-// Block Elements are East Asian Ambiguous, which charCells and tmux's utf8proc
-// both resolve to one cell; they are also present in the primary font, so no
-// CJK fallback widens them.
-const BAR_FILLED = "█";
-const BAR_TRACK = "░";
-const BAR_CAP_L = "▏";
-const BAR_CAP_R = "▕";
-
-// Neither sibling formatter fits: formatElapsed tops out at hours, so a
-// month-old file would read "696h", and formatRemaining counts down toward a
-// deadline rather than up from a timestamp.
+// Neither sibling formatter fits: formatElapsed caps at 99d and renders a
+// fresh file as seconds rather than "0m", and formatRemaining counts down
+// toward a deadline rather than up from a timestamp.
 function formatAge(sec: number): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}m`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h`;
@@ -467,7 +500,7 @@ function usageColumns(usages: AgentUsage[]): string[] {
 // width the threshold reasons about, and the result is a wrapped row rather
 // than a type error.
 function usageCellW(layout: UsageLayout): number {
-  return layout.labelW + 1 + (layout.bars ? BAR_BLOCK_W + 1 : 0) + PCT_W;
+  return layout.labelW + 1 + (layout.bars ? GAUGE_CELLS + 1 : 0) + PCT_W;
 }
 
 export function usageRowWidth(layout: UsageLayout): number {
@@ -507,21 +540,13 @@ export function usageLayout(
 }
 
 function barTokens(pct: number, alert: boolean): UsageToken[] {
-  // A window that has been touched at all keeps one lit cell: plain rounding
-  // draws 1% and 0% identically, and "have I started spending this" is the
-  // first question the bar exists to answer.
-  const filled = Math.min(
-    BAR_CELLS,
-    pct > 0 ? Math.max(1, Math.round(pct / 100 * BAR_CELLS)) : 0,
-  );
+  const filled = gaugeFill(pct);
   return [
-    { text: BAR_CAP_L, color: DOGRUN.muted },
     {
-      text: BAR_FILLED.repeat(filled),
+      text: GAUGE_FILLED.repeat(filled),
       color: alert ? DOGRUN.err : DOGRUN.fgDim,
     },
-    { text: BAR_TRACK.repeat(BAR_CELLS - filled), color: DOGRUN.dim },
-    { text: BAR_CAP_R, color: DOGRUN.muted },
+    { text: GAUGE_TRACK.repeat(GAUGE_CELLS - filled), color: DOGRUN.dim },
   ].filter((t) => t.text.length > 0);
 }
 
@@ -554,7 +579,7 @@ function usageRowTokens(
       // since — an empty track would assert 0%, which the file cannot support.
       out.push(
         ...(expired
-          ? [{ text: " ".repeat(BAR_BLOCK_W), color: DOGRUN.muted }]
+          ? [{ text: " ".repeat(GAUGE_CELLS), color: DOGRUN.muted }]
           : barTokens(w.usedPct, alert)),
       );
       out.push({ text: " ", color: DOGRUN.muted });
@@ -630,27 +655,75 @@ export function clampUsageTokens(
   return kept;
 }
 
-interface UsageFooterProps {
+// --- Titled card ---
+
+// A rounded frame whose top edge carries a title, as `╭─ title ─────╮`. Ink
+// draws no border titles, so the top edge is a Text row of its own and the Box
+// below it draws the other three sides.
+const CARD_TOP_LEFT = "╭─ ";
+
+interface CardProps {
+  title: UsageToken[];
+  width: number;
+  height?: number;
+  children?: React.ReactNode;
+}
+
+export const Card: React.FC<CardProps> = (
+  { title, width, height, children }: CardProps,
+) => {
+  // CARD_TOP_LEFT + title + " " + at least one "─" + "╮"
+  const shown = clampUsageTokens(title, Math.max(0, width - 6));
+  const titleCells = shown.reduce((n, t) => n + stringCells(t.text), 0);
+  const rule = "─".repeat(Math.max(1, width - 5 - titleCells));
+  return (
+    <Box flexDirection="column" width={width} height={height}>
+      <Box>
+        <Text color={DOGRUN.dim}>{CARD_TOP_LEFT}</Text>
+        {shown.map((t, i) => (
+          <React.Fragment key={i}>
+            <Text color={t.color} bold={i === 0}>{t.text}</Text>
+          </React.Fragment>
+        ))}
+        <Text color={DOGRUN.dim}>{" " + rule + "╮"}</Text>
+      </Box>
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        borderStyle="round"
+        borderTop={false}
+        borderColor={DOGRUN.dim}
+        paddingX={1}
+      >
+        {children}
+      </Box>
+    </Box>
+  );
+};
+
+// Rows the Usage card takes: top edge, one row per agent, bottom border.
+export function usageCardRows(usageCount: number): number {
+  return usageCount + 2;
+}
+
+// Border (2) + paddingX (2).
+export const CARD_CHROME_COLS = 4;
+
+interface UsageCardProps {
   usages: AgentUsage[];
   now: number;
   width: number;
 }
 
-export const UsageFooter: React.FC<UsageFooterProps> = (
-  { usages, now, width }: UsageFooterProps,
+export const UsageCard: React.FC<UsageCardProps> = (
+  { usages, now, width }: UsageCardProps,
 ) => {
-  // The two leading cells are drawn per row, so the drawable budget is two
-  // narrower than the width the footer is handed.
-  const budget = Math.max(0, width - 2);
-  const rows = usageRows(usages, now, budget);
+  const inner = Math.max(0, width - CARD_CHROME_COLS);
   return (
-    // Column direction is what makes the footer occupy exactly
-    // marginTop(1) + rows.length, which is the reservation bodyHeightFor makes.
-    <Box flexDirection="column" marginTop={1}>
-      {rows.map((row, ri) => (
+    <Card title={[{ text: "Usage", color: DOGRUN.fg }]} width={width}>
+      {usageRows(usages, now, inner).map((row, ri) => (
         <Box key={ri}>
-          <Text>{"  "}</Text>
-          {clampUsageTokens(row, budget).map((t, i) => (
+          {clampUsageTokens(row, inner).map((t, i) => (
             // Ink 7 types Text's props as a closed object, so `key` on it fails
             // type-check (TS2322) even though React treats key as reserved.
             <React.Fragment key={i}>
@@ -659,6 +732,72 @@ export const UsageFooter: React.FC<UsageFooterProps> = (
           ))}
         </Box>
       ))}
-    </Box>
+    </Card>
   );
 };
+
+// --- Key-hint bar ---
+
+// U+21B5 ↵ is absent from CaskaydiaCove Nerd Font Mono and would fall back to
+// a double-width glyph inside one cell, as ↻ did for the countdown.
+const ENTER_ICON = "\u{F0311}"; // nf-md-keyboard-return
+
+const HINT_GAP = "   ";
+
+function chipTokens(
+  text: string,
+  color: string,
+  fill: string,
+): UsageToken[] {
+  return [
+    { text: PILL_LEFT, color: fill },
+    { text, color, backgroundColor: fill },
+    { text: PILL_RIGHT, color: fill },
+  ];
+}
+
+// The bottom row: the wait/idle filter pill while `w` is on, then each key as
+// a chip followed by what it does. Built as tokens so clampUsageTokens can cut
+// it from the right on a narrow popup — "jump" sits first so the harness'
+// spawn marker survives the narrowest e2e width.
+export function hintTokens(filterEnabled: boolean): UsageToken[] {
+  const keys: [string, string][] = [
+    [ENTER_ICON, "jump"],
+    ["j k", "move"],
+    ["n", "next wait"],
+    ["w", filterEnabled ? "clear" : "filter"],
+    ["m", "label"],
+    ["q", "quit"],
+  ];
+  const out: UsageToken[] = filterEnabled
+    ? [
+      ...chipTokens(" wait/idle ", DOGRUN.fg, DOGRUN.muted),
+      { text: HINT_GAP, color: DOGRUN.muted },
+    ]
+    : [];
+  keys.forEach(([key, label], i) => {
+    if (i > 0) out.push({ text: HINT_GAP, color: DOGRUN.muted });
+    out.push(...chipTokens(key, DOGRUN.accent, DOGRUN.bgChip));
+    out.push({ text: " " + label, color: DOGRUN.fgDim });
+  });
+  return out;
+}
+
+interface HintBarProps {
+  filterEnabled: boolean;
+  width: number;
+}
+
+export const HintBar: React.FC<HintBarProps> = (
+  { filterEnabled, width }: HintBarProps,
+) => (
+  <Box marginTop={1}>
+    {clampUsageTokens(hintTokens(filterEnabled), width).map((t, i) => (
+      <React.Fragment key={i}>
+        <Text color={t.color} backgroundColor={t.backgroundColor}>
+          {t.text}
+        </Text>
+      </React.Fragment>
+    ))}
+  </Box>
+);

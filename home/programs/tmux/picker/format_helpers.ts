@@ -4,9 +4,10 @@
 // unit-tested without npm:react / npm:ink at parse time.
 
 import { type PaneRow, type PaneStatus, STATUS_META } from "./pane_row.ts";
+import { stringCells, truncateToCells } from "./cell_width.ts";
 
-// Elapsed seconds → "Ns" / "Nm" / "Nh" / "·" (middle dot placeholder).
-// Mirrors bash format_elapsed in tmux-window-picker.sh:40-56.
+// Elapsed seconds → "Ns" / "Nm" / "Nh" / "Nd" / "·" (middle dot placeholder).
+// Capped at 99d so the result never outgrows the row's 3-cell elapsed column.
 export function formatElapsed(
   startedAtSec: number | null,
   nowSec: number,
@@ -16,7 +17,15 @@ export function formatElapsed(
   if (d < 0) return "·";
   if (d < 60) return `${d}s`;
   if (d < 3600) return `${Math.floor(d / 60)}m`;
-  return `${Math.floor(d / 3600)}h`;
+  if (d < 86400) return `${Math.floor(d / 3600)}h`;
+  return `${Math.min(99, Math.floor(d / 86400))}d`;
+}
+
+// Timestamp the row's elapsed column counts from: a running pane is timed from
+// its prompt (how long this turn has been working), every other state from the
+// last activity (how long it has been waiting on the user, or left alone).
+export function elapsedSource(row: PaneRow): number | null {
+  return row.status === "running" ? row.startedAtSec : row.lastActivityAtSec;
 }
 
 // formatElapsed is not reused here: its 1h granularity collapses the whole
@@ -61,17 +70,57 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
-// Split cwd/branch into separate columns for the row renderer. Both fields are
-// emitted independently so the renderer can place a middle-dot separator
-// between them and align each column with padEnd. When both are empty, repo
-// carries the "·" placeholder so the row is never blank.
-export function cwdBranchParts(
-  cwd: string,
-  branch: string,
-): { repo: string; branch: string } {
-  const base = basename(cwd);
-  if (!base && !branch) return { repo: "·", branch: "" };
-  return { repo: base, branch };
+export interface GitLocation {
+  repo: string;
+  worktree: string;
+}
+
+// Parse `git rev-parse --path-format=absolute --show-toplevel --git-dir
+// --git-common-dir`. The repo is named after the common dir because the
+// toplevel of a linked worktree is the worktree's own directory. A common dir
+// whose name starts with "." (`.git`, `.bare`) sits inside the project
+// directory, so the parent carries the name; otherwise it is the repository
+// directory itself (`repo.git`, a submodule's `modules/<name>`).
+export function parseGitLocation(stdout: string): GitLocation | null {
+  const [top, gitDir, commonDir] = stdout.trim().split("\n");
+  if (!top || !gitDir || !commonDir) return null;
+  const common = basename(commonDir);
+  const repo = common.startsWith(".")
+    ? basename(commonDir.replace(/\/+$/, "").replace(/\/[^/]*$/, ""))
+    : common.replace(/\.git$/, "");
+  return { repo, worktree: gitDir === commonDir ? "" : basename(top) };
+}
+
+// Location columns for the row renderer. `repoName` is absent until
+// fetchPanes' git lookup lands (and in unit fixtures), so the cwd basename
+// stands in. When everything is empty, repo carries the "·" placeholder so the
+// row is never blank.
+export function locationParts(
+  row: PaneRow,
+): { repo: string; worktree: string; branch: string } {
+  const repo = row.repoName || basename(row.cwd || row.currentPath);
+  const worktree = row.worktreeName ?? "";
+  const branch = row.worktreeBranch;
+  if (!repo && !branch) return { repo: "·", worktree: "", branch: "" };
+  return { repo, worktree, branch };
+}
+
+// Repo column text within `maxCells`: the `(worktree)` suffix survives and
+// the repo name gives way first, because the worktree is what tells two rows
+// of the same repository apart. Only a suffix that cannot fit on its own is
+// cut together with the name.
+export function repoLabel(
+  repo: string,
+  worktree: string,
+  maxCells: number,
+): { head: string; suffix: string } {
+  const suffix = worktree ? `(${worktree})` : "";
+  if (stringCells(repo + suffix) <= maxCells) return { head: repo, suffix };
+  const room = maxCells - stringCells(suffix);
+  if (suffix && room >= 1) {
+    return { head: truncateToCells(repo, room), suffix };
+  }
+  return { head: truncateToCells(repo + suffix, maxCells), suffix: "" };
 }
 
 // summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。

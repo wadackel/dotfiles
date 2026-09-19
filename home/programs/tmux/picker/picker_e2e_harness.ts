@@ -416,7 +416,9 @@ export async function spawnPicker(
   const target = `${SESSION}:${PICKER_WINDOW_NAME}`;
   await waitFor(
     target,
-    (out) => out.includes("AI Agents") || out.includes("No panes available."),
+    // "jump" leads the bottom key-hint bar, which is clipped from the right,
+    // so it survives the narrowest scenario width.
+    (out) => out.includes("jump") || out.includes("No panes available."),
   );
   return target;
 }

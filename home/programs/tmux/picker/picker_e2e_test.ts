@@ -18,15 +18,23 @@ import {
 import { codexCwdHash } from "./picker.tsx";
 import { stringCells } from "./cell_width.ts";
 
-// Helper: resolve a paneId (%N) to its "session:window.pane" target string.
-async function paneTarget(paneId: string): Promise<string> {
-  return (await tmux([
-    "display-message",
-    "-t",
-    paneId,
-    "-p",
-    "#{session_name}:#{window_index}.#{pane_index}",
-  ])).trim();
+// Row 1 of the selected pane, which carries the prompt the scenarios identify
+// panes by. The "▌" marker runs down all four rows of the selected card, and
+// the first of them is the card's padding row, so row 1 is the second.
+function selectedLine(out: string): string {
+  return out.split("\n").filter((l) => l.includes("▌"))[1] ?? "";
+}
+
+const selectedIncludes = (marker: string) => (out: string) =>
+  selectedLine(out).includes(marker);
+
+// Status text is looked up on list rows only, because the key-hint bar carries
+// "next wait", which would satisfy a whole-screen "wait" match on its own.
+function listStatuses(out: string): string[] {
+  const rows = out.split("\n").filter((l) => l.includes("claude"));
+  return ["run", "wait", "idle", "err"].filter((s) =>
+    rows.some((l) => l.includes(` ${s} `))
+  );
 }
 
 async function writeCodexProgressFixture(
@@ -103,7 +111,7 @@ Deno.test("S2: summary switches between waitReason and prompt by status", async 
   }
 });
 
-// S3: j/k and arrow keys move the "❯" pointer between rows. Pointer is
+// S3: j/k and arrow keys move the "▌" selection marker between rows. Pointer is
 // rendered by picker.tsx:401 only on the row whose index matches state.
 Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
   await setupServer();
@@ -112,14 +120,9 @@ Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
     await createClaudePane({ status: "running", prompt: "row-b-yyy" });
     const picker = await spawnPicker();
 
-    const selectedIncludes = (marker: string) => (out: string) => {
-      const line = out.split("\n").find((l) => l.includes("❯"));
-      return line?.includes(marker) ?? false;
-    };
-
     const initial = await captureOutput(picker);
     assertStringIncludes(
-      initial.split("\n").find((l) => l.includes("❯")) ?? "",
+      selectedLine(initial),
       "row-a-xxx",
     );
 
@@ -163,10 +166,7 @@ Deno.test("S4: enter selects target window+pane", async () => {
 
     // Move selection to paneB row.
     await sendKey(picker, "Down");
-    await waitFor(picker, (out) => {
-      const line = out.split("\n").find((l) => l.includes("❯"));
-      return line?.includes("row-b") ?? false;
-    });
+    await waitFor(picker, selectedIncludes("row-b"));
 
     await sendKey(picker, "Enter");
     await waitForExit();
@@ -202,19 +202,14 @@ Deno.test("S5: multi-status + self-filter", async () => {
     await createClaudePane({ status: "waiting" });
     await createClaudePane({ status: "idle" });
     await createClaudePane({ status: "error" });
-    const garbage = await createClaudePane({ agent: "shell" });
-    const garbageTarget = await paneTarget(garbage);
+    await createClaudePane({ agent: "shell", prompt: "garbage-pane" });
 
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
-
-    assertStringIncludes(out, "run");
-    assertStringIncludes(out, "wait");
-    assertStringIncludes(out, "idle");
-    assertStringIncludes(out, "err");
+    assertEquals(listStatuses(out), ["run", "wait", "idle", "err"]);
     assertFalse(
-      out.includes(garbageTarget),
-      `garbage target ${garbageTarget} leaked into multi-status capture:\n${out}`,
+      out.includes("garbage-pane"),
+      `shell pane leaked into multi-status capture:\n${out}`,
     );
 
     await sendKey(picker, "Escape");
@@ -227,18 +222,17 @@ Deno.test("S5: multi-status + self-filter", async () => {
 // S1: A non-claude pane (agent="shell") must be filtered out by picker.
 // fetchPanes keeps only `agent === "claude"` (picker.tsx:313), so a "shell"
 // pane should produce the same empty-list UI as S0. Also double-checks that
-// the garbage pane's target never leaks into the capture.
+// the garbage pane's prompt never leaks into the capture.
 Deno.test("S1: empty list (agent filter excludes non-claude)", async () => {
   await setupServer();
   try {
-    const garbage = await createClaudePane({ agent: "shell" });
-    const garbageTarget = await paneTarget(garbage);
+    await createClaudePane({ agent: "shell", prompt: "garbage-pane" });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
     assertStringIncludes(out, "No panes available.");
     assertFalse(
-      out.includes(garbageTarget),
-      `garbage target ${garbageTarget} leaked into picker output:\n${out}`,
+      out.includes("garbage-pane"),
+      `shell pane leaked into picker output:\n${out}`,
     );
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -364,10 +358,10 @@ Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
   }
 });
 
-// S9: idle duration renders as `idle Ns` when status=idle and activity_at
-// is set. Using a fixed timestamp 42s in the past keeps the assertion
-// deterministic without depending on precise scheduling.
-Deno.test("S9: idle duration renders `idle 42s`", async () => {
+// S9: an idle pane's elapsed column counts from its last activity. Using a
+// fixed timestamp 42s in the past keeps the assertion deterministic without
+// depending on precise scheduling.
+Deno.test("S9: idle pane shows time since last activity in the elapsed column", async () => {
   await setupServer();
   try {
     const nowSec = Math.floor(Date.now() / 1000);
@@ -380,11 +374,11 @@ Deno.test("S9: idle duration renders `idle 42s`", async () => {
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
     // Allow ±1s jitter from render timing (42s → 42 or 43).
-    const matched = out.includes("idle 42s") || out.includes("idle 43s");
+    const matched = / 4[23]s {2}/.test(out);
     assertEquals(
       matched,
       true,
-      `row 2 did not render expected idle duration:\n${out}`,
+      `elapsed column did not render the idle duration:\n${out}`,
     );
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -394,8 +388,9 @@ Deno.test("S9: idle duration renders `idle 42s`", async () => {
 });
 
 // S10: Under a narrow list width, low-priority row-2 segments drop first.
-// List width is ~60% of the terminal. Force overflow by making every segment
-// long and using a 60-col terminal — tool-slot must remain, idle should drop.
+// cols 60 gives listWidth 40 and a row-2 segment budget of 18 once the fixed
+// right block is reserved: the tool segment (14 cells) fits, the file segment
+// behind it does not.
 Deno.test("S10: narrow width drops low-priority segments first", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
@@ -403,23 +398,22 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
     await createClaudePane({
       status: "idle",
       prompt: "promptxxxxxxxxxxxxxxxx",
-      lastTool: "MultiEditLongNameXYZ", // takes > half the budget
+      lastTool: "MultiEditXYZ",
       lastEditFile: "/a/b/c/verylongfilename-for-overflow.tsx",
       lastActivityAtSec: nowSec - 42,
     });
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
     // Highest-priority (tool-slot, bare tool name — prefix removed) must remain.
-    assertStringIncludes(out, "MultiEditLongNameXYZ");
+    assertStringIncludes(out, "MultiEditXYZ");
     assertFalse(
       out.includes("last: "),
       `removed prefix 'last: ' leaked into render:\n${out}`,
     );
-    // Lowest-priority (idle) should have been dropped. The specific "idle 42s"
-    // / "idle 43s" literal must not appear in the rendered row.
+    // The lower-priority file segment should have been dropped.
     assertFalse(
-      out.includes("idle 42s") || out.includes("idle 43s"),
-      `narrow width did not drop idle segment:\n${out}`,
+      out.includes("verylongfilename"),
+      `narrow width did not drop the file segment:\n${out}`,
     );
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -468,11 +462,6 @@ Deno.test("S12: navigation wraps at boundaries", async () => {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
     await createClaudePane({ status: "running", prompt: "row-b-yyy" });
     const picker = await spawnPicker();
-
-    const selectedIncludes = (marker: string) => (out: string) => {
-      const line = out.split("\n").find((l) => l.includes("❯"));
-      return line?.includes(marker) ?? false;
-    };
 
     // Initial selection is the first row (row-a). Press Up → should wrap
     // to the last row (row-b).
@@ -524,9 +513,9 @@ Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async (
   }
 });
 
-// S14: Priority drop symmetry. S10 covers text-level drop (tool survives, idle
+// S14: Priority drop symmetry. S10 covers text-level drop (tool survives, file
 // dropped). S14 covers the same scenario at the icon layer — the tool icon
-// must remain visible while the idle icon must NOT leak into the render. Guards
+// must remain visible while the file icon must NOT leak into the render. Guards
 // against regressions where icons are emitted outside the budget-drop path.
 Deno.test("S14: narrow width drops low-priority icon along with its segment", async () => {
   await setupServer({ cols: 60, rows: 20 });
@@ -535,7 +524,7 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
     await createClaudePane({
       status: "idle",
       prompt: "promptxxxxxxxxxxxxxxxx",
-      lastTool: "MultiEditLongNameXYZ",
+      lastTool: "MultiEditXYZ",
       lastEditFile: "/a/b/c/verylongfilename-for-overflow.tsx",
       lastActivityAtSec: nowSec - 42,
     });
@@ -543,11 +532,12 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
     const out = await captureOutput(picker);
     // Highest-priority tool segment (and its icon) must survive the budget drop.
     assertStringIncludes(out, "󰒓");
-    // Lowest-priority idle icon must drop together with its segment. Asserting
-    // the icon (not the "idle Ns" text) is the new guarantee S14 adds on top of S10.
+    // The lower-priority file icon must drop together with its segment.
+    // Asserting the icon (not the file name) is the guarantee S14 adds on top
+    // of S10.
     assertFalse(
-      out.includes("󰏤"),
-      `narrow width did not drop idle icon with its segment:\n${out}`,
+      out.includes("󰈔"),
+      `narrow width did not drop file icon with its segment:\n${out}`,
     );
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -599,10 +589,10 @@ Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-cli
 // the full "TaskOutput" literal survives even when both tool and file
 // segments coexist with plenty of listWidth slack.
 Deno.test("S16: tool segment with icon + sibling file segment renders full tool name", async () => {
-  // cols=100 → listWidth=60. tool seg (12 cells) + " · " (3) + file seg
-  // (24 cells) = 39 cells; budget = 60 - 2 - target.length ≈ 50. No
+  // cols=120 → listWidth=72. tool seg (12 cells) + " · " (3) + file seg
+  // (24 cells) = 39 cells; budget = 72 - 2 - 20 (right block) = 50. No
   // truncation path is expected to fire — pure layout regression check.
-  await setupServer({ cols: 100, rows: 20 });
+  await setupServer({ cols: 120, rows: 20 });
   try {
     await createClaudePane({
       status: "running",
@@ -676,14 +666,16 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
     const picker = await spawnPicker();
     const out = await captureOutput(picker);
     assertStringIncludes(out, "(no activity)");
-    // None of the six row-2 segment icons may render when segs is empty.
-    // Token icon (U+F01BC 󰆼) is also checked here — a pane without
-    // contextUsedPct must not render the token segment. The positive
-    // threshold-color path for the token segment is covered by S19.
-    // ROW2_ICONS = tool 󰒓 / tree 󱙺 / file 󰈔 / progress 󰄱 / idle 󰏤 / token 󰆼.
-    for (const icon of ["󰒓", "󱙺", "󰈔", "󰄱", "󰏤", "\u{F01BC}"]) {
+    // None of the row-2 segment icons may render when segs is empty, and a
+    // pane without contextUsedPct must not draw the gauge. The positive
+    // threshold-color path for the gauge is covered by S19.
+    // ROW2_ICONS = tool 󰒓 / tree 󱙺 / file 󰈔 / progress 󰄱; gauge ━ / ─.
+    // The preview card to the right draws its own "─" border, so only the list
+    // column is checked.
+    const list = out.split("\n").map((l) => l.split(/[│╭╰]/)[0]).join("\n");
+    for (const icon of ["󰒓", "󱙺", "󰈔", "󰄱", "━", "─"]) {
       assertFalse(
-        out.includes(icon),
+        list.includes(icon),
         `row-2 icon ${icon} leaked into empty-state render:\n${out}`,
       );
     }
@@ -694,11 +686,11 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
   }
 });
 
-// S19: @pane_context_used_pct renders on row-2 right as
-// "<token icon> NN%" with threshold-based color. Values <50 green (ok),
-// 50–74 yellow (warn), ≥75 red (err). A pane without the option set must
-// not render the token segment at all.
-Deno.test("S19: token usage on row-2 right (icon + percent + color)", async () => {
+// S19: @pane_context_used_pct renders in row 2's fixed right block as
+// "<gauge> NN%" with threshold-based color. Values <50 green (ok), 50–74
+// yellow (warn), ≥75 red (err). The percentages share one column down the
+// list, and a pane without the option set draws neither gauge nor percent.
+Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + color)", async () => {
   await setupServer({ cols: 120, rows: 20 });
   try {
     const paneGreen = await createClaudePane({
@@ -728,30 +720,35 @@ Deno.test("S19: token usage on row-2 right (icon + percent + color)", async () =
     assertStringIncludes(out, "23%");
     assertStringIncludes(out, "80%");
 
-    // 2. Icon assertion — nf-md-database appears at least twice (once per
-    // pane with context set). U+F01BC = 󰆼.
-    const iconCount = out.split("\u{F01BC}").length - 1;
+    // 2. Gauge + alignment — both rows draw the heavy-line fill, and the
+    // percent signs land in the same cell column.
+    const lines = out.split("\n");
+    const pctLine = (n: string) => lines.find((l) => l.includes(n)) ?? "";
+    for (const n of ["23%", "80%"]) {
+      assertStringIncludes(pctLine(n), "━", `no gauge beside ${n}:\n${out}`);
+    }
     assertEquals(
-      iconCount >= 2,
-      true,
-      `expected nf-md-database icon ≥2 occurrences, got ${iconCount}:\n${out}`,
+      stringCells(pctLine("23%").split("23%")[0]),
+      stringCells(pctLine("80%").split("80%")[0]),
+      `23% and 80% are not in one column:\n${out}`,
     );
 
-    // 3. No-token row must not render the token segment. Locate the line by
-    // its prompt marker and confirm the icon is absent on that line.
+    // 3. No-token row must not render the gauge. Locate row 1 by its prompt
+    // marker; the gauge and percent live on the row below it.
     const notokenLine = out.split("\n").find((l) => l.includes("row-notoken"));
     assertEquals(
       typeof notokenLine,
       "string",
       `row-notoken line not found:\n${out}`,
     );
+    const notokenRow2 = lines[lines.indexOf(notokenLine!) + 1] ?? "";
     assertFalse(
-      notokenLine!.includes("\u{F01BC}"),
-      `token icon leaked onto pane without contextUsedPct:\n${notokenLine}`,
+      notokenRow2.includes("━") || notokenRow2.includes("─"),
+      `gauge leaked onto pane without contextUsedPct:\n${notokenRow2}`,
     );
     assertFalse(
-      notokenLine!.includes("%"),
-      `token percent leaked onto pane without contextUsedPct:\n${notokenLine}`,
+      notokenRow2.includes("%"),
+      `percent leaked onto pane without contextUsedPct:\n${notokenRow2}`,
     );
 
     // 4. Color assertion — capture raw (ANSI-preserving) and confirm the
@@ -820,11 +817,6 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
     await createClaudePane({ status: "running", prompt: "row-A" });
     await createClaudePane({ status: "running", prompt: "row-B" });
     const pc = await createClaudePane({ status: "running", prompt: "row-C" });
-
-    const selectedIncludes = (marker: string) => (out: string) => {
-      const line = out.split("\n").find((l) => l.includes("❯"));
-      return line?.includes(marker) ?? false;
-    };
 
     // Sub-case A (baseline / fromPane unset): no selfPane → first row.
     let picker = await spawnPicker();
@@ -933,13 +925,14 @@ Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async ()
 // S22: pressing `w` inside the picker toggles a wait/idle filter. Round-trip
 // the toggle in a single fixture (filter ON → only waiting/idle remain + pill
 // shown → filter OFF → all four statuses back, pill gone). The pill body text
-// `wait/idle` is asserted to confirm the title-bar pill renders; the
+// `wait/idle` is asserted to confirm the hint-bar pill renders; the
 // powerline endcap glyphs (U+E0B6 / U+E0B4) are not asserted directly because
 // terminal capture of PUA code points is rendering-dependent. The dynamic
 // `w  clear` / `w  filter` hint is exercised indirectly by toggling twice.
 //
 // Note: status row text uses `wait`/`idle` without the `/` separator, so
-// `wait/idle` substring matching is unambiguously the title-bar pill.
+// `wait/idle` substring matching is unambiguously the hint-bar pill.
+
 Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
   await setupServer();
   try {
@@ -950,10 +943,7 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
 
     const picker = await spawnPicker();
     const initial = await captureOutput(picker);
-    assertStringIncludes(initial, "run");
-    assertStringIncludes(initial, "wait");
-    assertStringIncludes(initial, "idle");
-    assertStringIncludes(initial, "err");
+    assertEquals(listStatuses(initial), ["run", "wait", "idle", "err"]);
     assertFalse(
       initial.includes("wait/idle"),
       `pill unexpectedly present before pressing w:\n${initial}`,
@@ -963,24 +953,16 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
     // the re-render landed before sampling the status texts.
     await sendKey(picker, "w");
     const filtered = await waitFor(picker, (o) => o.includes("wait/idle"));
-    assertStringIncludes(filtered, "wait");
-    assertStringIncludes(filtered, "idle");
-    assertFalse(
-      filtered.includes("run "),
-      `running status leaked through filter:\n${filtered}`,
-    );
-    assertFalse(
-      filtered.includes("err "),
-      `error status leaked through filter:\n${filtered}`,
+    assertEquals(
+      listStatuses(filtered),
+      ["wait", "idle"],
+      `filter let other statuses through:\n${filtered}`,
     );
 
     // Second `w` press: filter OFF. Wait until the pill disappears.
     await sendKey(picker, "w");
     const restored = await waitFor(picker, (o) => !o.includes("wait/idle"));
-    assertStringIncludes(restored, "run");
-    assertStringIncludes(restored, "wait");
-    assertStringIncludes(restored, "idle");
-    assertStringIncludes(restored, "err");
+    assertEquals(listStatuses(restored), ["run", "wait", "idle", "err"]);
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1216,35 +1198,33 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
 // S30: picker layout follows tmux resize-window. Picker reads stdout.columns
 // once at render and previously did not re-render on terminal resize. The
 // resize-tracking useEffect subscribes to stdout 'resize' so the layout
-// (listWidth / previewWidth / bodyHeight / showFilterUI) updates live.
+// (listWidth / previewWidth / bodyHeight / hint bar width) updates live.
 //
-// Signal: the " filter  " title-bar hint (picker.tsx:590-600) is gated only on
-// showFilterUI (= totalCols >= 80). It is independent of filterEnabled state,
-// unlike the wait/idle PILL badge which also requires `w` to be pressed.
-// The `w` filter toggle is intentionally NOT sent here — pressing it would
-// flip the hint string to " clear  " and obscure the resize signal.
+// Signal: the key-hint bar is ~73 cells, spans the list column, and is clipped
+// from the right, so its last hint " quit" is cut at cols 60 (list 40) and
+// shown at cols 150 (list 90).
 Deno.test("S30: picker re-layouts after tmux resize-window", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({ status: "waiting", prompt: "row-a" });
     const picker = await spawnPicker();
 
-    // Initial narrow render: showFilterUI false → " filter  " absent.
+    // Initial narrow render: the hint bar is clipped before " quit".
     const narrowOut = await captureOutput(picker);
     assertFalse(
-      narrowOut.includes(" filter  "),
-      `unexpected ' filter  ' hint at narrow width:\n${narrowOut}`,
+      narrowOut.includes(" quit"),
+      `unexpected ' quit' hint at narrow width:\n${narrowOut}`,
     );
 
     // Widen the tmux window — picker must repaint and surface the hint.
     // Target is the same SESSION:WINDOW path that spawnPicker uses; the
     // harness's SESSION const is "test" and PICKER_WINDOW_NAME is "picker".
-    await tmux(["resize-window", "-t", picker, "-x", "120", "-y", "30"]);
-    await waitFor(picker, (out) => out.includes(" filter  "));
+    await tmux(["resize-window", "-t", picker, "-x", "150", "-y", "30"]);
+    await waitFor(picker, (out) => out.includes(" quit"));
 
     // Narrow again — picker must repaint and hide the hint.
     await tmux(["resize-window", "-t", picker, "-x", "60", "-y", "20"]);
-    await waitFor(picker, (out) => !out.includes(" filter  "));
+    await waitFor(picker, (out) => !out.includes(" quit"));
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1447,8 +1427,14 @@ async function writeUsageFixture(
 // agent name: pane row-1 leads with the pointer and a status glyph, row-2 with
 // a segment icon, and the preview starts past listWidth. A bare
 // includes("claude") would also match a pane summary.
+// Usage rows live inside the Usage card under the preview, so each one is the
+// text between the card's side borders. Column positions are measured from the
+// card's inner left edge.
 function footerLines(out: string): string[] {
-  return out.split("\n").filter((l) => /^ {2}(claude|codex)\b/.test(l));
+  return out.split("\n").flatMap((l) => {
+    const m = l.match(/│ ((?:claude|codex)\b.*?)\s*│\s*$/);
+    return m ? [m[1]] : [];
+  });
 }
 
 // The countdown glyph is a supplementary-plane code point, so a raw indexOf
@@ -1462,7 +1448,7 @@ function columnStart(line: string, label: string): number {
   return stringCells(line.slice(0, at));
 }
 
-Deno.test("S31: usage footer gives each agent its own row with aligned columns", async () => {
+Deno.test("S31: usage card gives each agent its own row with aligned columns", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "footer-row-xxx" });
@@ -1485,11 +1471,11 @@ Deno.test("S31: usage footer gives each agent its own row with aligned columns",
     assertStringIncludes(lines[0], "claude");
     assertStringIncludes(lines[0], `42% \u{F0450} 1h47m`);
     assertStringIncludes(lines[1], "codex");
-    // At cols 200 the row budget carries bars.
-    assertStringIncludes(lines[0], "\u2588");
-    assertStringIncludes(lines[1], "\u2588");
+    // At cols 200 the card is 74 cells wide inside, enough for the gauges.
+    assertStringIncludes(lines[0], "━");
+    assertStringIncludes(lines[1], "━");
     assertEquals(columnStart(lines[0], "7d"), columnStart(lines[1], "7d"));
-    // The pane row has to survive the rows the footer takes off bodyHeight.
+    // The pane row has to survive the rows the card takes off the preview.
     assertStringIncludes(out, "footer-row-xxx");
 
     await sendKey(picker, "Escape");
@@ -1516,7 +1502,7 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
     // An expired window drops its countdown and its bar along with its
     // percentage, but keeps both slots so 7d does not slide left.
     assertFalse(line.includes("\u{F0450}"));
-    assertEquals(columnStart(line, "7d"), 46);
+    assertEquals(columnStart(line, "7d"), 34);
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1525,7 +1511,7 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
   }
 });
 
-Deno.test("S33: no usage files → no footer, body keeps its rows", async () => {
+Deno.test("S33: no usage files → no usage card, body keeps its rows", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "no-footer-xxx" });
@@ -1533,8 +1519,8 @@ Deno.test("S33: no usage files → no footer, body keeps its rows", async () => 
     const out = await waitFor(picker, (o) => o.includes("no-footer-xxx"));
 
     assertEquals(footerLines(out).length, 0);
-    // The rows the footer would have taken stay with the body: the pane's
-    // own row-2 renders below its row-1 rather than being clipped away.
+    // The pane's own row-2 renders below its row-1 rather than being clipped
+    // away.
     assertStringIncludes(out, "no-footer-xxx");
     assertStringIncludes(out, "(no activity)");
 
@@ -1545,7 +1531,7 @@ Deno.test("S33: no usage files → no footer, body keeps its rows", async () => 
   }
 });
 
-Deno.test("S34: narrow width suppresses the footer and keeps the title on one line", async () => {
+Deno.test("S34: narrow width suppresses the usage card and draws no title row", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({ status: "running", prompt: "narrow-xxx" });
@@ -1554,18 +1540,15 @@ Deno.test("S34: narrow width suppresses the footer and keeps the title on one li
       { label: "7d", usedPct: 13, resetsInSec: 500000 },
     ]);
     const picker = await spawnPicker();
-    // spawnPicker already waited for the title, so the frame is up. Give it two
-    // more ticks: a footer that only appeared on refresh would surface by now.
+    // spawnPicker already waited for the hint bar, so the frame is up. Give it
+    // two more ticks: a card that only appeared on refresh would surface by now.
     await new Promise((r) => setTimeout(r, 2200));
     const out = await captureOutput(picker);
 
     assertEquals(footerLines(out).length, 0);
-    // Title must still occupy exactly one line — the constraint the footer
-    // threshold exists to protect.
-    assertEquals(
-      out.split("\n").filter((l) => l.includes("AI Agents")).length,
-      1,
-    );
+    // The title lives on the popup border (tmux.conf's `-T`), so the picker
+    // itself must not spend a row on it.
+    assertFalse(out.includes("AI Agents"), `title row drawn:\n${out}`);
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1574,8 +1557,11 @@ Deno.test("S34: narrow width suppresses the footer and keeps the title on one li
   }
 });
 
-Deno.test("S35: cols 80 drops the bars and keeps one line per agent", async () => {
-  await setupServer({ cols: 80, rows: 20 });
+Deno.test("S35: the 152-column popup drops the bars and keeps one line per agent", async () => {
+  // cols 150 is the inner width of the narrowest 152-column popup: the preview
+  // is 58 wide, 54 inside the card — room for bar-less rows (42) but not for
+  // the gauges (60).
+  await setupServer({ cols: 150, rows: 20 });
   try {
     await createClaudePane({ status: "running", prompt: "widest-xxx" });
     // Worst case the renderer can produce: both agents present, every window
@@ -1593,14 +1579,13 @@ Deno.test("S35: cols 80 drops the bars and keeps one line per agent", async () =
 
     const lines = footerLines(out);
     assertEquals(lines.length, 2);
-    // The bar row needs 80 cells and the budget here is 78, so the layout falls
-    // back to numbers while keeping the per-agent rows and the column grid.
-    assertFalse(lines[0].includes("\u2588"));
-    assertFalse(lines[0].includes("\u2591"));
+    // The layout falls back to numbers while keeping the per-agent rows and
+    // the column grid.
+    assertFalse(lines[0].includes("━"));
+    assertFalse(lines[0].includes("─"));
     assertEquals(columnStart(lines[0], "7d"), columnStart(lines[1], "7d"));
-    // The prompt is width-truncated at cols 80, so the pane's target id is the
-    // stable marker that the row survived the footer's rows.
-    assertStringIncludes(out, "test:1.0");
+    // The pane row survives the rows the card takes.
+    assertStringIncludes(out, "widest-xxx");
 
     await sendKey(picker, "Escape");
     await waitForExit();
@@ -1661,6 +1646,209 @@ Deno.test("S36: row-2 tool error keeps its text after the error mark", async () 
     const out = await waitFor(picker, (o) => o.includes("tool-err-xxx"));
 
     assertStringIncludes(out, "Bash \u{F0156} Exit code 1");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// Runs git with the user's global and system config shut out, so a hooksPath
+// or signing setting on the developer machine cannot leak into the fixture.
+async function git(cwd: string, ...args: string[]): Promise<void> {
+  const { code, stderr } = await new Deno.Command("git", {
+    args: ["-c", "user.name=t", "-c", "user.email=t@t", ...args],
+    cwd,
+    env: { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+    stdout: "null",
+    stderr: "piped",
+  }).output();
+  if (code !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${new TextDecoder().decode(stderr)}`,
+    );
+  }
+}
+
+// S38: the repo column names the repository, not the cwd's basename. A pane in
+// a subdirectory of the main checkout shows the repo name, and a pane in a
+// linked worktree shows `repo(worktree)`.
+Deno.test("S38: repo column shows repo(worktree) from git", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "picker-git-" });
+  try {
+    await Deno.mkdir(`${root}/proj/sub`, { recursive: true });
+    await git(`${root}/proj`, "init", "-q", "-b", "main");
+    await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
+    await git(
+      `${root}/proj`,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "feature",
+      `${root}/proj-wt`,
+    );
+
+    await createClaudePane({
+      status: "idle",
+      prompt: "main-row",
+      cwd: `${root}/proj/sub`,
+    });
+    await createClaudePane({
+      status: "idle",
+      prompt: "wt-row",
+      cwd: `${root}/proj-wt`,
+    });
+    const picker = await spawnPicker();
+    const out = await waitFor(picker, (o) => o.includes("proj(proj-wt)"));
+    // Only the list column: the preview card beside it shows the full path,
+    // which does contain the subdirectory name.
+    const lines = out.split("\n").map((l) => l.split(/[│╭╰]/)[0]);
+    const mainRow = lines.find((l) => l.includes("main-row")) ?? "";
+    const wtRow = lines.find((l) => l.includes("wt-row")) ?? "";
+
+    assertStringIncludes(mainRow, "proj");
+    assertFalse(mainRow.includes("sub"), `subdir leaked: ${mainRow}`);
+    assertStringIncludes(mainRow, "main");
+    assertStringIncludes(wtRow, "proj(proj-wt)");
+    assertStringIncludes(wtRow, "feature");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+// S39: `n` moves the selection to the next waiting pane, skipping others, and
+// wraps past the end of the list.
+Deno.test("S39: n jumps to the next waiting pane and wraps", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-run" });
+    await createClaudePane({ status: "waiting", prompt: "row-wait-1" });
+    await createClaudePane({ status: "idle", prompt: "row-idle" });
+    await createClaudePane({ status: "waiting", prompt: "row-wait-2" });
+    const picker = await spawnPicker();
+    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-run");
+
+    for (const want of ["row-wait-1", "row-wait-2", "row-wait-1"]) {
+      await sendKey(picker, "n");
+      await waitFor(picker, selectedIncludes(want));
+    }
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S40: with no waiting pane, `n` leaves the selection where it is.
+Deno.test("S40: n without a waiting pane keeps the selection", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-first" });
+    await createClaudePane({ status: "idle", prompt: "row-second" });
+    const picker = await spawnPicker();
+    await sendKey(picker, "n");
+    // Two ticks for a stray move to land before sampling.
+    await new Promise((r) => setTimeout(r, 2200));
+    const out = await captureOutput(picker);
+    assertStringIncludes(selectedLine(out), "row-first");
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S41: a list taller than the body scrolls instead of letting Yoga shrink it.
+// At 20 panes and the default 50 rows the list gets 47 rows, room for 11
+// four-row cards between the two indicator lines; wrapping to the last pane
+// scrolls the first nine out of view.
+Deno.test("S41: 20 panes scroll with the selection and keep rows intact", async () => {
+  await setupServer();
+  try {
+    for (let i = 1; i <= 20; i++) {
+      await createClaudePane({
+        status: "idle",
+        prompt: `row-${String(i).padStart(2, "0")}`,
+      });
+    }
+    const picker = await spawnPicker();
+    const initial = await captureOutput(picker);
+    assertStringIncludes(initial, "↓ 9 more");
+    assertStringIncludes(initial, "row-01");
+    assertFalse(initial.includes("row-12"), `row-12 visible:\n${initial}`);
+
+    await sendKey(picker, "k"); // wraps to the last pane
+    const out = await waitFor(
+      picker,
+      (o) => selectedLine(o).includes("row-20"),
+    );
+    assertStringIncludes(out, "↑ 9 more");
+    assertFalse(out.includes("row-09"), `row-09 still visible:\n${out}`);
+    // Every visible pane keeps its own row 1: 11 prompts, each once.
+    const prompts = out.match(/row-\d\d/g) ?? [];
+    assertEquals(prompts.length, 11);
+    assertEquals(new Set(prompts).size, 11);
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S42: each pane is a four-row card — a padding row above and below its two
+// content rows — and the selection marker runs down all four rows.
+Deno.test("S42: the selected card carries the marker on all four rows", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "card-first" });
+    await createClaudePane({ status: "idle", prompt: "card-second" });
+    const picker = await spawnPicker();
+    const lines = (await captureOutput(picker)).split("\n");
+    const marked = lines.flatMap((l, i) => (l.startsWith("▌") ? [i] : []));
+    assertEquals(marked.length, 4, `marker rows: ${marked}`);
+    assertEquals(
+      marked[3] - marked[0],
+      3,
+      `marker rows not contiguous: ${marked}`,
+    );
+    // The card's padding row comes first, so the pane's own row 1 is second.
+    assertStringIncludes(lines[marked[1]], "card-first");
+    // The list starts one row below the popup border, level with the preview
+    // card's top edge.
+    assertEquals(marked[0], 1);
+
+    await sendKey(picker, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S43: a popup under 30 rows switches to compact cards — no padding rows, so
+// the marker covers only the two content rows — and starts the list on the top
+// row.
+Deno.test("S43: a short popup drops the card padding and starts at the top row", async () => {
+  await setupServer({ cols: 150, rows: 24 });
+  try {
+    await createClaudePane({ status: "running", prompt: "compact-first" });
+    await createClaudePane({ status: "idle", prompt: "compact-second" });
+    const picker = await spawnPicker();
+    const lines = (await captureOutput(picker)).split("\n");
+    const marked = lines.flatMap((l, i) => (l.startsWith("▌") ? [i] : []));
+    assertEquals(marked, [0, 1], `marker rows: ${marked}`);
+    assertStringIncludes(lines[0], "compact-first");
+    // One blank row separates the two panes.
+    assertStringIncludes(lines[3], "compact-second");
 
     await sendKey(picker, "Escape");
     await waitForExit();
