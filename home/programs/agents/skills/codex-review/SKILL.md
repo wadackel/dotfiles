@@ -15,14 +15,14 @@ codex exec review --uncommitted --full-auto
 # Code review (custom criteria — use `codex exec`, not `codex exec review`)
 codex exec --full-auto "
 Review uncommitted changes (run git diff to see them).
-Review guidelines: ./CLAUDE.md
+Review guidelines: ./AGENTS.md
 Criteria: code quality, security, performance
 "
 
 # Plan review
 codex exec -s read-only "
 Review the plan at ./plan.md
-Project guidelines: ./CLAUDE.md
+Project guidelines: ./AGENTS.md
 Related source: src/foo.ts, src/bar.ts
 "
 
@@ -42,7 +42,7 @@ For **custom criteria + specific scope**, use `codex exec --full-auto` instead a
 ```bash
 codex exec --full-auto "
 Review uncommitted changes (run git diff to see them).
-Guidelines: ./CLAUDE.md
+Guidelines: ./AGENTS.md
 Focus on: security vulnerabilities
 "
 ```
@@ -75,7 +75,7 @@ Use when specific review focus is needed (security audit, guideline compliance, 
 ```bash
 codex exec --full-auto "
 Review uncommitted changes (run git diff to see them).
-Guidelines: ./CLAUDE.md
+Guidelines: ./AGENTS.md
 Review criteria:
 1. Security (highest priority)
 2. Code quality
@@ -92,7 +92,7 @@ Mark each issue with severity: Critical/High/Medium/Low
 codex exec -s read-only "
 Review the implementation plan:
 - Plan: ./path/to/plan.md
-- Guidelines: ./CLAUDE.md
+- Guidelines: ./AGENTS.md
 - Related source: src/foo.ts, src/bar.ts
 
 Review criteria: ...

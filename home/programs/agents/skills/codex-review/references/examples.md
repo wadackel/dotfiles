@@ -5,7 +5,7 @@
 ```bash
 # 1. Collect file paths (not contents)
 #    - Plan file: ./plan.md
-#    - Guidelines: ./CLAUDE.md
+#    - Guidelines: ./AGENTS.md
 #    - Related source: src/auth/middleware.ts, src/auth/types.ts
 
 # 2. Start review (read-only sandbox, Codex reads files locally)
@@ -14,7 +14,7 @@ You are an experienced senior architect. Review the implementation plan below.
 
 ## Files to read
 - Implementation plan: ./plan.md
-- Project guidelines: ./CLAUDE.md
+- Project guidelines: ./AGENTS.md
 - Related source code: src/auth/middleware.ts, src/auth/types.ts
 
 ## Review criteria
@@ -47,7 +47,7 @@ You are a strict senior code reviewer.
 Review the uncommitted changes (run git diff to see them).
 
 ## Reference files
-- Project guidelines: ./CLAUDE.md
+- Project guidelines: ./AGENTS.md
 
 ## Review criteria
 - Code quality (readability, maintainability, naming conventions)
@@ -85,7 +85,7 @@ Conduct a security review of the uncommitted changes.
 Run git diff to see the changes.
 
 ## Reference files
-- Project guidelines: ./CLAUDE.md
+- Project guidelines: ./AGENTS.md
 
 ## Security checklist (priority order)
 1. **OWASP Top 10**: SQL injection, XSS, CSRF, authentication flaws
