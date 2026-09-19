@@ -9,7 +9,7 @@ import {
   parseArgs,
   parsePsOutput,
   type ProcInfo,
-} from "./picker-doctor.ts";
+} from "./agentower-doctor.ts";
 import type { PaneRow } from "./pane_row.ts";
 
 // --- detectAgentCommand ---

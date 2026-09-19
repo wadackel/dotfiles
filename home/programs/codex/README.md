@@ -23,9 +23,9 @@ The helper compares live identities against a declared file digest, current Git
 HEAD, or an explicitly declared manual identity; it cannot attest that external
 state never changed after observation.
 
-Plan paths remain stable across compaction and expired picker markers. Legacy
+Plan paths remain stable across compaction and expired Agentower markers. Legacy
 evidence remains readable and is revalidated before completion. Markers continue
-to control display only, with the picker's existing 24-hour freshness window.
+to control display only, with Agentower's existing 24-hour freshness window.
 
 See the [evidence command contract](skills/impl/references/evidence.md) for
 sidecar compatibility, locking, and supported artifact types, and the
@@ -34,7 +34,7 @@ sidecar compatibility, locking, and supported artifact types, and the
 ## Implemented parity
 
 - `codex-pane-status.ts`: writes Codex lifecycle state to tmux `@pane_*` options
-  so the `prefix+w` picker can show Codex panes next to Claude and opencode
+  so Agentower (`prefix+w`) can show Codex panes next to Claude and opencode
   panes. It also writes best-effort diagnostics to
   `~/.codex/logs/codex-pane-status.log`.
 - `codex-hook-log.ts`: records sanitized hook payloads to

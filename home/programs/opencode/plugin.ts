@@ -1,6 +1,6 @@
 // opencode plugin: bridges opencode session/chat/tool events → tmux pane
-// options consumed by ~/.local/share/picker-tmux/picker (the prefix+w popup
-// SSOT lives in ../tmux/pane_row.ts:TMUX_FORMAT). The Bun-specific I/O
+// options consumed by ~/.local/share/agentower/agentower (the prefix+w popup
+// SSOT lives in ../tmux/agentower/pane_row.ts:TMUX_FORMAT). The Bun-specific I/O
 // boundary lives here; pure logic + types live in plugin_logic.ts so Deno
 // can test them.
 //

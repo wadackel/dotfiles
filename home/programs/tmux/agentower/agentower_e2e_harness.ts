@@ -1,4 +1,4 @@
-// E2E test harness for picker.tsx. Spins up an isolated tmux server on a
+// E2E test harness for agentower.tsx. Spins up an isolated tmux server on a
 // PID-suffixed socket so concurrent runs never race. All exported helpers
 // target that isolated server only — callers never touch the host tmux.
 //
@@ -6,11 +6,11 @@
 //   await setupServer();
 //   try {
 //     await createClaudePane({ status: "waiting", ... });
-//     const picker = await spawnPicker();
-//     await waitFor(picker, (o) => o.includes("..."));
-//     await sendKey(picker, "Down");
-//     await sendKey(picker, "Escape");
-//     await waitForExit(picker);
+//     const agentower = await spawnAgentower();
+//     await waitFor(agentower, (o) => o.includes("..."));
+//     await sendKey(agentower, "Down");
+//     await sendKey(agentower, "Escape");
+//     await waitForExit();
 //   } finally {
 //     await teardown();
 //   }
@@ -20,9 +20,9 @@ import type { UserLabel } from "./pane_row.ts";
 
 // ---- Constants ----
 
-const SOCKET = `picker-e2e-${Deno.pid}`;
+const SOCKET = `agentower-e2e-${Deno.pid}`;
 const SESSION = "test";
-const PICKER_WINDOW_NAME = "picker";
+const AGENTOWER_WINDOW_NAME = "agentower";
 const POLL_INTERVAL_MS = 50;
 
 // Per-test-run scratch directory holding compiled stubs used by
@@ -34,7 +34,7 @@ const POLL_INTERVAL_MS = 50;
 // /usr/bin/cc is the one path that reliably makes the kernel's p_comm match
 // the binary's basename. The opencode stub uses the 15-char form
 // `.opencode-wrapp` so MAXCOMLEN truncation is a no-op.
-const LIVE_BIN_DIR = `/tmp/picker-e2e-bin-${Deno.pid}`;
+const LIVE_BIN_DIR = `/tmp/agentower-e2e-bin-${Deno.pid}`;
 const LIVE_BIN_PATHS: Record<string, string> = {
   claude: `${LIVE_BIN_DIR}/.claude-wrapped`,
   opencode: `${LIVE_BIN_DIR}/.opencode-wrapp`,
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
 }
 `;
 const DEFAULT_TIMEOUT_MS = (() => {
-  const raw = Deno.env.get("PICKER_E2E_TIMEOUT_MS");
+  const raw = Deno.env.get("AGENTOWER_E2E_TIMEOUT_MS");
   if (!raw) return 5000;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 5000;
@@ -74,20 +74,20 @@ export interface PaneOpts {
   sessionId?: string;
   subagents?: string;
   cwd?: string;
-  // User-defined session label set via picker.tsx's `m` keypress, stored
-  // in the @pane_user_label tmux pane option. When set (non-empty), the
-  // picker's row-1 display swaps icon/text/color from PaneStatus to the
+  // User-defined session label set via agentower.tsx's `m` keypress, stored
+  // in the @pane_user_label tmux pane option. When set (non-empty),
+  // Agentower's row-1 display swaps icon/text/color from PaneStatus to the
   // label's meta. Leave unset (or set to "") to test the unlabeled path.
   userLabel?: UserLabel;
   // Session id the user label is bound to, stored in @pane_user_label_session.
-  // picker.tsx writes the pane's current session id alongside the label; the
-  // picker only honors the label when this matches @pane_session_id. Set it
+  // agentower.tsx writes the pane's current session id alongside the label;
+  // Agentower only honors the label when this matches @pane_session_id. Set it
   // different from sessionId to reproduce a stale label left by a closed
-  // session, which the picker must drop.
+  // session, which Agentower must drop.
   userLabelSession?: string;
   // When undefined or true (default), spawn the pane with a live cc
   // placeholder so `pane_current_command` is `.claude-wrapped` — matching
-  // the picker's liveness filter (picker.tsx:CLAUDE_PANE_COMMANDS).
+  // Agentower's liveness filter (agentower.tsx:CLAUDE_PANE_COMMANDS).
   // Set to false to reproduce a stale pane whose cc has exited and the
   // shell has taken over (pane_current_command becomes the login shell).
   liveCommand?: boolean;
@@ -102,13 +102,13 @@ export interface ServerOpts {
 
 // `-f /dev/null` skips loading the user's ~/.config/tmux/tmux.conf on server
 // start so the sandbox really is isolated — SKILL.md / CLAUDE.md promise
-// "isolated tmux sandbox", and picker's assumptions (default remain-on-exit=off,
+// "isolated tmux sandbox", and Agentower's assumptions (default remain-on-exit=off,
 // no user hooks firing on pane-mode-changed, etc.) must not depend on current
 // user config.
 const TMUX_PREFIX = ["-f", "/dev/null", "-L", SOCKET] as const;
 
 // Run a tmux command against the isolated socket. Non-zero exit throws with
-// stderr included (fail-fast; differs from picker.tsx:tmuxRun which logs and
+// stderr included (fail-fast; differs from agentower.tsx:tmuxRun which logs and
 // continues — tests want hard failures).
 async function tmuxRun(args: string[]): Promise<string> {
   const { code, stdout, stderr } = await new Deno.Command("tmux", {
@@ -211,16 +211,16 @@ async function ensureLiveBin(): Promise<void> {
 // attached to a detached scratch window in the test session; its paneId is
 // returned so scenarios can reference it in subsequent tmux queries.
 //
-// Fields not passed in opts are left unset — picker.tsx reads `#{@pane_foo}`
+// Fields not passed in opts are left unset — agentower.tsx reads `#{@pane_foo}`
 // as empty string for unset options, which matches the fallback paths in
-// parseRow (picker.tsx:75-109).
+// parseRow (agentower.tsx:75-109).
 export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   const live = opts.liveCommand !== false;
   const agent = opts.agent ?? "claude";
   // Pick the per-agent live stub. Unknown agents fall back to the claude
   // stub so existing scenarios that pass `agent: "shell"` (negative tests)
   // still spawn a non-shell live pane — `isLivePaneCommand("shell", ...)`
-  // returns false anyway so the picker filters it out.
+  // returns false anyway so Agentower filters it out.
   const liveBinPath = LIVE_BIN_PATHS[agent] ?? LIVE_BIN_PATHS["claude"];
   const liveBinBasename = LIVE_BIN_BASENAMES[agent] ??
     LIVE_BIN_BASENAMES["claude"];
@@ -317,22 +317,22 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
 }
 
 // Scenarios that name their own HOME keep it; everything else runs against
-// this empty one. Without it the picker reads the developer's real
+// this empty one. Without it Agentower reads the developer's real
 // ~/.local/state/agent-usage and paints live account numbers into the usage
 // footer — a value that differs per machine and is absent on CI, so any layout
 // assertion taken here would not reproduce anywhere else.
 let sandboxHome: string | null = null;
 
-// Exposed so a scenario can seed fixtures into the same HOME the picker will
+// Exposed so a scenario can seed fixtures into the same HOME Agentower will
 // read, without having to invent its own temp dir.
 export async function sandboxHomePath(): Promise<string> {
   if (sandboxHome === null) {
-    // `dir: "/tmp"` is not cosmetic: picker-verify runs the suite under
+    // `dir: "/tmp"` is not cosmetic: agentower-verify runs the suite under
     // --allow-write=$HOME/.claude/tasks,/tmp, and makeTempDir's default lands
     // in $TMPDIR (/var/folders/… on macOS), which that scope excludes.
     sandboxHome = await Deno.makeTempDir({
       dir: "/tmp",
-      prefix: "picker-e2e-home-",
+      prefix: "agentower-e2e-home-",
     });
   }
   return sandboxHome;
@@ -344,7 +344,7 @@ async function sandboxEnv(): Promise<Record<string, string>> {
     // A value left in the developer's shell collides with sandbox pane ids —
     // every fresh tmux server reissues %0, %1, … — and silently moves the
     // initial selection off the first row.
-    CC_PICKER_FROM_PANE: "",
+    AGENTOWER_FROM_PANE: "",
   };
   // Replacing HOME orphans the Deno module cache, so aim it back at the real
   // one. S8/S8b inject it inline for the same reason.
@@ -355,30 +355,30 @@ async function sandboxEnv(): Promise<Record<string, string>> {
   return env;
 }
 
-// Spawn picker.tsx as the direct command of a new tmux window. tmux passes
-// the command to /bin/sh -c; picker.tsx is executable and carries its own
+// Spawn agentower.tsx as the direct command of a new tmux window. tmux passes
+// the command to /bin/sh -c; agentower.tsx is executable and carries its own
 // shebang (`#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run=tmux,git`),
 // so passing the bare path lets the shebang declare the permission set —
-// no drift risk between this string and picker.tsx:1.
+// no drift risk between this string and agentower.tsx:1.
 //
-// When picker exits, the window auto-closes (tmux default remain-on-exit=off),
+// When Agentower exits, the window auto-closes (tmux default remain-on-exit=off),
 // which is what waitForExit relies on.
-export async function spawnPicker(
+export async function spawnAgentower(
   opts: { selfPane?: string; env?: Record<string, string> } = {},
 ): Promise<string> {
   // URL.pathname is percent-encoded; decode so paths containing spaces or
   // non-ASCII characters reach tmux/sh as a real filesystem path.
-  const pickerPath = decodeURIComponent(
-    new URL("./picker.tsx", import.meta.url).pathname,
+  const agentowerPath = decodeURIComponent(
+    new URL("./agentower.tsx", import.meta.url).pathname,
   );
-  if (pickerPath.includes("'")) {
+  if (agentowerPath.includes("'")) {
     throw new Error(
-      `picker path contains single quote, unsafe for sh -c: ${pickerPath}`,
+      `Agentower path contains single quote, unsafe for sh -c: ${agentowerPath}`,
     );
   }
   // `tmux new-window -e K=V` sets K in the child's env (literal value, no
   // format expansion). Mirrors the interactive popup path where tmux.conf's
-  // `bind-key w` writes `CC_PICKER_FROM_PANE` to session env via
+  // `bind-key w` writes `AGENTOWER_FROM_PANE` to session env via
   // `set-environment` before `display-popup` (the popup inherits session env
   // at spawn). Reserved `TMUX_PANE` is unsuitable — tmux clobbers it with
   // the spawned pane's own id when the process starts, so the originating-
@@ -391,7 +391,7 @@ export async function spawnPicker(
     if (!/^%\d+$/.test(opts.selfPane)) {
       throw new Error(`selfPane must match %<digits>, got: ${opts.selfPane}`);
     }
-    env.CC_PICKER_FROM_PANE = opts.selfPane;
+    env.AGENTOWER_FROM_PANE = opts.selfPane;
   }
   const envArgs: string[] = [];
   for (const [key, value] of Object.entries(env)) {
@@ -409,11 +409,11 @@ export async function spawnPicker(
     "-t",
     SESSION,
     "-n",
-    PICKER_WINDOW_NAME,
+    AGENTOWER_WINDOW_NAME,
     ...envArgs,
-    `'${pickerPath}'`,
+    `'${agentowerPath}'`,
   ]);
-  const target = `${SESSION}:${PICKER_WINDOW_NAME}`;
+  const target = `${SESSION}:${AGENTOWER_WINDOW_NAME}`;
   await waitFor(
     target,
     // "jump" leads the bottom key-hint bar, which is clipped from the right,
@@ -430,7 +430,7 @@ export async function sendKey(target: string, key: string): Promise<void> {
 }
 
 // Capture the target pane's visible text and strip ANSI (SGR-only retained
-// via picker's sanitizeAnsi — though capture-pane -p without -e produces
+// via Agentower's sanitizeAnsi — though capture-pane -p without -e produces
 // plain text, stripping is defensive in case the pane emits raw CSI).
 export async function captureOutput(target: string): Promise<string> {
   const raw = await tmuxRun(["capture-pane", "-p", "-t", target]);
@@ -456,10 +456,10 @@ export async function waitFor(
   );
 }
 
-// Poll list-windows until the picker window disappears (auto-close on picker
-// exit). Works because spawnPicker launches picker as the window's direct
-// command, not inside a shell. Only one picker runs at a time by design; no
-// per-target parameter.
+// Poll list-windows until the Agentower window disappears (auto-close on
+// Agentower exit). Works because spawnAgentower launches Agentower as the
+// window's direct command, not inside a shell. Only one Agentower runs at a
+// time by design; no per-target parameter.
 export async function waitForExit(
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<void> {
@@ -475,11 +475,11 @@ export async function waitForExit(
         "#{window_name}",
       ])
     ).trim();
-    if (!windows.split("\n").includes(PICKER_WINDOW_NAME)) return;
+    if (!windows.split("\n").includes(AGENTOWER_WINDOW_NAME)) return;
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
   throw new Error(
-    `waitForExit timeout after ${timeoutMs}ms; picker window still present. Windows:\n${windows}`,
+    `waitForExit timeout after ${timeoutMs}ms; Agentower window still present. Windows:\n${windows}`,
   );
 }
 
@@ -487,7 +487,7 @@ export async function waitForExit(
 // The compiled LIVE_BIN_DIR stub is intentionally NOT removed here — it is
 // reused across every Deno.test call within the same process (the file is
 // only 33 KB and recompiling per-test would add ~50ms * N overhead). The
-// `/tmp/picker-e2e-bin-$PID` path is claimed by PID so concurrent test runs
+// `/tmp/agentower-e2e-bin-$PID` path is claimed by PID so concurrent test runs
 // do not collide; the OS reclaims /tmp on reboot.
 export async function teardown(): Promise<void> {
   await tmuxRunAllowFail(["kill-server"]);

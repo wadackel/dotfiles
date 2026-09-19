@@ -421,7 +421,7 @@ Deno.test("toolSegmentText: Edit-family with empty lastToolSubject (delegates to
       mkRow({
         lastTool: "Edit",
         lastToolSubject: "",
-        lastEditFile: "/x/y/picker.tsx",
+        lastEditFile: "/x/y/agentower.tsx",
       }),
     ),
     "Edit",

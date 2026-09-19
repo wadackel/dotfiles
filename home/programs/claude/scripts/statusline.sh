@@ -75,10 +75,10 @@ if [ -n "$cwd" ]; then
   fi
 fi
 
-# --- Cross-session usage (picker footer) ---
+# --- Cross-session usage (Agentower footer) ---
 # Deliberately outside the context-usage block below: rate_limits and
 # context_window arrive independently, so gating one on the other would blank
-# the picker footer for a reason nothing in the UI would explain. Absolute
+# Agentower's footer for a reason nothing in the UI would explain. Absolute
 # paths because the git block above has already cd'd into the workspace. Every
 # step is swallowed — under `set -e` one unguarded failure would abort the
 # script and leave the user with an empty statusline.
@@ -112,7 +112,7 @@ if [ -n "$used_pct" ] && [ -n "$ctx_size" ]; then
   used_int=${used_pct%.*}
   : "${used_int:=0}"
 
-  # Publish percentage to tmux pane option for the picker to consume. Best-effort:
+  # Publish percentage to tmux pane option for Agentower to consume. Best-effort:
   # `|| true` swallows failures when the pane id became stale mid-flight so the
   # statusline stdout path below is unaffected.
   if [ -n "${TMUX_PANE:-}" ]; then

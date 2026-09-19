@@ -7,7 +7,7 @@
   "model": "opencode/deepseek-v4-pro",
   "small_model": "opencode/qwen3.5-plus",
 
-  // tmux picker (prefix+w) bridges opencode session events → tmux pane
+  // Agentower (prefix+w) bridges opencode session events → tmux pane
   // options. Source lives in dotfiles/home/programs/opencode/plugin.ts;
   // home-manager symlinks it to ~/.config/opencode/plugin.ts. The path must
   // be absolute (file:// URL) — opencode 1.14.30 resolves relative `./` paths

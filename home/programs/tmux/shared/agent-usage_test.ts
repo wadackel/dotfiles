@@ -276,7 +276,7 @@ Deno.test("readAgentUsage: oversized file → null", async () => {
   await withHome(async (home) => {
     await Deno.mkdir(usageDir(home), { recursive: true });
     // Padding inside a valid document: the size ceiling has to fire before the
-    // parse, since the picker re-reads this on every tick.
+    // parse, since Agentower re-reads this on every tick.
     await Deno.writeTextFile(
       usageFilePath(home, "claude"),
       JSON.stringify({ ...sample("claude"), pad: "x".repeat(70 * 1024) }),

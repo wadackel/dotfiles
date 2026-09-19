@@ -224,7 +224,7 @@ This repository includes comprehensive Claude Code configuration:
   - `bash-policy.ts`: `PreToolUse` hook (always active) that blocks prohibited command patterns. Rules defined in: `bash-policy.yaml` (same directory). The `git push *renovate/*` rule exists because a direct push closes the Renovate PR; its message names the `stop-updating` label and the own-branch alternative instead of "push again", which the same rule would block
   - `write-policy.ts`: `PreToolUse` hook on `Write|Edit|MultiEdit` that blocks a personal identifier (`wadackel`, `tsuyoshi.wada`, host names) from entering a test or fixture path. A file that already carries the identifier stays editable, and `write-policy: allow` in the new content is the explicit escape. Tests: `deno test --allow-read --allow-write --allow-run=deno home/programs/claude/scripts/write-policy_test.ts`
   - `comment-metrics.ts <diff-file>`: counts added comment lines and comment blocks in a unified diff for `comment-reviewer`, which has no Bash; `/gate` appends its output to that reviewer's focus. Same file types and marker set as the reviewer's Scope; exit 0 whatever the diff contains, 2 only for a usage error. Tests: `deno test home/programs/claude/scripts/comment-metrics_test.ts`
-  - `claude-pane-status.ts`: Hook that writes session state to tmux pane options for the popup picker. Invoked per event by argv[0] (SessionStart/End/UserPromptSubmit/Stop/StopFailure/Notification/PermissionDenied/CwdChanged/Subagent*/Worktree*). Unknown events are a no-op. Debug: pipe JSON to stdin with `TMUX_PANE` set
+  - `claude-pane-status.ts`: Hook that writes session state to tmux pane options for Agentower. Invoked per event by argv[0] (SessionStart/End/UserPromptSubmit/Stop/StopFailure/Notification/PermissionDenied/CwdChanged/Subagent*/Worktree*). Unknown events are a no-op. Debug: pipe JSON to stdin with `TMUX_PANE` set
   - `writing-metrics/`: readability measurement tools for dialogue and generated documents (Japanese-English mixing density, reply volume percentiles, workflow-vocabulary contexts). Run every few weeks to compare Writing-norm metrics before and after. `lint.ts <file.md>` detects Writing-norm violations in a single Japanese Markdown file; `fire-rate.ts --from 2026-08-31` tracks per-category violation density across transcripts — compare against `fire-rate-baseline.md` (committed 2026-08-30 snapshot) to judge the concise-style sentence constraints
   - Running Claude script tests: `deno test --allow-env=HOME --allow-read --allow-write --allow-run home/programs/claude/scripts/<name>_test.ts` (`--allow-run` is required for test files that spawn the hook as a subprocess via `Deno.Command`, e.g. `bash-policy_test.ts`'s entry-point tests)
   - When adding new scripts, add `"Bash(*<script-name>*)"` to `permissions.allow` in `settings.json` (wildcard prefix handles full-path invocations by Claude. `Bash(<script-name>*)` does not match path-prefixed invocations)
@@ -298,22 +298,24 @@ Commands:
 - Each vendored skill root has a `.<vendor>-source` (`.figma-source`, `.gh-stack-source`) recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
 - `.gitattributes` marks `figma-use/references/plugin-api-standalone.d.ts` as `-diff` so the 445KB typings file does not flood PR review UI
 
-### picker-verify (tmux picker e2e)
+### agentower-verify (Agentower e2e)
 
-After changing `home/programs/tmux/picker/picker.tsx`, `home/programs/tmux/picker/picker_e2e_harness.ts`, or `home/programs/tmux/picker/picker_e2e_test.ts`, run `.claude/skills/picker-verify/picker-verify.ts` (or invoke the `/picker-verify` skill). It spins up an isolated `tmux -L picker-e2e-$PID` server, runs every e2e scenario in `picker_e2e_test.ts`, and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck picker into the sandbox. Do not claim picker changes are complete while `ok: false`.
+After changing `home/programs/tmux/agentower/agentower.tsx`, `home/programs/tmux/agentower/agentower_e2e_harness.ts`, or `home/programs/tmux/agentower/agentower_e2e_test.ts`, run `.claude/skills/agentower-verify/agentower-verify.ts` (or invoke the `/agentower-verify` skill). It spins up an isolated `tmux -L agentower-e2e-$PID` server, runs every e2e scenario in `agentower_e2e_test.ts`, and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck Agentower into the sandbox. Do not claim Agentower changes are complete while `ok: false`.
 
-### Picker binary (prefix+w)
+### Agentower binary (prefix+w)
 
-`home/programs/tmux/config/tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/picker-tmux/picker`, not `deno run picker.tsx`. The binary is produced by `home.activation.compilePickerBin` in `home/programs/tmux/default.nix` via `deno compile` (React+Ink cold-start is ~236ms; AOT is the only way to amortize it for a popup). Hash-skip keys on a Nix eval-time sha256 over the `.ts`/`.tsx` sources in `home/programs/tmux/picker/` and `home/programs/tmux/shared/` (tests and e2e harness excluded), so editing any of them — including `shared/pane-shared.ts` — triggers a recompile on the next rebuild.
+**Agentower** is the tmux `prefix+w` popup that lists the Claude Code / Codex / opencode panes with their status and jumps to the selected one (older records call it the tmux picker).
 
-Picker covers three AI agents: `claude` / `opencode` / `codex`. Each agent has its own pane-status writer that emits `@pane_*` tmux options (claude: `claude-pane-status.ts` invoked by Claude Code hooks; opencode: in-process Bun plugin at `home/programs/opencode/plugin.ts`; codex: `home/programs/codex/scripts/codex-pane-status.ts` invoked by Codex CLI lifecycle hooks registered in `home/programs/codex/hooks.json`). All three follow the same single-shot script + stdin JSON pattern.
+`home/programs/tmux/config/tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/agentower/agentower`, not `deno run agentower.tsx`. The binary is produced by `home.activation.compileAgentowerBin` in `home/programs/tmux/default.nix` via `deno compile` (React+Ink cold-start is ~236ms; AOT is the only way to amortize it for a popup). Hash-skip keys on a Nix eval-time sha256 over the `.ts`/`.tsx` sources in `home/programs/tmux/agentower/` and `home/programs/tmux/shared/` (tests and e2e harness excluded), so editing any of them — including `shared/pane-shared.ts` — triggers a recompile on the next rebuild.
 
-Implications when editing picker source:
+Agentower covers three AI agents: `claude` / `opencode` / `codex`. Each agent has its own pane-status writer that emits `@pane_*` tmux options (claude: `claude-pane-status.ts` invoked by Claude Code hooks; opencode: in-process Bun plugin at `home/programs/opencode/plugin.ts`; codex: `home/programs/codex/scripts/codex-pane-status.ts` invoked by Codex CLI lifecycle hooks registered in `home/programs/codex/hooks.json`). All three follow the same single-shot script + stdin JSON pattern.
 
-- Running `deno run home/programs/tmux/picker/picker.tsx` or `/picker-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.
+Implications when editing Agentower source:
+
+- Running `deno run home/programs/tmux/agentower/agentower.tsx` or `/agentower-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.
 - To make changes visible to `prefix+w`, run `sudo darwin-rebuild switch --flake .#private` — the activation detects the source hash change and recompiles.
-- To iterate without a full rebuild, re-run the compile directly: `deno compile --allow-env --allow-read --allow-run --no-prompt --output ~/.local/share/picker-tmux/picker home/programs/tmux/picker/picker.tsx` (arg set must match the activation).
-- Do not claim picker work is complete based solely on `deno run` or `picker-verify` output — the binary is the thing users invoke.
+- To iterate without a full rebuild, re-run the compile directly: `deno compile --allow-env --allow-read --allow-run --no-prompt --output ~/.local/share/agentower/agentower home/programs/tmux/agentower/agentower.tsx` (arg set must match the activation).
+- Do not claim Agentower work is complete based solely on `deno run` or `agentower-verify` output — the binary is the thing users invoke.
 
 ### Project Directory Encoding Rules
 

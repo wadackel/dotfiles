@@ -39,7 +39,7 @@ Statuses: `pass`, `fail`, `blocked`, `waived`. `live` PASS needs matching `expec
 
 A target includes all tracked and non-ignored untracked files. Keep test output outside the repository or in an already ignored build directory. Unsupported non-file entries, including submodules, fail explicitly; report the limitation instead of certifying a partial snapshot. Re-run checks after committing/staging too because HEAD and index are part of the target. Changes to the plan also invalidate prior results.
 
-Schema v2 adds `version`, `repository`, and optional per-task `required` / `checks`; existing task IDs, `baseline_sha`, string evidence, and status remain readable by the picker. Normalize accepts legacy records without marking them verified. Do not rewrite existing requirements to weaken acceptance; use an explicit waiver or create a revised plan when the user changes scope.
+Schema v2 adds `version`, `repository`, and optional per-task `required` / `checks`; existing task IDs, `baseline_sha`, string evidence, and status remain readable by Agentower. Normalize accepts legacy records without marking them verified. Do not rewrite existing requirements to weaken acceptance; use an explicit waiver or create a revised plan when the user changes scope.
 
 Mutations acquire an exclusive sibling `.lock` containing writer PID and start time. On a lock error, check that writer before any recovery; never delete another active writer's lock or automatically age it out. Initialization refuses to overwrite an existing sidecar.
 

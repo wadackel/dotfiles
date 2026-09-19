@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux,ps
 
-// Bridges Codex CLI lifecycle hooks to tmux pane options for the popup picker.
+// Bridges Codex CLI lifecycle hooks to tmux pane options for Agentower.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
 
 import { isEmbedded, parsePsLine, type PsRow } from "../agent-presence.ts";
@@ -321,7 +321,7 @@ export function extractEditFile(toolName: string, toolInput: unknown): string {
 export function selfHealOps(data: HookData): Op[] {
   const sid = str(data.session_id);
   if (!sid) return [];
-  // Defense-in-depth path-traversal guard; mirrors claude/opencode + picker.
+  // Defense-in-depth path-traversal guard; mirrors claude/opencode + Agentower.
   if (!SESSION_ID_RE.test(sid)) return [];
   const ops: Op[] = [
     { kind: "set", key: "@pane_agent", value: "codex" },
@@ -519,7 +519,7 @@ function rateLimitWindow(
 
 // The record's own timestamp, not the wall clock at publish time. A resumed
 // session replays a tail that can be days old, and stamping it with `now`
-// would make the picker's staleness rule read it as current.
+// would make Agentower's staleness rule read it as current.
 function recordedAtSec(payload: Record<string, unknown>): number | null {
   const ts = payload.timestamp;
   if (typeof ts !== "string") return null;
@@ -1203,13 +1203,13 @@ async function appendRunLog(record: RunLog): Promise<void> {
       append: true,
     });
   } catch {
-    // picker state is more important than diagnostics
+    // Agentower state is more important than diagnostics
   }
 }
 
 // Absent rate limits leave the previous file untouched rather than clearing it:
 // a 64KB tail that happens to contain no token_count says nothing about the
-// account, and the picker would rather show a stale number with its age than
+// account, and Agentower would rather show a stale number with its age than
 // drop the segment entirely.
 async function publishRateLimits(data: HookData): Promise<void> {
   const home = Deno.env.get("HOME");

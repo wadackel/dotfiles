@@ -1,16 +1,16 @@
 // Pure types + `tmux list-panes -F` format + row parser.
-// Extracted from picker.tsx so non-TUI tools (picker-doctor, tests) can reuse
+// Extracted from agentower.tsx so non-TUI tools (agentower-doctor, tests) can reuse
 // the SSOT without pulling in React / Ink.
 
 export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 
-// User-defined session label. Written by the picker itself (not by agent
+// User-defined session label. Written by Agentower itself (not by agent
 // hooks) via `set-option -p -t <paneId> @pane_user_label <value>`. Empty
 // string means "no label" (= none). The label set takes display priority
 // over PaneStatus in row-1: see displayMeta() in components.tsx.
 export type UserLabel = "" | "review" | "parked" | "feedback" | "pending";
 
-// Agents whose sessions the picker surfaces. PaneRow.agent stays `string` because
+// Agents whose sessions Agentower surfaces. PaneRow.agent stays `string` because
 // `@pane_agent` is read verbatim from tmux and may legitimately be empty or any
 // other value (a non-claude / non-opencode / non-codex pane). isLivePaneCommand applies the
 // allowlist; PaneRow.agent is not narrowed at the parser layer.
@@ -58,9 +58,9 @@ export interface PaneRow {
   lastToolError: string;
   contextUsedPct: number | null;
   userLabel: UserLabel;
-  // Filled by picker.tsx's fetchPanes from a git lookup, never by parseRow:
+  // Filled by agentower.tsx's fetchPanes from a git lookup, never by parseRow:
   // the tmux row carries only the cwd, and parseRow stays a pure parser that
-  // picker-doctor shares.
+  // agentower-doctor shares.
   repoName?: string;
   worktreeName?: string;
 }
@@ -93,7 +93,7 @@ export const USER_LABEL_META = {
   pending: { color: "#a6afff", short: "pending", icon: "\u{F00C3}" }, // nf-md-bookmark-outline
 } as const;
 
-// Cycling order for `m` keypress in the picker. Length 5 so `(idx + 1) % 5`
+// Cycling order for `m` keypress in Agentower. Length 5 so `(idx + 1) % 5`
 // closes the loop back to "" (none). The order is intentional, not derived
 // from Object.keys(USER_LABEL_META) — Object.keys order is technically
 // guaranteed for string keys in modern JS but the explicit array makes the
@@ -106,7 +106,7 @@ export const USER_LABEL_CYCLE: readonly UserLabel[] = [
   "pending",
 ] as const;
 
-// Compute the next label in the picker cycle. Unknown / out-of-cycle input
+// Compute the next label in Agentower's cycle. Unknown / out-of-cycle input
 // is treated as "" so the cycle restarts from the head.
 export function nextUserLabel(current: UserLabel): UserLabel {
   const idx = USER_LABEL_CYCLE.indexOf(current);

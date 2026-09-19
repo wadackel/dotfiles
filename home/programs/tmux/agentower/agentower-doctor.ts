@@ -1,21 +1,21 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-run=tmux,ps --allow-read
 
-// Diagnostic snapshot for the tmux AI session picker.
+// Diagnostic snapshot for Agentower.
 //
-// Run this when the picker (prefix+w) is missing a pane that has Claude Code
+// Run this when Agentower (prefix+w) is missing a pane that has Claude Code
 // or Codex running. It enumerates every tmux pane, walks each pane's descendant
-// processes, and classifies whether the pane matches what the picker expects:
+// processes, and classifies whether the pane matches what Agentower expects:
 //
 //   OK                    — @pane_agent matches the detected agent descendant
 //   SUSPECT_MISSING_FLAG  — detected agent descendant and @pane_agent disagree
-//                           (the invisible-in-picker signature — the picker's
+//                           (the invisible-in-Agentower signature — Agentower's
 //                            filter requires the right @pane_agent value)
 //   STALE_FLAG            — @pane_agent is claude/codex but no matching descendant
 //                           (teardown failure or orphaned flag)
 //   NORMAL                — neither condition — not an AI agent pane
 //
-// Intentionally NOT a detection fallback for picker.tsx. If that were the goal
-// we'd widen the picker filter; instead we keep picker's single-predicate SSOT
+// Intentionally NOT a detection fallback for agentower.tsx. If that were the goal
+// we'd widen Agentower's filter; instead we keep Agentower's single-predicate SSOT
 // and use this tool to diagnose why the SSOT is out of sync with reality.
 
 import { type PaneRow, parseRow, TMUX_FORMAT } from "./pane_row.ts";

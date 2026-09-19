@@ -1154,7 +1154,7 @@ Deno.test("selfHealOps: without session_id returns empty", () => {
 
 Deno.test("selfHealOps: invalid session_id (path traversal) drops event", () => {
   // Defense-in-depth: writer-side SESSION_ID_RE assertion must reject
-  // non-allowlist ids (e.g. `../bad`). Picker re-validates the same regex.
+  // non-allowlist ids (e.g. `../bad`). Agentower re-validates the same regex.
   assertEquals(selfHealOps({ session_id: "../bad", cwd: "/tmp" }), []);
   assertEquals(selfHealOps({ session_id: "sess:001" }), []);
   assertEquals(selfHealOps({ session_id: "a".repeat(129) }), []);
@@ -2112,7 +2112,7 @@ Deno.test("extractToolError: array → empty (defensive)", () => {
 
 Deno.test("extractToolError: strips ESC/NUL/BEL control bytes (terminal-escape injection defense)", () => {
   // A Bash command like `echo $'\x1b[2J'` produces failure output containing
-  // the raw ESC byte. Without stripping, picker rendering would execute the
+  // the raw ESC byte. Without stripping, Agentower rendering would execute the
   // escape sequence (clear screen, title change, etc).
   const raw = "Error: \x1b[2Jmalicious\x07text\x00here";
   const out = extractToolError(raw);
@@ -2701,7 +2701,7 @@ Deno.test("Phase B.1 fixture: StopFailure rate_limit", () => {
 
 // --- PreToolUse: user-input pause tools (AskUserQuestion / ExitPlanMode) ---
 // These tools pause the agent for user input. PreToolUse must flip status to
-// waiting immediately so the picker no longer shows "run" while paused. Without
+// waiting immediately so Agentower no longer shows "run" while paused. Without
 // this, the pane only flips to wait if a delayed Notification(elicitation_dialog)
 // happens to fire.
 

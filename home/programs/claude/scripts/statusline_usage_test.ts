@@ -1,7 +1,7 @@
 // Round-trip guard for the one schema that exists twice: agent-usage.ts writes
 // it from TypeScript, statusline.sh builds it with jq. Nothing else ties the
 // two together, so a typo in the jq expression would otherwise surface only in
-// the picker footer at runtime.
+// Agentower footer at runtime.
 //
 // The rendered-line assertions at the bottom pin the join logic only. The
 // fixture spells the effort path itself, so a renamed payload field would still

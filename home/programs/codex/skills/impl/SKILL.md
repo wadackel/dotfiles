@@ -22,7 +22,7 @@ Use the explicit plan path, or the path already pinned in this conversation. Onl
 rtk proxy deno run --allow-env=HOME --allow-read --allow-write --no-prompt ~/.codex/scripts/codex-plan-marker.ts resolve - "$PWD"
 ```
 
-Replace `-` with the known absolute plan path when resuming. Expired markers are acceptable for resolution; the 24-hour TTL controls picker display only. An absent or ambiguous pointer needs a plan selection, not automatic re-planning. Keep the returned path and repository root in the session's recovery summary. An explicit path must not replace another session's display pointer.
+Replace `-` with the known absolute plan path when resuming. Expired markers are acceptable for resolution; the 24-hour TTL controls Agentower display only. An absent or ambiguous pointer needs a plan selection, not automatic re-planning. Keep the returned path and repository root in the session's recovery summary. An explicit path must not replace another session's display pointer.
 
 Read the plan and normalize its `.evidence.json` using the helper described in [Evidence commands](references/evidence.md). JSON is the task-state source of truth. If `update_plan` is available, mirror it there; otherwise report progress directly. Never invent successful tool calls.
 

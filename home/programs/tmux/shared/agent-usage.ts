@@ -1,6 +1,6 @@
 // Cross-session rate-limit usage SSOT. Written by statusline.sh (Claude, via
 // jq) and codex-pane-status.ts (Codex, via writeAgentUsage), read by the tmux
-// picker to render its bottom usage footer. Reachable from ~/.codex/ through
+// Agentower to render its bottom usage footer. Reachable from ~/.codex/ through
 // the same in-worktree symlink + home-manager wiring as pane-shared.ts.
 //
 // Unlike pane-shared.ts, this module DOES use Deno.* — file I/O is its whole
@@ -70,13 +70,13 @@ export function usageFilePath(homeDir: string, agent: UsageAgent): string {
 
 // The label reaches the terminal verbatim, so a stray newline in it would make
 // the footer two rows tall and break the layout arithmetic that reserves
-// exactly one. Percentages outside 0–100 are equally untrustworthy: the picker
+// exactly one. Percentages outside 0–100 are equally untrustworthy: Agentower
 // would happily render "412%". Exported so writers can screen a derived label
 // before emitting it — a rejection here costs the whole file, not one window.
 export const USAGE_LABEL_RE = /^[0-9a-z]{1,8}$/;
 
 // Both writers emit a few hundred bytes and at most two windows. The ceilings
-// exist for what the picker does on the read side: it re-reads on every tick,
+// exist for what Agentower does on the read side: it re-reads on every tick,
 // where readTextFile against a FIFO would hang the frame forever and a bloated
 // windows array would be re-tokenized once a second.
 const MAX_USAGE_BYTES = 64 * 1024;
@@ -102,7 +102,7 @@ function isAgentUsage(v: unknown): v is AgentUsage {
     u.windows.every(isUsageWindow);
 }
 
-// Never throws: the picker calls this inside a tick whose single try block also
+// Never throws: Agentower calls this inside a tick whose single try block also
 // guards the pane refresh, so an exception here would stall the whole list.
 export async function readAgentUsage(
   homeDir: string,
@@ -110,7 +110,7 @@ export async function readAgentUsage(
 ): Promise<AgentUsage | null> {
   try {
     const path = usageFilePath(homeDir, agent);
-    // stat before read: readTextFile on a FIFO never returns, and the picker
+    // stat before read: readTextFile on a FIFO never returns, and Agentower
     // awaits this before its first frame.
     const stat = await Deno.stat(path);
     if (!stat.isFile || stat.size > MAX_USAGE_BYTES) return null;

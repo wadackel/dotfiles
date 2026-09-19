@@ -24,7 +24,7 @@ Read the plan in full. Evidence lives in `~/.claude/plans/<basename>.evidence.js
 
 For each task in order, skipping tasks whose `blockedBy` is open:
 
-1. `plan-state.ts start <evidence> task-N` (records the baseline sha). Mirror the status with `TaskUpdate` when the Task tools exist; the tmux picker reads that mirror.
+1. `plan-state.ts start <evidence> task-N` (records the baseline sha). Mirror the status with `TaskUpdate` when the Task tools exist; Agentower reads that mirror.
 2. Implement per the plan's Files to Change and Patterns to Mirror. A task whose acceptance names a failing test first runs the red step before the green one and keeps both outputs.
 3. `require` the task's checks: `cc-<n>` for each Autonomous Verification bullet this task owns (contract.md numbering), plus any task-local id. A `[live]` check declares its `expected` identity (`file`, `git_head`, or `identity`).
 4. `snapshot`, run the acceptance commands, then `record` each check with the raw output verbatim; the only edit is replacing a credential, token, or signed URL with `<redacted: where it lives>`. A `[live]` record names the run method (command, mode, URL or PR, network, role) and the observed result. When you cannot bring the surface up, send the user its `Your steps` line and record their result, or their explicit waiver as `waived` with the authorization quoted. Tests never stand in for a `[live]` item.

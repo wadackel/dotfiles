@@ -1,6 +1,6 @@
 // Pure event → tmux pane-option op converter for the opencode plugin.
-// Mirrors home/programs/claude/scripts/claude-pane-status.ts:eventToOps so the
-// picker reads `@pane_*` from both agents through one shared format. Bun-only
+// Mirrors home/programs/claude/scripts/claude-pane-status.ts:eventToOps so
+// Agentower reads `@pane_*` from both agents through one shared format. Bun-only
 // I/O lives in plugin.ts; this file is runtime-agnostic so Deno can test it.
 
 import {
@@ -78,7 +78,7 @@ function extractToolName(rawTool: unknown): string {
 export function selfHealOps(data: HookData): Op[] {
   const sid = readSessionId(data);
   if (!sid) return [];
-  // Defense-in-depth path-traversal guard; mirrors claude/codex + picker.
+  // Defense-in-depth path-traversal guard; mirrors claude/codex + Agentower.
   if (!SESSION_ID_RE.test(sid)) return [];
   const ops: Op[] = [
     { kind: "set", key: "@pane_agent", value: "opencode" },

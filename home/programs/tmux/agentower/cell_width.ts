@@ -1,5 +1,5 @@
 // Display-cell width helpers + ellipsis-aware truncation.
-// Pure module — extracted from picker.tsx so non-React tooling can compute
+// Pure module — extracted from agentower.tsx so non-React tooling can compute
 // terminal-cell widths (CJK / fullwidth aware) without dragging in
 // npm:react / npm:ink.
 

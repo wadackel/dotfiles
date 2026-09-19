@@ -81,7 +81,8 @@ cask
 plan-state
 code-simplifier
 agent-browser
-picker-verify
+agentower
+agentower-verify
 llm-wiki
 writing-clarity
 writing-metrics

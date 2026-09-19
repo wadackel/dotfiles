@@ -1,10 +1,10 @@
 #!/usr/bin/env -S deno run --allow-run=tmux,deno --allow-env --allow-read --allow-write
 
-// picker-verify: warm Deno module cache, run picker e2e suite against an
+// agentower-verify: warm Deno module cache, run Agentower e2e suite against an
 // isolated tmux server, emit a JSON summary on stdout. Exit code mirrors ok.
 
 interface Result {
-  check: "picker-e2e";
+  check: "agentower-e2e";
   ok: boolean;
   scenarios: {
     passed: number;
@@ -20,8 +20,9 @@ interface Result {
 const REPO_ROOT = decodeURIComponent(
   new URL("../../../", import.meta.url).pathname,
 );
-const PICKER_PATH = `${REPO_ROOT}home/programs/tmux/picker/picker.tsx`;
-const TEST_PATH = `${REPO_ROOT}home/programs/tmux/picker/picker_e2e_test.ts`;
+const AGENTOWER_PATH = `${REPO_ROOT}home/programs/tmux/agentower/agentower.tsx`;
+const TEST_PATH =
+  `${REPO_ROOT}home/programs/tmux/agentower/agentower_e2e_test.ts`;
 
 async function runDeno(args: string[]): Promise<{
   code: number;
@@ -71,7 +72,7 @@ async function main(): Promise<number> {
   const start = Date.now();
   const errors: string[] = [];
 
-  const cache = await runDeno(["cache", PICKER_PATH]);
+  const cache = await runDeno(["cache", AGENTOWER_PATH]);
   if (cache.code !== 0) {
     errors.push(
       `deno cache failed (code ${cache.code}): ${cache.stderr.trim()}`,
@@ -83,7 +84,7 @@ async function main(): Promise<number> {
   // /tmp for the harness-compiled .claude-wrapped stub directory.
   // --allow-run includes git so S38 can build a repository with a linked
   // worktree, and mkdir/test/cc so the harness can create/cache its
-  // `.claude-wrapped` stub (see picker_e2e_harness.ts:LIVE_BIN_*) — Darwin
+  // `.claude-wrapped` stub (see agentower_e2e_harness.ts:LIVE_BIN_*) — Darwin
   // rejects copies of Apple-signed binaries, making compile the only path
   // that makes tmux's #{pane_current_command} match `.claude-wrapped`.
   const writeScope = home
@@ -112,7 +113,7 @@ async function main(): Promise<number> {
   }
 
   const result: Result = {
-    check: "picker-e2e",
+    check: "agentower-e2e",
     ok,
     scenarios,
     elapsed_ms: Date.now() - start,

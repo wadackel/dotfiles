@@ -17,8 +17,8 @@ export type Op =
 // --- @pane_* key contract ---
 //
 // PaneOptionKey is the literal union of every key the agents may write. Each
-// agent only owns a subset (see ALL_PANE_OPTIONS_FOR_<AGENT> below). The
-// picker reads a superset declared in pane_row.ts:TMUX_FORMAT.
+// agent only owns a subset (see ALL_PANE_OPTIONS_FOR_<AGENT> below).
+// Agentower reads a superset declared in pane_row.ts:TMUX_FORMAT.
 
 export type PaneOptionKey =
   | "@pane_agent"
@@ -120,22 +120,22 @@ export const CLAUDE_ONLY_KEYS = [
   "@pane_worktree_path",
 ] as const satisfies readonly PaneOptionKey[];
 
-// Keys owned by the picker itself (read AND written by picker.tsx, not by
-// any agent hook). These keys appear in TMUX_FORMAT so the picker can read
+// Keys owned by Agentower itself (read AND written by agentower.tsx, not by
+// any agent hook). These keys appear in TMUX_FORMAT so Agentower can read
 // them but are intentionally absent from ALL_PANE_OPTIONS_FOR_<AGENT>. The
 // contract test in pane-shared_test.ts subtracts this set from the
-// "TMUX_FORMAT keys ⊆ ⋃ writer keys" check so picker-owned keys do not
+// "TMUX_FORMAT keys ⊆ ⋃ writer keys" check so Agentower-owned keys do not
 // trigger a false-positive contract violation. State written here lives
 // for the pane's lifetime only (no SessionEnd teardown by agents needed).
 //
 // @pane_user_label_session records the @pane_session_id that was current when
-// the label was written. The picker reads it to gate label display: when the
+// the label was written. Agentower reads it to gate label display: when the
 // recorded session no longer matches the pane's current @pane_session_id (a
 // new agent session was started on the same pane), parseRow normalizes the
 // label to "" so a stale label from a closed session does not leak into the
 // new one. This keys the fix on session identity, not on unreliable close
 // hooks.
-export const PICKER_OWNED_KEYS = [
+export const AGENTOWER_OWNED_KEYS = [
   "@pane_user_label",
   "@pane_user_label_session",
 ] as const satisfies readonly string[];
@@ -148,12 +148,12 @@ export const TOOL_ERROR_MAX_CHARS = 40;
 
 // --- session_id allowlist ---
 
-// Conservative allowlist for session_id when used as a path segment (picker
+// Conservative allowlist for session_id when used as a path segment (Agentower
 // reads `~/.claude/tasks/<sessionId>/*.json`) or written to @pane_session_id.
 // Claude Code session ids are UUIDs, codex / opencode use UUID-shape or
 // name-like ids — all fit within this regex. Rejecting anything else closes
 // the `sessionId = "../something"` directory traversal class at every
-// boundary that consumes it (writer selfHealOps + picker reader).
+// boundary that consumes it (writer selfHealOps + Agentower reader).
 export const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 // --- Pure formatters ---
@@ -182,7 +182,7 @@ export function truncate(raw: string, max: number, ellipsis = "…"): string {
 // tmux-list-panes -F output. Strips control bytes, collapses internal runs
 // of whitespace into a single space, trims, then slices to PROMPT_MAX_CHARS
 // (override via opts.max). Threat model: a crafted prompt containing e.g.
-// $'\x1b[2J' could otherwise clear the picker user's screen when tmux
+// $'\x1b[2J' could otherwise clear the screen of whoever has Agentower open when tmux
 // renders the option value.
 export function maskPrompt(
   raw: unknown,

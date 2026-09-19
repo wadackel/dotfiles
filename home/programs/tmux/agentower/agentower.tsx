@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-env --allow-read --allow-run --no-prompt
 
-// tmux Claude Code session picker (prefix+w).
+// Agentower: the tmux prefix+w popup that lists AI agent panes.
 // ink + React on Deno. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
 
 /** @jsx React.createElement */
@@ -11,7 +11,7 @@ import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@7.1.1";
 // ---- Types + row parsing SSOT ----
 
 // PaneRow / PaneStatus / STATUS_META / TMUX_FORMAT / parseRow live in
-// pane_row.ts so non-TUI tooling (picker-doctor.ts, tests) can reuse them
+// pane_row.ts so non-TUI tooling (agentower-doctor.ts, tests) can reuse them
 // without dragging in React + Ink at import time.
 import {
   type Agent,
@@ -167,7 +167,7 @@ export function row1Columns(
 
 // Both agents are read on every tick rather than cached: the files are a few
 // hundred bytes and are rewritten by other processes, so there is no local
-// signal that would tell the picker its copy went stale.
+// signal that would tell Agentower its copy went stale.
 export async function readAllAgentUsage(): Promise<AgentUsage[]> {
   const home = Deno.env.get("HOME");
   if (!home) return [];
@@ -403,13 +403,13 @@ async function gitLocation(dir: string): Promise<GitLocation> {
 
 // Allowed shape for a session id when used as a filesystem path segment.
 // Imported from pane-shared.ts so the writer (selfHealOps) and reader
-// (picker) share one regex — defense-in-depth against `sessionId =
+// (Agentower) share one regex — defense-in-depth against `sessionId =
 // "../something"` directory traversal at every consumer.
 import { SESSION_ID_RE } from "../shared/pane-shared.ts";
 
 // Read `~/.claude/tasks/<sessionId>/*.json` and aggregate completed/total counts.
 // Returns null when the dir is missing, empty, or every file fails to parse —
-// in which case the picker simply omits the task-progress segment. No cache:
+// in which case Agentower simply omits the task-progress segment. No cache:
 // dir-mtime cache is unsafe because an in-place status flip on an existing
 // task file does not bump dir mtime. Empirical task counts are ≤ ~13 per
 // session so the 1s tick budget is unaffected.
@@ -453,7 +453,7 @@ const CODEX_TASK_STATUSES = new Set([
   "completed",
 ]);
 
-// Mirrors codex-plan-marker.ts:canonical so picker hashes the same cwd string
+// Mirrors codex-plan-marker.ts:canonical so Agentower hashes the same cwd string
 // as the marker writer even when the leaf path has disappeared.
 async function canonical(p: string): Promise<string> {
   try {
@@ -601,10 +601,10 @@ export async function readTaskProgressForRow(
 }
 
 // Per-agent live-pane allowlist + isLivePaneCommand live in pane_row.ts so
-// non-TUI tooling (picker-doctor, tests) can share the SSOT without React/Ink.
+// non-TUI tooling (agentower-doctor, tests) can share the SSOT without React/Ink.
 // The matcher is intentionally exact-match against tmux's `pane_current_command`
 // (kernel p_comm basename, ≤15 bytes on macOS) — distinct from
-// picker-doctor.ts:detectAgentCommand which scans full `ps -o command` substrings.
+// agentower-doctor.ts:detectAgentCommand which scans full `ps -o command` substrings.
 
 async function fetchPanes(): Promise<PaneRow[]> {
   const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
@@ -666,7 +666,7 @@ export function parseTarget(target: string): {
 }
 
 // A popup takes every key before tmux's prefix table sees it, so the
-// `prefix w` that opened the picker has to be recognised here to close it.
+// `prefix w` that opened Agentower has to be recognised here to close it.
 // Only the Ctrl+letter form is supported; anything else disables the chord.
 // C-h/i/j/m are excluded because Ink reports them as backspace/tab/enter/return
 // without the ctrl flag.
@@ -866,7 +866,7 @@ function App({
         const nextUsages = await readAllAgentUsage();
         if (!cancelled) setUsages(nextUsages);
       } catch (e) {
-        console.error("picker: fetchPanes tick failed:", e);
+        console.error("agentower: fetchPanes tick failed:", e);
       } finally {
         if (!cancelled) timerId = setTimeout(tick, TICK_INTERVAL_MS);
       }
@@ -923,7 +923,7 @@ function App({
         sessionId,
       ]),
     ]).catch((e) => {
-      console.error("picker: writeUserLabel tmux write failed:", e);
+      console.error("agentower: writeUserLabel tmux write failed:", e);
       // Only drop our own guard — a later press may have superseded `label`,
       // in which case the newer pending write should remain in effect.
       if (pendingLabelWrites.current.get(paneId) === label) {
@@ -1157,25 +1157,25 @@ function App({
 
 async function main(): Promise<void> {
   if (!Deno.env.get("TMUX")) {
-    console.error("picker.tsx must run inside tmux");
+    console.error("agentower.tsx must run inside tmux");
     Deno.exit(2);
   }
   // Parallel with fetchPanes so the footer costs the popup no extra startup
-  // latency — the whole reason the picker is AOT-compiled in the first place.
+  // latency — the whole reason Agentower is AOT-compiled in the first place.
   const [rows, usages, prefixKey] = await Promise.all([
     fetchPanes(),
     readAllAgentUsage(),
     readPrefixKey(),
   ]);
 
-  // tmux.conf bind-key w writes CC_PICKER_FROM_PANE to the session environment via
+  // tmux.conf bind-key w writes AGENTOWER_FROM_PANE to the session environment via
   // `set-environment` BEFORE display-popup runs; the popup process inherits the value at spawn.
   // The earlier `display-popup -e "VAR=#{pane_id}"` form was empirically observed to deliver
   // a stale pane id (off-by-one against the previous invocation's source pane) — see the
   // diagnostic samples captured in plan 20260429T1822-picker-cursor-from-pane-fix. Routing the
   // value through session env, set BEFORE display-popup, sidesteps that quirk.
   // Reserved TMUX_PANE is unsuitable: tmux overwrites it with the popup's own pane id at spawn.
-  const fromPane = Deno.env.get("CC_PICKER_FROM_PANE") ?? null;
+  const fromPane = Deno.env.get("AGENTOWER_FROM_PANE") ?? null;
   const initialSelectedPaneId =
     fromPane && rows.some((r) => r.paneId === fromPane)
       ? fromPane

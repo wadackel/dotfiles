@@ -1,10 +1,10 @@
 // Pure-ish Ink view layer: PaneRowLine + the visual constants and the
-// row-2 truncator it depends on. Extracted from picker.tsx so the row
+// row-2 truncator it depends on. Extracted from agentower.tsx so the row
 // renderer can be reasoned about independently of the App-level state
 // machine (selection, filter, fetchPanes, useInput).
 //
 // Visual tokens (DOGRUN, ROW1_FIXED_OVERHEAD, TaskProgress) and the bottom
-// key-hint bar live here too — picker.tsx re-imports them so the App-level
+// key-hint bar live here too — agentower.tsx re-imports them so the App-level
 // chrome (hint bar, filter chip, summary budget, task-progress shape) shares
 // a single source.
 

@@ -4,7 +4,7 @@
 // if the firing process is itself running under a different agent's process tree
 // (e.g. codex spawned via Claude's `/codex-cli` skill). Without this gate the
 // embedded session's lifecycle hooks overwrite @pane_* options that belong to
-// the outer agent, and the picker shows the wrong status.
+// the outer agent, and Agentower shows the wrong status.
 //
 // Detection: walk the process ancestry via `ps -p PID -o ppid=,comm=` and count
 // occurrences of known agent CLIs (`claude`, `codex`, `opencode`). The hook's

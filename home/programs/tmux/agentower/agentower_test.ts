@@ -26,7 +26,7 @@ import {
   TMUX_FORMAT,
   topRowsFor,
   visibleWindow,
-} from "./picker.tsx";
+} from "./agentower.tsx";
 import {
   clampUsageTokens,
   DOGRUN,
@@ -68,7 +68,7 @@ Deno.test("parseRow: full row with all fields present", () => {
     "/x/y/file.ts",
     "1700001234",
     "pnpm test",
-    "picker.tsx",
+    "agentower.tsx",
     "Exit code 1",
     "42",
     "review",
@@ -94,7 +94,7 @@ Deno.test("parseRow: full row with all fields present", () => {
     lastEditFile: "/x/y/file.ts",
     lastActivityAtSec: 1700001234,
     currentToolSubject: "pnpm test",
-    lastToolSubject: "picker.tsx",
+    lastToolSubject: "agentower.tsx",
     lastToolError: "Exit code 1",
     contextUsedPct: 42,
     userLabel: "review",
@@ -366,7 +366,7 @@ async function withTempHome<T>(
 ): Promise<T> {
   const home = await Deno.makeTempDir({
     dir: "/tmp",
-    prefix: "picker-codex-home-",
+    prefix: "agentower-codex-home-",
   });
   const originalHome = Deno.env.get("HOME");
   Deno.env.set("HOME", home);
@@ -701,16 +701,16 @@ Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", (
   assertEquals(truncateTopSegBody(seg, 100), "Bash(ok)");
 });
 
-Deno.test("default.nix passes --no-prompt to deno compile (prevents picker hang from Deno permission prompter)", async () => {
+Deno.test("default.nix passes --no-prompt to deno compile (prevents Agentower hang from Deno permission prompter)", async () => {
   // Regression guard. Without --no-prompt, an unauthorized runtime op causes
   // Deno's TtyPrompter::prompt to call clear_stdin (runtime/permissions/
   // prompter.rs), which loops on tcflush + select with a 100ms timeout. Inside
   // a tmux popup, stdin is steadily readable, so select never returns 0 and
-  // the loop never exits. The picker's main thread spins inside this loop,
+  // the loop never exits. Agentower's main thread spins inside this loop,
   // starving the JS event loop. ESC/q bytes arrive at stdin but useInput
   // never fires; only SIGINT (Ctrl+C) breaks out via signal-exit. Adding
   // --no-prompt converts unauthorized ops into thrown errors caught by the
-  // tick try/catch (picker.tsx:781-783), preserving input responsiveness.
+  // fetchPanes tick try/catch in agentower.tsx, preserving input responsiveness.
   const url = new URL("../default.nix", import.meta.url);
   const text = await Deno.readTextFile(url);
   const m = text.match(
@@ -723,7 +723,7 @@ Deno.test("default.nix passes --no-prompt to deno compile (prevents picker hang 
     throw new Error(
       "Missing --no-prompt in deno compile invocation. Without it, Deno's " +
         "permission prompter can infinite-loop on tcflush+select inside " +
-        "TtyPrompter::prompt, hanging the picker.",
+        "TtyPrompter::prompt, hanging Agentower.",
     );
   }
 });

@@ -1,10 +1,10 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMUX_PANE --allow-run=tmux,ps
 
-// Bridges Claude Code hook events → tmux pane options (SSOT for the popup picker).
+// Bridges Claude Code hook events → tmux pane options (SSOT for Agentower).
 // Invoked as: claude-pane-status.ts <EventName>   (unknown events → no-op exit 0)
 //
 // Observability: every invocation appends one JSONL record to
-// $HOME/.claude/logs/claude-pane-status.log so invisible-in-picker cases can be
+// $HOME/.claude/logs/claude-pane-status.log so invisible-in-Agentower cases can be
 // diagnosed after the fact (which event fired, early-exit reason, tmux set
 // results per op). Log I/O errors are swallowed — hook must never break the
 // session when the log destination is unavailable.
@@ -88,7 +88,7 @@ const STALE_AT_SESSION_START = [
 ] as const satisfies readonly PaneOptionKey[];
 
 // Tools that pause for user input. PreToolUse for these flips status to
-// "waiting" so the picker no longer shows "run" while the agent is paused.
+// "waiting" so Agentower no longer shows "run" while the agent is paused.
 // PostToolUse's resumeOpsIfStuck handles the waiting→running transition.
 // EnterPlanMode is intentionally absent: it declares plan-mode entry; the
 // actual approval pause happens at ExitPlanMode.
@@ -324,7 +324,7 @@ export function selfHealOps(data: HookData): Op[] {
   const sid = str(data.session_id);
   if (!sid) return [];
   // Defense-in-depth: drop the entire event if session_id is outside the
-  // SESSION_ID_RE allowlist (path-traversal class). picker re-validates the
+  // SESSION_ID_RE allowlist (path-traversal class). Agentower re-validates the
   // same regex at its boundary, so this hard-fails malformed events at the
   // writer too rather than relying on a single consumer.
   if (!SESSION_ID_RE.test(sid)) return [];
@@ -362,7 +362,7 @@ export function eventToOps(
       case "SessionStart": {
         // agent / session_id / cwd are set by selfHealOps below.
         // sessionStartBody = unsetOps(STALE) + status=idle + last_activity_at=now.
-        // Seed activity_at so a fresh session shows `idle Ns` in the picker row 2
+        // Seed activity_at so a fresh session shows `idle Ns` in Agentower's row 2
         // from the moment it starts (otherwise brand-new idle panes display nothing).
         return sessionStartBody({
           staleKeys: STALE_AT_SESSION_START,
@@ -608,7 +608,7 @@ export function eventToOps(
               // Strip C0/C1 control bytes to keep the value safe for tmux
               // list-panes -F output (NL would split the row, TAB could
               // collide with delimiter formats, ESC could inject terminal
-              // escapes when picker renders). Picker applies basename().
+              // escapes when Agentower renders). Agentower applies basename().
               filePath = fp.replace(/[\x00-\x1f\x7f]/g, " ");
             }
           }

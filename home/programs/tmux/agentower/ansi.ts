@@ -1,5 +1,5 @@
 // ANSI escape sanitization + ANSI-aware line truncation.
-// Pure module — extracted from picker.tsx so that non-React tooling and
+// Pure module — extracted from agentower.tsx so that non-React tooling and
 // e2e harnesses can import these helpers without dragging in npm:react /
 // npm:ink at parse time.
 
@@ -39,7 +39,7 @@ export function sanitizeAnsi(input: string): string {
 // through intact. If truncation occurs mid-SGR-span, a reset `\x1b[0m` is
 // appended so no color leaks to the next line.
 //
-// Cell-aware semantics are load-bearing for the picker preview: Ink wraps a
+// Cell-aware semantics are load-bearing for Agentower's preview: Ink wraps a
 // `<Text>` line whose visual width exceeds the box, which pushes the bottom
 // rows (where AI-agent chat input sits) out of view. Counting CJK as 2
 // cells keeps the rendered width within `maxCols` even on Japanese pane

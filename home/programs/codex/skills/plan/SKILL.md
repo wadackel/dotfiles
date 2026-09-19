@@ -5,7 +5,7 @@ description: Codex design-first planning skill. Mirrors Claude `/plan`'s seven n
 
 # $plan
 
-Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for the tmux picker. `$impl` promotes `.pending-` to `.active-` at the start of its run.
+Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for Agentower. `$impl` promotes `.pending-` to `.active-` at the start of its run.
 
 Resolve consequential user-intent decisions before drafting. Existing choices in the conversation or an accepted Issue count as agreement; a fully specified request does not need another confirmation. Do not implement code while planning.
 
@@ -363,7 +363,7 @@ Use the Claude version table as a reference: `~/.claude/skills/plan/SKILL.md`, w
 
 ## ACTIVATE
 
-Write the `.pending-<cwd-hash>` UI-pointer marker so the tmux picker can show this cwd's plan/task progress. The marker is a display pointer only — it does not gate edits. `$impl` promotes `.pending-` to `.active-` at the start of its run (its `resolve` call refreshes an unambiguous display pointer); do not create `.active-` here.
+Write the `.pending-<cwd-hash>` UI-pointer marker so Agentower can show this cwd's plan/task progress. The marker is a display pointer only — it does not gate edits. `$impl` promotes `.pending-` to `.active-` at the start of its run (its `resolve` call refreshes an unambiguous display pointer); do not create `.active-` here.
 
 Delegate marker operations to the deterministic helper. Do not build cwd-hash or marker paths inline in shell.
 
@@ -371,7 +371,7 @@ Delegate marker operations to the deterministic helper. Do not build cwd-hash or
 ~/.codex/scripts/codex-plan-marker.ts activate-pending '<PLAN_FILE_PATH from DRAFT>' "$PWD"
 ```
 
-`<PLAN_FILE_PATH from DRAFT>` is the absolute path decided in DRAFT and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash the picker derives, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
+`<PLAN_FILE_PATH from DRAFT>` is the absolute path decided in DRAFT and substituted by the agent as a literal string, not via bash variable expansion. The helper canonicalizes `$PWD` to the same cwd-hash Agentower derives, creates `~/.codex/plans`, removes old active markers for re-plan, and atomically writes the pending marker.
 
 Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` cannot be activated — fix the plan file and re-run until it reports `0 errors`.
 
@@ -394,7 +394,7 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 - `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
 - `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
 - `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, runs `plan-state.ts coverage` / `complete` as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
-- Marker helper (`codex-plan-marker.ts`): writes the tmux picker's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
+- Marker helper (`codex-plan-marker.ts`): writes Agentower's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
 
-// The picker reads the marker format and TTL independently; changing them here
+// Agentower reads the marker format and TTL independently; changing them here
 // would leave display behavior inconsistent with plan resolution.
 
 // The shebang uses broad write permission because Deno shebang arguments cannot
@@ -10,7 +10,7 @@ const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 // Canonicalize a path even if its leaf does not yet exist. Walks up to the
 // nearest existing ancestor, canonicalizes that, then re-appends the unresolved
 // tail. This matters on macOS where /var/folders symlinks to /private/var/folders
-// — a non-canonical leaf would hash differently from the picker's canonical cwd.
+// — a non-canonical leaf would hash differently from Agentower's canonical cwd.
 export async function canonical(p: string): Promise<string> {
   try {
     return await Deno.realPath(p);

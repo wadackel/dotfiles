@@ -76,7 +76,7 @@ Deno.test("selfHealOps: cwd from properties.info.directory", () => {
 });
 
 Deno.test("selfHealOps: invalid sessionID (path traversal) drops event", () => {
-  // Defense-in-depth: writer-side SESSION_ID_RE assertion. Picker re-validates.
+  // Defense-in-depth: writer-side SESSION_ID_RE assertion. Agentower re-validates.
   assertEquals(selfHealOps({ sessionID: "../bad", cwd: "/tmp" }), []);
   assertEquals(selfHealOps({ session_id: "sess:001" }), []);
   assertEquals(selfHealOps({ sessionID: "a".repeat(129) }), []);

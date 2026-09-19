@@ -9,13 +9,13 @@ import {
   sandboxHomePath,
   sendKey,
   setupServer,
-  spawnPicker,
+  spawnAgentower,
   teardown,
   tmux,
   waitFor,
   waitForExit,
-} from "./picker_e2e_harness.ts";
-import { codexCwdHash } from "./picker.tsx";
+} from "./agentower_e2e_harness.ts";
+import { codexCwdHash } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 
 // Row 1 of the selected pane, which carries the prompt the scenarios identify
@@ -44,13 +44,13 @@ async function writeCodexProgressFixture(
   await Deno.mkdir(cwd, { recursive: true });
   const plansDir = `${home}/.codex/plans`;
   await Deno.mkdir(plansDir, { recursive: true });
-  const planPath = `${plansDir}/picker-e2e-plan.md`;
-  await Deno.writeTextFile(planPath, "## picker e2e plan\n");
+  const planPath = `${plansDir}/agentower-e2e-plan.md`;
+  await Deno.writeTextFile(planPath, "## agentower e2e plan\n");
   await Deno.writeTextFile(
-    `${plansDir}/picker-e2e-plan.evidence.json`,
+    `${plansDir}/agentower-e2e-plan.evidence.json`,
     JSON.stringify(
       {
-        plan: "picker-e2e-plan.md",
+        plan: "agentower-e2e-plan.md",
         tasks: [
           { id: "task-1", subject: "one", status: "completed" },
           { id: "task-2", subject: "two", status: "completed" },
@@ -67,15 +67,15 @@ async function writeCodexProgressFixture(
 }
 
 // S0: Smoke test — exercises the harness itself. No Claude panes in the
-// session, so picker should immediately render "No panes available." and
-// exit cleanly on Escape. If this fails, the harness is broken — not picker.
+// session, so Agentower should immediately render "No panes available." and
+// exit cleanly on Escape. If this fails, the harness is broken — not Agentower.
 Deno.test("S0: harness smoke (no panes)", async () => {
   await setupServer();
   try {
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "No panes available.");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
     // Sanity: harness made it to teardown without exception.
     assertEquals(true, true);
@@ -84,7 +84,7 @@ Deno.test("S0: harness smoke (no panes)", async () => {
   }
 });
 
-// S2: summaryOf in picker.tsx:220-226 picks waitReason when status is
+// S2: summaryOf in agentower.tsx:220-226 picks waitReason when status is
 // waiting/error (even if prompt is set), otherwise picks prompt. Assert both
 // branches fire in a single capture to avoid a second cold start.
 Deno.test("S2: summary switches between waitReason and prompt by status", async () => {
@@ -96,15 +96,15 @@ Deno.test("S2: summary switches between waitReason and prompt by status", async 
       prompt: "ignore-X",
     });
     await createClaudePane({ status: "running", prompt: "go-Y" });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "perm-X");
     assertStringIncludes(out, "go-Y");
     assertFalse(
       out.includes("ignore-X"),
       `waiting pane showed prompt instead of waitReason:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -112,37 +112,37 @@ Deno.test("S2: summary switches between waitReason and prompt by status", async 
 });
 
 // S3: j/k and arrow keys move the "▌" selection marker between rows. Pointer is
-// rendered by picker.tsx:401 only on the row whose index matches state.
+// rendered by agentower.tsx:401 only on the row whose index matches state.
 Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
     await createClaudePane({ status: "running", prompt: "row-b-yyy" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
-    const initial = await captureOutput(picker);
+    const initial = await captureOutput(agentower);
     assertStringIncludes(
       selectedLine(initial),
       "row-a-xxx",
     );
 
-    await sendKey(picker, "Down");
-    await waitFor(picker, selectedIncludes("row-b-yyy"));
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-b-yyy"));
 
-    await sendKey(picker, "k");
-    await waitFor(picker, selectedIncludes("row-a-xxx"));
+    await sendKey(agentower, "k");
+    await waitFor(agentower, selectedIncludes("row-a-xxx"));
 
-    await sendKey(picker, "j");
-    await waitFor(picker, selectedIncludes("row-b-yyy"));
+    await sendKey(agentower, "j");
+    await waitFor(agentower, selectedIncludes("row-b-yyy"));
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S4: Enter sends select-window + select-pane + switch-client (picker.tsx:349-354).
+// S4: Enter sends select-window + select-pane + switch-client (agentower.tsx:349-354).
 // In a detached test server switch-client silently fails (no current client), so
 // we only verify the select-window / select-pane side-effects via the tmux
 // #{pane_active} / #{window_active} flags — both set regardless of attached clients.
@@ -159,16 +159,16 @@ Deno.test("S4: enter selects target window+pane", async () => {
       status: "running",
       prompt: "row-b",
     });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
     // Idle wait so App/Preview ticks accumulate before the Enter exit path.
     await new Promise((r) => setTimeout(r, 2200));
 
     // Move selection to paneB row.
-    await sendKey(picker, "Down");
-    await waitFor(picker, selectedIncludes("row-b"));
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-b"));
 
-    await sendKey(picker, "Enter");
+    await sendKey(agentower, "Enter");
     await waitForExit();
 
     const paneActive = (
@@ -204,37 +204,37 @@ Deno.test("S5: multi-status + self-filter", async () => {
     await createClaudePane({ status: "error" });
     await createClaudePane({ agent: "shell", prompt: "garbage-pane" });
 
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertEquals(listStatuses(out), ["run", "wait", "idle", "err"]);
     assertFalse(
       out.includes("garbage-pane"),
       `shell pane leaked into multi-status capture:\n${out}`,
     );
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S1: A non-claude pane (agent="shell") must be filtered out by picker.
-// fetchPanes keeps only `agent === "claude"` (picker.tsx:313), so a "shell"
+// S1: A non-claude pane (agent="shell") must be filtered out by Agentower.
+// fetchPanes keeps only `agent === "claude"` (agentower.tsx:313), so a "shell"
 // pane should produce the same empty-list UI as S0. Also double-checks that
 // the garbage pane's prompt never leaks into the capture.
 Deno.test("S1: empty list (agent filter excludes non-claude)", async () => {
   await setupServer();
   try {
     await createClaudePane({ agent: "shell", prompt: "garbage-pane" });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "No panes available.");
     assertFalse(
       out.includes("garbage-pane"),
-      `shell pane leaked into picker output:\n${out}`,
+      `shell pane leaked into Agentower output:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -253,21 +253,21 @@ Deno.test("S6: last-tool fallback renders bare tool name (no `last: ` prefix)", 
       prompt: "row-last-tool",
       lastTool: "Edit",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "Edit");
     assertFalse(
       out.includes("last: "),
       `removed prefix 'last: ' leaked into render:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S7: @pane_last_edit_file holds a raw file path; picker applies basename
+// S7: @pane_last_edit_file holds a raw file path; Agentower applies basename
 // at render time. Verify the directory components are stripped.
 Deno.test("S7: last-edit-file renders basename only", async () => {
   await setupServer();
@@ -277,16 +277,16 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
       prompt: "row-basename",
       lastTool: "Edit",
       lastEditFile:
-        "/Users/alice/dotfiles/home/programs/tmux/picker/picker.tsx",
+        "/Users/alice/dotfiles/home/programs/tmux/agentower/agentower.tsx",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
-    assertStringIncludes(out, "picker.tsx");
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
+    assertStringIncludes(out, "agentower.tsx");
     assertFalse(
       out.includes("/Users/alice"),
       `basename failed — raw path leaked into row 2:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -295,7 +295,7 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
 
 // S8: readTaskProgress enumerates ~/.claude/tasks/<sessionId>/*.json.
 // Point HOME at a checked-in read-only fixture so this e2e keeps the same
-// permission profile as the rest of the picker tests.
+// permission profile as the rest of the Agentower tests.
 Deno.test("S8: task progress 2/3 from tasks dir", async () => {
   const originalHome = Deno.env.get("HOME");
   const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
@@ -312,10 +312,10 @@ Deno.test("S8: task progress 2/3 from tasks dir", async () => {
       lastTool: "Read",
       sessionId: "sess-A",
     });
-    const picker = await spawnPicker({ env });
-    const out = await waitFor(picker, (o) => o.includes("2/3"));
+    const agentower = await spawnAgentower({ env });
+    const out = await waitFor(agentower, (o) => o.includes("2/3"));
     assertStringIncludes(out, "2/3");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -329,7 +329,7 @@ Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
   const originalHome = Deno.env.get("HOME");
   const tempHome = await Deno.makeTempDir({
     dir: "/tmp",
-    prefix: "picker-codex-e2e-",
+    prefix: "agentower-codex-e2e-",
   });
   const denoDir = Deno.env.get("DENO_DIR") ??
     (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
@@ -346,11 +346,11 @@ Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
       lastTool: "Read",
       cwd,
     });
-    const picker = await spawnPicker({ env });
-    const out = await waitFor(picker, (o) => o.includes("2/3"));
+    const agentower = await spawnAgentower({ env });
+    const out = await waitFor(agentower, (o) => o.includes("2/3"));
     assertStringIncludes(out, "codex-row-progress");
     assertStringIncludes(out, "2/3");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -371,8 +371,8 @@ Deno.test("S9: idle pane shows time since last activity in the elapsed column", 
       lastTool: "Bash",
       lastActivityAtSec: nowSec - 42,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // Allow ±1s jitter from render timing (42s → 42 or 43).
     const matched = / 4[23]s {2}/.test(out);
     assertEquals(
@@ -380,7 +380,7 @@ Deno.test("S9: idle pane shows time since last activity in the elapsed column", 
       true,
       `elapsed column did not render the idle duration:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -402,8 +402,8 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
       lastEditFile: "/a/b/c/verylongfilename-for-overflow.tsx",
       lastActivityAtSec: nowSec - 42,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // Highest-priority (tool-slot, bare tool name — prefix removed) must remain.
     assertStringIncludes(out, "MultiEditXYZ");
     assertFalse(
@@ -415,7 +415,7 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
       out.includes("verylongfilename"),
       `narrow width did not drop the file segment:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -425,8 +425,8 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
 // S11: Regression for the self-exclusion bug. Before the fix, fetchPanes
 // excluded any row whose paneId matched the originating-pane env var, which
 // caused the pane that launched prefix+w to silently drop out of the list.
-// spawnPicker({ selfPane }) injects CC_PICKER_FROM_PANE=<claude-pane-id> into
-// the picker's child env via `tmux new-window -e`, reproducing the interactive
+// spawnAgentower({ selfPane }) injects AGENTOWER_FROM_PANE=<claude-pane-id> into
+// Agentower's child env via `tmux new-window -e`, reproducing the interactive
 // key-binding path (where tmux.conf's `bind-key w` writes the same env name to
 // session env via `set-environment` before `display-popup`).
 Deno.test("S11: self-launching Claude pane remains visible", async () => {
@@ -439,41 +439,41 @@ Deno.test("S11: self-launching Claude pane remains visible", async () => {
     await createClaudePane({ status: "running", prompt: "row-B" });
     await createClaudePane({ status: "running", prompt: "row-C" });
     await createClaudePane({ status: "running", prompt: "row-D" });
-    const picker = await spawnPicker({ selfPane: paneA });
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower({ selfPane: paneA });
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "row-self-A");
     assertStringIncludes(out, "row-B");
     assertStringIncludes(out, "row-C");
     assertStringIncludes(out, "row-D");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S12: navigation wraps at boundaries. picker.tsx:607-616 wraps Up at the
+// S12: navigation wraps at boundaries. agentower.tsx:607-616 wraps Up at the
 // first row to the last, and Down at the last row to the first. Verify both
-// directions within a single 2-pane scenario to keep picker-verify's 30 s
+// directions within a single 2-pane scenario to keep agentower-verify's 30 s
 // budget comfortable.
 Deno.test("S12: navigation wraps at boundaries", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
     await createClaudePane({ status: "running", prompt: "row-b-yyy" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
     // Initial selection is the first row (row-a). Press Up → should wrap
     // to the last row (row-b).
-    await waitFor(picker, selectedIncludes("row-a-xxx"));
-    await sendKey(picker, "Up");
-    await waitFor(picker, selectedIncludes("row-b-yyy"));
+    await waitFor(agentower, selectedIncludes("row-a-xxx"));
+    await sendKey(agentower, "Up");
+    await waitFor(agentower, selectedIncludes("row-b-yyy"));
 
     // Now on the last row. Press Down → should wrap back to the first.
-    await sendKey(picker, "Down");
-    await waitFor(picker, selectedIncludes("row-a-xxx"));
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-a-xxx"));
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -483,7 +483,7 @@ Deno.test("S12: navigation wraps at boundaries", async () => {
 // S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under a
 // 100-col width (listWidth=60) the new budget `listWidth - 2 - row.target.length`
 // still leaves room for tool / tree / file segments to all fit. The actual
-// Unicode code points come from picker.tsx:ROW2_ICONS — we assert by literal
+// Unicode code points come from agentower.tsx:ROW2_ICONS — we assert by literal
 // glyph so a regression that changes the constants (or drops the prefix) fails
 // here. The default 80-col path had just enough budget under the old
 // `listWidth - 4` formula but now lies on the drop threshold, which is why
@@ -498,15 +498,15 @@ Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async (
       lastEditFile: "/a/b/icon-test.ts",
       subagents: "Explore:x1",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // tool icon (nf-md-cog) — prefixed to currentTool segment
     assertStringIncludes(out, "󰒓");
     // tree icon (nf-md-graph-outline) — prefixed to subagents segment
     assertStringIncludes(out, "󱙺");
     // file icon (nf-md-file-document-outline) — prefixed to lastEditFile segment
     assertStringIncludes(out, "󰈔");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -528,8 +528,8 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
       lastEditFile: "/a/b/c/verylongfilename-for-overflow.tsx",
       lastActivityAtSec: nowSec - 42,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // Highest-priority tool segment (and its icon) must survive the budget drop.
     assertStringIncludes(out, "󰒓");
     // The lower-priority file icon must drop together with its segment.
@@ -539,7 +539,7 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
       out.includes("󰈔"),
       `narrow width did not drop file icon with its segment:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -547,7 +547,7 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
 });
 
 // S15: regression — the top-priority tool segment must not be Ink-hard-clipped
-// when the Row 2 line would overflow listWidth. Previously picker.tsx used
+// when the Row 2 line would overflow listWidth. Previously agentower.tsx used
 // `listWidth - 2 - 2` for budget, ignoring row.target's actual width. Under a
 // narrow listWidth and a long tool name, the line overflowed by 1–2 cells and
 // Ink silently clipped the tail (symptom: "Bash" → "Bas"). The fix reserves
@@ -565,15 +565,15 @@ Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-cli
       prompt: "tool-truncation-regression",
       currentTool: "BashToolXYZWriteTailChunkABCDEF",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // The prefix of the tool name must remain visible — the guard drops the
     // tail, never the head.
     assertStringIncludes(out, "BashToolXYZ");
     // Icon is a single supplementary-plane codepoint — it must not be split
     // by the truncate guard (Array.from iterates by code point).
     assertStringIncludes(out, "󰒓");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -584,7 +584,7 @@ Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-cli
 // be silently clipped by Ink. Ink 5.2.1 in flex-row layout eats 1 cell from
 // the first <Text> whose content is "<supplementary-plane icon> <ASCII body>"
 // whenever a sibling <Text> follows (reproduced with ink_repro*.tsx, observed
-// as "TaskOutput" → "TaskOutpu" in the live picker). The fix emits icon and
+// as "TaskOutput" → "TaskOutpu" in the live Agentower). The fix emits icon and
 // body as two sibling <Text> nodes; this scenario pins the fix by asserting
 // the full "TaskOutput" literal survives even when both tool and file
 // segments coexist with plenty of listWidth slack.
@@ -600,8 +600,8 @@ Deno.test("S16: tool segment with icon + sibling file segment renders full tool 
       currentTool: "TaskOutput",
       lastEditFile: "/a/b/TemplateItemsEditor.ts",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     // Full tool name must survive. The bug surfaced as the literal
     // "TaskOutpu" (missing final "t") preceding a non-"t" character such as
     // a space or separator.
@@ -614,7 +614,7 @@ Deno.test("S16: tool segment with icon + sibling file segment renders full tool 
     // while extracting it into a sibling Text node.
     assertStringIncludes(out, "󰒓");
     assertStringIncludes(out, "󰈔");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -624,7 +624,7 @@ Deno.test("S16: tool segment with icon + sibling file segment renders full tool 
 // S17: a pane whose @pane_agent is still "claude" but whose foreground
 // process has fallen back to the login shell (cc exited without firing
 // SessionEnd — the stale-pane bug from .wadackel/picker-stale-pane-bug.md)
-// must be filtered out by picker. Reproduced via liveCommand: false, which
+// must be filtered out by Agentower. Reproduced via liveCommand: false, which
 // skips the compiled `.claude-wrapped` stub so pane_current_command defaults
 // to the window's `zsh`.
 Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async () => {
@@ -639,14 +639,14 @@ Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async (
       prompt: "stale-marker-QQQ",
       liveCommand: false,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "alive-marker-ZZZ");
     assertFalse(
       out.includes("stale-marker-QQQ"),
-      `stale pane appeared in picker:\n${out}`,
+      `stale pane appeared in Agentower:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -654,7 +654,7 @@ Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async (
 });
 
 // S18: Fresh-session pane with no tool / subagent / edit / task / idle
-// activity produces an empty Row 2 segs array; picker.tsx renders
+// activity produces an empty Row 2 segs array; agentower.tsx renders
 // `(no activity)` gray instead of collapsing to an indent-only blank line.
 Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
   await setupServer();
@@ -663,8 +663,8 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
       status: "running",
       prompt: "fresh-session-marker",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "(no activity)");
     // None of the row-2 segment icons may render when segs is empty, and a
     // pane without contextUsedPct must not draw the gauge. The positive
@@ -679,7 +679,7 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
         `row-2 icon ${icon} leaked into empty-state render:\n${out}`,
       );
     }
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -710,11 +710,11 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
     await tmux(["set", "-p", "-t", paneGreen, "@pane_context_used_pct", "23"]);
     await tmux(["set", "-p", "-t", paneRed, "@pane_context_used_pct", "80"]);
 
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
     // 1. Text assertions — both percentages present.
     const out = await waitFor(
-      picker,
+      agentower,
       (o) => o.includes("23%") && o.includes("80%"),
     );
     assertStringIncludes(out, "23%");
@@ -755,7 +755,7 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
     // SGR foreground near 23% differs from the one near 80%. This is a
     // structural distinctness check, not a hex match, since tmux's
     // 256-color approximation is environment-dependent.
-    const raw = await tmux(["capture-pane", "-p", "-e", "-t", picker]);
+    const raw = await tmux(["capture-pane", "-p", "-e", "-t", agentower]);
     // Extract the SGR foreground sequence immediately preceding each percent.
     // Format: ESC [ 38 ; (5;N | 2;R;G;B) m
     const sgrBefore = (needle: string): string | null => {
@@ -788,7 +788,7 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
         `threshold mapping ok→err is not being applied.`,
     );
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -797,12 +797,12 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
 
 // S20: launching pane is initially selected when present in list.
 // tmux.conf's `bind-key w` writes the originating pane id into the session
-// environment as `CC_PICKER_FROM_PANE` via `set-environment` immediately
+// environment as `AGENTOWER_FROM_PANE` via `set-environment` immediately
 // before `display-popup` runs; the popup inherits the session env at spawn
-// so picker.tsx main() can resolve initialSelectedPaneId from it. Reserved
+// so agentower.tsx main() can resolve initialSelectedPaneId from it. Reserved
 // TMUX_PANE cannot be reused (tmux clobbers it for the spawned process).
 // The harness reproduces the same env-name contract by passing
-// `-e CC_PICKER_FROM_PANE=<pane-id>` to `tmux new-window` in spawnPicker()
+// `-e AGENTOWER_FROM_PANE=<pane-id>` to `tmux new-window` in spawnAgentower()
 // (literal value injection — no tmux format expansion involved on this path).
 // Three sub-cases cover the resolution ternary's three branches.
 //
@@ -819,23 +819,23 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
     const pc = await createClaudePane({ status: "running", prompt: "row-C" });
 
     // Sub-case A (baseline / fromPane unset): no selfPane → first row.
-    let picker = await spawnPicker();
-    await waitFor(picker, selectedIncludes("row-A"));
-    await sendKey(picker, "Escape");
+    let agentower = await spawnAgentower();
+    await waitFor(agentower, selectedIncludes("row-A"));
+    await sendKey(agentower, "Escape");
     await waitForExit();
 
     // Sub-case B (hit / fromPane in rows): selfPane=pc → row-C.
-    picker = await spawnPicker({ selfPane: pc });
-    await waitFor(picker, selectedIncludes("row-C"));
-    await sendKey(picker, "Escape");
+    agentower = await spawnAgentower({ selfPane: pc });
+    await waitFor(agentower, selectedIncludes("row-C"));
+    await sendKey(agentower, "Escape");
     await waitForExit();
 
     // Sub-case C (miss / fromPane stale): selfPane points at a non-existent
     // pane id, exercising the resolution ternary's `rows.some(...)` guard.
     // Falls back to first row.
-    picker = await spawnPicker({ selfPane: "%999" });
-    await waitFor(picker, selectedIncludes("row-A"));
-    await sendKey(picker, "Escape");
+    agentower = await spawnAgentower({ selfPane: "%999" });
+    await waitFor(agentower, selectedIncludes("row-A"));
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -846,21 +846,21 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
 // display-popup. Static assertion against the conf text — not a runtime test.
 //
 // The two regressions this catches:
-//   (1) `display-popup -e "CC_PICKER_FROM_PANE=#{pane_id}"` form (the original
+//   (1) `display-popup -e "AGENTOWER_FROM_PANE=#{pane_id}"` form (the original
 //       buggy shape). `#{pane_id}` in the `-e` flag is expanded at run-shell
 //       parse time against a stale context (observed off-by-one against the
 //       prior invocation's source pane in 12/12 diagnostic samples; see plan
 //       20260429T1822-picker-cursor-from-pane-fix).
 //   (2) Pre-capture via `set-option -g @cc-picker-source "#{pane_id}"` followed
-//       by `-e "CC_PICKER_FROM_PANE=#{@cc-picker-source}"`. tmux expands the
+//       by `-e "AGENTOWER_FROM_PANE=#{@cc-picker-source}"`. tmux expands the
 //       `-e` value at parse time, BEFORE the preceding set-option executes,
 //       so `-e` reads the option's PRIOR value — same off-by-one symptom
 //       (verified with diagnostic instrumentation during plan execution).
 //
 // Required pattern:
-//   `set-environment -t "#{session_name}" CC_PICKER_FROM_PANE "#{pane_id}"`
+//   `set-environment -t "#{session_name}" AGENTOWER_FROM_PANE "#{pane_id}"`
 //   runs before display-popup; the popup inherits session env at spawn.
-//   display-popup MUST NOT carry an explicit `-e CC_PICKER_FROM_PANE=...` flag
+//   display-popup MUST NOT carry an explicit `-e AGENTOWER_FROM_PANE=...` flag
 //   (that would re-introduce stale parse-time expansion).
 //
 // The runtime assertion (popup actually opens with the right pane highlighted)
@@ -890,13 +890,13 @@ Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async ()
   // its index so we can assert it appears BEFORE display-popup (order matters —
   // the popup must inherit the value at spawn).
   const setEnvRe =
-    /set-environment\s+-t\s+"#\{session_name\}"\s+CC_PICKER_FROM_PANE\s+"#\{pane_id\}"/;
+    /set-environment\s+-t\s+"#\{session_name\}"\s+AGENTOWER_FROM_PANE\s+"#\{pane_id\}"/;
   const setEnvMatch = setEnvRe.exec(bind);
   const popupRe = /display-popup\b/;
   const popupMatch = popupRe.exec(bind);
   if (!setEnvMatch || !popupMatch) {
     throw new Error(
-      `bind-key w must contain both set-environment (CC_PICKER_FROM_PANE = ` +
+      `bind-key w must contain both set-environment (AGENTOWER_FROM_PANE = ` +
         `#{pane_id}) and display-popup. Line: ${bind}`,
     );
   }
@@ -908,21 +908,21 @@ Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async ()
     );
   }
 
-  // Forbidden: any `-e CC_PICKER_FROM_PANE=...` flag on display-popup, regardless
+  // Forbidden: any `-e AGENTOWER_FROM_PANE=...` flag on display-popup, regardless
   // of quoting (no quotes / single quotes / double quotes). All forms reintroduce
   // the parse-time stale-expansion bug — direct `-e "VAR=#{pane_id}"`, the
   // set-option/#{@option} pre-capture variant, etc.
-  const hasForbiddenE = /-e\s+["']?CC_PICKER_FROM_PANE=/.test(bind);
+  const hasForbiddenE = /-e\s+["']?AGENTOWER_FROM_PANE=/.test(bind);
   if (hasForbiddenE) {
     throw new Error(
-      `display-popup MUST NOT carry a '-e CC_PICKER_FROM_PANE=...' flag (any ` +
+      `display-popup MUST NOT carry a '-e AGENTOWER_FROM_PANE=...' flag (any ` +
         `quoting form). The session-env transport is the only safe path. ` +
         `Line: ${bind}`,
     );
   }
 });
 
-// S22: pressing `w` inside the picker toggles a wait/idle filter. Round-trip
+// S22: pressing `w` inside Agentower toggles a wait/idle filter. Round-trip
 // the toggle in a single fixture (filter ON → only waiting/idle remain + pill
 // shown → filter OFF → all four statuses back, pill gone). The pill body text
 // `wait/idle` is asserted to confirm the hint-bar pill renders; the
@@ -941,8 +941,8 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
     await createClaudePane({ status: "idle" });
     await createClaudePane({ status: "error" });
 
-    const picker = await spawnPicker();
-    const initial = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const initial = await captureOutput(agentower);
     assertEquals(listStatuses(initial), ["run", "wait", "idle", "err"]);
     assertFalse(
       initial.includes("wait/idle"),
@@ -951,8 +951,8 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
 
     // First `w` press: filter ON. Wait until the pill text appears so we know
     // the re-render landed before sampling the status texts.
-    await sendKey(picker, "w");
-    const filtered = await waitFor(picker, (o) => o.includes("wait/idle"));
+    await sendKey(agentower, "w");
+    const filtered = await waitFor(agentower, (o) => o.includes("wait/idle"));
     assertEquals(
       listStatuses(filtered),
       ["wait", "idle"],
@@ -960,11 +960,11 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
     );
 
     // Second `w` press: filter OFF. Wait until the pill disappears.
-    await sendKey(picker, "w");
-    const restored = await waitFor(picker, (o) => !o.includes("wait/idle"));
+    await sendKey(agentower, "w");
+    const restored = await waitFor(agentower, (o) => !o.includes("wait/idle"));
     assertEquals(listStatuses(restored), ["run", "wait", "idle", "err"]);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -982,13 +982,13 @@ Deno.test(
     try {
       await createClaudePane({ status: "running" });
 
-      const picker = await spawnPicker();
-      const initial = await captureOutput(picker);
+      const agentower = await spawnAgentower();
+      const initial = await captureOutput(agentower);
       assertStringIncludes(initial, "run");
 
-      await sendKey(picker, "w");
+      await sendKey(agentower, "w");
       const empty = await waitFor(
-        picker,
+        agentower,
         (o) => o.includes("No waiting/idle panes"),
       );
       assertStringIncludes(empty, "No waiting/idle panes");
@@ -998,9 +998,9 @@ Deno.test(
       // `w` again should clear the filter and bring the running row back.
       // Wait for the empty-state message to actually disappear (not for `run`
       // to appear, which can match unrelated text in the tmux window chrome).
-      await sendKey(picker, "w");
+      await sendKey(agentower, "w");
       const restored = await waitFor(
-        picker,
+        agentower,
         (o) => !o.includes("No waiting/idle panes"),
       );
       assertStringIncludes(restored, "run");
@@ -1009,7 +1009,7 @@ Deno.test(
         `empty-state message persisted after clearing filter:\n${restored}`,
       );
 
-      await sendKey(picker, "Escape");
+      await sendKey(agentower, "Escape");
       await waitForExit();
     } finally {
       await teardown();
@@ -1017,11 +1017,11 @@ Deno.test(
   },
 );
 
-// S24: opencode pane is included in the picker output. fetchPanes filter
+// S24: opencode pane is included in Agentower output. fetchPanes filter
 // accepts `agent === "claude" || agent === "opencode"` AND
 // isLivePaneCommand(agent, currentCommand) — opencode panes spawn under the
 // `.opencode-wrapp` stub so liveCommand=true selects the right binary.
-Deno.test("S24: opencode pane visible in picker", async () => {
+Deno.test("S24: opencode pane visible in Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1029,10 +1029,10 @@ Deno.test("S24: opencode pane visible in picker", async () => {
       status: "running",
       prompt: "opencode-marker-S24",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "opencode-marker-S24");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1057,8 +1057,8 @@ Deno.test("S25: claude+opencode mixed list renders both with agent column", asyn
       status: "running",
       prompt: "opencode-marker-S25",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "claude-marker-S25");
     assertStringIncludes(out, "opencode-marker-S25");
     // Chip body form: " " + agentLabel + " " (chip-width hugs the canonical
@@ -1067,7 +1067,7 @@ Deno.test("S25: claude+opencode mixed list renders both with agent column", asyn
     // chip body substring. S28 covers codex; S25 fixture has no codex pane.
     assertStringIncludes(out, " claude ");
     assertStringIncludes(out, " opencode ");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1090,23 +1090,23 @@ Deno.test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async
       prompt: "stale-oc-marker-S26",
       liveCommand: false,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "alive-oc-marker-S26");
     assertFalse(
       out.includes("stale-oc-marker-S26"),
-      `stale opencode pane appeared in picker:\n${out}`,
+      `stale opencode pane appeared in Agentower:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S27: codex pane is included in the picker output. Codex panes spawn under
+// S27: codex pane is included in Agentower output. Codex panes spawn under
 // the `.codex-wrapped` stub so liveCommand=true selects the right binary.
-Deno.test("S27: codex pane visible in picker", async () => {
+Deno.test("S27: codex pane visible in Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1114,10 +1114,10 @@ Deno.test("S27: codex pane visible in picker", async () => {
       status: "running",
       prompt: "codex-marker-S27",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "codex-marker-S27");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1147,8 +1147,8 @@ Deno.test("S28: claude+opencode+codex mixed list renders all agent columns", asy
       status: "running",
       prompt: "codex-marker-S28",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "claude-marker-S28");
     assertStringIncludes(out, "opencode-marker-S28");
     assertStringIncludes(out, "codex-marker-S28");
@@ -1158,7 +1158,7 @@ Deno.test("S28: claude+opencode+codex mixed list renders all agent columns", asy
     assertStringIncludes(out, " claude ");
     assertStringIncludes(out, " opencode ");
     assertStringIncludes(out, " codex ");
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1181,21 +1181,21 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
       prompt: "stale-codex-marker-S29",
       liveCommand: false,
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
     assertStringIncludes(out, "alive-codex-marker-S29");
     assertFalse(
       out.includes("stale-codex-marker-S29"),
-      `stale codex pane appeared in picker:\n${out}`,
+      `stale codex pane appeared in Agentower:\n${out}`,
     );
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S30: picker layout follows tmux resize-window. Picker reads stdout.columns
+// S30: Agentower layout follows tmux resize-window. Agentower reads stdout.columns
 // once at render and previously did not re-render on terminal resize. The
 // resize-tracking useEffect subscribes to stdout 'resize' so the layout
 // (listWidth / previewWidth / bodyHeight / hint bar width) updates live.
@@ -1203,30 +1203,30 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
 // Signal: the key-hint bar is ~73 cells, spans the list column, and is clipped
 // from the right, so its last hint " quit" is cut at cols 60 (list 40) and
 // shown at cols 150 (list 90).
-Deno.test("S30: picker re-layouts after tmux resize-window", async () => {
+Deno.test("S30: Agentower re-layouts after tmux resize-window", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({ status: "waiting", prompt: "row-a" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
     // Initial narrow render: the hint bar is clipped before " quit".
-    const narrowOut = await captureOutput(picker);
+    const narrowOut = await captureOutput(agentower);
     assertFalse(
       narrowOut.includes(" quit"),
       `unexpected ' quit' hint at narrow width:\n${narrowOut}`,
     );
 
-    // Widen the tmux window — picker must repaint and surface the hint.
-    // Target is the same SESSION:WINDOW path that spawnPicker uses; the
-    // harness's SESSION const is "test" and PICKER_WINDOW_NAME is "picker".
-    await tmux(["resize-window", "-t", picker, "-x", "150", "-y", "30"]);
-    await waitFor(picker, (out) => out.includes(" quit"));
+    // Widen the tmux window — Agentower must repaint and surface the hint.
+    // Target is the same SESSION:WINDOW path that spawnAgentower uses; the
+    // harness's SESSION const is "test" and AGENTOWER_WINDOW_NAME is "agentower".
+    await tmux(["resize-window", "-t", agentower, "-x", "150", "-y", "30"]);
+    await waitFor(agentower, (out) => out.includes(" quit"));
 
-    // Narrow again — picker must repaint and hide the hint.
-    await tmux(["resize-window", "-t", picker, "-x", "60", "-y", "20"]);
-    await waitFor(picker, (out) => !out.includes(" quit"));
+    // Narrow again — Agentower must repaint and hide the hint.
+    await tmux(["resize-window", "-t", agentower, "-x", "60", "-y", "20"]);
+    await waitFor(agentower, (out) => !out.includes(" quit"));
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1234,7 +1234,7 @@ Deno.test("S30: picker re-layouts after tmux resize-window", async () => {
 });
 
 // S-N1: User-defined label overrides PaneStatus in row-1 display.
-// When @pane_user_label is set, picker renders the label's text + icon
+// When @pane_user_label is set, Agentower renders the label's text + icon
 // instead of the pane's automatic status (run/wait/idle/err).
 Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => {
   await setupServer();
@@ -1244,8 +1244,8 @@ Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => 
       userLabel: "feedback", // takes priority
       prompt: "labeled-row",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
 
     // Label text replaces status text.
     assertStringIncludes(out, "feedback");
@@ -1255,7 +1255,7 @@ Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => 
       `status text 'run' leaked into labeled row:\n${out}`,
     );
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1272,15 +1272,15 @@ Deno.test("S-N2: m keypress cycles userLabel none → review", async () => {
       status: "running",
       prompt: "cycle-me",
     });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     // Wait for the initial render so 'm' targets the right row.
-    await waitFor(picker, (out) => out.includes("cycle-me"));
+    await waitFor(agentower, (out) => out.includes("cycle-me"));
 
-    await sendKey(picker, "m");
+    await sendKey(agentower, "m");
     // The label text appears after the next 1s tick + repaint.
-    await waitFor(picker, (out) => out.includes("review"), 4000);
+    await waitFor(agentower, (out) => out.includes("review"), 4000);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1306,8 +1306,8 @@ Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async 
       prompt: "plain-row",
       cwd: "/repo/beta",
     });
-    const picker = await spawnPicker();
-    const out = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
 
     // Both label text and status text coexist (label only on first row).
     assertStringIncludes(out, "feedback");
@@ -1316,7 +1316,7 @@ Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async 
     assertStringIncludes(out, "alpha");
     assertStringIncludes(out, "beta");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1337,15 +1337,15 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
       userLabel: "parked",
       prompt: "clear-me",
     });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     // Confirm the initial label is rendered before sending the reset key.
-    await waitFor(picker, (out) => out.includes("parked"));
+    await waitFor(agentower, (out) => out.includes("parked"));
 
-    await sendKey(picker, "M");
+    await sendKey(agentower, "M");
     // The label text disappears after the next 1s tick + repaint.
-    await waitFor(picker, (out) => !out.includes("parked"), 4000);
+    await waitFor(agentower, (out) => !out.includes("parked"), 4000);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1355,7 +1355,7 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
 // S-N5: A label bound to a closed session does not leak into a new session
 // on the same pane. The pane's current @pane_session_id ("sess-new") differs
 // from the session the label was attached to (@pane_user_label_session =
-// "sess-old"), so parseRow drops the stale label and the picker renders the
+// "sess-old"), so parseRow drops the stale label and Agentower renders the
 // automatic status instead. This is the core fix: stale labels are gated on
 // session identity, not on unreliable close hooks. 'parked' is used for the same
 // reason as S-N4 (the Preview header contains the substring 'review').
@@ -1369,10 +1369,10 @@ Deno.test("S-N5: stale label from a closed session is not shown after a new sess
       sessionId: "sess-new", // the freshly started session on this pane
       prompt: "stale-label-row",
     });
-    const picker = await spawnPicker();
-    await waitFor(picker, (out) => out.includes("stale-label-row"));
+    const agentower = await spawnAgentower();
+    await waitFor(agentower, (out) => out.includes("stale-label-row"));
 
-    const out = await captureOutput(picker);
+    const out = await captureOutput(agentower);
     // The stale label must not render.
     assertFalse(
       out.includes("parked"),
@@ -1381,7 +1381,7 @@ Deno.test("S-N5: stale label from a closed session is not shown after a new sess
     // The automatic status takes over now that the label is gated out.
     assertStringIncludes(out, "run");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1463,8 +1463,8 @@ Deno.test("S31: usage card gives each agent its own row with aligned columns", a
       { label: "5h", usedPct: 7, resetsInSec: 3000 },
       { label: "7d", usedPct: 2, resetsInSec: 400000 },
     ]);
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => footerLines(o).length === 2);
 
     const lines = footerLines(out);
     assertEquals(lines.length, 2);
@@ -1478,7 +1478,7 @@ Deno.test("S31: usage card gives each agent its own row with aligned columns", a
     // The pane row has to survive the rows the card takes off the preview.
     assertStringIncludes(out, "footer-row-xxx");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1493,8 +1493,8 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
       { label: "5h", usedPct: 42, resetsInSec: -10 },
       { label: "7d", usedPct: 13, resetsInSec: 500000 },
     ]);
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => footerLines(o).length === 1);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => footerLines(o).length === 1);
 
     const line = footerLines(out)[0];
     assertStringIncludes(line, "--");
@@ -1504,7 +1504,7 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
     assertFalse(line.includes("\u{F0450}"));
     assertEquals(columnStart(line, "7d"), 34);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1515,8 +1515,8 @@ Deno.test("S33: no usage files → no usage card, body keeps its rows", async ()
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "no-footer-xxx" });
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("no-footer-xxx"));
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("no-footer-xxx"));
 
     assertEquals(footerLines(out).length, 0);
     // The pane's own row-2 renders below its row-1 rather than being clipped
@@ -1524,7 +1524,7 @@ Deno.test("S33: no usage files → no usage card, body keeps its rows", async ()
     assertStringIncludes(out, "no-footer-xxx");
     assertStringIncludes(out, "(no activity)");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1539,18 +1539,18 @@ Deno.test("S34: narrow width suppresses the usage card and draws no title row", 
       { label: "5h", usedPct: 42, resetsInSec: 6420 },
       { label: "7d", usedPct: 13, resetsInSec: 500000 },
     ]);
-    const picker = await spawnPicker();
-    // spawnPicker already waited for the hint bar, so the frame is up. Give it
+    const agentower = await spawnAgentower();
+    // spawnAgentower already waited for the hint bar, so the frame is up. Give it
     // two more ticks: a card that only appeared on refresh would surface by now.
     await new Promise((r) => setTimeout(r, 2200));
-    const out = await captureOutput(picker);
+    const out = await captureOutput(agentower);
 
     assertEquals(footerLines(out).length, 0);
-    // The title lives on the popup border (tmux.conf's `-T`), so the picker
+    // The title lives on the popup border (tmux.conf's `-T`), so Agentower
     // itself must not spend a row on it.
-    assertFalse(out.includes("AI Agents"), `title row drawn:\n${out}`);
+    assertFalse(out.includes("Agentower"), `title row drawn:\n${out}`);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1574,8 +1574,8 @@ Deno.test("S35: the 152-column popup drops the bars and keeps one line per agent
       { label: "5h", usedPct: 100, resetsInSec: 17999 },
       { label: "7d", usedPct: 100, resetsInSec: 500000 },
     ], 29 * 86400);
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => footerLines(o).length === 2);
 
     const lines = footerLines(out);
     assertEquals(lines.length, 2);
@@ -1587,7 +1587,7 @@ Deno.test("S35: the 152-column popup drops the bars and keeps one line per agent
     // The pane row survives the rows the card takes.
     assertStringIncludes(out, "widest-xxx");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1603,12 +1603,12 @@ Deno.test("S37: an agent missing a window leaves the column blank, not shifted",
       { label: "7d", usedPct: 13, resetsInSec: 500000 },
     ]);
     // Codex's current upstream shape: primary is the 7d window and secondary
-    // is null, so the picker sees one window where claude has two.
+    // is null, so Agentower sees one window where claude has two.
     await writeUsageFixture("codex", [
       { label: "7d", usedPct: 17, resetsInSec: 400000 },
     ]);
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => footerLines(o).length === 2);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => footerLines(o).length === 2);
 
     const [claude, codex] = footerLines(out);
     assertStringIncludes(claude, "5h");
@@ -1618,7 +1618,7 @@ Deno.test("S37: an agent missing a window leaves the column blank, not shifted",
     assertEquals(columnStart(claude, "7d"), columnStart(codex, "7d"));
     assertStringIncludes(out, "asymmetric-xxx");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1642,12 +1642,12 @@ Deno.test("S36: row-2 tool error keeps its text after the error mark", async () 
       lastTool: "Bash",
       lastToolError: "Exit code 1",
     });
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("tool-err-xxx"));
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("tool-err-xxx"));
 
     assertStringIncludes(out, "Bash \u{F0156} Exit code 1");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1676,7 +1676,10 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 // linked worktree shows `repo(worktree)`.
 Deno.test("S38: repo column shows repo(worktree) from git", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "picker-git-" });
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-git-",
+  });
   try {
     await Deno.mkdir(`${root}/proj/sub`, { recursive: true });
     await git(`${root}/proj`, "init", "-q", "-b", "main");
@@ -1701,8 +1704,8 @@ Deno.test("S38: repo column shows repo(worktree) from git", async () => {
       prompt: "wt-row",
       cwd: `${root}/proj-wt`,
     });
-    const picker = await spawnPicker();
-    const out = await waitFor(picker, (o) => o.includes("proj(proj-wt)"));
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("proj(proj-wt)"));
     // Only the list column: the preview card beside it shows the full path,
     // which does contain the subdirectory name.
     const lines = out.split("\n").map((l) => l.split(/[│╭╰]/)[0]);
@@ -1715,7 +1718,7 @@ Deno.test("S38: repo column shows repo(worktree) from git", async () => {
     assertStringIncludes(wtRow, "proj(proj-wt)");
     assertStringIncludes(wtRow, "feature");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1732,15 +1735,18 @@ Deno.test("S39: n jumps to the next waiting pane and wraps", async () => {
     await createClaudePane({ status: "waiting", prompt: "row-wait-1" });
     await createClaudePane({ status: "idle", prompt: "row-idle" });
     await createClaudePane({ status: "waiting", prompt: "row-wait-2" });
-    const picker = await spawnPicker();
-    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-run");
+    const agentower = await spawnAgentower();
+    assertStringIncludes(
+      selectedLine(await captureOutput(agentower)),
+      "row-run",
+    );
 
     for (const want of ["row-wait-1", "row-wait-2", "row-wait-1"]) {
-      await sendKey(picker, "n");
-      await waitFor(picker, selectedIncludes(want));
+      await sendKey(agentower, "n");
+      await waitFor(agentower, selectedIncludes(want));
     }
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1753,14 +1759,14 @@ Deno.test("S40: n without a waiting pane keeps the selection", async () => {
   try {
     await createClaudePane({ status: "running", prompt: "row-first" });
     await createClaudePane({ status: "idle", prompt: "row-second" });
-    const picker = await spawnPicker();
-    await sendKey(picker, "n");
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "n");
     // Two ticks for a stray move to land before sampling.
     await new Promise((r) => setTimeout(r, 2200));
-    const out = await captureOutput(picker);
+    const out = await captureOutput(agentower);
     assertStringIncludes(selectedLine(out), "row-first");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1780,15 +1786,15 @@ Deno.test("S41: 20 panes scroll with the selection and keep rows intact", async 
         prompt: `row-${String(i).padStart(2, "0")}`,
       });
     }
-    const picker = await spawnPicker();
-    const initial = await captureOutput(picker);
+    const agentower = await spawnAgentower();
+    const initial = await captureOutput(agentower);
     assertStringIncludes(initial, "↓ 9 more");
     assertStringIncludes(initial, "row-01");
     assertFalse(initial.includes("row-12"), `row-12 visible:\n${initial}`);
 
-    await sendKey(picker, "k"); // wraps to the last pane
+    await sendKey(agentower, "k"); // wraps to the last pane
     const out = await waitFor(
-      picker,
+      agentower,
       (o) => selectedLine(o).includes("row-20"),
     );
     assertStringIncludes(out, "↑ 9 more");
@@ -1798,7 +1804,7 @@ Deno.test("S41: 20 panes scroll with the selection and keep rows intact", async 
     assertEquals(prompts.length, 11);
     assertEquals(new Set(prompts).size, 11);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1812,8 +1818,8 @@ Deno.test("S42: the selected card carries the marker on all four rows", async ()
   try {
     await createClaudePane({ status: "running", prompt: "card-first" });
     await createClaudePane({ status: "idle", prompt: "card-second" });
-    const picker = await spawnPicker();
-    const lines = (await captureOutput(picker)).split("\n");
+    const agentower = await spawnAgentower();
+    const lines = (await captureOutput(agentower)).split("\n");
     const marked = lines.flatMap((l, i) => (l.startsWith("▌") ? [i] : []));
     assertEquals(marked.length, 4, `marker rows: ${marked}`);
     assertEquals(
@@ -1827,7 +1833,7 @@ Deno.test("S42: the selected card carries the marker on all four rows", async ()
     // card's top edge.
     assertEquals(marked[0], 1);
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1842,79 +1848,79 @@ Deno.test("S43: a short popup drops the card padding and starts at the top row",
   try {
     await createClaudePane({ status: "running", prompt: "compact-first" });
     await createClaudePane({ status: "idle", prompt: "compact-second" });
-    const picker = await spawnPicker();
-    const lines = (await captureOutput(picker)).split("\n");
+    const agentower = await spawnAgentower();
+    const lines = (await captureOutput(agentower)).split("\n");
     const marked = lines.flatMap((l, i) => (l.startsWith("▌") ? [i] : []));
     assertEquals(marked, [0, 1], `marker rows: ${marked}`);
     assertStringIncludes(lines[0], "compact-first");
     // One blank row separates the two panes.
     assertStringIncludes(lines[3], "compact-second");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// S44/S45: inside a popup tmux hands every key to the picker, so the
+// S44/S45: inside a popup tmux hands every key to Agentower, so the
 // `prefix w` that opened it arrives as two keys. The harness server runs with
 // `-f /dev/null`, so the prefix is read back instead of assuming C-b.
-Deno.test("S44: prefix then w closes the picker instead of toggling the filter", async () => {
+Deno.test("S44: prefix then w closes Agentower instead of toggling the filter", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
 
-    await sendKey(picker, prefix);
-    await sendKey(picker, "w");
+    await sendKey(agentower, prefix);
+    await sendKey(agentower, "w");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-Deno.test("S45: prefix then another key keeps the picker open and handles the key", async () => {
+Deno.test("S45: prefix then another key keeps Agentower open and handles the key", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
     await createClaudePane({ status: "waiting", prompt: "row-b-yyy" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
 
-    await sendKey(picker, prefix);
-    await sendKey(picker, "j");
-    await waitFor(picker, selectedIncludes("row-b-yyy"));
+    await sendKey(agentower, prefix);
+    await sendKey(agentower, "j");
+    await waitFor(agentower, selectedIncludes("row-b-yyy"));
 
-    await sendKey(picker, "w");
-    await waitFor(picker, (o) => o.includes("wait/idle"));
+    await sendKey(agentower, "w");
+    await waitFor(agentower, (o) => o.includes("wait/idle"));
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// One send-keys call writes both keys back to back, so they usually reach the
-// picker in a single read — the unsplit-chunk path S44 rarely takes.
-Deno.test("S46: prefix and w sent together still close the picker", async () => {
+// One send-keys call writes both keys back to back, so they usually reach
+// Agentower in a single read — the unsplit-chunk path S44 rarely takes.
+Deno.test("S46: prefix and w sent together still close Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
 
-    await tmux(["send-keys", "-t", picker, prefix, "w"]);
+    await tmux(["send-keys", "-t", agentower, prefix, "w"]);
     await waitForExit();
   } finally {
     await teardown();
   }
 });
 
-// Mouse reports are written straight to the picker's pty, which is what tmux
-// does for a popup once the picker turns mouse mode on. Coordinates are the
+// Mouse reports are written straight to Agentower's pty, which is what tmux
+// does for a popup once Agentower turns mouse mode on. Coordinates are the
 // 0-based cells the unit tests for cardIndexAt use; press and release go out
 // in one write, the way a terminal reports a click.
 async function sendClick(
@@ -1934,21 +1940,21 @@ async function sendClick(
 const CARD_0 = { x: 2, y: 2 };
 const CARD_1 = { x: 2, y: 6 };
 
-Deno.test("S47: the picker turns on SGR mouse reporting", async () => {
+Deno.test("S47: Agentower turns on SGR mouse reporting", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     const flags = await tmux([
       "display-message",
       "-t",
-      picker,
+      agentower,
       "-p",
       "#{mouse_standard_flag}#{mouse_sgr_flag}",
     ]);
     assertEquals(flags.trim(), "11");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -1963,12 +1969,12 @@ Deno.test("S48: clicking a card selects it and clicking it again jumps", async (
       status: "running",
       prompt: "row-b",
     });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
-    await sendClick(picker, 0, CARD_1);
-    await waitFor(picker, selectedIncludes("row-b"));
+    await sendClick(agentower, 0, CARD_1);
+    await waitFor(agentower, selectedIncludes("row-b"));
 
-    await sendClick(picker, 0, CARD_1);
+    await sendClick(agentower, 0, CARD_1);
     await waitForExit();
 
     const active = await tmux([
@@ -1993,26 +1999,26 @@ Deno.test("S49: the wheel moves the selection and stops at both ends", async () 
     await createClaudePane({ status: "running", prompt: "row-a" });
     await createClaudePane({ status: "running", prompt: "row-b" });
     await createClaudePane({ status: "running", prompt: "row-c" });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
     const settle = () => new Promise((r) => setTimeout(r, 500));
 
-    await sendClick(picker, 64, CARD_0);
+    await sendClick(agentower, 64, CARD_0);
     await settle();
-    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-a");
+    assertStringIncludes(selectedLine(await captureOutput(agentower)), "row-a");
 
-    await sendClick(picker, 65, CARD_0);
-    await waitFor(picker, selectedIncludes("row-b"));
-    await sendClick(picker, 65, CARD_0);
-    await waitFor(picker, selectedIncludes("row-c"));
+    await sendClick(agentower, 65, CARD_0);
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await sendClick(agentower, 65, CARD_0);
+    await waitFor(agentower, selectedIncludes("row-c"));
 
-    await sendClick(picker, 65, CARD_0);
+    await sendClick(agentower, 65, CARD_0);
     await settle();
-    assertStringIncludes(selectedLine(await captureOutput(picker)), "row-c");
+    assertStringIncludes(selectedLine(await captureOutput(agentower)), "row-c");
 
-    await sendClick(picker, 64, CARD_0);
-    await waitFor(picker, selectedIncludes("row-b"));
+    await sendClick(agentower, 64, CARD_0);
+    await waitFor(agentower, selectedIncludes("row-b"));
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
@@ -2027,11 +2033,11 @@ Deno.test("S50: right-clicking a card selects it and cycles its label", async ()
       status: "running",
       prompt: "row-b",
     });
-    const picker = await spawnPicker();
+    const agentower = await spawnAgentower();
 
-    await sendClick(picker, 2, CARD_1);
-    await waitFor(picker, selectedIncludes("row-b"));
-    await waitFor(picker, (out) => out.includes("review"), 4000);
+    await sendClick(agentower, 2, CARD_1);
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await waitFor(agentower, (out) => out.includes("review"), 4000);
     // The screen shows the label optimistically, ahead of the tmux write.
     let label = "";
     for (let i = 0; i < 40 && label !== "review"; i++) {
@@ -2047,7 +2053,7 @@ Deno.test("S50: right-clicking a card selects it and cycles its label", async ()
     }
     assertEquals(label, "review");
 
-    await sendKey(picker, "Escape");
+    await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
     await teardown();
