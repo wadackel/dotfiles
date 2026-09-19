@@ -169,8 +169,6 @@ Icon: `⚠️` when `hallucination-possible` or `judgment-required` is present, 
 
 Under `apply-all-safe`, when more than 10 targets are queued, pause every 5 to confirm.
 
-**Before any bulk apply, confirm a current backup exists.** Apply edits `02_Notes/` directly and the vault has no Git history; a backup taken before the last `ingest` does not cover notes written since. Same bar as [ingest.md](ingest.md) sets for backfill.
-
 ## Pending reminder
 
 `lint` and `curiosity` both open by scanning `98_Maintenance/proposals/` for pending files:

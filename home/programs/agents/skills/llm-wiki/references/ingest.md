@@ -188,7 +188,6 @@ Genre-at-a-time (`ingest <tag>`) is how the existing backlog gets compiled. Book
 
 - Process one genre per batch. Do not chain genres without checking in.
 - Report at the end of each genre: articles compiled, notes created, notes updated, and the medium/low-confidence genre calls.
-- The vault has no Git history. Before the first batch of a session, confirm a backup exists **covering `02_Notes/`, `04_Literature/`, `00_Inbox/`, `98_Maintenance/`, and `03_Books/`** — `ingest` mutates all five, and a backup of only the first two leaves the inbox unrecoverable. This skill's `allowed-tools` has no copy command, so the backup is taken outside it.
 - Reading only `## Summary` rather than full article text is what keeps this affordable. Do not fetch originals in bulk.
 - **Write one aggregated log entry for the batch, not one per article** — the batch form in [conventions.md](conventions.md). Per-article entries would run to hundreds of lines, and [lint.md](lint.md) observation 6 is built on the batch form.
 
