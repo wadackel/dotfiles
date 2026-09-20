@@ -76,7 +76,7 @@ Answer each question through [query.md](query.md)'s search flow, with two change
 Evaluate each answer against four questions, deliberately from a checking stance rather than a generating one:
 
 1. Is this just a restatement of an existing note?
-2. Does it trace to a source — the article's `## Summary`, its `## Memo`, or its external URL?
+2. Does it trace to a source — the article's `## Content`, its `## Summary`, its `## Memo`, or, for an article with no body, its external URL?
 3. Does it fill a gap the vault actually has?
 4. Which parts are inference rather than anything a source says?
 

@@ -105,7 +105,7 @@ Cite the book in `sources`, and the chapter in the body where a reader would wan
 
 **One book per batch.** Report and wait before the next one.
 
-This is not the article backfill's economics. `ingest.md`'s "read only `## Summary`" is what keeps articles cheap; a book has no summary standing in for its content, so compiling one means reading its index plus up to eight chapter files — `スタッフエンジニア/第 2 章` alone is 36KB.
+This is not the article backfill's economics. An article is cheap because its summary places it and its `## Content` is read only where [ingest.md](ingest.md) B-2's triggers fire; a book has no summary standing in for its content, so compiling one means reading its index plus up to eight chapter files — `スタッフエンジニア/第 2 章` alone is 36KB.
 
 Order by `rating` descending. Seven books have no rating; put them last, and break ties by file size descending so the books with the most material come first.
 

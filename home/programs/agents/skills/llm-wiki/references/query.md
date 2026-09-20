@@ -64,7 +64,7 @@ Cite in three levels, inline, per claim:
 
 **A book stops at level 2.** Its `## URL` points at a store page, not at the text, so there is no level-3 hop to make. When a claim rests on a book, cite the index note and, where the reader would want to verify a specific passage, the chapter note path-qualified (`[[03_Books/解像度を上げる/はじめに|はじめに]]`). Say that the source is a book — the reader needs to know the trail ends at their own reading notes rather than at something they can open.
 
-**Source articles hold a Web Clipper summary, not the original text.** For a verbatim quote, a code sample, or a precise figure, the summary is not enough: follow the `[title](url)` on the article's first body line to the original and cite that. Say plainly when a claim rests on the summary alone.
+**For a verbatim quote, a code sample, or a precise figure, read the article's `## Content`.** The summary compresses those away; the body is the record. Follow the `[title](url)` on the first body line only when the article has no body, or when what matters is how the page reads now — `## Content` is the text as it stood when the article was clipped, the URL is the page as it stands today. Say plainly when a claim rests on the summary alone.
 
 Where two notes disagree, present both — "A says X, B says Y" — rather than silently reconciling them. Where the answer needs something the vault does not contain, say "Wiki には記述なし" and mark what came from outside.
 

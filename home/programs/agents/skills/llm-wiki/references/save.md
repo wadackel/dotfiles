@@ -77,7 +77,7 @@ Claude Code セッション（<today>）の議論記録。
 - 📝
 ```
 
-`memo/conversation` is a new tag, deliberately distinct from `memo/web`: this is not a clipping, and the maintenance Bases view that lists under-tagged clippings filters on `memo/web`, so conversations correctly stay out of it. The `## Summary` heading is kept so that `ingest`, `recompile`, and `query` read conversation sources the same way they read clippings.
+`memo/conversation` is a new tag, deliberately distinct from `memo/web`: this is not a clipping, and the maintenance Bases view that lists under-tagged clippings filters on `memo/web`, so conversations correctly stay out of it. The `## Summary` heading is kept so that `ingest`, `recompile`, and `query` find their entry point here the same way they do in a clipping. A conversation has no `## Content` — there is no external article behind it — so for these sources the summary and `## 議論` are the record, and the body-reading triggers in [ingest.md](ingest.md) B-2 have nothing to fire on.
 
 **`type` is not set here.** If the run fails after this point, the file reads as uncompiled and the next `ingest` finishes the job.
 

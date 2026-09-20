@@ -86,7 +86,7 @@ This table is canonical. `lint.md` and `curiosity.md` reference it rather than r
 | `weak-relation` | lint | A relation inferred from keyword overlap | `low-precision` |
 | `ingest-incomplete` | lint | A missing log entry for a compiled source | `judgment-required` |
 
-Starting confidence: `link-fix` is `high` (mechanically decidable); `missing-page` skews `low` (body text generated without reading the original); everything else is `medium` by default.
+Starting confidence: `link-fix` is `high` (mechanically decidable); `missing-page` skews `low` (body text generated without reading the article's own text); everything else is `medium` by default.
 
 ## Aggregated proposals
 
@@ -105,7 +105,7 @@ The trade is deliberate: individual proposals are mechanically appliable but dro
 
 | Flag | Meaning | Review stance |
 |---|---|---|
-| `hallucination-possible` | Body text was generated; parts may not trace to a source | Verify against `## Summary` or the external URL before applying |
+| `hallucination-possible` | Body text was generated; parts may not trace to a source | Verify against the article's `## Content` before applying — the external URL only when there is no body |
 | `judgment-required` | More than one reasonable resolution exists | Edit the proposal to the chosen resolution, then apply |
 | `low-precision` | The detector is known to over-fire | Expect to reject most of these |
 
@@ -122,7 +122,7 @@ When a proposal spans genres, count the genres of the `[[notes]]` it mentions an
 | `new-page` | Create `02_Notes/<name>.md` from the conventions template. Update the MOC's `## 知識マップ` only if a structural trigger fires |
 | `append` | Edit the target note, adding to the named section or the end of the body |
 | `contradiction` / `contradiction-found` | Edit the target, or add `## 異論・補足` presenting both positions. Add the new source to `sources` |
-| `missing-page` | Same as `new-page`, but re-confirm with `AskUserQuestion` first — the body was written without reading the original |
+| `missing-page` | Same as `new-page`, but re-confirm with `AskUserQuestion` first — the body was written without reading the article's own text |
 | `stale-fix` | Edit the named section |
 | `link-fix` | Replace the plain text with `[[ノート]]` via Edit (old_string / new_string; the recorded `file:line` is a pointer, not the matcher) |
 | `orphan-fix` | Add `- [[孤立ノート]] — <理由>` to the link source's `## 関連ページ`, and to its `related` |

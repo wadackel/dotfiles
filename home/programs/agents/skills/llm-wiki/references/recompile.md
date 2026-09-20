@@ -43,7 +43,7 @@ As [ingest.md](ingest.md) B-1: read the MOC, `Grep` `02_Notes/` for related note
 
 ### 3. Re-extract
 
-From the source's `## Summary` and `## Memo`, re-evaluate where the material sits in the current structure. The summary has not changed — what changed is the vault around it.
+From the source's `## Summary` and `## Memo`, re-evaluate where the material sits in the current structure. Read `## Content` as well when the source has one: `recompile` takes one file at a time, so the body is affordable here in a way it is not across a genre, and a note first compiled from the summary alone may rest on specifics nobody ever confirmed. Books and `memo/conversation` sources have no `## Content`; for those, the summary is still the record. What changed is the vault around the source — and, for an article backfilled since it was first compiled, that its own text is now available.
 
 ### 4. Diff
 
@@ -62,7 +62,7 @@ Same triggers as [ingest.md](ingest.md) B-5, applied more strictly. `recompile` 
 
 ### 6. Source frontmatter
 
-Rewrite `generated_pages` to match reality and fix broken links in it. Sources carry no `updated` field ([conventions.md](conventions.md)) — do not add one. The body — `## Summary`, `## 議論`, `## Memo`, and for a book every chapter note — is not touched.
+Rewrite `generated_pages` to match reality and fix broken links in it. Sources carry no `updated` field ([conventions.md](conventions.md)) — do not add one. The body — `## Summary`, `## Content`, `## 議論`, `## Memo`, and for a book every chapter note — is not touched.
 
 The concept notes touched in step 4 do get their `updated` moved to today.
 

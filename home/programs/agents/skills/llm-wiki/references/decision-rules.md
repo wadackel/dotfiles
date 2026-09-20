@@ -48,9 +48,9 @@ The vault currently has almost none of these. During backfill, watch for them ac
 
 ## When to park a source
 
-`type: parked` is the second terminal state ([conventions.md](conventions.md)). Reach for it when a source cannot produce or strengthen any concept note — not because the subject is uninteresting, but because **there is no claim in it to trace back to**. A chapter-heading skeleton with no body, a link plus a publisher's blurb, a clipping whose `## Summary` never arrived.
+`type: parked` is the second terminal state ([conventions.md](conventions.md)). Reach for it when a source cannot produce or strengthen any concept note — not because the subject is uninteresting, but because **there is no claim in it to trace back to**. A chapter-heading skeleton with no body, a link plus a publisher's blurb, a clipping whose `## Summary` never arrived, an article whose `## Content` turned out to be a paywall interstitial.
 
-The test is the same one create/update already use, run to exhaustion: if no note can be created and no note can be updated, and re-reading the source would not change that, park it.
+The test is the same one create/update already use, run to exhaustion: if no note can be created and no note can be updated, and re-reading the source would not change that, park it. Where the source has a `## Content` you have not read, "re-reading" means reading it — park nothing on the strength of a thin summary alone.
 
 Write it the way `type: source` is written — **last**, after deciding, and with the reason in the operation log rather than in frontmatter. The reason is a sentence, not a field. A parked source stays parked until someone removes the `type` by hand, which is exactly how a book gets picked back up after its notes grow.
 

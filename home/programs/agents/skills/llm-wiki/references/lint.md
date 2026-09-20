@@ -38,7 +38,7 @@ A concept mentioned across several notes with no note of its own.
 
 Method: extract proper nouns and domain terms from notes, compare against filenames, and report at the threshold of "mentioned in 3+ notes, no note exists".
 
-→ `kind: missing-page`, `risk_flags: [hallucination-possible]`, `confidence: low`. The body is drafted without reading any original, which is exactly the shape of a plausible-sounding fabrication. Say so in the proposal.
+→ `kind: missing-page`, `risk_flags: [hallucination-possible]`, `confidence: low`. The body is drafted without reading the article's own text, which is exactly the shape of a plausible-sounding fabrication. Say so in the proposal.
 
 ## Observation 4 — stale notes
 

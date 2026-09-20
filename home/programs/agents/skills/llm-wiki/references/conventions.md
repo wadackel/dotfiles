@@ -103,16 +103,21 @@ For files under `04_Literature/` and for index notes under `03_Books/`, the pres
 
 Never write `type: source` by hand — doing so hides the file from `ingest` forever.
 
-## Sources hold a summary, not the original text
+## The body is the record, the summary is the index
 
-Upstream LLM Wiki keeps raw source text. This vault does not: `04_Literature/` articles are Web Clipper output whose body is a `## Summary` list plus an empty `## Memo` section, and the original text was never captured.
+`04_Literature/` articles are Web Clipper output. Each carries a `## Summary` list, an optional `## Memo`, and — for articles clipped or backfilled since the body became available — a `## Content` section holding the article's own text.
 
 Consequences:
 
-- `ingest` reads `## Summary` — that is the source of record. Do not attempt to re-fetch the original to replace it.
-- When a verbatim quote, a statistic, or a code sample is needed, follow the `[title](url)` link on the article's first body line to the original. `query` has a branch for this.
-- Anything a concept note asserts must be traceable to the `## Summary` or to the external URL. If it is traceable to neither, it does not belong in the note.
-- `## Memo` is the user's own commentary. Read it — it is signal about what they took from the article — but never write into it.
+- **`## Content` is the source of record.** A claim that rests on a number, a proper noun, a verbatim quote, or a code sample is confirmed there before it is written into a note.
+- **`## Summary` is the index.** It is what `ingest` reads first, and it is enough for placing an article and for the general claims it already states. It is not enough for the specific ones.
+- **The summary is model output; the body is the article.** A summary can name something the article never said. That is why a specific claim is confirmed against `## Content` even when the summary already states it — finding it in the summary points you at it, it does not confirm it.
+- **A summary can be a stub too.** Some say one line and assert nothing. This adds no third trigger to [ingest.md](ingest.md) B-2 — it removes the default: "the summary is enough" assumes the summary states something, so when it states nothing there is nothing to copy across however general the line you meant to write. Read the body if there is one. A stub summary over a stub body leaves the article with nothing to compile — park it ([decision-rules.md](decision-rules.md)) rather than writing the line anyway.
+- **Not every article has a body.** Some were clipped before the body existed and some failed to fetch. Books and `memo/conversation` sources never have one. When there is no `## Content`, the summary is the record and the external URL is the fallback for a quote — except during `ingest`, which does not go to the network for a body it is missing ([ingest.md](ingest.md) B-2). Say plainly that the claim rests on the summary alone.
+- **A body can exist and still be worthless.** A paywall interstitial or a consent page yields a `## Content` that is short and says nothing about the subject. When the body lacks the article's substance, follow the summary and say so; do not let a stub outrank it. When the summary has no substance either, the article has nothing to compile — park it ([decision-rules.md](decision-rules.md)).
+- **`## Content` runs to the end of the file.** It is always the last section, and the article's own `##` headings appear inside it, so cutting at the next `## ` truncates it. Read to EOF.
+- **A long body is read in parts.** `Read` stops at its line limit without saying so, which turns a partial body into one you believe is whole. When the last line the read returned is not the article's last line, it stopped short. Continue with `Read`'s `offset` from there, or `Grep` inside the file for the passage and read that range.
+- **`## Memo` is the user's own commentary.** Read it — it is signal about what they took from the article — but never write into it. The clip template seeds the section with a `- 📝` placeholder; a Memo holding only that is empty.
 
 ## Wikilinks
 
@@ -273,7 +278,7 @@ Never delete old entries. `curiosity` builds its exclusion set from these files,
 ## Prohibited
 
 - Writing to `aliases`, `tags`, or `description` — and, on books, `date` or `rating`
-- Writing into a source's `## Summary` or `## Memo`
+- Writing into a source's `## Summary`, `## Content`, or `## Memo`
 - Writing anything to a chapter note under `03_Books/` — frontmatter included
 - Creating an index file per genre (the Bases views are the catalog)
 - Creating genre subdirectories under `02_Notes/` or `04_Literature/` (existing Bases filter on `file.folder == "02_Notes"`)
