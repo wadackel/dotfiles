@@ -36,6 +36,7 @@
       "Bash(*writing-metrics/baseline-mixing.ts*)",
       "Bash(*writing-metrics/fire-rate.ts*)",
       "Bash(*writing-metrics/lint.ts*)",
+      "Bash(*writing-metrics/reask-rate.ts*)",
       "Bash(*writing-metrics/task-other.ts*)",
       "Bash(*writing-metrics/task-src.ts*)",
       "Bash(*writing-metrics/vocab-inventory.ts*)",

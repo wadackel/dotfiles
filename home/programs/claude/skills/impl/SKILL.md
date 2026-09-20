@@ -47,7 +47,7 @@ Do not trust the inherited summary. Re-resolve the plan (confirming a fallback p
 
 Three things, in this order, then the sidecar path:
 
-1. What changed and what it means for the user, in a few sentences by intent, not by file.
+1. What changed and what it means for the user, in a few sentences by intent, not by file, and how to see it working (command, path, URL).
 2. How it was verified: the commands and surfaces that were actually exercised, and anything not verified, said plainly.
 3. What the reader must decide, one bullet each: a finding deferred on purpose with what happens if it stays, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps`, a deviation from the plan. Write "なし" when there is none.
 
