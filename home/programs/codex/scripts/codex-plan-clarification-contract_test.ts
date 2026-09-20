@@ -511,3 +511,28 @@ Deno.test("representative plan artifact fixtures preserve contract context", () 
     assertStringIncludes(artifact.body, "Interview status");
   }
 });
+
+// opencode 側の配線は 2 ファイルに別れた同じリテラルで成立するため、片方だけ改名しても
+// build も lint も通り、opencode だけが黙って規則を受け取らなくなる。
+Deno.test("Vault-first policy reaches both Codex and opencode", async () => {
+  const policy = await readRepoFile(
+    "home/programs/agents/shared/vault-policy.md",
+  );
+  assertInOrder(await readRepoFile("home/programs/codex/default.nix"), [
+    "builtins.readFile ./subagent-policy.md",
+    "builtins.readFile ../agents/shared/vault-policy.md",
+  ]);
+  assertStringIncludes(
+    await readRepoFile("home/programs/agents/default.nix"),
+    '".agents/vault-policy.md"',
+  );
+  assertStringIncludes(
+    await readRepoFile("home/programs/opencode/opencode.json"),
+    '"{env:HOME}/.agents/vault-policy.md"',
+  );
+  assertIncludesAll(policy, [
+    "more than one defensible answer",
+    "`llm-wiki` skill's `query` verb",
+    "Skip it only for what the current repository settles",
+  ]);
+});

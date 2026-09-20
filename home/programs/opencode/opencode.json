@@ -19,10 +19,14 @@
     "file://{env:HOME}/.config/opencode/plugins/rtk.ts"
   ],
 
-  // AGENTS.md は ~/.claude/CLAUDE.md がフォールバック読み込みされるため未設定。
-  // RTK ガイドだけ追加で読ませる。{env:HOME} は profile 非依存の置換。
+  // opencode 1.x が自動で拾うのは AGENTS.md だけで、~/.claude/CLAUDE.md は読まない。
+  // Claude 側の規則はここへ届かないので、必要なものは instructions で明示する。
+  // vault-policy.md の実体は home/programs/agents/shared/ にあり、Codex は同じファイルを
+  // AGENTS.md へ inline する。{env:HOME} は profile 非依存の置換で、plugin 配列と違い
+  // file:// は付かない。
   "instructions": [
-    "{env:HOME}/.claude/RTK.md"
+    "{env:HOME}/.claude/RTK.md",
+    "{env:HOME}/.agents/vault-policy.md"
   ],
 
   // 信頼ベース: 編集・bash・webfetch は基本 allow、破壊的コマンドのみ deny。
@@ -57,6 +61,14 @@
     },
     "skill": {
       "*": "allow"
+    },
+    // vault-policy.md が llm-wiki を使って vault を引けと指示する一方、vault は
+    // プロジェクト外なので既定では external_directory の許可を求める。非対話の
+    // `opencode run` はそれを自動拒否するため、許可が無いと規則が空振りする。
+    // ここが ~ なのは、permission のマッチャが {env:HOME} 置換ではなく自前の
+    // ~ 展開を通すため。このファイルの他の箇所と表記が違うのはそのせい。
+    "external_directory": {
+      "~/Documents/Main/**": "allow"
     }
   },
 

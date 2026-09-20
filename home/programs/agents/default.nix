@@ -12,6 +12,12 @@
   # would break the other agent's publication.
   home.file.".agents/scripts".source = dotfiles.linkHere ./. "scripts";
 
+  # Codex inlines this file at build time (home/programs/codex/default.nix), so
+  # it needs no published copy. opencode reads instruction files from disk by
+  # path, so it gets one here — out-of-store, which keeps wording edits from
+  # needing a rebuild on that side.
+  home.file.".agents/vault-policy.md".source = dotfiles.linkHere ./. "shared/vault-policy.md";
+
   # Claude / Codex / opencode all start from a login shell, so one session
   # variable reaches all three. Per-agent config files would need three
   # injection points, and Claude's settings.json expands neither $HOME nor
