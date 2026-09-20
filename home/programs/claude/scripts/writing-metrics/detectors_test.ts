@@ -8,8 +8,10 @@ import {
   detectTelegraphicFragment,
   detectWorkflowVocab,
   type Dictionaries,
+  itemLengths,
   loadDictionaries,
   proseStats,
+  replyKind,
   resolveProtectedTermsPath,
 } from "./detectors.ts";
 
@@ -339,4 +341,88 @@ Deno.test("proseStats: 句点で終わらない箇条書きとラベル行を断
   assertEquals(s.itemLines, 5);
   assertEquals(s.labelFragmentLines, 3);
   assertEquals(s.labelFragmentRatio, 0.6);
+});
+
+// --- 箇条書きの長さ ---------------------------------------------------------
+
+Deno.test("itemLengths: bullet 行の字数は marker と ** を除き、番号付き行とラベル行と fence は数えない", () => {
+  const text = [
+    "- **対象**: `config.ts` を直す",
+    "  - 入れ子も 1 行",
+    "1. 番号付きは骨組みなので数えない",
+    "**端末層**: marker なしのラベル行も数えない",
+    "```",
+    "- fence の中は数えない",
+    "```",
+    "| 表 | - 表も数えない |",
+  ].join("\n");
+  const r = itemLengths(text);
+  assertEquals(r.lines, [
+    "対象: `config.ts` を直す".length,
+    "入れ子も 1 行".length,
+  ]);
+  // prose は code span を ␣ 1 文字に置換した長さ
+  assertEquals(r.linesProse, ["対象: ␣ を直す".length, "入れ子も 1 行".length]);
+});
+
+Deno.test("itemLengths: tight な入れ子では親の項目が子を含み、子も自分の項目を持つ", () => {
+  const text = [
+    "- 親の事実です",
+    "  - 子の補足です",
+    "    続きの散文",
+    "- 次の親",
+  ].join("\n");
+  const r = itemLengths(text);
+  const parent = "親の事実です".length + "子の補足です".length +
+    "続きの散文".length;
+  const child = "子の補足です".length + "続きの散文".length;
+  assertEquals(r.blocks, [parent, child, "次の親".length]);
+  for (const [i, b] of r.blocks.entries()) assert(b >= r.lines[i]);
+});
+
+Deno.test("itemLengths: loose list でも空行 1 行を跨いで子が親の項目に入り、連続 2 空行で閉じる", () => {
+  const text = [
+    "- 親",
+    "",
+    "  - 子",
+    "",
+    "",
+    "  - 別の段落の bullet",
+  ].join("\n");
+  const r = itemLengths(text);
+  assertEquals(r.blocks[0], "親".length + "子".length);
+  assertEquals(r.blocks[2], "別の段落の bullet".length);
+});
+
+Deno.test("itemLengths: 番号付き骨組みの配下の bullet は opener になり、骨組み自体は数えない", () => {
+  const text = [
+    "3. What the reader must decide",
+    "   - 対象",
+    "     - 放置した場合の影響",
+    "4. 次の節",
+  ].join("\n");
+  const r = itemLengths(text);
+  assertEquals(r.lines, ["対象".length, "放置した場合の影響".length]);
+  assertEquals(r.blocks, [
+    "対象".length + "放置した場合の影響".length,
+    "放置した場合の影響".length,
+  ]);
+});
+
+Deno.test("replyKind: 質問・報告・Plan ready・その他を見出しと固定文字列で分ける", () => {
+  assertEquals(
+    replyKind("### どちらにしますか？\n\n- **A.** x\n\n> 推奨: A。"),
+    "question",
+  );
+  assertEquals(
+    replyKind("Gate は PASS。\n\nFull record: ~/x.gate.log.md"),
+    "report",
+  );
+  assertEquals(
+    replyKind("## Plan ready\n- Status: PENDING APPROVAL"),
+    "plan-ready",
+  );
+  assertEquals(replyKind("ふつうの返答です。"), "other");
+  // ^### が行頭一致になるのは m フラグがあるときだけ
+  assertEquals(replyKind("前置き\n### 進めますか？\n> 推奨: B。"), "question");
 });

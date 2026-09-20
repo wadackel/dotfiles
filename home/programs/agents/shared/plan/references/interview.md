@@ -20,13 +20,13 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user. Read it b
 
 <背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>
 
-- **A. <ラベル>** — <含意 1 行>
-- **B. <ラベル>** — <含意 1 行>
+- **A. <ラベル>** — <含意 1 文>
+- **B. <ラベル>** — <含意 1 文>
 
 > 推奨: A。<理由 1〜2 文>
 ```
 
-The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. The closing blockquote names the recommended answer (`> Recommendation:` in English conversations).
+The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. The closing blockquote names the recommended answer (`> Recommendation:` in English conversations). An option line carries one sentence. A cost, a constraint, or a second consequence goes on a nested bullet under it, not into the same line.
 
 ## What to ask
 

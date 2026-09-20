@@ -494,3 +494,67 @@ export function proseStats(text: string): ProseStats {
     labelFragmentRatio: itemLines === 0 ? 0 : labelFragmentLines / itemLines,
   };
 }
+
+// ---------------------------------------------------------------------------
+// 箇条書きの長さ
+
+export interface ItemLengths {
+  /** bullet 行ごとの字数（marker と ** を除く、code span はそのまま）。入れ子も 1 行 */
+  lines: number[];
+  /** 同じ行を prose（code span と `[tag]` を ␣ 1 文字に置換した本文）で数えた字数 */
+  linesProse: number[];
+  /** bullet ごとの項目字数: その行 + それより深い字下げの行。入れ子 bullet も自分の項目を持つ */
+  blocks: number[];
+}
+
+const BULLET_MARKER = /^\s*[-*+]\s+/;
+const ANY_MARKER = /^\s*(?:[-*+]|\d+\.)\s+/;
+
+function itemChars(text: string): number {
+  return text.trim().replace(ANY_MARKER, "").replace(/\*\*/g, "").length;
+}
+
+function indentOf(raw: string): number {
+  return raw.length - raw.trimStart().length;
+}
+
+// 番号付き行は報告の骨組み（`3. What the reader must decide`）なので行にも項目の
+// opener にも数えない。その配下の bullet は数える。項目は「次の行に」書かれた
+// 継続行を含めるため、marker のない深い字下げの prose も足す
+export function itemLengths(text: string): ItemLengths {
+  const lines = analyzeLines(text);
+  const out: ItemLengths = { lines: [], linesProse: [], blocks: [] };
+  for (const [i, line] of lines.entries()) {
+    if (line.kind === "fence" || !BULLET_MARKER.test(line.raw)) continue;
+    out.lines.push(itemChars(line.raw));
+    out.linesProse.push(itemChars(line.prose));
+    const depth = indentOf(line.raw);
+    let block = itemChars(line.raw);
+    let blanks = 0;
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j];
+      if (next.kind === "blank") {
+        if (++blanks >= 2) break;
+        continue;
+      }
+      blanks = 0;
+      if (
+        next.kind === "fence" || next.kind === "table" ||
+        next.kind === "heading" || indentOf(next.raw) <= depth
+      ) break;
+      block += itemChars(next.raw);
+    }
+    out.blocks.push(block);
+  }
+  return out;
+}
+
+export type ReplyKind = "question" | "report" | "plan-ready" | "other";
+
+/** 返答の種類を固定文字列で近似する。順序は特異な印から */
+export function replyKind(text: string): ReplyKind {
+  if (/Full record:|VERDICT|\.gate\.log/.test(text)) return "report";
+  if (/Plan ready|PENDING APPROVAL/.test(text)) return "plan-ready";
+  if (/^### .+[?？]$/m.test(text) && /> 推奨/.test(text)) return "question";
+  return "other";
+}

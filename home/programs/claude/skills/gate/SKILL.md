@@ -54,7 +54,7 @@ Append to `~/.claude/plans/<slug>.gate.log.md` under `### Round N` (read the fil
 The reply carries only what changes the reader's next action:
 
 - The verdict in one line, with the sidecar path.
-- Every item the reader must decide, one per bullet with `file:line` and what happens if it stays: a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred to a later run (copy its `Observe` and `Your steps`). A finding dismissed in an earlier round that resurfaces is listed here, not dismissed again.
+- Every item the reader must decide, one bullet each: the `file:line` and the finding on the bullet. What happens if it stays goes on a nested bullet under it. The items are a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, and a `[live]` item waived or deferred to a later run, with its `Observe` and `Your steps` copied as nested bullets under it. A finding dismissed in an earlier round that resurfaces is listed here, not dismissed again.
 - Nothing else: no per-reviewer lines, no round counts, no themed tallies of NITs.
 
 A gate that ends `[BLOCKED: gate escalated]` lists the open blockers the same way.

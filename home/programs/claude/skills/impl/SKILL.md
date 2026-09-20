@@ -49,6 +49,6 @@ Three things, in this order, then the sidecar path:
 
 1. What changed and what it means for the user, in a few sentences by intent, not by file, and how to see it working (command, path, URL).
 2. How it was verified: the commands and surfaces that were actually exercised, and anything not verified, said plainly.
-3. What the reader must decide, one bullet each: a finding deferred on purpose with what happens if it stays, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps`, a deviation from the plan. Write "なし" when there is none.
+3. What the reader must decide, one bullet each: the item on the bullet, and what happens if it stays on a nested bullet under it. The items are a finding deferred on purpose, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` copied as nested bullets under it, and a deviation from the plan. Write "なし" when there is none.
 
 Full record: `~/.claude/plans/<basename>.gate.log.md`. Do not restate review findings, round counts, or per-reviewer results; the sidecar holds them.

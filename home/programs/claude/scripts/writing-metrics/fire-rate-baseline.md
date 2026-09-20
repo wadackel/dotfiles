@@ -116,3 +116,87 @@ after（arrow 0 + paren 1 = 1件）≤ before（arrow 1 + paren 1 = 2件）で�
 ## 追加指標（2026-09-16）
 
 `fire-rate.ts` は上のカテゴリに加えて、文平均長（。区切り、fence と表を除く）、ラベル断片率（箇条書きとラベル行のうち句点で終わらない行の割合）、スキル文脈別（直前の非 meta ユーザー発話が `/plan` / `/impl` を含むか）の文字数中央値を出す。2026-09 の Claude / Codex 比較で差が出たのはこの 2 指標で、矢印・括弧は床に達していた。再構築の baseline と判定は `instruction-stack-baseline.md` にある。
+
+## 追加指標（2026-09-20）: 箇条書きの行字数と項目字数
+
+concise.md の Shape 節に「1 bullet に 1 事実、2 つ目は別の bullet」を足し、`interview.md` の選択肢行・gate の返答規則・impl 完了報告の項目 3 を「bullet に対象、入れ子 bullet に補足」の形に改めた際の測定記録。文面に字数は書かず、判定閾値はこの文書にだけ置く。
+
+### 指標の定義
+
+`fire-rate.ts` は `itemLengths()`（`detectors.ts`）で次を出す。
+
+- 行字数（raw）: `-` `*` `+` の bullet 行ごとの字数。marker と `**` を除き、code span はそのまま。入れ子 bullet も 1 行
+- 行字数（prose）: 同じ行の code span と `[live]` のような角括弧タグを ␣ 1 文字に置換した字数。9/16 前後の 9.3% → 13.8%（code span 除外の 100 字超）の系列と比較する用
+- 項目字数: bullet 行 + それより深い字下げの行（bullet と prose）の合計。空行 1 行は跨ぎ、字下げが同じ以下の bullet・見出し・fence・表・連続 2 空行で閉じる。入れ子 bullet も自分の項目を持つので、親の項目は子を含む
+- 番号付き行（`1.`）は報告の骨組みなので行にも項目にも数えない。marker のない `**ラベル**:` 行も数えない
+- 字下げなしの継続行（CommonMark の lazy continuation）は opener 以下の字下げなので母集団外。見た目は同じ段落に続くため、指標だけ下がる抜け道として残る
+- p50 / p90 は昇順に並べた `floor((n-1)*p)` 番目の値（下側順位）。既存の「スキル文脈別 文字数」の中央値（偶数個で平均）とは定義が違う
+- 返答種別が複数に一致したときは report > plan-ready > question の順で 1 つに割り当てる
+- 軸は 2 つ。文脈（`/plan` `/impl` が出てから次のマーカーまで、粗い近似）と返答種別（question: `### …？` + `> 推奨` / report: `Full record:` `VERDICT` `.gate.log` / plan-ready: `Plan ready` `PENDING APPROVAL` / other、正規表現の近似で取りこぼしがある）
+
+**主指標は「行 p90」「100 字超（raw）」「項目 p90」の 3 つ。** 行 p50、100 字超（prose）、項目 p50 は参考。母集団は全 assistant 応答（進捗メモ含む）で、最終返答だけを数える `reask-rate.ts` や調査時の `sentlen2.ts` とは異なる。09-16〜09-20 の窓には、この計測作業自体の応答と、09-19 の concise.md 書き換え（Reader 節、Reply 節）以降の応答が混ざる。contract.md の RUC テンプレート（スラッシュ区切り 1 行）由来の長行は今回対象外で、母集団に残る。
+
+### 変更前の値（2026-09-20 16 時台、`fire-rate.ts --from 2026-09-16`、4 日窓）
+
+```text
+対象: n=1972 応答, 481,260 字
+
+箇条書き（行数 / 行 p50 / 行 p90 / 100 字超 raw / 100 字超 prose / 項目 p50 / 項目 p90）
+all                2107 /   49 /  137 /  20.1% /  13.9% /   51 /  146
+ctx:plan            242 /   76 /  149 /  26.9% /  21.1% /   76 /  151
+ctx:impl            304 /   71 /  169 /  32.9% /  25.7% /   78 /  195
+ctx:none           1561 /   43 /  125 /  16.6% /  10.5% /   43 /  135
+kind:question        75 /   81 /  136 /  32.0% /  29.3% /   81 /  136
+kind:report         304 /   69 /  180 /  34.5% /  24.0% /   77 /  198
+kind:plan-ready     133 /   66 /  174 /  29.3% /  23.3% /   68 /  177
+kind:other         1595 /   44 /  123 /  16.1% /  10.5% /   45 /  132
+```
+
+### 固定プロンプトの before / after（n=1 の記録、合否ゲートではない）
+
+cwd `~/dotfiles`、headless `claude -p … --output-format json < /dev/null`、`--settings` なし（settings.json の `outputStyle` は concise）。before は変更前、after-1 は concise.md だけ変えた後、after-2 は契約 3 か所も変えた後。
+
+| 採取 | プロンプト | bullet 数（うち入れ子） | 最長行 | 100 字超 | 項目 p90 |
+|---|---|---:|---:|---:|---:|
+| before | (a) `/plan` の A1 質問 | 2 (0) | 157 | 2 | 129 |
+| after-1 | (a) | 3 (0) | 120 | 1 | 96 |
+| after-2 | (a) | 6 (3) | 87 | 0 | 111 |
+| before | (b) 報告（3 項目、影響付き） | 7 (0) | 208 | 6 | 180 |
+| after-1 | (b) | 23 (17) | 79 | 0 | 125 |
+
+(a) の選択肢行 verbatim（before と after-1 は最長の 1 行、after-2 は先頭 2 択）:
+
+```text
+before : - **B. Deno テスト + `nix flake check`** — A に加えて、formatting と config-lint も CI で検査します。ただし checks は `aarch64-darwin` 向けなので、macOS runner に Nix を入れる必要があり、1 回の実行が数分延びます。
+after-1: - **C. A に加えて `nix flake check` も実行** — Nix のインストールとビルドで数分延びます。その代わり、使われていない formatting と config-lint の check も CI で回るようになります。
+after-2:
+- **A. Deno テストだけ** — `.github/workflows/` に push / PR で `deno test` を回す workflow を 1 本追加します。
+  - tmux サーバーを立てる `agentower_e2e_test.ts` は対象外にします。
+- **B. Deno テストに `nix flake check` も加える** — フォーマット崩れと `config-lint` 違反も CI で検出できます。
+  - Nix のインストールが入るため、job の所要時間が数分延びます。
+```
+
+(b) の最長 bullet（生の字数 212 字。表の 208 は `itemLengths` の基準で marker と `**` を除いた値）:
+
+```text
+before : - **`reask-rate.ts` は `/plan …` のような skill 起動を返答の区切りとして扱わない。** skill 起動の発話は `<command-…>` で始まるためノイズとして捨てられ、返答をためるバッファ `buf…
+```
+
+after-1 は事実ごとに入れ子 bullet に分かれ、最長 79 字。
+
+読み方: (a) は after-1（concise.md のみ）では選択肢行がまだ 2 文だったが、after-2（`interview.md` の書式変更後）で 1 文 + 入れ子になった。契約側の変更が選択肢行に効く。(b) は concise.md だけで入れ子に分かれ、項目 p90 も 180 → 125 に下がった。折り返しでなく事実が分かれている。
+
+### 再測定手順
+
+```text
+~/.claude/scripts/writing-metrics/fire-rate.ts --from 2026-09-21
+```
+
+- 起点は変更翌日（09-21）。09-20 は変更前後の応答が混ざる
+- 判定には対象期間 200,000 字以上を要する。未満なら判定保留として蓄積を待つ
+- 実行は 2〜3 週間後を目安とする。transcript は約 30 日で消えるため、上の「変更前の値」は 10 月中旬以降は再現できず、この記録だけが基準になる
+- 種別ごとに「行 p90」「100 字超（raw）」「項目 p90」を上の表と並べる。n と対象字数を併記する
+
+### 判定基準
+
+質問・報告・Plan ready の各種別で、行 p90 と 100 字超（raw）が変更前の値を下回り、かつ項目 p90 も下がっていれば「指示側で直った」。行だけ下がって項目 p90 が同じなら、事実を分けたのでなく折り返しただけと判定する。other（会話）に残る 100 字超はモデル由来の床とみなし、指示で押し下げる対象にしない。

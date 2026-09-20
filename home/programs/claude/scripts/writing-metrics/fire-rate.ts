@@ -13,8 +13,12 @@
  */
 import {
   detectAll,
+  type ItemLengths,
+  itemLengths,
   loadDictionaries,
   proseStats,
+  type ReplyKind,
+  replyKind,
   resolveProtectedTermsPath,
 } from "./detectors.ts";
 
@@ -66,6 +70,27 @@ let labelFragmentLines = 0;
 // マーカーまでを同じ文脈として数える: スキル実行中の質問応答も同じ文脈に属する
 type Context = "plan" | "impl" | "none";
 const byContext: Record<Context, number[]> = { plan: [], impl: [], none: [] };
+// 箇条書きの長さは文脈（スキル実行中か）と返答種別（質問 / 報告 / Plan ready）の
+// 両方で偏るので、別軸で溜める
+type Lengths = ItemLengths;
+const emptyLengths = (): Lengths => ({ lines: [], linesProse: [], blocks: [] });
+const itemsAll = emptyLengths();
+const itemsByContext: Record<Context, Lengths> = {
+  plan: emptyLengths(),
+  impl: emptyLengths(),
+  none: emptyLengths(),
+};
+const itemsByKind: Record<ReplyKind, Lengths> = {
+  question: emptyLengths(),
+  report: emptyLengths(),
+  "plan-ready": emptyLengths(),
+  other: emptyLengths(),
+};
+function addLengths(into: Lengths, from: Lengths) {
+  into.lines.push(...from.lines);
+  into.linesProse.push(...from.linesProse);
+  into.blocks.push(...from.blocks);
+}
 
 function userText(r: Record<string, unknown>): string | null {
   const m = r.message as { role?: string; content?: unknown } | undefined;
@@ -150,6 +175,10 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
     sentenceChars += st.sentenceChars;
     itemLines += st.itemLines;
     labelFragmentLines += st.labelFragmentLines;
+    const il = itemLengths(text);
+    addLengths(itemsAll, il);
+    addLengths(itemsByContext[context], il);
+    addLengths(itemsByKind[replyKind(text)], il);
     const cats = new Set<string>();
     for (const f of detectAll(text, dict)) {
       cats.add(f.category);
@@ -192,4 +221,34 @@ for (const [ctx, xs] of Object.entries(byContext)) {
       median(xs).toFixed(0).padStart(6)
     }`,
   );
+}
+
+function quantile(xs: number[], p: number): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor((s.length - 1) * p)];
+}
+function over(xs: number[], k: number): string {
+  return xs.length
+    ? (xs.filter((x) => x > k).length / xs.length * 100).toFixed(1)
+    : "0.0";
+}
+function lengthsRow(label: string, l: Lengths): string {
+  return `${label.padEnd(16)} ${String(l.lines.length).padStart(6)} / ${
+    String(quantile(l.lines, 0.5)).padStart(4)
+  } / ${String(quantile(l.lines, 0.9)).padStart(4)} / ${
+    over(l.lines, 100).padStart(5)
+  }% / ${over(l.linesProse, 100).padStart(5)}% / ${
+    String(quantile(l.blocks, 0.5)).padStart(4)
+  } / ${String(quantile(l.blocks, 0.9)).padStart(4)}`;
+}
+console.log(
+  "\n箇条書き（行数 / 行 p50 / 行 p90 / 100 字超 raw / 100 字超 prose / 項目 p50 / 項目 p90）",
+);
+console.log(lengthsRow("all", itemsAll));
+for (const [ctx, l] of Object.entries(itemsByContext)) {
+  console.log(lengthsRow(`ctx:${ctx}`, l));
+}
+for (const [kind, l] of Object.entries(itemsByKind)) {
+  console.log(lengthsRow(`kind:${kind}`, l));
 }
