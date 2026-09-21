@@ -155,7 +155,7 @@ Two consequences to hold onto:
 
 ### The rest
 
-- **Human frontmatter fields are off limits.** `aliases`, `tags`, and `description` belong to the user. This skill writes only `type`, `sources`, `related`, `updated`, `generated_pages`. See [references/conventions.md](references/conventions.md).
+- **Human frontmatter fields are off limits.** `aliases`, `tags`, and `description` belong to the user. This skill writes only `type`, `sources`, `related`, `updated`, `generated_pages` — plus `clip/*` genre tags on an article that has none yet ([references/ingest.md](references/ingest.md) A-1). See [references/conventions.md](references/conventions.md).
 - **Source bodies are never rewritten.** Only frontmatter changes, in `04_Literature/` and in `03_Books/` index notes. Chapter notes under `03_Books/` are never written to at all — not their bodies, not their frontmatter. They are the user's own writing, they exist nowhere else, and the QuickAdd workflow that produced them assumes they stay untouched.
 - **The vault is not under Git.** There is no undo. Confirm before deleting notes or renaming in bulk, and never run a destructive sweep without a backup covering `02_Notes/`, `04_Literature/`, `00_Inbox/`, `98_Maintenance/`, and `03_Books/`. The last one matters most — it is the user's own writing and exists nowhere else.
 - **`mv` never overwrites.** Use `mv -n` everywhere. A silent overwrite in `04_Literature/` destroys the user's own `## Memo`, which no backup taken after the fact can recover.

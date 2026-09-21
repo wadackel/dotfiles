@@ -44,7 +44,7 @@ A no-argument run over an uncompiled backlog of thousands is not something to st
 
 ### A-1. Interpret the input
 
-- **Path under `04_Literature/`** — genre comes from the `clip/*` tag. Straight to Phase B.
+- **Path under `04_Literature/`** — genre comes from the `clip/*` tag. Straight to Phase B. Use whatever `clip/*` it carries as is, whether the user added it or the Web Clip plugin did at clip time; do not re-judge it. An article with **no** `clip/*` is one the plugin could not tag (about a quarter of new clips): decide its genre by A-2, add the tags to its frontmatter, then go to Phase B. Add only `clip/*` entries — every other tag, and the order of the existing ones, stays as found.
 - **Path under `03_Books/`** — must resolve to an index note; a chapter note is not a target. Genre is inferred rather than tagged, and one book may carry up to three. Straight to Phase B, following [books.md](books.md).
 - **Path under `00_Inbox/`** — genre unknown. Go to A-2.
 - **Path elsewhere** — `Read` it, decide the genre (A-2), write it into `04_Literature/<slug>.md`, leave the original alone.

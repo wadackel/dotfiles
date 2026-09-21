@@ -12,7 +12,7 @@ The vault splits frontmatter into fields the user owns and fields this skill own
 
 | Set | Fields | Who writes |
 |---|---|---|
-| Human | `aliases`, `tags`, `description` | The user only |
+| Human | `aliases`, `tags`, `description` | The user only — except a `clip/*` genre tag on an article that carries none, which the Web Clip plugin adds at clip time and `ingest` adds when the plugin could not ([ingest.md](ingest.md) A-1) |
 | Machine | `type`, `sources`, `related`, `updated`, `generated_pages` | `llm-wiki` only |
 
 The `obsidian-notes` skill instructs agents to leave `aliases` / `tags` / `description` empty when creating notes. That rule stands unchanged — it governs the human set. Machine fields are a separate category and are exempt from it.
@@ -222,7 +222,7 @@ views:
 
 The two Bases views are a self-updating convenience catalog, so **no separate index file is ever created**. They are not complete, and the difference matters when deciding where a new note has to be listed.
 
-`## Articles` is reliable — it filters on the `clip/*` tag, which every clipped article carries. `## Notes` is not: it filters on substrings of the filename, so a note whose title shares no keyword with the genre never appears no matter how central it is. A 2026-08-12 audit found `不変条件と整合性境界`, `機械強制できる担保とその境界`, and `律速の移動と待ち行列` all invisible in their parent's view for this reason.
+`## Articles` is reliable — it filters on the `clip/*` tag, which every article with a genre carries. An article that fits no genre carries no `clip/*` and appears in no view by design. `## Notes` is not: it filters on substrings of the filename, so a note whose title shares no keyword with the genre never appears no matter how central it is. A 2026-08-12 audit found `不変条件と整合性境界`, `機械強制できる担保とその境界`, and `律速の移動と待ち行列` all invisible in their parent's view for this reason.
 
 **`## 知識マップ` is therefore the authoritative catalog for concept notes**, and a new note that the `## Notes` filter does not match must be listed there or it is unreachable. Two fixes were tried and rejected:
 
@@ -277,7 +277,7 @@ Never delete old entries. `curiosity` builds its exclusion set from these files,
 
 ## Prohibited
 
-- Writing to `aliases`, `tags`, or `description` — and, on books, `date` or `rating`
+- Writing to `aliases`, `tags`, or `description` — and, on books, `date` or `rating`. The one exception is adding `clip/*` to an article in `04_Literature/` that carries none ([ingest.md](ingest.md) A-1)
 - Writing into a source's `## Summary`, `## Content`, or `## Memo`
 - Writing anything to a chapter note under `03_Books/` — frontmatter included
 - Creating an index file per genre (the Bases views are the catalog)
