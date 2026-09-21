@@ -26,7 +26,22 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user. Read it b
 > 推奨: A。<理由 1〜2 文>
 ```
 
-The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. The closing blockquote names the recommended answer (`> Recommendation:` in English conversations). An option line carries one sentence. A cost, a constraint, or a second consequence goes on a nested bullet under it, not into the same line.
+The heading is the question itself. Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. An option line carries one sentence. A cost, a constraint, or a second consequence goes on a nested bullet under it, or in its own column when the options are a table, never into the option line. The options take the shape their material asks for: a table when every option has the same fields and none needs a sample (columns 案 / すること / 代償, or Option / What / Cost in English), prose that leads with the recommendation and its reason when one answer is clearly right and the others are fallbacks, and the bullet list above otherwise. Every shape keeps each line short enough for a narrow screen and ends with the recommendation blockquote (`> 推奨`, or `> Recommendation:` in English conversations).
+
+When the options are a table:
+
+```markdown
+### <質問文をそのまま見出しにする>
+
+<前提 1 文、file:lines 付き>
+
+| 案 | すること | 代償 |
+|---|---|---|
+| A. <ラベル> | <1 句> | <1 句> |
+| B. <ラベル> | <1 句> | <1 句> |
+
+> 推奨: A。<理由 1〜2 文>
+```
 
 ## What to ask
 

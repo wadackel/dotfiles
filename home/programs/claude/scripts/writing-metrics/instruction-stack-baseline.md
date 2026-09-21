@@ -171,6 +171,8 @@ CLAUDE_CONFIG_DIR=$HOME/.claude-old claude -p '<prompt>' --settings '{"outputSty
 | shared/plan/references/contract.md | 1,142 | — |
 | shared/plan/references/interview.md | 657 | 600（57 語超過） |
 | plan + interview + contract | 2,852 | 2,800（52 語超過） |
+
+2026-09-22 の完了報告の形の改訂（`impl/SKILL.md` の Final report 節に完成例、`interview.md` に表形のサンプル）で、`impl/SKILL.md` と `interview.md` の超過は広がる。削る候補は次回に回し、この表の値は改訂前のまま。
 | impl 単体（contract は語彙の参照先で必読にしない） | 822 | 1,500（contract 込みなら 1,964） |
 | gate + contract + security-triggers + domain-reviewer-prompt | 2,999 | 3,000 |
 

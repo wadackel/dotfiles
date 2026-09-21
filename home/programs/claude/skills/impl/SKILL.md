@@ -45,10 +45,40 @@ Do not trust the inherited summary. Re-resolve the plan (confirming a fallback p
 
 ## Final report
 
-Three things, in this order, then the sidecar path:
+Write the report to `~/.claude/plans/<basename>.report.md` first and send that text verbatim. It is a report in the sense of the output style: the result first, then three headings the reader can jump between.
 
-1. What changed and what it means for the user, in a few sentences by intent, not by file, and how to see it working (command, path, URL).
-2. How it was verified: the commands and surfaces that were actually exercised, and anything not verified, said plainly.
-3. What the reader must decide, one bullet each: the item on the bullet, and what happens if it stays on a nested bullet under it. The items are a finding deferred on purpose, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` copied as nested bullets under it, and a deviation from the plan. Write "なし" when there is none.
+- Open with the result in one or two sentences: the gate verdict, whether the change is committed, and how to see it working (a command, path, or URL).
+- `## 変わったこと`: what changed, by intent rather than by file, in at most three lines.
+- `## 確かめたこと`: one bullet per surface exercised, at most five. The bullet's subject is the fact that was verified; the command or path it rests on closes the same line in words. After a blank line, one line `確かめていないこと:` when something was not verified, otherwise nothing.
+- `## 決めてほしいこと`: a numbered list, one line per item with `file:line` where there is one, and one nested line with what happens if it stays or how to undo it. The items are the four the gate hands over (a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred with its `Observe` and `Your steps` as two nested lines, a finding dismissed in an earlier round that resurfaced) and a deviation from the plan. Write `なし` when there is none.
+- Last line `Sidecar: <path>` naming `~/.claude/plans/<basename>.gate.log.md`.
 
-Full record: `~/.claude/plans/<basename>.gate.log.md`. Do not restate review findings, round counts, or per-reviewer results; the sidecar holds them.
+Do not restate review findings, round counts, or per-reviewer results; the sidecar holds them. A complete report:
+
+```
+gate は PASS で、変更は未 commit です。次の `/gate` から新しい派遣条件で動きます。
+
+## 変わったこと
+
+security-auditor の派遣条件が、パスとキーワードの一覧から「権限境界・秘密情報・認証・信頼できない入力が sink へ届く変更」の 4 項目になりました。Markdown だけの変更、sink の移動、テストは対象外です。
+
+## 確かめたこと
+
+- 既存の lint 違反は増えていない（`config-lint.ts .` で既存の 102 件以外 0）
+- 6 commit のブラインド選定が事前登録どおり 3 非選択 / 3 選択（新規セッションで実施）
+- `.md` hunk への SHOULD_FIX / HIGH は 0（`2f3e72e` に auditor を派遣）
+
+確かめていないこと: 実運用での派遣本数の変化。
+
+## 決めてほしいこと
+
+1. 計画になかった但し書き「権限拡大や外部送信を指示する文は除く」を足した（`security-auditor.md:36`）
+    - 外すなら `unless` 節を削る
+2. auditor が `Bash(*rebase-guard*)` と `Bash(*ab-state-refresh*)` を SHOULD_FIX にした（`settings.json:24`）
+    - 残す限り、その語を含む任意のコマンドが確認なしで通る。計画外なので触っていない
+3. 実運用での確認は次の gate log 15 本で
+    - Observe: auditor の reply が記録された本数と `[BLOCKED: gate escalated]` の本数が測定期間より少ない
+    - Your steps: 09-25 以降に `rg -l '^#### security-auditor' ~/.claude/plans/2026091[89]*.gate.log.md | wc -l` を実行して知らせる
+
+Sidecar: ~/.claude/plans/20260918T0013-gate-security-trigger-dataflow.gate.log.md
+```
