@@ -7,6 +7,7 @@ import {
   captureOutput,
   createClaudePane,
   sandboxHomePath,
+  sendBurst,
   sendKey,
   setupServer,
   spawnAgentower,
@@ -15,7 +16,7 @@ import {
   waitFor,
   waitForExit,
 } from "./agentower_e2e_harness.ts";
-import { codexCwdHash } from "./agentower.tsx";
+import { codexCwdHash, MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 
 // Row 1 of the selected pane, which carries the prompt the scenarios identify
@@ -2057,5 +2058,223 @@ Deno.test("S50: right-clicking a card selects it and cycles its label", async ()
     await waitForExit();
   } finally {
     await teardown();
+  }
+});
+
+Deno.test("S51: a key typed before the first frame still reaches the list", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await createClaudePane({ status: "running", prompt: "row-b" });
+    // startDelayMs parks the key in the pane's tty while sh sleeps, so it is
+    // already buffered when Agentower execs — the prefix+w symptom, without a
+    // race. Before the entry module set raw mode ahead of the ink import, a
+    // key delivered this early stayed invisible until the next keypress.
+    const agentower = await spawnAgentower({
+      waitForReady: false,
+      startDelayMs: 600,
+    });
+    await sendKey(agentower, "j");
+
+    await waitFor(agentower, selectedIncludes("row-b"), 8000);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S52: Ctrl+C during load still closes the popup", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const agentower = await spawnAgentower({ waitForReady: false });
+
+    await sendKey(agentower, "C-c");
+
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+function wheelDown(cell: { x: number; y: number }): string {
+  return `\x1b[<${MOUSE_WHEEL_DOWN};${cell.x + 1};${cell.y + 1}M`;
+}
+
+Deno.test("S53: a burst of j in one write moves one row per key", async () => {
+  await setupServer();
+  try {
+    for (const prompt of ["row-a", "row-b", "row-c", "row-d"]) {
+      await createClaudePane({ status: "running", prompt });
+    }
+    const agentower = await spawnAgentower();
+
+    await sendBurst(agentower, "jjj");
+
+    await waitFor(agentower, selectedIncludes("row-d"));
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S54: a wheel burst moves per event and clamps at the end", async () => {
+  await setupServer();
+  try {
+    for (const prompt of ["row-a", "row-b", "row-c", "row-d"]) {
+      await createClaudePane({ status: "running", prompt });
+    }
+    const agentower = await spawnAgentower();
+
+    await sendBurst(agentower, wheelDown(CARD_0).repeat(3));
+    await waitFor(agentower, selectedIncludes("row-d"));
+
+    // Already on the last row: a second fling must not wrap back to the top.
+    await sendBurst(agentower, wheelDown(CARD_0).repeat(3));
+    await new Promise((r) => setTimeout(r, 300));
+    assertEquals(
+      selectedIncludes("row-d")(await captureOutput(agentower)),
+      true,
+    );
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// The progress segment used to arrive with the first tick, a full second after
+// the popup opened, shifting the row under the cursor. main() now reads it
+// before render, so it is on the frame spawnAgentower waits for. A corrupt
+// usage file rides along: the footer read sits behind the same tick body, and
+// the list and the progress segment must survive it.
+Deno.test("S55: task progress is on the first frame, past a corrupt usage file", async () => {
+  const originalHome = Deno.env.get("HOME");
+  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
+    .pathname;
+  // /tmp explicitly: agentower-verify.ts narrows --allow-write to
+  // $HOME/.claude/tasks and /tmp, so TMPDIR is out of scope there.
+  const tempHome = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-e2e-home-",
+  });
+  await Deno.mkdir(`${tempHome}/.claude`, { recursive: true });
+  await copyDirRecursive(
+    `${fixtureHome}/.claude/tasks`,
+    `${tempHome}/.claude/tasks`,
+  );
+  const usageDir = `${tempHome}/.local/state/agent-usage`;
+  await Deno.mkdir(usageDir, { recursive: true });
+  await Deno.writeTextFile(`${usageDir}/claude.json`, "{not json at all");
+
+  const denoDir = Deno.env.get("DENO_DIR") ??
+    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+  const env: Record<string, string> = { HOME: tempHome };
+  if (denoDir) env.DENO_DIR = denoDir;
+
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "idle",
+      prompt: "row-progress",
+      lastTool: "Read",
+      sessionId: "sess-A",
+    });
+    const agentower = await spawnAgentower({ env });
+
+    // No waitFor: spawnAgentower already returned on the first frame, so a
+    // segment that only arrives with the tick would not be here yet.
+    const first = await captureOutput(agentower);
+    assertStringIncludes(first, "2/3");
+    assertStringIncludes(first, "row-progress");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(tempHome, { recursive: true });
+  }
+});
+
+async function copyDirRecursive(from: string, to: string): Promise<void> {
+  await Deno.mkdir(to, { recursive: true });
+  for await (const entry of Deno.readDir(from)) {
+    const src = `${from}/${entry.name}`;
+    const dst = `${to}/${entry.name}`;
+    if (entry.isDirectory) await copyDirRecursive(src, dst);
+    else if (entry.isFile) await Deno.copyFile(src, dst);
+  }
+}
+
+// The branch column is read from HEAD on every tick rather than cached, so a
+// checkout inside the pane has to move it. Nothing pinned that before: S38 only
+// looks at the branch a repository was created with.
+Deno.test("S56: a checkout while the popup is open moves the branch column", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-git-",
+  });
+  try {
+    await Deno.mkdir(`${root}/proj`, { recursive: true });
+    await git(`${root}/proj`, "init", "-q", "-b", "main");
+    await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
+
+    await createClaudePane({
+      status: "idle",
+      prompt: "main-row",
+      cwd: `${root}/proj`,
+    });
+    const agentower = await spawnAgentower();
+    await waitFor(agentower, (o) => o.includes("main"));
+
+    await git(`${root}/proj`, "checkout", "-q", "-b", "other");
+
+    await waitFor(agentower, (o) => o.includes("other"), 4000);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+// branchMax used to be measured in UTF-16 units while repoMax a line above used
+// display cells, so a CJK branch got half the room it needed and was cut short
+// even with the column wide enough to hold it.
+Deno.test("S57: a CJK branch name gets the width it actually occupies", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-git-",
+  });
+  try {
+    await Deno.mkdir(`${root}/proj`, { recursive: true });
+    await git(`${root}/proj`, "init", "-q", "-b", "機能追加");
+    await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
+
+    await createClaudePane({
+      status: "idle",
+      prompt: "cjk-row",
+      cwd: `${root}/proj`,
+    });
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("cjk-row"));
+    const row = out.split("\n").map((l) => l.split(/[│╭╰]/)[0])
+      .find((l) => l.includes("cjk-row")) ?? "";
+
+    assertStringIncludes(row, "機能追加");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
   }
 });

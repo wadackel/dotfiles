@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   basename,
+  branchFromHead,
   elapsedSource,
   formatElapsed,
   formatRemaining,
@@ -150,7 +151,7 @@ Deno.test("summaryOf: preserves full CJK prompt (caller truncates by width)", ()
 Deno.test("parseGitLocation: main checkout has no worktree", () => {
   assertEquals(
     parseGitLocation("/src/dotfiles\n/src/dotfiles/.git\n/src/dotfiles/.git\n"),
-    { repo: "dotfiles", worktree: "" },
+    { repo: "dotfiles", worktree: "", gitDir: "/src/dotfiles/.git" },
   );
 });
 
@@ -160,7 +161,11 @@ Deno.test("parseGitLocation: linked worktree names the repo after the common dir
       "/src/dotfiles-worktrees/obsidian\n" +
         "/src/dotfiles/.git/worktrees/obsidian\n/src/dotfiles/.git\n",
     ),
-    { repo: "dotfiles", worktree: "obsidian" },
+    {
+      repo: "dotfiles",
+      worktree: "obsidian",
+      gitDir: "/src/dotfiles/.git/worktrees/obsidian",
+    },
   );
 });
 
@@ -169,7 +174,7 @@ Deno.test("parseGitLocation: bare repo.git with a linked worktree drops .git", (
     parseGitLocation(
       "/src/wt\n/src/repo.git/worktrees/wt\n/src/repo.git\n",
     ),
-    { repo: "repo", worktree: "wt" },
+    { repo: "repo", worktree: "wt", gitDir: "/src/repo.git/worktrees/wt" },
   );
 });
 
@@ -178,7 +183,11 @@ Deno.test("parseGitLocation: .bare layout names the repo after its parent", () =
     parseGitLocation(
       "/src/repo/main\n/src/repo/.bare/worktrees/main\n/src/repo/.bare\n",
     ),
-    { repo: "repo", worktree: "main" },
+    {
+      repo: "repo",
+      worktree: "main",
+      gitDir: "/src/repo/.bare/worktrees/main",
+    },
   );
 });
 
@@ -188,13 +197,41 @@ Deno.test("parseGitLocation: submodule is named after its module dir", () => {
       "/src/qmk/lib/chibios\n/src/qmk/.git/modules/lib/chibios\n" +
         "/src/qmk/.git/modules/lib/chibios\n",
     ),
-    { repo: "chibios", worktree: "" },
+    {
+      repo: "chibios",
+      worktree: "",
+      gitDir: "/src/qmk/.git/modules/lib/chibios",
+    },
   );
 });
 
 Deno.test("parseGitLocation: fewer than three lines → null", () => {
   assertEquals(parseGitLocation(""), null);
   assertEquals(parseGitLocation("/src/a\n/src/a/.git\n"), null);
+});
+
+// --- branchFromHead ---
+
+Deno.test("branchFromHead: a ref yields the branch, slashes and all", () => {
+  assertEquals(branchFromHead("ref: refs/heads/main\n"), "main");
+  assertEquals(branchFromHead("ref: refs/heads/feat/bar\n"), "feat/bar");
+});
+
+Deno.test("branchFromHead: a detached HEAD yields the empty string", () => {
+  // Matches what `git symbolic-ref --short HEAD` did: exit non-zero, read "".
+  assertEquals(
+    branchFromHead("9bd0f1e2c3d4a5b6978899aabbccddeeff001122\n"),
+    "",
+  );
+});
+
+Deno.test("branchFromHead: an empty or unreadable HEAD yields the empty string", () => {
+  assertEquals(branchFromHead(""), "");
+  assertEquals(branchFromHead("   \n"), "");
+});
+
+Deno.test("branchFromHead: a ref outside refs/heads is not a branch", () => {
+  assertEquals(branchFromHead("ref: refs/remotes/origin/main\n"), "");
 });
 
 // --- locationParts ---

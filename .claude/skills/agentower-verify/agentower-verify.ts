@@ -20,7 +20,8 @@ interface Result {
 const REPO_ROOT = decodeURIComponent(
   new URL("../../../", import.meta.url).pathname,
 );
-const AGENTOWER_PATH = `${REPO_ROOT}home/programs/tmux/agentower/agentower.tsx`;
+const AGENTOWER_PATH =
+  `${REPO_ROOT}home/programs/tmux/agentower/agentower-main.ts`;
 const TEST_PATH =
   `${REPO_ROOT}home/programs/tmux/agentower/agentower_e2e_test.ts`;
 

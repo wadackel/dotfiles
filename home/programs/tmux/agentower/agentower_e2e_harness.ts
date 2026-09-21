@@ -355,25 +355,47 @@ async function sandboxEnv(): Promise<Record<string, string>> {
   return env;
 }
 
-// Spawn agentower.tsx as the direct command of a new tmux window. tmux passes
-// the command to /bin/sh -c; agentower.tsx is executable and carries its own
-// shebang (`#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run=tmux,git`),
+// Spawn Agentower as the direct command of a new tmux window. tmux passes the
+// command to /bin/sh -c; agentower-main.ts is executable and carries its own
+// shebang (`#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run --no-prompt`),
 // so passing the bare path lets the shebang declare the permission set —
-// no drift risk between this string and agentower.tsx:1.
+// no drift risk between this string and agentower-main.ts:1.
+//
+// AGENTOWER_E2E_BIN swaps in a compiled binary instead. It is read here rather
+// than taken as an option because every scenario calls spawnAgentower() with no
+// arguments, so an option would never reach them; the env var lets one run of
+// the suite exercise the shipped artifact.
 //
 // When Agentower exits, the window auto-closes (tmux default remain-on-exit=off),
 // which is what waitForExit relies on.
 export async function spawnAgentower(
-  opts: { selfPane?: string; env?: Record<string, string> } = {},
+  opts: {
+    selfPane?: string;
+    env?: Record<string, string>;
+    // Skip the readiness wait so the caller can send keys before the first
+    // frame. Pair it with startDelayMs, or the send races the spawn.
+    waitForReady?: boolean;
+    // Delay the exec by this many seconds' worth of milliseconds, so keys sent
+    // in the meantime are already sitting in the pane's tty when the process
+    // starts — the real prefix+w symptom, made deterministic.
+    startDelayMs?: number;
+    // Redirect the process's stderr here. agentower-bench.ts pairs it with
+    // AGENTOWER_TRACE, whose marks would otherwise land in the pane and be
+    // captured as part of the frame.
+    traceFile?: string;
+  } = {},
 ): Promise<string> {
   // URL.pathname is percent-encoded; decode so paths containing spaces or
   // non-ASCII characters reach tmux/sh as a real filesystem path.
-  const agentowerPath = decodeURIComponent(
-    new URL("./agentower.tsx", import.meta.url).pathname,
-  );
-  if (agentowerPath.includes("'")) {
+  const agentowerPath = Deno.env.get("AGENTOWER_E2E_BIN") ??
+    decodeURIComponent(
+      new URL("./agentower-main.ts", import.meta.url).pathname,
+    );
+  // The path is interpolated into an sh -c string that tmux hands to /bin/sh,
+  // so anything sh would re-read there is refused rather than escaped.
+  if (/['"$`\\]/.test(agentowerPath)) {
     throw new Error(
-      `Agentower path contains single quote, unsafe for sh -c: ${agentowerPath}`,
+      `Agentower path contains shell metacharacters, unsafe for sh -c: ${agentowerPath}`,
     );
   }
   // `tmux new-window -e K=V` sets K in the child's env (literal value, no
@@ -403,6 +425,25 @@ export async function spawnAgentower(
     }
     envArgs.push("-e", `${key}=${value}`);
   }
+  const delayMs = opts.startDelayMs ?? 0;
+  if (!Number.isInteger(delayMs) || delayMs < 0) {
+    throw new Error(
+      `startDelayMs must be a non-negative integer, got: ${delayMs}`,
+    );
+  }
+  const traceFile = opts.traceFile ?? "";
+  if (traceFile && /['"$`\\]/.test(traceFile)) {
+    throw new Error(`traceFile contains shell metacharacters: ${traceFile}`);
+  }
+  // `exec` rather than a plain call: the pane's tty is already open while sh
+  // sleeps, so keys sent during the delay are buffered by the line discipline
+  // and inherited by the real process — which is exactly what happens when a
+  // user types while the popup binary is still loading.
+  const command = delayMs === 0 && !traceFile
+    ? `'${agentowerPath}'`
+    : `sh -c '${
+      delayMs === 0 ? "" : `sleep ${delayMs / 1000}; `
+    }exec "${agentowerPath}"${traceFile ? ` 2>>"${traceFile}"` : ""}'`;
   await tmuxRun([
     "new-window",
     "-d",
@@ -411,9 +452,10 @@ export async function spawnAgentower(
     "-n",
     AGENTOWER_WINDOW_NAME,
     ...envArgs,
-    `'${agentowerPath}'`,
+    command,
   ]);
   const target = `${SESSION}:${AGENTOWER_WINDOW_NAME}`;
+  if (opts.waitForReady === false) return target;
   await waitFor(
     target,
     // "jump" leads the bottom key-hint bar, which is clipped from the right,
@@ -421,6 +463,16 @@ export async function spawnAgentower(
     (out) => out.includes("jump") || out.includes("No panes available."),
   );
   return target;
+}
+
+// Send raw bytes as one write, so several events land in a single stdin read
+// the way a pty releases a buffered burst or a trackpad fling arrives. sendKey
+// issues one write per call and cannot produce that.
+export async function sendBurst(target: string, seq: string): Promise<void> {
+  const hex = [...new TextEncoder().encode(seq)].map((b) =>
+    b.toString(16).padStart(2, "0")
+  );
+  await tmuxRun(["send-keys", "-t", target, "-H", ...hex]);
 }
 
 // Send a single key name (Down / Up / Enter / Escape / j / k) to the pane.

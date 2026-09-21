@@ -1,12 +1,18 @@
-#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run --no-prompt
-
 // Agentower: the tmux prefix+w popup that lists AI agent panes.
 // ink + React on Deno. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
 
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
 import React, { useEffect, useRef, useState } from "npm:react@19.2.0";
-import { Box, render, Text, useApp, useInput, useStdout } from "npm:ink@7.1.1";
+import {
+  Box,
+  type Key,
+  render,
+  Text,
+  useApp,
+  useInput,
+  useStdout,
+} from "npm:ink@7.1.1";
 
 // ---- Types + row parsing SSOT ----
 
@@ -41,7 +47,7 @@ export {
 };
 
 // Row-1 repo/branch column width caps for the dynamic layout. App computes
-// per-render repoMax / branchMax by scanning visible rows and clamps to these
+// per-render repoMax / branchMax by scanning every row and clamps to these
 // upper bounds so a single long branch cannot starve the summary slot.
 const REPO_CAP = 24;
 const BRANCH_CAP = 28;
@@ -60,6 +66,7 @@ import { sanitizeAnsi, truncateAnsiLine } from "./ansi.ts";
 import { stringCells, truncateToCells } from "./cell_width.ts";
 import {
   basename,
+  branchFromHead,
   type GitLocation,
   locationParts,
   parseGitLocation,
@@ -79,6 +86,11 @@ import {
   usageRowWidth,
 } from "./components.tsx";
 import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
+import { trace } from "./trace.ts";
+
+// The ink + React module graph is ~100ms of this file's cost, and it is
+// already evaluated by the time this line runs.
+trace("ink-module-eval-done");
 
 // ---- Usage footer layout gates ----
 
@@ -326,6 +338,39 @@ export function nextWaitingIndex(rows: PaneRow[], from: number): number {
   return from;
 }
 
+// One stdin read can carry several keypresses: Ink splits escape sequences into
+// separate events but hands a run of printable characters over whole. Only the
+// navigation keys are split, because every printable character would also split
+// terminal replies parseMouse does not claim (`\x1b[0n` arrives as `[0n`, whose
+// `n` jumps the selection) and short pastes, whose `m` writes a pane option.
+export function isKeyBurst(input: string): boolean {
+  return /^[jkn]{2,8}$/.test(input);
+}
+
+// Where the selection moves to, given where it is now. Ink runs every event
+// from one stdin read in a single synchronous loop, so handlers in a burst all
+// close over the same render; App applies these inside a functional state
+// update so each one resolves against the previous result instead.
+export type SelectionResolver = (cur: number, rows: PaneRow[]) => number;
+
+export function wrapStep(step: number): SelectionResolver {
+  return (cur, rows) => (cur + step + rows.length) % rows.length;
+}
+
+// A character peeled out of a burst carries no modifier state of its own.
+export const NO_MODIFIERS = {
+  escape: false,
+  return: false,
+  upArrow: false,
+  downArrow: false,
+} as const;
+
+// Wheel events clamp where j/k wrap: one trackpad fling delivers a burst, and
+// wrapping would spin the selection around.
+export function clampStep(step: number): SelectionResolver {
+  return (cur, rows) => Math.min(rows.length - 1, Math.max(0, cur + step));
+}
+
 // ---- tmux I/O (impure) ----
 
 async function tmuxRun(
@@ -347,26 +392,19 @@ async function tmuxRun(
 
 // Resolve the current git branch for cwd. Returns "" when cwd is not a git
 // repo or git fails — callers fall back to the "·" placeholder.
-async function gitBranch(cwd: string): Promise<string> {
-  if (!cwd) return "";
+async function readHeadBranch(gitDir: string): Promise<string> {
+  if (!gitDir) return "";
   try {
-    const { code, stdout } = await new Deno.Command("git", {
-      args: ["symbolic-ref", "--short", "HEAD"],
-      cwd,
-      stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-    }).output();
-    if (code !== 0) return "";
-    return new TextDecoder().decode(stdout).trim();
+    return branchFromHead(await Deno.readTextFile(`${gitDir}/HEAD`));
   } catch {
     return "";
   }
 }
 
-// A directory's toplevel and common dir cannot change while the popup is open,
-// so each is resolved once; the branch is not cached because a checkout inside
-// the pane moves it.
+// A directory's toplevel, git dir and common dir cannot change while the popup
+// is open, so each is resolved once. The branch is not among them: a checkout
+// inside the pane moves it, so HEAD is read every tick — which is a file read,
+// not a process, precisely because it sits on the tick.
 const gitLocationCache = new Map<string, GitLocation>();
 
 // Falls back to the directory's basename when git has nothing to say (not a
@@ -396,7 +434,8 @@ async function gitLocation(dir: string): Promise<GitLocation> {
   } catch {
     // Deno.Command throws when cwd does not exist.
   }
-  const resolved = location ?? { repo: basename(dir), worktree: "" };
+  const resolved = location ??
+    { repo: basename(dir), worktree: "", gitDir: "" };
   gitLocationCache.set(dir, resolved);
   return resolved;
 }
@@ -629,13 +668,11 @@ async function fetchPanes(): Promise<PaneRow[]> {
     rows.map(async (row) => {
       const source = row.cwd || row.currentPath;
       if (!source) return;
-      const [location, branch] = await Promise.all([
-        gitLocation(source),
-        row.worktreeBranch || gitBranch(source),
-      ]);
+      const location = await gitLocation(source);
       row.repoName = location.repo;
       row.worktreeName = location.worktree;
-      row.worktreeBranch = branch;
+      row.worktreeBranch = row.worktreeBranch ||
+        await readHeadBranch(location.gitDir);
     }),
   );
   return rows;
@@ -764,18 +801,27 @@ function Preview(
 function App({
   initialRows,
   initialSelectedPaneId,
+  initialTaskProgress,
   initialUsages,
   prefixKey,
   onSelect,
 }: {
   initialRows: PaneRow[];
   initialSelectedPaneId: string;
+  initialTaskProgress: Map<string, TaskProgress | null>;
   initialUsages: AgentUsage[];
   prefixKey: string | null;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
+  // No dependency array: this runs after every commit, which is what the bench
+  // counts to tell one repaint per tick from three.
+  const commits = useRef(0);
+  useEffect(() => {
+    commits.current += 1;
+    trace(commits.current === 1 ? "first-commit" : "tick-commit");
+  });
   // useStdout() does not re-render on resize; subscribe to stdout's 'resize'
   // event so that totalCols/totalRows (and everything derived: listWidth,
   // previewWidth, bodyHeight, hint bar width) follow tmux popup / window resizes.
@@ -818,9 +864,7 @@ function App({
   const prefixByte = prefixKey === null
     ? null
     : String.fromCharCode(prefixKey.charCodeAt(0) & 0x1f);
-  const [taskProgressMap, setTaskProgressMap] = useState<
-    Map<string, TaskProgress | null>
-  >(new Map());
+  const [taskProgressMap, setTaskProgressMap] = useState(initialTaskProgress);
   const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   const [filterEnabled, setFilterEnabled] = useState(false);
@@ -835,6 +879,7 @@ function App({
     // Self-rescheduling setTimeout chain: at most one fetchPanes in-flight,
     // no out-of-order overwrite, and errors do not break the loop.
     const tick = async () => {
+      const started = performance.now();
       try {
         const r = await fetchPanes();
         if (cancelled) return;
@@ -851,7 +896,6 @@ function App({
           }
           return { ...row, userLabel: want };
         });
-        setRows(merged);
         // Fetch task progress for every supported pane in parallel. Failures are
         // isolated (readTaskProgress swallows them) so one bad session dir does
         // not block the whole tick.
@@ -860,14 +904,22 @@ function App({
             [row.paneId, await readTaskProgressForRow(row)] as const
           ),
         );
-        if (!cancelled) setTaskProgressMap(new Map(entries));
-        // Sits after setRows so a throw from the usage files cannot take the
-        // pane list down with it — this tick body is one try block.
-        const nextUsages = await readAllAgentUsage();
-        if (!cancelled) setUsages(nextUsages);
+        // A rejected usage read leaves the previous footer standing instead of
+        // blanking it, which would resize the preview column for one tick.
+        const nextUsages = await readAllAgentUsage().catch(() => null);
+        // All three together, after every read: each await between two sets
+        // ends a commit, and a commit is a full frame (~8ms, render-us). Setting
+        // the rows first would show them ~0.6ms sooner — the two reads above —
+        // at the price of that extra frame every second.
+        if (!cancelled) {
+          setRows(merged);
+          setTaskProgressMap(new Map(entries));
+          if (nextUsages) setUsages(nextUsages);
+        }
       } catch (e) {
         console.error("agentower: fetchPanes tick failed:", e);
       } finally {
+        trace("tick-us", (performance.now() - started) * 1000);
         if (!cancelled) timerId = setTimeout(tick, TICK_INTERVAL_MS);
       }
     };
@@ -888,6 +940,19 @@ function App({
     r.paneId === selectedPaneId
   );
   const index = foundIdx >= 0 ? foundIdx : 0;
+
+  // The resolver runs inside the state updater rather than against `index`
+  // above: `index` is this render's value, and Ink dispatches every event from
+  // one stdin read before React re-renders, so a burst would otherwise resolve
+  // every step from the same starting row.
+  const updateSelection = (next: SelectionResolver) => {
+    setSelectedPaneId((prev: string) => {
+      if (derivedRows.length === 0) return prev;
+      const found = derivedRows.findIndex((r: PaneRow) => r.paneId === prev);
+      const cur = found >= 0 ? found : 0;
+      return derivedRows[next(cur, derivedRows)]?.paneId ?? prev;
+    });
+  };
 
   const writeUserLabel = (
     paneId: string,
@@ -945,14 +1010,7 @@ function App({
       mouse.button === MOUSE_WHEEL_UP || mouse.button === MOUSE_WHEEL_DOWN
     ) {
       if (mouse.x >= geometry.listWidth) return;
-      // Clamped rather than wrapped like j/k: one trackpad fling delivers a
-      // burst of wheel events, and wrapping would spin the selection around.
-      const step = mouse.button === MOUSE_WHEEL_UP ? -1 : 1;
-      const nextIdx = Math.min(
-        derivedRows.length - 1,
-        Math.max(0, index + step),
-      );
-      setSelectedPaneId(derivedRows[nextIdx].paneId);
+      updateSelection(clampStep(mouse.button === MOUSE_WHEEL_UP ? -1 : 1));
       return;
     }
     const hit = cardIndexAt(geometry, mouse);
@@ -975,31 +1033,12 @@ function App({
     }
   };
 
-  useInput((chunk, key) => {
-    const mouse = parseMouse(chunk);
-    if (mouse) {
-      if (mouse.press) handleMouse(mouse);
-      return;
-    }
-    let input = chunk;
-    // Keys that reach stdin in one read arrive as a single unsplit chunk
-    // (`\x13w`), so the prefix byte is peeled off here rather than relying on
-    // Ink to report it as its own Ctrl keypress.
-    if (prefixByte !== null && chunk.length > 1 && chunk[0] === prefixByte) {
-      prefixPending.current = true;
-      input = chunk.slice(1);
-    }
-    if (prefixPending.current) {
-      prefixPending.current = false;
-      if (input === "w") {
-        onSelect(null);
-        exit();
-        return;
-      }
-    } else if (key.ctrl && input === prefixKey) {
-      prefixPending.current = true;
-      return;
-    }
+  // Pick rather than a structural literal, so an Ink rename fails the build
+  // here instead of silently never matching.
+  const dispatch = (
+    input: string,
+    key: Pick<Key, "escape" | "return" | "upArrow" | "downArrow">,
+  ) => {
     if (key.escape || input === "q") {
       onSelect(null);
       exit();
@@ -1011,18 +1050,13 @@ function App({
       return;
     }
     if (key.upArrow || input === "k") {
-      const nextIdx = index === 0 ? derivedRows.length - 1 : index - 1;
-      const nextId = derivedRows[nextIdx]?.paneId;
-      if (nextId !== undefined) setSelectedPaneId(nextId);
+      updateSelection(wrapStep(-1));
     }
     if (key.downArrow || input === "j") {
-      const nextIdx = index === derivedRows.length - 1 ? 0 : index + 1;
-      const nextId = derivedRows[nextIdx]?.paneId;
-      if (nextId !== undefined) setSelectedPaneId(nextId);
+      updateSelection(wrapStep(1));
     }
     if (input === "n") {
-      const nextId = derivedRows[nextWaitingIndex(derivedRows, index)]?.paneId;
-      if (nextId !== undefined) setSelectedPaneId(nextId);
+      updateSelection((cur, rows) => nextWaitingIndex(rows, cur));
       return;
     }
     if (input === "w") {
@@ -1048,6 +1082,42 @@ function App({
       if (target) writeUserLabel(target.paneId, "", target.sessionId);
       return;
     }
+  };
+
+  useInput((chunk, key) => {
+    trace("input-received");
+    const mouse = parseMouse(chunk);
+    if (mouse) {
+      if (mouse.press) handleMouse(mouse);
+      return;
+    }
+    let input = chunk;
+    // Keys that reach stdin in one read arrive as a single unsplit chunk
+    // (`\x13w`), so the prefix byte is peeled off here rather than relying on
+    // Ink to report it as its own Ctrl keypress.
+    if (prefixByte !== null && chunk.length > 1 && chunk[0] === prefixByte) {
+      prefixPending.current = true;
+      input = chunk.slice(1);
+    }
+    if (prefixPending.current) {
+      prefixPending.current = false;
+      if (input === "w") {
+        onSelect(null);
+        exit();
+        return;
+      }
+    } else if (key.ctrl && input === prefixKey) {
+      prefixPending.current = true;
+      return;
+    }
+    // Peeled input, not the raw chunk: the prefix byte is already off, and the
+    // mouse check above has claimed the SGR reports, which reach useInput as
+    // printable text (`[<0;12;3M`) once Ink strips their ESC.
+    if (isKeyBurst(input)) {
+      for (const ch of input) dispatch(ch, NO_MODIFIERS);
+      return;
+    }
+    dispatch(input, key);
   });
 
   if (rows.length === 0) {
@@ -1086,8 +1156,10 @@ function App({
   listOffset.current = view.offset;
   const previewHeight = columnHeight -
     (usageVisible ? usageCardRows(usages.length) : 0);
-  // Dynamic repo/branch column widths: scan visible rows, clamp to caps, and
+  // Dynamic repo/branch column widths: scan every row, clamp to caps, and
   // shrink branch first if the combined width would starve the summary slot.
+  // Every row rather than the visible window, so scrolling does not move the
+  // columns and shift each row sideways.
   const rowsParts: ReturnType<typeof locationParts>[] = derivedRows.map(
     (r: PaneRow) => locationParts(r),
   );
@@ -1099,7 +1171,7 @@ function App({
         stringCells(p.worktree ? `${p.repo}(${p.worktree})` : p.repo)
       ),
     ),
-    Math.max(0, ...rowsParts.map((p) => p.branch.length)),
+    Math.max(0, ...rowsParts.map((p) => stringCells(p.branch))),
   );
 
   return (
@@ -1155,9 +1227,9 @@ function App({
 
 // ---- Main ----
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   if (!Deno.env.get("TMUX")) {
-    console.error("agentower.tsx must run inside tmux");
+    console.error("agentower must run inside tmux");
     Deno.exit(2);
   }
   // Parallel with fetchPanes so the footer costs the popup no extra startup
@@ -1167,6 +1239,7 @@ async function main(): Promise<void> {
     readAllAgentUsage(),
     readPrefixKey(),
   ]);
+  trace("io-done");
 
   // tmux.conf bind-key w writes AGENTOWER_FROM_PANE to the session environment via
   // `set-environment` BEFORE display-popup runs; the popup process inherits the value at spawn.
@@ -1181,11 +1254,24 @@ async function main(): Promise<void> {
       ? fromPane
       : (rows[0]?.paneId ?? "");
 
+  // Needs `rows`, so it cannot join the Promise.all above. Without it the
+  // progress segments appear a full tick after the popup opens and shift the
+  // row layout under the cursor; the reads are a readDir per pane against a
+  // directory that is usually absent.
+  const initialTaskProgress = new Map(
+    await Promise.all(
+      rows.map(async (row) =>
+        [row.paneId, await readTaskProgressForRow(row)] as const
+      ),
+    ),
+  );
+
   const result: { value: PaneRow | null } = { value: null };
   const { waitUntilExit } = render(
     <App
       initialRows={rows}
       initialSelectedPaneId={initialSelectedPaneId}
+      initialTaskProgress={initialTaskProgress}
       initialUsages={usages}
       prefixKey={prefixKey}
       onSelect={(r) => {
@@ -1199,6 +1285,10 @@ async function main(): Promise<void> {
       // reads as flicker along the top edge. With this on, lines whose content
       // is unchanged are never written, so tmux never marks them dirty.
       incrementalRendering: true,
+      // Ink times its own render(rootNode), so this is the frame's real cost
+      // rather than anything this file could measure from outside. Microseconds
+      // because a sub-millisecond frame would round to zero.
+      onRender: ({ renderTime }) => trace("render-us", renderTime * 1000),
     },
   );
   await waitUntilExit();
@@ -1206,16 +1296,4 @@ async function main(): Promise<void> {
   const picked = result.value;
   if (!picked) return;
   await jumpTo(picked.target);
-}
-
-if (import.meta.main) {
-  try {
-    await main();
-    // One-shot CLI: force exit so popup closes deterministically (avoid
-    // event-loop drain stall after jumpTo / Ink unmount).
-    Deno.exit(0);
-  } catch (e) {
-    console.error(e);
-    Deno.exit(1);
-  }
 }

@@ -2,8 +2,8 @@
 name: agentower-verify
 description: >-
   Runs e2e tests for Agentower, the tmux prefix+w AI agent popup
-  (home/programs/tmux/agentower/agentower.tsx) in an isolated tmux server sandbox.
-  Use proactively after any change to agentower.tsx, agentower_e2e_harness.ts,
+  (home/programs/tmux/agentower/agentower-main.ts) in an isolated tmux server sandbox.
+  Use proactively after any change to agentower-main.ts, agentower.tsx, agentower_e2e_harness.ts,
   or agentower_e2e_test.ts — even if the user doesn't explicitly ask for
   verification, run at least once to catch regressions before the user
   tries Agentower. Also use when asked to "verify Agentower",
@@ -35,7 +35,7 @@ JSON result to stdout.
 
 The script is self-contained. It:
 
-1. Runs `deno cache home/programs/tmux/agentower/agentower.tsx` to warm npm modules.
+1. Runs `deno cache home/programs/tmux/agentower/agentower-main.ts` to warm npm modules.
 2. Runs `agentower_e2e_test.ts` under `deno test` with the permission scopes the
    script defines (see the `runDeno` call and its scope-rationale comments in
    `agentower-verify.ts` — that file is the source of truth for the exact flags).

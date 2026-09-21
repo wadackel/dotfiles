@@ -73,6 +73,10 @@ export function basename(path: string): string {
 export interface GitLocation {
   repo: string;
   worktree: string;
+  // Where this checkout's HEAD lives. For a linked worktree that is
+  // .git/worktrees/<name>, which is the file `git symbolic-ref HEAD` reads, so
+  // branchFromHead over it is equivalent to running git and costs no process.
+  gitDir: string;
 }
 
 // Parse `git rev-parse --path-format=absolute --show-toplevel --git-dir
@@ -88,7 +92,15 @@ export function parseGitLocation(stdout: string): GitLocation | null {
   const repo = common.startsWith(".")
     ? basename(commonDir.replace(/\/+$/, "").replace(/\/[^/]*$/, ""))
     : common.replace(/\.git$/, "");
-  return { repo, worktree: gitDir === commonDir ? "" : basename(top) };
+  return { repo, worktree: gitDir === commonDir ? "" : basename(top), gitDir };
+}
+
+// The branch a HEAD file names, or "" when it points at a commit rather than a
+// ref. `git symbolic-ref --short HEAD` exits non-zero on a detached HEAD, and
+// the caller turned that into "" as well.
+export function branchFromHead(headText: string): string {
+  const ref = /^ref:\s+refs\/heads\/(.+)$/.exec(headText.trim());
+  return ref ? ref[1] : "";
 }
 
 // Location columns for the row renderer. `repoName` is absent until

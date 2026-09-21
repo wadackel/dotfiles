@@ -300,22 +300,48 @@ Commands:
 
 ### agentower-verify (Agentower e2e)
 
-After changing `home/programs/tmux/agentower/agentower.tsx`, `home/programs/tmux/agentower/agentower_e2e_harness.ts`, or `home/programs/tmux/agentower/agentower_e2e_test.ts`, run `.claude/skills/agentower-verify/agentower-verify.ts` (or invoke the `/agentower-verify` skill). It spins up an isolated `tmux -L agentower-e2e-$PID` server, runs every e2e scenario in `agentower_e2e_test.ts`, and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck Agentower into the sandbox. Do not claim Agentower changes are complete while `ok: false`.
+After changing `home/programs/tmux/agentower/agentower-main.ts`, `home/programs/tmux/agentower/agentower.tsx`, `home/programs/tmux/agentower/agentower_e2e_harness.ts`, or `home/programs/tmux/agentower/agentower_e2e_test.ts`, run `.claude/skills/agentower-verify/agentower-verify.ts` (or invoke the `/agentower-verify` skill). It spins up an isolated `tmux -L agentower-e2e-$PID` server, runs every e2e scenario in `agentower_e2e_test.ts`, and emits a JSON verdict. Escape-driven exit is exercised in every scenario, so a broken quit path fails CI-style rather than leaking a stuck Agentower into the sandbox. Do not claim Agentower changes are complete while `ok: false`.
 
 ### Agentower binary (prefix+w)
 
 **Agentower** is the tmux `prefix+w` popup that lists the Claude Code / Codex / opencode panes with their status and jumps to the selected one (older records call it the tmux picker).
 
-`home/programs/tmux/config/tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/agentower/agentower`, not `deno run agentower.tsx`. The binary is produced by `home.activation.compileAgentowerBin` in `home/programs/tmux/default.nix` via `deno compile` (React+Ink cold-start is ~236ms; AOT is the only way to amortize it for a popup). Hash-skip keys on a Nix eval-time sha256 over the `.ts`/`.tsx` sources in `home/programs/tmux/agentower/` and `home/programs/tmux/shared/` (tests and e2e harness excluded), so editing any of them — including `shared/pane-shared.ts` — triggers a recompile on the next rebuild.
+`home/programs/tmux/config/tmux.conf`'s `bind-key w` invokes the AOT-compiled binary at `~/.local/share/agentower/agentower`, not `deno run`. The entry point is `agentower/agentower-main.ts`; `agentower.tsx` exports `main()` and is reached through a dynamic import so that `Deno.stdin.setRaw(true, { cbreak: true })` runs before the ink module graph. Bytes typed before that call sit in the tty's canonical queue where Deno's node-compat stdin cannot see them until the next keypress, so the entry split is what makes keys typed during startup arrive at all.
+
+`home.activation.compileAgentowerBin` in `home/programs/tmux/default.nix` builds the binary in four steps: `deno check` → `deno bundle --minify` → `agentower/bundle-postprocess.ts` → `deno compile --no-check`. `--minify` is there for React rather than size: it is the only switch that makes esbuild fold `NODE_ENV` to the production build, and without it the bundle carries React's development build with no way to patch the production one back in. Because `agentowerSrcHash` covers the `.ts` sources and not `default.nix`, a change to these flags alone never triggers a rebuild. The explicit `deno check` is there because neither of the last two looks at types, and `deno compile` used to. Bundling shortens the module graph (see `agentower-bench-baseline.md` for the measured difference); the post-process stage exists only because bundling hoists ink's devtools imports (`ws`, `react-devtools-core`) to the top level, which `deno compile` then refuses. That script asserts it made exactly 3 replacements and exits 1 otherwise, and the activation branches on it rather than calling `exit` (an `exit` would abort the activation fragments that follow). **If an ink upgrade breaks the assert**, either re-derive the three lines or drop the bundle stage and compile `agentower-main.ts` directly — the flags are otherwise the same.
+
+After `mv`, the activation runs the new binary once, because macOS charges ~1.4s to the first exec of a freshly written Mach-O of this size and the next `prefix+w` would otherwise pay it. Its exit code must be 2 — `main()`'s own guard on the missing `TMUX` — because that is also the only check that the binary starts at all; anything else keeps the old stamp so the next activation rebuilds. The `</dev/null` keeps the warm-up off the `darwin-rebuild` terminal's stdin. (It is **not** needed to protect the terminal mode: Deno restores termios at exit, measured on 2.9.5 — `stty -a` reports `icanon` before and after a run that sets cbreak and exits 2.)
+
+`deno bundle` is experimental. If a Deno upgrade changes `--external` or `-o`, or an ink upgrade breaks the post-process assert, drop the bundle and post-process stages and compile `agentower-main.ts` directly with the same `deno compile` flags minus `--no-check`.
+
+Hash-skip keys on a Nix eval-time sha256 over the `.ts`/`.tsx` sources in `home/programs/tmux/agentower/` and `home/programs/tmux/shared/` (tests, the e2e harness, and `agentower-bench.ts` excluded), so editing any of them — including `shared/pane-shared.ts` — triggers a rebuild on the next activation.
 
 Agentower covers three AI agents: `claude` / `opencode` / `codex`. Each agent has its own pane-status writer that emits `@pane_*` tmux options (claude: `claude-pane-status.ts` invoked by Claude Code hooks; opencode: in-process Bun plugin at `home/programs/opencode/plugin.ts`; codex: `home/programs/codex/scripts/codex-pane-status.ts` invoked by Codex CLI lifecycle hooks registered in `home/programs/codex/hooks.json`). All three follow the same single-shot script + stdin JSON pattern.
 
 Implications when editing Agentower source:
 
-- Running `deno run home/programs/tmux/agentower/agentower.tsx` or `/agentower-verify` exercises the source path only. Neither tells you whether the deployed binary reflects your edits.
-- To make changes visible to `prefix+w`, run `sudo darwin-rebuild switch --flake .#private` — the activation detects the source hash change and recompiles.
-- To iterate without a full rebuild, re-run the compile directly: `deno compile --allow-env --allow-read --allow-run --no-prompt --output ~/.local/share/agentower/agentower home/programs/tmux/agentower/agentower.tsx` (arg set must match the activation).
-- Do not claim Agentower work is complete based solely on `deno run` or `agentower-verify` output — the binary is the thing users invoke.
+- `/agentower-verify` runs the suite against the source entry. Set `AGENTOWER_E2E_BIN=<path>` to run the same scenarios against a compiled binary instead — that is the only way to check the shipped artifact.
+- To make changes visible to `prefix+w`, run `sudo darwin-rebuild switch --flake .#private` — the activation detects the source hash change and rebuilds.
+- To iterate without a full rebuild, re-run the four steps directly (arg set must match the activation):
+  ```
+  deno check home/programs/tmux/agentower/agentower-main.ts
+  deno bundle --minify --external ws --external react-devtools-core -o /tmp/agentower.bundle.js home/programs/tmux/agentower/agentower-main.ts
+  deno run --allow-read --allow-write home/programs/tmux/agentower/bundle-postprocess.ts /tmp/agentower.bundle.js
+  deno compile --no-check --allow-env --allow-read --allow-run --no-prompt --output ~/.local/share/agentower/agentower /tmp/agentower.bundle.js
+  ```
+- Do not claim Agentower work is complete based solely on source-mode output — the binary is the thing users invoke.
+
+### agentower-bench (startup and input measurement)
+
+`home/programs/tmux/agentower/agentower-bench.ts` measures what the popup costs and whether keys survive its startup, so a regression can be attributed to a phase instead of "it feels slow". It drives a binary inside the e2e harness's isolated tmux server and reads the `AGENTOWER_TRACE` marks the binary writes to stderr (`entry-start`, `raw-on`, `ink-module-eval-done`, `io-done`, `first-commit`, `input-received`, `tick-commit`, `render-us`, `tick-us`; off and free when the env var is unset). The `-us` pair carries a duration in microseconds rather than a timestamp: `render-us` is Ink's own timing of one `render(rootNode)`, so it is the frame's real cost, and one mark per frame makes it the frame counter that `tick-commit` is not (`tick-commit` sees App's commits only, never a frame driven by `Preview` alone).
+
+```
+home/programs/tmux/agentower/agentower-bench.ts --after <binary> [--before <binary>] [--pretty]
+```
+
+`agentower-bench-baseline.md` next to it holds the numbers from 2026-09-21 with the commands that produced them. Absolute values move with the machine — read the before/after pair. The bench is excluded from the compile hash, so editing it costs nothing at activation.
+
+It is deliberately **not** in `permissions.allow`: `--after` execs whatever path it is given, so it takes a confirmation each run. A `Bash(*agentower-bench*)` wildcard would also match a same-named file in any repository under review — the same reason `plan-state.ts` is allowed by path rather than by bare name.
 
 ### Project Directory Encoding Rules
 

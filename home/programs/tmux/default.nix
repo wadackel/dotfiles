@@ -20,7 +20,10 @@ let
         file:
         (file.hasExt "ts" || file.hasExt "tsx")
         && !(lib.hasSuffix "_test.ts" file.name)
-        && file.name != "agentower_e2e_harness.ts";
+        && file.name != "agentower_e2e_harness.ts"
+        # Measurement only: editing it must not cost a 68MB recompile plus the
+        # warm-up run on the next activation.
+        && file.name != "agentower-bench.ts";
       files =
         lib.fileset.toList (lib.fileset.fileFilter isSrc ./agentower)
         ++ lib.fileset.toList (lib.fileset.fileFilter isSrc ./shared);
@@ -61,9 +64,12 @@ in
     dotfiles.linkHere ./. "scripts/popup-session.sh";
 
   # Agentower (prefix+w: ink + React on Deno)
-  home.file.".local/bin/agentower.tsx".source = dotfiles.linkHere ./. "agentower/agentower.tsx";
+  home.file.".local/bin/agentower-main.ts".source =
+    dotfiles.linkHere ./. "agentower/agentower-main.ts";
 
   # Agentower source siblings for direct/manual Deno runs.
+  home.file.".local/bin/agentower.tsx".source = dotfiles.linkHere ./. "agentower/agentower.tsx";
+  home.file.".local/bin/trace.ts".source = dotfiles.linkHere ./. "agentower/trace.ts";
   home.file.".local/bin/pane_row.ts".source = dotfiles.linkHere ./. "agentower/pane_row.ts";
   home.file.".local/bin/ansi.ts".source = dotfiles.linkHere ./. "agentower/ansi.ts";
   home.file.".local/bin/cell_width.ts".source = dotfiles.linkHere ./. "agentower/cell_width.ts";
@@ -78,12 +84,12 @@ in
   # Dev layout script
   home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "scripts/dev-layout.sh";
 
-  # AOT-compile agentower.tsx into ~/.local/share/agentower/agentower.
-  # Agentower is launched by `prefix+w` via display-popup and the React+Ink
-  # module graph evaluation dominates cold startup (~236ms out of ~370ms
-  # measured). Deno's npm cache does not amortize this (cold == warm in
-  # measurement), so only AOT via `deno compile` eliminates the cost.
-  # Hash-skip avoids recompiling when Agentower source modules are unchanged.
+  # Evaluating the React+Ink module graph dominates Agentower's startup, and
+  # Deno's npm cache does not amortize it (cold == warm), so AOT is the only
+  # way to pay it once. Bundling first collapses the graph further, but breaks
+  # `deno compile` — hence the post-process stage (agentower/bundle-postprocess.ts).
+  # `deno compile` type-checks its input, and a `.js` bundle under --no-check
+  # does not, so the check is run explicitly.
   home.activation.compileAgentowerBin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     SRC="${./.}"
     OUT="$HOME/.local/share/agentower"
@@ -116,13 +122,55 @@ in
       # interrupt → signal-exit → 抜けられる)。`--no-prompt` を付けると
       # prompt 経路自体が抑止され「未許可なら即 throw」になるので Agentower
       # 側の fetchPanes tick の try/catch (agentower.tsx) で吸収され継続稼働する。
-      run ${pkgs.deno}/bin/deno compile \
-        --allow-env --allow-read --allow-run \
-        --no-prompt \
-        --output "$TMP" \
-        "$SRC/agentower/agentower.tsx"
-      run /bin/mv -f "$TMP" "$BIN"
-      run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
+      # Kept after the build rather than cleaned up: when a rebuild ships a
+      # binary that misbehaves, this is the input that produced it.
+      BUNDLE="$OUT/agentower.bundle.js"
+      # Neither `deno bundle` nor `deno compile --no-check` looks at types, so
+      # without this the activation would happily ship a binary built from
+      # source that does not type-check.
+      run ${pkgs.deno}/bin/deno check "$SRC/agentower/agentower-main.ts"
+      # --minify is for React, not size: it is the only switch that makes
+      # esbuild fold NODE_ENV to production (--conditions, DENO_CONDITIONS and
+      # NODE_ENV at bundle time all keep development, and drop the production
+      # body so it cannot be patched in later). The source hash does not cover
+      # this file, so a flag change alone is never rebuilt.
+      run ${pkgs.deno}/bin/deno bundle \
+        --minify \
+        --external ws --external react-devtools-core \
+        -o "$BUNDLE" \
+        "$SRC/agentower/agentower-main.ts"
+      # `exit` would abort the activation fragments that follow, so a failed
+      # post-process branches instead and leaves the previous binary and stamp
+      # untouched for the next activation to retry. `run` on the condition so
+      # that --dry-run echoes the whole branch instead of running this one step.
+      if run ${pkgs.deno}/bin/deno run \
+        --allow-read="$SRC/agentower","$OUT" --allow-write="$BUNDLE" \
+        "$SRC/agentower/bundle-postprocess.ts" "$BUNDLE"; then
+        run ${pkgs.deno}/bin/deno compile \
+          --no-check \
+          --allow-env --allow-read --allow-run \
+          --no-prompt \
+          --output "$TMP" \
+          "$BUNDLE"
+        run /bin/mv -f "$TMP" "$BIN"
+        # macOS charges ~1.4s to the first exec of a freshly written Mach-O of
+        # this size, so without this the next `prefix+w` after every rebuild
+        # waits for it. The exit code doubles as the only check that the binary
+        # starts at all: 2 is main()'s own guard on the missing TMUX, so
+        # anything else means the graph did not evaluate and the stamp must not
+        # claim this build is current.
+        WARM=0
+        run --silence /usr/bin/env -u TMUX "$BIN" </dev/null 2>"$OUT/.warm.log" || WARM=$?
+        if [ "$WARM" = 2 ]; then
+          run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
+        else
+          echo "agentower: fresh binary exited $WARM, expected 2 — keeping the previous stamp so the next activation rebuilds" >&2
+          /bin/cat "$OUT/.warm.log" >&2 || true
+        fi
+        /bin/rm -f "$OUT/.warm.log"
+      else
+        echo "agentower: bundle post-process failed, keeping the previous binary" >&2
+      fi
     fi
   '';
 }

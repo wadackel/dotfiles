@@ -2,9 +2,11 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   bodyHeightFor,
   cardIndexAt,
+  clampStep,
   codexCwdHash,
   COMPACT_CARD,
   isCompact,
+  isKeyBurst,
   isLivePaneCommand,
   listGeometry,
   MOUSE_LEFT,
@@ -26,6 +28,7 @@ import {
   TMUX_FORMAT,
   topRowsFor,
   visibleWindow,
+  wrapStep,
 } from "./agentower.tsx";
 import {
   clampUsageTokens,
@@ -1270,4 +1273,63 @@ Deno.test("cardIndexAt: compact gap rows belong to no card", () => {
   assertEquals(cardIndexAt(g, { x: 0, y: 2 }), null);
   assertEquals(cardIndexAt(g, { x: 0, y: 3 }), 1);
   assertEquals(cardIndexAt(g, { x: 0, y: 5 }), null);
+});
+
+// --- isKeyBurst ---
+
+Deno.test("isKeyBurst: a run of navigation keys splits", () => {
+  assertEquals(isKeyBurst("jj"), true);
+  assertEquals(isKeyBurst("jjj"), true);
+  assertEquals(isKeyBurst("kkn"), true);
+  assertEquals(isKeyBurst("jjjjjjjj"), true);
+});
+
+Deno.test("isKeyBurst: a terminal reply Ink stripped the ESC from does not", () => {
+  // `\x1b[0n` (DSR) reaches useInput as `[0n`; splitting it would fire `n`.
+  assertEquals(isKeyBurst("[0n"), false);
+  assertEquals(isKeyBurst("[24;80R"), false);
+});
+
+Deno.test("isKeyBurst: pastes and single keys do not", () => {
+  assertEquals(isKeyBurst("jjjjjjjjj"), false);
+  assertEquals(isKeyBurst("j"), false);
+  assertEquals(isKeyBurst("mm"), false);
+  assertEquals(isKeyBurst("qq"), false);
+  assertEquals(isKeyBurst(""), false);
+});
+
+// --- selection resolvers ---
+
+Deno.test("wrapStep: moves and wraps at both ends", () => {
+  const rows = statusRows("running", "running", "running");
+  assertEquals(wrapStep(1)(0, rows), 1);
+  assertEquals(wrapStep(1)(2, rows), 0);
+  assertEquals(wrapStep(-1)(0, rows), 2);
+  assertEquals(wrapStep(-1)(1, rows), 0);
+});
+
+Deno.test("clampStep: stops at both ends instead of wrapping", () => {
+  const rows = statusRows("running", "running", "running");
+  assertEquals(clampStep(1)(2, rows), 2);
+  assertEquals(clampStep(-1)(0, rows), 0);
+  assertEquals(clampStep(1)(0, rows), 1);
+});
+
+Deno.test("resolvers: a burst advances step by step", () => {
+  const rows = statusRows("running", "running", "running", "running");
+  let cur = 0;
+  for (let i = 0; i < 3; i++) cur = wrapStep(1)(cur, rows);
+  assertEquals(cur, 3);
+  cur = 0;
+  for (let i = 0; i < 3; i++) cur = clampStep(1)(cur, rows);
+  assertEquals(cur, 3);
+});
+
+Deno.test("resolvers: a missing prevId resolves from index 0", () => {
+  // App falls back to 0 when the selected pane left the list; the resolvers
+  // must behave the same as they would on a real starting index.
+  const rows = statusRows("running", "running");
+  assertEquals(wrapStep(1)(0, rows), 1);
+  assertEquals(clampStep(-1)(0, rows), 0);
+  assertEquals(nextWaitingIndex(rows, 0), 0);
 });
