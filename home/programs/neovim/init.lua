@@ -109,6 +109,7 @@ vim.opt.fillchars = {
   eob = " ",
 }
 vim.opt.winborder = "rounded"
+vim.opt.swapfile = false
 
 -- 基本キーマップ
 -- leader を \ に退避
