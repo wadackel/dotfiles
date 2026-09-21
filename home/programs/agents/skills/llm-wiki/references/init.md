@@ -16,6 +16,7 @@ Decide which mode you are in *before* preflight, from whether a `clip/*` tag mat
 
 ## Preflight
 
+0. Confirm the genre is in the definitions in the `## タグ` section of `$VAULT/02_Notes/ノートの構造整理.md`. A genre is created by the user's decision, not by `init` on its own: if the tag has no definition there, stop and ask. **Skipped in tagless mode**, whose genres exist only for books.
 1. `date +%Y-%m-%d` for `<today>`.
 2. Confirm the tag actually exists on articles, using the `Grep` tool with the tag as a literal pattern. Do not interpolate the tag into a shell command — it can come from article content ([SKILL.md](../SKILL.md) Safety). Zero hits means a typo: report the closest existing tags and stop. **Skipped in tagless mode** — there is no tag to confirm.
 3. Decide the MOC name (see below), then check for a collision against **both** `Glob "$VAULT/02_Notes/<MOC>.md"` and `03_Books/` (`Glob "$VAULT/03_Books/*.md"` and `"$VAULT/03_Books/*/*.md"`). The second target matters in tagless mode, where the name is derived from the books that will hang off the genre, so it can land on a book's own filename — and `wiki-doctor` fails on that collision ([books.md](books.md)). If the note already exists, do not overwrite. Either it is already this genre's MOC (report "already exists" and stop) or it is an unrelated note with the same name (pick a qualified name and continue).
@@ -48,7 +49,7 @@ updated: <today>
 ## 知識マップ
 
 <!-- ingest がジャンルの構造を把握したら、ネストした箇条書きで埋める。
-     コードフェンスで囲まないこと — フェンス内の [[...]] は解決されない -->
+     コードフェンスで囲まないこと — フェンス内の wikilink は解決されない -->
 
 ## 横断テーマ
 

@@ -774,6 +774,43 @@ if (!BASELINE_DIR) {
   );
 }
 
+// ---- 11. clip/* タグとジャンル MOC が 1 対 1 ----
+// 記事は MOC の Articles ビューからしか辿れないので、MOC のないタグの記事はどこからも見えない。
+// 2 つの MOC が同じタグを引くと、どちらが正本か分からなくなる。
+// 階層タグ（clip/A/B）は親の hasTag("clip/A") が子まで拾い、1 対 1 が崩れる。
+{
+  const owners = new Map<string, string[]>();
+  for (const p of mdFiles.filter((p) => rel(p).startsWith("02_Notes/"))) {
+    for (const m of bodies.get(p)!.matchAll(/hasTag\("clip\/([^"]+)"\)/g)) {
+      owners.set(m[1], [...(owners.get(m[1]) ?? []), rel(p)]);
+    }
+  }
+  const used = new Map<string, number>();
+  let genreless = 0;
+  for (const p of mdFiles.filter((p) => rel(p).startsWith("04_Literature/"))) {
+    const fm = bodies.get(p)!.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
+    const clips = tagsOf(fm).filter((t) => t.startsWith("clip/")).map((t) =>
+      t.slice(5)
+    );
+    if (clips.length === 0) genreless++;
+    for (const g of clips) used.set(g, (used.get(g) ?? 0) + 1);
+  }
+  const bad: string[] = [];
+  for (const [g, n] of used) {
+    if (g.includes("/")) bad.push(`clip/${g}（${n} 件）が 2 階層になっている`);
+    const o = owners.get(g) ?? [];
+    if (o.length === 0) bad.push(`clip/${g}（${n} 件）を引く MOC がない`);
+    if (o.length > 1) {
+      bad.push(`clip/${g} を複数の MOC が引いている: ${o.join(", ")}`);
+    }
+  }
+  add(
+    "clip/* タグとジャンル MOC が 1 対 1",
+    bad,
+    `${used.size} ジャンルすべてに MOC が 1 つずつある。ジャンルなしの記事 ${genreless} 件（情報）`,
+  );
+}
+
 // ---- 出力 ----
 let failed = 0;
 let skipped = 0;

@@ -54,9 +54,9 @@ Any check failing — including the variable being unset — means asking with `
 | Operation log | `$VAULT/98_Maintenance/logs/<MOC> 操作ログ.md` |
 | Proposals | `$VAULT/98_Maintenance/proposals/<MOC>/` |
 
-A **genre is a MOC note**, not a directory. Genres form two tiers: tier 1 is the 12 MOCs linked from `Home.md`; tier 2 is the MOCs that articles hang off directly, each holding two Bases views and a knowledge map. `init` creates tier-2 MOCs.
+A **genre is a MOC note**, not a directory. Genres form two tiers: tier 1 is the 12 MOCs linked from `Home.md`; tier 2 is the MOCs that articles hang off directly, each holding two Bases views and a knowledge map. `init` creates tier-2 MOCs. Four tier-1 MOCs — `Management`, `Career`, `Gadget`, `Design` — also hold an `## Articles` view, because their tag shares their name.
 
-The vault's `clip/*` tags outnumber its MOCs by a wide margin. A tag without a MOC is not yet a genre — run `init` before compiling its articles.
+Every `clip/*` tag has exactly one MOC, one level after `clip/`, at most three per article. The genres and their one-line definitions live in the `## タグ` section of `$VAULT/02_Notes/ノートの構造整理.md`; judge articles against those definitions. A new genre is a human decision — add its definition there, then run `init`.
 
 ## Verb dispatch
 
@@ -74,7 +74,7 @@ Read the matching reference under `references/` and follow it.
 
 ## wiki-doctor
 
-`scripts/wiki-doctor.ts` checks, deterministically, the defect classes this skill has actually shipped before: unresolved wikilinks, filename collisions between `98_Maintenance/` and `02_Notes/` and between `02_Notes/` and `03_Books/`, knowledge maps trapped in code fences, raw wikilinks inside maintenance artifacts, `05_Private/` names leaking into output, unparseable frontmatter, chapter notes under `03_Books/` drifting from the baseline, compile-state integrity, bidirectional `generated_pages` ↔ `sources`, body sections drifting from frontmatter, and load-bearing strings going out of sync across spec files.
+`scripts/wiki-doctor.ts` checks, deterministically, the defect classes this skill has actually shipped before: unresolved wikilinks, filename collisions between `98_Maintenance/` and `02_Notes/` and between `02_Notes/` and `03_Books/`, knowledge maps trapped in code fences, raw wikilinks inside maintenance artifacts, `05_Private/` names leaking into output, unparseable frontmatter, chapter notes under `03_Books/` drifting from the baseline, compile-state integrity, bidirectional `generated_pages` ↔ `sources`, body sections drifting from frontmatter, load-bearing strings going out of sync across spec files, and `clip/*` tags without exactly one MOC.
 
 ```
 deno run --allow-read --allow-env scripts/wiki-doctor.ts --vault "$VAULT" [--baseline <pre-change backup>]

@@ -170,7 +170,7 @@ No `#` heading — the filename is the title. The first body line is a wikilink 
 
 Two tiers, with different responsibilities.
 
-**Tier 1** — the 12 MOCs linked from `Home.md` (`Engineering`, `Design`, `Career`, …). Hand-maintained topic lists. This skill adds at most a `## 横断テーマ` section and otherwise leaves them alone.
+**Tier 1** — the 12 MOCs linked from `Home.md` (`Engineering`, `Design`, `Career`, …). Hand-maintained topic lists. This skill adds at most a `## 横断テーマ` section and otherwise leaves them alone. Four of them — `Management`, `Career`, `Gadget`, `Design` — also carry an `## Articles` view for the `clip/*` tag of the same name; ingest treats them as that genre's MOC.
 
 **Tier 2** — MOCs that articles hang off directly (`アクセシビリティ`, `AI`, `TypeScript`, …). Structure:
 
