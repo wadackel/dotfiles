@@ -26,7 +26,7 @@ For each task in order, skipping tasks whose `blockedBy` is open:
 
 1. `plan-state.ts start <evidence> task-N` (records the baseline sha). Mirror the status with `TaskUpdate` when the Task tools exist; Agentower reads that mirror.
 2. Implement per the plan's Files to Change and Patterns to Mirror. A task whose acceptance names a failing test first runs the red step before the green one and keeps both outputs.
-3. `require` the task's checks: `cc-<n>` for each Autonomous Verification bullet this task owns (contract.md numbering), plus any task-local id. A `[live]` check declares its `expected` identity (`file`, `git_head`, or `identity`).
+3. `require` the task's checks: `cc-<n>` for each Autonomous Verification bullet this task owns (contract.md numbering), plus any task-local id. A `[live]` check declares its `expected` identity: `file` for an artifact inside the repository (re-digested at each record, so a fix needs a new record, not a new declaration), `git_head` for the tree, `identity` only for a surface with no repository file, never a digest: a name that does not change with the build.
 4. `snapshot`, run the acceptance commands, then `record` each check with the raw output verbatim; the only edit is replacing a credential, token, or signed URL with `<redacted: where it lives>`. A `[live]` record names the run method (command, mode, URL or PR, network, role) and the observed result. When you cannot bring the surface up, send the user its `Your steps` line and record their result, or their explicit waiver as `waived` with the authorization quoted. Tests never stand in for a `[live]` item.
 5. When `git diff --stat` since the baseline reaches 20 files or 500 lines, dispatch `code-simplifier` unnamed with the changed files, the diff, and the project CLAUDE.md path; apply HIGH-confidence simplifications, present the rest.
 6. `plan-state.ts complete <evidence> task-N`. A rejection names the check to redo; redo it rather than editing the file.
@@ -47,7 +47,7 @@ Do not trust the inherited summary. Re-resolve the plan (confirming a fallback p
 
 Write the report to `~/.claude/plans/<basename>.report.md` first and send that text verbatim. It is a report in the sense of the output style: the result first, then three headings the reader can jump between.
 
-- Open with the result in one or two sentences: the gate verdict, whether the change is committed, and how to see it working (a command, path, or URL).
+- Open with the result in one or two sentences: whether the direction in `## Overview` was reached (omitted when there is no plan), the gate verdict, whether the change is committed, and how to see it working (a command, path, or URL).
 - `## 変わったこと`: what changed, by intent rather than by file, in at most three lines.
 - `## 確かめたこと`: one bullet per surface exercised, at most five. The bullet's subject is the fact that was verified; the command or path it rests on closes the same line in words. After a blank line, one line `確かめていないこと:` when something was not verified, otherwise nothing.
 - `## 決めてほしいこと`: a numbered list, one line per item with `file:line` where there is one, and one nested line with what happens if it stays or how to undo it. The items are the four the gate hands over (a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred with its `Observe` and `Your steps` as two nested lines, a finding dismissed in an earlier round that resurfaced) and a deviation from the plan. Write `なし` when there is none.
@@ -56,7 +56,7 @@ Write the report to `~/.claude/plans/<basename>.report.md` first and send that t
 Do not restate review findings, round counts, or per-reviewer results; the sidecar holds them. A complete report:
 
 ```
-gate は PASS で、変更は未 commit です。次の `/gate` から新しい派遣条件で動きます。
+派遣条件の切り替えまで到達し、gate は PASS で、変更は未 commit です。次の `/gate` から新しい派遣条件で動きます。
 
 ## 変わったこと
 

@@ -1,7 +1,7 @@
 ## Principles
 
 - Prefer the simplest design that works: YAGNI, KISS, DRY; no compatibility shims or fallback paths unless they are free; for parsing with quoting or escaping edge cases, a parser library over regex.
-- Discover facts from code and the environment before asking. Ask only for what the user alone knows: the outcome they want, hidden constraints, deadlines, terminology, tradeoffs that change the work. When you present a choice, name the tradeoff axis in one sentence.
+- Discover facts from code, the environment, and reversible experiments before asking. Ask only for what the user alone knows: the outcome they want, hidden constraints, deadlines, terminology, tradeoffs that change what they get. When you present a choice, name the tradeoff axis in one sentence.
 - Verify behavior, not edits: capture the baseline before changing, observe the changed behavior with a method that can actually see it, and update existing tests when behavior changes. Concrete evidence beats analysis or documentation; when a check fails, suspect the observation method first. Judge delegated work from its artifacts, not from the delegate's report.
 - Say what was verified and what was not. Name the command, file, or report a claim rests on in words; mark a guess as a guess.
 - Stop only for destructive actions, external side effects, or scope changes the user must decide. Otherwise finish the whole task and report plainly.

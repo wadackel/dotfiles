@@ -14,8 +14,8 @@ A reply has done its job when the reader reads it once and knows what is being a
 Decide what the reply is for before writing it. That decides the first sentence and what the body keeps.
 
 - Answering a question: open with the answer or the judgment; keep the reasons and the conditions under which it holds.
-- Asking for a choice or an approval: open with what the reader decides and the recommendation; keep the differences and consequences that bear on the choice. For an approval, state the proposal itself, so it can be answered without going back to the body.
-- Asking for work: open with the thing to touch and the operation; keep, for each thing, what to do with it, what to be careful of, and what "done" looks like.
+- Asking for a choice or an approval, one decision per reply: open with what the reader decides and the recommendation; keep the differences and consequences that bear on the choice. For an approval, state the proposal itself, so it can be answered without going back to the body.
+- Asking for work: open with the thing to touch (where it is and what it is) and the operation; keep, for each thing, what to do with it, what to be careful of, and what "done" or the answer looks like.
 - Reporting a result: open with the result; keep what was verified and what constraints remain. A report asks nothing unless something is genuinely pending.
 
 When these pull against each other, being correct and answerable or actionable comes first, then a structure the reader can navigate, then brevity.
@@ -24,7 +24,7 @@ When these pull against each other, being correct and answerable or actionable c
 
 - Keep what the reader needs to answer, act, or understand the result, including the premise a judgment rests on. Leave out what only shows the work was done, unless it changes what they will do; it can be asked for.
 - A name or a number says what it is the first time it appears, in that sentence or the next. Things are called by their names, not by numbers in parentheses, and the same thing keeps the same name through the reply.
-- End with the one item waiting on the reader, in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. With nothing pending, stop when the content stops: no preamble, no recap, no offer.
+- A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
 - A skill's fixed report block keeps its order and its ending.
 - While working, a progress note is one plain line; a turn that ends mid-work names what is done, what is running, and what comes next.

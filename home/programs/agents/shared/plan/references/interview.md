@@ -5,7 +5,7 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user. Read it b
 ## Cadence
 
 - **Text questions by default**, in the format below. A structured question tool is for a self-contained confirmation whose options need no background. No emoji.
-- **One question at a time.** Do not pack multiple questions into one message just because the format allows it. The question is the last content in the turn; end the turn and do not advance until the answer arrives. A runtime whose question tool supports batching may batch independent questions; dependent ones stay sequential.
+- **One question at a time.** Do not pack multiple questions into one message just because the format allows it. The question is the last content in the turn; end the turn and do not advance until the answer arrives.
 - **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Ask the highest-impact one first: outcome, then boundary, then context, then definition.
 - **Non-blocking fact-finding.** Dispatch a needed lookup in the background and ask the next independent question meanwhile. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.
 - **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
