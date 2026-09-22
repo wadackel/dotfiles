@@ -173,9 +173,16 @@ export const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // deno-lint-ignore no-control-regex
 const CONTROL_RUN_RE = /[\x00-\x1f\x7f]+/g;
 
+// Counted in code points: String#slice counts UTF-16 units and would cut an
+// emoji or CJK Ext-B character in half, leaving a lone surrogate that tmux
+// draws as U+FFFD.
+function capCodePoints(s: string, max: number, ellipsis: string): string {
+  const cps = Array.from(s);
+  return cps.length > max ? cps.slice(0, max).join("") + ellipsis : s;
+}
+
 export function truncate(raw: string, max: number, ellipsis = "…"): string {
-  const clean = raw.replace(CONTROL_RUN_RE, " ");
-  return clean.length > max ? clean.slice(0, max) + ellipsis : clean;
+  return capCodePoints(raw.replace(CONTROL_RUN_RE, " "), max, ellipsis);
 }
 
 // Sanitize + truncate a free-form prompt for safe rendering inside
@@ -192,8 +199,7 @@ export function maskPrompt(
   const max = opts.max ?? PROMPT_MAX_CHARS;
   const ellipsis = opts.ellipsis ?? "…";
   const flat = raw.replace(CONTROL_RUN_RE, " ").replace(/ {2,}/g, " ").trim();
-  if (flat.length <= max) return flat;
-  return flat.slice(0, max) + ellipsis;
+  return capCodePoints(flat, max, ellipsis);
 }
 
 // Format a tool error string for @pane_last_tool_error. Mirrors claude's

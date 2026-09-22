@@ -145,3 +145,23 @@ Deno.test("truncateAnsiLine: surrogate pair (CJK Ext B) counts as 2 cells, not s
   // maxCols=3 → only first wide CP fits (2 cells), next would overflow.
   assertEquals(truncateAnsiLine(wide, 3), "\u{20000}");
 });
+
+Deno.test("truncateAnsiLine: a combining mark after the last fitting cell stays attached", () => {
+  // NFD が is か + U+3099; cutting between them would render a bare か.
+  assertEquals(truncateAnsiLine("か\u3099き", 2), "か\u3099");
+});
+
+Deno.test("truncateAnsiLine: emoji counts as 2 cells", () => {
+  assertEquals(truncateAnsiLine("🎉🎉🎉", 5), "🎉🎉");
+});
+
+// capture-pane hands tabs back as a literal \t; the terminal would expand it
+// to the next tab stop after the width was counted.
+Deno.test("truncateAnsiLine: a tab expands to the next 8-column stop", () => {
+  assertEquals(truncateAnsiLine("ab\tc", 80), "ab      c");
+  assertEquals(truncateAnsiLine("\tx", 80), "        x");
+});
+
+Deno.test("truncateAnsiLine: a tab past the budget is cut to it", () => {
+  assertEquals(truncateAnsiLine("abc\tdef", 5), "abc  ");
+});

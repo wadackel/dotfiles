@@ -74,3 +74,29 @@ Deno.test("truncateToCells: mixed ASCII + CJK respects boundary", () => {
   // budget=4 exactly fits → unchanged
   assertEquals(truncateToCells("abあ", 4), "abあ");
 });
+
+// Expected widths are tmux's own: each was read back as #{cursor_x} after
+// printing the string into a pane.
+Deno.test("stringCells: emoji with default emoji presentation → 2 cells", () => {
+  assertEquals(stringCells("A🎉B"), 4);
+  assertEquals(stringCells("⭐"), 2);
+  assertEquals(stringCells("⌛"), 2);
+});
+
+Deno.test("stringCells: text-presentation symbols stay 1 cell", () => {
+  assertEquals(stringCells("⏺✻⚠✔▶"), 5);
+});
+
+Deno.test("stringCells: combining marks and zero-width characters → 0 cells", () => {
+  assertEquals(stringCells("か\u3099X"), 3); // NFD が + X
+  assertEquals(stringCells("e\u0301Y"), 2);
+  assertEquals(stringCells("\u200bZ"), 1);
+});
+
+Deno.test("stringCells: VS16 widens the symbol before it", () => {
+  assertEquals(stringCells("\u2764\ufe0fZ"), 3);
+});
+
+Deno.test("truncateToCells: emoji counted as 2 cells", () => {
+  assertEquals(truncateToCells("🎉🎉🎉", 4), "🎉…");
+});

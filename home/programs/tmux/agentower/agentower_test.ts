@@ -2,6 +2,7 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import {
   bodyHeightFor,
   cardIndexAt,
+  clampPreview,
   clampStep,
   codexCwdHash,
   COMPACT_CARD,
@@ -19,7 +20,6 @@ import {
   parseMouse,
   parsePrefixKey,
   parseRow,
-  parseTarget,
   readTaskProgress,
   readTaskProgressForRow,
   row1Columns,
@@ -322,29 +322,6 @@ Deno.test("isLivePaneCommand: rejects unknown agent", () => {
   assertEquals(isLivePaneCommand("shell", ".claude-wrapped"), false);
   assertEquals(isLivePaneCommand("", ".claude-wrapped"), false);
   assertEquals(isLivePaneCommand("opencode_v2", ".opencode-wrapp"), false);
-});
-
-Deno.test("parseTarget: basic session:window.pane", () => {
-  assertEquals(parseTarget("0:1.2"), { session: "0", window: "0:1" });
-});
-
-Deno.test("parseTarget: session name containing dot", () => {
-  // Bash picker: `${target%%:*}` = "work.foo", `${win_pane%%.*}` = "1"
-  // → select-window target is "work.foo:1"
-  assertEquals(parseTarget("work.foo:1.2"), {
-    session: "work.foo",
-    window: "work.foo:1",
-  });
-});
-
-Deno.test("parseTarget: malformed target falls back to identity", () => {
-  assertEquals(parseTarget("broken"), { session: "broken", window: "broken" });
-  assertEquals(parseTarget(":1.2"), { session: "", window: ":1" });
-});
-
-Deno.test("parseTarget: dot before colon is not treated as pane separator", () => {
-  // `a.b:0.1` — lastDotIdx=6 (after colon), colonIdx=3
-  assertEquals(parseTarget("a.b:0.1"), { session: "a.b", window: "a.b:0" });
 });
 
 // --- readTaskProgress ---
@@ -696,6 +673,21 @@ Deno.test("truncateTopSegBody: tool seg with error suffix → generic slice", ()
   // budget 16 → maxBodyCells 14 → cut inside the error tail, no ellipsis.
   const seg = mkSeg({ body: "Bash(test) \u{F0156} Exit code 1" });
   assertEquals(truncateTopSegBody(seg, 16), "Bash(test) \u{F0156} E");
+});
+
+Deno.test("truncateTopSegBody: CJK body is cut by display cells", () => {
+  // budget 12 → maxBodyCells 10; each kana is 2 cells.
+  const seg = mkSeg({ key: "file", body: "設計ドキュメント.md" });
+  const out = truncateTopSegBody(seg, 12);
+  assertEquals(out, "設計ドキュ");
+  assertEquals(stringCells(out) <= 10, true);
+});
+
+Deno.test("truncateTopSegBody: CJK tool subject keeps its paren within the cell budget", () => {
+  const seg = mkSeg({ body: "Edit(設計ドキュメント.md)" });
+  const out = truncateTopSegBody(seg, 16);
+  assertEquals(out, "Edit(設計ド…)");
+  assertEquals(stringCells(out) <= 14, true);
 });
 
 Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", () => {
@@ -1332,4 +1324,12 @@ Deno.test("resolvers: a missing prevId resolves from index 0", () => {
   assertEquals(wrapStep(1)(0, rows), 1);
   assertEquals(clampStep(-1)(0, rows), 0);
   assertEquals(nextWaitingIndex(rows, 0), 0);
+});
+
+Deno.test("clampPreview: capture-pane's final newline does not take a row", () => {
+  assertEquals(clampPreview("L1\nL2\nL3\n", 80, 2), "L2\nL3");
+});
+
+Deno.test("clampPreview: blank rows the pane itself ends with are kept", () => {
+  assertEquals(clampPreview("L1\n\n\n", 80, 3), "L1\n\n");
 });

@@ -363,3 +363,14 @@ Deno.test("module source has no Deno.* / Bun.* / node: references", async () => 
   }
   assertEquals(violations, []);
 });
+
+// String#slice counts UTF-16 units, so a cut through a surrogate pair left a
+// lone high surrogate, which tmux draws as U+FFFD.
+Deno.test("maskPrompt: a cut never splits a surrogate pair", () => {
+  const out = maskPrompt("x".repeat(39) + "𠮷abc");
+  assertEquals(out, "x".repeat(39) + "𠮷…");
+});
+
+Deno.test("truncate: a cut never splits a surrogate pair", () => {
+  assertEquals(truncate("ab🎉cd", 3), "ab🎉…");
+});

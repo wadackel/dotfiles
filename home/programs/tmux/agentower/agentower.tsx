@@ -678,28 +678,9 @@ async function fetchPanes(): Promise<PaneRow[]> {
   return rows;
 }
 
-async function capturePane(target: string): Promise<string> {
-  const { stdout } = await tmuxRun(["capture-pane", "-p", "-e", "-t", target]);
+async function capturePane(paneId: string): Promise<string> {
+  const { stdout } = await tmuxRun(["capture-pane", "-p", "-e", "-t", paneId]);
   return sanitizeAnsi(stdout);
-}
-
-// Parse a tmux target `session:window.pane` into its components.
-// Correctly handles session names containing `.` by splitting on the FIRST
-// `:` for session and the LAST `.` for the window/pane boundary. Mirrors the
-// bash picker's `${target%%:*}` + `${win_pane%%.*}` semantics.
-export function parseTarget(target: string): {
-  session: string;
-  window: string;
-} {
-  const colonIdx = target.indexOf(":");
-  const lastDotIdx = target.lastIndexOf(".");
-  if (colonIdx === -1 || lastDotIdx <= colonIdx) {
-    return { session: target, window: target };
-  }
-  return {
-    session: target.substring(0, colonIdx),
-    window: target.substring(0, lastDotIdx),
-  };
 }
 
 // A popup takes every key before tmux's prefix table sees it, so the
@@ -716,18 +697,27 @@ async function readPrefixKey(): Promise<string | null> {
   return parsePrefixKey(stdout);
 }
 
-async function jumpTo(target: string): Promise<void> {
-  const { session, window } = parseTarget(target);
-  await tmuxRun(["switch-client", "-t", session]);
-  await tmuxRun(["select-window", "-t", window]);
-  await tmuxRun(["select-pane", "-t", target]);
+// By pane id rather than `session:window.pane`: tmux accepts ':' and '.' in a
+// session name, and a name with ':' cannot be split back out of that string —
+// tmux itself fails to resolve it. Each command takes the window or session
+// that contains the pane.
+async function jumpTo(paneId: string): Promise<void> {
+  await tmuxRun(["switch-client", "-t", paneId]);
+  await tmuxRun(["select-window", "-t", paneId]);
+  await tmuxRun(["select-pane", "-t", paneId]);
 }
 
 // Keep preview bounded so it never pushes the list column to zero width and
 // never exceeds the popup height. Truncate each line to the column width and
-// keep only the last `maxLines` lines.
-function clampPreview(text: string, maxCols: number, maxLines: number): string {
-  const lines = text.split("\n");
+// keep only the last `maxLines` lines. capture-pane ends every line with a
+// newline, and splitting on it as-is yields one empty element past the pane's
+// last row, which would take the bottom preview row and push the top one out.
+export function clampPreview(
+  text: string,
+  maxCols: number,
+  maxLines: number,
+): string {
+  const lines = text.replace(/\n$/, "").split("\n");
   const tail = lines.slice(Math.max(0, lines.length - maxLines));
   return tail.map((line) => truncateAnsiLine(line, maxCols)).join("\n");
 }
@@ -744,11 +734,11 @@ function displayPath(path: string): string {
 function Preview(
   { row, width, height }: { row: PaneRow; width: number; height: number },
 ) {
-  const target = row.target;
+  const paneId = row.paneId;
   const [content, setContent] = useState<string | null>(null);
   useEffect(() => {
-    // Reset content the moment target changes — without this, a stale capture
-    // of the previous target keeps rendering under the new card title until
+    // Reset content the moment the pane changes — without this, a stale capture
+    // of the previous pane keeps rendering under the new card title until
     // the new capturePane resolves (~0–1 s).
     setContent(null);
     let cancelled = false;
@@ -758,11 +748,11 @@ function Preview(
     const innerCols = Math.max(10, width - CARD_CHROME_COLS);
     const innerRows = Math.max(3, height - 3);
     // Self-rescheduling setTimeout (not setInterval) guarantees at most one
-    // in-flight capturePane per target and prevents out-of-order completions
+    // in-flight capturePane per pane and prevents out-of-order completions
     // from overwriting fresher content.
     const tick = async () => {
       try {
-        const text = await capturePane(target);
+        const text = await capturePane(paneId);
         if (!cancelled) setContent(clampPreview(text, innerCols, innerRows));
       } catch (e) {
         if (!cancelled) setContent(`(preview failed: ${String(e)})`);
@@ -775,7 +765,7 @@ function Preview(
       cancelled = true;
       if (timerId !== undefined) clearTimeout(timerId);
     };
-  }, [target, width, height]);
+  }, [paneId, width, height]);
   const { repo, worktree, branch } = locationParts(row);
   const title = [
     { text: repo, color: DOGRUN.fg },
@@ -860,6 +850,8 @@ function App({
   // First visible pane of a scrolled list. Kept across renders so moving the
   // selection inside the window does not shift it.
   const listOffset = useRef(0);
+  // Index the selection was drawn at, for when its pane is no longer listed.
+  const lastIndex = useRef(0);
   const prefixPending = useRef(false);
   const prefixByte = prefixKey === null
     ? null
@@ -939,7 +931,21 @@ function App({
   const foundIdx = derivedRows.findIndex((r: PaneRow) =>
     r.paneId === selectedPaneId
   );
-  const index = foundIdx >= 0 ? foundIdx : 0;
+  // A selected pane that leaves the list (closed, or hidden by the filter) hands
+  // the selection to whatever now sits where it was, and the effect below makes
+  // that row the selection. Leaving selectedPaneId on the missing pane instead
+  // pulls the cursor back to it the moment it reappears, under a reader who may
+  // be pressing Enter on the row they were shown.
+  const index = foundIdx >= 0
+    ? foundIdx
+    : Math.max(0, Math.min(lastIndex.current, derivedRows.length - 1));
+  lastIndex.current = index;
+  const shownPaneId = derivedRows[index]?.paneId;
+  useEffect(() => {
+    if (shownPaneId !== undefined && shownPaneId !== selectedPaneId) {
+      setSelectedPaneId(shownPaneId);
+    }
+  }, [shownPaneId, selectedPaneId]);
 
   // The resolver runs inside the state updater rather than against `index`
   // above: `index` is this render's value, and Ink dispatches every event from
@@ -949,7 +955,7 @@ function App({
     setSelectedPaneId((prev: string) => {
       if (derivedRows.length === 0) return prev;
       const found = derivedRows.findIndex((r: PaneRow) => r.paneId === prev);
-      const cur = found >= 0 ? found : 0;
+      const cur = found >= 0 ? found : index;
       return derivedRows[next(cur, derivedRows)]?.paneId ?? prev;
     });
   };
@@ -1295,5 +1301,5 @@ export async function main(): Promise<void> {
 
   const picked = result.value;
   if (!picked) return;
-  await jumpTo(picked.target);
+  await jumpTo(picked.paneId);
 }

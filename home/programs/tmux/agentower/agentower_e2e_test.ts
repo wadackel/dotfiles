@@ -2278,3 +2278,230 @@ Deno.test("S57: a CJK branch name gets the width it actually occupies", async ()
     await Deno.remove(root, { recursive: true }).catch(() => {});
   }
 });
+
+// The list column of each captured line, cut at the preview card's left edge.
+function listColumn(out: string): string[] {
+  return out.split("\n").map((l) => l.split(/[│╭╰]/)[0]);
+}
+
+// Row-2 segment widths used to be code-point counts, so a CJK file or subagent
+// name passed the budget at half its real width and Ink wrapped the row, which
+// pushed every pane below it down one line.
+Deno.test("S58: CJK row-2 segments stay on their row", async () => {
+  await setupServer({ cols: 120, rows: 40 });
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "cjk-seg-row",
+      currentTool: "Edit",
+      lastEditFile: "/x/設計ドキュメント草案メモ版.md",
+      subagents: "探索エージェント:a",
+    });
+    await createClaudePane({ status: "idle", prompt: "below-row" });
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("below-row"));
+    const list = listColumn(out);
+    const first = list.findIndex((l) => l.includes("cjk-seg-row"));
+    // Four-row cards: the next pane's row 1 is four lines further down.
+    assertStringIncludes(list[first + 4] ?? "", "below-row", out);
+    // splitLayout gives the list 72 of the 120 columns.
+    for (const l of list) {
+      const used = stringCells(l.trimEnd());
+      assertEquals(used <= 72, true, `list line overflows: ${l}`);
+    }
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// cell_width counted an emoji as one cell while tmux draws two, so an emoji
+// prompt overflowed row 1 and wrapped the card.
+Deno.test("S59: an emoji prompt is truncated to the row instead of wrapping", async () => {
+  await setupServer({ cols: 120, rows: 40 });
+  try {
+    await createClaudePane({ status: "idle", prompt: "🎉".repeat(40) });
+    await createClaudePane({ status: "idle", prompt: "below-row" });
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("below-row"));
+    const list = listColumn(out);
+    const first = list.findIndex((l) => l.includes("🎉"));
+    assertStringIncludes(list[first], "…", out);
+    assertStringIncludes(list[first + 4] ?? "", "below-row", out);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// capture-pane ends its last row with a newline too; split as-is, that became
+// an empty preview row under the pane's real bottom row.
+Deno.test("S60: the preview's last row is the pane's last row", async () => {
+  await setupServer({ cols: 120, rows: 40 });
+  try {
+    await printingClaudePane(
+      "i=1; while [ $i -le 60 ]; do echo L$i; i=$((i+1)); done; printf BOTTOM",
+    );
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("BOTTOM"));
+    const rows = out.split("\n");
+    const bottomBorder = rows.findIndex((l) => l.includes("╰"));
+    assertStringIncludes(rows[bottomBorder - 1], "BOTTOM", out);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// tmux accepts ':' in a session name, but `name:win.pane` built from it cannot
+// be resolved again, so preview and jump both addressed nothing.
+Deno.test("S61: a pane in a session named with ':' previews and is jumped to", async () => {
+  await setupServer({ cols: 120, rows: 40 });
+  try {
+    const stub = `/tmp/agentower-e2e-bin-${Deno.pid}/.claude-wrapped`;
+    const paneId = (await tmux([
+      "new-session",
+      "-d",
+      "-P",
+      "-F",
+      "#{pane_id}",
+      "-s",
+      "proj:v2",
+      "-x",
+      "120",
+      "-y",
+      "40",
+      `sh -c 'yes "" | head -60; printf COLON-MARK; exec ${stub} 99999'`,
+    ])).trim();
+    await waitForCommand(paneId, ".claude-wrapped");
+    await tmux(["set-option", "-p", "-t", paneId, "@pane_agent", "claude"]);
+    await tmux(["set-option", "-p", "-t", paneId, "@pane_status", "idle"]);
+    // A second window made current, so the jump has a window to switch.
+    const sessionId = (await tmux([
+      "display-message",
+      "-p",
+      "-t",
+      paneId,
+      "#{session_id}",
+    ])).trim();
+    await tmux(["new-window", "-t", sessionId, "-n", "other"]);
+    const agentower = await spawnAgentower();
+    await waitFor(agentower, (o) => o.includes("COLON-MARK"));
+
+    await sendKey(agentower, "Enter");
+    await waitForExit();
+    const windowActive = (await tmux([
+      "display-message",
+      "-p",
+      "-t",
+      paneId,
+      "#{window_active}",
+    ])).trim();
+    assertEquals(windowActive, "1", "the pane's window was not selected");
+  } finally {
+    await teardown();
+  }
+});
+
+// A live claude pane whose screen is whatever `script` prints before the stub
+// takes over. Printed by the pane itself: the suite's write scope does not
+// reach the pane's tty.
+async function printingClaudePane(script: string): Promise<string> {
+  const stub = `/tmp/agentower-e2e-bin-${Deno.pid}/.claude-wrapped`;
+  if (script.includes("'")) throw new Error("script must not contain '");
+  const paneId = (await tmux([
+    "new-window",
+    "-d",
+    "-t",
+    "test",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    `sh -c '${script}; exec ${stub} 99999'`,
+  ])).trim();
+  await waitForCommand(paneId, ".claude-wrapped");
+  await tmux(["set-option", "-p", "-t", paneId, "@pane_agent", "claude"]);
+  await tmux(["set-option", "-p", "-t", paneId, "@pane_status", "idle"]);
+  return paneId;
+}
+
+async function waitForCommand(paneId: string, cmd: string): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline) {
+    const cur = (await tmux([
+      "display-message",
+      "-p",
+      "-t",
+      paneId,
+      "#{pane_current_command}",
+    ])).trim();
+    if (cur === cmd) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`pane ${paneId} never ran ${cmd}`);
+}
+
+// A selected pane hidden by the filter left selectedPaneId pointing at it, so
+// the cursor sat on another row and then jumped back when the pane returned.
+Deno.test("S62: a filtered-out selection stays on the row it moved to", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "idle", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "waiting",
+      prompt: "row-b",
+    });
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "j");
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await sendKey(agentower, "w");
+    await waitFor(agentower, (o) => o.includes("wait/idle"));
+
+    await tmux(["set-option", "-p", "-t", paneB, "@pane_status", "running"]);
+    await waitFor(agentower, (o) => !o.includes("row-b"), 4000);
+    await waitFor(agentower, selectedIncludes("row-a"));
+
+    await tmux(["set-option", "-p", "-t", paneB, "@pane_status", "waiting"]);
+    const back = await waitFor(agentower, (o) => o.includes("row-b"), 4000);
+    assertStringIncludes(selectedLine(back), "row-a", back);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// capture-pane returns tabs as a literal \t. Counted as one cell and expanded
+// by the terminal afterwards, a tab pushed the rest of its preview line, and
+// the card's right border with it, several columns right.
+Deno.test("S63: a tab in the pane keeps the preview's right border in place", async () => {
+  await setupServer({ cols: 120, rows: 40 });
+  try {
+    await printingClaudePane(
+      String.raw`yes "" | head -50; printf "a\tb\tTAB-MARK"`,
+    );
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("TAB-MARK"));
+    const rows = out.split("\n");
+    const tabRow = rows.find((l) => l.includes("TAB-MARK")) ?? "";
+    const plainRow = rows[rows.indexOf(tabRow) - 1];
+    assertStringIncludes(tabRow, "a       b       TAB-MARK", out);
+    assertEquals(
+      stringCells(tabRow.trimEnd()),
+      stringCells(plainRow.trimEnd()),
+      out,
+    );
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

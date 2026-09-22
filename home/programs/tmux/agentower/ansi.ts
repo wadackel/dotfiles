@@ -50,9 +50,12 @@ export function truncateAnsiLine(line: string, maxCols: number): string {
   let used = 0;
   let hasOpenSgr = false;
   let i = 0;
-  while (i < line.length && used < maxCols) {
+  // Past the budget only zero-width code points are still taken, so a combining
+  // mark stays with the base character it follows.
+  while (i < line.length) {
     const ch = line[i];
     if (ch === "\x1b") {
+      if (used >= maxCols) break;
       const rest = line.slice(i);
       // deno-lint-ignore no-control-regex
       const m = rest.match(/^\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/);
@@ -66,6 +69,17 @@ export function truncateAnsiLine(line: string, maxCols: number): string {
         i += m[0].length;
         continue;
       }
+      i++;
+      continue;
+    }
+    // capture-pane returns a tab as a literal \t where the pane drew blanks up
+    // to the next stop; left in, the terminal would expand it after the width
+    // was counted. tmux's tab stops default to every 8 columns.
+    if (ch === "\t") {
+      const w = Math.min(8 - (used % 8), maxCols - used);
+      if (w <= 0) break;
+      out += " ".repeat(w);
+      used += w;
       i++;
       continue;
     }

@@ -26,7 +26,7 @@ import {
   summaryOf,
   toolSegmentText,
 } from "./format_helpers.ts";
-import { stringCells, truncateToCells } from "./cell_width.ts";
+import { sliceToCells, stringCells, truncateToCells } from "./cell_width.ts";
 import {
   type AgentUsage,
   isUsageStale,
@@ -87,26 +87,25 @@ const ROW2_SEP = " · ";
 // that reads as a bug or data-load failure.
 const ROW2_EMPTY_TEXT = "(no activity)";
 
-// Cell width = icon(1) + space(1) + body code points. Module-level so
+// Cell width = icon(1) + space(1) + body cells. Module-level so
 // `truncateTopSegBody` can reference it without threading a parameter.
 const SEG_PREFIX_CELLS = 2;
 
 // Pre-truncate the top-priority row-2 segment when its cells exceed `budget`.
 // Returns the new body string. For tool segments whose body ends with `)`
 // (i.e. "Tool(subject)" with no error suffix), reserve 2 cells and append
-// "…)" so the closing paren survives the cut — otherwise fall back to the
-// generic code-point slice (bare tool names, error suffixes, non-tool keys).
+// "…)" so the closing paren survives the cut — otherwise fall back to a plain
+// cell-bounded slice (bare tool names, error suffixes, non-tool keys).
 // Safe to call when the body already fits within the budget — returns the
 // original body unchanged in that case so the paren-preservation branch
 // cannot spuriously append "…)" when no truncation is needed.
 export function truncateTopSegBody(seg: Row2Seg, budget: number): string {
   const maxBodyCells = Math.max(0, budget - SEG_PREFIX_CELLS);
-  const cps = Array.from(seg.body);
-  if (cps.length <= maxBodyCells) return seg.body;
+  if (stringCells(seg.body) <= maxBodyCells) return seg.body;
   if (seg.key === "tool" && seg.body.endsWith(")") && maxBodyCells >= 3) {
-    return cps.slice(0, maxBodyCells - 2).join("") + "…)";
+    return truncateToCells(seg.body, maxBodyCells - 1) + ")";
   }
-  return cps.slice(0, maxBodyCells).join("");
+  return sliceToCells(seg.body, maxBodyCells);
 }
 
 // Row-2 segment icons (Nerd Font Material Design). Supplementary-plane code
@@ -295,11 +294,11 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     });
   }
 
-  // Cell width = icon(1) + space(1) + body code points. Accurate while icons
-  // stay supplementary-plane (1 cell) and bodies stay ASCII-heavy. CJK bodies
-  // would undercount, but upstream TOOL_SUBJECT_MAX_CHARS=24 bounds that risk.
+  // The icons are 1-cell Nerd Font glyphs, so only the body needs measuring.
+  // A code-point count is not enough: a CJK file or subagent name is twice as
+  // wide as it is long, and nothing upstream bounds lastEditFile.
   const segCells = (s: Row2Seg): number =>
-    SEG_PREFIX_CELLS + Array.from(s.body).length;
+    SEG_PREFIX_CELLS + stringCells(s.body);
 
   const budget = Math.max(0, listWidth - 2 - ROW2_RIGHT_CELLS);
   let totalCells = segs.length > 0 ? segCells(segs[0]) : 0;
