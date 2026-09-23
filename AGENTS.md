@@ -202,6 +202,15 @@ The Hermes module (`home/programs/hermes/default.nix`) runs its Deno scripts fro
 
 Restart the gateway with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.hermes-agent`. `hermes gateway restart` looks for its own launchd label (`ai.hermes.gateway`), not the one home-manager installs, and can fall back to starting a second gateway in the foreground. After rolling back a generation, restart the gateway too: the running MCP servers keep the scripts they started with.
 
+### Asking Claude through Hermes
+
+A Slack DM starting with `!claude <repo or owner/repo> <request>` runs Claude Code on that repository; replies in its thread either approve (`merge`, `マージ`, `マージして`, `LGTM`, exact match) or go back to the same Claude session. Allowed owners are the `--owners` list in `home/programs/hermes/default.nix`; a bare repo name means `wadackel`.
+
+- The `claude-task` plugin (`pre_gateway_dispatch`) takes these messages before the model sees them and starts `scripts/claude-task.ts`. It is a plugin rather than a file hook because only that hook can keep a message from the model.
+- Claude runs `claude -p --restricted` in a sandbox that reads only the worktree and the toolchain and reaches only the npm registry, so it never loads `~/.claude/settings.json`, its hooks, or MCP servers. It only edits files; the script commits, pushes `claude/<thread ts>`, labels `claude`, opens the PR or issue, and merges after checking CI.
+- State is `~/.config/hermes-claude/tasks/<thread ts>.json`; clones, worktrees and the pnpm store are under `~/.local/share/hermes-claude`. Logs go to `~/Library/Logs/hermes-claude-task.log`.
+- The daily exploratory test of obsidian-web-clip is a no-agent cron job on `scripts/claude-explore-web-clip.sh`. Cron jobs live in `~/.hermes/cron/jobs.json`, not in Nix; it was registered with `hermes cron create "0 10 * * *" --script claude-explore-web-clip.sh --no-agent --deliver slack:D0C3V6SQABC --name claude-explore-web-clip`.
+
 ### Session Variables and tmux
 
 A change to `home.sessionVariables` (for example `LLM_WIKI_VAULT_ROOT` in `home/programs/agents/default.nix`) does not reach a tmux server that was already running: new panes inherit the server's environment from when it started, so an agent launched inside tmux still sees the old value or none. Either push the variable into the server with `tmux set-environment -g VAR value` or restart the server. `/llm-wiki` asks before doing anything when the variable is empty rather than searching an empty path.

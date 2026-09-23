@@ -74,6 +74,57 @@ let
     #!/usr/bin/env bash
     exec ${lib.escapeShellArgs (denoRun args)}
   '';
+  claudeStateDir = "${homeDir}/.config/hermes-claude";
+  explorePrompt = dotfiles.pathHere ./prompts "explore-web-clip.md";
+  claudeWorkDir = "${homeDir}/.local/share/hermes-claude";
+  # Absolute paths: the gateway runs under launchd, whose PATH has none of these.
+  claudeBin = "${
+    inputs.nix-claude-code.packages.${pkgs.stdenv.hostPlatform.system}.default
+  }/bin/claude";
+  ghBin = "${pkgs.gh}/bin/gh";
+  gitBin = "${pkgs.git}/bin/git";
+  claudeTask =
+    args:
+    denoRun {
+      net = [ "slack.com" ];
+      read = [
+        claudeStateDir
+        claudeWorkDir
+        secretsFile
+        explorePrompt
+      ];
+      write = [
+        claudeStateDir
+        claudeWorkDir
+      ];
+      run = [
+        claudeBin
+        ghBin
+        gitBin
+      ];
+      env = [
+        "HOME"
+        "USER"
+        "TMPDIR"
+      ];
+      script = "claude-task.ts";
+      args = [
+        "--channel"
+        dmChannel
+        "--owners"
+        (lib.concatStringsSep "," [
+          "wadackel"
+          "reg-viz"
+        ])
+        "--claude"
+        claudeBin
+        "--gh"
+        ghBin
+        "--git"
+        gitBin
+      ]
+      ++ args;
+    };
 in
 {
   imports = [ inputs.hermes-agent.homeManagerModules.default ];
@@ -119,6 +170,8 @@ in
         # Every job reports straight to the owner's DM, so the default
         # "Cronjob Response: <name> (job_id: …)" header and footer are noise.
         cron.wrap_response = false;
+
+        plugins.enabled = [ "claude-task" ];
 
         platform_toolsets = {
           # Listing no MCP server would hand every server, gcal included, to
@@ -254,6 +307,77 @@ in
                       stderr=log,
                       start_new_session=True,
                   )
+        '';
+        "scripts/claude-explore-web-clip.sh" = ''
+          #!/usr/bin/env bash
+          exec ${
+            lib.escapeShellArgs (claudeTask [
+              "explore"
+              "wadackel/obsidian-web-clip"
+              explorePrompt
+            ])
+          }
+        '';
+        # A plugin rather than a file hook: only `pre_gateway_dispatch` can keep
+        # a message from reaching the model, and a `!claude` request or a reply
+        # in its thread must go to Claude Code, not to the cheap model.
+        "plugins/claude-task/plugin.yaml" = ''
+          name: claude-task
+          description: Hand DM requests starting with !claude, and replies in their threads, to Claude Code
+        '';
+        "plugins/claude-task/__init__.py" = ''
+          import os
+          import subprocess
+
+          CHANNEL = "${dmChannel}"
+          COMMAND = ${builtins.toJSON (claudeTask [ ])}
+          TASKS = "${claudeStateDir}/tasks"
+          LOG = os.path.expanduser("~/Library/Logs/hermes-claude-task.log")
+
+
+          def _spawn(args):
+              env = {
+                  "HOME": os.environ["HOME"],
+                  "USER": os.environ.get("USER", ""),
+                  "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+                  "PATH": "/usr/bin:/bin",
+              }
+              with open(LOG, "a") as log:
+                  subprocess.Popen(
+                      COMMAND + args,
+                      env=env,
+                      stdin=subprocess.DEVNULL,
+                      stdout=log,
+                      stderr=log,
+                      start_new_session=True,
+                  )
+
+
+          # Runs on the gateway event loop before the model and before auth, so
+          # it checks the sender itself and only hands work to a detached process.
+          def on_dispatch(event=None, **_):
+              source = getattr(event, "source", None)
+              if source is None or getattr(source, "chat_id", None) != CHANNEL:
+                  return None
+              allowed = {u.strip() for u in os.environ.get("SLACK_ALLOWED_USERS", "").split(",") if u.strip()}
+              if getattr(source, "user_id", None) not in allowed:
+                  return None
+              raw = getattr(event, "raw_message", None) or {}
+              text = (raw.get("text") or getattr(event, "text", "") or "").strip()
+              thread = raw.get("thread_ts")
+              # A thread that already holds a task takes every message as a reply,
+              # even one that starts with !claude.
+              if thread and os.path.exists(os.path.join(TASKS, thread + ".json")):
+                  _spawn(["reply", thread, text])
+                  return {"action": "skip", "reason": "claude-task reply"}
+              if text.startswith("!claude"):
+                  _spawn(["start", thread or getattr(event, "message_id", "") or raw.get("ts", ""), text])
+                  return {"action": "skip", "reason": "claude-task request"}
+              return None
+
+
+          def register(ctx):
+              ctx.register_hook("pre_gateway_dispatch", on_dispatch)
         '';
       };
     };
