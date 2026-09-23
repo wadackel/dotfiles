@@ -3,6 +3,7 @@
   lib,
   pkgs,
   inputs,
+  dotfiles,
   profile ? null,
   ...
 }:
@@ -17,7 +18,7 @@ let
   secretsFile = "${homeDir}/.config/hermes/secrets.env";
   # The owner's DM with the Hermes bot, where every report and digest goes.
   dmChannel = "D0C3V6SQABC";
-  webClip = "${../agents/skills/web-clip/scripts}/web-clip.ts";
+  webClip = dotfiles.pathHere ../agents/skills/web-clip/scripts "web-clip.ts";
   appsScript = [
     "script.google.com"
     "script.googleusercontent.com"
@@ -45,7 +46,9 @@ let
     ++ lib.optional (read != [ ]) "--allow-read=${lib.concatStringsSep "," read}"
     ++ lib.optional (write != [ ]) "--allow-write=${lib.concatStringsSep "," write}"
     ++ lib.optional (run != [ ]) "--allow-run=${lib.concatStringsSep "," run}"
-    ++ [ "${./scripts}/${script}" ]
+    # The worktree copy, not a store copy: a script edit then reaches the next
+    # run without a rebuild, and whatever sits in ~/dotfiles is what runs.
+    ++ [ (dotfiles.pathHere ./scripts script) ]
     ++ args;
   feedAction = denoRun {
     net = [ "slack.com" ];

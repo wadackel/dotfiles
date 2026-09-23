@@ -89,6 +89,8 @@ The `programs/default.nix` auto-imports all subdirectories, enabling modular con
 
 `lib/dotfiles-path.nix`'s `linkHere` creates out-of-store symlinks. When combined with `home.file`'s `recursive = true`, it creates individual file links via the Nix store, requiring `darwin-rebuild` when adding new files. Linking the entire directory (without `recursive`) allows new files to be reflected automatically.
 
+`pathHere` returns the same worktree path as a plain string, for a module that must hand a path to a program instead of linking it (the Hermes Deno scripts). It asserts at evaluation that the file exists in the flake source, so a new file has to be tracked by Git first.
+
 ### Helper Functions in flake.nix
 
 - **`mkHome`**: Creates standalone home-manager configuration
@@ -187,6 +189,18 @@ Command to hot-reload after editing: `TMUX="" tmux source-file ~/.config/tmux/tm
 `\;` inside `bind-key`'s `if-shell` arguments does not function as a command separator (`tmux list-keys` shows `\\;`, meaning it is retained as a literal character). To execute multiple commands sequentially, separate with `\;` at the top level of `bind-key`:
 - ✗ `bind-key h if-shell -F cond 'cmd1 \; cmd2'` — `cmd1 \; cmd2` treated as a single command
 - ✓ `bind-key h if-shell -F cond 'cmd1' \; if-shell -F cond2 'cmd2'` — separated at top level
+
+### Applying Hermes changes
+
+The Hermes module (`home/programs/hermes/default.nix`) runs its Deno scripts from `~/dotfiles` through `dotfiles.pathHere`, not from the Nix store, so whatever is on disk there — another branch, a stash, a rebase in progress, a half-written file — is what the next run executes. Deno does not type-check at run time, so a broken script shows up only in `~/Library/Logs/hermes-agent.err.log` or `~/Library/Logs/hermes-feed-action.log`. Do longer Hermes work in a `.claude/worktrees/` worktree and run `deno check` before bringing it back.
+
+| Change | How it takes effect |
+|---|---|
+| A cron pre-run script or `feed-action.ts` | The next run; each run spawns a new process |
+| An MCP server script (`*-mcp.ts` and what it imports) | `/reload-mcp` in the Slack DM, or restarting the gateway. The gateway connects MCP servers once and keeps them, and cron jobs reuse those connections. `/reload-mcp` asks Once / Always / Cancel; Always stores `approvals.mcp_reload_confirm: false` |
+| `settings`, `mcpServers`, `hermesHomeFiles`, or anything else in the Nix module | `sudo darwin-rebuild switch --flake .#private`, then restart the gateway |
+
+Restart the gateway with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.hermes-agent`. `hermes gateway restart` looks for its own launchd label (`ai.hermes.gateway`), not the one home-manager installs, and can fall back to starting a second gateway in the foreground. After rolling back a generation, restart the gateway too: the running MCP servers keep the scripts they started with.
 
 ### Session Variables and tmux
 
