@@ -111,7 +111,7 @@ Both configurations use the same overlays and extraSpecialArgs to ensure consist
 
 Despite Nix, Homebrew is used for:
 
-- **Applications/Casks**: Arc, Chrome Canary, Claude Code, Raycast, WezTerm, 1Password CLI, etc.
+- **Applications/Casks**: Arc, Chrome Canary, Claude Code, Tinycast, WezTerm, 1Password CLI, etc.
 - **Python versions**: 3.8, 3.9, 3.10, 3.11, 3.13, 3.14 (not yet stable in nixpkgs)
 - **Specialized tools**: z3, cask, numpy, pillow
 - **Custom taps**: wadackel/tap (pinact)

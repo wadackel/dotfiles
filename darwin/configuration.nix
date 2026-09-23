@@ -51,6 +51,10 @@
       "wadackel/tap"
       "hashicorp/tap"
       "steipete/tap"
+      {
+        name = "abue-ammar/tinycast";
+        trusted = true;
+      }
     ];
 
     # Formula configuration
@@ -87,7 +91,7 @@
       "kap"
       "keycastr"
       "obsidian"
-      "raycast"
+      "tinycast"
       "slack"
       "wezterm"
       "xcodes-app"
@@ -295,6 +299,34 @@
 
     # カスタム設定
     CustomUserPreferences = {
+      # Tinycast (起動時にしか読まないため、変更後はアプリの再起動が必要)
+      "com.tinycast.app" =
+        let
+          # Carbon の修飾キー値
+          cmd = 256;
+          opt = 2048;
+          ctrl = 4096;
+          hyper = cmd + opt + ctrl; # ⌃⌥⌘
+          combo =
+            carbonModifiers: carbonKeyCode:
+            builtins.toJSON { combo._0 = { inherit carbonModifiers carbonKeyCode; }; };
+        in
+        {
+          windowManagementEnabled = true;
+          compactMode = true;
+          "hotkey.togglePalette" = combo cmd 49; # ⌘Space
+          "hotkey.command:clipboard-history" = combo (ctrl + cmd) 9; # ⌃⌘V
+          "hotkey.windowCommand.left-half" = combo hyper 123; # ←
+          "hotkey.windowCommand.right-half" = combo hyper 124; # →
+          "hotkey.windowCommand.maximize" = combo hyper 46; # M
+          "hotkey.windowCommand.almost-maximize" = combo hyper 40; # K
+          "hotkey.windowCommand.center" = combo hyper 8; # C
+          "hotkey.windowCommand.top-left-quarter" = combo hyper 18; # 1
+          "hotkey.windowCommand.top-right-quarter" = combo hyper 19; # 2
+          "hotkey.windowCommand.bottom-left-quarter" = combo hyper 20; # 3
+          "hotkey.windowCommand.bottom-right-quarter" = combo hyper 21; # 4
+        };
+
       # TimeMachine自動確認の無効化
       "com.apple.TimeMachine" = {
         DoNotOfferNewDisksForBackup = true;
