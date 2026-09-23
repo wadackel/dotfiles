@@ -83,6 +83,10 @@ in
           docker_volumes = [ ];
         };
 
+        # Every job reports straight to the owner's DM, so the default
+        # "Cronjob Response: <name> (job_id: …)" header and footer are noise.
+        cron.wrap_response = false;
+
         platform_toolsets = {
           # Listing no MCP server would hand every server, gcal included, to
           # Slack sessions; `no_mcp` keeps calendar writes cron-only.
