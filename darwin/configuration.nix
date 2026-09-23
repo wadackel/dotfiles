@@ -338,13 +338,6 @@
         DSDontWriteUSBStores = true; # USBドライブ
       };
 
-      # アクセシビリティ: スクロールズーム設定
-      # NOTE: ターミナル (WezTerm) に Full Disk Access が必要
-      "com.apple.universalaccess" = {
-        HIDScrollZoomModifierMask = 262144; # Control (^) キー
-        closeViewScrollWheelToggle = true; # スクロールでズーム有効化
-      };
-
       # Spotlightショートカット無効化
       "com.apple.symbolichotkeys" = {
         AppleSymbolicHotKeys = {
@@ -403,6 +396,18 @@
 
       # デーモン再起動で即時反映
       killall corebrightnessd 2>/dev/null || true
+    fi
+
+    # アクセシビリティ: Control + スクロールでズーム
+    # com.apple.universalaccess は TCC で保護され、darwin-rebuild を実行するターミナルに
+    # Full Disk Access が無いと書き込めない。CustomUserPreferences に置くと失敗が set -e で
+    # activation 全体 (launchd, homebrew など) を止めるため、ここで警告に留める。
+    # 書き込んだ値は動作中のズーム処理に通知されず、再ログインまで効かない
+    if ! launchctl asuser "$(id -u -- ${username})" sudo --user=${username} -- /bin/sh -c '
+      defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true &&
+      defaults write com.apple.universalaccess HIDScrollZoomModifierMask -int 262144
+    ' 2>/dev/null; then
+      echo >&2 "warning: com.apple.universalaccess を書き込めませんでした。ターミナルに Full Disk Access を付けて再起動してください (tmux 内なら tmux kill-server も必要)"
     fi
 
     # Dock設定を即座に反映
