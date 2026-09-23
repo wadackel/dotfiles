@@ -382,11 +382,13 @@
     CB_PLIST="/private/var/root/Library/Preferences/com.apple.CoreBrightness.plist"
     if [ -f "$CB_PLIST" ]; then
       # ディスプレイレベル: 全ディスプレイの AutoBrightnessEnable を無効化
+      # DisplayPreferences が無い環境 (新規セットアップ直後など) では Print が失敗し、
+      # activate の set -e + pipefail で以降 (home-manager 含む) が無言で中断されるため || true
       /usr/libexec/PlistBuddy -c "Print :DisplayPreferences" "$CB_PLIST" 2>/dev/null | \
         /usr/bin/awk '/^    [A-Za-z0-9-]+ =/{print $1}' | while read -r display_id; do
           /usr/libexec/PlistBuddy -c "Set :DisplayPreferences:''${display_id}:AutoBrightnessEnable false" "$CB_PLIST" 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Add :DisplayPreferences:''${display_id}:AutoBrightnessEnable bool false" "$CB_PLIST" 2>/dev/null || true
-        done
+        done || true
 
       # ユーザーレベル: コンソールユーザーの CBAutoBrightnessEnabled を無効化
       CONSOLE_USER=$(/usr/bin/stat -f%Su /dev/console)
