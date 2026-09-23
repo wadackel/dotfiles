@@ -1,8 +1,9 @@
 { config, lib, ... }:
 
 {
+  # activation の PATH には /usr/bin が無く、rustup-init などが curl を見つけられないため末尾に足す
   home.activation.miseInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    run ${config.programs.mise.package}/bin/mise install --yes 2>&1 || true
+    run env PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin" ${config.programs.mise.package}/bin/mise install --yes 2>&1 || true
   '';
 
   programs.mise = {
