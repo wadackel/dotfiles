@@ -294,6 +294,8 @@
       EnableStandardClickToShowDesktop = true; # 壁紙クリックでデスクトップ表示
       StandardHideDesktopIcons = false; # デスクトップアイコンを常に表示
       HideDesktop = false; # デスクトップを隠さない
+      StandardHideWidgets = true; # デスクトップにウィジェットを表示しない
+      StageManagerHideWidgets = true; # ステージマネージャ使用時もウィジェットを表示しない
       AppWindowGroupingBehavior = false; # ウィンドウを個別に扱う
     };
 
