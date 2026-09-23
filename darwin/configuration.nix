@@ -1,4 +1,5 @@
 {
+  lib,
   pkgs,
   username,
   homeDir,
@@ -18,6 +19,14 @@
 
   # プライマリユーザー設定（Dock など per-user 設定に必要）
   system.primaryUser = username;
+
+  # 常時起動（private profile の Mac mini で AI agent と Tailscale 経由の SSH を使う）
+  power = lib.mkIf (profile == "private") {
+    sleep.computer = "never";
+    restartAfterPowerFailure = true;
+    restartAfterFreeze = true;
+  };
+  services.openssh.enable = lib.mkIf (profile == "private") true; # リモートログイン
 
   nix.settings = {
     experimental-features = "nix-command flakes";
@@ -294,6 +303,9 @@
       Bluetooth = true; # Bluetoothアイコン表示
       Sound = true; # 音量アイコン表示
     };
+
+    # 外出中にアップデートで再起動し、FileVault の解除画面で止まるのを防ぐ
+    SoftwareUpdate.AutomaticallyInstallMacOSUpdates = lib.mkIf (profile == "private") false;
 
     # ウィンドウマネージャ設定
     WindowManager = {
