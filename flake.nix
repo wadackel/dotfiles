@@ -101,7 +101,7 @@
       profiles = {
         private = {
           username = "wadackel";
-          hostname = "wadackels-MacBook-Air";
+          hostname = "wadackels-Mac-mini";
         };
         work = {
           username = "tsuyoshi.wada";

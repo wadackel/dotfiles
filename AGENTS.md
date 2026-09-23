@@ -57,7 +57,7 @@ When asked to add a new program or modify configuration:
 
 The repository supports two machine profiles defined in `flake.nix`:
 
-- **`private`**: Personal machine (wadackel/wadackels-MacBook-Air)
+- **`private`**: Personal machine (wadackel/wadackels-Mac-mini)
 - **`work`**: Work machine (tsuyoshi.wada/tsuyoshiwadas-MacBook-Pro)
 
 Profiles are the single source of truth for username, hostname, and can enable profile-specific behavior via the `profile` parameter.
