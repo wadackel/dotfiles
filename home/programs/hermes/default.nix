@@ -12,27 +12,57 @@ let
   hermesHome = config.services.hermes-agent.hermesHome;
   googleDir = "${homeDir}/.config/hermes-google";
   dailyDir = "${homeDir}/Documents/Main/99_Tracking/Daily";
+  feedsDir = "${homeDir}/.config/hermes-feeds";
+  literatureDir = "${homeDir}/Documents/Main/04_Literature";
+  secretsFile = "${homeDir}/.config/hermes/secrets.env";
+  # The owner's DM with the Hermes bot, where every report and digest goes.
+  dmChannel = "D0C3V6SQABC";
+  webClip = "${../agents/skills/web-clip/scripts}/web-clip.ts";
   appsScript = [
     "script.google.com"
     "script.googleusercontent.com"
   ];
+  deno = "${pkgs.deno}/bin/deno";
   denoRun =
     {
+      # null allows every host: feeds live on arbitrary sites.
       net ? [ ],
       read ? [ ],
       write ? [ ],
+      run ? [ ],
+      env ? [ "HOME" ],
       script,
+      args ? [ ],
     }:
     [
-      "${pkgs.deno}/bin/deno"
+      deno
       "run"
       "--no-prompt"
-      "--allow-env=HOME"
+      "--allow-env=${lib.concatStringsSep "," env}"
     ]
-    ++ lib.optional (net != [ ]) "--allow-net=${lib.concatStringsSep "," net}"
+    ++ lib.optional (net == null) "--allow-net"
+    ++ lib.optional (net != null && net != [ ]) "--allow-net=${lib.concatStringsSep "," net}"
     ++ lib.optional (read != [ ]) "--allow-read=${lib.concatStringsSep "," read}"
     ++ lib.optional (write != [ ]) "--allow-write=${lib.concatStringsSep "," write}"
-    ++ [ "${./scripts}/${script}" ];
+    ++ lib.optional (run != [ ]) "--allow-run=${lib.concatStringsSep "," run}"
+    ++ [ "${./scripts}/${script}" ]
+    ++ args;
+  feedAction = denoRun {
+    net = [ "slack.com" ];
+    read = [
+      feedsDir
+      secretsFile
+    ];
+    write = [ feedsDir ];
+    run = [ deno ];
+    env = [
+      "HOME"
+      "PATH"
+      "HERMES_WEB_CLIP"
+      "HERMES_DENO"
+    ];
+    script = "feed-action.ts";
+  };
   mcpServer = args: {
     command = builtins.head (denoRun args);
     args = builtins.tail (denoRun args);
@@ -121,6 +151,23 @@ in
           // {
             tools.include = [ "set_briefing" ];
           };
+        feeds =
+          mcpServer {
+            net = [ "slack.com" ];
+            read = [
+              feedsDir
+              secretsFile
+            ];
+            write = [ feedsDir ];
+            script = "feeds-mcp.ts";
+            args = [
+              "--channel"
+              dmChannel
+            ];
+          }
+          // {
+            tools.include = [ "post_digest" ];
+          };
       };
 
       # Cron pre-run scripts must resolve inside $HERMES_HOME/scripts, and the
@@ -141,6 +188,70 @@ in
           write = [ dailyDir ];
           script = "prepare-daily.ts";
         };
+        "scripts/collect-feeds.sh" = cronScript {
+          net = null;
+          read = [
+            feedsDir
+            literatureDir
+          ];
+          write = [ feedsDir ];
+          script = "collect-feeds.ts";
+        };
+        "scripts/suggest-feeds.sh" = cronScript {
+          net = null;
+          read = [
+            feedsDir
+            literatureDir
+            secretsFile
+          ];
+          write = [ feedsDir ];
+          script = "suggest-feeds.ts";
+          args = [
+            "--channel"
+            dmChannel
+          ];
+        };
+        "hooks/feed-reactions/HOOK.yaml" = ''
+          name: feed-reactions
+          description: Act on reactions to feed digest messages in the owner's DM
+          events:
+            - reaction:added
+        '';
+        # Runs inside the gateway's event loop, so it only checks the event and
+        # hands the work to a detached process. The child gets a minimal
+        # environment: the gateway's own holds every Hermes secret.
+        "hooks/feed-reactions/handler.py" = ''
+          import os
+          import subprocess
+
+          ACTIONS = {"paperclip", "+1", "-1", "heavy_plus_sign", "mute"}
+          CHANNEL = "${dmChannel}"
+          COMMAND = ${builtins.toJSON feedAction}
+          LOG = os.path.expanduser("~/Library/Logs/hermes-feed-action.log")
+
+
+          def handle(event_type, context):
+              if context.get("channel_id") != CHANNEL or context.get("reaction") not in ACTIONS:
+                  return
+              allowed = {u.strip() for u in os.environ.get("SLACK_ALLOWED_USERS", "").split(",") if u.strip()}
+              if context.get("user_id") not in allowed:
+                  return
+              env = {
+                  "HOME": os.environ["HOME"],
+                  "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                  "HERMES_WEB_CLIP": "${webClip}",
+                  "HERMES_DENO": "${deno}",
+              }
+              with open(LOG, "a") as log:
+                  subprocess.Popen(
+                      COMMAND + [context["reaction"], CHANNEL, context["message_ts"]],
+                      env=env,
+                      stdin=subprocess.DEVNULL,
+                      stdout=log,
+                      stderr=log,
+                      start_new_session=True,
+                  )
+        '';
       };
     };
 
