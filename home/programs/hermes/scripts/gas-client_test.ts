@@ -99,14 +99,65 @@ Deno.test("callBridge retries read actions but not createEvent", async () => {
     }),
   );
   try {
-    assertEquals(await callBridge("listNewMail", {}, [0, 0]), "ok");
+    assertEquals(
+      await callBridge("listNewMail", {}, { retryDelaysMs: [0, 0] }),
+      "ok",
+    );
     assertEquals(posts, 2);
     failFirst = true;
     posts = 0;
     await assertRejects(
-      () => callBridge("createEvent", {}, [0, 0]),
+      () => callBridge("createEvent", {}, { retryDelaysMs: [0, 0] }),
       Error,
       "non-JSON",
+    );
+    assertEquals(posts, 1);
+  } finally {
+    if (prevHome) Deno.env.set("HOME", prevHome);
+    await server.shutdown();
+    await Deno.remove(home, { recursive: true });
+  }
+});
+
+Deno.test("callBridge gives up on a bridge that stops answering", async () => {
+  let posts = 0;
+  const server = Deno.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    onListen: () => {},
+  }, async (req) => {
+    const url = new URL(req.url);
+    if (req.method === "POST") {
+      posts++;
+      return Response.redirect(new URL("/echo", url), 302);
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    return Response.json({ result: "late" });
+  });
+  const home = await Deno.makeTempDir();
+  const prevHome = Deno.env.get("HOME");
+  Deno.env.set("HOME", home);
+  await Deno.mkdir(`${home}/.config/hermes-google`, { recursive: true });
+  await Deno.writeTextFile(
+    `${home}/.config/hermes-google/bridge.json`,
+    JSON.stringify({
+      url: `http://127.0.0.1:${server.addr.port}/exec`,
+      secret: "s",
+    }),
+  );
+  const options = { retryDelaysMs: [0, 0], timeoutMs: 50 };
+  try {
+    await assertRejects(
+      () => callBridge("listHolidays", {}, options),
+      Error,
+      "listHolidays: timed out",
+    );
+    assertEquals(posts, 3);
+    posts = 0;
+    await assertRejects(
+      () => callBridge("createEvent", {}, options),
+      Error,
+      "createEvent: timed out",
     );
     assertEquals(posts, 1);
   } finally {
