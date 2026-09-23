@@ -334,6 +334,7 @@
         {
           windowManagementEnabled = true;
           compactMode = true;
+          interfaceSize = "large";
           "hotkey.togglePalette" = combo cmd 49; # ⌘Space
           "hotkey.command:clipboard-history" = combo (ctrl + cmd) 9; # ⌃⌘V
           "hotkey.windowCommand.left-half" = combo hyper 123; # ←
