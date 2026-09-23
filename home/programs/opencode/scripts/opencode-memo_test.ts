@@ -108,14 +108,14 @@ Deno.test("heuristicSummary: falls back to tool summary when no text at all", ()
   assertEquals(heuristicSummary(out), "glob: 1 を使用");
 });
 
-Deno.test("buildLLMInput: includes user prompts, assistant text, tools", () => {
+Deno.test("buildLLMInput: includes user prompts and assistant text, not tools", () => {
   const out = parseRows(messages, parts);
   const input = buildLLMInput(out);
   assertStringIncludes(input, "[User prompts]");
   assertStringIncludes(input, "opencodeのhooks");
   assertStringIncludes(input, "[First assistant response]");
   assertStringIncludes(input, "[Last assistant response]");
-  assertStringIncludes(input, "glob: 2");
+  assertEquals(input.includes("glob"), false);
 });
 
 Deno.test("countUserMessages: counts non-noise user prompts only", () => {

@@ -3,14 +3,16 @@
 // → ../../agents/memo/memo-shared.ts.
 //
 // Agent-specific concerns (transcript / DB parser, NOISE_PATTERNS,
-// heuristicSummary, buildLLMInput, log path, hook entry) stay in the agent
-// script. Shared concerns (Daily Note upsert, throwaway-session filtering,
-// Claude call, debounce I/O, repo-name resolution, LLM output parsing,
-// Obsidian escape) live here.
+// heuristicSummary, extracting the texts for buildLLMInput, log path, hook
+// entry) stay in the agent script. Shared concerns (Daily Note upsert and entry
+// lines, throwaway-session filtering, LLM input composition, Claude call,
+// debounce I/O, repo-name resolution, LLM output parsing, Obsidian escape) live
+// here.
 
 export interface LLMResult {
   summary: string;
   details: string[];
+  learning?: string;
 }
 
 export interface DebounceState {
@@ -76,6 +78,10 @@ export function escapeObsidianSyntax(text: string): string {
 
 // --- LLM output parser ---
 
+const LEARNING_PATTERN = /^\s*(?:[-・]\s*)?学び\s*[:：]\s*(.*)$/;
+// haiku は「出さない」と指示しても空欄の学び行を書くことがあり、そのまま残すとデイリーに中身のない行が並ぶ。
+const EMPTY_LEARNINGS = new Set(["", "なし", "無し", "特になし", "-", "n/a"]);
+
 export function parseLLMOutput(raw: string): LLMResult | null {
   const lines = raw.trim().split("\n").filter((line) => line.trim());
   if (lines.length === 0) return null;
@@ -84,15 +90,90 @@ export function parseLLMOutput(raw: string): LLMResult | null {
     200,
   );
   if (!summary) return null;
-  const details = lines
-    .slice(1)
+  let learning: string | undefined;
+  const rest: string[] = [];
+  for (const line of lines.slice(1)) {
+    const match = line.replace(/\*\*/g, "").match(LEARNING_PATTERN);
+    if (!match) {
+      rest.push(line);
+      continue;
+    }
+    const value = match[1].trim();
+    const bare = value.replace(/^[（(]|[)）。．.]+$/g, "").toLowerCase();
+    if (!EMPTY_LEARNINGS.has(bare)) learning = value.slice(0, 150);
+  }
+  const details = rest
     .filter((line) => /^\s*[-・]/.test(line))
     .map((line) =>
       line.replace(/^\s*[-・]\s*/, "").replace(/\*\*/g, "").trim().slice(0, 100)
     )
     .filter((line) => line.length > 0)
     .slice(0, 3);
-  return { summary, details };
+  return learning ? { summary, details, learning } : { summary, details };
+}
+
+// --- Daily Note entry lines ---
+
+export interface EntryOrigin {
+  timestamp: string;
+  repoName: string;
+  sessionShort: string;
+}
+
+export function formatEntryLines(
+  result: LLMResult,
+  { timestamp, repoName, sessionShort }: EntryOrigin,
+): string[] {
+  const lines = [
+    `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+      escapeObsidianSyntax(result.summary)
+    }`,
+    ...result.details.map((d) => `    - ${escapeObsidianSyntax(d)}`),
+  ];
+  if (result.learning) {
+    lines.push(`    - 学び: ${escapeObsidianSyntax(result.learning)}`);
+  }
+  return lines;
+}
+
+// --- LLM input ---
+
+// 最後の応答は作業の結論と学びを最も多く含むが、ユーザー発言の後ろに置くと全体の上限で真っ先に切られる。
+// そこで先頭に置き、ユーザー発言には別枠を割り当てる。
+const LAST_RESPONSE_CHARS = 1500;
+const FIRST_RESPONSE_CHARS = 300;
+const PROMPT_CHARS = 200;
+const PROMPTS_BUDGET = 1000;
+const INPUT_CHARS = 3000;
+
+export function composeLLMInput(
+  userTexts: string[],
+  assistantTexts: string[],
+): string {
+  const flat = (text: string) => text.replace(/\s+/g, " ").trim();
+  const parts: string[] = [];
+  if (assistantTexts.length > 0) {
+    parts.push("[Last assistant response]");
+    parts.push(flat(assistantTexts.at(-1)!).slice(0, LAST_RESPONSE_CHARS));
+  }
+  if (assistantTexts.length > 1) {
+    parts.push("\n[First assistant response]");
+    parts.push(flat(assistantTexts[0]).slice(0, FIRST_RESPONSE_CHARS));
+  }
+  const prompts = userTexts.map((t) => `- ${flat(t).slice(0, PROMPT_CHARS)}`);
+  if (prompts.length > 0) {
+    const [first, ...rest] = prompts;
+    const recent: string[] = [];
+    let used = first.length;
+    for (let i = rest.length - 1; i >= 0; i--) {
+      if (used + rest[i].length + 1 > PROMPTS_BUDGET) break;
+      used += rest[i].length + 1;
+      recent.unshift(rest[i]);
+    }
+    parts.push(parts.length > 0 ? "\n[User prompts]" : "[User prompts]");
+    parts.push(first, ...recent);
+  }
+  return parts.join("\n").slice(0, INPUT_CHARS);
 }
 
 // --- Session filtering ---
@@ -224,7 +305,12 @@ export async function callClaude(
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
     "出力フォーマット:\n" +
     "1行目: 40〜80文字の要約（意図と結果を含む）\n" +
-    "2行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n\n" +
+    "2行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n" +
+    "最終行（任意）: 「学び: 」で始まる1行（30〜100文字）。このリポジトリの外でも役立つ知見" +
+    "（不具合の原因、ツールや仕様の制約、理由のある設計判断など）が得られたときだけ書く。" +
+    "該当しなければこの行は書かない。作業内容、ツールの実行回数、" +
+    "「〜が重要」「〜すべき」のような一般論は学びではない。ツール名・設定・挙動など具体的な対象を含めて書く。" +
+    "ただしトークン、パスワード、URL、社内のホスト名、個人名は書かない。\n\n" +
     "補足が不要なほど単純なセッションなら1行目だけでもOK。\n" +
     "出力は要約のみ。説明や前置きは不要です。";
 

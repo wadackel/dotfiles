@@ -1,5 +1,6 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
 import {
+  buildLLMInput,
   countNonNoiseUserMessages,
   countToolUses,
   countUserMessages,
@@ -31,6 +32,25 @@ const assistantEntry = (text: string) => ({
     role: "assistant",
     content: [{ type: "text", text }],
   },
+});
+
+Deno.test("buildLLMInput: leads with the last response and omits tool counts", () => {
+  const toolUse = {
+    type: "assistant",
+    message: {
+      role: "assistant",
+      content: [{ type: "tool_use", name: "Bash" }],
+    },
+  };
+  const input = buildLLMInput([
+    userEntry("この不具合の原因を調査して"),
+    assistantEntry("最初の応答"),
+    toolUse,
+    assistantEntry("最終報告"),
+  ]);
+  assertEquals(input.startsWith("[Last assistant response]\n最終報告"), true);
+  assertStringIncludes(input, "この不具合の原因を調査して");
+  assertEquals(input.includes("Bash"), false);
 });
 
 Deno.test("extractUserTexts: skips isMeta:true entries", () => {

@@ -2,9 +2,11 @@
 
 import {
   callClaude,
+  composeLLMInput,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  formatEntryLines,
   isThrowawaySession,
   nowTimestamp,
   repoNameFor,
@@ -201,35 +203,11 @@ export function heuristicSummary(entries: TranscriptEntry[]): string {
 
 // --- LLM Context Builder ---
 
-function buildLLMInput(entries: TranscriptEntry[]): string {
-  const parts: string[] = [];
-
-  const userTexts = extractNonNoiseUserTexts(entries);
-  if (userTexts.length > 0) {
-    parts.push("[User prompts]");
-    for (const t of userTexts) {
-      parts.push(`- ${t.replace(/\n/g, " ").slice(0, 200)}`);
-    }
-  }
-
-  const assistantTexts = extractAssistantTexts(entries);
-  if (assistantTexts.length > 0) {
-    parts.push("\n[First assistant response]");
-    parts.push(assistantTexts[0].replace(/\n/g, " ").slice(0, 300));
-  }
-
-  if (assistantTexts.length > 1) {
-    parts.push("\n[Last assistant response]");
-    parts.push(assistantTexts.at(-1)!.replace(/\n/g, " ").slice(0, 300));
-  }
-
-  const tools = extractToolSummary(entries);
-  if (tools) {
-    parts.push("\n[Actions taken]");
-    parts.push(tools);
-  }
-
-  return parts.join("\n").slice(0, 3000);
+export function buildLLMInput(entries: TranscriptEntry[]): string {
+  return composeLLMInput(
+    extractNonNoiseUserTexts(entries),
+    extractAssistantTexts(entries),
+  );
 }
 
 // --- Main ---
@@ -353,13 +331,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
-    escapeObsidianSyntax(llmResult.summary)
-  }`;
-  const detailLines = llmResult.details.map((d) =>
-    `    - ${escapeObsidianSyntax(d)}`
-  );
-  const llmLines = [mainLine, ...detailLines];
+  const llmLines = formatEntryLines(llmResult, {
+    timestamp,
+    repoName,
+    sessionShort,
+  });
 
   upsertDailyNote(dailyPath, sessionShort, llmLines);
   await log(`LLM UPDATED: ${llmLines.join(" | ")}`);

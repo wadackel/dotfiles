@@ -9,9 +9,11 @@
 
 import {
   callClaude,
+  composeLLMInput,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  formatEntryLines,
   isThrowawaySession,
   nowTimestamp,
   repoNameFor,
@@ -214,35 +216,10 @@ export function heuristicSummary(parsed: ParseResult): string {
 }
 
 export function buildLLMInput(parsed: ParseResult): string {
-  const parts: string[] = [];
-  const userTexts = parsed.user.filter((t) => !isNoise(t));
-  if (userTexts.length > 0) {
-    parts.push("[User prompts]");
-    for (const t of userTexts) {
-      parts.push(`- ${stripControls(t).replace(/\s+/g, " ").slice(0, 200)}`);
-    }
-  }
-  if (parsed.assistant.length > 0) {
-    parts.push("\n[First assistant response]");
-    parts.push(
-      stripControls(parsed.assistant[0]).replace(/\s+/g, " ").slice(0, 300),
-    );
-  }
-  if (parsed.assistant.length > 1) {
-    parts.push("\n[Last assistant response]");
-    parts.push(
-      stripControls(parsed.assistant.at(-1)!).replace(/\s+/g, " ").slice(
-        0,
-        300,
-      ),
-    );
-  }
-  const tools = formatToolSummary(parsed.toolCounts);
-  if (tools) {
-    parts.push("\n[Actions taken]");
-    parts.push(tools);
-  }
-  return parts.join("\n").slice(0, 3000);
+  return composeLLMInput(
+    parsed.user.filter((t) => !isNoise(t)).map(stripControls),
+    parsed.assistant.map(stripControls),
+  );
 }
 
 export function countUserMessages(parsed: ParseResult): number {
@@ -349,13 +326,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mainLine = `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
-    escapeObsidianSyntax(llmResult.summary)
-  }`;
-  const detailLines = llmResult.details.map((d) =>
-    `    - ${escapeObsidianSyntax(d)}`
-  );
-  const llmLines = [mainLine, ...detailLines];
+  const llmLines = formatEntryLines(llmResult, {
+    timestamp,
+    repoName,
+    sessionShort,
+  });
   upsertDailyNote(dailyPath, sessionShort, llmLines);
   await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
   saveDebounceState(statePath, userCount);

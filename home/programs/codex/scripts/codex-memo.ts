@@ -2,9 +2,11 @@
 
 import {
   callClaude,
+  composeLLMInput,
   dailyNotePath,
   debounceStatePath,
   escapeObsidianSyntax,
+  formatEntryLines,
   isThrowawaySession,
   nowTimestamp,
   repoNameFor,
@@ -212,36 +214,10 @@ export function heuristicSummary(entries: HookLogEntry[]): string {
 }
 
 export function buildLLMInput(entries: HookLogEntry[]): string {
-  const parts: string[] = [];
-  const userTexts = extractUserTexts(entries).filter((t) => !isNoise(t));
-  if (userTexts.length > 0) {
-    parts.push("[User prompts]");
-    for (const t of userTexts) {
-      parts.push(`- ${stripControls(t).replace(/\s+/g, " ").slice(0, 200)}`);
-    }
-  }
-
-  const assistantTexts = extractAssistantTexts(entries);
-  if (assistantTexts.length > 0) {
-    parts.push("\n[First assistant response]");
-    parts.push(
-      stripControls(assistantTexts[0]).replace(/\s+/g, " ").slice(0, 300),
-    );
-  }
-  if (assistantTexts.length > 1) {
-    parts.push("\n[Last assistant response]");
-    parts.push(
-      stripControls(assistantTexts.at(-1)!).replace(/\s+/g, " ").slice(0, 300),
-    );
-  }
-
-  const tools = extractToolSummary(entries);
-  if (tools) {
-    parts.push("\n[Actions taken]");
-    parts.push(tools);
-  }
-
-  return parts.join("\n").slice(0, 3000);
+  return composeLLMInput(
+    extractUserTexts(entries).filter((t) => !isNoise(t)).map(stripControls),
+    extractAssistantTexts(entries).map(stripControls),
+  );
 }
 
 // Deno は bare な --allow-run エントリを PATH 経由で解決するため、Deno.execPath() を
@@ -427,14 +403,7 @@ async function mainWorker(workerInput: HookData): Promise<void> {
     return;
   }
 
-  const mainLine =
-    `- ${ctx.timestamp} - \`(${ctx.repoName}/${ctx.sessionShort})\` ${
-      escapeObsidianSyntax(llmResult.summary)
-    }`;
-  const detailLines = llmResult.details.map((detail) =>
-    `    - ${escapeObsidianSyntax(detail)}`
-  );
-  const llmLines = [mainLine, ...detailLines];
+  const llmLines = formatEntryLines(llmResult, ctx);
   upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
   await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
   saveDebounceState(

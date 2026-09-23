@@ -4,8 +4,10 @@ import {
   assertThrows,
 } from "jsr:@std/assert@^1";
 import {
+  composeLLMInput,
   debounceStatePath,
   escapeObsidianSyntax,
+  formatEntryLines,
   isThrowawaySession,
   memoRunDir,
   parseLLMOutput,
@@ -76,6 +78,110 @@ Deno.test("parseLLMOutput: trims markdown heading and bold markers", () => {
   const out = parseLLMOutput("## **見出し**\n- **太字** body");
   assertEquals(out?.summary, "見出し");
   assertEquals(out?.details, ["太字 body"]);
+});
+
+Deno.test("parseLLMOutput: returns the learning line apart from details", () => {
+  const out = parseLLMOutput(
+    "要約\n- one\n- two\n- three\n学び: bot のラベル付与で本命 run がキャンセルされる",
+  );
+  assertEquals(out?.details, ["one", "two", "three"]);
+  assertEquals(out?.learning, "bot のラベル付与で本命 run がキャンセルされる");
+});
+
+Deno.test("parseLLMOutput: recognizes learning prefixed, bolded, or full-width", () => {
+  for (
+    const line of [
+      "- 学び: X",
+      "・学び: X",
+      "学び：X",
+      "**学び**: X",
+      "- **学び：** X",
+    ]
+  ) {
+    const out = parseLLMOutput(`要約\n- detail\n${line}`);
+    assertEquals(out?.learning, "X", line);
+    assertEquals(out?.details, ["detail"], line);
+  }
+});
+
+Deno.test("parseLLMOutput: treats an empty or none learning as absent", () => {
+  for (
+    const value of [
+      "",
+      "なし",
+      "なし。",
+      "（なし）",
+      "特になし。",
+      "無し",
+      "-",
+      "N/A",
+    ]
+  ) {
+    const out = parseLLMOutput(`要約\n学び: ${value}`);
+    assertEquals(out, { summary: "要約", details: [] }, value);
+  }
+});
+
+Deno.test("parseLLMOutput: caps learning to 150 chars", () => {
+  const out = parseLLMOutput(`要約\n学び: ${"あ".repeat(300)}`);
+  assertEquals(out?.learning?.length, 150);
+});
+
+Deno.test("formatEntryLines: writes the learning as the last detail line", () => {
+  assertEquals(
+    formatEntryLines(
+      { summary: "要約 #tag", details: ["詳細"], learning: "学んだ #rule" },
+      { timestamp: "10:00", repoName: "repo", sessionShort: "abcd1234" },
+    ),
+    [
+      "- 10:00 - `(repo/abcd1234)` 要約 ＃tag",
+      "    - 詳細",
+      "    - 学び: 学んだ ＃rule",
+    ],
+  );
+});
+
+Deno.test("formatEntryLines: omits the learning line when there is none", () => {
+  assertEquals(
+    formatEntryLines({ summary: "要約", details: [] }, {
+      timestamp: "10:00",
+      repoName: "r",
+      sessionShort: "s",
+    }),
+    ["- 10:00 - `(r/s)` 要約"],
+  );
+});
+
+Deno.test("composeLLMInput: drops tool counts and keeps the last response under many prompts", () => {
+  const prompts = Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(250, "p"));
+  const last = "L".repeat(2000);
+  const input = composeLLMInput(prompts, ["F".repeat(500), last]);
+  assertEquals(input.includes("[Actions taken]"), false);
+  assertStringIncludes(input, `[Last assistant response]\n${"L".repeat(1500)}`);
+  assertEquals(input.includes("L".repeat(1501)), false);
+  assertStringIncludes(input, `- 0${"p".repeat(199)}`);
+  assertStringIncludes(input, `- 19${"p".repeat(198)}`);
+  assertEquals(input.includes(`- 1${"p".repeat(199)}`), false);
+  assertEquals(
+    input.indexOf(`- 18${"p".repeat(198)}`) <
+      input.indexOf(`- 19${"p".repeat(198)}`),
+    true,
+  );
+  assertEquals(input.length <= 3000, true);
+});
+
+Deno.test("composeLLMInput: handles empty inputs and prompts alone", () => {
+  assertEquals(composeLLMInput([], []), "");
+  assertEquals(
+    composeLLMInput(["この件を調べて"], []),
+    "[User prompts]\n- この件を調べて",
+  );
+});
+
+Deno.test("composeLLMInput: treats a lone response as the last one", () => {
+  const input = composeLLMInput(["q"], ["A".repeat(1000)]);
+  assertStringIncludes(input, `[Last assistant response]\n${"A".repeat(1000)}`);
+  assertEquals(input.includes("[First assistant response]"), false);
 });
 
 Deno.test("parseLLMOutput: caps details to 3 items", () => {

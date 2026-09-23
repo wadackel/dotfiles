@@ -124,13 +124,13 @@ Deno.test("heuristicSummary: falls back to first assistant when only Stop presen
   assertEquals(heuristicSummary(stopOnly), "first assistant reply");
 });
 
-Deno.test("buildLLMInput: includes compact user prompts, assistant text, and tools", () => {
+Deno.test("buildLLMInput: includes compact user prompts and assistant text, not tools", () => {
   const input = buildLLMInput(entries);
   assertStringIncludes(input, "[User prompts]");
   assertStringIncludes(input, "codexのhooksを改善");
   assertStringIncludes(input, "[First assistant response]");
   assertStringIncludes(input, "[Last assistant response]");
-  assertStringIncludes(input, "exec_command: 2");
+  assertEquals(input.includes("exec_command"), false);
 });
 
 Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
