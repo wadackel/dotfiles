@@ -33,10 +33,13 @@ book_targets   = [p for p in glob("$VAULT/03_Books/*.md")
 | `/llm-wiki ingest` | Triage `00_Inbox/`, then compile every uncompiled article in `04_Literature/`. Books are not included |
 | `/llm-wiki ingest <genre or tag>` | Compile only the articles carrying that `clip/*` tag. **The backfill mode** |
 | `/llm-wiki ingest books` | Compile uncompiled books in `03_Books/`, one book per batch ([books.md](books.md)) |
+| `/llm-wiki ingest daily` | Reflect the ticked candidates in the daily-memo candidate list ([daily.md](daily.md)) |
 | `/llm-wiki ingest <path>` | Compile that one file. A path under `03_Books/` must be an index note |
 | `/llm-wiki ingest <URL>` | Fetch, save to `04_Literature/`, then compile |
 
 **`books` is a reserved word in this slot and beats any tag or genre of the same name.** The argument otherwise takes a free-form genre or tag, and the vault already has a tier-1 MOC named `Books` — without this rule, `ingest Books` is ambiguous between "compile the `clip/Books` articles" and "start the book backfill", and the wrong reading starts a batch nobody asked for. To target that MOC's articles, name the tag explicitly (`ingest clip/Books`).
+
+**`daily` is reserved the same way.** The vault tags every daily note `#daily`, so without the rule `ingest daily` could read as "compile what carries that tag" — which would sweep hundreds of daily notes into `04_Literature/`.
 
 A no-argument run over an uncompiled backlog of thousands is not something to start without saying so. When the scan finds more than 30 targets, report the count and the genre breakdown and ask which genre to take first rather than proceeding.
 

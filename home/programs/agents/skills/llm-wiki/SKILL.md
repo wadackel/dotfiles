@@ -66,6 +66,7 @@ Read the matching reference under `references/` and follow it.
 |---|---|---|
 | `init <tag>` | Create the tier-2 MOC for a `clip/*` tag | [references/init.md](references/init.md) |
 | `ingest [path\|URL\|tag\|books]` | Compile sources into concept notes (no argument: every uncompiled article; `books`: `03_Books/`) | [references/ingest.md](references/ingest.md) |
+| `ingest daily` | Reflect the daily-memo candidates the user ticked, then move decided ones to the yearly record | [references/daily.md](references/daily.md) |
 | `save [title]` | Capture the current conversation as a source, then compile it | [references/save.md](references/save.md) |
 | `recompile <path>` | Re-process an already-compiled source | [references/recompile.md](references/recompile.md) |
 | `query <question>` | Search the vault and answer from it | [references/query.md](references/query.md) |

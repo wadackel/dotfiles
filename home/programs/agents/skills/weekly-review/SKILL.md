@@ -185,7 +185,7 @@ A precondition for writing, not a review. Do not reach Step 7 until this passes.
 3. On `FAIL`, rewrite the offending subsection and repeat from 1. Compress it — reaching the limit by rewording the same content back to the same length is not a fix. Dropping bullet markers, switching to prose, or nesting under a deeper heading does not compress anything: every body line counts either way
 4. On `ORPHAN` above 0, a body line landed outside `### 0.` … `### 3.`. Move it into the subsection it belongs to
 5. On `RESULT:UNPARSEABLE`, the note structure itself is broken — `## 🦄 Notes` is missing, or one of the four `### 0.` … `### 3.` headings is absent or malformed. Restore them and repeat from 1. Never continue to Step 7 while this persists
-6. After two failed attempts, **stop**. Do not write to the vault. Report the checker output and say what is blocking further compression
+6. After two failed attempts, **stop**. Do not write the weekly note. Report the checker output and say what is blocking further compression, then continue with Step 8 — the harvest is a separate write and does not depend on the budget
 
 The file that passed is the artifact. Step 7 writes **that exact content** — if you touch Notes again after the check, the check no longer covers what you are writing, so come back here and re-run it.
 
@@ -212,7 +212,15 @@ Use the **Write tool** to write directly to the vault file path: `~/Documents/Ma
 - **`## History`**: Step 5 result (fixed or preserved)
 - **`## Reading`**: Step 5 result (fixed or preserved)
 
-### Step 8: Open in Obsidian
+### Step 8: Harvest Daily-Memo Candidates
+
+Collect reusable knowledge from the daily memos into the candidate list the user judges later. The procedure, criteria, source keys, and list format live in `~/.claude/skills/llm-wiki/references/daily.md` — read it and follow its "Harvest" section. It is kept there because `/llm-wiki ingest daily` reads the same rules; do not restate them here.
+
+- Input: the seven daily notes loaded in Step 2, plus the previous week's Saturday and Sunday (Monday minus 2 and minus 1 days, via `obsidian read`; skip missing days silently). A run on Friday misses the weekend; the next week's run picks it up
+- Output: new candidates added at the top of `## 候補` in `~/Documents/Main/98_Maintenance/daily-mining/デイリー候補一覧.md` with the Edit tool. Write nothing else, and never write to a daily note
+- Report one line: the number of new candidates, and the number already ticked and waiting for `/llm-wiki ingest daily`
+
+### Step 9: Open in Obsidian
 
 Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated weekly note.
 
