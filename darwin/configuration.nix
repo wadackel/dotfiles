@@ -235,6 +235,12 @@
       show-recents = false;
       mineffect = "scale";
       minimize-to-application = true;
+      persistent-apps = [
+        "/Applications/Google Chrome.app"
+        "/Applications/WezTerm.app"
+        "/Applications/Obsidian.app"
+        "/System/Applications/System Settings.app"
+      ];
 
       # 拡大・表示設定
       launchanim = true; # アプリ起動時のアニメーション
