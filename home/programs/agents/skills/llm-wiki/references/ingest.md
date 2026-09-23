@@ -47,7 +47,7 @@ A no-argument run over an uncompiled backlog of thousands is not something to st
 
 ### A-1. Interpret the input
 
-- **Path under `04_Literature/`** — genre comes from the `clip/*` tag. Straight to Phase B. Use whatever `clip/*` it carries as is, whether the user added it or the Web Clip plugin did at clip time; do not re-judge it. An article with **no** `clip/*` is one the plugin could not tag (about a quarter of new clips): decide its genre by A-2, add the tags to its frontmatter, then go to Phase B. Add only `clip/*` entries — every other tag, and the order of the existing ones, stays as found.
+- **Path under `04_Literature/`** — genre comes from the `clip/*` tag. Straight to Phase B. Use whatever `clip/*` it carries as is, whether the user added it or the Web Clip plugin did at clip time; do not re-judge it. An article with **no** `clip/*` is one the plugin could not tag (the plugin adds its top genre even below the threshold when it clears a lower floor, so this is under one in ten new clips): decide its genre by A-2, add the tags to its frontmatter, then go to Phase B. Add only `clip/*` entries — every other tag, and the order of the existing ones, stays as found.
 - **Path under `03_Books/`** — must resolve to an index note; a chapter note is not a target. Genre is inferred rather than tagged, and one book may carry up to three. Straight to Phase B, following [books.md](books.md).
 - **Path under `00_Inbox/`** — genre unknown. Go to A-2.
 - **Path elsewhere** — `Read` it, decide the genre (A-2), write it into `04_Literature/<slug>.md`, leave the original alone.
@@ -66,7 +66,7 @@ A no-argument run over an uncompiled backlog of thousands is not something to st
 | Medium | A genre fits only in part | Include it, and list it for review |
 | None | No definition fits | **No `clip/*` tag at all.** Do not create a tag |
 
-A new genre is a human decision, never made mid-ingest: it needs roughly 20 articles' worth of subject and a definition added to `ノートの構造整理` first. List the genre-less articles in the completion report, grouped by apparent subject, so a recurring subject can be proposed as a genre later.
+A new genre is a human decision, never made mid-ingest: it needs roughly 20 articles' worth of subject and a definition added to `ノートの構造整理` first. List the genre-less articles in the completion report, grouped by apparent subject, so a recurring subject can be proposed as a genre later. Across batches, `/weekly-review` keeps the same grouping in `98_Maintenance/genre-mining/ジャンル候補一覧.md` ([genre-candidates.md](genre-candidates.md)).
 
 Do not ask the user per file — a misfiling is fixable afterwards by editing the tag. Record every decision with its confidence and a one-line rationale, and put the medium and none ones in the completion report's review section so they can be checked.
 

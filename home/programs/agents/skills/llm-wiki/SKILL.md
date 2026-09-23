@@ -91,6 +91,7 @@ These checks are **not** a reviewer's job. Each one is here because a review cau
 - Everything specific to books in `03_Books/`: [references/books.md](references/books.md)
 - Create / update / split decisions and save-or-not judgment: [references/decision-rules.md](references/decision-rules.md)
 - Proposal isolation, review, and apply semantics: [references/proposals.md](references/proposals.md)
+- The list of genre-less articles bundled by subject, for deciding new genres: [references/genre-candidates.md](references/genre-candidates.md)
 
 `init` / `ingest` / `save` / `recompile` / `query` / `curiosity` end by appending to `98_Maintenance/logs/<MOC> 操作ログ.md`. `lint` does not — its output is the proposal files, and its findings reach the log when a proposal is applied.
 

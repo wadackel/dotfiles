@@ -185,7 +185,7 @@ A precondition for writing, not a review. Do not reach Step 7 until this passes.
 3. On `FAIL`, rewrite the offending subsection and repeat from 1. Compress it — reaching the limit by rewording the same content back to the same length is not a fix. Dropping bullet markers, switching to prose, or nesting under a deeper heading does not compress anything: every body line counts either way
 4. On `ORPHAN` above 0, a body line landed outside `### 0.` … `### 3.`. Move it into the subsection it belongs to
 5. On `RESULT:UNPARSEABLE`, the note structure itself is broken — `## 🦄 Notes` is missing, or one of the four `### 0.` … `### 3.` headings is absent or malformed. Restore them and repeat from 1. Never continue to Step 7 while this persists
-6. After two failed attempts, **stop**. Do not write the weekly note. Report the checker output and say what is blocking further compression, then continue with Step 8 — the harvest is a separate write and does not depend on the budget
+6. After two failed attempts, **stop**. Do not write the weekly note. Report the checker output and say what is blocking further compression, then continue with Steps 8 and 9 — the harvests are separate writes and do not depend on the budget
 
 The file that passed is the artifact. Step 7 writes **that exact content** — if you touch Notes again after the check, the check no longer covers what you are writing, so come back here and re-run it.
 
@@ -220,7 +220,15 @@ Collect reusable knowledge from the daily memos into the candidate list the user
 - Output: new candidates added at the top of `## 候補` in `~/Documents/Main/98_Maintenance/daily-mining/デイリー候補一覧.md` with the Edit tool. Write nothing else, and never write to a daily note
 - Report one line: the number of new candidates, and the number already ticked and waiting for `/llm-wiki ingest daily`
 
-### Step 9: Open in Obsidian
+### Step 9: Harvest Genre Candidates
+
+Rebuild the list of genre-less articles bundled by subject, which the user reads when deciding whether a new genre is due. The input, bundling, and list format live in `~/.claude/skills/llm-wiki/references/genre-candidates.md` — read it and follow its "Harvest" section. It is kept there because `ingest` points at the same list; do not restate it here.
+
+- Input: the vault as it is now, not the week's daily notes
+- Output: `~/Documents/Main/98_Maintenance/genre-mining/ジャンル候補一覧.md`, overwritten with the Write tool. Write nothing else
+- Report one line: the number of bundles, the size of the largest, and the number of articles still waiting for `ingest`
+
+### Step 10: Open in Obsidian
 
 Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated weekly note.
 
