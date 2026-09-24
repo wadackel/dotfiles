@@ -4,9 +4,10 @@
 //
 // The URL is public (ANYONE_ANONYMOUS), so every request must carry the shared
 // secret in its body; the query string is avoided because URLs end up in logs.
-// No action can send, change or delete mail, or touch existing events. The
-// built-in GmailApp and CalendarApp are avoided because they demand full mail
-// and calendar scopes; the advanced services honour the narrow scopes in
+// No action can send, change or delete mail, or change existing events;
+// events are only listed, stripped of descriptions and guests. The built-in
+// GmailApp and CalendarApp are avoided because they demand full mail and
+// calendar scopes; the advanced services honour the narrow scopes in
 // appsscript.json.
 
 var MAX_MESSAGES = 20;
@@ -27,6 +28,7 @@ function doPost(e) {
     if (req.action === "listNewMail") return reply_({ result: listNewMail_(req.after) });
     if (req.action === "createEvent") return reply_({ result: createEvent_(req.event) });
     if (req.action === "listHolidays") return reply_({ result: listHolidays_(req.from, req.to) });
+    if (req.action === "listEvents") return reply_({ result: listEvents_(req.from, req.to) });
     return reply_({ error: "unknown action" });
   } catch (err) {
     return reply_({ error: String(err) });
@@ -73,20 +75,60 @@ function createEvent_(event) {
 }
 
 var HOLIDAY_CALENDAR = "ja.japanese#holiday@group.v.calendar.google.com";
+var HERMES_TRAIL = "Created by Hermes from Gmail message";
 
-// Dates are YYYY-MM-DD; `to` is exclusive. Returns the holiday dates only.
-function listHolidays_(from, to) {
+// Dates are YYYY-MM-DD; `to` is exclusive.
+function dayRange_(from, to) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     throw new Error("from and to must be YYYY-MM-DD");
   }
+  return { timeMin: from + "T00:00:00+09:00", timeMax: to + "T00:00:00+09:00" };
+}
+
+// Returns the holiday dates only.
+function listHolidays_(from, to) {
+  var range = dayRange_(from, to);
   var res = Calendar.Events.list(HOLIDAY_CALENDAR, {
-    timeMin: from + "T00:00:00+09:00",
-    timeMax: to + "T00:00:00+09:00",
+    timeMin: range.timeMin,
+    timeMax: range.timeMax,
     singleEvents: true,
   });
   return (res.items || []).map(function (e) {
     return e.start.date;
   });
+}
+
+// Anyone can put an invitation on the calendar, so the description and guests
+// never leave Google; only the flags the host needs to decide what to show do.
+function listEvents_(from, to) {
+  var range = dayRange_(from, to);
+  var res = Calendar.Events.list("primary", {
+    timeMin: range.timeMin,
+    timeMax: range.timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    timeZone: "Asia/Tokyo",
+    eventTypes: ["default", "fromGmail"],
+  });
+  return (res.items || []).map(function (e) {
+    var me = (e.attendees || []).filter(function (a) {
+      return a.self;
+    })[0];
+    return {
+      summary: e.summary || "",
+      location: e.location || "",
+      start: listTime_(e.start),
+      end: listTime_(e.end),
+      organizerSelf: !!(e.organizer && e.organizer.self),
+      selfResponse: me ? me.responseStatus : null,
+      fromGmail: e.eventType === "fromGmail",
+      hermesTrail: typeof e.description === "string" && e.description.indexOf(HERMES_TRAIL) !== -1,
+    };
+  });
+}
+
+function listTime_(t) {
+  return t.date ? { date: t.date } : { dateTime: t.dateTime };
 }
 
 function pickTime_(t) {

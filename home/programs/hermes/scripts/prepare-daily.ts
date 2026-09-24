@@ -17,6 +17,7 @@ import {
   getSection,
   HEADINGS,
   isWeekend,
+  readNote,
   renderNote,
   staleTodos,
   tokyoDate,
@@ -27,15 +28,6 @@ const LOOKBACK_DAYS = 30;
 const HISTORY_WORKDAYS = 10;
 const STALE_DAYS = 3;
 const MEMO_LIMIT = 3000;
-
-async function readNote(date: string): Promise<string | undefined> {
-  try {
-    return await Deno.readTextFile(`${dailyDir()}/${date}.md`);
-  } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return undefined;
-    throw e;
-  }
-}
 
 function clip(text: string, limit: number): string {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;

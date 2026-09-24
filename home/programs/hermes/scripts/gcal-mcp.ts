@@ -3,7 +3,8 @@
 //
 // The mail job reads untrusted text, so this server deliberately offers no
 // listing, editing or deleting. A prompt-injected model can at worst add a
-// bogus event that points back to the mail it came from.
+// bogus event that points back to the mail it came from. That title is later
+// read by Slack sessions through agenda-mcp.ts, marked as mail-derived.
 
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";

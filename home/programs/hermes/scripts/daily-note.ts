@@ -196,6 +196,15 @@ export function dailyDir(): string {
   return `${home}/Documents/Main/99_Tracking/Daily`;
 }
 
+export async function readNote(date: string): Promise<string | undefined> {
+  try {
+    return await Deno.readTextFile(`${dailyDir()}/${date}.md`);
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return undefined;
+    throw e;
+  }
+}
+
 // Obsidian ignores dot-files, so a half-written note is never indexed or
 // picked up by Templater's on-create trigger; the rename makes it appear whole.
 export async function writeNoteAtomically(

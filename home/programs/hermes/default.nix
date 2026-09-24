@@ -23,6 +23,10 @@ let
     "script.google.com"
     "script.googleusercontent.com"
   ];
+  # Both platform_toolsets.slack and mcpServers use this name. Hermes hands
+  # Slack every server when none of the listed names is defined, so a rename
+  # on one side only would silently expose gcal's create_event.
+  slackMcpServer = "agenda";
   deno = "${pkgs.deno}/bin/deno";
   denoRun =
     {
@@ -175,14 +179,15 @@ in
 
         platform_toolsets = {
           # Listing no MCP server would hand every server, gcal included, to
-          # Slack sessions; `no_mcp` keeps calendar writes cron-only.
+          # Slack sessions; naming one makes the list an allowlist, so Slack
+          # reads the calendar through agenda and calendar writes stay cron-only.
           slack = [
             "web"
             "terminal"
             "file"
             "todo"
             "memory"
-            "no_mcp"
+            slackMcpServer
           ];
           cron = [ "gcal" ];
         };
@@ -197,6 +202,21 @@ in
           }
           // {
             tools.include = [ "create_event" ];
+          };
+        ${slackMcpServer} =
+          mcpServer {
+            net = appsScript;
+            read = [
+              googleDir
+              dailyDir
+            ];
+            script = "agenda-mcp.ts";
+          }
+          // {
+            tools.include = [
+              "list_events"
+              "read_todos"
+            ];
           };
         daily =
           mcpServer {

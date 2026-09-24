@@ -199,6 +199,9 @@ The Hermes module (`home/programs/hermes/default.nix`) runs its Deno scripts fro
 | A cron pre-run script or `feed-action.ts` | The next run; each run spawns a new process |
 | An MCP server script (`*-mcp.ts` and what it imports) | `/reload-mcp` in the Slack DM, or restarting the gateway. The gateway connects MCP servers once and keeps them, and cron jobs reuse those connections. `/reload-mcp` asks Once / Always / Cancel; Always stores `approvals.mcp_reload_confirm: false` |
 | `settings`, `mcpServers`, `hermesHomeFiles`, or anything else in the Nix module | `sudo darwin-rebuild switch --flake .#private`, then restart the gateway |
+| The Apps Script bridge (`home/programs/hermes/gas/`) | From `~/.config/hermes-google/clasp`, `clasp push` then `clasp redeploy <deploymentId> -d <what changed>`; the deployment ID is the path segment of the URL in `~/.config/hermes-google/bridge.json`. The clasp project's `rootDir` is the main checkout's `gas/`, so a worktree's edits are never pushed. `clasp push` replaces the whole remote project: `clasp pull -P` into a temporary `rootDir` first and diff (the pulled script arrives as `Code.js`) |
+
+Slack sessions get exactly one MCP server, `agenda` (`scripts/agenda-mcp.ts`): it lists events on the primary calendar and reads the To-Do of the latest daily note, and writes nothing. Naming it in `platform_toolsets.slack` makes the list an allowlist, which keeps `gcal`'s `create_event` cron-only; listing no server would hand Slack every one of them.
 
 Restart the gateway with `launchctl kickstart -k gui/$(id -u)/org.nix-community.home.hermes-agent`. `hermes gateway restart` looks for its own launchd label (`ai.hermes.gateway`), not the one home-manager installs, and can fall back to starting a second gateway in the foreground. After rolling back a generation, restart the gateway too: the running MCP servers keep the scripts they started with.
 

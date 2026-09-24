@@ -1,5 +1,5 @@
 // Client for the Apps Script bridge in ../gas/Code.gs, shared by the Hermes
-// cron scripts and the Calendar MCP server.
+// cron scripts and the gcal and agenda MCP servers.
 //
 // bridge.json lives outside HERMES_HOME on purpose: Hermes mounts parts of
 // its home into the Docker terminal, and colima only exposes HERMES_HOME to
@@ -13,7 +13,7 @@ export function configDir(): string {
   return `${home}/.config/hermes-google`;
 }
 
-type Action = "listNewMail" | "createEvent" | "listHolidays";
+type Action = "listNewMail" | "createEvent" | "listHolidays" | "listEvents";
 
 // Apps Script now and then answers with a Google error page (HTTP 404, or an
 // HTML page with status 200) and succeeds a moment later. Only read actions
@@ -24,7 +24,11 @@ const RETRY_DELAYS_MS = [2_000, 5_000];
 // the daily-note pre-run script until Hermes killed it an hour later. A call
 // normally takes about a second.
 const TIMEOUT_MS = 30_000;
-const READ_ONLY: ReadonlySet<Action> = new Set(["listNewMail", "listHolidays"]);
+const READ_ONLY: ReadonlySet<Action> = new Set([
+  "listNewMail",
+  "listHolidays",
+  "listEvents",
+]);
 
 async function callOnce(
   bridge: Bridge,
