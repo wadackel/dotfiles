@@ -1,7 +1,6 @@
 import {
   assert,
   assertEquals,
-  assertInstanceOf,
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert@1";
@@ -140,7 +139,6 @@ Deno.test("callBridge marks an error the bridge itself reported", async () => {
         BridgeError,
         "createEvent: Exception: invalid time",
       );
-      assertInstanceOf(err, BridgeError);
       assertEquals(err.reported, true);
     },
   );

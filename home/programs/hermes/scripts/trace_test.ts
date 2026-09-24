@@ -34,6 +34,23 @@ Deno.test("trace appends one stamped line per call, whitespace collapsed", async
   });
 });
 
+Deno.test("trace drops URL queries and control characters", async () => {
+  await withHome(async (_home, log) => {
+    trace(
+      "fetch failed for https://script.googleusercontent.com/macros/echo?user_content_key=SECRETKEY&lib=x (reset) \x1b[2K\x1b[1Afake",
+    );
+    const text = await Deno.readTextFile(log);
+    assert(!text.includes("SECRETKEY"), text);
+    assert(!text.includes("\x1b"), text);
+    assert(
+      text.includes(
+        "fetch failed for https://script.googleusercontent.com/macros/echo (reset)",
+      ),
+      text,
+    );
+  });
+});
+
 Deno.test("trace never throws when the log cannot be written", async () => {
   await withHome(async (home) => {
     trace("dropped");
@@ -79,7 +96,7 @@ Deno.test("startTrace logs start and the exit code of the script", async () => {
         JSON.stringify(new URL("./trace.ts", import.meta.url).href)
       };\nstartTrace();\nDeno.exit(3);\n`,
     );
-    const { code } = await new Deno.Command(Deno.execPath(), {
+    const { code, stderr } = await new Deno.Command(Deno.execPath(), {
       args: [
         "run",
         "--no-prompt",
@@ -90,12 +107,33 @@ Deno.test("startTrace logs start and the exit code of the script", async () => {
       ],
       env: { HOME: home },
       stdout: "null",
-      stderr: "null",
+      stderr: "piped",
     }).output();
-    assertEquals(code, 3);
+    assertEquals(code, 3, new TextDecoder().decode(stderr));
     const lines = (await Deno.readTextFile(log)).trim().split("\n");
     assertEquals(lines.length, 2);
     assertMatch(lines[0], / child\[\d+\] start$/);
     assertMatch(lines[1], / child\[\d+\] exit 3 after \d+ms$/);
+  });
+});
+
+Deno.test("tracing without any log permission leaves the script running", async () => {
+  await withHome(async (home, log) => {
+    const child = `${home}/child.ts`;
+    await Deno.writeTextFile(
+      child,
+      `import { startTrace, trace } from ${
+        JSON.stringify(new URL("./trace.ts", import.meta.url).href)
+      };\nstartTrace();\ntrace("x");\nconsole.log("still running");\n`,
+    );
+    const { code, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
+      args: ["run", "--no-prompt", child],
+      env: { HOME: home },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    assertEquals(code, 0, new TextDecoder().decode(stderr));
+    assertEquals(new TextDecoder().decode(stdout), "still running\n");
+    assertEquals(await Deno.stat(log).then(() => true, () => false), false);
   });
 });

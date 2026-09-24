@@ -123,6 +123,7 @@ export async function createEventChecked(
     } catch {
       throw e;
     }
+    if (!Array.isArray(events)) throw e;
     const found = events.some((l) =>
       l.summary === event.summary && l.organizerSelf && l.hermesTrail &&
       sameStart(l.start, event.start)
