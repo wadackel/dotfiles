@@ -192,7 +192,7 @@ Command to hot-reload after editing: `TMUX="" tmux source-file ~/.config/tmux/tm
 
 ### Applying Hermes changes
 
-The Hermes module (`home/programs/hermes/default.nix`) runs its Deno scripts from `~/dotfiles` through `dotfiles.pathHere`, not from the Nix store, so whatever is on disk there — another branch, a stash, a rebase in progress, a half-written file — is what the next run executes. Deno does not type-check at run time, so a broken script shows up only in `~/Library/Logs/hermes-agent.err.log` or `~/Library/Logs/hermes-feed-action.log`. Do longer Hermes work in a `.claude/worktrees/` worktree and run `deno check` before bringing it back.
+The Hermes module (`home/programs/hermes/default.nix`) runs its Deno scripts from `~/dotfiles` through `dotfiles.pathHere`, not from the Nix store, so whatever is on disk there — another branch, a stash, a rebase in progress, a half-written file — is what the next run executes. Deno does not type-check at run time, so a broken script shows up only in `~/Library/Logs/hermes-agent.err.log` or `~/Library/Logs/hermes-feed-action.log`. The cron pre-run scripts and the `gcal` / `agenda` MCP servers also append a `start` line, an `exit` line, and every failed Apps Script bridge call to `~/Library/Logs/hermes-scripts.log` (`scripts/trace.ts`), because Hermes discards a pre-run script's stderr unless it exits non-zero. A run with no `start` line stalled before the script's own code, while Deno was loading modules; a `start` with no `exit` was killed, crashed, or is still running. Do longer Hermes work in a `.claude/worktrees/` worktree and run `deno check` before bringing it back.
 
 | Change | How it takes effect |
 |---|---|

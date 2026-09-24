@@ -6,6 +6,7 @@
 // whole inbox backlog to the model.
 
 import { callBridge, configDir } from "./gas-client.ts";
+import { startTrace } from "./trace.ts";
 
 const BODY_LIMIT = 2000;
 const SEEN_LIMIT = 500;
@@ -174,6 +175,7 @@ async function fetchNewMails(state: MailState): Promise<Mail[]> {
 }
 
 if (import.meta.main) {
+  startTrace();
   const state = await readState();
   if (!state) {
     // Later queries look back OVERLAP_SECONDS, so mail already sitting in that

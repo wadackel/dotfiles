@@ -24,6 +24,9 @@ import {
   writeJson,
 } from "./feed-store.ts";
 import { tokyoDate } from "./daily-note.ts";
+import { startTrace, trace } from "./trace.ts";
+
+startTrace();
 
 const FIRST_RUN_WINDOW_MS = 24 * 3600_000;
 const FEED_CONCURRENCY = 8;
@@ -32,11 +35,14 @@ const today = tokyoDate(new Date());
 const seen = await readJson<Seen>("seen.json", { ids: [] });
 const since = seen.lastRun ?? Date.now() - FIRST_RUN_WINDOW_MS;
 const feeds = (await loadFeeds()).filter((f) => !f.muted);
+trace(`feeds: ${feeds.length}`);
 
 const results: Awaited<ReturnType<typeof fetchFeed>>[] = [];
 const failed: string[] = [];
+const batches = Math.ceil(feeds.length / FEED_CONCURRENCY);
 for (let i = 0; i < feeds.length; i += FEED_CONCURRENCY) {
   const batch = feeds.slice(i, i + FEED_CONCURRENCY);
+  const started = Date.now();
   const got = await Promise.allSettled(batch.map((f) => fetchFeed(f.url)));
   got.forEach((r, j) => {
     if (r.status === "fulfilled") {
@@ -48,11 +54,21 @@ for (let i = 0; i < feeds.length; i += FEED_CONCURRENCY) {
           feedTitle: batch[j].title,
         })),
       });
-    } else failed.push(batch[j].title);
+    } else {
+      failed.push(batch[j].title);
+      trace(`feed failed: ${batch[j].title}: ${r.reason}`);
+    }
   });
+  trace(
+    `batch ${i / FEED_CONCURRENCY + 1}/${batches} done in ${
+      Date.now() - started
+    }ms`,
+  );
 }
 
+const clipsStarted = Date.now();
 const clips = await loadClips();
+trace(`clips: ${clips.length} in ${Date.now() - clipsStarted}ms`);
 const candidates = selectCandidates(results.flatMap((r) => r.entries), {
   since,
   seenIds: new Set(seen.ids),
@@ -66,6 +82,7 @@ const pool: Pool = {
   items: candidates.map((e, i) => ({ ...e, key: `c${i + 1}` })),
 };
 await writeJson("pool.json", pool);
+trace(`pool: ${pool.items.length} candidates`);
 if (failed.length) console.error(`failed feeds: ${failed.join(", ")}`);
 if (pool.items.length === 0) Deno.exit(0);
 

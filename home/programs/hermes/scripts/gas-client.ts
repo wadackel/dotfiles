@@ -5,6 +5,8 @@
 // its home into the Docker terminal, and colima only exposes HERMES_HOME to
 // the VM, so nothing inside a container can read the secret.
 
+import { trace } from "./trace.ts";
+
 type Bridge = { url: string; secret: string };
 
 export function configDir(): string {
@@ -30,6 +32,34 @@ const READ_ONLY: ReadonlySet<Action> = new Set([
   "listEvents",
 ]);
 
+// A failure that came back as a response. `reported` means the bridge itself
+// answered with an error, so the script ran to its end and saved nothing;
+// any other failure (a Google error page, a timeout, a dropped connection)
+// may have come after the work was done. `name` stays "Error" so scripts that
+// print the error keep their output.
+export class BridgeError extends Error {
+  constructor(
+    message: string,
+    readonly detail: string,
+    readonly reported = false,
+  ) {
+    super(message);
+  }
+}
+
+// The query of the final URL is left out: script.googleusercontent.com hands
+// the result to anyone holding its user_content_key. The body is summarized
+// only for failures, whose text is Google's error page or the bridge's error.
+function describe(res: Response, text: string): string {
+  const url = new URL(res.url);
+  const title = text.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1];
+  const summary = title ??
+    text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  return `final ${url.host}${url.pathname}, ${
+    res.headers.get("content-type") ?? "no content-type"
+  }, ${title === undefined ? "body" : "title"} "${summary}"`;
+}
+
 async function callOnce(
   bridge: Bridge,
   action: Action,
@@ -54,14 +84,25 @@ async function callOnce(
     }
     throw e;
   }
-  if (!res.ok) throw new Error(`${action}: HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new BridgeError(`${action}: HTTP ${res.status}`, describe(res, text));
+  }
   let body;
   try {
     body = JSON.parse(text);
   } catch {
-    throw new Error(`${action}: non-JSON response (${text.slice(0, 40)}…)`);
+    throw new BridgeError(
+      `${action}: non-JSON response (${text.slice(0, 40)}…)`,
+      describe(res, text),
+    );
   }
-  if (body.error) throw new Error(`${action}: ${body.error}`);
+  if (body.error) {
+    throw new BridgeError(
+      `${action}: ${body.error}`,
+      describe(res, text),
+      true,
+    );
+  }
   return body.result;
 }
 
@@ -78,9 +119,21 @@ export async function callBridge(
   );
   const delays = READ_ONLY.has(action) ? retryDelaysMs : [];
   for (let attempt = 0;; attempt++) {
+    const started = Date.now();
     try {
-      return await callOnce(bridge, action, params, timeoutMs);
+      const result = await callOnce(bridge, action, params, timeoutMs);
+      if (attempt > 0) {
+        trace(`bridge ${action} succeeded on attempt ${attempt + 1}`);
+      }
+      return result;
     } catch (e) {
+      trace(
+        `bridge ${action} attempt ${attempt + 1}/${
+          delays.length + 1
+        } failed after ${Date.now() - started}ms: ${
+          e instanceof Error ? e.message : e
+        }${e instanceof BridgeError ? ` (${e.detail})` : ""}`,
+      );
       if (attempt >= delays.length) throw e;
       await new Promise((r) => setTimeout(r, delays[attempt]));
     }

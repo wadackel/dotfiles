@@ -24,6 +24,7 @@ import {
 } from "./feed-store.ts";
 import { postMessage } from "./slack.ts";
 import { tokyoDate } from "./daily-note.ts";
+import { startTrace } from "./trace.ts";
 
 const WINDOW_DAYS = 90;
 const MIN_CLIPS = 3;
@@ -70,6 +71,7 @@ export function rankSites(
 }
 
 if (import.meta.main) {
+  startTrace();
   const i = Deno.args.indexOf("--channel");
   const channel = i === -1 ? undefined : Deno.args[i + 1];
   if (!channel) throw new Error("usage: suggest-feeds.ts --channel <id>");

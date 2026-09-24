@@ -9,6 +9,7 @@ import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
 import { z } from "npm:zod@4.6.5";
 import { callBridge } from "./gas-client.ts";
+import { startTrace } from "./trace.ts";
 import {
   addDays,
   cleanChecklist,
@@ -198,6 +199,7 @@ function text(body: string) {
 }
 
 if (import.meta.main) {
+  startTrace();
   const server = new McpServer({ name: "agenda", version: "1.0.0" });
   server.registerTool(
     "list_events",

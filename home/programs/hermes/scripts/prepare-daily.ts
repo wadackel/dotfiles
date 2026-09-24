@@ -10,6 +10,7 @@
 // reworded. --dry-run prints the note it would create instead of writing it.
 
 import { callBridge } from "./gas-client.ts";
+import { startTrace } from "./trace.ts";
 import {
   addDays,
   cleanChecklist,
@@ -23,6 +24,8 @@ import {
   tokyoDate,
   writeNoteAtomically,
 } from "./daily-note.ts";
+
+startTrace();
 
 const LOOKBACK_DAYS = 30;
 const HISTORY_WORKDAYS = 10;

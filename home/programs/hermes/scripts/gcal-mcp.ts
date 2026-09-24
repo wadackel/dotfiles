@@ -5,11 +5,15 @@
 // listing, editing or deleting. A prompt-injected model can at worst add a
 // bogus event that points back to the mail it came from. That title is later
 // read by Slack sessions through agenda-mcp.ts, marked as mail-derived.
+//
+// It does list events in one case, to settle a create whose outcome is
+// unknown; what it reads there never goes back to the model.
 
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
 import { z } from "npm:zod@4.6.5";
-import { callBridge } from "./gas-client.ts";
+import { BridgeError, callBridge } from "./gas-client.ts";
+import { startTrace, trace } from "./trace.ts";
 
 const TIME_ZONE = "Asia/Tokyo";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,7 +78,67 @@ export function buildEvent(input: EventInput) {
   };
 }
 
+type BuiltEvent = ReturnType<typeof buildEvent>;
+type Listed = {
+  summary: string;
+  start: { date?: string; dateTime?: string };
+  organizerSelf: boolean;
+  hermesTrail: boolean;
+};
+type Call = (
+  action: "createEvent" | "listEvents",
+  params: Record<string, unknown>,
+) => Promise<unknown>;
+
+// Listed times come back as local date-times with an offset; the first 19
+// characters are the local time buildEvent sent.
+function sameStart(listed: Listed["start"], sent: EventTime): boolean {
+  return "date" in sent
+    ? listed.date === sent.date
+    : listed.dateTime?.slice(0, 19) === sent.dateTime;
+}
+
+// Apps Script has answered a create with a Google error page after saving
+// the event, and a retry would then add it twice. Only an error the bridge
+// reported itself proves nothing was saved; for anything else the calendar
+// is asked. A Hermes event with the same title and start that was already
+// there counts too: either way the event is on the calendar once.
+export async function createEventChecked(
+  event: BuiltEvent,
+  call: Call = callBridge,
+): Promise<{ htmlLink?: string; confirmed?: true }> {
+  try {
+    return await call("createEvent", { event }) as { htmlLink?: string };
+  } catch (e) {
+    if (e instanceof BridgeError && e.reported) throw e;
+    const day = "date" in event.start
+      ? event.start.date
+      : event.start.dateTime.slice(0, 10);
+    let events: Listed[];
+    try {
+      events = await call("listEvents", {
+        from: day,
+        to: nextDay(day),
+      }) as Listed[];
+    } catch {
+      throw e;
+    }
+    const found = events.some((l) =>
+      l.summary === event.summary && l.organizerSelf && l.hermesTrail &&
+      sameStart(l.start, event.start)
+    );
+    if (!found) throw e;
+    trace(
+      `createEvent failed (${
+        e instanceof Error ? e.message : e
+      }); confirmed on the calendar for ${day}`,
+    );
+    return { confirmed: true };
+  }
+}
+
 if (import.meta.main) {
+  startTrace();
   const server = new McpServer({ name: "gcal", version: "1.0.0" });
   server.registerTool(
     "create_event",
@@ -92,13 +156,13 @@ if (import.meta.main) {
       },
     },
     async (input: EventInput) => {
-      const created = await callBridge("createEvent", {
-        event: buildEvent(input),
-      }) as { htmlLink?: string };
+      const created = await createEventChecked(buildEvent(input));
       return {
         content: [{
           type: "text",
-          text: `Created: ${created.htmlLink ?? "(no link)"}`,
+          text: created.confirmed
+            ? "Created: (link unavailable; confirmed on the calendar after a bridge error)"
+            : `Created: ${created.htmlLink ?? "(no link)"}`,
         }],
       };
     },

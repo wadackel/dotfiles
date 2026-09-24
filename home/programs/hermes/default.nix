@@ -70,13 +70,25 @@ let
     ];
     script = "feed-action.ts";
   };
+  # scripts/trace.ts appends here and rotates to .1; rename needs read too.
+  scriptLogs = [
+    "${homeDir}/Library/Logs/hermes-scripts.log"
+    "${homeDir}/Library/Logs/hermes-scripts.log.1"
+  ];
+  withScriptLogs =
+    args:
+    args
+    // {
+      read = (args.read or [ ]) ++ scriptLogs;
+      write = (args.write or [ ]) ++ scriptLogs;
+    };
   mcpServer = args: {
-    command = builtins.head (denoRun args);
-    args = builtins.tail (denoRun args);
+    command = builtins.head (denoRun (withScriptLogs args));
+    args = builtins.tail (denoRun (withScriptLogs args));
   };
   cronScript = args: ''
     #!/usr/bin/env bash
-    exec ${lib.escapeShellArgs (denoRun args)}
+    exec ${lib.escapeShellArgs (denoRun (withScriptLogs args))}
   '';
   claudeStateDir = "${homeDir}/.config/hermes-claude";
   explorePrompt = dotfiles.pathHere ./prompts "explore-web-clip.md";
