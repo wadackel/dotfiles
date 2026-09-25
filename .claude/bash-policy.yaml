@@ -1,0 +1,13 @@
+# Project rules for dotfiles, loaded by ~/.claude/scripts/bash-policy.ts.
+# Force-added to Git: the global gitignore excludes **/.claude/bash-policy.yaml.
+rules:
+  - pattern: "git switch -c *"
+    message: &main-only "In dotfiles, work and commit on main (see AGENTS.md, Branch Policy). If the user explicitly asked for a branch, ask them to run it with '! git switch -c <name>'."
+  - pattern: "git switch -C *"
+    message: *main-only
+  - pattern: "git switch --create *"
+    message: *main-only
+  - pattern: "git checkout -b *"
+    message: *main-only
+  - pattern: "git checkout -B *"
+    message: *main-only
