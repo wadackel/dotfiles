@@ -1,6 +1,6 @@
 # daily — harvest reusable knowledge from daily notes
 
-The daily notes under `$VAULT/99_Tracking/Daily/` hold two kinds of memo under `## ✍️ Memo`: entries the user writes by hand, and session summaries a Stop hook writes for every coding-agent session. Both carry reusable knowledge that otherwise never leaves the day it was written — a 2026-09-22 trial over 3,474 hand-written entries found about 4% worth a concept note; the user's judgment matched the proposal on 44 of 50 candidates, and 39 were reflected.
+The daily notes under `$VAULT/99_Tracking/Daily/` hold two kinds of memo under `## ✍️ Memo`: entries the user writes by hand, and session summaries a Stop hook writes for every coding-agent session. Both carry reusable knowledge that otherwise never leaves the day it was written.
 
 The flow has three stages, and each has one owner:
 

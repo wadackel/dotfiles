@@ -67,7 +67,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes `.go` file
 | Level | Criteria | Examples |
 |---|---|---|
 | MUST_FIX | Panic / data race / goroutine leak | Writing to nil map, missing defer unlock, goroutine blocking on never-closed channel |
-| SHOULD_FIX | Idiom violation without immediate failure | `%v` instead of `%w`, context not propagated |
+| SHOULD_FIX | Idiom violation with a concrete consequence (lost error chain, uncancellable work) | `%v` instead of `%w`, context not propagated |
 | NIT | Style | Could use `errors.Is` |
 
 ## Output Format

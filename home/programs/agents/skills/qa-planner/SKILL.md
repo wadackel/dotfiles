@@ -47,22 +47,7 @@ Design test cases and execute them. Claude runs all tests directly -- only deleg
 3. Identify the tech stack (framework, language, existing test runner)
 4. Read relevant source files to understand the feature's behavior
 5. Assess risk areas: what parts of this change are most likely to break, and what is the business impact if they do?
-6. **If using a user-confirmation prompt and the user selects a verbal explanation option** (e.g., "口頭で説明"), provide structured guidance on what information is needed:
-
-   ```
-   次の情報を教えてください：
-
-   - **機能の目的**: この機能は何をするものですか？
-   - **主要なユースケース**: ユーザーはどのようにこの機能を使いますか？
-   - **入力/パラメータ**: どのような入力フィールドやパラメータがありますか？
-   - **検証ルール**: 入力に対してどのような検証が必要ですか？（例: 必須項目、形式、長さ制限）
-   - **期待される動作**: 成功時と失敗時の動作は？
-   - **特別な考慮事項**: セキュリティ、パフォーマンス、エッジケースなど
-   ```
-
-   After receiving this information, proceed with Step 3 (Design Test Cases).
-
-7. **Load the specialized skill for the target type before Step 3** (idempotent — always call, do not rely on "already loaded" introspection):
+6. **Load the specialized skill for the target type before Step 3** (idempotent — always call, do not rely on "already loaded" introspection):
 
    | Type | Required skill call |
    |------|---------------------|
@@ -209,7 +194,7 @@ Capture screenshot evidence to prove test execution results. Commands reference 
   ```
 - When embedding into report.md, use the **relative path** `screenshots/qa-{test-id}-{description}.png` (report.md lives in the same `$RUN_DIR/` as the screenshots, so a relative path resolves correctly in Markdown previewers).
 
-**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation -- the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `wait_for` times out, inspect network requests to verify data was actually received before assuming a rendering failure.
+**WebApp timing caveat**: Apps that populate UI via WebSocket or async fetch may appear blank immediately after navigation -- the data hasn't arrived yet, not a bug. Always use `agent-browser wait` to wait for expected content before screenshotting. If `agent-browser wait` times out, run `agent-browser --session "claude-$PPID" network requests` to see whether the data arrived before assuming a rendering failure.
 
 #### Exploratory Testing (Optional, Mode B)
 

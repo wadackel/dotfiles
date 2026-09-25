@@ -325,8 +325,6 @@ If issues were found and user approves fixes:
 
 3. **Repeat** until all tests pass or user is satisfied with results.
 
-## Examples
-
 ## Validation Checklist
 
 Before reporting test completion, ensure:

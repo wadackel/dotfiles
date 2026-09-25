@@ -23,7 +23,7 @@ Directories use numeric prefixes. **Do not guess directory names** -- verify wit
 | `01_Projects/` | Project-related notes |
 | `02_Notes/` | General notes |
 | `03_Books/` | Book notes and reviews |
-| `05_Private/` | Private notes |
+| `05_Private/` | Identity documents — never read, search, or write here, and never name a file from it (see obsidian-cli) |
 | `99_Tracking/Daily/` | Daily notes (`YYYY-MM-DD.md`) |
 | `99_Tracking/Weekly/` | Weekly notes (`YYYY-WNN.md`) |
 

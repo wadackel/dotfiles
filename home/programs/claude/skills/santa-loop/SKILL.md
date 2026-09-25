@@ -141,7 +141,7 @@ The same prompt string is used for both Reviewer A and Reviewer B in Step 4.
 3. **Same inputs** — both receive task spec + Audit Verdict Input + diff + file paths
 4. **Structured output** — each returns a typed JSON verdict (see `references/reviewer-prompt.md`)
 
-Both reviewers MUST be launched **in parallel** — issue both tool calls in the SAME message. Sequential launching loses the speed benefit and risks context bleed.
+Launch both reviewers in the same message; they are independent, and the prompt string is fixed before either returns.
 
 #### Reviewer A: Claude code-reviewer (always runs)
 
@@ -203,7 +203,7 @@ else:
 
 **Why both must pass**: if only one reviewer catches an issue, that issue is real. The other reviewer's blind spot is exactly the failure mode `santa-loop` exists to eliminate. There is no partial credit.
 
-Dedupe by lowercased issue text Levenshtein distance (or simpler: by first 80 chars). Show both reviewers' findings to the user — even when both agree, divergent phrasings provide useful detail.
+Merge issues that name the same defect at the same file:line. Show both reviewers' findings to the user — even when both agree, divergent phrasings provide useful detail.
 
 ### Step 6: Fix Cycle (NAUGHTY path)
 
@@ -215,11 +215,8 @@ for round in 1..MAX_ROUNDS:
 
     # 1. Display merged critical_issues to user (per-issue file:line)
     # 2. Fix every flagged issue and change only what was flagged
-    # 3. Record fixes in working tree. santa-loop does NOT auto-commit.
-    #    Global CLAUDE.md rule "only commit when user requests" takes precedence.
-    #    Fresh reviewers in the next round read the current working tree state
-    #    (which includes all Round N-1 fixes) directly.
-    #    If the user wants per-round commits, they invoke /commit explicitly.
+    # 3. Leave fixes uncommitted; commit only when the user asks. Fresh reviewers
+    #    in the next round read the working tree, which holds all Round N-1 fixes.
 
     # 4. Re-run Step 4 with FRESH reviewer instances (new Agent invocations,
     #    no Continue, no resume, no carry-over context)
@@ -244,7 +241,7 @@ Reviewer agreement summary:
 Manual review required before proceeding.
 ```
 
-Do NOT push. Do NOT mark the task completed. Surface to the user.
+Do not push. Surface the escalation to the user.
 
 ### Step 7: Final Report
 
@@ -261,7 +258,7 @@ Suggestions deferred:        <count>
 
 Audit verdict (from /gate, passthrough): PASS
 
-Result: READY for completion. Push is the user's decision (santa-loop does not push).
+Result: READY. Push is the user's decision (santa-loop does not push).
 ```
 
 On NAUGHTY (escalated):
@@ -310,7 +307,7 @@ Recommendation: manually review and either fix the remaining items or re-scope t
 
 **Why fresh reviewers each round**: anchoring bias. A reviewer that remembers flagging X in round 1 is psychologically reluctant to find Y in round 2. Fresh agents have no such memory.
 
-**Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision. NICE just unblocks the final task and surfaces the report.
+**Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision. NICE only produces the report.
 
 **Why Completeness is delegated to /gate (accepting the SPOF trade-off)**: the gate's evidence audit is a script (`plan-state.ts coverage` / `complete`); santa-loop owns code/design quality. Re-judging completeness duplicates reasoning. Trade-off: a thin `required` declaration passes the script unchecked; net trade: clarity + cost saving > rare unchecked false-PASS.
 

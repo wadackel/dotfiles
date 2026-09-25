@@ -206,7 +206,7 @@ If B-3 finds a concept note that exists but has no log entry, it may be debris f
 Genre-at-a-time (`ingest <tag>`) is how the existing backlog gets compiled. Books use the same machinery at a different granularity — **one book per batch**, per [books.md](books.md), because a book has no summary standing in for its content and compiling one means reading every chapter note.
 
 - Process one genre per batch. Do not chain genres without checking in.
-- Report at the end of each genre: articles compiled, notes created, notes updated, and the medium/low-confidence genre calls.
+- Report at the end of each genre: articles compiled, notes created, notes updated, and the medium- and none-confidence genre calls.
 - Reading `## Summary` first and `## Content` only where B-2's two triggers fire is what keeps a genre affordable. Reading every body in a genre is not. Do not fetch originals over the network in bulk either — the body is already in the vault.
 - **Write one aggregated log entry for the batch, not one per article** — the batch form in [conventions.md](conventions.md). Per-article entries would run to hundreds of lines, and [lint.md](lint.md) observation 6 is built on the batch form.
 
@@ -215,6 +215,6 @@ Genre-at-a-time (`ingest <tag>`) is how the existing backlog gets compiled. Book
 - Sources compiled, with paths
 - Genres affected, and any created by `init`
 - Notes created / updated / split
-- Items to review: medium and low-confidence genre calls, `00_Inbox/` files left in place, collisions resolved by qualification
+- Items to review: medium- and none-confidence genre calls, `00_Inbox/` files left in place, collisions resolved by qualification
 - Notes written without a body by the URL path, with the note that re-clipping the URL with the Web Clipper is what gives them one
 - In scan mode: processed and skipped counts

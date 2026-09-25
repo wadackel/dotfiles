@@ -36,7 +36,7 @@ Every Pair has exactly 5 fields. All are mandatory — missing any one disqualif
 |---|---|---|
 | Behavioral correction (user said "do Y instead") | hook or permissions (Rung 1 / 2) | Deterministic misbehavior, user already judged it wrong. 100% enforcement beats 50-80% skill triggering. |
 | Workflow candidate (multi-step observed) | skill (Rung 3) | /invoke litmus passes. Procedure > rule. |
-| Discovered fact (tool quirk / environment) | claude_md (Rung 4) — if unavoidable | Fact cannot be enforced, only documented. Strengthened Rung 4 bar still applies. |
+| Discovered fact (tool quirk / environment) | claude_md (Rung 4) — if unavoidable | Fact cannot be enforced, only documented. The Rung 4 acceptance bar still applies. |
 
 ## Worked examples
 
@@ -78,7 +78,7 @@ Session evidence: claude executed "check CI → read failure logs → identify r
 
 Why skill not claude_md: Q4 of mechanism-signature passes (3+ steps, tool orchestration, parameterizable). Skill-TDD Gate: RED reproducible (without /iterate-pr, claude waited for per-step prompts); GREEN minimum (skill body = the 5 steps); REFACTOR: no existing skill covers CI-fix specifically.
 
-### Example 3 — Discovered fact → claude_md (with strengthened Rung 4 bar)
+### Example 3 — Discovered fact → claude_md (with the Rung 4 acceptance bar)
 
 Session evidence: at turn 47 claude's `git diff origin/main...HEAD` in shallow-clone CI returned 16 files when only 3 changed.
 
@@ -95,7 +95,7 @@ Session evidence: at turn 47 claude's `git diff origin/main...HEAD` in shallow-c
 - **Expiry condition**: remove when `/iterate-pr` skill adds explicit shallow-clone guidance
 ```
 
-Rung 4 strengthened bar check:
+Rung 4 acceptance bar check:
 - (a) Past-session evidence: turn 47 of session-abc. ✓
 - (b) Expiry OR redundancy: expiry specified (remove when `/iterate-pr` absorbs the guidance). ✓
 

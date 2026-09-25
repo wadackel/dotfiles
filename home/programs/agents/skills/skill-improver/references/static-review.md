@@ -126,9 +126,9 @@ Report the six scores side by side rather than as a sum; the lowest-scoring dime
 When proposing improvements from structural mode, prioritize:
 
 1. **Critical** — invalid frontmatter format, broken file references, description-functionality mismatch, fundamentally broken workflow
-2. **High** — missing trigger phrases, no progressive disclosure, confusing workflow, inconsistent terminology
+2. **High** — description does not name the skill's intent or domain nouns, no progressive disclosure, confusing workflow, inconsistent terminology
 3. **Medium** — verbose content, missing examples, suboptimal invocation control
-4. **Low** — extra trigger phrases for edges, more examples, minor formatting
+4. **Low** — more examples, minor formatting
 
 ### Limitation reminder
 

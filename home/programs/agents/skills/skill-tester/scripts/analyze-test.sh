@@ -30,7 +30,7 @@ result_text=$(jq -r 'select(.type == "result") | .result // ""' "$jsonl_file" 2>
 
 # ターゲットスキル発火判定
 triggered="false"
-if [ -n "$target_skill" ] && echo "$skills_invoked" | grep -qF "$target_skill"; then
+if [ -n "$target_skill" ] && echo "$skills_invoked" | grep -qxF "$target_skill"; then
   triggered="true"
 fi
 

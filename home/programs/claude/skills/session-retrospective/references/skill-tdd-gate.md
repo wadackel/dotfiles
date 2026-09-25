@@ -71,8 +71,8 @@ Reject Rung 3 candidates that match any of these patterns:
 
 | Signal | Why reject |
 |---|---|
-| "User mentioned it multiple times" but no workflow | Preference, not workflow → CLAUDE.md |
-| "This is useful information" | Fact, not orchestration → CLAUDE.md |
+| "User mentioned it multiple times" but no workflow | Preference, not workflow → route via mechanism-signature.md |
+| "This is useful information" | Fact, not orchestration → route via mechanism-signature.md |
 | "Someone will probably need this someday" | Speculation, no reproducible RED → discard |
 | "It's complex" but it is a one-off | One-off complex ≠ skill. Skill requires generalizability across future sessions |
 | "Adds surface for review coverage" | No reproducible failure to fix — cargo-cult structure |

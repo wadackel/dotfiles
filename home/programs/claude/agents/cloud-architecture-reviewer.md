@@ -10,17 +10,6 @@ color: purple
 
 Specialist for infrastructure-as-code and cloud deployment patterns. Catches issues that generic code review and application-layer reviewers miss.
 
-## Trigger
-
-Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes:
-- `.tf`, `*.tfvars`
-- Kubernetes manifests (yaml with `apiVersion:` + `kind:` at top level)
-- Helm charts (`Chart.yaml`, `values.yaml`, `templates/*.yaml`)
-- `Dockerfile`, `*.dockerfile`
-- `docker-compose.yml`, `compose.yml`
-- `serverless.yml`
-- `.github/workflows/*.yml`, `.github/workflows/*.yaml`
-
 ## Out of Scope (delegated)
 
 - Application code (languages) → `typescript-reviewer` / `go-reviewer` / etc.

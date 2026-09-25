@@ -13,7 +13,7 @@ Approval is the user's `/impl` keystroke; there is no state file.
 Use the `File:` line of the most recent `## Plan ready` in the conversation. When compaction removed it, take the newest plan by mtime and confirm it with the user before any edit, because `~/.claude/plans/` is shared across sessions:
 
 ```
-stat -f '%m %N' ~/.claude/plans/[0-9]*T[0-9]*-*.md | grep -vE '\.(log|evidence)\.md$' | sort -rn | head -1 | cut -d' ' -f2-
+stat -f '%m %N' ~/.claude/plans/[0-9]*T[0-9]*-*.md | grep -vE '\.(log|report)\.md$' | sort -rn | head -1 | cut -d' ' -f2-
 ```
 
 `stat` rather than `ls -t`: this environment sometimes appends a size column to `ls` output, which breaks the filter. No plan resolves → reply `Run /plan <request> first. No plan to execute.`

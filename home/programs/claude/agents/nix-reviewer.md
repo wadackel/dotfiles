@@ -35,7 +35,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes `.nix` fil
 
 ### 3. home.file / home.activation
 - `home.file.<path>.source = ./relative/path;` — source path exists at the Nix store path
-- `recursive = true` for linking a directory with hot-added files
+- A directory that gains files over time is linked whole, without `recursive`; `recursive = true` links each file, so every new file needs `darwin-rebuild`
 - `recursive = false` (default) for single-file links (clearer intent)
 - `text` vs `source` usage (text for inline, source for external file)
 - `home.activation` scripts idempotent and safely re-runnable
@@ -53,7 +53,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes `.nix` fil
 
 ### 6. Homebrew Integration
 - `homebrew.brews` / `homebrew.casks` — no duplicates between the two
-- `homebrew.global.brewfile` disabled (per project note); formulas explicitly listed
+- Formulas and casks listed explicitly in `homebrew.brews` / `homebrew.casks`
 - `homebrew.taps` present before referencing a custom-tap formula
 - No brew for things already in nixpkgs (except documented exceptions like Python versions)
 

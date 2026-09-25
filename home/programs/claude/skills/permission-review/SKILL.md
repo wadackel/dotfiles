@@ -125,12 +125,12 @@ User confirmation prompt:
   - Other (free input)
 ```
 
-**Critical**: Always generate options from the JSON output's `subPatterns` field. Do not invent patterns.
+Build the options from the JSON's `subPatterns`, which come from the logged commands; a pattern beyond those arrives through Other.
 
 #### Other Input Validation
 
 When the user enters a custom pattern via Other:
-- Must be `Tool(pattern)` format (Tool: Bash, Read, Edit, Write, Glob, Grep, Task, WebFetch, WebSearch, or `mcp__` prefix)
+- Must be `Tool(pattern)` format (Bash, Read, Edit, Glob, Grep, WebFetch, WebSearch, Agent, Skill, or an `mcp__` prefix); a file-write path rule is written as `Edit(...)`, because Claude Code checks only `Edit` rules for file edits
 - Parentheses must be balanced
 - Invalid examples: `Bash(git commit` (no closing paren), `git *` (no Tool name)
 - If invalid, explain why and prompt re-entry

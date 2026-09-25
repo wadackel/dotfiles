@@ -76,7 +76,7 @@ When invoked, read the target skill's SKILL.md and any referenced files, then ev
 - Positive cases: ✅/⚠️/❌ — {finding}
 - Negative cases: ✅/⚠️/❌ — {finding}
 - Edge cases: ✅/⚠️/❌ — {finding}
-- Paraphrase coverage (undertriggering guard): ✅/⚠️/❌ — {finding}
+- Intent-category coverage (undertriggering guard): ✅/⚠️/❌ — {finding}
 - "Do NOT use for..." pattern (overtriggering guard): ✅/⚠️/❌ — {finding}
 
 ### 3. Functional Test Coverage
@@ -91,7 +91,7 @@ When invoked, read the target skill's SKILL.md and any referenced files, then ev
 
 ### 5. Undertriggering Diagnostics
 - Signal pattern documented: ✅/⚠️/❌ — {finding}
-- Paraphrase remedy guidance: ✅/⚠️/❌ — {finding}
+- Intent-widening remedy guidance: ✅/⚠️/❌ — {finding}
 
 ### 6. Overtriggering Diagnostics
 - Signal pattern documented: ✅/⚠️/❌ — {finding}

@@ -10,10 +10,10 @@ argument-hint: "[plan|code|security]"
 
 ```bash
 # Code review (uncommitted changes, default criteria)
-codex exec review --uncommitted --full-auto
+codex exec -s workspace-write review --uncommitted
 
 # Code review (custom criteria — use `codex exec`, not `codex exec review`)
-codex exec --full-auto "
+codex exec -s workspace-write "
 Review uncommitted changes (run git diff to see them).
 Review guidelines: ./AGENTS.md
 Criteria: code quality, security, performance
@@ -27,20 +27,20 @@ Related source: src/foo.ts, src/bar.ts
 "
 
 # Follow-up review
-codex exec resume --last --full-auto "Fixes applied. Please re-review."
+codex exec -s workspace-write resume --last "Fixes applied. Please re-review."
 ```
 
 ## Important: `codex exec review` vs `codex exec`
 
 `codex exec review` scope selectors (`--uncommitted`, `--base`, `--commit`) and custom prompts are **mutually exclusive**:
 
-- `codex exec review --uncommitted --full-auto` — reviews uncommitted changes with Codex's default criteria
+- `codex exec -s workspace-write review --uncommitted` — reviews uncommitted changes with Codex's default criteria
 - `codex exec review "custom instructions"` — custom review, but Codex decides the scope
 
-For **custom criteria + specific scope**, use `codex exec --full-auto` instead and instruct Codex to read the diff:
+For **custom criteria + specific scope**, use `codex exec -s workspace-write` instead and instruct Codex to read the diff:
 
 ```bash
-codex exec --full-auto "
+codex exec -s workspace-write "
 Review uncommitted changes (run git diff to see them).
 Guidelines: ./AGENTS.md
 Focus on: security vulnerabilities
@@ -62,10 +62,10 @@ Focus on: security vulnerabilities
 Use when default review criteria are sufficient:
 
 ```bash
-codex exec review --uncommitted --full-auto
+codex exec -s workspace-write review --uncommitted
 ```
 - `--uncommitted`: Codex auto-reads staged/unstaged/untracked changes
-- `--full-auto`: `-a on-request -s workspace-write`
+- `-s workspace-write` goes before `review`; the subcommand itself takes no `-s`, and without it the run inherits `danger-full-access` from `~/.codex/config.toml`
 - Use `--base <BRANCH>` instead of `--uncommitted` to review against a branch
 
 ### Code review (custom criteria)
@@ -73,7 +73,7 @@ codex exec review --uncommitted --full-auto
 Use when specific review focus is needed (security audit, guideline compliance, etc.):
 
 ```bash
-codex exec --full-auto "
+codex exec -s workspace-write "
 Review uncommitted changes (run git diff to see them).
 Guidelines: ./AGENTS.md
 Review criteria:
@@ -106,10 +106,10 @@ Review criteria: ...
 1. Apply fixes using Edit/Write tools
 2. Invoke via Bash tool:
    ```bash
-   codex exec resume --last --full-auto "Fixes applied. Please re-review."
+   codex exec -s workspace-write resume --last "Fixes applied. Please re-review."
    ```
    - `--last`: Resumes the most recent session in the current directory (cwd-filtered)
-   - For parallel reviews, use explicit session ID: `codex exec resume <SESSION_ID> --full-auto "..."`
+   - For parallel reviews, use explicit session ID: `codex exec -s workspace-write resume <SESSION_ID> "..."`
 3. Repeat until no issues remain (max 5 iterations)
 
 ## Use cases

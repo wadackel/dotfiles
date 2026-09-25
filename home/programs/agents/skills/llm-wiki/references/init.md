@@ -4,8 +4,6 @@
 
 There is no `init _root`: the vault, `Home.md`, and the 12 tier-1 MOCs already exist.
 
-Most `clip/*` tags in this vault have no MOC yet, so this is the verb `ingest` calls most often during backfill.
-
 ## Argument
 
 The `clip/*` tag, with or without the prefix — `init clip/Team` and `init Team` are the same. Case is taken from the tag as written in the vault.

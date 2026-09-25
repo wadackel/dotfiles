@@ -93,24 +93,9 @@ The script outputs JSON to stdout.
 
 **Reading the result:**
 
-- `ok: true` — Check passed. Report to the user that the configuration loaded successfully.
-- `ok: false` — Errors found. Share the `errors` array with the user and propose fixes.
-- `warnings` — Non-fatal but noteworthy items. Share as informational.
-
-### Step 4: Report to user
-
-Summarize check results concisely.
-
-**Success report example:**
-> Startup check passed — no errors. 72 plugins recognized, telescope.nvim loaded successfully.
-
-**Failure report example:**
-> Startup check detected an error:
-> `E5108: Error executing lua: unexpected symbol near '!'`
-> Investigating and fixing the issue.
-
-On failure, identify the root cause and attempt a fix, then re-run `startup`
-to confirm the fix.
+- `ok: true` — the check passed.
+- `ok: false` — report the `errors` entries, find the cause, fix it, and re-run `startup` to confirm.
+- `warnings` — non-fatal; mention them alongside the result.
 
 ## Limitations
 

@@ -94,7 +94,7 @@ Some rules cannot be auto-verified:
 - "Prefer functional composition" — requires AST inspection and style judgment
 - "User prefers concise responses" — depends on user perception
 
-For these, the verification_plan should still be recorded (for transparency) but the chosen type is typically `transcript_grep` with a weak proxy pattern. When no reasonable proxy exists, SKIP the proposal — a rule that cannot be verified should not land at Rung 4 and should not be in the ledger. Refer to the Rung 4 strengthened acceptance bar in `routing-logic.md`.
+For these, the verification_plan should still be recorded (for transparency) but the chosen type is typically `transcript_grep` with a weak proxy pattern. When no reasonable proxy exists, SKIP the proposal — a rule that cannot be verified should not land at Rung 4 and should not be in the ledger. Refer to the Rung 4 acceptance bar in `routing-logic.md`.
 
 ## Example end-to-end
 

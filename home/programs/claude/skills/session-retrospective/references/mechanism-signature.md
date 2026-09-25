@@ -82,7 +82,7 @@ If all four questions are NO, the rule is a principle, fact, or preference with 
 | NO | YES | — | — | 1B (hook script) |
 | NO | NO | YES | — | 2 (permissions) |
 | NO | NO | NO | YES | 3 (skill / reference / description fix) |
-| NO | NO | NO | NO | 4 (CLAUDE.md) — must pass strengthened bar |
+| NO | NO | NO | NO | 4 (CLAUDE.md) — must pass the Rung 4 acceptance bar |
 
 Each row's Rung is a **starting point**, not a verdict. Phase 3 then runs the full Enforcement Layer Ladder to confirm, and the Ladder may downgrade further (e.g., Rung 3 → Rung 4 if Skill-TDD Gate rejects).
 
@@ -99,7 +99,7 @@ Phase 3 then checks: is there already a `git -C *` rule in `bash-policy.yaml`? I
 ## Anti-patterns
 
 - **Multi-YES answers**: if two questions are YES, take the earliest (smallest Rung number). The `git -C` example is both Q1 (Bash-matchable) and Q4 (part of a "check before git command" workflow). Rung 1A wins because it is deterministic and cheapest.
-- **Forcing YES to avoid Rung 4**: if the honest answer to all four is NO, do not invent a workflow or a deterministic pattern just to dodge Rung 4. The strengthened Rung 4 bar exists precisely for honest Rung 4 candidates.
+- **Forcing YES to avoid Rung 4**: if the honest answer to all four is NO, do not invent a workflow or a deterministic pattern just to dodge Rung 4. The Rung 4 acceptance bar exists precisely for honest Rung 4 candidates.
 - **Skipping the follow-up Ladder**: the 4-question pre-routing only narrows the starting point. The full Ladder in `routing-logic.md` still runs and may override (e.g., Rung 3 → Rung 4 if Skill-TDD Gate rejects).
 
 ## Relationship to existing artifacts

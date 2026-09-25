@@ -16,8 +16,7 @@
 **Skill Tool Detection:**
 - The conductor identifies skill triggering by parsing stream-json output via `analyze-test.sh`
 - Automatic detection of `{"type":"tool_use","name":"Skill","input":{"skill":"xxx"}}` events
-- This is 100% reliable for detecting whether the Skill tool was invoked
-- No reliance on self-reporting or structured formats
+- Detection reads the Skill tool calls recorded in the transcript, not the tested session's self-report
 
 **Test Isolation:**
 - Tests execute sequentially, one headless session at a time
@@ -30,7 +29,7 @@
 - Negative tests execute fully (rather than semantic analysis), consuming tokens even when passing
 - Story tests are particularly expensive (setup + test prompts, all with `--resume`)
 - Sequential execution means a 10-test suite may take 10-15 minutes
-- Trade-off: higher cost and time vs. perfect isolation and 100% accurate triggering detection
+- Trade-off: higher cost and time vs. complete isolation and transcript-based trigger detection
 
 ## Story Test Constraints
 
@@ -63,7 +62,7 @@
 - This is the officially documented method to bypass nest detection (see Claude Code docs)
 - Used to run `claude -p` from within a Claude Code session
 - Safe when used with `--no-session-persistence` to avoid state pollution
-- Bash tool's 10-minute timeout applies — mitigated by `--max-turns` limit
+- A Bash call's timeout applies (10 minutes by default) — mitigated by the `--max-turns` limit
 
 **Skills in `-p` Mode:**
 - Skills ARE available in print mode — only slash commands are restricted
@@ -77,7 +76,5 @@
 - Format has been stable across recent Claude Code versions
 
 **Bash Tool Timeout:**
-- Bash tool has a 10-minute maximum timeout
-- Long tests may exceed this limit and be killed
-- Mitigation: Use `--max-turns 10` to limit test duration
-- For particularly long tests, consider using `run_in_background` (not yet implemented)
+- A Bash call times out after 10 minutes unless its `timeout` is raised (up to 20 minutes)
+- `--max-turns` bounds each test; for a longer one, raise `timeout` or run it with `run_in_background`

@@ -1,8 +1,8 @@
 # CI Watch Prompt Template
 
-This file contains the prompt template used by iterate-pr to construct the Phase B CI Watch SubAgent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
+This file contains the prompt template iterate-pr Step 8 and create-pr Post-Creation step 4 use to build the CI Watch SubAgent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
 
-The CI Watch agent blocks until all CI checks complete, then collects the final status and any failure logs. This offloads the blocking wait and log collection from the main Opus context.
+The CI Watch agent blocks until all CI checks complete, then collects the final status and any failure logs. This offloads the blocking wait and log collection from the main context.
 
 ## Template
 
@@ -180,7 +180,7 @@ Where:
 ### Standard Invocation
 
 ```
-Task:
+Agent tool:
   subagent_type: "general-purpose"
   model: "sonnet"
   prompt: |

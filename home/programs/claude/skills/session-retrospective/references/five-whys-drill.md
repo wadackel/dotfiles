@@ -94,7 +94,7 @@ Append to the evidence list for each drilled learning:
 - **Why3**: no layer documents the shallow-clone constraint → **STOP (systemic / skill content gap)**
 - **Root Cause**: skill verification commands are written assuming full git history, without documenting the shallow-clone alternative (`refs/pull/N/merge`)
 - **Category**: systemic
-- **Immediate fix**: rerun with `--depth=0` unshallow in this session
+- **Immediate fix**: `git fetch --unshallow` and rerun in this session
 - **Prevention proposal**: Reference deepening in the skill that owns diff-verification — add a "shallow-clone" subsection pointing to `refs/pull/N/merge` and value-correctness checks. Routed to Rung 3 (reference deepening), NOT Rung 4 (CLAUDE.md), because it is a multi-paragraph workflow, not a one-liner.
 
 ## Anti-patterns

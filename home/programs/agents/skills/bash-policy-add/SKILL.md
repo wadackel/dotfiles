@@ -114,16 +114,16 @@ Edit the target file to append the approved rule under `rules:`.
 ```yaml
 # Block npm in favor of pnpm
 - pattern: "npm install *"
-  message: "Use pnpm install instead of npm install."
+  message: "This project uses pnpm: npm install ignores pnpm-lock.yaml and writes a package-lock.json. Use pnpm install instead."
 
 # Block git -C
 - pattern: "git -C *"
-  message: "Use 'cd <path> && git <subcmd>' instead of 'git -C <path>'."
+  message: "Do not use 'git -C <path>': the Bash(git <subcmd> *) rules in permissions.allow do not match it, so every call asks for permission. Use 'cd <path> && git <subcmd>' instead."
 
 # Block npx with scaffdog exception
 - pattern: "npx *"
   message: |
-    Do not use npx directly. Use pnpm alternatives instead:
+    npx can fetch and run a package that is not in the lockfile. Use the workspace binaries instead:
       pnpm exec <command>
       pnpm -F <package> <script>
   exclude:

@@ -68,28 +68,6 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 - `/gate` is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/gate`.
 
-## Simplification Heuristics
-
-Encoded in the agent system prompts; documented here for reference.
-
-### Plan-Level Over-Engineering Signals
-
-1. **Speculative generalization**: Abstractions designed for use cases that don't exist yet
-2. **Premature error taxonomy**: Complex error hierarchies when a simple error message suffices
-3. **Configuration surface area**: Making things configurable that have exactly one valid value
-4. **Indirection without benefit**: Wrapper layers that add no logic, just pass-through
-5. **Defensive design against impossible states**: Handling states the system can never reach
-6. **Feature flags for initial implementation**: Adding toggles before the feature is even validated
-
-### Code-Level Over-Engineering Signals
-
-1. **Dead abstractions**: Interfaces with one implementation, base classes with one subclass
-2. **Redundant validation**: Re-checking invariants guaranteed by the type system or caller
-3. **Over-parameterization**: Functions with configuration objects when a simple call suffices
-4. **Speculative caching**: Cache layers without measured performance problems
-5. **Unnecessary indirection**: Factory/builder/strategy patterns for straightforward construction
-6. **Defensive copying**: Deep cloning when ownership is clear
-
 ## Design Decisions
 
 **Why a fresh subagent (not inline review):** The main session has followed the entire design journey. It knows *why* each decision was made, which makes it blind to unnecessary complexity — every piece feels justified in context. A fresh subagent sees only the artifact and naturally asks "is this needed?" without the sunk-cost bias.

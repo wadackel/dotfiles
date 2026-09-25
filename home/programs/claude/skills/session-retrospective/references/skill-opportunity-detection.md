@@ -19,7 +19,7 @@ The single most important question for any learning:
 > "Would the user realistically type `/skill-name` to trigger this?"
 
 - **YES** → Skill candidate. Continue evaluating with the detection signals below.
-- **NO** → CLAUDE.md entry. The learning is a fact, preference, or behavioral rule that applies passively.
+- **NO** → Not a skill. Route it through `mechanism-signature.md`: hook, permissions, or CLAUDE.md.
 
 A skill is worth proposing when:
 - The user would reach for it by name in future sessions
@@ -65,7 +65,7 @@ When the user corrects Claude with detailed multi-step instructions, they're ess
 - User: "When iterating on a PR, always check CI first, then review comments, then read the actual failure logs before making changes" → This became the iterate-pr skill
 
 **Contrast with CLAUDE.md:**
-- User: "Always use pnpm, not npm" → Preference, goes to CLAUDE.md
+- User: "Always use pnpm, not npm" → Preference, not a skill; a bash-policy rule (Rung 1A)
 - User: "When fixing CI, do X → Y → Z → W" → Skill
 
 ### Signal 3: Cross-Session Repetition Signals
@@ -150,7 +150,7 @@ A session consumed an external knowledge source (PDF, guide, specification, chec
 ### Case 2: "Use gh CLI for GitHub URLs"
 - **As CLAUDE.md**: Behavioral preference, applies passively → CLAUDE.md
 - **As Skill**: Only if there's a multi-step gh workflow with orchestration
-- **Decision**: CLAUDE.md. No orchestration involved.
+- **Decision**: Not a skill; route via mechanism-signature.md (a `permissions.deny` on `WebFetch(domain:github.com)` is Rung 2).
 
 ### Case 3: "When reviewing code, first check PR diff, then read failing tests, then check coverage"
 - **As CLAUDE.md**: Too procedural for a one-liner
@@ -222,7 +222,7 @@ Every skill candidate — new creation, reference deepening, or description fix 
 - "This involves orchestrating 3 external tools with specific flags — Claude won't remember the correct combination without a skill"
 - "The user explicitly described this as a repeating workflow they want automated"
 
-### Weak justifications (→ use CLAUDE.md instead):
+### Weak justifications (→ not a skill; route via mechanism-signature.md):
 - "This is useful information" (but no orchestration)
 - "The user mentioned it multiple times" (but it's a preference, not a workflow)
 - "It's complex" (but it's a one-off specific to this codebase)

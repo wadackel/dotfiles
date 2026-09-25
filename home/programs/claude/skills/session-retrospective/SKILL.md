@@ -52,7 +52,7 @@ Captures the stdout path (something like `/tmp/claude-session-history-NNNN.md`).
 ```bash
 ~/.claude/skills/session-retrospective/scripts/retrospective-ledger.ts verify \
   --transcript /tmp/claude-session-history-NNNN.md \
-  --session "$(cat /tmp/claude-session-id 2>/dev/null || echo unknown)"
+  --session "<the Session ID value from the extract's header>"
 ```
 
 This iterates every active entry that has a proposal and applies the verification plan. See [references/outcome-verification.md](references/outcome-verification.md) for grammar and delta rules.
@@ -97,8 +97,8 @@ For each learning that survived Phase 2, construct a **Behavior-Change Pair** pe
 
 **Gates that MUST run** per Pair:
 
-- If Enforcement = skill: pass [references/skill-tdd-gate.md](references/skill-tdd-gate.md) RED test. No reproducible RED → demote to claude_md (if the strengthened Rung 4 bar passes) or Rejection Log.
-- If Enforcement = claude_md: pass the strengthened Rung 4 acceptance bar in `routing-logic.md` — (a) past-session concrete evidence AND ((b) expiry OR (c) redundancy check).
+- If Enforcement = skill: pass [references/skill-tdd-gate.md](references/skill-tdd-gate.md) RED test. No reproducible RED → demote to claude_md (if the Rung 4 acceptance bar passes) or Rejection Log.
+- If Enforcement = claude_md: pass the Rung 4 acceptance bar in `routing-logic.md` — (a) past-session concrete evidence AND ((b) expiry OR (c) redundancy check).
 - Scope-Agnostic verdict from Phase 2 must be keep-principle or keep-instance. discard → Rejection Log.
 
 **RECURRENCE handling**: if a learning is flagged as RECURRENCE from Phase 1, the Pair targets the SAME rule but at a stronger enforcement Rung (Rung N → Rung N-1). Per routing-logic.md boundary handling.
@@ -145,9 +145,9 @@ Which proposals would you like to apply?
 
 1. Apply the concrete changes (edit files, create skills, add hook rules, etc.) via Edit / Write tools.
 2. For EACH accepted Pair, call `retrospective-ledger.ts` to record the Pair in the ledger:
-   - `retrospective-ledger.ts add --rule "<Target After in one sentence>" --domain "<archetype>" --session "<current session id>"`
+   - `retrospective-ledger.ts add --rule "<Target After in one sentence>" --domain "<archetype>" --session "<the Session ID value from the extract's header>"`
    - If the add matched an existing entry (similarity match), the entry is reinforced; otherwise a new entry is created.
-   - Then `retrospective-ledger.ts record-proposal <id> --layer <hook|permissions|skill|claude_md> --target <path> --plan '<verification_plan JSON>' --expiry "<expiry sentence or empty>" --session "<session id>"`
+   - Then `retrospective-ledger.ts record-proposal <id> --layer <hook|permissions|skill|claude_md> --target <path> --plan '<verification_plan JSON>' --expiry "<expiry sentence or empty>" --session "<the Session ID value from the extract's header>"`
 3. For RECURRENCE-derived Pairs (escalation), record-proposal attaches a NEW proposal to the SAME existing entry (id from Phase 1's recurrence list).
 4. Emit a final summary: X Pairs shipped, Y rejected, Z recurred+escalated.
 
@@ -164,7 +164,7 @@ Which proposals would you like to apply?
 - [references/scope-agnostic-gate.md](references/scope-agnostic-gate.md) — substitution test + counter-examples (Phase 2)
 - [references/mechanism-signature.md](references/mechanism-signature.md) — 4-question pre-routing (Phase 3)
 - [references/skill-tdd-gate.md](references/skill-tdd-gate.md) — RED/GREEN/REFACTOR (Phase 3, skill candidates)
-- [references/routing-logic.md](references/routing-logic.md) — Enforcement Ladder + Rung 4 strengthened bar (Phase 3)
+- [references/routing-logic.md](references/routing-logic.md) — Enforcement Ladder + Rung 4 acceptance bar (Phase 3)
 - [references/behavior-change-pair.md](references/behavior-change-pair.md) — Pair template + archetype → enforcement bias (Phase 3)
 - [references/outcome-verification.md](references/outcome-verification.md) — Verification plan grammar + confidence delta (Phase 1)
 - [references/learning-categories.md](references/learning-categories.md) — 3 archetypes (Phase 2)

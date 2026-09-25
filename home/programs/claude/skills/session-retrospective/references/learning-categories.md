@@ -54,7 +54,7 @@ Repeated style corrections are Behavioral corrections. Non-repeated single-insta
 - agent-browser needs `snapshot -i` before element refs can be used
 - This repo uses `.#private` / `.#work` as flake outputs (project-specific fact)
 
-**Routing bias:** claude_md (Rung 4) — **if the strengthened Rung 4 bar passes**. Facts cannot be enforced, only documented. Key check: does mechanism-signature Q1-Q3 pass instead? If yes (e.g., "tool X is broken, block it") the archetype is really a Behavioral correction with enforcement, not a Discovered fact.
+**Routing bias:** claude_md (Rung 4) — **if the Rung 4 acceptance bar passes**. Facts cannot be enforced, only documented. Key check: does mechanism-signature Q1-Q3 pass instead? If yes (e.g., "tool X is broken, block it") the archetype is really a Behavioral correction with enforcement, not a Discovered fact.
 
 ## Decision tree (Phase 2 classification)
 

@@ -101,10 +101,7 @@ The Explore subagent will independently read files, search the codebase, and inv
 
 ### Processing Results
 
-1. **Falsified** → Update plan immediately, mark Deepening Log verdict as ITERATE
-2. **Unverified** → Add to plan as explicit risk with test strategy
-3. **Verified** → Record in Deepening Log for confidence tracking
-4. **Design Questions** → Ask the user through the current agent's user-confirmation mechanism if needed; in text-only runtimes, ask the question, end the turn, and wait for the user's next response
+Triage the reply together with the critic's findings as the plan skill's DEEPEN phase describes: a Falsified claim is resolved before the plan is activated (fixed inline, or queued as a user decision), an Unverified claim the approach depends on needs evidence or a revised approach, Verified claims go to `<plan>.log.md`, and Design Questions are asked per `interview.md`.
 
 ---
 

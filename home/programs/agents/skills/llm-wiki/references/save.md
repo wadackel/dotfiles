@@ -2,7 +2,7 @@
 
 `save [title]` extracts what the current session established, writes it into `04_Literature/` as a conversation source, and compiles it.
 
-This is the entry point that matters most day to day: the vault has 1,290 daily notes but only 14 links from them into `02_Notes/`, so insight from working sessions has never been reaching the concept layer.
+This is the entry point for insight from working sessions, which otherwise stays in daily notes and never reaches the concept layer.
 
 ## Working outside the vault
 

@@ -66,13 +66,6 @@ Use Claude's native file tools on the cloned directory:
 
 **Do NOT use `gh api` for file contents** — everything is local now.
 
-### Step 3: Report
-
-Summarize findings to the user. Structure depends on the request but typically includes:
-- Repository overview (language, framework, structure)
-- Key findings relevant to the user's question
-- Notable patterns, potential issues, or recommendations
-
 ## Cleanup
 
 Do NOT automatically delete the cloned repository after exploration. The user may want to continue investigating in follow-up messages. The `/tmp` directory is cleaned up on system restart.
@@ -87,4 +80,4 @@ rm -rf /tmp/repo-dive/owner-repo
 
 - For private repositories, `git clone` uses the `gh` CLI's auth context (credential helper). If clone fails, suggest `gh auth status` to verify authentication.
 - Shallow clone (`--depth 1`) is the default. If the user needs git history (blame, log), re-clone without `--depth 1`.
-- When exploring monorepos or very large repos, ask the user which subdirectory to focus on before diving in.
+- In monorepos or very large repos, find the subdirectory the question concerns (search for the named feature, read the workspace config) before reading broadly; ask only when the request names nothing to search for.

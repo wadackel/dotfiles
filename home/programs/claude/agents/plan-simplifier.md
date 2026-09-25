@@ -66,7 +66,7 @@ Read the plan carefully. For each element (step, abstraction, error-handling str
 - "While we're at it" additions that aren't in the user's requirements
 - Edge case handling that the user didn't ask for and isn't safety-critical
 
-### CRITICAL: Scope Reduction vs. Simplification
+### Scope Reduction vs. Simplification
 
 Before proposing any change, verify it does NOT reduce scope:
 
@@ -75,7 +75,7 @@ Before proposing any change, verify it does NOT reduce scope:
 - **Scope reduction**: Fewer outcomes, fewer capabilities (BAD — this is a requirements change)
   Example: "Only apply fix to select action" when the plan says "all tree operations"
 
-**Test**: After applying this proposal, can the user still do everything the plan promises? If NO, this is NOT a simplification — it is a scope reduction. Do NOT propose it.
+**Test**: after applying the proposal, can the user still do everything the plan promises? If not, it is a scope reduction; leave it out.
 
 Specifically, do NOT propose:
 - Reducing the set of actions/endpoints/commands that a feature applies to

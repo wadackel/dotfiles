@@ -39,10 +39,10 @@ Provide your review in this format:
 
 ```bash
 # 1a. Standard review (default criteria, Codex auto-reads uncommitted changes)
-codex exec review --uncommitted --full-auto
+codex exec -s workspace-write review --uncommitted
 
 # 1b. OR: Custom criteria review (use `codex exec` to combine scope + criteria)
-codex exec --full-auto "
+codex exec -s workspace-write "
 You are a strict senior code reviewer.
 Review the uncommitted changes (run git diff to see them).
 
@@ -68,7 +68,7 @@ For each issue, include:
 # (Use Edit/Write tools to fix issues identified by Codex)
 
 # 3. Follow-up review (max 5 iterations)
-codex exec resume --last --full-auto "
+codex exec -s workspace-write resume --last "
 Applied fixes for the identified issues. Please re-review.
 "
 
@@ -80,7 +80,7 @@ Applied fixes for the identified issues. Please re-review.
 
 ```bash
 # Security review with focused criteria (use `codex exec` for custom prompt)
-codex exec --full-auto "
+codex exec -s workspace-write "
 Conduct a security review of the uncommitted changes.
 Run git diff to see the changes.
 

@@ -117,12 +117,7 @@ With all ambiguities resolved, create the deliverable in the agreed format.
 
 **Implementation handoff:** Preserve the agreed purpose, non-goals, constraints, acceptance criteria, and implementation discretion in the deliverable. Link accepted source decisions so downstream planning does not re-ask settled questions. Separate local checks from observation of the actual deployed or running artifact, and identify any required user participation. For PoC/Goal use, state the primary path that establishes success and the stopping condition; additional polish outside that scope is not a completion requirement. Do not start Goal or grant external-action permissions merely by writing this handoff.
 
-**Structure for clarity:**
-- Lead with a summary/overview
-- Separate facts from decisions from open questions
-- Include the "why" behind decisions — it helps future readers judge if the decision still applies
-- Reference specific code, files, or systems when relevant
-- Link related items (other Issues, docs, etc.)
+**Structure for clarity:** separate facts from decisions from open questions, and give the why behind each decision so a later reader can judge whether it still applies.
 
 **Assumptions vs Open questions (use both, but distinguish).** Every unresolved detail falls into exactly one of these buckets:
 
@@ -158,11 +153,7 @@ Skip this gate for `decision` and `stakeholder` deliverables. The cost is one or
 
 ## Handling multiple items
 
-When the user has several items to process (like multiple Issues):
-
-1. Process them sequentially — one complete cycle per item
-2. Apply learnings from earlier items (e.g., if the user corrected your approach on item 1, adapt for item 2)
-3. After the first item, offer to review whether the depth and style match expectations before continuing
+When the user has several items to process (like multiple Issues), finish one complete cycle per item, and after the first ask whether its depth and style match what they want before continuing.
 
 ## When NOT to interview
 

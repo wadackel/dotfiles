@@ -111,6 +111,8 @@ Return ONE JSON object with this exact shape (no surrounding prose, no markdown 
   "suggestions": ["..."]
 }
 
+`checks` has one entry per rubric row, in rubric order, including rows appended for file types.
+
 ## Verdict Rules
 
 - `verdict` is PASS only when EVERY check is PASS

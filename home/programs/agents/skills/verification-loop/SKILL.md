@@ -153,8 +153,7 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 ## Anti-Patterns
 
-- Paraphrasing tool output ("tests pass") instead of pasting raw stdout — `/gate` (the default final gate) requires raw evidence; `/santa-loop` trusts the audit verdict and does not re-judge completeness
-- Running phases serially when they're independent (Build / Lint / Tests can usually parallelize on a single toolchain — but watch for resource contention)
+- Paraphrasing tool output ("tests pass") instead of pasting raw stdout — the raw output is what lets a reader check the verdict instead of trusting it
 - Treating Security or Diff flags as blocking — they are signals, not gates; over-blocking causes users to lose trust in the gate
 - Auto-applying `--fix` flags within this skill — verification reads, doesn't write. Auto-fix belongs in `/impl` per-task work, not in the gate
 
@@ -175,6 +174,6 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 **Why no auto-fix**: a verification gate that mutates the code creates a "ratchet" — every run might rewrite something the user didn't expect. Strict separation: this skill reads, `/impl` writes.
 
-**Why raw output is captured verbatim**: the verbatim output is what `/gate` (the default final gate) consumes for evidence audit; `/santa-loop` then receives the audit verdict and re-uses the same evidence trail without re-judging completeness.
+**Why raw output is captured verbatim**: a READY verdict is only as good as the output behind it; pasted stdout lets the reader check each phase instead of trusting a summary.
 
 **Why opt-in**: in a 5-plan analysis, final-gate re-execution caught nothing that per-task verification had missed, so running it by default duplicates cost without catching anything new. Opt-in preserves the deterministic re-run capability for cases that genuinely require it via manual invocation (`/verify`, pre-PR sanity check, standalone post-`/impl` step). No orchestration hook is exposed — users invoke this skill directly.

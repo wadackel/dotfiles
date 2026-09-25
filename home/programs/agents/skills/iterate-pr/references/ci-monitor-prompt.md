@@ -1,8 +1,8 @@
 # CI Monitor Prompt Template
 
-This file contains the prompt template used by iterate-pr to construct the Phase A CI Monitor SubAgent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
+This file contains the prompt template iterate-pr Step 3 uses to build the CI Monitor SubAgent prompt. Replace `{placeholders}` with actual values before passing to the subagent.
 
-The CI Monitor collects CI status, review feedback, and failure logs in a single pass, returning a prose summary with a VERDICT line. This avoids loading raw CI logs and review data into the main Opus context.
+The CI Monitor collects CI status, review feedback, and failure logs in a single pass, returning a prose summary with a VERDICT line. This avoids loading raw CI logs and review data into the main context.
 
 ## Template
 
@@ -182,7 +182,7 @@ Where:
 ### Standard Invocation
 
 ```
-Task:
+Agent tool:
   subagent_type: "general-purpose"
   model: "sonnet"
   prompt: |

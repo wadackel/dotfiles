@@ -12,7 +12,7 @@ The Ladder still runs after pre-routing to confirm the choice. Pre-routing only 
 
 - Behavioral correction → Rung 1 (hook) or Rung 2 (permissions)
 - Workflow candidate → Rung 3 (skill)
-- Discovered fact → Rung 4 (claude_md), only if strengthened bar passes
+- Discovered fact → Rung 4 (claude_md), only if the Rung 4 acceptance bar passes
 
 This is a starting hint, not a verdict. The Ladder overrides when mechanism-signature signals otherwise.
 
@@ -54,13 +54,13 @@ For each learning, walk down this ladder and stop at the **first rung that appli
   When to use: only when Rungs 0-3 do not apply. This layer depends on Claude reading and obeying a written rule — the weakest form of prevention.
   A proposal landing on Rung 4 MUST include one line per rejected rung explaining why Rungs 0-3 do not apply.
 
-  **Rung 4 acceptance bar (strengthened)** — the proposal MUST satisfy BOTH conditions below:
+  **Rung 4 acceptance bar** — the proposal must satisfy both conditions below:
 
   1. **(a) Past-session evidence — mandatory**: cite at least one concrete past-session event (turn number, verbatim quote, or file:line) where this line would have prevented the misbehavior. Hypothetical "if someone ever does X" does not count. Without past-session evidence, Rung 4 is unjustified — discard the proposal.
 
   2. **(b) Expiry OR redundancy check — either one**:
      - **(b1) Expiry condition**: a one-sentence trigger for when this line can be removed ("remove when the skill's description adds the phrase X", "remove when library Y reaches version Z"). Prevents CLAUDE.md from accreting rules that outlive their cause.
-     - **(b2) Redundancy check**: confirm by grep that no existing CLAUDE.md line, instinct at confidence ≥0.7, or skill body already covers the same rule. If coverage exists and did not prevent the recurrence, escalate to the layer that failed (description fix, reference deepening, or hook) rather than adding a second written rule.
+     - **(b2) Redundancy check**: confirm by grep that no existing CLAUDE.md line, active ledger entry at confidence ≥ 0.5, or skill body already covers the same rule. If coverage exists and did not prevent the recurrence, escalate to the layer that failed (description fix, reference deepening, or hook) rather than adding a second written rule.
 
   Sub-routing inside Rung 4 (Project-Specific vs Universal, Team vs Personal) uses the existing rules below (see "Rules for Determining Project-Specific vs Universal").
 
@@ -102,13 +102,13 @@ A learning is **project-specific** if it:
 
 After determining a learning is project-specific, further classify:
 
-**Team convention** (→ Project CLAUDE.md, git-managed):
+**Team convention** (→ the project's committed instruction file: `CLAUDE.md`, or `AGENTS.md` when the project keeps its instructions there; adding a `CLAUDE.md` to an AGENTS.md-only project stops Claude Code from reading `AGENTS.md` by default):
 - Build commands, test commands, project structure
 - Coding standards the team agreed upon
 - Architecture decisions documented in ADRs
 - Example: "Always run `task format` after modifying proto files"
 
-**Personal preference** (→ Project-local personal CLAUDE.md, `~/.claude/projects/<hash>/CLAUDE.md`):
+**Personal preference** (→ `./CLAUDE.local.md`, added to `.gitignore`; in an AGENTS.md-only project it stops Claude Code from reading `AGENTS.md`, so it starts with an `@AGENTS.md` import):
 - Individual workflow optimizations
 - Personal coding checklist items
 - Preferences not mandated by the team
@@ -116,8 +116,8 @@ After determining a learning is project-specific, further classify:
 - Example: "Always create Stories for new components matching existing patterns"
 
 **Heuristic:** Ask "Would a new team member need to follow this rule?"
-- If YES → Team convention (Project CLAUDE.md)
-- If NO → Personal preference (Project-local personal CLAUDE.md)
+- If YES → Team convention (the project's committed instruction file)
+- If NO → Personal preference (`CLAUDE.local.md`)
 
 ### Universal/Cross-Project Indicators
 
@@ -194,7 +194,7 @@ Propose a new skill when ANY of the following conditions are met:
 - (E) "Edit nix → check → rebuild" repeated 3 times in session
 
 **Examples that should NOT be skills:**
-- "Use pnpm instead of npm" (preference, no orchestration → CLAUDE.md)
+- "Use pnpm instead of npm" (preference, no orchestration → bash-policy rule, Rung 1A)
 - "Port 3001, not 3000" (fact, no workflow → CLAUDE.md)
 - "Prefer named exports" (code style → CLAUDE.md)
 - "Read file → make one edit → save" (too simple, fewer than 3 meaningful steps)
@@ -308,10 +308,10 @@ Before finalizing routing decisions, verify:
 - [ ] Proposal is concise (one line for CLAUDE.md entries)
 - [ ] Placement in target file is specified (after which section)
 
-## Routing Summary Table (3-archetype, v3)
+## Routing Summary Table
 
 | Archetype | Default Target (Rung) | Skill Route Possible? | Skill Condition |
 |-----------|-----------------------|----------------------|-----------------|
 | Behavioral correction | Rung 1 (hook / bash-policy) or Rung 2 (permissions) | Only if the correction names a multi-step procedure | Condition B + must pass skill-tdd-gate RED |
 | Workflow candidate | Rung 3 (skill creation / description fix / reference deepening) | Always (that is the archetype's definition) | Condition A / C / D / E / Signal 6 + skill-tdd-gate RED |
-| Discovered fact | Rung 4 (CLAUDE.md) — only if strengthened bar passes | Rarely; typically reference-deepening on an existing skill | When the fact is structural and the skill would be permanent |
+| Discovered fact | Rung 4 (CLAUDE.md) — only if the Rung 4 acceptance bar passes | Rarely; typically reference-deepening on an existing skill | When the fact is structural and the skill would be permanent |

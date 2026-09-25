@@ -15,7 +15,7 @@ Delegates tasks to Codex CLI (`codex exec`) for analysis, investigation, and sec
 
 **Key principle**: Codex analyzes and advises — Claude Code implements. Do not ask Codex to write implementation code directly. Use Codex output to inform Claude Code's implementation decisions.
 
-**Prerequisites**: `codex` CLI must be installed (Homebrew: `brew install openai/codex/codex`).
+**Prerequisites**: `codex` CLI on PATH (installed by `home/programs/codex/default.nix`).
 
 ## Quick start
 
@@ -24,7 +24,7 @@ Delegates tasks to Codex CLI (`codex exec`) for analysis, investigation, and sec
 codex exec -s read-only --ephemeral "Analyze error handling in ./src/api/. Read ./CLAUDE.md for context."
 
 # Error investigation with sandbox execution
-codex exec --full-auto --ephemeral "Reproduce and debug the test failure in ./tests/auth.test.ts. Run the test suite."
+codex exec -s workspace-write --ephemeral "Reproduce and debug the test failure in ./tests/auth.test.ts. Run the test suite."
 ```
 
 ## When Claude Should Use This Skill
@@ -61,7 +61,6 @@ codex exec -s <sandbox> --ephemeral "prompt"
 |---|---|---|
 | Read-only | `-s read-only` | Analysis, review, no filesystem changes needed |
 | Workspace write | `-s workspace-write` | Need to run commands that modify files |
-| Full auto | `--full-auto` | Convenience alias: on-request approval + workspace-write |
 
 For current flag details, run `codex exec --help`.
 
@@ -126,9 +125,9 @@ For multi-turn tasks where session continuity is needed:
 codex exec -s read-only "initial prompt"
 
 # Resume later
-codex exec resume --last --full-auto "follow-up prompt"
+codex exec -s workspace-write resume --last "follow-up prompt"
 # Or with explicit session ID:
-codex exec resume <SESSION_ID> --full-auto "follow-up prompt"
+codex exec -s workspace-write resume <SESSION_ID> "follow-up prompt"
 ```
 
 ## Important Guidelines
@@ -152,9 +151,9 @@ Codex CLI runs synchronously via Bash tool. Default timeout is 10 minutes (max 2
 
 Non-obvious behavior to be aware of:
 
-1. **`codex exec review` scope + prompt are mutually exclusive**: `--uncommitted`, `--base`, `--commit` cannot be combined with a custom `[PROMPT]`. Use `codex exec --full-auto "Review uncommitted changes (run git diff)..."` for custom criteria with specific scope.
+1. **`codex exec review` scope + prompt are mutually exclusive**: `--uncommitted`, `--base`, `--commit` cannot be combined with a custom `[PROMPT]`. Use `codex exec -s workspace-write "Review uncommitted changes (run git diff)..."` for custom criteria with specific scope.
 
-2. **`--full-auto` expands to**: on-request approval policy + workspace-write sandbox. It does NOT grant full filesystem access.
+2. **Pass `-s` on every call**: `~/.codex/config.toml` sets `sandbox_mode = "danger-full-access"`. For `exec review` and `exec resume`, put `-s` before the subcommand (`codex exec -s read-only review …`); the subcommands reject it.
 
 3. **`--ephemeral`**: Prevents session files from being saved to disk. Use for one-off tasks to keep the session list clean for codex-review's `resume --last`.
 

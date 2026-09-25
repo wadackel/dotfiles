@@ -36,7 +36,7 @@ How to split: create the new note from the conventions template, then replace th
 - Three or more notes in a genre circle the same problem with no note tying them together
 - A `query` asked for a comparison, a trade-off, or the overall picture
 
-The vault currently has almost none of these. During backfill, watch for them actively: a genre with 100+ articles and no synthesis note has an obvious gap.
+A genre with 100+ articles and no synthesis note has an obvious gap.
 
 ## Whether to save a `query` result
 

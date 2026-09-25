@@ -108,10 +108,9 @@ Both configurations use the same overlays and extraSpecialArgs to ensure consist
 
 Despite Nix, Homebrew is used for:
 
-- **Applications/Casks**: Arc, Chrome Canary, Claude Code, Tinycast, WezTerm, 1Password CLI, etc.
-- **Python versions**: 3.8, 3.9, 3.10, 3.11, 3.13, 3.14 (not yet stable in nixpkgs)
-- **Specialized tools**: z3, cask, numpy, pillow
-- **Custom taps**: wadackel/tap (pinact)
+- **Applications (casks)**: Arc, Chrome Canary, the Claude desktop app, Tinycast, WezTerm, 1Password CLI, etc.
+- **Python**: `python@3.14` with `numpy` / `pillow`
+- **Formulas**: `tree-sitter-cli` (nvim-treesitter needs a newer release than nixpkgs ships), `z3`, `cask`
 
 Homebrew configuration is in `darwin/configuration.nix` under the `homebrew` section.
 
@@ -225,10 +224,6 @@ If system settings don't update after `darwin-rebuild`:
 2. Some Dock/Finder settings use post-activation scripts for immediate effect (see `system.activationScripts`)
 3. Try: `killall Dock && killall Finder`
 
-### Homebrew Formula Not Found
-
-The `homebrew.global.brewfile` is disabled due to formula lookup issues during migration. Formulas are explicitly listed in `homebrew.brews`.
-
 ### Rollback After Bad Change
 
 Nix keeps all previous generations - you can always rollback safely. See [README.md](README.md#rollback) for rollback commands.
@@ -238,7 +233,7 @@ Nix keeps all previous generations - you can always rollback safely. See [README
 This repository includes comprehensive Claude Code configuration:
 
 - **Settings**: `home/programs/claude/settings.json` (symlinked to `~/.claude/settings.json`)
-- **Agents**: 10 specialized agents in `home/programs/claude/agents/` (code-review, security-audit, architecture-review, debugging, frontend, refactoring, build-error-resolution, task-planning, TDD, skill-review)
+- **Agents**: `home/programs/claude/agents/` holds the reviewers `/gate` dispatches (`code-reviewer`, `security-auditor`, per-language and domain specialists, `comment-reviewer`) and task agents (`debugger`, `refactoring-specialist`, `build-error-resolver`, `tdd-guide`, `code-simplifier` / `plan-simplifier`, `architect-reviewer`, `skill-guide-reviewer`)
 - **Scripts**: `home/programs/claude/scripts/` (symlinked to `~/.claude/scripts/`)
   - `claude-notify.ts`: terminal-notifier + tmux integration notifications. Debug: `~/.claude/scripts/claude-notify.ts debug`
   - `claude-memo.ts`: Stop hook that writes session summaries to Obsidian daily notes. Debug: `$TMPDIR/claude-memo.log`
@@ -373,7 +368,7 @@ Example: `/Users/foo/github.com/bar` → `-Users-foo-github-com-bar`
 
 `bash-policy.ts` evaluates all Bash commands as a global `PreToolUse` hook.
 - **Blocking behavior**: exit 2 → command not executed → stderr returned to Claude as error feedback → self-correction
-- **Global rules**: `~/.claude/scripts/bash-policy.yaml` (currently: `git -C *`)
+- **Global rules**: `~/.claude/scripts/bash-policy.yaml`
 - **Project rules**: Create `.claude/bash-policy.yaml` and it will be auto-loaded by searching upward from `cwd` (already in global gitignore)
 - **Rule format**: YAML with `pattern: "npx *"` + `message: "..."` (glob matching)
 
@@ -387,7 +382,7 @@ Commands containing pipes `|`, `&&`, `||`, `;`, or redirects `2>&1` do not match
 - Use a `PermissionRequest` hook to segment commands containing shell syntax (pipes, redirects, etc.), match against a whitelist, and auto-approve (see `home/programs/claude/scripts/approve-piped-commands.ts`)
 - `PermissionRequest` fires only just before a permission dialog appears, making it lower overhead than `PreToolUse`
 
-`Tool(**)` patterns (e.g., `Read(**)`) only cover paths within the project directory and `additionalDirectories`. For paths outside the project like `~/.claude/`, add `Tool(~/.claude/**)` separately. All three of `Read`, `Edit`, and `Write` need the `~/.claude/**` pattern.
+`Tool(**)` patterns (e.g., `Read(**)`) only cover paths within the project directory and `additionalDirectories`. For paths outside the project like `~/.claude/`, add `Tool(~/.claude/**)` separately. `Read(~/.claude/**)` and `Edit(~/.claude/**)` are needed; the `Edit` rule also covers `Write`.
 
 ### plan-state / plan-evidence (shared evidence sidecar)
 

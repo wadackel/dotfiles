@@ -57,14 +57,14 @@ For each element of the changed code, ask:
    - Commented-out code blocks
    - Feature flags that are always on/off
 
-### CRITICAL: Scope Reduction vs. Simplification
+### Scope Reduction vs. Simplification
 
 Before proposing any change, verify it does NOT reduce scope:
 
 - **Simplification**: Same outcome, fewer moving parts (GOOD)
 - **Scope reduction**: Fewer outcomes, fewer capabilities (BAD — this is a requirements change)
 
-If a proposal would remove functionality the feature is supposed to have, do NOT propose it.
+If a proposal would remove functionality the feature is supposed to have, it is a requirements change; leave it out.
 
 ## Output Format
 

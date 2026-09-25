@@ -53,7 +53,7 @@ Hypothetical "maybe in the future" counter-examples are disallowed. If you canno
 After the substitution test and counter-examples, pick one:
 
 - **Keep principle**: write the rule at the principle level. The specific tool / project / domain becomes an example, not the rule itself. This is what enters Phase 3 Routing.
-- **Keep instance**: the rule is genuinely scope-specific and does not generalize. Route to Rung 4 (Project-Specific CLAUDE.md) only. Global CLAUDE.md, skills, and hooks are excluded.
+- **Keep instance**: the rule is genuinely scope-specific and does not generalize. It stays inside the project: a project `.claude/bash-policy.yaml` rule or project settings when mechanism-signature Q1–Q3 applies, otherwise the project's instruction file. Global CLAUDE.md, global hooks, and skills are excluded.
 - **Discard**: the rule fails the substitution test AND you cannot find two concrete counter-examples. Drop it and record in the Rejection Log.
 
 ## Template

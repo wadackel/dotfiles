@@ -1,4 +1,4 @@
-<!-- Mirror of the comment rules in home/programs/claude/CLAUDE.md (Design Principles) — update both together. -->
+<!-- Mirror of the comment rules in home/programs/claude/CLAUDE.md (## Code) — update both together. -->
 
 ## Code Comment Conventions
 

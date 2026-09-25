@@ -68,7 +68,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes `.rs` file
 | Level | Criteria | Examples |
 |---|---|---|
 | MUST_FIX | UB, data race, panic in library code | Unsound `unsafe`, `unwrap` in lib, `!Send` in Arc |
-| SHOULD_FIX | Design / performance issue | Over-cloning, unnecessary Mutex |
+| SHOULD_FIX | Design or performance issue with a concrete consequence | Over-cloning in a hot path, unnecessary Mutex |
 | NIT | Style | Could use `let-else`, inline format args |
 
 ## Output Format
