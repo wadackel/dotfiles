@@ -23,10 +23,12 @@ let
     "script.google.com"
     "script.googleusercontent.com"
   ];
-  # Both platform_toolsets.slack and mcpServers use this name. Hermes hands
-  # Slack every server when none of the listed names is defined, so a rename
-  # on one side only would silently expose gcal's create_event.
+  # Both platform_toolsets.slack and mcpServers use these names. A rename on
+  # one side only drops that server from Slack silently, and Hermes hands
+  # Slack every server, gcal's unapproved create_event included, once none of
+  # the listed names is defined.
   slackMcpServer = "agenda";
+  slackCalendarServer = "calendar";
   deno = "${pkgs.deno}/bin/deno";
   denoRun =
     {
@@ -191,8 +193,9 @@ in
 
         platform_toolsets = {
           # Listing no MCP server would hand every server, gcal included, to
-          # Slack sessions; naming one makes the list an allowlist, so Slack
-          # reads the calendar through agenda and calendar writes stay cron-only.
+          # Slack sessions; naming them makes the list an allowlist, so Slack
+          # reads the calendar through agenda and writes to it only through
+          # calendar, which asks the owner to approve each event.
           slack = [
             "web"
             "terminal"
@@ -200,6 +203,7 @@ in
             "todo"
             "memory"
             slackMcpServer
+            slackCalendarServer
           ];
           cron = [ "gcal" ];
         };
@@ -214,6 +218,20 @@ in
           }
           // {
             tools.include = [ "create_event" ];
+          };
+        ${slackCalendarServer} =
+          mcpServer {
+            net = appsScript;
+            read = [ googleDir ];
+            script = "gcal-mcp.ts";
+            args = [ "--slack" ];
+          }
+          // {
+            tools.include = [ "create_event" ];
+            # The owner's approval may take the full 330 seconds gcal-mcp.ts
+            # waits for it, and the bridge up to ~130 more after an accept;
+            # the 300-second default would abandon a create already approved.
+            timeout = 480;
           };
         ${slackMcpServer} =
           mcpServer {
