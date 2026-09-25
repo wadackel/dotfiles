@@ -12,7 +12,8 @@
     "FORCE_AUTOUPDATE_PLUGINS": "true",
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_ERROR_REPORTING": "true",
-    "OTEL_LOG_TOOL_DETAILS": "1"
+    "OTEL_LOG_TOOL_DETAILS": "1",
+    "CLAUDE_CODE_SCROLL_SPEED": "3"
   },
   "permissions": {
     "allow": [
@@ -761,15 +762,16 @@
   "language": "japanese",
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
+  "modelSettings": {
+    "claude-opus-5-5": {
+      "effortLevel": "high"
+    }
+  },
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "preferredNotifChannel": "terminal_bell",
   "teammateMode": "in-process",
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "modelSettings": {
-    "claude-opus-5-5": {
-      "effortLevel": "high"
-    }
-  }
+  "voiceEnabled": true
 }
