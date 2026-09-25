@@ -54,7 +54,7 @@ Append to `~/.claude/plans/<slug>.gate.log.md` under `### Round N` (read the fil
 The reply carries only what changes the reader's next action:
 
 - Under `/impl`, the gate writes no reply of its own: it hands the verdict and the items below to the final report.
-- Standalone, the reply takes the shape of `## Final report` in `~/.claude/skills/impl/SKILL.md`, with `## 見つかったこと` (what was reviewed and what came out, at most three lines) in place of `## 変わったこと`. The items under `## 決めてほしいこと` are a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` as two nested lines, and a finding dismissed in an earlier round that resurfaced, which is listed here rather than dismissed again. Each item is one line with its `file:line`, and one nested line with what happens if it stays.
+- Standalone, the reply takes the shape of `## Final report` in `~/.claude/skills/impl/SKILL.md`, with `## 見つかったこと` (what was reviewed and what came out, briefly) in place of `## 変わったこと`. The items under `## 決めてほしいこと` are a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` as two nested lines, and a finding dismissed in an earlier round that resurfaced, which is listed here rather than dismissed again. Each item is one line with its `file:line`, and one nested line with what happens if it stays.
 - With `--diff-only`, `## 確かめたこと` lists the review surfaces and `Sidecar:` names the scratchpad `.gate.diff` and the log.
 - Nothing else: no per-reviewer lines, no round counts, no themed tallies of NITs.
 

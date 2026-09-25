@@ -118,7 +118,7 @@ Order by `rating` descending. Seven books have no rating; put them last, and bre
 | `/llm-wiki ingest 03_Books/<...>.md` | That one book |
 | `/llm-wiki recompile 03_Books/<...>.md` | Re-process a book whose notes have grown |
 
-The no-argument exclusion is deliberate. The article backlog is nearly drained, so without it the books would be most of what a bare `ingest` finds — and the "more than 30 targets, ask first" guard in [ingest.md](ingest.md) does not fire at the size of this shelf. A bare `ingest` would quietly start a whole-shelf run.
+The no-argument exclusion is deliberate. Once the article backlog is small, the books would otherwise be most of what a bare `ingest` finds — and the "more than 30 targets, ask first" guard in [ingest.md](ingest.md) does not fire at the size of this shelf. A bare `ingest` would quietly start a whole-shelf run.
 
 ## Operation log
 

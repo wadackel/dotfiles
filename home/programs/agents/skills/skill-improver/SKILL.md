@@ -177,7 +177,7 @@ On convergence, generate a **hold-out scenario** per `references/scenario-and-co
 
 **Diverged** when 3 iterations produce no reduction in unclear points → the skill's design itself is flawed. Stop patching; recommend structural rewrite to the user.
 
-**Resource cutoff**: if iteration cost no longer justifies the quality gain, stop at the current score. Report it to the user as a colloquial "good enough" cutoff (e.g., "shipping at ~80 points" using the source skill's informal phrasing — this is not a formal 100-point scoring scale).
+**Resource cutoff**: if iteration cost no longer justifies the quality gain, stop at the current score. Report it to the user as a "good enough" cutoff and say what the remaining iterations would have targeted.
 
 ## Iteration Report Format
 
@@ -235,22 +235,11 @@ Weight qualitative (unclear points, discretionary gaps) **over** quantitative. C
 
 Numbers are guide values from empirical-prompt-tuning; eyeball when metrics are noisy or when N/A.
 
-## Red Flags (rationalizations to refuse)
+## Evaluator stance
 
-| Rationalization | Actual state |
-|---|---|
-| "I can reread my own prompt — same effect" | Cannot objectify text you just wrote. Dispatch a fresh subagent. |
-| "One scenario is enough" | One scenario overfits. Minimum 2, prefer 3. |
-| "Zero unclear points once — done" | Could be luck. Require 2 consecutive. |
-| "Squash multiple unclear points in one patch" | Lose attribution. One theme per iteration. |
-| "Split each micro-fix into its own iteration" | Opposite trap. Related fixes bundle fine; unrelated split. |
-| "Metrics look good — ignore qualitative feedback" | Time shrinkage can mean over-thinning. Qualitative first. |
-| "Faster to rewrite than iterate" | Valid after 3 stuck iterations. Before that, it's an escape. |
-| "Reuse the same subagent to save cost" | Subagent has learned. Always fresh. |
-| "Change the scenario if it keeps failing" | Invalidates cross-iteration comparison. Frozen means frozen. |
-| "Skip hold-out — we already converged" | Hold-out catches overfitting to the frozen set. Do not skip. |
-| "Defer to the skill author's judgment on unclear points I found" | You are the evaluator. Report everything observable. |
-| "The rule is written in the skill, so it gets followed" | Deterministic judgments written as prose get eyeballed instead. Seven fresh subagents skipped the same string-prefix rule. Move determinism into a script. |
+Report every unclear point you observe, including ones the skill author might defend: you are the evaluator, and a point left out of the report never reaches a patch.
+
+When fresh subagents keep skipping the same rule, the rule is usually a deterministic judgment written as prose, which gets eyeballed instead of applied. Move it into a script the skill calls rather than restating it more forcefully.
 
 ## Self-application
 

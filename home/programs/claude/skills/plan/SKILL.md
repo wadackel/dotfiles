@@ -45,13 +45,13 @@ Find three things: patterns to mirror (`file:lines` and a snippet), the executio
 
 ## DRAFT
 
-Write `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` with the headings the complexity requires (`contract.md`); prose in the user's language, headings and machine lines in English. Tag every Autonomous Verification bullet; a user-observable behavior change carries a `[live]` bullet, and one the agent cannot run goes under Requires User Confirmation in the five-field form. Target 120–150 lines.
+Write `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` with the headings the complexity requires (`contract.md`); prose in the user's language, headings and machine lines in English. Tag every Autonomous Verification bullet; a user-observable behavior change carries a `[live]` bullet, and one the agent cannot run goes under Requires User Confirmation in the five-field form. Size the plan to what the task needs, without filler sections or restated context.
 
-Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` lines into DEEPEN. Then state the plan path, its headings, and the key design decisions in at most three lines and proceed. Do not ask whether to proceed; drift is DEEPEN's job.
+Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` lines into DEEPEN. Then state the plan path, its headings, and the key design decisions briefly and proceed. Do not ask whether to proceed; drift is DEEPEN's job.
 
 ## DEEPEN
 
-Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed. Rounds: one by default, `--max-rounds=N` up to five; a Round 1 `ITERATE` caused by a Dimension 7 veto or a restructuring fix earns one more round. Log each round to `<plan>.log.md`.
+Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, for medium and above unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed. Rounds: one by default, `--max-rounds=N` up to five; a Round 1 `ITERATE` caused by a Dimension 7 veto or a restructuring fix earns one more round. Log each round to `<plan>.log.md`.
 
 Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items one per turn per `interview.md`.
 

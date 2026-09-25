@@ -5,7 +5,6 @@
 **Complete Isolation:**
 - Each test executes in a completely independent `claude -p` session with zero prior context
 - Tests run sequentially using shell scripts (`run-test.sh`, `run-story-test.sh`)
-- No team configuration, agent names, or other metadata is visible to the test session
 - This eliminates context contamination entirely but requires process orchestration
 
 **Triggering Accuracy Testing:**
@@ -57,7 +56,6 @@
 - Story tests rely on the skill's ability to use conversation history
 - If the skill doesn't access prior messages, story tests may fail even if the skill works correctly in real usage
 - This limitation applies to skills that analyze conversation context
-- At least 60% element identification rate is expected for passing story tests
 
 ## Headless Mode Constraints
 
@@ -70,7 +68,6 @@
 **Skills in `-p` Mode:**
 - Skills ARE available in print mode — only slash commands are restricted
 - Skill auto-triggering (description-based) works normally in `-p` mode
-- Verified: ast-grep skill successfully triggered in Phase 1 verification
 - This is a key advantage over interactive mode restrictions
 
 **stream-json Format Compatibility:**
@@ -84,18 +81,3 @@
 - Long tests may exceed this limit and be killed
 - Mitigation: Use `--max-turns 10` to limit test duration
 - For particularly long tests, consider using `run_in_background` (not yet implemented)
-
-## Comparison with Agent Teams Approach
-
-| Aspect | Agent Teams (Old) | Headless (New) |
-|--------|-------------------|----------------|
-| Context contamination | Tester sees team config | Zero contamination |
-| Skill detection | Self-reported (unreliable) | Automatic parsing (100% reliable) |
-| Positive test accuracy | Low (subagents prefer direct tools) | High (realistic conditions) |
-| Test isolation | Partial (shared team context) | Complete (separate processes) |
-| Setup complexity | High (TeamCreate/Task/SendMessage) | Low (shell scripts + Bash) |
-| Cost | High (agent spawning overhead) | High (full Claude sessions) |
-| Debugging | Difficult (agent internals hidden) | Easy (all output in files) |
-| Story test support | Single agent multi-prompt (awkward) | Natural `--resume` multi-turn |
-
-The headless approach trades similar cost for significantly better test accuracy and complete isolation.

@@ -44,7 +44,7 @@ The description is the skill's only discovery mechanism. Claude selects skills p
 
 ### 5. Undertriggering Diagnostics
 Signal: multiple positive tests fail → description lacks domain coverage.
-Remedy: expand trigger phrases; add paraphrase variants ("set up X" / "create X" / "initialize X").
+Remedy: widen the intent categories the description names so the missed prompts fall inside them; add a trigger phrase only when it names a distinct intent, not one paraphrase per missed prompt.
 
 ### 6. Overtriggering Diagnostics
 Signal: multiple negative tests fire → description is too broad.

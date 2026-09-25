@@ -32,7 +32,7 @@ Read each genre's MOC for its note list, read the `updated` frontmatter of those
 
 **Notes under `05_Private/` have no `updated` field, so an anti-recency sort puts them at the very front of the candidate list.** Reading one fails at the permission layer ([SKILL.md](../SKILL.md) Safety). When that happens, drop the candidate and **record it as a count, never a title** — Phase 6 logs every sampled note, and a private filename in the log is the exposure this rule exists to prevent.
 
-Notes with no `updated` — anything predating this skill, which is most of the 455 — sort as oldest. That is correct: they are exactly what has never been revisited.
+Notes with no `updated` — anything predating this skill, which is most of the existing notes — sort as oldest. That is correct: they are exactly what has never been revisited.
 
 ### Even coverage
 
@@ -89,7 +89,7 @@ Sort into four buckets:
 | C | Contradicts an existing note | `contradiction` |
 | D | Restatement or thinly grounded | None (still counted in the log) |
 
-Expect 30–70% to land in A/B/C. At `--budget 5` that is roughly 2–5 proposals.
+Judge each candidate on its own. After the run, if almost none or almost all landed in A/B/C, re-read the table above against a few of them before writing proposals: either extreme usually means the criteria were applied loosely.
 
 ## Phase 5 — write proposals
 
@@ -135,6 +135,6 @@ If every genre's notes were touched within 30 days, say so and stop:
 
 ## Cadence
 
-This vault holds 455 concept notes, so monthly at `--budget 10` is the steady state. It is not worth running before backfill has produced a concept layer to probe: with `98_Maintenance/logs/` empty, the exclusion set is empty and every note is a candidate, which makes the sampling meaningless.
+With a concept layer of several hundred notes, monthly at `--budget 10` is the steady state. It is not worth running before backfill has produced a concept layer to probe: with `98_Maintenance/logs/` empty, the exclusion set is empty and every note is a candidate, which makes the sampling meaningless.
 
 `lint` covers structural health — links, contradictions, staleness. `curiosity` covers whether the content still holds up. Run both and they cover each other's blind spots.

@@ -1,8 +1,8 @@
 # Behavior-Change Pair
 
-The unit of work in Phase 3 Pair Design. Replaces the prior "proposal" unit which was a document (text to add to CLAUDE.md / skill body). A Pair is **a targeted change in observable agent behavior paired with a mechanism that enforces it and a plan that verifies it**.
+The unit of work in Phase 3 Pair Design. A Pair is **a targeted change in observable agent behavior paired with a mechanism that enforces it and a plan that verifies it**.
 
-The shift matters because the prior unit could ship a CLAUDE.md line that nobody read and nobody could measure. A Pair cannot ship without specifying **how a future session will tell whether the change happened**.
+A text-only proposal can ship a CLAUDE.md line that nobody reads and nobody can measure; a Pair cannot ship without specifying **how a future session will tell whether the change happened**.
 
 ## Required fields
 
@@ -71,7 +71,7 @@ Session evidence: claude executed "check CI → read failure logs → identify r
 - **Enforcement layer**: skill
 - **Verification plan**:
   ```json
-  { "type": "file_exists", "path": "home/programs/claude/skills/iterate-pr/SKILL.md", "expected": true }
+  { "type": "transcript_grep", "pattern": "/iterate-pr", "expected": "present" }
   ```
 - **Expiry condition**: remove if user deletes the skill OR if invocation frequency drops to zero for 30 days
 ```

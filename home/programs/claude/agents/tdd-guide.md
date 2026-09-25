@@ -1,6 +1,6 @@
 ---
 name: tdd-guide
-description: Test-Driven Development specialist enforcing write-tests-first methodology. Use PROACTIVELY when writing new features, fixing bugs, or creating scripts with testable behavior. Ensures tests exist before implementation and guides through Red-Green-Refactor cycle.
+description: Test-Driven Development specialist enforcing write-tests-first methodology. Use when writing new features, fixing bugs, or creating scripts with testable behavior. Ensures tests exist before implementation and guides through Red-Green-Refactor cycle.
 tools: Read, Write, Edit, Bash, Grep
 model: sonnet
 color: green
@@ -49,7 +49,7 @@ Nix has no unit test concept, so the RED-GREEN cycle of TDD cannot be strictly a
 
 ### Skill Definitions
 ```bash
-# 1. Define trigger test cases with skill-tester first
+# 1. Define trigger test cases first, in skill-tester's scenario format
 #    - positive: prompts that should trigger the skill
 #    - negative: prompts that should not trigger the skill
 # 2. Create SKILL.md

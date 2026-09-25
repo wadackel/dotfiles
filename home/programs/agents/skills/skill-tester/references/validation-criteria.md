@@ -179,7 +179,7 @@ Each test produces stream-json output analyzed by `analyze-test.sh`, which retur
 **Success criteria:**
 - Only relevant resources are loaded
 - Progressive disclosure prevents over-loading
-- Description is under 100 words
+- Description length is justified: of two candidates that measure the same in skill-improver's `measure-trigger.ts`, the shorter is kept
 
 ## Story Test Assessment
 
@@ -208,7 +208,7 @@ Story tests verify that a skill can effectively utilize prior conversation conte
 A story test passes when:
 - `analyze-test.sh` returns `triggered: true` (Skill tool was invoked)
 - Skill output demonstrates awareness of setup conversation (not just test prompt)
-- At least 60% of planted elements (corrections, patterns, errors) are identified
+- The output identifies the planted elements (corrections, patterns, errors), and the report names each one it missed
 - Output quality is comparable to what a real session would produce
 - No hallucinated elements that weren't in the setup conversation
 - The skill's analysis respects the temporal order of the conversation
@@ -324,10 +324,9 @@ Based on test results, the conductor compiles recommendations:
 - Competing with another skill
 
 **Solutions:**
-- Expand description to include more scenarios
-- Add explicit trigger phrases
-- Clarify the unique use case
-- Test paraphrase coverage: verify that "set up X", "create X", and "initialize X" all trigger if the skill handles project/resource creation
+- Name the intent and the domain nouns the failing prompts share, rather than adding one phrase per missed prompt; a description that fires only on its own phrases has memorized vocabulary, not intent
+- Check whether a neighboring skill owns the same words; if so, no description resolves it
+- Measure each candidate description with skill-improver's Step 2.5 (`measure-trigger.ts`) before keeping it
 
 ### Issue: Skill triggers on unrelated requests
 
@@ -338,13 +337,9 @@ Based on test results, the conductor compiles recommendations:
 - Overlapping keywords with other domains
 
 **Solutions:**
-- Narrow the description scope
-- Add negative examples in description
+- Narrow the description to the intent the skill owns
 - Specify file types or explicit contexts
-- Use "Do NOT use for..." exclusion pattern in the description to set explicit boundaries, e.g.:
-  ```
-  description: "...Do NOT use for simple exploration (use data-viz skill instead)."
-  ```
+- Measure before adding a "Do NOT use for..." clause: in skill-improver's description measurements such a scope sentence changed no should-not-trigger result (`skill-improver/references/description-optimization.md`)
 
 ### Issue: Workflow steps executed out of order
 

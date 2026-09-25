@@ -33,7 +33,7 @@ A CLAUDE.md entry is better when:
 
 ## Detection Signals
 
-Apply these to ALL learnings in every category — not just "Repeated Workflows".
+Apply these to every learning, whatever its archetype.
 
 ### Signal 1: Complex Multi-Step Workflow (even once)
 
@@ -46,7 +46,7 @@ A workflow done once but with 4+ distinct steps, tool orchestration, and clear p
 - Non-obvious ordering (steps depend on output of prior steps)
 
 **Example from this ecosystem:**
-- gdocs-to-md: parse URL → download via gog → convert via pandoc → extract images → report. This was a skill even though a user may do it only once per session.
+- gdocs-to-md: parse URL → fetch the document JSON via `gws docs` → convert with a Deno script → report. This was a skill even though a user may do it only once per session.
 
 **Anti-example:**
 - "Read file, make edit, save" — too simple, too generic, no orchestration
@@ -96,8 +96,8 @@ Workflows that chain 2+ external tools in a non-obvious way are strong skill can
 - Output of one tool feeds as input to the next
 
 **Examples from this ecosystem:**
-- gdocs-to-md: chains gws → pandoc with media extraction
-- codex-review: chains git diff → codex MCP → apply fixes → re-review loop
+- gdocs-to-md: chains `gws docs` → a Deno converter
+- codex-review: chains git diff → `codex exec` → apply fixes → re-review loop
 
 ### Signal 5: Pattern Similar to Existing Successful Skills
 
@@ -158,7 +158,7 @@ A session consumed an external knowledge source (PDF, guide, specification, chec
 - **Decision**: Skill. The user described a workflow, not a preference.
 
 ### Case 4: "User corrected commit message format three times"
-- **As CLAUDE.md**: "Commit messages should be in Japanese" → one-line preference
+- **As CLAUDE.md**: "Commit messages and PR bodies are in English" → one-line preference
 - **As Skill**: Only if the full commit workflow is multi-step
 - **Decision**: CLAUDE.md. The correction is about format, not process.
 
@@ -215,7 +215,7 @@ Every skill candidate — new creation, reference deepening, or description fix 
 - **GREEN**: minimum content addressing the specific RED failure.
 - **REFACTOR**: overlap scan against existing skills (≥60% coverage → prefer description fix / reference deepening), loophole scan, drift check.
 
-**Absence of a reproducible RED is a weak justification on its own**, regardless of how strong the other signals are. Add "no reproducible RED from transcript evidence" to the weak-justification list below.
+**Absence of a reproducible RED is a weak justification on its own**, regardless of how strong the other signals are.
 
 ### Strong justifications:
 - "This is a 6-step workflow — a CLAUDE.md line can't capture the sequencing and conditional logic"

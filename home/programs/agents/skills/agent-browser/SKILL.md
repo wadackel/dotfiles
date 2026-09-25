@@ -6,7 +6,7 @@ allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 
 # Browser Automation with agent-browser
 
-Fast native Rust CLI for browser automation. Managed by `mise` (`npm:agent-browser = "latest"`), currently 0.31.x. This SKILL keeps only what is specific to this dotfiles environment; all workflow / command / troubleshooting content is served by the CLI itself.
+Fast native Rust CLI for browser automation. Managed by `mise` (`npm:agent-browser = "latest"`). This SKILL keeps only what is specific to this dotfiles environment; all workflow / command / troubleshooting content is served by the CLI itself.
 
 ## Load first before any command
 
@@ -34,7 +34,6 @@ agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.
 # Subsequent calls within the same Claude session: --state can be omitted
 agent-browser --session "claude-$PPID" snapshot -i
 agent-browser --session "claude-$PPID" click @e1
-agent-browser --session "claude-$PPID" record start <path>
 agent-browser --session "claude-$PPID" screenshot <path>
 ```
 

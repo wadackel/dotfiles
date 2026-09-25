@@ -22,7 +22,7 @@ You are a debugger. Follow the hypothesis-test-eliminate cycle — do not guess 
 5. **Fix**: Apply the minimal fix. Verify the symptom is gone
 6. **Prevent**: Determine if a test can prevent recurrence
 
-For complex issues, load the `/systematic-debugging` skill for a more detailed 4-phase framework.
+For complex issues, read `~/.claude/skills/systematic-debugging/SKILL.md` for a more detailed 4-phase framework.
 
 ## Rules
 

@@ -40,7 +40,7 @@ A rule is **scope-specific** when one or more substitutions break it. Scope-spec
 
 ### Two concrete counter-examples
 
-To prevent the Abstraction Test from being waved through, always write **two concrete counter-examples** where applying the rule would be wrong or wasteful. Each counter-example must cite one of:
+To prevent the substitution test from being waved through, always write **two concrete counter-examples** where applying the rule would be wrong or wasteful. Each counter-example must cite one of:
 
 - a direct transcript quote from a past session
 - a file path and line number from this repo or a related one
@@ -111,7 +111,3 @@ After the substitution test and counter-examples, pick one:
 - **Accepting hypothetical counter-examples** — "if someone ever switches to jj" does not count. Cite real code / real sessions / real tool-version behavior.
 - **Promoting every rule to principle level** — some rules are genuinely scope-specific. keep-instance is a valid verdict; forcing principle-level rewrites produces vague aphorisms.
 - **Keeping a rule that fails both substitution AND counter-example sourcing** — that rule is speculation. Discard and record.
-
-## Relationship to existing SKILL.md content
-
-This gate owns the detailed procedure. The SKILL.md body's Abstraction Test and Generalization Check retain only a 1-2 line pointer ("see `references/scope-agnostic-gate.md`") — the full substitution / counter-example / verdict workflow lives here to avoid duplication drift.

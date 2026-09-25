@@ -5,9 +5,10 @@ description: "Judgment rules for readable prose — vocabulary choice (which Eng
 
 # Writing Clarity
 
-Judgment material for making prose easier to read. The binding norms live in
-`~/.claude/CLAUDE.md` (`### Writing`) — this skill does not restate them; it
-supplies the decision procedures those norms need.
+Judgment material for making prose easier to read. The binding reply norms
+live in the `concise` output style (`~/.claude/output-styles/concise.md`) —
+this skill does not restate them; it supplies the decision procedures those
+norms need.
 
 ## Vocabulary: translate or keep?
 

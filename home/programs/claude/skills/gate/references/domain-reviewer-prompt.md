@@ -52,16 +52,9 @@ Findings on code **outside the changed lines** — pre-existing issues, adjacent
 
 One exception: an exploitable security defect keeps its real severity even when it is pre-existing. Report it at the severity it warrants and say in the finding that it predates this diff.
 
-## Output Budget
+## Output Detail
 
-Write full detail (Description + Suggestion) for at most 8 findings, chosen in descending severity order.
-
-Beyond that budget:
-
-- Every remaining blocker-severity finding (`MUST_FIX`/`SHOULD_FIX`, or `CRITICAL`/`HIGH`) MUST still be listed as a single line: `file:line — one-line title`. Never drop a blocker.
-- Remaining `NIT`/`LOW` findings are reported as a count only.
-
-Do not pad the output. Skip preamble, skip narration of what you did, skip a list of things that are fine.
+Write full detail (Description + Suggestion) for every blocker-severity finding (`MUST_FIX`/`SHOULD_FIX`, or `CRITICAL`/`HIGH`). List each `NIT`/`LOW` finding as one line: `file:line — one-line title`. The reply is the sections below, starting at `### Must Fix`.
 
 ## Output Format
 

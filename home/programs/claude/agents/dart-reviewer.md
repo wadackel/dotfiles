@@ -65,7 +65,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes `.dart` fi
 | Level | Criteria | Examples |
 |---|---|---|
 | MUST_FIX | Crash / memory leak | Unguarded `!` on potentially null value, undisposed controller, setState in build |
-| SHOULD_FIX | Perf / best practice | Missing `const`, bad Provider scope |
+| SHOULD_FIX | Perf or state-management issue with a concrete consequence | Missing `const`, bad Provider scope |
 | NIT | Style | Could use arrow syntax, `late` instead of nullable |
 
 ## Output Format

@@ -10,12 +10,6 @@ color: green
 
 Runtime-specialist reviewer for Deno scripts. Catches Deno-specific pitfalls that TypeScript-only review would miss.
 
-## Trigger
-
-Auto-dispatched when:
-- `deno.jsonc` or `deno.json` exists in the repo, OR
-- `git diff <baseline>..HEAD` contains usage of `Deno.*` API
-
 ## Out of Scope (delegated)
 
 - TypeScript language semantics (types, generics, switch exhaustiveness) → `typescript-reviewer`

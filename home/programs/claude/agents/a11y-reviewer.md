@@ -10,12 +10,6 @@ color: pink
 
 Specialist reviewer for web accessibility. Evaluates markup and styles against WCAG 2.2 success criteria and WAI-ARIA Authoring Practices Guide.
 
-## Trigger
-
-Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes:
-- `.css`, `.scss`, `.html`, OR
-- `.jsx` / `.tsx` files with JSX markup
-
 ## Out of Scope (delegated)
 
 - React state / hooks / re-render → `react-reviewer`
@@ -89,9 +83,6 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes:
 ```
 ## Accessibility Review
 
-### Good Practices  (optional — omit section if empty)
-- ✓ file:line — <what's done well>
-
 ### MUST_FIX
 - file:line — <issue> — <suggested fix> [— WCAG: <SC ID + name>]
 
@@ -107,9 +98,8 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes:
 VERDICT: PASS | FAIL
 ```
 
-- PASS only when no MUST_FIX. SHOULD_FIX and NIT do not block.
+- PASS only when there is no MUST_FIX and no SHOULD_FIX. NIT does not block.
 - WCAG SC suffix is optional — append when applicable, omit if not clearly mapped to a single SC.
-- Good Practices lines start with `✓ ` to disambiguate from findings in gate's first-80-chars dedup.
 - Manual Verification items are informational. gate merge logic does not treat them as blocking; the user reads them as follow-up items.
 
 ## Key Principles
@@ -125,4 +115,4 @@ VERDICT: PASS | FAIL
 - Reporting color contrast as MUST_FIX without citing the actual ratio or acknowledging that exact verification needs runtime tooling (mark as Manual Verification instead)
 - Confusing CSS specificity / layout preference with a11y bug — those are out of scope
 - Not reading CSS files at all (focus indicator styles, color tokens, `prefers-reduced-motion` live in CSS)
-- Flagging issues already present in the baseline — read `git diff` carefully, only review NEW issues
+- Blocking on issues already present in the baseline — report those as NIT; only issues this diff introduces or touches may block

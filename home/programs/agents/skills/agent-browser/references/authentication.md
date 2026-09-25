@@ -1,23 +1,14 @@
 # Authentication Patterns
 
-Login flows, session persistence, OAuth, 2FA, and authenticated browsing.
+How this environment authenticates headless agent-browser runs: auth state imported from the user's running Chrome.
 
-**Related**: [session-management.md](session-management.md) for state persistence details, [SKILL.md](../SKILL.md) for quick start.
+**Related**: [SKILL.md](../SKILL.md) for quick start.
 
 ## Contents
 
 - [Import Auth from Your Browser](#import-auth-from-your-browser)
-- [Persistent Profiles](#persistent-profiles)
-- [Session Persistence](#session-persistence)
-- [Basic Login Flow](#basic-login-flow)
-- [Saving Authentication State](#saving-authentication-state)
-- [Restoring Authentication](#restoring-authentication)
-- [OAuth / SSO Flows](#oauth--sso-flows)
-- [Two-Factor Authentication](#two-factor-authentication)
-- [HTTP Basic Auth](#http-basic-auth)
-- [Cookie-Based Auth](#cookie-based-auth)
-- [Token Refresh Handling](#token-refresh-handling)
-- [Security Best Practices](#security-best-practices)
+
+Generic login, OAuth, 2FA, profile, and saved-state patterns ship with the CLI: `agent-browser skills get core --full`. Add this environment's `--session` / `--state` flags to every command taken from there.
 
 ## Import Auth from Your Browser
 
@@ -38,7 +29,7 @@ abr               →  ~/.agent-browser-state/main.json (plaintext JSON, mode 60
 
 ### Required environment
 
-**No env var is required.** The state file lives at the fixed path `$HOME/.agent-browser-state/main.json`, and skill commands reference it as a literal. Earlier iterations used an `AGENT_BROWSER_STATE_PATH` env var, but it did not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells, so the indirection was removed.
+**No env var is required.** The state file lives at the fixed path `$HOME/.agent-browser-state/main.json`, and skill commands reference it as a literal. An `AGENT_BROWSER_STATE_PATH` env var is not used because it does not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells.
 
 `AGENT_BROWSER_STATE` (the CLI's hardcoded auto-load env) **must not** be exported in this environment — exporting it makes the daemon navigate to `origins[0]` on the first command and reject any subsequent `--state` flag with `⚠ --state ignored: daemon already running`. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the call that may start the daemon (typically the first call of the session).
 
@@ -101,7 +92,7 @@ agent-browser --session "claude-$PPID" snapshot -i
 agent-browser --session "claude-$PPID" tab new https://app.linear.app
 ```
 
-The browser is independent and headless; the user's Chrome window is unaffected. See [session-management.md](session-management.md) for parallel session patterns and [SKILL.md](../SKILL.md) Default Flags for the rationale behind the two flags.
+The browser is independent and headless; the user's Chrome window is unaffected. See [SKILL.md](../SKILL.md) Default Flags for the rationale behind the two flags.
 
 ### State expiry and recovery
 
@@ -121,7 +112,7 @@ Cookie + localStorage capture is not enough for sites that bind session state to
 - **Service Workers** holding auth tokens in memory
 - **Per-device device-trust signals** that re-prompt for 2FA on a "new" headless instance
 
-For those, fall back to a **persistent profile** (next section) — the user-data-dir captures everything and survives across runs.
+For those, fall back to a **persistent profile** (`--profile <dir>`; see `agent-browser skills get core --full`) — the user-data-dir captures everything and survives across runs.
 
 ### Security notes
 
@@ -131,229 +122,3 @@ For those, fall back to a **persistent profile** (next section) — the user-dat
 - Cookie narrowing keeps unrelated sites' cookies (banking, personal accounts) out of `main.json` entirely. `--all-cookies` disables that; use it only when a specific SSO flow needs it, and re-run without the flag afterwards to prune again.
 - `--remote-debugging-port=9222` exposes full browser control on localhost while it is enabled. Only run `abr` on trusted machines.
 - Application-layer encryption was deliberately removed: env-var-derived keys provide no protection against same-UID readers, who can read the env directly. The added complexity (secret-manager lookups, encrypted-file suffix juggling, biometric prompts on shell startup) was not justified by the residual threat surface FileVault already covers.
-
-## Persistent Profiles
-
-Use `--profile` to point agent-browser at a Chrome user data directory. This persists everything (cookies, IndexedDB, service workers, cache) across browser restarts without explicit save/load:
-
-```bash
-# First run: login once
-agent-browser --profile ~/.myapp-profile open https://app.example.com/login
-# ... complete login flow ...
-
-# All subsequent runs: already authenticated
-agent-browser --profile ~/.myapp-profile open https://app.example.com/dashboard
-```
-
-Use different paths for different projects or test users:
-
-```bash
-agent-browser --profile ~/.profiles/admin open https://app.example.com
-agent-browser --profile ~/.profiles/viewer open https://app.example.com
-```
-
-Or set via environment variable:
-
-```bash
-export AGENT_BROWSER_PROFILE=~/.myapp-profile
-agent-browser open https://app.example.com/dashboard
-```
-
-## Session Persistence
-
-Use `--session-name` to auto-save and restore cookies + localStorage by name, without managing files:
-
-```bash
-# Auto-saves state on close, auto-restores on next launch
-agent-browser --session-name twitter open https://twitter.com
-# ... login flow ...
-agent-browser close  # state saved to ~/.agent-browser/sessions/
-
-# Next time: state is automatically restored
-agent-browser --session-name twitter open https://twitter.com
-```
-
-## Basic Login Flow
-
-```bash
-# Navigate to login page
-agent-browser open https://app.example.com/login
-agent-browser wait --load networkidle
-
-# Get form elements
-agent-browser snapshot -i
-# Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Sign In"
-
-# Fill credentials
-agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
-
-# Submit
-agent-browser click @e3
-agent-browser wait --load networkidle
-
-# Verify login succeeded
-agent-browser get url  # Should be dashboard, not login
-```
-
-## Saving Authentication State
-
-After logging in, save state for reuse:
-
-```bash
-# Login first (see above)
-agent-browser open https://app.example.com/login
-agent-browser snapshot -i
-agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
-agent-browser click @e3
-agent-browser wait --url "**/dashboard"
-
-# Save authenticated state
-agent-browser state save ./auth-state.json
-```
-
-## Restoring Authentication
-
-Skip login by loading saved state:
-
-```bash
-# Load saved auth state
-agent-browser state load ./auth-state.json
-
-# Navigate directly to protected page
-agent-browser open https://app.example.com/dashboard
-
-# Verify authenticated
-agent-browser snapshot -i
-```
-
-## OAuth / SSO Flows
-
-For OAuth redirects:
-
-```bash
-# Start OAuth flow
-agent-browser open https://app.example.com/auth/google
-
-# Handle redirects automatically
-agent-browser wait --url "**/accounts.google.com**"
-agent-browser snapshot -i
-
-# Fill Google credentials
-agent-browser fill @e1 "user@gmail.com"
-agent-browser click @e2  # Next button
-agent-browser wait 2000
-agent-browser snapshot -i
-agent-browser fill @e3 "password"
-agent-browser click @e4  # Sign in
-
-# Wait for redirect back
-agent-browser wait --url "**/app.example.com**"
-agent-browser state save ./oauth-state.json
-```
-
-## Two-Factor Authentication
-
-Handle 2FA with manual intervention:
-
-```bash
-# Login with credentials
-agent-browser open https://app.example.com/login --headed  # Show browser
-agent-browser snapshot -i
-agent-browser fill @e1 "user@example.com"
-agent-browser fill @e2 "password123"
-agent-browser click @e3
-
-# Wait for user to complete 2FA manually
-echo "Complete 2FA in the browser window..."
-agent-browser wait --url "**/dashboard" --timeout 120000
-
-# Save state after 2FA
-agent-browser state save ./2fa-state.json
-```
-
-## HTTP Basic Auth
-
-For sites using HTTP Basic Authentication:
-
-```bash
-# Set credentials before navigation
-agent-browser set credentials username password
-
-# Navigate to protected resource
-agent-browser open https://protected.example.com/api
-```
-
-## Cookie-Based Auth
-
-Manually set authentication cookies:
-
-```bash
-# Set auth cookie
-agent-browser cookies set session_token "abc123xyz"
-
-# Navigate to protected page
-agent-browser open https://app.example.com/dashboard
-```
-
-## Token Refresh Handling
-
-For sessions with expiring tokens:
-
-```bash
-#!/bin/bash
-# Wrapper that handles token refresh
-
-STATE_FILE="./auth-state.json"
-
-# Try loading existing state
-if [[ -f "$STATE_FILE" ]]; then
-    agent-browser state load "$STATE_FILE"
-    agent-browser open https://app.example.com/dashboard
-
-    # Check if session is still valid
-    URL=$(agent-browser get url)
-    if [[ "$URL" == *"/login"* ]]; then
-        echo "Session expired, re-authenticating..."
-        # Perform fresh login
-        agent-browser snapshot -i
-        agent-browser fill @e1 "$USERNAME"
-        agent-browser fill @e2 "$PASSWORD"
-        agent-browser click @e3
-        agent-browser wait --url "**/dashboard"
-        agent-browser state save "$STATE_FILE"
-    fi
-else
-    # First-time login
-    agent-browser open https://app.example.com/login
-    # ... login flow ...
-fi
-```
-
-## Security Best Practices
-
-1. **Never commit state files** - They contain session tokens
-   ```bash
-   echo "*.auth-state.json" >> .gitignore
-   ```
-
-2. **Use environment variables for credentials**
-   ```bash
-   agent-browser fill @e1 "$APP_USERNAME"
-   agent-browser fill @e2 "$APP_PASSWORD"
-   ```
-
-3. **Clean up after automation**
-   ```bash
-   agent-browser cookies clear
-   rm -f ./auth-state.json
-   ```
-
-4. **Use short-lived sessions for CI/CD**
-   ```bash
-   # Don't persist state in CI
-   agent-browser open https://app.example.com/login
-   # ... login and perform actions ...
-   agent-browser close  # Session ends, nothing persisted
-   ```

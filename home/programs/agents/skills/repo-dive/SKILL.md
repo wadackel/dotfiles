@@ -63,7 +63,6 @@ Use Claude's native file tools on the cloned directory:
 - **Glob** for file discovery (`/tmp/repo-dive/owner-repo/**/*.ts`)
 - **Read** for file contents
 - **Grep** for content search
-- **Agent** (subagent_type=Explore) for deep codebase exploration
 
 **Do NOT use `gh api` for file contents** — everything is local now.
 

@@ -9,7 +9,7 @@ Comprehensive deterministic verification system. Project-aware: detects what bui
 
 ## When to Use
 
-- **Opt-in only**: `/verification-loop` is no longer part of the default `/impl` final gate (the default is `/gate`, which audits per-task evidence with `plan-state.ts` and reviews the diff without re-execution). Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes. It is not orchestrated by the final-gate task.
+- **Opt-in only**: `/impl` ends with `/gate`, which audits per-task evidence with `plan-state.ts` and reviews the diff without re-execution. Invoke this skill manually when deterministic re-execution of build / typecheck / lint / tests is genuinely required — e.g., running `/verify` before opening a PR, or as a standalone step after `/impl` completes.
 - **Manual**: before opening a PR / after refactoring / when the user asks "/verify" or "verify quality" or "検証して".
 
 Do NOT use for:
@@ -59,7 +59,7 @@ pyright .             # Python
 mypy .                # Python (alternative)
 ```
 
-Report all errors. Fix critical ones — but do NOT auto-fix in this skill; surface them.
+Report all errors without fixing them; this skill only reads (see Design Decisions).
 
 ### Phase 3: Lint
 
@@ -177,4 +177,4 @@ When NOT READY, fix the issues and re-invoke `/verification-loop` until it retur
 
 **Why raw output is captured verbatim**: the verbatim output is what `/gate` (the default final gate) consumes for evidence audit; `/santa-loop` then receives the audit verdict and re-uses the same evidence trail without re-judging completeness.
 
-**Why opt-in (no longer the default `/impl` final gate)**: empirical 5-plan analysis showed 0 catches by gate re-execution that per-task verification missed. Default re-execution duplicates cost without catching anything new. Opt-in preserves the deterministic re-run capability for cases that genuinely require it via manual invocation (`/verify`, pre-PR sanity check, standalone post-`/impl` step). No orchestration hook is exposed — users invoke this skill directly.
+**Why opt-in**: in a 5-plan analysis, final-gate re-execution caught nothing that per-task verification had missed, so running it by default duplicates cost without catching anything new. Opt-in preserves the deterministic re-run capability for cases that genuinely require it via manual invocation (`/verify`, pre-PR sanity check, standalone post-`/impl` step). No orchestration hook is exposed — users invoke this skill directly.

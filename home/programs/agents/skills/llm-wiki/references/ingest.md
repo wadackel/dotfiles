@@ -24,7 +24,7 @@ book_targets   = [p for p in glob("$VAULT/03_Books/*.md")
 
 `03_Books/` is two levels deep and needs the index predicate: a direct child `03_Books/<name>.md`, or the file whose basename equals its parent directory, `03_Books/<dir>/<dir>.md`. Everything else there is a chapter note — body text, never a target. See [books.md](books.md), which governs every book-specific decision below.
 
-**Books are excluded from a no-argument run.** The article backlog is nearly drained, so including them would make a bare `ingest` almost entirely a book backfill — and the 30-target guard below does not fire at the size of this shelf.
+**Books are excluded from a no-argument run.** Once the article backlog is small, including them would make a bare `ingest` almost entirely a book backfill — and the 30-target guard below does not fire at the size of this shelf.
 
 ## Call modes
 

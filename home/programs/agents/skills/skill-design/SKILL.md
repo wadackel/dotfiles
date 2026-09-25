@@ -61,7 +61,7 @@ argument-hint: "[target-name]"
 
 - Use imperative/infinitive form (verb-first): "Run the test suite", "Read the config file"
 - Avoid second-person ("You should...") -- use objective instructional language
-- Provide concrete examples, not abstract guidelines
+- Use examples to pin an output shape the reader must reproduce exactly; give several that differ and label them illustrative, because a single example gets copied in length, tone, and structure. For judgment, state the rule and its reason instead
 
 ## Interaction Flow Principles
 
@@ -77,6 +77,13 @@ Use the **repo-dive** skill to clone and explore a GitHub repository.
 ```
 
 Let the target skill's own documentation handle the details.
+
+## Instruction Register
+
+Current models follow a skill's text closely and literally, so its volume and granularity carry as much weight as its content.
+
+- **State each rule once, at normal volume, with its reason.** Capitalized MUST / NEVER / CRITICAL makes a rule over-apply to neighboring cases, and a rule carrying its "because" extends correctly to cases it did not list. When a test shows one instruction being skipped, give it a reason or move the check into a script before raising its volume.
+- **Match specificity to fragility.** Numbered steps and exact commands belong where only one sequence is safe: destructive operations, auth flows, strings a script parses. For judgment work, state the outcome, the constraints, and how to check the result, and leave the plan to the model.
 
 ## Resource Organization
 

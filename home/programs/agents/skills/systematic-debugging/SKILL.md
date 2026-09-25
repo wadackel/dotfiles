@@ -17,18 +17,17 @@ description: >-
 
 Random fixes are expensive — each failed attempt pollutes the debugging state
 with unintended side effects, making the real root cause harder to find.
-Investigating first typically takes 15-30 minutes; thrashing through guesses
-takes 2-3 hours and often introduces new bugs.
 
 Investigate the root cause before attempting any fix. Complete each phase
-before proceeding to the next.
+before proceeding to the next. When a phase changes what you believe — a cause
+confirmed or ruled out, a hypothesis rejected — tell the user in a few sentences
+before moving on.
 
-## Relationship to CLAUDE.md
+## Scope
 
-CLAUDE.md Bug Fixes rules remain authoritative. This skill adds procedural
-detail (the 4-phase process). Apply "present alternatives (workaround vs
-root-cause)" after Phase 1 completion. /plan covers plan-mode
-investigation; this skill's unique value is implementation-phase debugging.
+After Phase 1, present both the minimal workaround and the root-cause fix when
+both exist. /plan covers plan-mode investigation; this skill covers debugging
+during implementation.
 
 ## The Four Phases
 
@@ -51,10 +50,8 @@ the original issue.
    backward tracing technique
    - Where does the bad value originate? Trace up until the source is found
 
-**Checkpoint:** Output `## Phase 1 Summary` with confirmed symptoms,
-ruled-out causes, and remaining hypotheses.
-
-(Per CLAUDE.md: include direct observation means in the plan)
+Name how you will observe the symptom directly, so the fix can later be
+checked with the same observation.
 
 ### Phase 2: Pattern Analysis
 
@@ -67,8 +64,6 @@ code directly point to the cause.
 3. **Identify differences** — list every difference, however small
 4. **Understand dependencies** — what components, config, environment needed
 
-**Checkpoint:** Output `## Phase 2 Summary` with differences found.
-
 ### Phase 3: Hypothesis Testing
 
 Testing one variable at a time is essential because multiple simultaneous
@@ -78,9 +73,8 @@ changes make it impossible to know which change had what effect.
 2. **Test minimally** — smallest possible change, one variable at a time
 3. **Verify** — worked -> Phase 4. Didn't work -> new hypothesis, don't stack fixes
 
-(Per CLAUDE.md: fix approach must be falsified — consider why it could be wrong)
-
-**Checkpoint:** Output `## Phase 3 Result` with hypothesis and test outcome.
+Treat the chosen fix as a hypothesis too: before applying it, state what would
+show it is wrong.
 
 ### Phase 4: Implementation
 
@@ -92,7 +86,8 @@ changes make it impossible to know which change had what effect.
    If each fix reveals new problems in different places, the issue is likely
    architectural — discuss with the user before attempting more fixes.
 
-(Per CLAUDE.md: baseline -> implement -> re-measure -> compare -> conclude)
+Observe the failing behavior before the change and again after it, with the
+same method, and compare the two before concluding.
 
 After fixing, consider defense-in-depth: add validation at each layer data
 passes through (entry point, business logic, environment guard), not just
@@ -111,24 +106,15 @@ timing-dependent, or external:
 2. Implement appropriate handling (retry, timeout, error message)
 3. Add monitoring/logging for future investigation
 
-But 95% of "no root cause" conclusions come from incomplete investigation.
+Reach this conclusion only after Phases 1-3 have ruled out causes in the code
+and its configuration.
 
-## Red Flags — Recognize and Resist
+## Returning to Phase 1
 
-These thought patterns feel productive but lead to wasted time. When you
-notice one, return to Phase 1.
-
-| Thought | Why it leads to wasted time |
-|---------|----------------------------|
-| "Quick fix for now, investigate later" | The first fix sets the pattern; "later" rarely comes |
-| "Just try changing X and see" | Guessing without evidence; even if it works, you won't know why |
-| "Add multiple changes, run tests" | Can't isolate which change fixed it (or broke something else) |
-| "It's probably X, let me fix that" | Seeing symptoms is not understanding the root cause |
-| "I don't fully understand but this might work" | Partial understanding guarantees future bugs |
-| "Issue is simple, don't need the full process" | Simple bugs have root causes too; the process is fast for simple bugs |
-| "Emergency, no time for process" | Systematic debugging is faster than guess-and-check thrashing |
-| Proposing solutions before tracing data flow | Investigation must come first |
-| Each fix reveals new problem elsewhere | This signals an architectural problem, not a single bug |
+Go back to Phase 1 when you are about to change code without a confirmed
+cause, when you are stacking several changes into one test run, or when each
+fix reveals a new problem somewhere else (the last usually means the problem is
+architectural).
 
 ## Quick Reference
 

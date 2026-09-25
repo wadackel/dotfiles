@@ -2,7 +2,7 @@
 
 Early-prune heuristic that narrows candidate Rungs **before** Phase 3 Routing runs the full Enforcement Layer Ladder. Used at the start of Phase 3 to prevent the default bias toward Rung 4 (CLAUDE.md).
 
-The failure mode this heuristic addresses: the existing Phase 2 Root Cause Check asks "which layer could have stopped this earliest?" but in practice the answer defaults to CLAUDE.md because it is the path of least resistance — any rule *can* be expressed as a written sentence. Mechanism-Signature asks four orthogonal questions that point at the **native home** of the rule, regardless of whether it can also be written as English prose.
+The failure mode this heuristic addresses: asked "which layer could have stopped this earliest?", the answer defaults to CLAUDE.md because it is the path of least resistance — any rule *can* be expressed as a written sentence. Mechanism-Signature asks four orthogonal questions that point at the **native home** of the rule, regardless of whether it can also be written as English prose.
 
 This is **pre-routing, not re-routing**. The final decision still uses the Enforcement Layer Ladder in `routing-logic.md`. Pre-routing just sets the starting point so the Ladder does not sweep every learning past Rungs 1-3 by reflex.
 
@@ -94,7 +94,7 @@ Each row's Rung is a **starting point**, not a verdict. Phase 3 then runs the fu
 
 Phase 3 then checks: is there already a `git -C *` rule in `bash-policy.yaml`? If yes, done (already covered). If not, add one. Either way, DO NOT add a CLAUDE.md line — Rung 4 is skipped because Rung 1A applies.
 
-**Before this heuristic**: this learning historically landed on Rung 4 as "Avoid `git -C` — use `cd && git` instead" in CLAUDE.md. That CLAUDE.md line depends on Claude remembering to apply it on every Bash call — ~50-80% reliability. The Rung 1A bash-policy entry is 100%.
+**Why not Rung 4**: a CLAUDE.md line such as "Avoid `git -C` — use `cd && git` instead" depends on Claude remembering to apply it on every Bash call — ~50-80% reliability. The Rung 1A bash-policy entry is 100%.
 
 ## Anti-patterns
 

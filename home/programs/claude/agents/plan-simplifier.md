@@ -1,6 +1,6 @@
 ---
 name: plan-simplifier
-description: Reviews a plan for over-engineering through the YAGNI/KISS/DRY lens. Spawned by simplify-review / plan skills to provide a fresh-context simplification pass that detects speculative generalization, unnecessary indirection, over-defensive design, premature optimization, and scope creep from critique rounds. Do NOT use for code review (use code-simplifier or code-reviewer) or general plan critique (use the Plan agent with critic-prompt).
+description: Reviews a plan for over-engineering through the YAGNI/KISS/DRY lens. Spawned by the simplify-review skill to provide a fresh-context simplification pass that detects speculative generalization, unnecessary indirection, over-defensive design, premature optimization, and scope creep from critique rounds. Do NOT use for code review (use code-simplifier or code-reviewer) or general plan critique (use the Plan agent with critic-prompt).
 tools: Read, Grep, Glob
 model: sonnet
 color: green

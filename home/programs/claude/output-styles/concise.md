@@ -27,7 +27,7 @@ When these pull against each other, being correct and answerable or actionable c
 - A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
 - A skill's fixed report block keeps its order and its ending.
-- While working, a progress note is one plain line; a turn that ends mid-work names what is done, what is running, and what comes next.
+- While working, a progress note is plain and short and comes when something was found or the direction changed; a turn that ends mid-work names what is done, what is running, and what comes next.
 - Bulk output goes to a file; the reply keeps the digest and names the path.
 - Certainty in words, not tags: what was run or read, what a subagent reported, what is a guess, what is unverified.
 - Japanese prose keeps code identifiers, commands, paths, product names, and skill names as they are.

@@ -9,7 +9,7 @@ Review the current session to extract learnings and propose improvements with ve
 
 ## Architecture summary
 
-Earlier versions of this skill emitted proposals into a one-way pipe (CLAUDE.md line → shipped → never measured). v3 closes the loop:
+The ledger closes the loop between a proposal and the sessions after it:
 
 ```
 ledger ← (Phase 1 verifies prior proposals: prevented/recurred/noise) ←─┐
@@ -38,7 +38,7 @@ No arguments. The skill reads the current session transcript automatically.
 
 Read the ledger and auto-verify prior proposals against the current session's observable state. Updates outcomes and confidence scores.
 
-**Step 1 — Extract transcript** (same as prior version):
+**Step 1 — Extract transcript**:
 
 ```bash
 cd $(git rev-parse --show-toplevel)
@@ -172,10 +172,8 @@ Which proposals would you like to apply?
 
 ## Design decisions
 
-**Why 4 phases instead of 5**: the prior Phase 2.5 (Skill Opportunity Scan) and Phase 2.6 (Instinct Extraction) were orthogonal cuts through the same evidence. Merged into Phase 2 (Extract & Drill) since the 3-archetype classification delivers both outcomes with one pass.
-
-**Why the ledger is the source of truth**: prior design had proposals → CLAUDE.md lines → never measured. Ledger makes proposals first-class objects with verification plans, outcomes history, and confidence. instinct-learner was folded in because it was the same ledger concept at a lower abstraction.
+**Why the ledger is the source of truth**: a proposal that only becomes a CLAUDE.md line is never measured. The ledger makes proposals first-class objects with verification plans, outcomes history, and confidence.
 
 **Why verification_plan is mandatory**: a proposal that cannot be auto-verified cannot close the feedback loop. It ships but the skill cannot tell whether it worked. Unmeasurable proposals were the single largest source of CLAUDE.md bloat.
 
-**Why confidence is outcome-driven**: the prior reinforce-on-reoccurrence signal (+0.1 per duplicate) counted rediscovery of the same rule, not evidence that the rule changed behavior. Outcome-driven confidence (prevented +0.05, recurred -0.2) measures what we actually care about.
+**Why confidence is outcome-driven**: counting rediscoveries of the same rule measures how often it comes up, not whether it changed behavior. Outcome-driven confidence (prevented +0.05, recurred -0.2) measures the latter.

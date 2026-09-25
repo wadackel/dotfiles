@@ -54,18 +54,18 @@ Ensure you're not on `main` or `master`. If so, ask the user to create or switch
 git remote show origin | rg "HEAD branch"
 ```
 
-The result comes from the remote, so validate it against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$` before using it anywhere below (Branch Management, Post-Creation); a name that does not match is refused with a report to the user, never substituted into a command.
+The result comes from the remote, so validate it against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$` before using it anywhere below (Branch Management, Post-Creation); a name that does not match is refused with a report to the user, never substituted into a command. Below, `<base>` stands for that validated name, written literally into each command.
 
 ### 3. Analyze recent commits
 
 ```bash
-git log origin/main..HEAD --oneline --no-decorate
+git log origin/<base>..HEAD --oneline --no-decorate
 ```
 
 ### 4. Review the diff
 
 ```bash
-git diff origin/main..HEAD --stat
+git diff origin/<base>..HEAD --stat
 ```
 
 ## Information Gathering
@@ -81,10 +81,10 @@ If the summary is unclear from context, ask the user to describe the changes.
 
 Before creating the PR:
 
-1. **Rebase on latest main** (if needed):
+1. **Rebase on the latest base branch** (if needed):
    ```bash
    git fetch origin
-   git rebase origin/main
+   git rebase origin/<base>
    ```
 
 2. **Refuse to push a parked WIP commit**: if any subject in `git log --format=%s origin/<base>..HEAD` (the validated base from Gather Context step 2) is `wip: auto-commit before rebase`, or if that command exits non-zero (the guard fails closed), stop — the rebase skill left uncommitted work parked in a commit that must be unwound (its step 6) before anything is pushed. Check the whole range, not only HEAD: the Prerequisites Check above may have added a commit on top of the parked one.
@@ -123,9 +123,7 @@ cat .github/pull_request_template.md 2>/dev/null || echo "NO_TEMPLATE"
 - <If none, use "n/a">
 ```
 
-Write in **English** by default. Only write in Japanese when `ja` was explicitly passed in `$ARGUMENTS`. Do NOT infer the language from the user's conversation language — always default to English. If the project's CLAUDE.md has a Language section, follow its rules.
-
-Example: if `$ARGUMENTS` is empty or contains only `draft`, write in English regardless of what language the user is speaking.
+Write in English unless `ja` is in `$ARGUMENTS`; the language of the conversation does not change this. If the project's CLAUDE.md has a Language section, follow its rules.
 
 ### Create PR with gh CLI
 
@@ -138,7 +136,7 @@ Before creating the PR, self-check the body with the **leave-no-trace** judgment
 Then create the PR referencing the file:
 
 ```bash
-gh pr create --title "PR_TITLE" --body-file /tmp/pr-body-<random>.md --base main
+gh pr create --title "PR_TITLE" --body-file /tmp/pr-body-<random>.md --base <base>
 ```
 
 - If `draft` was passed in `$ARGUMENTS`, add the `--draft` flag
@@ -171,7 +169,7 @@ After creating the PR:
 
 ## Error Handling
 
-1. **No commits ahead of main**: Ask if the user meant to work on a different branch
+1. **No commits ahead of the base branch**: Ask if the user meant to work on a different branch
 2. **Branch not pushed**: Push first with `git push -u origin <branch_name>` (literal, validated, unquoted) — after the same WIP-commit range check as Branch Management step 2
 3. **PR already exists**: Show existing PR with `gh pr view`, ask if they want to update it
 4. **Merge conflicts**: Guide user through resolving conflicts or rebasing

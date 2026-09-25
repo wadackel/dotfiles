@@ -14,21 +14,16 @@ This is a **declarative macOS development environment** managed with Nix, nix-da
 
 When working on tasks in this repository, Claude Code should:
 
-1. **Take ownership of the entire workflow**
-   - Plan and execute changes end-to-end
-   - Minimize the need for user verification and manual steps
-   - Design workflows that can be validated programmatically when possible
-
-2. **Apply configuration changes**
+1. **Apply configuration changes**
    - After making changes to Nix files, Claude should apply the configuration using `darwin-rebuild`
-   - **CRITICAL**: Always verify the correct profile before applying:
-     - Use `.#private` for personal machine (wadackel)
-     - Use `.#work` for work machine (tsuyoshi.wada)
+   - Apply the profile that matches this machine; a profile sets the username and hostname, so applying the other one misconfigures the machine:
+     - `.#private` for the personal machine (wadackel)
+     - `.#work` for the work machine (tsuyoshi.wada)
    - Check the current user/hostname with `whoami` and `hostname` if uncertain
    - Example: `sudo darwin-rebuild switch --flake .#private`
-   - **Important**: When editing symlinked config files (tmux.conf, zshrc, etc.) managed by home-manager, darwin-rebuild is NOT needed. Changes are immediately reflected since the file is symlinked, not copied. Only run darwin-rebuild when modifying Nix files themselves (*.nix).
+   - When editing symlinked config files (tmux.conf, zshrc, etc.) managed by home-manager, darwin-rebuild is not needed. Changes are immediately reflected since the file is symlinked, not copied. Only run darwin-rebuild when modifying Nix files themselves (*.nix).
 
-3. **Verify changes programmatically**
+2. **Verify changes programmatically**
    - Use `nix flake check` before applying
    - After applying, verify the configuration took effect when possible
    - Report any errors or warnings encountered during application
@@ -258,7 +253,7 @@ This repository includes comprehensive Claude Code configuration:
   - Exception: Scripts called from `hooks` are not Bash tool calls, so adding to `permissions.allow` is not required
   - When adding new scripts, grant execute permission with `chmod +x` (execute bit is required for hook execution. Git manages mode as 100644/100755, so a commit is also needed)
 - **Output styles**: `home/programs/claude/output-styles/` (symlinked to `~/.claude/output-styles`). `concise` is the global default via `settings.json`'s `outputStyle` key. Health check: `claude -p 'STYLE-CHECK' --settings '{"outputStyle":"concise"}'` must return `concise-active` — if not, the style is not being loaded
-- **Gate**: `/gate` is the final step of `/impl` and the standalone review entry. The evidence audit is `~/.agents/scripts/plan-state.ts coverage` / `complete` on `~/.claude/plans/<plan>.evidence.json` (shared with Codex `$impl`); the review wave and its findings go verbatim to `~/.claude/plans/<plan-slug>.gate.log.md`, and the reply carries only what the reader must decide. The impl final report and the standalone gate reply share one shape (three headings, defined once in `impl/SKILL.md`); under `/impl` the gate hands its items to the report instead of replying; Codex `$impl` reports the same three parts as prose without headings. `security-auditor` is selected by the data-flow triggers in `references/security-triggers.md`; Codex `$impl`'s rule that a change to review-controlling skill markdown needs security review is deliberately not mirrored on the Claude side (a 2026-09-18 decision)
+- **Gate**: `/gate` is the final step of `/impl` and the standalone review entry. The evidence audit is `~/.agents/scripts/plan-state.ts coverage` / `complete` on `~/.claude/plans/<plan>.evidence.json` (shared with Codex `$impl`); the review wave and its findings go verbatim to `~/.claude/plans/<plan-slug>.gate.log.md`, and the reply carries only what the reader must decide. The impl final report and the standalone gate reply share one shape (three headings, defined once in `impl/SKILL.md`); under `/impl` the gate hands its items to the report instead of replying; Codex `$impl` reports the same three parts as prose without headings. `security-auditor` is selected by the data-flow triggers in `references/security-triggers.md`; Codex `$impl`'s rule that a change to review-controlling skill markdown needs security review is deliberately not mirrored on the Claude side
 - **Shared contract**: `home/programs/agents/shared/plan/references/contract.md` defines every fixed string the plan / impl / gate skills, `check-plan.ts`, `plan-state.ts`, and the reviewer hook read (plan headings, Completion Criteria tags, the Requires User Confirmation form, `Final Audit + Review`, verdict vocabulary, sidecar names); `interview.md` next to it holds the question format and the ask-or-decide judgment shared by both plan skills and `requirements-interview`. `codex-plan-clarification-contract_test.ts` pins each entry against the files that carry it
 - **Module**: `home/programs/claude/default.nix` manages symlinking to `~/.claude/`
 - **Skills layout**:
@@ -307,7 +302,7 @@ Editing existing Claude Code config files (settings.json, skills, etc.) is immed
 `home/programs/agents/scripts/config-lint.ts` is the second flake check next to `formatting` (`checks.config-lint` in `flake.nix` runs it with `deno run --no-remote --no-prompt`; the script has no import for that reason). Published at `~/.agents/scripts/config-lint.ts`; run it by hand as `config-lint.ts .` from the repository root.
 
 - Rules: `policy-parse` (error: a `- pattern:` line in the global `bash-policy.yaml` that is not `- pattern: "<glob>"`, or a policy with no rule), `skill-policy-conflict` (error: a command line inside a `bash` / `sh` / `shell` / `zsh` fence of a `SKILL.md` or `references/*.md` under `home/programs` that matches a bash-policy pattern; `<!-- config-lint: allow -->` on the line above the fence skips it, and vendored skill directories with a `.<vendor>-source` marker are skipped), `home-literal` (error: a `/Users/<name>` literal in `settings.json`, `hooks.json`, `*.nix`, `*.yaml`, `*.yml`, `*.json`; `$`, `*`, `{` after the slash are templates; `config-lint: allow` on the line or an entry in the script's `HOME_LITERAL_ALLOW` set exempts a line, the latter for strict JSON)
-- Not covered: untagged fences, inline code spans, `exclude:` in the policy, heredoc bodies, and `cd x && git -C y` compounds (the lint matches whole lines; the hook splits on the bash AST). The rule is preventive: at introduction no fence matched
+- Not covered: untagged fences, inline code spans, `exclude:` in the policy, heredoc bodies, and `cd x && git -C y` compounds (the lint matches whole lines; the hook splits on the bash AST). The rule is preventive
 - Tests: `deno test --allow-read --allow-write --allow-run=deno home/programs/agents/scripts/config-lint_test.ts` (temp-dir fixtures)
 
 ### Vendored skills sync

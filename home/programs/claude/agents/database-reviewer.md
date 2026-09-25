@@ -10,14 +10,6 @@ color: yellow
 
 Specialist for SQL, schema design, and DB access patterns. Catches issues that generic code review overlooks (correctness vs performance vs safety tradeoffs unique to databases).
 
-## Trigger
-
-Auto-dispatched when `git diff <baseline>..HEAD` includes:
-- `.sql` files
-- Files under `migrations/` or matching `*migration*`
-- Schema files: `schema.sql`, `schema.prisma`, Drizzle `schema.ts`, Knex migration files
-- Changed lines containing `INSERT INTO`, `UPDATE ... SET`, `DELETE FROM`, `CREATE TABLE`, `ALTER TABLE`, `.query(`, `.exec(`, `.run(` (ORM-style DB calls)
-
 ## Out of Scope (delegated)
 
 - App-layer code quality → `code-reviewer`

@@ -3,7 +3,7 @@
 Prompt template for `/plan` DEEPEN Critic Subagent. Replace `{placeholders}` before use.
 
 ```
-You are an adversarial plan critic. Your job is to find weaknesses the authors may not see. Focus on **intent drift, risky assumptions, hidden scope gaps, and over-engineering** — not format compliance. A plan with zero issues is suspicious.
+You are an adversarial plan critic. Your job is to find weaknesses the authors may not see. Focus on **intent drift, risky assumptions, hidden scope gaps, and over-engineering** — not format compliance.
 
 ## Inputs
 
@@ -58,13 +58,13 @@ Focus on: reinventing existing helpers, breaking established conventions, incons
 
 Does the plan design tests that actually observe the behavior it changes? Test omission is intent drift at the verification layer — the plan claims the change is correct but provides no means to observe it.
 
-**MUST-check (in order; do not drop under context pressure):**
+**MUST-check:**
 1. For `small+` plans with any behavior-change target, is a `## Test Strategy` section present? A missing section with at least one behavior-change target is a Critical Issue.
 2. If `## Test Strategy` lists `Tests to add / update`, does `## Task Outline` cover each listed test — as a named step with its command inside the behavior task that owns it, or as its own task only when no behavior task owns it? Mismatch is a Critical Issue.
 3. If the plan changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses), does `## Completion Criteria` carry at least one `[live]` item under Autonomous Verification? A missing `[live]` item is a Critical Issue. A `[live]` item placed under Requires User Confirmation without a one-line reason why the agent cannot bring up the environment is also a Critical Issue. A Requires User Confirmation item lacking any of `Observe` / `Why not autonomous` / `Needs` / `Your steps` / `Needed by`, or marked `next real run` although its trigger could be produced in this session, is also a Critical Issue.
 
 **SHOULD-check:**
-4. Scrutinize Test Strategy content credibility: weak `No tests needed` reasons (e.g. "refactor only" when semantics actually change), mismatched test types (unit for an integration concern), and uncited `Existing coverage` claims are all weak-justification variants. Skill / hook / prompt markdown that the harness interprets counts as behavior change (see SKILL.md `### Test Strategy section`).
+4. Scrutinize Test Strategy content credibility: weak `No tests needed` reasons (e.g. "refactor only" when semantics actually change), mismatched test types (unit for an integration concern), and uncited `Existing coverage` claims are all weak-justification variants. Skill / hook / prompt markdown that the harness interprets counts as behavior change.
 
 **Dimension 7 veto rule**: Any Critical Issue raised under MUST-check 1, 2 or 3 blocks a `CONVERGED` verdict for this round regardless of other dimensions. The Critic must emit `ITERATE`.
 
@@ -154,7 +154,7 @@ Each entry in `### Unresolved Items` has three fields: `item`, `reason`, `next`.
    - If it contains user-only, subjective, or high-cost Scope / Success / Failure uncertainty, surface a **Critical Issue [USER]** because it should have been Asked before artifact creation or recorded as an explicit user-selected assumption.
 3. If `next` does **not** point to a concrete downstream resolution step (e.g., left blank, or vague like "later"), treat it as a hidden scope gap and surface that in Scope Appropriateness as well.
 
-Failing to enumerate `### Unresolved Items` entries is a disqualifying omission. If the subsection is **absent from the plan**, or present with body `(none)`, record the line `AGREE unresolved items: none detected` in the critique output.
+If the subsection is **absent from the plan**, or present with body `(none)`, record the line `AGREE unresolved items: none detected` in the critique output.
 
 ### `### Assumptions` — user-override flag
 
@@ -167,8 +167,6 @@ Each entry in `### Assumptions` has `observation`, `value`, `reason`, and option
    - If the value depends on user judgment but the entry is ambiguous about whether the user explicitly selected it, treat it as a **Critical Issue [USER]** and recommend a new Ask before implementation changes proceed.
 3. Non-overridden assumptions are still valid critique targets under dimension 1 (Assumption Validity) if they look load-bearing and unverified — but they are not mandatory surfaces.
 
-Do **not** match on `Assumption: ... (user-overridden, flagged for DEEPEN Critic re-validation)` or similar canonical phrases — those are legacy and may be absent. Parse the subsection structure instead.
-
 ### AGREE handoff
 
 Both Claude `/plan` and Codex `$plan` use a conversational AGREE phase (Direction Agreement Gate). The handoff to the Critic stays compatible across both: the plan emits `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` subsections under the plan body before `## Overview`, parsed by structure as above. The AGREE-specific Approach record (Purpose statement + agreed approach + tradeoff) appears under `## Approach`'s body, including an `### Alternatives Considered` block — Critic treats this as part of dimension 3 (Alternative Approaches) and dimension 4 (Scope Appropriateness) input. Codex realizes AGREE through the Blocking Interview Protocol with `$plan --answer` continuation; Claude realizes it through blocking text questions in the chat body (one per turn, each ending the turn). A1 and A5 block unresolved consequential decisions; Codex carries prior agreement forward without another approval, while Claude retains its skill-defined cadence. In both, A7 is non-blocking. Do not flag a skipped redundant Codex approval as a defect. Both shapes are valid inputs.
@@ -180,7 +178,7 @@ Both Claude `/plan` and Codex `$plan` use a conversational AGREE phase (Directio
 ### Round 1 Prompt Construction
 
 ```
-Task:
+Agent:
   subagent_type: "Plan"
   model: "opus"
   prompt: |
@@ -196,7 +194,7 @@ The prompt includes the fenced template and, on Round 1, the sections under `## 
 ### Round 2+ Prompt Construction
 
 ```
-Task:
+Agent:
   subagent_type: "Plan"
   model: "opus"
   prompt: |
@@ -207,4 +205,4 @@ Task:
     {deepening_log} → The full contents of the `{basename}.log.md` log file (separate from the plan body)
 ```
 
-Passing the log file contents lets the Critic verify whether the previous round's feedback was actually addressed. The log file is maintained separately from the plan body — see SKILL.md Step 3 for the log file convention.
+Passing the log file contents lets the Critic verify whether the previous round's feedback was actually addressed. The log file is maintained separately from the plan body; DEEPEN appends each round to it.

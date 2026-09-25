@@ -82,7 +82,7 @@ Auto-dispatched when `git diff --name-only <baseline>..HEAD` includes:
 | Level | Criteria | Examples |
 |---|---|---|
 | MUST_FIX | Security hole, data loss risk, prod downtime risk | Wildcard IAM, secrets committed, single-replica prod, unpinned GH action |
-| SHOULD_FIX | Best-practice violation without immediate exploit | Missing resource limits, spot instances absent for eligible workload |
+| SHOULD_FIX | Concrete reliability, security, or cost risk without immediate exploit | Missing resource limits, spot instances absent for eligible workload |
 | NIT | Polish / optimization | Could use multi-stage Docker build |
 
 ## Output Format

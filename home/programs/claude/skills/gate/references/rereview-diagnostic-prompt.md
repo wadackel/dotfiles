@@ -31,9 +31,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 
 ## Your Task
 
-You are verifying a fix, not re-reviewing the feature. A previous review round reported the findings below, the implementer applied a fix, and your job is to judge whether the fix closed them.
-
-Do NOT re-review the whole change. Do NOT hunt for new findings outside the fix diff.
+You are verifying a fix, not re-reviewing the feature. A previous review round reported the findings below, the implementer applied a fix, and your job is to judge whether the fix closed them. The rest of the change was reviewed in earlier rounds, so findings outside the fix diff are out of scope here.
 
 ## Findings from the previous round
 

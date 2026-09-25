@@ -145,7 +145,7 @@ Treat a non-zero exit (missing file, no match, version < 19) as **not confirmed*
 VERDICT: PASS | FAIL
 ```
 
-PASS only when no MUST_FIX. SHOULD_FIX and NIT do not block. The `— See: <URL>` suffix on MUST_FIX entries is **optional** — include it when a specific react.dev or nextjs.org page explains the pattern, skip it otherwise. Keep each finding on a single line for consistency with sibling reviewers (`typescript-reviewer`, `a11y-reviewer`).
+PASS only when there is no MUST_FIX and no SHOULD_FIX; NIT does not block. The `— See: <URL>` suffix on MUST_FIX entries is **optional** — include it when a specific react.dev or nextjs.org page explains the pattern, skip it otherwise. Keep each finding on a single line for consistency with sibling reviewers (`typescript-reviewer`, `a11y-reviewer`).
 
 ## False Positive Suppression
 

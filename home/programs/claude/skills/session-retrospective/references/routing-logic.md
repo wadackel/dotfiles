@@ -62,7 +62,7 @@ For each learning, walk down this ladder and stop at the **first rung that appli
      - **(b1) Expiry condition**: a one-sentence trigger for when this line can be removed ("remove when the skill's description adds the phrase X", "remove when library Y reaches version Z"). Prevents CLAUDE.md from accreting rules that outlive their cause.
      - **(b2) Redundancy check**: confirm by grep that no existing CLAUDE.md line, instinct at confidence ≥0.7, or skill body already covers the same rule. If coverage exists and did not prevent the recurrence, escalate to the layer that failed (description fix, reference deepening, or hook) rather than adding a second written rule.
 
-  Sub-routing inside Rung 4 (Project-Specific vs Universal, Team vs Personal) uses the existing rules below (see "Rules for Determining Project-Specific vs Universal"). Those rules are unchanged by this ladder.
+  Sub-routing inside Rung 4 (Project-Specific vs Universal, Team vs Personal) uses the existing rules below (see "Rules for Determining Project-Specific vs Universal").
 
 **Execution-mode change (outside the ladder, referenced only)**:
   Redefining a `~/.claude/agents/*.md` SubAgent is an "execution mode change", not a prevention layer. Consider it only when a specific class of task should run with different tool access (e.g., read-only). It does not have a rung assignment.
@@ -134,7 +134,7 @@ A learning is **universal** if it:
 - Editor or IDE preferences (e.g., "Use Neovim for text editing")
 
 **Describes Claude's general behavior:**
-- When to use subagents (e.g., "Use Explore subagent for codebase exploration")
+- When to use subagents (e.g., "Dispatch a subagent only for a multi-file investigation")
 - Communication preferences (e.g., "User prefers concise responses")
 - Tool selection patterns (e.g., "Use Edit tool for file modifications, not sed")
 
@@ -145,9 +145,9 @@ A learning is **universal** if it:
 
 **Examples:**
 - ✅ "Use `gh` CLI for GitHub URLs instead of WebFetch (private repos)"
-- ✅ "Always use Explore subagent for codebase exploration, not direct Grep"
+- ✅ "Use `fd` for files and `rg` for content"
 - ✅ "User prefers Japanese for user-facing text, English for code"
-- ✅ "Commit messages should be in Japanese, not English"
+- ✅ "Commit messages and PR bodies are in English"
 
 ## Rules for Skill Proposals
 
@@ -176,7 +176,7 @@ Propose a new skill when ANY of the following conditions are met:
 - Specific flags or configurations required for correct execution
 - Output of one tool feeds as input to the next
 
-**Condition E: Repeated within session (original criterion)**
+**Condition E: Repeated within session**
 - Workflow performed 2+ times in the session
 - Each occurrence followed the same structure
 
@@ -187,10 +187,10 @@ Propose a new skill when ANY of the following conditions are met:
 - Passes the /invoke litmus test ("Would the user type `/skill-name` for this?")
 
 **Examples of skill-worthy learnings by condition:**
-- (A) "Parse Google Doc URL → download as docx → convert with pandoc → extract images → report"
+- (A) "Parse Google Doc URL → fetch the structure with `gws docs` → convert with the Deno script → report"
 - (B) User: "When fixing CI, always: check status → read logs → identify root cause → fix → push → wait"
 - (C) User: "I always need to convert docs to markdown for my project"
-- (D) "gog export → pandoc conversion with media extraction → cleanup"
+- (D) "`gws docs` export → Deno conversion → cleanup"
 - (E) "Edit nix → check → rebuild" repeated 3 times in session
 
 **Examples that should NOT be skills:**
@@ -235,15 +235,15 @@ Propose a skill modification when:
 
 **General rule:** Choose the most specific, most actionable target.
 
-**Example 1:** "Use Explore subagent for codebase exploration"
+**Example 1:** "Dispatch a subagent only for a multi-file investigation"
 - Could be: Global CLAUDE.md (general Claude behavior)
 - Could be: Multiple skill modifications (any skill that explores code)
 - **Decision:** Global CLAUDE.md (broader applicability, affects all workflows)
 
-**Example 2:** "Chrome DevTools MCP requires take_snapshot before interaction"
+**Example 2:** "agent-browser needs `snapshot -i` before element refs can be used"
 - Could be: Global CLAUDE.md (tool knowledge)
-- Could be: qa-planner skill modification (tool-specific)
-- **Decision:** qa-planner skill modification (more specific, users already using the skill will benefit)
+- Could be: agent-browser skill modification (tool-specific)
+- **Decision:** agent-browser skill modification (more specific, users already using the skill will benefit)
 
 **Example 3:** "Always run nix flake check before darwin-rebuild"
 - Could be: Project CLAUDE.md (this is a Nix project)
@@ -292,7 +292,7 @@ When proposing additions to CLAUDE.md files:
 - If file is mixed → Match the language of the relevant section
 
 **Examples:**
-- User's ~/.claude/CLAUDE.md is in Japanese → Proposals in Japanese
+- User's ~/.claude/CLAUDE.md is in English → Proposals in English
 - Project CLAUDE.md is in English → Proposals in English
 - Project CLAUDE.md has Japanese headers but English content → Match section language
 

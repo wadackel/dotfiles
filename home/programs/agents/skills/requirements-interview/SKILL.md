@@ -79,10 +79,10 @@ With deliverable type and detail level decided, gather the requirements and unde
 
 1. **Receive requirements.** Ask the user to describe what they need, framed by the Setup results. If `$ARGUMENTS` was provided, treat it as the requirements input — assess whether it's sufficient or needs clarification before proceeding.
 
-2. **Research the domain.** If the requirements involve a codebase, existing system, or technical domain, research it **before moving to Phase 2.** This is not optional for code-related requests — it must happen before identifying ambiguities or interviewing.
+2. **Research the domain.** If the requirements involve a codebase, existing system, or technical domain, research it before Phase 2, so the ambiguity list and the interview carry only what the code cannot answer.
 
    - Use Explore agents, Grep, Glob, Read to understand current behavior, relevant code paths, configurations, and existing patterns
-   - Resolve questions that become self-evident from reading the code — **do not ask the user what the code can tell you**
+   - Resolve questions that become self-evident from reading the code
    - Feed research findings into Phase 2: ambiguities that were resolved by research should be excluded from the ambiguity list
    - At detail level `implementation`, this overview research is not enough on its own. Once the interview has fixed what changes, build the **surface inventory** (call sites, entry points and modes, docs stating current behavior, fixtures, type shapes on the data path) from [references/implementation-readiness.md](references/implementation-readiness.md) Part 1 before drafting. The inventory can run in the background while the last interview questions are being answered.
 
@@ -146,9 +146,9 @@ This Assumptions table does not override the Phase 3 Interview gate. A user-inte
 
 The same routing applies to Phase 0 Setup inferences and to the "When NOT to interview" path below. When the deliverable has a fixed format with no Assumptions table (an ADR, a commit message), every row above goes in the reply that presents the artifact, never inside the artifact body.
 
-**Self-check before output:** Re-read the deliverable and ask: "Could someone unfamiliar with this conversation understand and act on this?" If any part relies on context only present in the conversation, make it explicit in the deliverable.
+**Standalone deliverable:** someone unfamiliar with this conversation can understand and act on it. Whatever the deliverable relies on is written into it rather than left in the conversation.
 
-**Implementation-readiness gate (detail level `implementation` only).** The self-check above tests comprehension; it does not test whether the draft's claims about code are true or whether an implementer would get stuck. Those gaps are invisible to the draft's author, who shares the interview's assumptions, so close them with the procedure in [references/implementation-readiness.md](references/implementation-readiness.md):
+**Implementation-readiness gate (detail level `implementation` only).** The standalone requirement above covers comprehension; it does not test whether the draft's claims about code are true or whether an implementer would get stuck. Those gaps are invisible to the draft's author, who shares the interview's assumptions, so close them with the procedure in [references/implementation-readiness.md](references/implementation-readiness.md):
 
 1. Apply the drafting rules (Part 2) while writing: no mechanism asserted at finer granularity than what was read, every `file:line` verified at draft time, no undecided alternatives in the body, every acceptance criterion names its observation, every new precondition states its failure path per entry point.
 2. Before presenting the draft, dispatch the implementer review (Part 3) — one fresh-context, read-only agent with the template prompt — and fold its MUST_FIX and SHOULD_FIX findings back into the draft. Re-dispatch once if any MUST_FIX was found.
@@ -164,14 +164,6 @@ When the user has several items to process (like multiple Issues):
 2. Apply learnings from earlier items (e.g., if the user corrected your approach on item 1, adapt for item 2)
 3. After the first item, offer to review whether the depth and style match expectations before continuing
 
-## Adapting to the user
-
-Pay attention to how the user communicates:
-- **Terse answers** → keep questions focused, minimize options
-- **Detailed answers with context** → the user thinks deeply about this; ask deeper follow-ups
-- **"I don't know" or uncertainty** → provide more research and stronger recommendations
-- **Corrections to your framing** → you misunderstood something; re-examine your assumptions
-
 ## When NOT to interview
 
 Skip the interview only when one of these is true:
@@ -179,6 +171,6 @@ Skip the interview only when one of these is true:
 - The request already includes concrete scope, target audience, success criteria, acceptance criteria, and relevant constraints
 - The task is a mechanical rewrite of already-specified content
 
-In these cases, proceed directly to the deliverable but still apply the self-check (would a third party understand this?) and, at detail level `implementation`, the implementation-readiness gate. Skipping the interview removes the questions, not the verification of the draft against the code. Decisions that would have been questions follow "Decisions the user cannot be asked" in Phase 4.
+In these cases, proceed directly to the deliverable but still hold the deliverable to the standalone requirement and, at detail level `implementation`, the implementation-readiness gate. Skipping the interview removes the questions, not the verification of the draft against the code. Decisions that would have been questions follow "Decisions the user cannot be asked" in Phase 4.
 
 A vague request to create an Issue, Markdown spec, PRD, feature request, bug report, or design document is never fully specified merely because a reasonable implementation path exists.

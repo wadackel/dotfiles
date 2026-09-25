@@ -8,7 +8,7 @@ When to create a note, update one, split one, and when to save nothing at all.
 2. **Enough substance** — the material does not fit as a section of an existing note.
 3. **Reusable** — other notes will plausibly link to it.
 
-Fail any one and the answer is "update an existing note" or "save nothing". `02_Notes/` already holds nearly 500 notes, and roughly a quarter of them have no outgoing links at all; adding more isolated notes makes the vault worse, not better.
+Fail any one and the answer is "update an existing note" or "save nothing". `02_Notes/` already holds hundreds of notes, many of them with no outgoing links at all; adding more isolated notes makes the vault worse, not better.
 
 ## Update an existing note
 

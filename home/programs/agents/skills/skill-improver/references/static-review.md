@@ -64,7 +64,7 @@ Checks:
 - Body under 500 lines
 - Only context Claude doesn't already have (no explanation of well-known concepts)
 - Consistent terminology
-- Concrete examples
+- Examples where an output shape must be reproduced exactly, several and labeled illustrative; rules with reasons elsewhere
 - Forward slashes for paths
 - No time-sensitive information
 
@@ -83,7 +83,7 @@ Score guide: 5 (perfect token efficiency), 4 (well-structured), 3 (some), 2 (lim
 #### 4. Workflow Design
 
 Checks:
-- Numbered, sequential steps
+- Numbered steps where order matters; outcome, constraints, and a way to check the result for judgment work
 - Decision points explicit
 - Multi-workflow skills have a Step 0 selector
 - Error handling addressed
@@ -119,12 +119,7 @@ Score guide: 5 (perfect for use case), 4 (appropriate), 3 (reasonable), 2 (misma
 
 ### Total assessment
 
-Sum the six scores (max 30):
-- 26-30: Excellent
-- 21-25: Good
-- 16-20: Functional, room for improvement
-- 11-15: Significant gaps
-- 6-10: Major issues, substantial rework
+Report the six scores side by side rather than as a sum; the lowest-scoring dimensions are where improvement starts.
 
 ### Improvement priority
 

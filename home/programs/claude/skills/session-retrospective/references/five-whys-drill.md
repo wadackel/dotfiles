@@ -1,12 +1,12 @@
 # 5-Whys Drill
 
-Iterative root-cause drill-down invoked from Phase 2 Extract & Drill (Step: "Why did this happen?" in the per-learning drill). Replaces the single-level "Why did this happen?" with a 3-5 step chain until the chain terminates at a **systemic / process / environment** cause — the level at which a durable fix is possible.
+Iterative root-cause drill-down invoked from Phase 2 Extract & Drill: a 3-5 step chain that continues until it terminates at a **systemic / process / environment** cause — the level at which a durable fix is possible.
 
 The point is not to ask "Why?" literally five times. It is to keep asking "what earlier condition made this possible?" until the answer stops being an individual action and starts being a property of the system.
 
 ## When to run
 
-Run this drill for every non-preference learning — Behavioral correction, Workflow candidate, Discovered fact (knowledge gap), and Discovered fact (tool quirk). SKILL.md Phase 2 Step 1 invokes the drill on all such learnings; this file owns the procedure details.
+Run this drill for every non-preference learning — Behavioral correction, Workflow candidate, Discovered fact (knowledge gap), and Discovered fact (tool quirk). SKILL.md Phase 2 invokes the drill on all such learnings; this file owns the procedure details.
 
 Skip this drill for session-local one-shot preferences (outside the 3 archetypes in learning-categories.md) — preferences are not failures, they have no causal chain to drill.
 
@@ -41,7 +41,7 @@ Each Why answer must be:
 Stop when the chain reaches any of:
 
 - **Systemic**: a property of the harness, skill design, tool contract, or shared infrastructure. Example: "skill description lacks the triggering phrase for this scenario"
-- **Process**: a step that is missing or misordered in a documented workflow. Example: "plan Phase 4 Critic has no step that checks for output-value verification"
+- **Process**: a step that is missing or misordered in a documented workflow. Example: "the plan DEEPEN critic has no step that checks for output-value verification"
 - **Environment**: a property of the runtime, filesystem, shell, or external service that is not under the user's direct control but is knowable. Example: "shallow clone fetches only HEAD, so 2-dot diffs against the base branch resolve incorrectly"
 
 If the chain reaches one of these, the Root Cause is actionable — you can fix the system, the process, or document the environment constraint.
@@ -50,7 +50,7 @@ If the chain reaches one of these, the Root Cause is actionable — you can fix 
 
 Not every learning warrants 5 levels. Stop early when:
 
-- **Level 1**: the symptom is a one-off user preference with no upstream condition (e.g., "user prefers Japanese commit messages"). Route directly to Rung 4.
+- **Level 1**: the symptom is a one-off user preference with no upstream condition (e.g., "user prefers `fd` over `find`"). Route directly to Rung 4.
 - **Level 2**: the Why already points at a systemic/process/environment cause (e.g., symptom = "Claude used npm", Why1 = "project uses pnpm and CLAUDE.md does not say so" = Discovered fact (knowledge gap) at the systemic level).
 - **Level 3**: the chain has reached systemic/process/environment without needing deeper levels.
 

@@ -6,7 +6,7 @@ argument-hint: "[skill-name]"
 
 # Skill Tester
 
-Validate Claude Code skills through automated multi-agent team testing.
+Validate Claude Code skills by running each test prompt in its own headless `claude -p` session.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ Validate Claude Code skills through automated multi-agent team testing.
 
 If no skill name is provided, you'll be prompted to select from available skills.
 
-The skill will analyze the target, design test scenarios, and present a plan for approval before creating a test team with dedicated tester agents.
+The skill will analyze the target, design test scenarios, and present a plan for approval before running any test.
 
 ## Overview
 
@@ -73,7 +73,7 @@ Before designing test scenarios, check the skill's description against these cri
 - [ ] Contains specific trigger phrases users would say
 - [ ] Has bilingual triggers if the user communicates in multiple languages
 - [ ] If `$ARGUMENTS` is used, `argument-hint` is present in frontmatter
-- [ ] Description is under 100 words (concise for context efficiency)
+- [ ] Description length is justified: of two candidates that measure the same in skill-improver's `measure-trigger.ts`, the shorter is kept
 
 Flag any failures as pre-test recommendations. These inform test design (e.g., undertriggering risk) but do not block test execution.
 
@@ -147,7 +147,7 @@ Negative tests:
 Edge cases:
 1. "{prompt}" - Expected: {behavior}
 
-This will create a team with dedicated tester agents. Proceed with these tests?
+Each test runs in its own headless `claude -p` session. Proceed with these tests?
 ```
 
 Wait for user confirmation before proceeding.
@@ -254,7 +254,7 @@ d. Additional story test evaluation:
    - Check result_preview for context awareness indicators
    - Does the output reference elements from setup prompts?
    - Are planted elements (corrections, patterns, errors) identified?
-   - Context utilization rate should be ≥60%
+   - Which planted elements did the output miss?
 
 e. Determine PASS/FAIL:
    - PASS if triggered=true AND output demonstrates context awareness
@@ -265,12 +265,10 @@ f. Record the result with story-specific notes
 
 **Important notes**:
 - Each test runs in a completely independent `claude -p` session
-- No context contamination between tests (unlike agent teams approach)
+- No context contamination between tests
 - Skill tool detection is automatic via stream-json parsing
 - All test output is preserved in `$OUTPUT_DIR` for debugging
 - Tests use `--dangerously-skip-permissions` to avoid interactive prompts
-
-**Key principle**: Each test executes in a fresh headless Claude session with zero prior context, ensuring complete isolation. Skills trigger naturally based on their descriptions, and invocations are detected automatically from stream-json output.
 
 ### Step 5: Compile Final Report
 
@@ -310,7 +308,7 @@ After the report is delivered:
 Bash: rm -rf "$OUTPUT_DIR"
 ```
 
-This removes all temporary test output files. The headless approach doesn't require team cleanup since no agent teams are created.
+This removes all temporary test output files.
 
 ### Step 7: Iterate on Improvements
 
@@ -322,8 +320,7 @@ If issues were found and user approves fixes:
    - Add/update references (provide missing context)
 
 2. **Re-test failed tests** (optional):
-   - Create a new team for just the failed test scenarios
-   - Run through the same workflow
+   - Run only the failed scenarios through Step 4 again
    - Verify fixes resolved the issues
 
 3. **Repeat** until all tests pass or user is satisfied with results.
@@ -367,4 +364,3 @@ Testing constraints and considerations including:
 - Story test constraints (non-determinism, `--resume` context preservation)
 - Cost considerations (each test is a full Claude session)
 - Headless mode constraints (`env -u CLAUDECODE`, skills in `-p` mode, stream-json format)
-- Comparison with agent teams approach

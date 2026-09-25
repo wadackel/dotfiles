@@ -38,17 +38,22 @@ To see recent commits, run:
 See recent commits:
 ```
 
-## Pattern 4: Unclear Workflow
+## Pattern 4: Workflow Specificity Does Not Match Fragility
 
-**Before:** Prose-style instructions without clear steps
+**Symptom:** subagents diverge on the order of a sequence that has only one safe order, or walk a step list mechanically where the scenario needed judgment.
+
+**Fix:** number the steps only where order matters — a destructive operation, a state marker written last, output a script parses. For judgment work, replace the steps with the outcome, the constraints, and how to check the result.
+
+**Before (judgment written as a script):**
+```markdown
+1. Read the diff
+2. List three risks
+3. Write a summary
+```
 
 **After:**
 ```markdown
-## Workflow
-
-1. First, do X
-2. Then, do Y
-3. Finally, do Z
+Report what a reviewer could get wrong about this diff, each item with the file and line that shows it. Leave out what the diff makes obvious.
 ```
 
 ## Pattern 6: Missing argument-hint
@@ -163,4 +168,20 @@ description: Processes Excel files
 **After:**
 ```yaml
 description: Processes Excel files, creates pivot tables, generates charts. Use when analyzing Excel files, spreadsheets, tabular data, .xlsx files, or when the user asks to "work with Excel" or "analyze this spreadsheet".
+```
+
+## Pattern 10: Skipped Rule → Reason or Script, Not Volume
+
+**Symptom:** a subagent skipped a rule the skill states.
+
+**Fix:** give the rule its reason, or move a deterministic check into a script the skill calls. Raising the volume (bold, MUST, NEVER, CRITICAL) makes current models over-apply the rule to neighboring cases, and the next iteration then chases the over-application.
+
+**Before:**
+```markdown
+**CRITICAL: You MUST NEVER skip the collision check.**
+```
+
+**After:**
+```markdown
+Check for a filename collision before writing: `Write` overwrites silently, and the file it replaces may be the user's only copy.
 ```

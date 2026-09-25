@@ -1,6 +1,6 @@
 ---
 name: simplify-review
-description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', 'YAGNI check', or when /plan Phase 4 converges and the plan contains 5+ implementation steps. Also use proactively before finalizing non-trivial plans, or at task completion when the diff is large (20+ changed files or 500+ lines)."
+description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', or 'YAGNI check'. Also use proactively before finalizing non-trivial plans."
 argument-hint: "[plan|code|auto]"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "[plan|code|auto]"
 
 Detects over-engineering in plans and code by spawning a fresh subagent (`plan-simplifier` / `code-simplifier`) that reviews from a clean perspective. The reviewer has no knowledge of the design journey — only the artifact and its context — so it naturally spots complexity that feels justified to the author but isn't justified by the requirements.
 
-This skill is a **manual entry point** for ad-hoc review. The default automated paths bypass it: `/plan` Phase 4 Step 6 dispatches `plan-simplifier` directly via the Agent tool, and `/impl` Step 4.5 (diff ≥ 20 files or ≥ 500 lines) dispatches `code-simplifier` directly via the Agent tool. Those skills are the canonical source of truth for the dispatch prompts; this skill orchestrates only the manual `/simplify-review` invocation.
+This skill is the entry point for an independent simplification review. `/impl` reviews simplification in the main session and dispatches neither subagent on its own, so a plan or diff gets a fresh-context simplification pass only through this skill.
 
 ## Why This Matters
 
@@ -28,17 +28,15 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 |---|---|
 | User says "simplify", "YAGNI check", "過剰設計をレビュー" | Manual |
 | Re-running simplify on an already-iterated plan / diff | Manual |
-| Plan or diff that the automated paths missed | Manual |
+| Independent review of a plan or diff before `/gate` | Manual |
 | User review feedback says "too complex" | Reactive |
-
-For the automated paths (`/plan` Phase 4 Step 6 and `/impl` Step 4.5 threshold), the simplifier subagent is dispatched directly by those skills — no need to invoke `/simplify-review`.
 
 ## Manual Workflow
 
 On `/simplify-review` invocation, parse `$ARGUMENTS`:
 
-- `plan` → dispatch `plan-simplifier` with the current plan file, the original user request, and a CLAUDE.md design-principles summary. (See `/plan` Phase 4 Step 6 for the canonical prompt shape.)
-- `code` → dispatch `code-simplifier` with `git diff` (or `git diff <baseline_sha>..HEAD`) plus the project CLAUDE.md path. (See `/impl` Step 4.5 for the canonical prompt shape.)
+- `plan` → dispatch `plan-simplifier` with the current plan file, the original user request, and a CLAUDE.md design-principles summary.
+- `code` → dispatch `code-simplifier` with the changed files, `git diff` (or `git diff <baseline_sha>..HEAD`), and the project CLAUDE.md path.
 - `auto` or empty — detect: plan mode active → `plan`; otherwise uncommitted changes or a recent task completion → `code`; both applicable → run `plan` first, then `code`.
 
 Both subagents return categorized proposals (per-proposal: confidence, rationale, before / after, risk) plus a verdict of `SIMPLIFY` or `MINIMAL`. Triage them with the protocol below, apply approved changes, and present a results summary.
@@ -68,8 +66,6 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 ## Integration Points
 
-- `/plan` Phase 4 Step 6 dispatches `plan-simplifier` directly via the Agent tool (canonical prompt shape lives there).
-- `/impl` Step 4.5 (diff ≥ 20 files or ≥ 500 lines) dispatches `code-simplifier` directly via the Agent tool (canonical prompt shape lives there).
 - `/gate` is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/gate`.
 
 ## Simplification Heuristics
@@ -98,7 +94,7 @@ Encoded in the agent system prompts; documented here for reference.
 
 **Why a fresh subagent (not inline review):** The main session has followed the entire design journey. It knows *why* each decision was made, which makes it blind to unnecessary complexity — every piece feels justified in context. A fresh subagent sees only the artifact and naturally asks "is this needed?" without the sunk-cost bias.
 
-**Why dedicated `plan-simplifier` / `code-simplifier` subagents (not a generic `Plan` or `code-reviewer` agent):** Earlier versions dispatched a generic subagent with a placeholder-filled prompt template loaded from `references/`. That two-step indirection was unreliable when invoked in parallel with other Agent calls — the Skill tool merely loads skill content into context without spawning the subagent, so "parallel simplify-review" effectively degraded to serial or skipped. First-class agent definitions spawn directly via the Agent tool, guaranteeing true parallel execution.
+**Why dedicated `plan-simplifier` / `code-simplifier` subagents (not a generic `Plan` or `code-reviewer` agent):** The Skill tool loads a skill's text into context and spawns nothing, so a prompt template kept in a skill cannot run in parallel with other Agent calls. First-class agent definitions spawn directly through the Agent tool and run in parallel.
 
 **Why two separate agents (plan vs code):** Input shape (plan text vs git diff) and evaluation focus (structure vs implementation) differ enough that merging them into one agent with a mode switch would bloat the system prompt without benefit.
 
@@ -106,4 +102,4 @@ Encoded in the agent system prompts; documented here for reference.
 
 **Why auto-apply HIGH confidence:** Requiring user approval for every dead code removal creates noise. The guardrails (subtractive only, no behavioral change, CLAUDE.md aligned) ensure auto-applied changes are safe.
 
-**Why this skill body is a manual entry point only (no Step 1-5 workflow):** the default automated paths (`/plan` Phase 4 Step 6, `/impl` Step 4.5) call the simplifier agents directly without going through this skill. Re-stating their full dispatch prompts here violated DRY and let the canonical prompt shape drift across files. The dispatch source of truth lives in `/plan` and `/impl`; this skill provides only the manual entry plus the triage / auto-apply protocol that the main session applies after dispatch returns.
+**Why this skill has no step-by-step workflow:** the review instructions live in the `plan-simplifier` and `code-simplifier` agent definitions. This skill holds only what the main session needs around a manual dispatch: the inputs to pass and the triage / auto-apply protocol for what comes back.

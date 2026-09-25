@@ -22,16 +22,16 @@ Do NOT use for:
 
 ## Prerequisites
 
-`/santa-loop` expects `/gate` to have returned `PASS`, with its verdict line, the `plan-state.ts coverage` output, and the sidecar round available as `Audit Verdict Input`. When invoked from `/impl`, the orchestrator runs `/gate` first and embeds its verdict.
+`/santa-loop` expects `/gate` to have returned `PASS`, with its verdict line, the `plan-state.ts coverage` output, and the sidecar round available as `Audit Verdict Input`.
 
-Manual standalone `/santa-loop` without `Audit Verdict Input` is **unsupported** — santa-loop aborts with the single-line error in Layer 2 "Absent → unsupported error". Run `/gate` first, or invoke both via `/impl`.
+Manual standalone `/santa-loop` without `Audit Verdict Input` is **unsupported** — santa-loop aborts with the single-line error in Layer 2 "Absent → unsupported error". Run `/gate` first.
 
 ## Workflow
 
 ### Step 1: Identify Scope
 
-1. Resolve plan file path (active marker → `$ARGUMENTS`). A plan file is required — if neither source yields one, the invocation is a manual standalone and aborts per Layer 2 "Absent → unsupported error" (no `Audit Verdict Input` can be supplied without a plan context).
-2. Resolve baseline: use `git diff <baseline_sha>..HEAD` if the `/impl` task's `metadata.baseline_sha` is reachable; otherwise `git diff HEAD` covers the plan's uncommitted changes.
+1. Resolve plan file path (`$ARGUMENTS`, else the `File:` line of the most recent `## Plan ready`). A plan file is required — if neither source yields one, the invocation is a manual standalone and aborts per Layer 2 "Absent → unsupported error" (no `Audit Verdict Input` can be supplied without a plan context).
+2. Resolve baseline: use `git diff <baseline_sha>..HEAD` if the first task's `baseline_sha` in `<plan>.evidence.json` is reachable; otherwise `git diff HEAD` covers the plan's uncommitted changes.
 3. Capture changed files: `git diff --name-only <baseline>..HEAD`.
 4. Read each changed file in full so the rubric can be tailored to file types.
 
@@ -53,13 +53,12 @@ Completeness vs the plan's Completion Criteria is **delegated to `/gate`** (its 
 
 **Layer 2 — Audit Verdict Input embed**
 
-The orchestrator (`/impl`) runs `/gate` first, captures its `PASS` verdict + coverage output, and embeds it verbatim into the reviewer prompt under `{audit_verdict_input}`. The reviewer treats this as authoritative and focuses solely on code/design quality — completeness is already audited.
+The orchestrator takes the `PASS` verdict + coverage output of the preceding `/gate` run and embeds it verbatim into the reviewer prompt under `{audit_verdict_input}`. The reviewer treats this as authoritative and focuses solely on code/design quality — completeness is already audited.
 
 **Absent → unsupported error**: if `{audit_verdict_input}` is empty (manual `/santa-loop` invoked without a prior `/gate` run), santa-loop emits a single-line error and aborts:
 
 ```
-santa-loop: Audit Verdict Input is required. Run /gate first,
-            or invoke both via /impl (which orchestrates the sequence).
+santa-loop: Audit Verdict Input is required. Run /gate first.
 ```
 
 Manual standalone `/santa-loop` is unsupported by design — the rare-path defensive runtime branching is intentionally omitted in favor of explicit refusal.
@@ -90,7 +89,7 @@ Some Completion Criteria items require host access the reviewer's sandbox cannot
 
 **Identify orchestrator-only items:**
 
-Explicit tag: plan's Completion Criteria item has `[orchestrator-only]` prefix — this is the **sole signal**. Tags are mandatory per `/plan` Phase 4 Step 8; untagged items should never reach santa-loop. If encountered (bypassed /plan), emit a hard error and abort: `santa-loop: untagged Autonomous Verification items detected. Re-invoke /plan to add tags.`
+Explicit tag: plan's Completion Criteria item has `[orchestrator-only]` prefix — this is the **sole signal**. `check-plan.ts` rejects untagged items (`av-tag-missing`), so they should never reach santa-loop. If encountered (bypassed /plan), emit a hard error and abort: `santa-loop: untagged Autonomous Verification items detected. Re-invoke /plan to add tags.`
 
 A missing plan file is a symptom of missing `Audit Verdict Input` (no plan → no `/gate` verdict to embed) and is caught by the single Layer 2 abort predicate. santa-loop aborts at Step 1 before reaching this step; there is no planless fallback.
 
@@ -135,7 +134,7 @@ The same prompt string is used for both Reviewer A and Reviewer B in Step 4.
 
 ### Step 4: Dual Independent Review
 
-**Critical invariants** (from santa-method):
+**Critical invariants**:
 
 1. **Context isolation** — neither reviewer sees the other's assessment
 2. **Identical rubric** — both receive the same evaluation criteria
@@ -215,13 +214,11 @@ for round in 1..MAX_ROUNDS:
         break
 
     # 1. Display merged critical_issues to user (per-issue file:line)
-    # 2. Fix every flagged issue — change ONLY what was flagged
-    #    NO drive-by refactors, NO scope expansion, NO "while I'm here"
+    # 2. Fix every flagged issue and change only what was flagged
     # 3. Record fixes in working tree. santa-loop does NOT auto-commit.
     #    Global CLAUDE.md rule "only commit when user requests" takes precedence.
     #    Fresh reviewers in the next round read the current working tree state
-    #    (which includes all Round N-1 fixes) directly. Per-round audit trail is
-    #    captured in metadata.evidence instead of git history.
+    #    (which includes all Round N-1 fixes) directly.
     #    If the user wants per-round commits, they invoke /commit explicitly.
 
     # 4. Re-run Step 4 with FRESH reviewer instances (new Agent invocations,
@@ -244,8 +241,7 @@ Reviewer agreement summary:
 - Reviewer A only: <count>
 - Reviewer B only: <count>
 
-Manual review required before proceeding. /impl will mark the task as
-in_progress with [BLOCKED: santa-loop escalated] notation.
+Manual review required before proceeding.
 ```
 
 Do NOT push. Do NOT mark the task completed. Surface to the user.
@@ -284,8 +280,6 @@ Unresolved critical issues:
 Recommendation: manually review and either fix the remaining items or re-scope the task.
 ```
 
-When invoked from `/impl`, the orchestrator uses the final verdict to mark the gate task `completed` (NICE) or to add `[BLOCKED: santa-loop escalated]` to the description and leave it `in_progress` (NAUGHTY).
-
 ## Failure Modes & Mitigations
 
 | Failure mode | Symptom | Mitigation |
@@ -316,7 +310,7 @@ When invoked from `/impl`, the orchestrator uses the final verdict to mark the g
 
 **Why fresh reviewers each round**: anchoring bias. A reviewer that remembers flagging X in round 1 is psychologically reluctant to find Y in round 2. Fresh agents have no such memory.
 
-**Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision (different from ECC's santa-loop). NICE just unblocks the final task and surfaces the report.
+**Why no auto-push on NICE**: in this dotfiles workflow, `git push` is the user's decision. NICE just unblocks the final task and surfaces the report.
 
 **Why Completeness is delegated to /gate (accepting the SPOF trade-off)**: the gate's evidence audit is a script (`plan-state.ts coverage` / `complete`); santa-loop owns code/design quality. Re-judging completeness duplicates reasoning. Trade-off: a thin `required` declaration passes the script unchecked; net trade: clarity + cost saving > rare unchecked false-PASS.
 

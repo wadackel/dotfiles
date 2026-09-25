@@ -2,8 +2,6 @@
 
 3 archetypes used by Phase 2 Extract & Drill to classify each learning. Each archetype biases toward a particular Enforcement layer when Phase 3 Pair Design routes the proposal.
 
-The prior 5-category taxonomy (Missing Context / Corrected Approaches / Repeated Workflows / Tool Knowledge / Preference Patterns) was retired because categorization was not directly actionable — two of the five were near-duplicates (Missing Context ≈ Tool Knowledge, Corrected Approaches ≈ Preference Patterns at different intensities) and the routing step had to re-derive the archetype on the fly. The 3 archetypes map directly to enforcement layers.
-
 ## The 3 archetypes
 
 ### 1. Behavioral correction
@@ -17,12 +15,12 @@ The prior 5-category taxonomy (Missing Context / Corrected Approaches / Repeated
 
 **Examples:**
 - User corrected `npm install` → `pnpm install` three turns later claude used npm again
-- User said "commit messages in Japanese", claude pushed with English message
+- User said "PR bodies in English", claude opened the PR with a Japanese body
 - User said "use `Edit` tool, not `sed` via Bash", claude ran sed
 
 **Routing bias:** hook or permissions (Rung 1 / 2). Deterministic misbehavior with a named correct form — enforcement at 100% reliability beats 50-80% skill triggering or ~always-ignored written rule.
 
-**Absorbs**: the prior "Corrected Approaches" category in full, plus the **weak** end of "Preference Patterns" (repeated style corrections). Non-repeated single-instance preferences ("I prefer concise explanations for this one question") are NOT Behavioral corrections — they are session-local and do not enter the ledger.
+Repeated style corrections are Behavioral corrections. Non-repeated single-instance preferences ("I prefer concise explanations for this one question") are NOT Behavioral corrections — they are session-local and do not enter the ledger.
 
 ### 2. Workflow candidate
 
@@ -41,8 +39,6 @@ The prior 5-category taxonomy (Missing Context / Corrected Approaches / Repeated
 
 **Routing bias:** skill (Rung 3). Must pass `skill-tdd-gate.md` RED test (reproduce "agent without skill" failure from evidence). Failure → demote to Behavioral correction (if the missing step is single-shot) or Discovered fact (if it is pure documentation).
 
-**Absorbs**: the prior "Repeated Workflows" category in full.
-
 ### 3. Discovered fact
 
 **Definition:** session revealed a fact about a tool, environment, library, or convention that claude did not know. Not a behavior misaligned with user preference — a piece of knowledge gap.
@@ -55,12 +51,10 @@ The prior 5-category taxonomy (Missing Context / Corrected Approaches / Repeated
 **Examples:**
 - `git diff origin/main...HEAD` in shallow clone returns meaningless count
 - `deno run -e` does not exist — use `deno eval`
-- Chrome DevTools MCP requires `take_snapshot` before element interaction
+- agent-browser needs `snapshot -i` before element refs can be used
 - This repo uses `.#private` / `.#work` as flake outputs (project-specific fact)
 
 **Routing bias:** claude_md (Rung 4) — **if the strengthened Rung 4 bar passes**. Facts cannot be enforced, only documented. Key check: does mechanism-signature Q1-Q3 pass instead? If yes (e.g., "tool X is broken, block it") the archetype is really a Behavioral correction with enforcement, not a Discovered fact.
-
-**Absorbs**: the prior "Missing Context" and "Tool Knowledge" categories in full.
 
 ## Decision tree (Phase 2 classification)
 
@@ -88,21 +82,6 @@ Ambiguous case — learning fits more than one archetype:
 - **Workflow candidate + Discovered fact**: pick Workflow candidate — turning the fact into an invocable procedure is higher-leverage.
 
 When truly unclear, default to **Behavioral correction** — it maps to the strongest enforcement layer (hook/permissions) and cuts through the CLAUDE.md bias.
-
-## Migration map (5 category → 3 archetype)
-
-For backfilling or re-classifying legacy ledger entries:
-
-| Old category | New archetype | Note |
-|---|---|---|
-| Missing Context | Discovered fact | Pure knowledge gap |
-| Tool Knowledge | Discovered fact | Tool-specific fact |
-| Corrected Approaches | Behavioral correction | Direct map |
-| Preference Patterns (repeated ≥2x) | Behavioral correction | Stable preference = behavioral rule |
-| Preference Patterns (one-shot) | DROP | Session-local, not ledger-worthy |
-| Repeated Workflows | Workflow candidate | Direct map |
-
-Legacy entries already in the ledger are NOT automatically re-classified — they continue under their old categorization fields until natural reinforcement / decay cycles them. See `retrospective-ledger.jsonl` for the current 40 entries.
 
 ## Anti-patterns
 

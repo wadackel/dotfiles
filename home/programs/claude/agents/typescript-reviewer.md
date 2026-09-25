@@ -80,7 +80,7 @@ If a finding belongs to another reviewer's scope, note it and skip — do not du
 | SHOULD_FIX | Type unsoundness or design issue without immediate production risk | Internal helper, non-exported scope, non-critical path | `any` in internal utility, optional chaining hiding nullability in a logging path, missing `import type` creating circular-dep risk, missing `satisfies` that loses literal info |
 | NIT | Style / preference | N/A | overload ordering, unnecessary type alias, could use `Pick` / `Omit` utility type |
 
-VERDICT is `PASS` only when no MUST_FIX. SHOULD_FIX and NIT do not block.
+VERDICT is `PASS` only when there is no MUST_FIX and no SHOULD_FIX. NIT does not block.
 
 ## Output Format
 
@@ -102,7 +102,7 @@ VERDICT: PASS | FAIL
 ## Anti-Patterns
 
 - Reporting every `any` even when justified — context matters (interop boundary with an untyped JS lib, `@types` gap, explicit escape hatch)
-- Flagging issues already in the baseline — read `git diff` carefully, review only NEW issues introduced by this change
+- Blocking on issues already in the baseline — report those as NIT; only issues this diff introduces or touches may block
 - Reporting style preferences as MUST_FIX — severity is calibrated to runtime risk, not taste
 - Re-reviewing the same issue another reviewer (code-reviewer / react-reviewer / deno-reviewer) already flagged
 - Flagging `// @ts-expect-error` / `// @ts-ignore` when it is accompanied by an explanatory comment — this is a legitimate escape hatch for intentional type divergence
