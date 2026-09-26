@@ -30,7 +30,7 @@ const WINDOW_DAYS = 90;
 const MIN_CLIPS = 3;
 const MAX_SUGGESTIONS = 5;
 // Sites whose clips are one-off posts or media rather than a feed worth
-// following.
+// following, or whose feed is a firehose of press releases.
 const IGNORED_SITES = new Set([
   "x.com",
   "twitter.com",
@@ -39,12 +39,16 @@ const IGNORED_SITES = new Set([
   "speakerdeck.com",
   "docs.google.com",
   "gist.github.com",
+  "prtimes.jp",
 ]);
 
 export function rankSites(
   clips: Clip[],
-  since: string,
-  exclude: Set<string>,
+  { since, exclude, minClips = MIN_CLIPS }: {
+    since: string;
+    exclude: Set<string>;
+    minClips?: number;
+  },
 ): { site: string; origin: string; clips: string[] }[] {
   const bySite = new Map<string, { origin: string; clips: string[] }>();
   for (const c of clips) {
@@ -65,7 +69,7 @@ export function rankSites(
     bySite.set(site, cur);
   }
   return [...bySite.entries()]
-    .filter(([, v]) => v.clips.length >= MIN_CLIPS)
+    .filter(([, v]) => v.clips.length >= minClips)
     .sort((a, b) => b[1].clips.length - a[1].clips.length)
     .map(([site, v]) => ({ site, ...v }));
 }
@@ -85,7 +89,7 @@ if (import.meta.main) {
 
   const found: Suggestion[] = [];
   const tried: string[] = [];
-  for (const s of rankSites(await loadClips(), since, exclude)) {
+  for (const s of rankSites(await loadClips(), { since, exclude })) {
     if (found.length >= MAX_SUGGESTIONS) break;
     tried.push(s.site);
     const feed = await discoverFeed(s.origin);

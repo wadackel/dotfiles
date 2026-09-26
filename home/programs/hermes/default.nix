@@ -273,6 +273,10 @@ in
           }
           // {
             tools.include = [ "post_digest" ];
+            # With no cap on picks, a digest can outlast the 300-second MCP
+            # default. Hermes still cuts every tool call at 420 seconds; a retry
+            # after that is refused because post_digest posts a pool only once.
+            timeout = 600;
           };
       };
 
@@ -299,6 +303,7 @@ in
           read = [
             feedsDir
             literatureDir
+            secretsFile
           ];
           write = [ feedsDir ];
           script = "collect-feeds.ts";

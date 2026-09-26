@@ -14,6 +14,7 @@ import {
   selectCandidates,
 } from "./feeds.ts";
 import {
+  appendDigestLog,
   fetchFeed,
   loadClips,
   loadFeeds,
@@ -24,6 +25,13 @@ import {
   writeJson,
 } from "./feed-store.ts";
 import { tokyoDate } from "./daily-note.ts";
+import {
+  byScore,
+  jevKey,
+  profileText,
+  type Score,
+  scoreEntries,
+} from "./jev.ts";
 import { startTrace, trace } from "./trace.ts";
 
 startTrace();
@@ -77,11 +85,53 @@ const candidates = selectCandidates(results.flatMap((r) => r.entries), {
   ),
 });
 
+// The scores only order the candidates; Haiku never sees them, so its picks
+// stay an independent judgment to compare the scores against later.
+let scores: (Score | undefined)[] = [];
+if (candidates.length > 0) {
+  const auth = await jevKey();
+  if ("reason" in auth) {
+    trace(`jev: skipped (${auth.reason})`);
+  } else {
+    const jevStarted = Date.now();
+    const result = await scoreEntries(candidates, {
+      key: auth.key,
+      profile: profileText(clips, today),
+    });
+    scores = result.scores;
+    const scored = scores.filter(Boolean).length;
+    trace(
+      `jev: scored ${scored}/${candidates.length} in ${
+        Date.now() - jevStarted
+      }ms`,
+    );
+    for (const error of new Set(result.errors)) trace(`jev failed: ${error}`);
+  }
+}
+const ordered = candidates.map((e, i) => ({ entry: e, score: scores[i] }))
+  .sort((a, b) =>
+    byScore(
+      { published: a.entry.published, score: a.score },
+      { published: b.entry.published, score: b.score },
+    )
+  );
+
 const pool: Pool = {
   date: today,
-  items: candidates.map((e, i) => ({ ...e, key: `c${i + 1}` })),
+  items: ordered.map((o, i) => ({ ...o.entry, key: `c${i + 1}` })),
 };
 await writeJson("pool.json", pool);
+const at = new Date().toISOString();
+await appendDigestLog(pool.items.map((e, i) => ({
+  kind: "candidate",
+  at,
+  date: today,
+  key: e.key,
+  url: e.url,
+  title: e.title,
+  feedTitle: e.feedTitle,
+  ...ordered[i].score,
+})));
 trace(`pool: ${pool.items.length} candidates`);
 if (failed.length) console.error(`failed feeds: ${failed.join(", ")}`);
 if (pool.items.length === 0) Deno.exit(0);

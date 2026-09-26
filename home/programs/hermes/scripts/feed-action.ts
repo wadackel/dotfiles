@@ -82,6 +82,7 @@ if (ref.kind === "article") {
       reaction,
       title: ref.title,
       feedTitle: ref.feedTitle,
+      url: ref.url,
     });
     await finish(
       reaction === "+1"

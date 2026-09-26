@@ -21,11 +21,26 @@ export function home(): string {
   return h;
 }
 
+// Read from the same file Hermes loads, because Hermes scrubs its own secrets
+// from the environment of cron scripts and MCP servers, and a secret in the
+// Nix store would be world-readable.
+export async function readSecret(name: string): Promise<string> {
+  const text = await Deno.readTextFile(`${home()}/.config/hermes/secrets.env`);
+  const line = text.split("\n").find((l) => l.startsWith(`${name}=`));
+  const value = line?.slice(name.length + 1).trim().replace(/^["']|["']$/g, "");
+  if (!value) throw new Error(`${name} is missing from secrets.env`);
+  return value;
+}
+
 export const stateDir = () => `${home()}/.config/hermes-feeds`;
 export const literatureDir = () => `${home()}/Documents/Main/04_Literature`;
 
 export type Seen = { lastRun?: number; ids: string[] };
-export type Pool = { date: string; items: (Entry & { key: string })[] };
+export type Pool = {
+  date: string;
+  items: (Entry & { key: string })[];
+  postedAt?: string;
+};
 // `text` is kept so a reaction can append its result with chat.update, which
 // replaces the whole message.
 export type MessageRef =
@@ -82,6 +97,33 @@ export async function appendFeedback(f: Feedback): Promise<void> {
       append: true,
       mode: 0o600,
     },
+  );
+}
+
+// One line per candidate the digest saw and per article it posted, so the Jev
+// scores can later be compared with what was picked and reacted to.
+export type DigestRow =
+  & { at: string; date: string; url: string }
+  & (
+    | {
+      kind: "candidate";
+      key: string;
+      title: string;
+      feedTitle: string;
+      interest?: number;
+      practical?: number;
+      promo?: number;
+    }
+    | { kind: "pick"; explore: boolean; bundle: boolean }
+  );
+
+export async function appendDigestLog(rows: DigestRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await Deno.writeTextFile(
+    `${stateDir()}/digest-log.jsonl`,
+    rows.map((r) => JSON.stringify(r) + "\n").join(""),
+    { append: true, mode: 0o600 },
   );
 }
 

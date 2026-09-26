@@ -242,6 +242,8 @@ export type Feedback = {
   reaction: "+1" | "-1";
   title: string;
   feedTitle: string;
+  // Absent on reactions recorded before the digest log existed.
+  url?: string;
 };
 
 export function interestProfile(

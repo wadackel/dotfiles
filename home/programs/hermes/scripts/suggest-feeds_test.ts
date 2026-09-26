@@ -17,9 +17,22 @@ Deno.test("rankSites keeps frequently clipped, unsubscribed sites", () => {
     ...[1, 2].map((n) => clip(`https://rare.test/${n}`)),
     ...[1, 2, 3].map((n) => clip(`https://old.test/${n}`, "2026-01-01")),
   ];
-  const got = rankSites(clips, "2026-06-25", new Set(["subscribed.test"]));
+  const got = rankSites(clips, {
+    since: "2026-06-25",
+    exclude: new Set(["subscribed.test"]),
+  });
   assertEquals(got.map((s) => [s.site, s.origin, s.clips.length]), [
     ["blog.example.com", "https://blog.example.com", 4],
     ["zenn.dev/mizchi", "https://zenn.dev/mizchi", 3],
   ]);
+});
+
+Deno.test("rankSites takes a lower threshold and skips press-release sites", () => {
+  const clips = [
+    ...[1, 2].map((n) => clip(`https://rare.test/${n}`, "2020-01-01")),
+    ...[1, 2, 3].map((n) => clip(`https://prtimes.jp/main/html/rd/p/${n}`)),
+    clip("https://once.test/1"),
+  ];
+  const got = rankSites(clips, { since: "", exclude: new Set(), minClips: 2 });
+  assertEquals(got.map((s) => s.site), ["rare.test"]);
 });
