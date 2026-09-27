@@ -82,7 +82,7 @@ Flag any failures as pre-test recommendations. These inform test design (e.g., u
 First, determine if the skill requires conversation context:
 
 **Context-dependent skills** (need story tests):
-- Skills that analyze conversation history (e.g., `session-retrospective`)
+- Skills that analyze conversation history
 - Skills that require prior code changes (e.g., `codex-review`)
 - Skills that depend on prior tool usage or established state
 

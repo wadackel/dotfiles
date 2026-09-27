@@ -17,7 +17,7 @@ Each story scenario should be:
 
 ## Example Story Scenario
 
-**For session-retrospective:**
+**For a skill that analyzes the current conversation:**
 
 ```
 - ID: S1

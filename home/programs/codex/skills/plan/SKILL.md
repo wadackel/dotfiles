@@ -170,7 +170,7 @@ Consolidate findings into a **Unified Discovery Table**: `Category | File:Lines 
 
 If `## Files to Change` contains UPDATE and behavior changes, or if the request is bug-fix, refactor, spec change, performance, CLI output, or semantic change, use one of the three mandates for empirical observation:
 
-- historical signals: `~/.codex/plans/*.md`, `~/.codex/sessions/**/*.jsonl`, `~/.claude/retrospective-ledger.jsonl`, `git log -p`
+- historical signals: `~/.codex/plans/*.md`, `~/.codex/sessions/**/*.jsonl`, `git log -p`
 - direct current-behavior observation: run the CLI, trigger the hook, or read effective config
 
 Record "what the spec says" vs "what actually happens" at Tier 1/2 and add an Empirical Behavior row to the Discovery Table.
