@@ -15,6 +15,8 @@ let
   dailyDir = "${homeDir}/Documents/Main/99_Tracking/Daily";
   feedsDir = "${homeDir}/.config/hermes-feeds";
   literatureDir = "${homeDir}/Documents/Main/04_Literature";
+  vocabDir = "${homeDir}/Documents/Main/06_Vocabulary";
+  vocabProposalsDir = "${homeDir}/Documents/Main/98_Maintenance/proposals/Vocabulary";
   secretsFile = "${homeDir}/.config/hermes/secrets.env";
   # The owner's DM with the Hermes bot, where every report and digest goes.
   dmChannel = "D0C3V6SQABC";
@@ -110,6 +112,8 @@ let
         claudeWorkDir
         secretsFile
         explorePrompt
+        vocabDir
+        vocabProposalsDir
       ];
       write = [
         claudeStateDir

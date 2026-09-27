@@ -10,7 +10,7 @@
 // user starts opencode from a tmux pane.
 
 import type { Plugin } from "@opencode-ai/plugin";
-import { eventToOps, type PaneState } from "./plugin_logic.ts";
+import { eventToOps, type PaneState, vocabDigestFor } from "./plugin_logic.ts";
 // `Op` lives in pane-shared.ts (SSOT). plugin_logic.ts no longer re-exports
 // types — Bun resolves the relative import directly via the symlink chain.
 import { type Op } from "./pane-shared.ts";
@@ -24,6 +24,7 @@ declare const Bun: {
     opts?: {
       stdout?: "pipe" | "inherit" | "ignore";
       stderr?: "pipe" | "inherit" | "ignore";
+      timeout?: number;
     },
   ) => {
     exitCode: number;
@@ -214,6 +215,39 @@ async function dispatchMemo(
   spawnMemoWorker(input);
 }
 
+// The vocabulary digest comes from vocab.ts, which reads the Obsidian vault.
+// Its permissions are given here explicitly because Bun does not honor the
+// script's shebang.
+const vocabCache = new Map<string, string>();
+
+function buildVocabDigest(): string {
+  if (!DENO_BIN || !process.env.HOME) return "";
+  try {
+    const result = Bun.spawnSync(
+      [
+        DENO_BIN,
+        "run",
+        "--allow-read",
+        "--allow-env=HOME",
+        "--allow-run=git",
+        "--no-prompt",
+        `${process.env.HOME}/.agents/scripts/vocab.ts`,
+        "digest",
+        "--cwd",
+        process.cwd(),
+      ],
+      // The transform blocks the model call it runs before, so a stuck git or
+      // a cold module fetch costs at most this long, then no vocabulary.
+      { stdout: "pipe", stderr: "ignore", timeout: 5000 },
+    );
+    return result.exitCode === 0
+      ? new TextDecoder().decode(result.stdout).trim()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 // Sanity check on bootstrap: log once if TMUX_PANE is missing so the user
 // can diagnose why the badge stays unset. The plugin is otherwise silent —
 // opencode logs its own stderr.
@@ -280,6 +314,16 @@ export const PaneStatus: Plugin = async (_input) => {
         ...(input as Record<string, unknown>),
         output: output as Record<string, unknown>,
       });
+    },
+
+    "experimental.chat.system.transform": async (input, output) => {
+      const text = vocabDigestFor(
+        vocabCache,
+        input.sessionID,
+        process.env.VOCAB_DIGEST,
+        buildVocabDigest,
+      );
+      if (text) output.system.push(text);
     },
 
     "permission.ask": async (input) => {

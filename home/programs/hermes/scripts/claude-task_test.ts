@@ -7,6 +7,7 @@ import {
   isMergeWord,
   mergeReadiness,
   parseRequest,
+  repoVocabulary,
   splitNul,
   touchesWorkflows,
 } from "./claude-task.ts";
@@ -200,4 +201,75 @@ Deno.test("decideAction commits only for a pr outcome with changes", () => {
     decideAction({ hasPr: false, pushed: true, outcome: "answer", files: [] }),
     "open-pr",
   );
+});
+
+Deno.test("claudeArgv appends the repository vocabulary to the system prompt", () => {
+  const base = { settings: claudeSettings(paths), prompt: "直して" };
+  const plain = claudeArgv(base);
+  const i = plain.indexOf("--append-system-prompt") + 1;
+  assertEquals(claudeArgv({ ...base, vocabulary: "" }), plain);
+  const withVocab = claudeArgv({ ...base, vocabulary: "- agentower: popup" });
+  assertEquals(withVocab[i], `${plain[i]}\n\n- agentower: popup`);
+  assertEquals(withVocab.length, plain.length);
+});
+
+Deno.test("repoVocabulary returns empty text when the module fails to load", async () => {
+  assertEquals(
+    await repoVocabulary(
+      "dotfiles",
+      "/nonexistent",
+      () => Promise.reject(new Error("x")),
+    ),
+    "",
+  );
+});
+
+Deno.test("repoVocabulary reads only the two vault folders and keeps the target repo's terms", async () => {
+  const home = await Deno.makeTempDir({ prefix: "claude-task-vocab-" });
+  try {
+    const vocab = `${home}/Documents/Main/06_Vocabulary`;
+    const proposals =
+      `${home}/Documents/Main/98_Maintenance/proposals/Vocabulary`;
+    await Deno.mkdir(vocab, { recursive: true });
+    await Deno.mkdir(proposals, { recursive: true });
+    await Deno.writeTextFile(
+      `${vocab}/dotfiles.md`,
+      "---\ntype: vocab\nkind: repo\nstatus: approved\n---\nrepo\n",
+    );
+    await Deno.writeTextFile(
+      `${vocab}/agentower.md`,
+      '---\ntype: vocab\nkind: term\nstatus: approved\napplies_in: ["[[dotfiles]]"]\n---\nprefix+w のポップアップ。\n',
+    );
+    await Deno.writeTextFile(
+      `${vocab}/gate.md`,
+      "---\ntype: vocab\nkind: term\nstatus: approved\n---\n個人のワークフローの語。\n",
+    );
+    const probe = `${home}/probe.ts`;
+    await Deno.writeTextFile(
+      probe,
+      `import { repoVocabulary } from ${
+        JSON.stringify(new URL("./claude-task.ts", import.meta.url).href)
+      };\nconsole.log(await repoVocabulary("dotfiles", ${
+        JSON.stringify(home)
+      }));\n`,
+    );
+    const out = await new Deno.Command("deno", {
+      args: [
+        "run",
+        "--no-prompt",
+        "--allow-env=HOME,USER,TMPDIR",
+        `--allow-read=${vocab},${proposals}`,
+        probe,
+      ],
+      env: { HOME: home },
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    const text = new TextDecoder().decode(out.stdout);
+    assertEquals(out.code, 0, new TextDecoder().decode(out.stderr));
+    assert(text.includes("- agentower: prefix+w のポップアップ。"), text);
+    assert(!text.includes("gate"), text);
+  } finally {
+    await Deno.remove(home, { recursive: true });
+  }
 });

@@ -171,7 +171,7 @@ Under `apply-all-safe`, when more than 10 targets are queued, pause every 5 to c
 
 ## Pending reminder
 
-`lint` and `curiosity` both open by scanning `98_Maintenance/proposals/` for pending files:
+`lint` and `curiosity` both open by scanning `98_Maintenance/proposals/` for pending files, skipping `proposals/Vocabulary/` — those are vocabulary proposals the owner approves in the `06_Vocabulary/語彙レビュー` Bases view and `vocab.ts apply` reflects, not this review flow:
 
 ```
 ⚠️ pending な提案が残っています:

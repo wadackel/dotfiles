@@ -1,0 +1,1 @@
+../../agents/scripts/vocab-propose.ts

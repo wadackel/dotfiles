@@ -10,7 +10,7 @@ Before the observations below, run `scripts/wiki-doctor.ts` (see [SKILL.md](../S
 
 ## Phase 0 — pending reminder
 
-Scan `98_Maintenance/proposals/` for pending files and offer to review them first, per [proposals.md](proposals.md).
+Scan `98_Maintenance/proposals/` (except `Vocabulary/`) for pending files and offer to review them first, per [proposals.md](proposals.md).
 
 ## Observation 1 — contradictions
 

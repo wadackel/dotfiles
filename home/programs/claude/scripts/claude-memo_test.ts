@@ -4,8 +4,10 @@ import {
   countNonNoiseUserMessages,
   countToolUses,
   countUserMessages,
+  extractTurns,
   extractUserTexts,
   heuristicSummary,
+  proposeVocab,
 } from "./claude-memo.ts";
 import { resolveRepoName } from "./memo-shared.ts";
 
@@ -178,4 +180,66 @@ Deno.test("countToolUses: counts assistant tool_use blocks only", () => {
   ];
   assertEquals(countToolUses(entries), 2);
   assertEquals(countToolUses([userEntry("prompt")]), 0);
+});
+
+Deno.test("claude-memo: extractTurns keeps order and drops meta and noise", () => {
+  const turns = extractTurns(
+    [
+      {
+        type: "user",
+        message: { role: "user", content: "gate の範囲を教えて" },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "どの計画ですか？" }],
+        },
+      },
+      {
+        type: "user",
+        isMeta: true,
+        message: { role: "user", content: "meta" },
+      },
+      { type: "user", message: { role: "user", content: "ok" } },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "いま開いている計画のこと" }],
+        },
+      },
+    ] as unknown as Parameters<typeof extractTurns>[0],
+  );
+  assertEquals(turns, [
+    { role: "user", text: "gate の範囲を教えて" },
+    { role: "assistant", text: "どの計画ですか？" },
+    { role: "user", text: "いま開いている計画のこと" },
+  ]);
+});
+
+Deno.test("claude-memo: a vocabulary module that fails to load does not throw", async () => {
+  const previous = Deno.env.get("TMPDIR");
+  const tmp = await Deno.makeTempDir({ prefix: "claude-memo-vocab-" });
+  Deno.env.set("TMPDIR", tmp);
+  try {
+    await proposeVocab(
+      {
+        agent: "claude",
+        sessionId: "s",
+        cwd: "/tmp",
+        repo: "r",
+        turns: [],
+      },
+      () => Promise.reject(new Error("module not found")),
+    );
+    assertStringIncludes(
+      await Deno.readTextFile(`${tmp}/claude-memo.log`),
+      "VOCAB ERROR: Error: module not found",
+    );
+  } finally {
+    if (previous === undefined) Deno.env.delete("TMPDIR");
+    else Deno.env.set("TMPDIR", previous);
+    await Deno.remove(tmp, { recursive: true });
+  }
 });

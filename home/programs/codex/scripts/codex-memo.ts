@@ -14,6 +14,7 @@ import {
   shouldRunLLM,
   upsertDailyNote,
 } from "./memo-shared.ts";
+import type { SessionInput, Turn } from "./vocab-propose.ts";
 
 export interface HookLogEntry {
   ts: string;
@@ -163,6 +164,47 @@ export function extractAssistantTexts(entries: HookLogEntry[]): string[] {
     texts.push(msg);
   }
   return texts;
+}
+
+export function extractTurns(entries: HookLogEntry[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const entry of entries) {
+    const payload = entry.payload;
+    if (!payload || isTruncated(payload)) continue;
+    if (entry.event === "UserPromptSubmit") {
+      const prompt = payload.prompt;
+      if (typeof prompt === "string" && prompt && !isNoise(prompt)) {
+        turns.push({ role: "user", text: prompt });
+      }
+    } else if (entry.event === "Stop") {
+      const msg = payload.last_assistant_message;
+      if (typeof msg === "string" && msg) {
+        turns.push({ role: "assistant", text: msg });
+      }
+    }
+  }
+  return turns;
+}
+
+// Loaded only when used, so a missing or broken vocabulary module never stops
+// the memo itself.
+export async function proposeVocab(
+  input: Omit<SessionInput, "home" | "tmpdir">,
+  load = () => import("./vocab-propose.ts"),
+): Promise<void> {
+  try {
+    const home = Deno.env.get("HOME");
+    if (!home) return;
+    const { proposeFromSession } = await load();
+    const r = await proposeFromSession({
+      ...input,
+      home,
+      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+    });
+    await log(`WORKER VOCAB: ${r.note}`);
+  } catch (e) {
+    await log(`WORKER VOCAB ERROR: ${e}`);
+  }
 }
 
 function toolUseCounts(entries: HookLogEntry[]): Map<string, number> {
@@ -388,28 +430,38 @@ async function mainWorker(workerInput: HookData): Promise<void> {
 
   const ctx = await prepareContext(workerInput, "WORKER ");
   if (!ctx) return;
+  const vocab = proposeVocab({
+    agent: "codex",
+    sessionId: workerInput.session_id,
+    cwd: workerInput.cwd ?? Deno.cwd(),
+    repo: ctx.repoName,
+    turns: extractTurns(ctx.entries),
+  });
+  try {
+    const condensed = buildLLMInput(ctx.entries);
+    await log(
+      `WORKER LLM: calling claude -p (haiku) (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
+    );
+    const llmResult = await callClaude(
+      condensed,
+      "Codex",
+      { onStderr: (msg) => log(`WORKER LLM ERROR: ${msg}`) },
+    );
+    if (!llmResult) {
+      await log("WORKER LLM: no result, keeping heuristic entry");
+      return;
+    }
 
-  const condensed = buildLLMInput(ctx.entries);
-  await log(
-    `WORKER LLM: calling claude -p (haiku) (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
-  );
-  const llmResult = await callClaude(
-    condensed,
-    "Codex",
-    { onStderr: (msg) => log(`WORKER LLM ERROR: ${msg}`) },
-  );
-  if (!llmResult) {
-    await log("WORKER LLM: no result, keeping heuristic entry");
-    return;
+    const llmLines = formatEntryLines(llmResult, ctx);
+    upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
+    await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
+    saveDebounceState(
+      debounceStatePath("codex", ctx.sessionShort),
+      ctx.userCount,
+    );
+  } finally {
+    await vocab;
   }
-
-  const llmLines = formatEntryLines(llmResult, ctx);
-  upsertDailyNote(ctx.dailyPath, ctx.sessionShort, llmLines);
-  await log(`WORKER LLM UPDATED: ${llmLines.join(" | ")}`);
-  saveDebounceState(
-    debounceStatePath("codex", ctx.sessionShort),
-    ctx.userCount,
-  );
 }
 
 async function main(): Promise<void> {

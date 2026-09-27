@@ -207,3 +207,22 @@ export function eventToOps(
   if (body.length === 0) return [];
   return [...selfHealOps(data), ...body];
 }
+
+// The system transform fires on every model call, but the vocabulary digest
+// only changes between sessions, so it is built once per session. A missing
+// session id shares one slot rather than rebuilding on every call.
+export function vocabDigestFor(
+  cache: Map<string, string>,
+  sessionID: string | undefined,
+  vocabDigestEnv: string | undefined,
+  build: () => string,
+): string {
+  if (vocabDigestEnv === "off") return "";
+  const key = sessionID ?? "";
+  let text = cache.get(key);
+  if (text === undefined) {
+    text = build();
+    cache.set(key, text);
+  }
+  return text;
+}

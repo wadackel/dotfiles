@@ -21,6 +21,7 @@ import {
   shouldRunLLM,
   upsertDailyNote,
 } from "./memo-shared.ts";
+import type { SessionInput, Turn } from "./vocab-propose.ts";
 
 // --- Types ---
 
@@ -188,6 +189,47 @@ export function parseRows(
   return { user, assistant, toolCounts };
 }
 
+// parseRows keeps user and assistant text apart; proposals need the order to
+// tell which assistant question a user line answers.
+export function turnsFromRows(
+  messages: MessageRow[],
+  parts: PartRow[],
+): Turn[] {
+  const roleByMessageId = new Map(messages.map((m) => [m.id, m.role]));
+  const turns: Turn[] = [];
+  for (const p of parts) {
+    if (p.type !== "text" || !p.text) continue;
+    const role = roleByMessageId.get(p.message_id);
+    if (role === "user" && !isNoise(p.text)) {
+      turns.push({ role: "user", text: p.text });
+    } else if (role === "assistant") {
+      turns.push({ role: "assistant", text: p.text });
+    }
+  }
+  return turns;
+}
+
+// Loaded only when used, so a missing or broken vocabulary module never stops
+// the memo itself.
+export async function proposeVocab(
+  input: Omit<SessionInput, "home" | "tmpdir">,
+  load = () => import("./vocab-propose.ts"),
+): Promise<void> {
+  try {
+    const home = Deno.env.get("HOME");
+    if (!home) return;
+    const { proposeFromSession } = await load();
+    const r = await proposeFromSession({
+      ...input,
+      home,
+      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+    });
+    await log(`VOCAB: ${r.note}`);
+  } catch (e) {
+    await log(`VOCAB ERROR: ${e}`);
+  }
+}
+
 export function formatToolSummary(
   toolCounts: Map<string, number>,
 ): string {
@@ -280,60 +322,71 @@ async function main(): Promise<void> {
     return;
   }
 
-  const heuristic = heuristicSummary(parsedRows);
-  if (!heuristic) {
-    await log("SKIP: no summary extractable");
-    return;
-  }
-
   const repoName = await repoNameFor(cwd);
-  const timestamp = nowTimestamp();
-  const statePath = debounceStatePath("opencode", sessionShort);
-
-  const dailyContent = Deno.readTextFileSync(dailyPath);
-  const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
-  const runLLM = shouldRunLLM(statePath, userCount);
-
-  if (!runLLM && hasExistingEntry) {
-    await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
-    return;
-  }
-
-  const heuristicLines = [
-    `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
-      escapeObsidianSyntax(heuristic)
-    }`,
-  ];
-  upsertDailyNote(dailyPath, sessionShort, heuristicLines);
-  await log(`HEURISTIC: ${heuristicLines[0]}`);
-
-  if (!runLLM) {
-    await log(`DEBOUNCE: skip LLM (userCount=${userCount}, no new messages)`);
-    return;
-  }
-
-  const condensed = buildLLMInput(parsedRows);
-  await log(
-    `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
-  );
-  const llmResult = await callClaude(
-    condensed,
-    "opencode",
-    { onStderr: (msg) => log(`LLM ERROR: ${msg}`) },
-  );
-  if (!llmResult) {
-    await log("LLM: no result, keeping heuristic entry");
-    return;
-  }
-
-  const llmLines = formatEntryLines(llmResult, {
-    timestamp,
-    repoName,
-    sessionShort,
+  const vocab = proposeVocab({
+    agent: "opencode",
+    sessionId,
+    cwd,
+    repo: repoName,
+    turns: turnsFromRows(rows.messages, rows.parts),
   });
-  upsertDailyNote(dailyPath, sessionShort, llmLines);
-  await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
-  saveDebounceState(statePath, userCount);
+  try {
+    const heuristic = heuristicSummary(parsedRows);
+    if (!heuristic) {
+      await log("SKIP: no summary extractable");
+      return;
+    }
+
+    const timestamp = nowTimestamp();
+    const statePath = debounceStatePath("opencode", sessionShort);
+
+    const dailyContent = Deno.readTextFileSync(dailyPath);
+    const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
+    const runLLM = shouldRunLLM(statePath, userCount);
+
+    if (!runLLM && hasExistingEntry) {
+      await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
+      return;
+    }
+
+    const heuristicLines = [
+      `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+        escapeObsidianSyntax(heuristic)
+      }`,
+    ];
+    upsertDailyNote(dailyPath, sessionShort, heuristicLines);
+    await log(`HEURISTIC: ${heuristicLines[0]}`);
+
+    if (!runLLM) {
+      await log(`DEBOUNCE: skip LLM (userCount=${userCount}, no new messages)`);
+      return;
+    }
+
+    const condensed = buildLLMInput(parsedRows);
+    await log(
+      `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
+    );
+    const llmResult = await callClaude(
+      condensed,
+      "opencode",
+      { onStderr: (msg) => log(`LLM ERROR: ${msg}`) },
+    );
+    if (!llmResult) {
+      await log("LLM: no result, keeping heuristic entry");
+      return;
+    }
+
+    const llmLines = formatEntryLines(llmResult, {
+      timestamp,
+      repoName,
+      sessionShort,
+    });
+    upsertDailyNote(dailyPath, sessionShort, llmLines);
+    await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
+    saveDebounceState(statePath, userCount);
+  } finally {
+    await vocab;
+  }
 }
 
 if (import.meta.main) {

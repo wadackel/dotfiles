@@ -228,6 +228,13 @@ Rebuild the list of genre-less articles bundled by subject, which the user reads
 - Output: `~/Documents/Main/98_Maintenance/genre-mining/ジャンル候補一覧.md`, overwritten with the Write tool. Write nothing else
 - Report one line: the number of bundles, the size of the largest, and the number of articles still waiting for `ingest`
 
+### Step 9b: Vocabulary Proposals
+
+Draft vocabulary proposals from the week and reflect the owner's approvals. Follow the "Weekly drafting" section of the `vocab` skill; do not restate it here.
+
+- Output: pending proposals in `~/Documents/Main/98_Maintenance/proposals/Vocabulary/`, written only through `~/.agents/scripts/vocab.ts`, and the approved ones applied to `06_Vocabulary/`
+- Report one line: proposals written automatically, proposals you drafted, proposals applied, and lint errors (verbatim when there are any)
+
 ### Step 10: Open in Obsidian
 
 Use `obsidian open path="99_Tracking/Weekly/YYYY-WNN.md"` to display the updated weekly note.

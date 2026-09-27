@@ -1,5 +1,10 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { eventToOps, type PaneState, selfHealOps } from "./plugin_logic.ts";
+import {
+  eventToOps,
+  type PaneState,
+  selfHealOps,
+  vocabDigestFor,
+} from "./plugin_logic.ts";
 import { maskPrompt, type Op } from "./pane-shared.ts";
 
 const STATE: PaneState = { status: "idle", currentTool: "" };
@@ -411,4 +416,25 @@ Deno.test("Phase B.1 fixture: session.deleted", () => {
     { kind: "unset", key: "@pane_last_tool" },
     { kind: "unset", key: "@pane_last_activity_at" },
   ]);
+});
+
+Deno.test("vocabDigestFor builds the digest once per session", () => {
+  const cache = new Map<string, string>();
+  let builds = 0;
+  const build = () => `digest ${++builds}`;
+  assertEquals(vocabDigestFor(cache, "s1", undefined, build), "digest 1");
+  assertEquals(vocabDigestFor(cache, "s1", undefined, build), "digest 1");
+  assertEquals(vocabDigestFor(cache, "s2", undefined, build), "digest 2");
+  assertEquals(vocabDigestFor(cache, undefined, undefined, build), "digest 3");
+  assertEquals(vocabDigestFor(cache, undefined, undefined, build), "digest 3");
+  assertEquals(builds, 3);
+});
+
+Deno.test("vocabDigestFor does nothing when VOCAB_DIGEST=off", () => {
+  let builds = 0;
+  assertEquals(
+    vocabDigestFor(new Map(), "s1", "off", () => `digest ${++builds}`),
+    "",
+  );
+  assertEquals(builds, 0);
 });

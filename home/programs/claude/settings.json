@@ -29,6 +29,11 @@
       "Bash(*check-plan*)",
       "Bash(*/.agents/scripts/plan-state.ts*)",
       "Bash(*home/programs/agents/scripts/plan-state_test.ts*)",
+      "Bash(*/.agents/scripts/vocab.ts*)",
+      "Bash(*home/programs/agents/scripts/vocab-lib_test.ts*)",
+      "Bash(*home/programs/agents/scripts/vocab-propose_test.ts*)",
+      "Bash(*home/programs/agents/scripts/vocab_test.ts*)",
+      "Bash(*home/programs/claude/scripts/vocab-probe_test.ts*)",
       "Bash(*home/programs/agents/scripts/plan-evidence_test.ts*)",
       "Bash(*config-lint*)",
       "Bash(*skill-improver/scripts/measure-trigger.ts*)",
@@ -650,6 +655,10 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts SessionStart"
+          },
+          {
+            "type": "command",
+            "command": "~/.agents/scripts/vocab.ts hook claude"
           }
         ]
       }

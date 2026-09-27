@@ -14,6 +14,7 @@ import {
   shouldRunLLM,
   upsertDailyNote,
 } from "./memo-shared.ts";
+import type { SessionInput, Turn } from "./vocab-propose.ts";
 
 // --- Types ---
 
@@ -210,6 +211,52 @@ export function buildLLMInput(entries: TranscriptEntry[]): string {
   );
 }
 
+export function extractTurns(entries: TranscriptEntry[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const e of entries) {
+    const content = e.message?.content;
+    if (e.type === "user" && e.isMeta !== true) {
+      const texts = typeof content === "string"
+        ? [content]
+        : Array.isArray(content)
+        ? (content as ContentBlock[]).filter((b) => b.type === "text" && b.text)
+          .map((b) => b.text!)
+        : [];
+      for (const text of texts) {
+        if (!isNoise(text)) turns.push({ role: "user", text });
+      }
+    } else if (e.type === "assistant" && Array.isArray(content)) {
+      for (const block of content as ContentBlock[]) {
+        if (block.type === "text" && block.text?.trim()) {
+          turns.push({ role: "assistant", text: block.text });
+        }
+      }
+    }
+  }
+  return turns;
+}
+
+// Loaded only when used, so a missing or broken vocabulary module never stops
+// the memo itself.
+export async function proposeVocab(
+  input: Omit<SessionInput, "home" | "tmpdir">,
+  load = () => import("./vocab-propose.ts"),
+): Promise<void> {
+  try {
+    const home = Deno.env.get("HOME");
+    if (!home) return;
+    const { proposeFromSession } = await load();
+    const r = await proposeFromSession({
+      ...input,
+      home,
+      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+    });
+    await log(`VOCAB: ${r.note}`);
+  } catch (e) {
+    await log(`VOCAB ERROR: ${e}`);
+  }
+}
+
 // --- Main ---
 
 async function main(): Promise<void> {
@@ -266,79 +313,89 @@ async function main(): Promise<void> {
   }
 
   const repoName = await repoNameFor(cwd);
-
-  const sessionShort = sessionId.slice(0, 8);
-  const timestamp = nowTimestamp();
-  const dailyPath = dailyNotePath();
-  try {
-    await Deno.stat(dailyPath);
-  } catch {
-    await log(`SKIP: daily note not found: ${dailyPath}`);
-    return;
-  }
-
-  // Check if entry already exists (from a previous Stop invocation)
-  const dailyContent = Deno.readTextFileSync(dailyPath);
-  const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
-
-  const userCount = countUserMessages(entries);
-  const statePath = debounceStatePath("claude", sessionShort);
-  const runLLM = shouldRunLLM(statePath, userCount);
-
-  if (!runLLM && hasExistingEntry) {
-    await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
-    return;
-  }
-
-  // Phase 1: Heuristic summary — write immediately as placeholder (single line)
-  const heuristic = heuristicSummary(entries);
-  if (!heuristic) {
-    await log("SKIP: no summary extractable");
-    return;
-  }
-
-  const heuristicLines = [
-    `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
-      escapeObsidianSyntax(heuristic)
-    }`,
-  ];
-  upsertDailyNote(dailyPath, sessionShort, heuristicLines);
-  await log(`HEURISTIC: ${heuristicLines[0]}`);
-
-  // Phase 2: LLM summary — runs only when there are new user messages
-  if (!runLLM) {
-    await log(`DEBOUNCE: skip LLM (userCount=${userCount}, no new messages)`);
-    return;
-  }
-
-  saveDebounceState(statePath, userCount);
-
-  const condensed = buildLLMInput(entries);
-  await log(
-    `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
-  );
-
-  const llmResult = await callClaude(
-    condensed,
-    "Claude Code",
-    {
-      onStderr: (msg) => log(`LLM ERROR: ${msg}`),
-      extraEnv: { CLAUDE_MEMO_SKIP: "1" },
-    },
-  );
-  if (!llmResult) {
-    await log("LLM: no result, keeping heuristic entry");
-    return;
-  }
-
-  const llmLines = formatEntryLines(llmResult, {
-    timestamp,
-    repoName,
-    sessionShort,
+  const vocab = proposeVocab({
+    agent: "claude",
+    sessionId,
+    cwd,
+    repo: repoName,
+    turns: extractTurns(entries),
   });
+  try {
+    const sessionShort = sessionId.slice(0, 8);
+    const timestamp = nowTimestamp();
+    const dailyPath = dailyNotePath();
+    try {
+      await Deno.stat(dailyPath);
+    } catch {
+      await log(`SKIP: daily note not found: ${dailyPath}`);
+      return;
+    }
 
-  upsertDailyNote(dailyPath, sessionShort, llmLines);
-  await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
+    // Check if entry already exists (from a previous Stop invocation)
+    const dailyContent = Deno.readTextFileSync(dailyPath);
+    const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
+
+    const userCount = countUserMessages(entries);
+    const statePath = debounceStatePath("claude", sessionShort);
+    const runLLM = shouldRunLLM(statePath, userCount);
+
+    if (!runLLM && hasExistingEntry) {
+      await log(`DEBOUNCE: skip (userCount=${userCount}, entry exists)`);
+      return;
+    }
+
+    // Phase 1: Heuristic summary — write immediately as placeholder (single line)
+    const heuristic = heuristicSummary(entries);
+    if (!heuristic) {
+      await log("SKIP: no summary extractable");
+      return;
+    }
+
+    const heuristicLines = [
+      `- ${timestamp} - \`(${repoName}/${sessionShort})\` ${
+        escapeObsidianSyntax(heuristic)
+      }`,
+    ];
+    upsertDailyNote(dailyPath, sessionShort, heuristicLines);
+    await log(`HEURISTIC: ${heuristicLines[0]}`);
+
+    // Phase 2: LLM summary — runs only when there are new user messages
+    if (!runLLM) {
+      await log(`DEBOUNCE: skip LLM (userCount=${userCount}, no new messages)`);
+      return;
+    }
+
+    saveDebounceState(statePath, userCount);
+
+    const condensed = buildLLMInput(entries);
+    await log(
+      `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
+    );
+
+    const llmResult = await callClaude(
+      condensed,
+      "Claude Code",
+      {
+        onStderr: (msg) => log(`LLM ERROR: ${msg}`),
+        extraEnv: { CLAUDE_MEMO_SKIP: "1" },
+      },
+    );
+    if (!llmResult) {
+      await log("LLM: no result, keeping heuristic entry");
+      return;
+    }
+
+    const llmLines = formatEntryLines(llmResult, {
+      timestamp,
+      repoName,
+      sessionShort,
+    });
+
+    upsertDailyNote(dailyPath, sessionShort, llmLines);
+    await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
+  } finally {
+    await vocab;
+  }
 }
 
 if (import.meta.main) {

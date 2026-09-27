@@ -12,6 +12,11 @@
             "type": "command",
             "timeout": 5,
             "command": "sh -c '\"$HOME/.codex/scripts/codex-hook-log.ts\" SessionStart'"
+          },
+          {
+            "type": "command",
+            "timeout": 5,
+            "command": "sh -c '\"$HOME/.agents/scripts/vocab.ts\" hook codex'"
           }
         ]
       }

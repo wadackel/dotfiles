@@ -13,7 +13,7 @@
 
 ## Phase 0 — pending reminder
 
-Scan `98_Maintenance/proposals/` for pending proposals and offer to review them first, per [proposals.md](proposals.md).
+Scan `98_Maintenance/proposals/` (except `Vocabulary/`) for pending proposals and offer to review them first, per [proposals.md](proposals.md).
 
 ## Phase 1 — sample
 

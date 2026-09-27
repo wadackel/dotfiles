@@ -186,10 +186,37 @@ const SYSTEM_PROMPT = [
   "Installing dependencies or running tests is fine even when you only answer a question: file changes are discarded unless your outcome is pr, and for pr only the changes the fix needs should remain.",
 ].join(" ");
 
+// The owner's vocabulary for the target repository only. The global terms
+// name the owner's own workflow (skills, /gate, the vault), which
+// SYSTEM_PROMPT tells Claude to ignore here. Loaded lazily so a broken module
+// costs the vocabulary, never the task.
+export async function repoVocabulary(
+  repo: string,
+  homeDir = home(),
+  load = () => import("../../agents/scripts/vocab-lib.ts"),
+): Promise<string> {
+  try {
+    const lib = await load();
+    const p = lib.vaultPaths(homeDir);
+    const { schema } = await lib.loadSchema(p);
+    return lib.buildDigest(
+      lib.effectiveEntries(await lib.loadNotes(p), await lib.loadProposals(p)),
+      {
+        repo,
+        includeGlobal: false,
+        symmetric: lib.symmetricRelations(schema),
+      },
+    );
+  } catch {
+    return "";
+  }
+}
+
 export function claudeArgv(o: {
   settings: ReturnType<typeof claudeSettings>;
   prompt: string;
   resume?: string;
+  vocabulary?: string;
 }): string[] {
   return [
     "-p",
@@ -208,7 +235,7 @@ export function claudeArgv(o: {
     "--json-schema",
     JSON.stringify(OUTCOME_SCHEMA),
     "--append-system-prompt",
-    SYSTEM_PROMPT,
+    o.vocabulary ? `${SYSTEM_PROMPT}\n\n${o.vocabulary}` : SYSTEM_PROMPT,
     ...(o.resume ? ["--resume", o.resume] : []),
     o.prompt,
   ];
@@ -492,7 +519,12 @@ async function runClaude(
     pnpm: pnpmDir(),
   });
   const child = new Deno.Command(cfg.claude, {
-    args: claudeArgv({ settings, prompt, resume: t.sessionId }),
+    args: claudeArgv({
+      settings,
+      prompt,
+      resume: t.sessionId,
+      vocabulary: await repoVocabulary(t.repo),
+    }),
     cwd: worktreePath(t),
     clearEnv: true,
     env: {
