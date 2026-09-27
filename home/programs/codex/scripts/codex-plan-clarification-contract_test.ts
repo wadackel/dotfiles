@@ -13,6 +13,11 @@ const CRITIC_PROMPT =
 const ADVERSARIAL_PROMPT =
   "home/programs/agents/shared/plan/references/adversarial-prompt.md";
 const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
+const CLAUDE_GATE = "home/programs/claude/skills/gate/SKILL.md";
+const CLAUDE_IMPL = "home/programs/claude/skills/impl/SKILL.md";
+const CODEX_IMPL = "home/programs/codex/skills/impl/SKILL.md";
+const HUMAN_REVIEW =
+  "home/programs/agents/shared/plan/references/human-review.md";
 
 // Codex may reuse prior agreement; imposing Claude's fixed cadence on both
 // would silently reintroduce redundant approval turns.
@@ -131,6 +136,23 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
     CONTRACT,
   ]],
   ["<redacted:", [CONTRACT, CLAUDE_PLAN, CRITIC_PROMPT]],
+  ["## 完了の条件", [CONTRACT, CLAUDE_PLAN]],
+  ["## 人が読む変更", [CONTRACT, CLAUDE_PLAN]],
+  ["人が読む:", [CONTRACT, HUMAN_REVIEW]],
+  ["権限・信頼境界", [HUMAN_REVIEW]],
+  ["秘密情報・認証", [HUMAN_REVIEW]],
+  ["外部への書き込み・送信", [HUMAN_REVIEW]],
+  ["取り消せない操作", [HUMAN_REVIEW]],
+];
+// Only the plan skills have a `references/` that links to the shared
+// directory; gate and the impl skills must name the public path, or a bare
+// `references/human-review.md` would resolve to their own directory.
+const HUMAN_REVIEW_REFERRERS: ReadonlyArray<readonly [string, string]> = [
+  [CLAUDE_PLAN, "references/human-review.md"],
+  [CLAUDE_GATE, "~/.claude/skills/plan/references/human-review.md"],
+  [CLAUDE_IMPL, "~/.claude/skills/plan/references/human-review.md"],
+  [CODEX_PLAN, "references/human-review.md"],
+  [CODEX_IMPL, "~/.agents/skills/plan/references/human-review.md"],
 ];
 const CONTRACT_REFERRERS = [
   CLAUDE_PLAN,
@@ -349,6 +371,12 @@ for (const [needle, files] of CONTRACT_MIRRORS) {
   });
 }
 
+Deno.test("skills that apply human-review.md reference it by a path that resolves", async () => {
+  for (const [path, reference] of HUMAN_REVIEW_REFERRERS) {
+    assertStringIncludes(await readRepoFile(path), reference, path);
+  }
+});
+
 Deno.test("skills and prompts reference contract.md rather than deleted references", async () => {
   for (const path of CONTRACT_REFERRERS) {
     const body = await readRepoFile(path);
@@ -410,6 +438,7 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
     "**Approach**",
     "**Files to Change**",
     "**Completion Criteria**",
+    "**Human Review**",
     "**Test Strategy**",
     "**Execution**",
   ]);

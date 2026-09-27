@@ -65,7 +65,15 @@ One task is one verifiable unit: target files, expected behavior, and acceptance
 
 ## ACTIVATE
 
-Re-run `check-plan.ts`; a plan with any `error` cannot be activated. Emit the design decisions and the `### Assumptions` as one line each, the plan path, then the block below. Do not repeat Files to Change, the Task Outline, or the rest of the plan body.
+Re-run `check-plan.ts`; a plan with any `error` cannot be activated. Emit, in this order:
+
+1. The design decisions and the `### Assumptions`, one line each.
+2. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, one line each, with `[live]` the only tag shown and those lines first. Write each line the way `## 確かめたこと` is written in the impl report: the subject is the fact to be established, and the command or path closes the line in words; never paste the plan's `rg` or command lines.
+3. `## 人が読む変更`: the `## Files to Change` entries that meet `references/human-review.md`, one line each with the label and what changes, or `なし`.
+4. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `人が読む変更を確かめたうえで、` when that section is not `なし`.
+5. The plan path, then the block below.
+
+Do not repeat the Task Outline or the rest of the plan body; `## 人が読む変更` is the one part of Files to Change shown. When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again.
 
 ```
 ## Plan ready

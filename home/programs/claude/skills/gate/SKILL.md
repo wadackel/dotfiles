@@ -49,13 +49,15 @@ On the final task (`Final Audit + Review`): `start` it if not started, `require`
 
 ## 6. Record and reply
 
-Append to `~/.claude/plans/<slug>.gate.log.md` under `### Round N` (read the file first for N): the coverage output, the reviewer selection with its reasons, every reviewer's final reply verbatim (a credential, token, or signed URL quoted in a finding becomes `<redacted: where it lives>`), and per bucket the blockers fixed, findings deferred to the user, and non-blockers dismissed with a one-line reason each. Nothing else is dropped from the sidecar. When the write fails, put the block in the reply instead and say so.
+Append to `~/.claude/plans/<slug>.gate.log.md` under `### Round N` (read the file first for N): the coverage output, the reviewer selection with its reasons, every reviewer's final reply verbatim (a credential, token, or signed URL quoted in a finding becomes `<redacted: where it lives>`), per bucket the blockers fixed, findings deferred to the user, and non-blockers dismissed with a one-line reason each, and the `人が読む:` items. Nothing else is dropped from the sidecar. When the write fails, put the block in the reply instead and say so.
+
+Before recording, apply `~/.claude/skills/plan/references/human-review.md` to the final state, the collected diff plus every `rereview-<n>` fix diff, whether or not the review wave ran. Each matching hunk becomes a `人が読む:` item in the form that file gives, listed before every other item under `## 決めてほしいこと`.
 
 The reply carries only what changes the reader's next action:
 
 - Under `/impl`, the gate writes no reply of its own: it hands the verdict and the items below to the final report.
-- Standalone, the reply takes the shape of `## Final report` in `~/.claude/skills/impl/SKILL.md`, with `## 見つかったこと` (what was reviewed and what came out, briefly) in place of `## 変わったこと`. The items under `## 決めてほしいこと` are a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` as two nested lines, and a finding dismissed in an earlier round that resurfaced, which is listed here rather than dismissed again. Each item is one line with its `file:line`, and one nested line with what happens if it stays.
+- Standalone, the reply takes the shape of `## Final report` in `~/.claude/skills/impl/SKILL.md`, with `## 見つかったこと` (what was reviewed and what came out, briefly) in place of `## 変わったこと`. The items under `## 決めてほしいこと` are the `人が読む:` items, a `SHOULD_FIX` / `HIGH` deferred on purpose, a security `MEDIUM` or above left open, a `[live]` item waived or deferred to a later run with its `Observe` and `Your steps` as two nested lines, and a finding dismissed in an earlier round that resurfaced, which is listed here rather than dismissed again. Each item is one line with its `file:line`, and one nested line with what happens if it stays.
 - With `--diff-only`, `## 確かめたこと` lists the review surfaces and `Sidecar:` names the scratchpad `.gate.diff` and the log.
 - Nothing else: no per-reviewer lines, no round counts, no themed tallies of NITs.
 
-A gate that ends `[BLOCKED: gate escalated]` carries that marker in the result sentence and lists the open blockers under `## 決めてほしいこと`.
+A gate that ends `[BLOCKED: gate escalated]` carries that marker in the result sentence and lists the `人が読む:` items and the open blockers under `## 決めてほしいこと`.

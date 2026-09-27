@@ -62,6 +62,8 @@ A plan that changes user-observable behavior carries at least one `[live]` item.
 
 ## Activation
 
+Approval rests on two things shown before the approval line: what counts as done, and which changes a person still reads in the diff. Claude shows them as `## 完了の条件` and `## 人が読む変更`, Codex's Approval Summary as `**Completion Criteria**` and `**Human Review**`. The criteria, their four labels, and the report-time item that starts with `人が読む:` are in `human-review.md` next to this file.
+
 Claude ends `/plan` with:
 
 ```

@@ -382,7 +382,8 @@ The user must be able to decide whether to approve `$impl` from a compact Approv
 - **Overview**: intended outcome and non-goals.
 - **Approach**: key decisions, constraints, and implementation discretion.
 - **Files to Change**: affected components and representative paths.
-- **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation.
+- **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation, each stated as the fact to be established rather than a command, closed by one sentence that once they pass the change can be accepted without reading the diff, apart from the Human Review items.
+- **Human Review**: the Files to Change entries that meet `references/human-review.md`, one line each with the label and what changes, or none.
 - **Test Strategy**: meaningful verification and known limits.
 - **Execution**: task count, important dependencies, and risks.
 
