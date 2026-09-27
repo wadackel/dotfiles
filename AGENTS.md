@@ -310,12 +310,13 @@ Third-party SKILL.md sets are vendored under `home/programs/agents/skills/` and 
 
 - `figma`: `figma-{use,generate-design,generate-library,use-slides}/` mirror upstream `figma/mcp-server-guide`
 - `gh-stack`: `gh-stack/` mirrors upstream `github/gh-stack` (`skills/gh-stack`); the extension itself is installed via `pkgs.gh-stack` in `home/programs/gh/default.nix`
+- `typesafe-ai`: `typesafe-ai/` mirrors upstream `typesafe-ai/skills` (`skills/typesafe-ai`); design guidance for Jev / System One judgments that defers API details to the live docs at `docs.typesafe.ai`
 
 Commands:
 
 - Re-sync all vendors: `./home/programs/agents/scripts/sync-vendored-skills.ts`; pass vendor names to limit (e.g. `... gh-stack`)
 - Check for upstream drift without writing: `./home/programs/agents/scripts/sync-vendored-skills.ts --check [vendor...]`
-- Each vendored skill root has a `.<vendor>-source` (`.figma-source`, `.gh-stack-source`) recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
+- Each vendored skill root has a `.<vendor>-source` (`.figma-source`, `.gh-stack-source`, `.typesafe-ai-source`) recording `upstream:` / `commit:` / `synced_at:` — `commit:` is the rollback anchor
 - `.gitattributes` marks `figma-use/references/plugin-api-standalone.d.ts` as `-diff` so the 445KB typings file does not flood PR review UI
 
 ### agentower-verify (Agentower e2e)

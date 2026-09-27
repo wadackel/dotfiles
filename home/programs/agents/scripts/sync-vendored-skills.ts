@@ -34,6 +34,11 @@ const VENDORS: readonly Vendor[] = [
     upstream: "https://github.com/github/gh-stack.git",
     skills: ["gh-stack"],
   },
+  {
+    name: "typesafe-ai",
+    upstream: "https://github.com/typesafe-ai/skills.git",
+    skills: ["typesafe-ai"],
+  },
 ];
 
 const REPO_ROOT = new URL("../../../../", import.meta.url).pathname;
