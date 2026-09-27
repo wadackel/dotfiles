@@ -39,6 +39,16 @@ const VENDORS: readonly Vendor[] = [
     upstream: "https://github.com/typesafe-ai/skills.git",
     skills: ["typesafe-ai"],
   },
+  {
+    name: "docker",
+    upstream: "https://github.com/docker/skills.git",
+    skills: [
+      "docker-project-foundations",
+      "docker-build-strategies",
+      "docker-compose-patterns",
+      "docker-destructive-guardrails",
+    ],
+  },
 ];
 
 const REPO_ROOT = new URL("../../../../", import.meta.url).pathname;
