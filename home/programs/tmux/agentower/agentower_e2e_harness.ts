@@ -362,7 +362,7 @@ async function sandboxEnv(): Promise<Record<string, string>> {
 // no drift risk between this string and agentower-main.ts:1.
 //
 // AGENTOWER_E2E_BIN swaps in a compiled binary instead. It is read here rather
-// than taken as an option because every scenario calls spawnAgentower() with no
+// than taken as an option because most scenarios call spawnAgentower() with no
 // arguments, so an option would never reach them; the env var lets one run of
 // the suite exercise the shipped artifact.
 //
@@ -383,6 +383,7 @@ export async function spawnAgentower(
     // AGENTOWER_TRACE, whose marks would otherwise land in the pane and be
     // captured as part of the frame.
     traceFile?: string;
+    args?: string[];
   } = {},
 ): Promise<string> {
   // URL.pathname is percent-encoded; decode so paths containing spaces or
@@ -435,15 +436,24 @@ export async function spawnAgentower(
   if (traceFile && /['"$`\\]/.test(traceFile)) {
     throw new Error(`traceFile contains shell metacharacters: ${traceFile}`);
   }
+  const args = opts.args ?? [];
+  for (const arg of args) {
+    if (!/^--[a-z-]+$/.test(arg)) {
+      throw new Error(`args must match --<lowercase>, got: ${arg}`);
+    }
+  }
+  const argSuffix = args.map((a) => " " + a).join("");
   // `exec` rather than a plain call: the pane's tty is already open while sh
   // sleeps, so keys sent during the delay are buffered by the line discipline
   // and inherited by the real process — which is exactly what happens when a
   // user types while the popup binary is still loading.
   const command = delayMs === 0 && !traceFile
-    ? `'${agentowerPath}'`
+    ? `'${agentowerPath}'${argSuffix}`
     : `sh -c '${
       delayMs === 0 ? "" : `sleep ${delayMs / 1000}; `
-    }exec "${agentowerPath}"${traceFile ? ` 2>>"${traceFile}"` : ""}'`;
+    }exec "${agentowerPath}"${argSuffix}${
+      traceFile ? ` 2>>"${traceFile}"` : ""
+    }'`;
   await tmuxRun([
     "new-window",
     "-d",
@@ -463,6 +473,47 @@ export async function spawnAgentower(
     (out) => out.includes("jump") || out.includes("No panes available."),
   );
   return target;
+}
+
+// Attach a real tmux client to `session` from a pane of its own host session
+// on the same server, so the harness needs no pty; TMUX is unset there because
+// tmux refuses to attach from inside a pane otherwise. The host is sized like
+// setupServer's session so a client switching in does not shrink the Agentower
+// window under `window-size latest`. Input sent to the returned hostPane
+// reaches the client as keystrokes and counts as its activity.
+let clientHosts = 0;
+export async function attachClient(
+  session: string,
+): Promise<{ clientName: string; hostPane: string }> {
+  const before = new Set(
+    (await tmuxRun(["list-clients", "-F", "#{client_name}"]))
+      .split("\n").filter(Boolean),
+  );
+  const hostPane = (await tmuxRun([
+    "new-session",
+    "-d",
+    "-s",
+    `clienthost-${++clientHosts}`,
+    "-x",
+    "200",
+    "-y",
+    "50",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    `env -u TMUX tmux -L ${SOCKET} attach -t ${session}`,
+  ])).trim();
+  const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const added = (await tmuxRun(["list-clients", "-F", "#{client_name}"]))
+      .split("\n").filter((name) => name && !before.has(name));
+    if (added.length === 1) return { clientName: added[0], hostPane };
+    if (added.length > 1) {
+      throw new Error(`attachClient: expected one new client, got ${added}`);
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+  throw new Error(`attachClient timeout: no client attached to ${session}`);
 }
 
 // Send raw bytes as one write, so several events land in a single stdin read

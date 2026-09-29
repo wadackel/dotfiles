@@ -332,3 +332,36 @@ abr() {
   fi
   "$script" "$@"
 }
+
+
+# ====================================================
+# Agentower dashboard (always-on Agentower for a second display)
+# ====================================================
+
+agentower() {
+  # Inside tmux, switch-client would resolve to the client showing the
+  # dashboard itself, so every jump would land on its own window. $TMUX cannot
+  # tell: a terminal app launched from a tmux pane hands TMUX and TMUX_PANE to
+  # every window it opens later, so ask tmux whether this tty is a pane.
+  if env -u TMUX tmux list-panes -a -F '#{pane_tty}' 2>/dev/null | grep -qxF "$(tty)"; then
+    print -u2 "agentower: the dashboard runs in a terminal window outside tmux; inside tmux, use prefix+w."
+    return 1
+  fi
+  local bin="$HOME/.local/share/agentower/agentower"
+  if [[ ! -x "$bin" ]]; then
+    print -u2 "agentower: $bin not found or not executable."
+    print -u2 "  Run: cd ~/dotfiles && sudo darwin-rebuild switch --flake .#private"
+    return 1
+  fi
+  # Ink draws every tmux error above its frame, and a dashboard left open
+  # through a tmux server restart would scroll one per second; keep them in a
+  # log instead, and point at it when a crash would otherwise end silently.
+  # An inherited TMUX_PANE would steer tmux's choice of client toward a pane
+  # that may be long gone.
+  local log="$HOME/Library/Logs/agentower-dashboard.log"
+  env -u TMUX -u TMUX_PANE "$bin" --dashboard 2>>"$log" || {
+    local code=$?
+    print -u2 "agentower: exited $code; see $log"
+    return $code
+  }
+}

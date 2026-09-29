@@ -4,6 +4,7 @@ import {
   assertStringIncludes,
 } from "jsr:@std/assert@1";
 import {
+  attachClient,
   captureOutput,
   createClaudePane,
   sandboxHomePath,
@@ -2500,6 +2501,179 @@ Deno.test("S63: a tab in the pane keeps the preview's right border in place", as
     );
 
     await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- Dashboard mode (--dashboard) ----
+//
+// The dashboard stays open and jumps whichever client tmux resolves when
+// switch-client gets no -c. These scenarios attach real clients to an `away`
+// session so the switch into the agent panes' session is observable; S4's
+// detached server has no client, which is why it can only check pane_active.
+// `cat` echoes what a client types, which is how S67 knows its keystroke was
+// processed (and the client's activity updated) before pressing Enter.
+
+async function createAwaySession(): Promise<void> {
+  await tmux([
+    "new-session",
+    "-d",
+    "-s",
+    "away",
+    "-x",
+    "200",
+    "-y",
+    "50",
+    "cat",
+  ]);
+}
+
+async function clientView(
+  clientName: string,
+): Promise<{ session: string; pane: string }> {
+  const out = await tmux([
+    "list-clients",
+    "-F",
+    "#{client_name}\t#{client_session}\t#{pane_id}",
+  ]);
+  const row = out.split("\n").map((l) => l.split("\t"))
+    .find(([name]) => name === clientName);
+  if (!row) throw new Error(`client ${clientName} not listed:\n${out}`);
+  return { session: row[1], pane: row[2] };
+}
+
+async function waitForClientPane(
+  clientName: string,
+  pane: string,
+): Promise<{ session: string; pane: string }> {
+  const deadline = Date.now() + 5000;
+  let view = await clientView(clientName);
+  while (view.pane !== pane && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 50));
+    view = await clientView(clientName);
+  }
+  return view;
+}
+
+async function windowAlive(): Promise<boolean> {
+  const names = await tmux([
+    "list-windows",
+    "-t",
+    "test",
+    "-F",
+    "#{window_name}",
+  ]);
+  return names.split("\n").includes("agentower");
+}
+
+Deno.test("S64: dashboard Enter jumps the attached client and stays open", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
+    await createAwaySession();
+    const { clientName } = await attachClient("away");
+    assertEquals((await clientView(clientName)).session, "away");
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await sendKey(agentower, "Enter");
+
+    assertEquals(
+      await waitForClientPane(clientName, paneB),
+      { session: "test", pane: paneB },
+    );
+    await waitFor(agentower, (o) => o.includes("jump"));
+    assertEquals(await windowAlive(), true);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S65: dashboard ignores Escape and quits on q", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+
+    await sendKey(agentower, "Escape");
+    await new Promise((r) => setTimeout(r, 1500));
+    assertEquals(await windowAlive(), true);
+    await waitFor(agentower, (o) => o.includes("jump"));
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S66: dashboard click on the selected card jumps and stays open", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
+    await createAwaySession();
+    const { clientName } = await attachClient("away");
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+
+    await sendClick(agentower, 0, CARD_1);
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await sendClick(agentower, 0, CARD_1);
+
+    assertEquals(
+      await waitForClientPane(clientName, paneB),
+      { session: "test", pane: paneB },
+    );
+    assertEquals(await windowAlive(), true);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// B attaches last, so it starts out as the most recent client; typing into A
+// has to overtake it for A to be the one that moves.
+Deno.test("S67: dashboard jumps the client that had input last", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b",
+    });
+    await createAwaySession();
+    const clientA = await attachClient("away");
+    const clientB = await attachClient("away");
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+
+    await sendKey(clientA.hostPane, "Z");
+    await waitFor("away", (o) => o.includes("Z"));
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-b"));
+    await sendKey(agentower, "Enter");
+
+    assertEquals(
+      await waitForClientPane(clientA.clientName, paneB),
+      { session: "test", pane: paneB },
+    );
+    assertEquals((await clientView(clientB.clientName)).session, "away");
+
+    await sendKey(agentower, "q");
     await waitForExit();
   } finally {
     await teardown();

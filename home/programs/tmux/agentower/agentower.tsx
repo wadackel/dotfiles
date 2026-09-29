@@ -788,12 +788,19 @@ function Preview(
   );
 }
 
+// "popup" is the one-shot prefix+w picker. "dashboard" (--dashboard) runs in a
+// terminal window of its own, outside tmux, and stays open after a jump; with
+// no client of its own, its switch-client lands on the client tmux resolves as
+// the most recently active one.
+type AgentowerMode = "popup" | "dashboard";
+
 function App({
   initialRows,
   initialSelectedPaneId,
   initialTaskProgress,
   initialUsages,
   prefixKey,
+  mode,
   onSelect,
 }: {
   initialRows: PaneRow[];
@@ -801,6 +808,7 @@ function App({
   initialTaskProgress: Map<string, TaskProgress | null>;
   initialUsages: AgentUsage[];
   prefixKey: string | null;
+  mode: AgentowerMode;
   onSelect: (row: PaneRow | null) => void;
 }) {
   const { exit } = useApp();
@@ -1025,7 +1033,7 @@ function App({
     if (mouse.button === MOUSE_LEFT) {
       if (hit === index) {
         onSelect(target);
-        exit();
+        if (mode === "popup") exit();
       } else {
         setSelectedPaneId(target.paneId);
       }
@@ -1045,14 +1053,17 @@ function App({
     input: string,
     key: Pick<Key, "escape" | "return" | "upArrow" | "downArrow">,
   ) => {
-    if (key.escape || input === "q") {
+    // Escape closes only the popup: a stray press must not take down a
+    // dashboard that is meant to stay on screen.
+    if (input === "q" || (key.escape && mode === "popup")) {
       onSelect(null);
       exit();
       return;
     }
+    if (key.escape) return;
     if (key.return) {
       onSelect(derivedRows[index] ?? null);
-      exit();
+      if (mode === "popup") exit();
       return;
     }
     if (key.upArrow || input === "k") {
@@ -1234,16 +1245,21 @@ function App({
 // ---- Main ----
 
 export async function main(): Promise<void> {
-  if (!Deno.env.get("TMUX")) {
+  const mode: AgentowerMode = Deno.args.includes("--dashboard")
+    ? "dashboard"
+    : "popup";
+  if (mode === "popup" && !Deno.env.get("TMUX")) {
     console.error("agentower must run inside tmux");
     Deno.exit(2);
   }
   // Parallel with fetchPanes so the footer costs the popup no extra startup
   // latency — the whole reason Agentower is AOT-compiled in the first place.
+  // The prefix chord exists to close a popup that swallows every key, so the
+  // dashboard skips it.
   const [rows, usages, prefixKey] = await Promise.all([
     fetchPanes(),
     readAllAgentUsage(),
-    readPrefixKey(),
+    mode === "popup" ? readPrefixKey() : null,
   ]);
   trace("io-done");
 
@@ -1273,6 +1289,19 @@ export async function main(): Promise<void> {
   );
 
   const result: { value: PaneRow | null } = { value: null };
+  // Chained so a second Enter cannot interleave its switch-client /
+  // select-window / select-pane with the first jump's. tmuxRun resolves on a
+  // failing tmux command, so the catch is only for a failed spawn, which must
+  // not end a process that is meant to stay up.
+  let jumps = Promise.resolve();
+  const onSelect = mode === "popup"
+    ? (r: PaneRow | null) => {
+      result.value = r;
+    }
+    : (r: PaneRow | null) => {
+      if (!r) return;
+      jumps = jumps.then(() => jumpTo(r.paneId)).catch(() => {});
+    };
   const { waitUntilExit } = render(
     <App
       initialRows={rows}
@@ -1280,9 +1309,8 @@ export async function main(): Promise<void> {
       initialTaskProgress={initialTaskProgress}
       initialUsages={usages}
       prefixKey={prefixKey}
-      onSelect={(r) => {
-        result.value = r;
-      }}
+      mode={mode}
+      onSelect={onSelect}
     />,
     {
       // Opt-in per-line diffing. Ink's default renderer rewrites every line of
@@ -1298,6 +1326,9 @@ export async function main(): Promise<void> {
     },
   );
   await waitUntilExit();
+  // agentower-main.ts exits the process as soon as main returns, which would
+  // cut a jump started just before `q` between its tmux calls.
+  await jumps;
 
   const picked = result.value;
   if (!picked) return;
