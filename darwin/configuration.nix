@@ -334,6 +334,7 @@
         in
         {
           windowManagementEnabled = true;
+          windowManagementCycleMode = "sizes";
           compactMode = true;
           interfaceSize = "large";
           "hotkey.togglePalette" = combo cmd 49; # ⌘Space
