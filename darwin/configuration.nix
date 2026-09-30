@@ -90,6 +90,7 @@
       "1password-cli"
       "appcleaner"
       "arc"
+      "chatgpt"
       "claude"
       "figma"
       "firefox"
