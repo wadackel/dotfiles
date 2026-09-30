@@ -538,7 +538,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/rtk-rewrite.sh"
+            "command": "~/.claude/hooks/rtk-worktree-guard.sh"
           }
         ]
       },
@@ -725,28 +725,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts SubagentStop"
-          }
-        ]
-      }
-    ],
-    "WorktreeCreate": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts WorktreeCreate"
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-pane-status.ts WorktreeRemove"
           }
         ]
       }

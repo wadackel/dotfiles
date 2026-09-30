@@ -1097,26 +1097,6 @@ Deno.test("eventToOps: SubagentStop drains pending teardown when list becomes em
   assertEquals(ops.every((o) => o.kind === "unset"), true);
 });
 
-Deno.test("eventToOps: WorktreeCreate with branch + path", () => {
-  const ops = eventToOps(
-    "WorktreeCreate",
-    { branch: "feat/foo", path: "/tmp/wt", session_id: "s1" },
-    emptyState,
-  );
-  const br = ops.find((o) => o.key === "@pane_worktree_branch");
-  assertEquals(br?.kind === "set" ? br.value : "", "feat/foo");
-  const pa = ops.find((o) => o.key === "@pane_worktree_path");
-  assertEquals(pa?.kind === "set" ? pa.value : "", "/tmp/wt");
-});
-
-Deno.test("eventToOps: WorktreeRemove unsets both worktree keys", () => {
-  const ops = eventToOps("WorktreeRemove", { session_id: "s1" }, emptyState);
-  const br = ops.find((o) => o.key === "@pane_worktree_branch");
-  assertEquals(br?.kind, "unset");
-  const pa = ops.find((o) => o.key === "@pane_worktree_path");
-  assertEquals(pa?.kind, "unset");
-});
-
 Deno.test("eventToOps: unknown event → no-op", () => {
   assertEquals(eventToOps("NotARealEvent", {}, emptyState), []);
   assertEquals(eventToOps("", {}, emptyState), []);

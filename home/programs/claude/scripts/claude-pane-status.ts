@@ -719,30 +719,6 @@ export function eventToOps(
         return [subagentOp];
       }
 
-      case "WorktreeCreate": {
-        const branch = str(data.branch) || str(data.worktree_branch);
-        const path = str(data.path) || str(data.worktree_path);
-        const ops: Op[] = [];
-        if (branch) {
-          ops.push({
-            kind: "set",
-            key: "@pane_worktree_branch",
-            value: branch,
-          });
-        }
-        if (path) {
-          ops.push({ kind: "set", key: "@pane_worktree_path", value: path });
-        }
-        return ops;
-      }
-
-      case "WorktreeRemove": {
-        return [
-          { kind: "unset", key: "@pane_worktree_branch" },
-          { kind: "unset", key: "@pane_worktree_path" },
-        ];
-      }
-
       default:
         return [];
     }
