@@ -1,139 +1,154 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write
 
-// Splices a Nix-generated managed block into ~/.codex/config.toml between
-// `# nix-managed:start` / `# nix-managed:end` markers. Content outside the
-// markers (e.g. [projects.*] / [notice] sections that Codex CLI mutates at
-// runtime) is preserved verbatim. Idempotent: skips write when the resulting
-// content equals the current file.
+// Merges the Nix-managed settings into ~/.codex/config.toml as TOML values
+// rather than as a marked text block: the ChatGPT desktop app rewrites the
+// whole file and drops comments, so markers cannot survive it, and re-adding
+// the block then duplicates every managed key. Keys outside the managed set
+// (e.g. [projects.*] / [notice], mutated by Codex at runtime) are kept.
 
-const START_MARKER = "# nix-managed:start";
-const END_MARKER = "# nix-managed:end";
+import { parse, stringify } from "npm:smol-toml@1.9.0";
 
-function splitLines(content: string): string[] {
-  return content.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+type Table = Record<string, unknown>;
+type KeyPath = string[];
+
+export type ApplyAction = "created" | "updated" | "noop";
+
+export interface SpliceResult {
+  next: string;
+  action: ApplyAction;
+  // Managed leaf paths, stored so that a key dropped from Nix can be removed on
+  // the next run. Segment arrays, because TOML keys may themselves contain dots.
+  paths: KeyPath[];
 }
 
-function isTableHeader(line: string): boolean {
-  return /^\s*\[[^\]]+\]\s*(?:#.*)?$/.test(line);
+const LEGACY_START_MARKER = "# nix-managed:start\n";
+const LEGACY_END_MARKER = "# nix-managed:end\n";
+const PREVIOUS_NOTIFY_FLAG = "--previous-notify";
+
+function isTable(value: unknown): value is Table {
+  return typeof value === "object" && value !== null &&
+    !Array.isArray(value) && !(value instanceof Date);
 }
 
-function isTuiHeader(line: string): boolean {
-  return /^\s*\[tui\]\s*(?:#.*)?$/.test(line);
+function leafPaths(table: Table, prefix: KeyPath = []): KeyPath[] {
+  return Object.entries(table).flatMap(([key, value]) =>
+    isTable(value) && Object.keys(value).length > 0
+      ? leafPaths(value, [...prefix, key])
+      : [[...prefix, key]]
+  );
 }
 
-function onlyOwnsStatusLine(sectionLines: string[]): boolean {
-  const keys = sectionLines
-    .map((line) => line.replace(/\n$/, ""))
-    .filter((line) => line.trim() !== "" && !line.trimStart().startsWith("#"))
-    .map((line) => line.match(/^\s*([A-Za-z0-9_-]+)\s*=/)?.[1] ?? null);
-
-  return keys.length > 0 && keys.every((key) => key === "status_line");
-}
-
-function bodyOwnsTuiStatusLine(managedBody: string): boolean {
-  const lines = splitLines(managedBody);
-
-  for (let i = 0; i < lines.length; i++) {
-    if (!isTuiHeader(lines[i])) continue;
-
-    let end = i + 1;
-    while (end < lines.length && !isTableHeader(lines[end])) {
-      end++;
-    }
-
-    return onlyOwnsStatusLine(lines.slice(i + 1, end));
+function getPath(table: Table, path: KeyPath): unknown {
+  let node: unknown = table;
+  for (const key of path) {
+    if (!isTable(node)) return undefined;
+    node = node[key];
   }
-
-  return false;
+  return node;
 }
 
-function pruneLegacyTuiStatusLineTail(
-  content: string,
-  managedBody: string,
-): string {
-  if (!bodyOwnsTuiStatusLine(managedBody)) return content;
-
-  const lines = splitLines(content);
-  const kept: string[] = [];
-
-  for (let i = 0; i < lines.length;) {
-    if (!isTuiHeader(lines[i])) {
-      kept.push(lines[i]);
-      i++;
-      continue;
+function setPath(table: Table, path: KeyPath, value: unknown): void {
+  let node = table;
+  for (const key of path.slice(0, -1)) {
+    node[key] ??= {};
+    const child = node[key];
+    if (!isTable(child)) {
+      throw new Error(
+        `cannot set ${
+          path.join(".")
+        }: ${key} is not a table in the current config`,
+      );
     }
-
-    let end = i + 1;
-    while (end < lines.length && !isTableHeader(lines[end])) {
-      end++;
-    }
-
-    if (onlyOwnsStatusLine(lines.slice(i + 1, end))) {
-      i = end;
-      continue;
-    }
-
-    kept.push(...lines.slice(i, end));
-    i = end;
+    node = child;
   }
-
-  return kept.join("");
+  node[path[path.length - 1]] = value;
 }
 
-export interface ApplyResult {
-  action: "created" | "replaced" | "prepended" | "noop";
-  warning?: string;
+// Only the ancestors of the removed key are pruned when they become empty; a
+// table that was already empty (e.g. [desktop]) is someone else's state.
+function deletePath(table: Table, path: KeyPath): void {
+  const ancestors: Table[] = [table];
+  for (const key of path.slice(0, -1)) {
+    const child = ancestors[ancestors.length - 1][key];
+    if (!isTable(child)) return;
+    ancestors.push(child);
+  }
+  const last = path.length - 1;
+  if (!(path[last] in ancestors[last])) return;
+  delete ancestors[last][path[last]];
+  for (let i = last; i > 0 && Object.keys(ancestors[i]).length === 0; i--) {
+    delete ancestors[i - 1][path[i - 1]];
+  }
+}
+
+function parseCommand(payload: unknown): string[] | null {
+  if (typeof payload !== "string") return null;
+  try {
+    const value = JSON.parse(payload);
+    return Array.isArray(value) && value.every((v) => typeof v === "string")
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// The desktop app wraps notify as `<client> turn-ended --previous-notify
+// '<JSON of the previous notify>'` for Computer Use. Keeping the wrapper and
+// swapping only its payload keeps both notifications; overwriting it would
+// drop the app's until it re-wraps, and the payload goes stale on every deno
+// store-path change.
+function mergeNotify(current: unknown, managed: unknown): unknown {
+  if (!Array.isArray(current)) return managed;
+  const index = current.indexOf(PREVIOUS_NOTIFY_FLAG) + 1;
+  const previous = index > 0 ? parseCommand(current[index]) : null;
+  if (previous === null) return managed;
+  if (JSON.stringify(previous) === JSON.stringify(managed)) return current;
+  return current.with(index, JSON.stringify(managed));
+}
+
+function removeLegacyBlock(content: string): string {
+  const start = content.indexOf(LEGACY_START_MARKER);
+  const end = start === -1 ? -1 : content.indexOf(LEGACY_END_MARKER, start);
+  if (end === -1) return content;
+  return content.slice(0, start) +
+    content.slice(end + LEGACY_END_MARKER.length);
 }
 
 export function spliceContent(
   current: string | null,
   managedBody: string,
-): { next: string; result: ApplyResult } {
-  const normalizedBody = managedBody.endsWith("\n")
-    ? managedBody
-    : managedBody + "\n";
-  const block = `${START_MARKER}\n${normalizedBody}${END_MARKER}\n`;
+  previousPaths: KeyPath[],
+): SpliceResult {
+  const managed = parse(managedBody);
+  const paths = leafPaths(managed);
 
   if (current === null) {
-    return { next: block, result: { action: "created" } };
+    return { next: stringify(managed), action: "created", paths };
   }
 
-  const startIdx = current.indexOf(`${START_MARKER}\n`);
-  // Search for END from the start marker forward so a stray reversed marker
-  // pair (END appearing before START) falls through to the prepend+warn path
-  // instead of corrupting the splice region.
-  const endIdx = startIdx === -1
-    ? -1
-    : current.indexOf(`${END_MARKER}\n`, startIdx);
-
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    const before = current.slice(0, startIdx);
-    const after = pruneLegacyTuiStatusLineTail(
-      current.slice(endIdx + `${END_MARKER}\n`.length),
-      managedBody,
+  const unmarked = removeLegacyBlock(current);
+  const doc = parse(unmarked);
+  const kept = new Set(paths.map((path) => JSON.stringify(path)));
+  for (const path of previousPaths) {
+    if (!kept.has(JSON.stringify(path))) deletePath(doc, path);
+  }
+  for (const path of paths) {
+    const value = getPath(managed, path);
+    setPath(
+      doc,
+      path,
+      path.length === 1 && path[0] === "notify"
+        ? mergeNotify(doc.notify, value)
+        : value,
     );
-    const next = before + block + after;
-    if (next === current) {
-      return { next, result: { action: "noop" } };
-    }
-    return { next, result: { action: "replaced" } };
   }
 
-  // No markers: prepend with a blank line separating from existing content.
-  // Existing managed-target keys (model, mcp_servers.*, ...) will now duplicate
-  // and TOML parsing will fail until the user removes them manually.
-  const separator = current.startsWith("\n") || current.length === 0
-    ? ""
-    : "\n";
-  const next = block + separator + current;
-  return {
-    next,
-    result: {
-      action: "prepended",
-      warning:
-        "Managed block prepended above existing content. Remove duplicate top-level keys / sections from the unmanaged tail (model, model_reasoning_*, sandbox_mode, notify, personality, web_search, [features], [tui], [sandbox_workspace_write], [mcp_servers.chrome-devtools]) before next Codex CLI run, or TOML parsing will fail.",
-    },
-  };
+  const next = stringify(doc);
+  if (unmarked === current && next === stringify(parse(current))) {
+    return { next: current, action: "noop", paths };
+  }
+  return { next, action: "updated", paths };
 }
 
 async function readIfExists(path: string): Promise<string | null> {
@@ -145,28 +160,48 @@ async function readIfExists(path: string): Promise<string | null> {
   }
 }
 
-async function main(): Promise<number> {
-  const [managedPath, targetPath] = Deno.args;
-  if (!managedPath || !targetPath) {
-    console.error("usage: apply-managed.ts <managed-toml-path> <target-path>");
-    return 2;
+async function readPreviousPaths(statePath: string): Promise<KeyPath[]> {
+  const raw = await readIfExists(statePath);
+  if (raw === null) return [];
+  const { paths } = JSON.parse(raw);
+  if (
+    !Array.isArray(paths) ||
+    !paths.every((path) =>
+      Array.isArray(path) && path.every((key) => typeof key === "string")
+    )
+  ) {
+    throw new Error(`${statePath}: expected {"paths": string[][]}`);
   }
+  return paths;
+}
 
-  const managedBody = await Deno.readTextFile(managedPath);
-  const current = await readIfExists(targetPath);
-  const { next, result } = spliceContent(current, managedBody);
+export async function apply(
+  managedPath: string,
+  targetPath: string,
+): Promise<ApplyAction> {
+  const statePath = `${targetPath}.nix-managed.json`;
+  const { next, action, paths } = spliceContent(
+    await readIfExists(targetPath),
+    await Deno.readTextFile(managedPath),
+    await readPreviousPaths(statePath),
+  );
 
-  if (result.action !== "noop") {
-    await Deno.writeTextFile(targetPath, next);
+  // The config goes first: a state file ahead of a failed config write would
+  // forget keys that are still in the config.
+  if (action !== "noop") await Deno.writeTextFile(targetPath, next);
+  const state = JSON.stringify({ paths }, null, 2) + "\n";
+  if (await readIfExists(statePath) !== state) {
+    await Deno.writeTextFile(statePath, state);
   }
-  if (result.warning) {
-    console.error(`[codex-config] ${result.warning}`);
-  }
-  console.error(`[codex-config] ${result.action}: ${targetPath}`);
-  return 0;
+  return action;
 }
 
 if (import.meta.main) {
-  const code = await main();
-  if (code !== 0) Deno.exit(code);
+  const [managedPath, targetPath] = Deno.args;
+  if (!managedPath || !targetPath) {
+    console.error("usage: apply-managed.ts <managed-toml-path> <target-path>");
+    Deno.exit(2);
+  }
+  const action = await apply(managedPath, targetPath);
+  console.error(`[codex-config] ${action}: ${targetPath}`);
 }

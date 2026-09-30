@@ -10,10 +10,9 @@ let
   tomlFormat = pkgs.formats.toml { };
 
   # Codex CLI config keys/sections that we want to fix declaratively.
-  # Anything NOT in this attrset (e.g. [projects.*], [notice], [notice.model_migrations])
-  # is left untouched by `apply-managed.ts` between rebuilds — Codex CLI mutates
-  # those at runtime as the user trusts new project directories or dismisses
-  # migration prompts.
+  # `apply-managed.ts` overwrites only these keys in ~/.codex/config.toml; others
+  # (e.g. [projects.*], [notice], the desktop app's [desktop]) are kept, since
+  # Codex and the desktop app mutate them at runtime.
   managed = {
     model = "gpt-6-astra";
     model_context_window = 872000;
@@ -90,7 +89,7 @@ in
   home.file.".codex/agent-usage.ts".source = dotfiles.linkHere ./. "agent-usage.ts";
 
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
-  # a splice failure means ~/.codex/config.toml is in an unknown state, so
+  # a merge failure means ~/.codex/config.toml is in an unknown state, so
   # darwin-rebuild should fail loudly rather than complete with a silent broken config.
   home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     run ${pkgs.deno}/bin/deno run --allow-read --allow-write \
