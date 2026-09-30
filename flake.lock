@@ -7,11 +7,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1790710334,
-        "narHash": "sha256-2mYAyTTnluy3BjrE3gVoUOeGWmhmLKz8L9IyVxZFDgQ=",
+        "lastModified": 1790784266,
+        "narHash": "sha256-n9CGZjwPHGfdSi1CXKGXxyW7MZ6lQtvusVQ/YSNvzMk=",
         "owner": "wadackel",
         "repo": "codex-nix",
-        "rev": "bfa12defe6a30eb2bee0c3230e61f05bd0e5312d",
+        "rev": "718ebe323603dd76d8a3f518cfc730158507c696",
         "type": "github"
       },
       "original": {
