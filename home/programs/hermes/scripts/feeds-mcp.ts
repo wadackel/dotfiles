@@ -29,7 +29,7 @@ import { startTrace, trace } from "./trace.ts";
 
 export type DigestInput = {
   picks: { id: string; reason: string; explore?: boolean }[];
-  bundles: { ids: string[]; reason: string[] }[];
+  bundles: { items: { id: string; reason: string }[] }[];
 };
 
 // Resolves the model's ids against today's pool and enforces the bundle rules.
@@ -53,14 +53,10 @@ export function resolveDigest(
     explore: p.explore ?? false,
   }));
   const bundles = input.bundles.map((b) => {
-    if (b.ids.length === 0) throw new Error("a bundle needs at least one id");
-    if (b.reason.length !== b.ids.length) {
-      throw new Error("a bundle needs one reason per id");
+    if (b.items.length === 0) {
+      throw new Error("a bundle needs at least one item");
     }
-    const items = b.ids.map((id, i) => ({
-      entry: take(id),
-      reason: b.reason[i],
-    }));
+    const items = b.items.map((i) => ({ entry: take(i.id), reason: i.reason }));
     if (new Set(items.map((i) => i.entry.feedUrl)).size !== 1) {
       throw new Error("a bundle must come from a single feed");
     }
@@ -91,9 +87,12 @@ export async function postDigest(
 ): Promise<string> {
   const pool = await readJson<Pool>("pool.json", { date: "", items: [] });
   // The model may call again after a tool timeout while the first call is
-  // still posting; a pool is posted once.
+  // still posting; a pool is posted once. The repeat is answered as a success:
+  // Hermes counts an error result against the server's circuit breaker and
+  // keeps that count until the gateway restarts, so the next day's run would
+  // start already close to being paused.
   if (pool.postedAt) {
-    throw new Error(`this digest was already posted at ${pool.postedAt}`);
+    return `Already posted at ${pool.postedAt}; nothing was posted this time.`;
   }
   const { picks, bundles } = resolveDigest(pool, input);
   // A bundle is one slot in the parent's list, but each of its entries gets
@@ -220,8 +219,10 @@ if (import.meta.main) {
           explore: z.boolean().optional(),
         })),
         bundles: z.array(z.object({
-          ids: z.array(z.string()),
-          reason: z.array(z.string().min(1).max(120)),
+          items: z.array(z.object({
+            id: z.string(),
+            reason: z.string().min(1).max(120),
+          })),
         })),
       },
     },

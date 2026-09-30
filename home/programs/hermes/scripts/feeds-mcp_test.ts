@@ -1,4 +1,9 @@
-import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from "jsr:@std/assert@1";
 import { postDigest, resolveDigest } from "./feeds-mcp.ts";
 import { type Pool, readJson, writeJson } from "./feed-store.ts";
 
@@ -24,7 +29,9 @@ const pool: Pool = {
 Deno.test("resolveDigest maps ids to pool entries", () => {
   const got = resolveDigest(pool, {
     picks: [{ id: "c1", reason: "r", explore: true }],
-    bundles: [{ ids: ["g1", "g2"], reason: ["x", "y"] }],
+    bundles: [{
+      items: [{ id: "g1", reason: "x" }, { id: "g2", reason: "y" }],
+    }],
   });
   assertEquals(got.picks[0].entry.url, "https://a.test/c1");
   assertEquals(got.picks[0].explore, true);
@@ -55,7 +62,9 @@ Deno.test("resolveDigest rejects unknown ids, reuse, and bundle rule violations"
     () =>
       resolveDigest(pool, {
         picks: [],
-        bundles: [{ ids: ["c1", "g1"], reason: ["a", "b"] }],
+        bundles: [{
+          items: [{ id: "c1", reason: "a" }, { id: "g1", reason: "b" }],
+        }],
       }),
     Error,
     "single feed",
@@ -64,10 +73,10 @@ Deno.test("resolveDigest rejects unknown ids, reuse, and bundle rule violations"
     () =>
       resolveDigest(pool, {
         picks: [],
-        bundles: [{ ids: ["g1"], reason: [] }],
+        bundles: [{ items: [] }],
       }),
     Error,
-    "one reason",
+    "at least one item",
   );
 });
 
@@ -78,7 +87,9 @@ Deno.test("resolveDigest accepts any number of picks and explore picks", () => {
       reason: "r",
       explore: id === "c1" || id === "c2",
     })),
-    bundles: [{ ids: ["g1", "g2"], reason: ["x", "y"] }],
+    bundles: [{
+      items: [{ id: "g1", reason: "x" }, { id: "g2", reason: "y" }],
+    }],
   });
   assertEquals(got.picks.length, 6);
   assertEquals(got.picks.filter((p) => p.explore).length, 2);
@@ -121,7 +132,7 @@ Deno.test("postDigest records what was posted when a later post fails", () =>
       () =>
         postDigest("D1", {
           picks: [{ id: "c1", reason: "r" }, { id: "c2", reason: "r" }],
-          bundles: [{ ids: ["g1"], reason: ["x"] }],
+          bundles: [{ items: [{ id: "g1", reason: "x" }] }],
         }, post),
       Error,
       "boom",
@@ -171,7 +182,9 @@ Deno.test("postDigest logs bundle items and marks an empty digest seen", () =>
       Promise.resolve(thread ? `2000000000.00${++n}` : "parent");
     await postDigest("D1", {
       picks: [{ id: "c1", reason: "r", explore: true }],
-      bundles: [{ ids: ["g1", "g2"], reason: ["x", "y"] }],
+      bundles: [{
+        items: [{ id: "g1", reason: "x" }, { id: "g2", reason: "y" }],
+      }],
     }, post);
     const log = await digestLog(home);
     assertEquals(log.map((r) => [r.url, r.explore, r.bundle]), [
@@ -187,7 +200,7 @@ Deno.test("postDigest logs bundle items and marks an empty digest seen", () =>
     assertEquals(seen.ids.length, pool.items.length);
   }));
 
-Deno.test("postDigest refuses a pool it has already posted", () =>
+Deno.test("postDigest answers a repeat call on a posted pool without posting", () =>
   withPool(async () => {
     let n = 0;
     const post = (_c: string, _t: string, thread?: string) =>
@@ -195,10 +208,9 @@ Deno.test("postDigest refuses a pool it has already posted", () =>
     const input = { picks: [{ id: "c1", reason: "r" }], bundles: [] };
     await postDigest("D1", input, post);
     const posts = n;
-    await assertRejects(
-      () => postDigest("D1", input, post),
-      Error,
-      "already posted",
+    assertStringIncludes(
+      await postDigest("D1", input, post),
+      "Already posted",
     );
     assertEquals(n, posts);
   }));
