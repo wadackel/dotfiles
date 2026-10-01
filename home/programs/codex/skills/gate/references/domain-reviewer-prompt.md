@@ -1,0 +1,95 @@
+# Domain Reviewer Prompt Template
+
+Use this template when dispatching a domain specialist (`rust-reviewer`, `typescript-reviewer`, `react-reviewer`, `a11y-reviewer`, `go-reviewer`, `nix-reviewer`, `deno-reviewer`, `dart-reviewer`, `database-reviewer`, `cloud-architecture-reviewer`, `comment-reviewer`) or `security-auditor` from `/gate`. Replace `{placeholders}` with actual values.
+
+One template covers the domain specialists and `security-auditor`. The verdict line is schema-neutral, so the 3-tier (MUST_FIX / SHOULD_FIX / NIT) and 4-tier (CRITICAL / HIGH / MEDIUM / LOW) reviewers both read a rule that applies to them — `security-auditor` carries its own severity table in its agent definition.
+
+**Paste the `## Template` block verbatim.** Do not summarise it, do not rewrite the verdict line, and do not turn the verdict line into a placeholder. Dropping the verdict rule is the single failure mode this template exists to prevent: reviewers that are not told the rule return `PASS` while listing blocker-severity findings, and the gate then advances without those findings being fixed.
+
+## Template
+
+```
+## Language
+
+Write all user-facing prose (issue descriptions, suggestions, expected behavior, notes, summary) in **Japanese**.
+
+Keep the following fields in **English** so downstream parsing works:
+
+- `VERDICT: PASS|FAIL` line
+- Severity labels: `MUST_FIX`, `SHOULD_FIX`, `NIT`, `MEDIUM`, `LOW`, `CRITICAL`, `HIGH`
+- Category labels
+- Section headers: `### Must Fix`, `### Should Fix`, `### Nits`, `### Notes`, `## Findings`, `## Summary`
+- Empty-section sentinels: `None`, `(none)` — used by aggregation to detect populated sections; do not translate
+- Field labels: `File:Line`, `Severity`, `Category`, `Description`, `Suggestion`
+- File paths, line numbers, code snippets, command output: as-is
+
+Use either the Must Fix / Should Fix / Nits schema or the CRITICAL / HIGH / MEDIUM / LOW schema — keep whichever schema you use in English.
+
+Do NOT translate the section headers, severity tags, empty-section sentinels, or field labels.
+
+## Review target
+
+Repo: {repo_path} (branch {branch})
+Diff: `git diff {baseline_sha}..HEAD`
+Diff file: {diff_path} (the same content as the command above; if Read truncates, continue from the last offset until the end)
+Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
+
+{review_focus}
+
+## Diff
+
+{diff_body}
+
+## Severity Boundary
+
+Assign `SHOULD_FIX` (or `HIGH`) only to findings that carry a concrete risk to behavior, correctness, security, or maintainability and that warrant a fix before merge. Style preferences, best-practice deviations, naming, and suggestions that carry no behavioral risk are `NIT` (or `LOW`) — no matter how confident you are that the change would be an improvement.
+
+When you are torn between `SHOULD_FIX` and `NIT`, choose `NIT`.
+
+## Scope Discipline
+
+Findings on code **outside the changed lines** — pre-existing issues, adjacent refactor opportunities, improvements to untouched code — MUST be reported as `NIT` (or `LOW`), never `SHOULD_FIX`/`HIGH`. Only defects introduced or directly touched by this diff may block.
+
+One exception: an exploitable security defect keeps its real severity even when it is pre-existing. Report it at the severity it warrants and say in the finding that it predates this diff.
+
+## Output Detail
+
+Write full detail (Description + Suggestion) for every blocker-severity finding (`MUST_FIX`/`SHOULD_FIX`, or `CRITICAL`/`HIGH`). List each `NIT`/`LOW` finding as one line: `file:line — one-line title`. The reply is the sections below, starting at `### Must Fix`.
+
+## Output Format
+
+### Must Fix
+[Findings that block, or `None`]
+
+### Should Fix
+[Findings that block, or `None`]
+
+### Nits
+[Non-blocking findings, or `None`]
+
+### Notes
+[Observations worth recording that are not findings, or `None`]
+
+VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]
+```
+
+## Placeholders
+
+| Placeholder | Value |
+|---|---|
+| `{repo_path}` | Absolute path to the repository or worktree under review |
+| `{branch}` | Branch name, or `detached at <sha>` |
+| `{baseline_sha}` | The first task's `baseline_sha` from the evidence sidecar, or the sha given to `--diff-only` |
+| `{diff_path}` | The diff file the gate wrote (`~/.claude/plans/<plan-slug>.gate.diff`) |
+| `{diff_body}` | The diff text for `code-reviewer`, `security-auditor`, and `comment-reviewer`, which have no Bash; `(see Diff file)` for every other specialist |
+| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns. For `comment-reviewer` only, it may end with a fenced `comment-metrics:` block |
+
+## Usage
+
+```
+Agent tool:
+  subagent_type: "<specialist name>"
+  prompt: [Template above with placeholders filled]
+```
+
+Pass only factual data (repo path, diff range, focus). Never pass the main session's summary of what was implemented — the reviewer must judge independently.

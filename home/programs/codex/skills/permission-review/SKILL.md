@@ -1,0 +1,165 @@
+---
+name: permission-review
+description: Reviews logged permission requests and interactively applies permissions.allow patterns or bash-policy rules. Use when asked to "review permissions", "check permission logs", "permission review", "権限ログを確認", "許可パターンを見直し", "権限の最適化", or when optimizing permission dialog frequency.
+argument-hint: "[--days N] [--project NAME] [--tool NAME]"
+---
+
+# permission-review
+
+Analyzes accumulated permission request logs and guides the user through
+adding patterns to `permissions.allow` or `bash-policy.yaml`.
+
+## Quick start
+
+```
+/permission-review
+```
+
+## Skill Execution Workflow
+
+### Step 1: Run Analysis
+
+Execute the CLI tool and capture the JSON output:
+
+```bash
+~/.Codex/skills/permission-review/permission-review.ts --format json
+```
+
+If the user specifies filters, pass them as flags (e.g. `--days 7`, `--project dotfiles`, `--tool Bash`).
+
+The `--format json` mode automatically provides:
+- Full command examples (up to 50 per pattern, no truncation)
+- `subPatterns` array for each candidate (ordered specific to general)
+- `reason` field for Bash entries explaining why the permission confirmation occurred
+
+### Step 1.5: Duplicate Check
+
+Before presenting candidates, verify each proposed pattern against existing
+`settings.json` entries:
+
+```bash
+grep 'Bash(git clone' ~/dotfiles/home/programs/Codex/settings.json
+```
+
+For each candidate:
+- If the pattern already exists in `settings.json`, mark as "existing pattern found"
+- Investigate why dialogs still occurred despite the pattern existing
+  (typically: compound commands where `approve-piped-commands.ts` couldn't
+  match all segments)
+- For compound_command reason candidates with existing patterns, run
+  unmatched segment analysis to find the actual missing patterns
+
+### Step 2: Detail Presentation (Phase 1)
+
+Present **all** candidate patterns with full details. For each pattern in
+`allowCandidates` and `reviewItems`, use this format:
+
+```markdown
+### `Bash(git *)` -- 24 requests / 140 executions (project1, project2)
+
+Reason for confirmation: [reason-based explanation]
+Existing patterns: `Bash(git add *)`, `Bash(git commit *)`, ... (already registered)
+
+Commands that actually triggered dialogs (last 5):
+- `git add app/styles.css && git commit -m "..."` (cloudflare-d1-sandbox, 2026-03-01)
+- `git switch main && git pull origin main` (blog.wadackel.me, 2026-03-08)
+- `git clone --depth 1 https://github.com/... 2>&1` (dotfiles, 2026-03-06)
+
+Available patterns to add:
+- `Bash(git commit *)` -- allow commit only
+- `Bash(git status *)` -- allow status only
+- `Bash(git *)` -- allow all git commands
+```
+
+To get the actual dialog-triggering commands, extract from the raw permission log:
+
+```bash
+grep '"event":"request"' ~/.Codex/logs/permission-requests.jsonl | \
+  grep '"tool":"Bash"' | \
+  jq -r 'select(.input.command | test("^git ")) | "\(.ts[0:10]) [\(.project)] \(.input.command | split("\n")[0][:100])"' | \
+  tail -5
+```
+
+For patterns with `executed: 0`, add a caution:
+
+```markdown
+### `Bash(pip3 *)` -- 1 request / 0 executions (dotfiles)
+
+⚠ This pattern has never been approved (may have been denied)
+```
+
+Display the `reason` field as a human-readable explanation:
+- `compound_command`: "Does not match `permissions.allow` due to pipe/compound command (known limitation). `approve-piped-commands.ts` auto-approves based on settings.json patterns"
+- `pattern_gap`: "Existing pattern `Bash(X *)` is registered, but this subcommand is not covered"
+- `no_pattern` (or absent): "No corresponding pattern registered"
+
+Every candidate **must** be presented in this format. This is a required format, not illustrative.
+
+### Step 3: Individual Review (Phase 2)
+
+Review each candidate **one at a time** in a separate user-confirmation turn.
+Do NOT batch multiple candidates into a single question -- the user needs to see
+the full context (command examples, reason, existing patterns) for each candidate
+before deciding.
+
+For each candidate in `allowCandidates` / `reviewItems`, ask through the current agent's user-confirmation mechanism with up to 3 options + Other. In text-only runtimes, present the options, end the turn, and wait for the user's next response before applying anything:
+
+1. **Select and add pattern** -- proceed to sub-flow for pattern selection
+2. **Add to bash-policy** -- use the **bash-policy-add skill**
+3. **Skip (keep log)** -- take no action; log entries are preserved for next review
+
+#### Pattern Selection Sub-flow
+
+When "Select and add pattern" is chosen:
+
+- If `subPatterns` has **1 entry** (typical for non-Bash tools): skip sub-flow, add directly
+- If `subPatterns` has **2 entries**: present 2 options + Other (3 options total)
+- If `subPatterns` has **3+ entries**: sort by pattern string length descending (specific to general), present top 3 + Other (4 options total)
+
+Each option should include a brief explanation:
+```
+User confirmation prompt:
+  - "Bash(git commit *)" -- allow commit only
+  - "Bash(git status *)" -- allow status only
+  - "Bash(git *)" -- allow all git commands
+  - Other (free input)
+```
+
+Build the options from the JSON's `subPatterns`, which come from the logged commands; a pattern beyond those arrives through Other.
+
+#### Other Input Validation
+
+When the user enters a custom pattern via Other:
+- Must be `Tool(pattern)` format (Bash, Read, Edit, Glob, Grep, WebFetch, WebSearch, Agent, Skill, or an `mcp__` prefix); a file-write path rule is written as `Edit(...)`, because Codex checks only `Edit` rules for file edits
+- Parentheses must be balanced
+- Invalid examples: `Bash(git commit` (no closing paren), `git *` (no Tool name)
+- If invalid, explain why and prompt re-entry
+
+Record all added patterns for Step 4.
+
+### Step 4: Apply Changes and Selective Purge
+
+1. Edit the relevant files (`settings.json`, `bash-policy.yaml`)
+2. **Selectively purge only patterns that were added** (quote patterns containing `*`, `(`, `)` with single quotes):
+   ```bash
+   ~/.Codex/skills/permission-review/permission-review.ts --purge-pattern 'Bash(git commit *)' --purge-pattern 'WebFetch(*)'
+   ```
+3. **If all candidates were skipped, do NOT run purge** -- entries remain for next review
+4. Show a change summary:
+   - Added patterns
+   - Purged entry count
+   - Remaining log entry count
+5. Note that no `darwin-rebuild` is needed (all files are symlinked)
+
+#### Interrupted Session Recovery
+
+If a previous session added patterns but didn't purge (interrupted before Step 4),
+the next `/permission-review` run may show already-added patterns. In that case,
+use `--purge` for bulk cleanup, or `--purge-pattern` to selectively clean specific patterns.
+
+## Important Notes
+
+- Log file location: `~/.Codex/logs/permission-requests.jsonl`
+- Settings file (source of truth): `~/dotfiles/home/programs/Codex/settings.json`
+- The logger hook only records requests -- it does not track whether the user approved or denied them
+- Patterns appearing frequently are likely being routinely approved by the user
