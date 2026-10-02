@@ -60,7 +60,7 @@ Total: up to 9 files in one parallel call.
 
 Extract from each daily note:
 
-- **To-Do** (`## 📝 To-Do`): `[x]` completed / `[ ]` incomplete
+- **To-Do** (`## 📝 To-Do`): `[x]` completed / `[ ]` and `[-]` incomplete (`[-]` marks work in progress, not a cancellation)
 - **Tasks** (`## 🧑‍💻 Tasks`): long-term task items
 - **Memo** (`## ✍️ Memo`): timestamped entries
   - Project identification: extract `repo-name` from `` `(repo-name/short-hash)` `` pattern
@@ -122,7 +122,9 @@ Aim for this shape:
 
 #### `2.来週やること`
 
-- Collect incomplete To-Do `[ ]` items + Tasks + "next week" mentions from Memo
+- Sources are exactly three: incomplete To-Do (`[ ]` or `[-]`) items, Tasks, and hand-written Memo entries that mention next week
+- Session summaries (Memo entries carrying `` `(repo-name/short-hash)` ``) are not a source, even when they name a next step. They record where one agent session stopped, not what the owner plans to do
+- The previous week's "来週やること" feeds `0.今週やること` only. An item from it enters this section only when this week's To-Do or Tasks carry it again
 - **Group by project label** (same as "今週やったこと"): repo names, or `Misc`
 - Use nested bullet format:
   ```
@@ -132,7 +134,8 @@ Aim for this shape:
   - Misc
       - 面接コンテンツの見直し
   ```
-- Carry over sub-item structure from To-Do where available
+- Under a project label, list an open To-Do's or Task's incomplete sub-items directly and drop the parent line; fold the parent's subject into a sub-item when it would not read alone (`方針合意` → `v1 切り離しの方針合意`). A parent with no incomplete sub-items is itself the item
+- Under `Misc`, keep the parent as a line with its incomplete sub-items nested beneath. `Misc` names no subject, so the parent is what groups them
 - Strip Issue / PR numbers and paths from anything carried over, for the same reason as `0.今週やること`
 - Granularity: task-level (one bullet per planned task). The milestone rollup rules from `1.今週やったこと` do NOT apply here
 - **Merge mode**: respect existing content, add only new items
