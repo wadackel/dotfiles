@@ -342,7 +342,7 @@
           "hotkey.windowCommand.left-half" = combo hyper 123; # ←
           "hotkey.windowCommand.right-half" = combo hyper 124; # →
           "hotkey.windowCommand.maximize" = combo hyper 46; # M
-          "hotkey.windowCommand.almost-maximize" = combo hyper 40; # K
+          "hotkey.windowCommand.reasonable-size" = combo hyper 40; # K
           "hotkey.windowCommand.center" = combo hyper 8; # C
           "hotkey.windowCommand.top-left-quarter" = combo hyper 18; # 1
           "hotkey.windowCommand.top-right-quarter" = combo hyper 19; # 2
