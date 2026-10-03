@@ -1,12 +1,23 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR,TMUX_PANE,CODEX_THREAD_ID --allow-run
 
 import { SESSION_ID_RE } from "../pane-shared.ts";
+import { CodexPaneResolver } from "./codex-pane-target.ts";
 
 interface NotifyPayload {
+  "thread-id"?: string;
   "last-assistant-message"?: string;
   last_assistant_message?: string;
   message?: string;
   title?: string;
+}
+
+export function notificationThreadId(
+  payload: NotifyPayload,
+  inherited?: string,
+): string {
+  return typeof payload["thread-id"] === "string"
+    ? payload["thread-id"]
+    : inherited ?? "";
 }
 
 export interface TmuxContext {
@@ -26,7 +37,6 @@ const DEFAULT_MESSAGE = "Codex task completed";
 const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
 const PENDING_SUBAGENT_NOTIFICATIONS_KEY =
   "@pane_pending_subagent_notifications";
-const MAIN_SESSION_ID_KEY = "@pane_session_id";
 const TMUX_COORDINATION_TIMEOUT_MS = 2000;
 const COMMON_COMMAND_PATHS: Record<string, string[]> = {
   "terminal-notifier": [
@@ -207,27 +217,6 @@ export type NotificationIdentityDecision =
     mainSessionId: string;
   };
 
-async function notificationIdentityDecisionForPane(
-  tmuxPath: string,
-  pane: string,
-  threadId: string | undefined,
-): Promise<NotificationIdentityDecision> {
-  const mainSession = await tmuxShowOptionalUserOption(
-    tmuxPath,
-    pane,
-    MAIN_SESSION_ID_KEY,
-  );
-  if (!mainSession.ok) {
-    return {
-      kind: "unknown",
-      reason: "main-session-read-failed",
-      threadId: threadId ?? "",
-      mainSessionId: mainSession.stderr,
-    };
-  }
-  return notificationIdentityDecision(threadId, mainSession.value);
-}
-
 export function notificationIdentityDecision(
   threadId: string | undefined,
   mainSessionId: string,
@@ -403,6 +392,8 @@ async function tmuxField(
   field: string,
 ): Promise<string> {
   const result = await runCommand(tmuxPath, [
+    "-L",
+    "default",
     "display-message",
     "-t",
     pane,
@@ -412,9 +403,10 @@ async function tmuxField(
   return result.code === 0 ? result.stdout : "";
 }
 
-async function tmuxContext(tmuxPath: string): Promise<TmuxContext | null> {
-  const pane = tmuxPaneId(Deno.env.get("TMUX_PANE"));
-  if (!pane) return null;
+async function tmuxContext(
+  tmuxPath: string,
+  pane: string,
+): Promise<TmuxContext | null> {
   const [session, window, paneIndex, paneTitle] = await Promise.all([
     tmuxField(tmuxPath, pane, "session_name"),
     tmuxField(tmuxPath, pane, "window_index"),
@@ -430,7 +422,15 @@ async function tmuxShow(
   pane: string,
   key: string,
 ): Promise<TmuxShowResult> {
-  const result = await runCommand(tmuxPath, ["show", "-t", pane, "-pv", key], {
+  const result = await runCommand(tmuxPath, [
+    "-L",
+    "default",
+    "show",
+    "-t",
+    pane,
+    "-pv",
+    key,
+  ], {
     timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
   });
   return result.code === 0
@@ -454,7 +454,7 @@ async function tmuxSet(
   const args = op.kind === "set"
     ? ["set", "-t", pane, "-p", op.key, op.value]
     : ["set", "-t", pane, "-p", "-u", op.key];
-  const result = await runCommand(tmuxPath, args, {
+  const result = await runCommand(tmuxPath, ["-L", "default", ...args], {
     timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
   });
   return { ok: result.code === 0, stderr: result.stderr };
@@ -465,7 +465,13 @@ async function consumePendingSubagentNotification(
   pane: string,
 ): Promise<boolean> {
   const lockName = subagentLockName(pane);
-  const lock = await runCommand(tmuxPath, ["wait-for", "-L", lockName], {
+  const lock = await runCommand(tmuxPath, [
+    "-L",
+    "default",
+    "wait-for",
+    "-L",
+    lockName,
+  ], {
     timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
   });
   if (lock.code !== 0) {
@@ -496,7 +502,13 @@ async function consumePendingSubagentNotification(
     );
     return true;
   } finally {
-    const unlock = await runCommand(tmuxPath, ["wait-for", "-U", lockName], {
+    const unlock = await runCommand(tmuxPath, [
+      "-L",
+      "default",
+      "wait-for",
+      "-U",
+      lockName,
+    ], {
       timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
     });
     if (unlock.code !== 0) {
@@ -512,31 +524,36 @@ async function send(
   const payload = parsePayload(rawPayload);
   const message = notificationMessage(payload);
   const tmuxPath = await commandPath("tmux");
-  const rawPane = tmuxPaneId(Deno.env.get("TMUX_PANE"));
-  if (rawPane) {
-    const identity = await notificationIdentityDecisionForPane(
-      tmuxPath,
-      rawPane,
-      Deno.env.get("CODEX_THREAD_ID"),
-    );
-    await log(
-      `notify_identity reason=${identity.reason} kind=${identity.kind} thread=${identity.threadId} main=${identity.mainSessionId}`,
-    );
-    if (identity.kind === "skip") {
-      await consumePendingSubagentNotification(tmuxPath, rawPane);
-      await log(
-        `subagent_notify_skip reason=identity-subagent thread=${identity.threadId} main=${identity.mainSessionId}`,
-      );
-      return;
-    }
-    if (
-      identity.kind === "unknown" &&
-      await consumePendingSubagentNotification(tmuxPath, rawPane)
-    ) {
-      return;
-    }
+  const threadId = notificationThreadId(
+    payload,
+    Deno.env.get("CODEX_THREAD_ID"),
+  );
+  const resolver = new CodexPaneResolver({
+    codexHome: `${Deno.env.get("HOME")}/.codex`,
+    tmuxPath,
+  });
+  const resolution = await resolver.resolve(threadId);
+  await log(`notify_target reason=${resolution.reason} thread=${threadId}`);
+  const currentTargets = [];
+  for (const target of resolution.targets) {
+    if (await resolver.isCurrent(target, threadId)) currentTargets.push(target);
   }
-  const ctx = await tmuxContext(tmuxPath);
+  if (
+    currentTargets.length &&
+    currentTargets.every((target) => target.sessionId !== threadId)
+  ) {
+    for (const target of currentTargets) {
+      await consumePendingSubagentNotification(tmuxPath, target.paneId);
+    }
+    await log(`subagent_notify_skip reason=recorded-parent thread=${threadId}`);
+    return;
+  }
+  const mainTarget = currentTargets.find((target) =>
+    target.sessionId === threadId
+  );
+  const ctx = mainTarget
+    ? await tmuxContext(tmuxPath, mainTarget.paneId)
+    : null;
   const scriptPath = `${Deno.env.get("HOME")}/.codex/scripts/codex-notify.ts`;
   const executeCmd = ctx
     ? buildActivateCommand(Deno.execPath(), scriptPath, ctx, tmuxPath)
@@ -596,6 +613,8 @@ async function activate(
   await new Promise((resolve) => setTimeout(resolve, 100));
   const target = `${session}:${window}.${pane}`;
   const clients = await runCommand(tmuxPath || "tmux", [
+    "-L",
+    "default",
     "list-clients",
     "-F",
     "#{client_name}",
@@ -607,6 +626,8 @@ async function activate(
   );
   for (const client of clients.stdout.split("\n").filter(Boolean)) {
     const result = await runCommand(tmuxPath || "tmux", [
+      "-L",
+      "default",
       "switch-client",
       "-c",
       client,

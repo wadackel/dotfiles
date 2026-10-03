@@ -54,3 +54,68 @@ export async function isEmbedded(
   }
   return false;
 }
+
+export const CODEX_UUID_PATTERN =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const TITLE_ID_RE = new RegExp(
+  `^codex \\| (${CODEX_UUID_PATTERN}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{5}\\.\\.\\.)(?= |$)`,
+);
+
+export function parseTitleIdentity(title: string): string | null {
+  const normalized = title.replace(/^● /, "").replace(
+    /^\[ [!.] \] Action Required \| /,
+    "",
+  );
+  const id = TITLE_ID_RE.exec(normalized)?.[1];
+  return id?.replace(/\.\.\.$/, "") ?? null;
+}
+
+export interface AgentProcess {
+  pid: number;
+  ppid: number;
+  name: string;
+}
+
+export function parseProcesses(raw: string): Map<number, AgentProcess> {
+  const result = new Map<number, AgentProcess>();
+  for (const line of raw.split("\n")) {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+    if (!match) continue;
+    const name = match[3].split("/").at(-1)!.replace(
+      /^\.(.+)-wrapp(?:ed)?$/,
+      "$1",
+    );
+    const pid = Number(match[1]);
+    result.set(pid, { pid, ppid: Number(match[2]), name });
+  }
+  return result;
+}
+
+export function processAncestry(
+  pid: number,
+  procs: Map<number, AgentProcess>,
+): AgentProcess[] {
+  const chain: AgentProcess[] = [];
+  const visited = new Set<number>();
+  while (pid > 1 && !visited.has(pid) && chain.length < 64) {
+    visited.add(pid);
+    const proc = procs.get(pid);
+    if (!proc) break;
+    chain.push(proc);
+    pid = proc.ppid;
+  }
+  return chain;
+}
+
+export function topLevelCodexPid(
+  panePid: number,
+  procs: Map<number, AgentProcess>,
+): number | null {
+  const candidates = [...procs.values()].filter((p) => {
+    if (p.name !== "codex") return false;
+    const chain = processAncestry(p.pid, procs);
+    return chain.some((a) => a.pid === panePid) &&
+      chain.filter((a) => AGENT_NAMES.has(a.name)).length === 1;
+  });
+  return candidates.length === 1 ? candidates[0].pid : null;
+}

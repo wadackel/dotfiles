@@ -24,6 +24,7 @@ import {
   type PaneState,
   parentStopOps,
   removeSubagent,
+  resolvedEventToOps,
   selfHealOps,
   shouldIncrementPendingSubagentNotification,
   subagentMutationOps,
@@ -43,6 +44,54 @@ function state(overrides: Partial<PaneState> = {}): PaneState {
     ...overrides,
   };
 }
+
+Deno.test("resolved main identity replaces a fresh running session instead of becoming its child", async () => {
+  const ops = await resolvedEventToOps(
+    "UserPromptSubmit",
+    { session_id: "new", prompt: "next" },
+    state({
+      agent: "codex",
+      sessionId: "old",
+      status: "running",
+      lastActivityAt: String(Math.floor(Date.now() / 1000)),
+    }),
+    "new",
+  );
+  assert(hasOp(ops, { kind: "set", key: "@pane_session_id", value: "new" }));
+  assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
+  assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
+});
+
+Deno.test("late SessionStart cannot reset state established by a newer event", async () => {
+  const ops = await resolvedEventToOps(
+    "SessionStart",
+    { session_id: "main" },
+    state({ agent: "codex", sessionId: "main", status: "running" }),
+    "main",
+  );
+  assertEquals(ops, []);
+});
+
+Deno.test("proven child cannot replace an idle parent or an unrelated session", async () => {
+  const data = { session_id: "child" };
+  const ops = await resolvedEventToOps(
+    "SessionStart",
+    data,
+    state({ agent: "codex", sessionId: "parent", status: "idle" }),
+    "parent",
+  );
+  assert(hasSubagentAdd(ops, "child"));
+  assertEquals(ops.some((op) => op.key === "@pane_session_id"), false);
+  assertEquals(
+    await resolvedEventToOps(
+      "SessionStart",
+      data,
+      state({ agent: "codex", sessionId: "old", status: "running" }),
+      "parent",
+    ),
+    [],
+  );
+});
 
 function hasOp(ops: PaneOp[], expected: Op): boolean {
   return ops.some((op) => JSON.stringify(op) === JSON.stringify(expected));

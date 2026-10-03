@@ -7,6 +7,7 @@ import {
   normalizeMissingUserOption,
   notificationIdentityDecision,
   notificationMessage,
+  notificationThreadId,
   parsePayload,
   pendingSubagentNotificationDecision,
   runCommand,
@@ -15,6 +16,18 @@ import {
   type TmuxContext,
   tmuxPaneId,
 } from "./codex-notify.ts";
+
+Deno.test("notification identity uses the event payload before inherited environment", () => {
+  assertEquals(
+    notificationThreadId({ "thread-id": "current" }, "stale"),
+    "current",
+  );
+  assertEquals(notificationThreadId({}, "legacy"), "legacy");
+  assertEquals(
+    notificationThreadId({ "thread-id": "invalid!" }, "stale"),
+    "invalid!",
+  );
+});
 
 Deno.test("parsePayload: accepts Codex notify payload and falls back on malformed JSON", () => {
   assertEquals(parsePayload('{"last-assistant-message":"done"}'), {

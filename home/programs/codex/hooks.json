@@ -6,6 +6,7 @@
           {
             "type": "command",
             "timeout": 5,
+            "async": true,
             "command": "sh -c '\"$HOME/.codex/scripts/codex-pane-status.ts\" SessionStart'"
           },
           {

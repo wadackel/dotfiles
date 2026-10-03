@@ -45,6 +45,124 @@ import {
 import { type AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
 import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
+import {
+  isStartupCodex,
+  type PaneSnapshot,
+  parsePaneSnapshot,
+  selectPaneRows,
+} from "./pane_row.ts";
+import { parseProcesses } from "../shared/agent-presence.ts";
+
+const STARTUP_ID = "11111111-1111-4111-8111-111111111111";
+function startupSnapshot(overrides: Partial<PaneRow> = {}): PaneSnapshot {
+  const fields = Array(23).fill("");
+  fields[0] = "%10";
+  fields[1] = "test:0.0";
+  fields[2] = "codex";
+  fields[3] = "/tmp/project";
+  const row = { ...parseRow(fields.join("\x1f"))!, ...overrides };
+  return {
+    row,
+    panePid: 100,
+    title: `codex | ${STARTUP_ID.slice(0, 29)}... | project`,
+  };
+}
+
+Deno.test("startup snapshot preserves the existing row format and adds title and pid", () => {
+  const fields = Array(23).fill("");
+  fields[0] = "%10";
+  const snapshot = parsePaneSnapshot(
+    [...fields, "100", `codex | ${STARTUP_ID}`].join("\x1f"),
+  );
+  assertEquals(snapshot?.panePid, 100);
+  assertEquals(snapshot?.title, `codex | ${STARTUP_ID}`);
+  assertEquals(parsePaneSnapshot(fields.join("\x1f")), null);
+});
+
+Deno.test("unregistered Codex is idle with no previous session data", () => {
+  const s = startupSnapshot({
+    agent: "claude",
+    status: "running",
+    sessionId: "old",
+    prompt: "old prompt",
+    currentTool: "Bash",
+    subagents: "old:child",
+    startedAtSec: 10,
+    lastActivityAtSec: 20,
+    contextUsedPct: 90,
+    userLabel: "review",
+    cwd: "/tmp/old",
+    worktreeBranch: "old",
+  });
+  assertEquals(isStartupCodex(s), true);
+  const [row] = selectPaneRows([s], parseProcesses("100 1 zsh\n110 100 codex"));
+  assertEquals([row.agent, row.status, row.startup], ["codex", "idle", true]);
+  assertEquals([row.paneId, row.target, row.cwd], [
+    "%10",
+    "test:0.0",
+    "/tmp/project",
+  ]);
+  assertEquals([
+    row.sessionId,
+    row.prompt,
+    row.currentTool,
+    row.subagents,
+    row.userLabel,
+    row.worktreeBranch,
+  ], ["", "", "", "", "", ""]);
+  assertEquals([row.startedAtSec, row.lastActivityAtSec, row.contextUsedPct], [
+    null,
+    null,
+    null,
+  ]);
+});
+
+Deno.test("registered current session supersedes startup without changing its pane identity", () => {
+  const s = startupSnapshot({
+    agent: "codex",
+    status: "running",
+    sessionId: STARTUP_ID,
+    prompt: "current",
+  });
+  assertEquals(isStartupCodex(s), false);
+  assertEquals(selectPaneRows([s], new Map()), [s.row]);
+  const reused = {
+    ...s,
+    title: "codex | 22222222-2222-4222-8222-22222... | next",
+  };
+  const [row] = selectPaneRows([reused], parseProcesses("100 1 codex"));
+  assertEquals([row.paneId, row.status, row.prompt], [
+    s.row.paneId,
+    "idle",
+    "",
+  ]);
+});
+
+Deno.test("startup discovery rejects shells, invalid titles, missing processes and embedded Codex", () => {
+  const s = startupSnapshot();
+  const top = parseProcesses("100 1 codex");
+  assertEquals(selectPaneRows([{ ...s, title: "ordinary title" }], top), []);
+  assertEquals(
+    selectPaneRows([startupSnapshot({ currentCommand: "zsh" })], top),
+    [],
+  );
+  assertEquals(selectPaneRows([s], new Map()), []);
+  assertEquals(
+    selectPaneRows(
+      [s],
+      parseProcesses("100 1 zsh\n105 100 claude\n110 105 codex"),
+    ),
+    [],
+  );
+});
+
+Deno.test("startup rows never read old task progress from their directory", async () => {
+  const [row] = selectPaneRows(
+    [startupSnapshot()],
+    parseProcesses("100 1 codex"),
+  );
+  assertEquals(await readTaskProgressForRow(row), null);
+});
 
 Deno.test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");

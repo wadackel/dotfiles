@@ -1,9 +1,9 @@
-#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux,ps
+#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux,ps,/usr/bin/sqlite3
 
 // Bridges Codex CLI lifecycle hooks to tmux pane options for Agentower.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
 
-import { isEmbedded, parsePsLine, type PsRow } from "../agent-presence.ts";
+import { CodexPaneResolver } from "./codex-pane-target.ts";
 import {
   labelFromWindowMinutes,
   USAGE_LABEL_RE,
@@ -23,7 +23,6 @@ import {
   TOOL_SUBJECT_MAX_CHARS,
   toolStartOps,
   truncate,
-  unsetOps as sharedUnsetOps,
 } from "../pane-shared.ts";
 
 export type SubagentMutation =
@@ -588,16 +587,16 @@ function nowSec(): string {
   return String(Math.floor(Date.now() / 1000));
 }
 
-// Local alias so the existing call sites read naturally; delegates to the
-// shared partial-drain primitive.
-const unsetOps = sharedUnsetOps;
-
 export async function eventToOps(
   event: string,
   data: HookData,
   state: PaneState,
+  role?: "main" | "child",
 ): Promise<PaneOp[]> {
-  if (isChildCodexEvent(data, state, event)) {
+  if (
+    role === "child" ||
+    (role === undefined && isChildCodexEvent(data, state, event))
+  ) {
     const childId = str(data.session_id);
     const registerUnknownChild: PaneOp[] =
       !hasSubagent(state.subagents, childId)
@@ -614,6 +613,7 @@ export async function eventToOps(
         : [];
     switch (event) {
       case "SessionStart": {
+        if (role === "child") return registerUnknownChild;
         return [{
           kind: "set",
           key: "@pane_subagents",
@@ -832,19 +832,33 @@ export async function eventToOps(
   return [...selfHealOps(data), ...body];
 }
 
-async function fetchParent(pid: number): Promise<PsRow | null> {
-  try {
-    const { stdout, code } = await new Deno.Command("ps", {
-      args: ["-p", String(pid), "-o", "ppid=,comm="],
-      stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-    }).output();
-    if (code !== 0) return null;
-    return parsePsLine(new TextDecoder().decode(stdout));
-  } catch {
-    return null;
+export async function resolvedEventToOps(
+  event: string,
+  data: HookData,
+  state: PaneState,
+  displayedSessionId: string,
+): Promise<PaneOp[]> {
+  if (
+    ![
+      "SessionStart",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "Stop",
+      "PermissionRequest",
+    ].includes(event)
+  ) return [];
+  const sameSession = state.agent === "codex" &&
+    state.sessionId === displayedSessionId;
+  if (str(data.session_id) !== displayedSessionId) {
+    return sameSession ? await eventToOps(event, data, state, "child") : [];
   }
+  // Async startup can arrive after a prompt or tool has already initialized the pane.
+  if (event === "SessionStart" && sameSession) return [];
+  const initial = !sameSession && event !== "SessionStart"
+    ? await eventToOps("SessionStart", data, state, "main")
+    : [];
+  return [...initial, ...await eventToOps(event, data, state, "main")];
 }
 
 export async function commandOutput(
@@ -905,7 +919,7 @@ export async function commandOutput(
 async function tmuxRun(
   args: string[],
 ): Promise<{ code: number; stderr: string }> {
-  const result = await commandOutput("tmux", args, {
+  const result = await commandOutput("tmux", ["-L", "default", ...args], {
     stdout: "null",
     stderr: "piped",
     timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
@@ -921,7 +935,15 @@ async function tmuxShow(
   pane: string,
   key: string,
 ): Promise<TmuxShowResult> {
-  const result = await commandOutput("tmux", ["show", "-t", pane, "-pv", key], {
+  const result = await commandOutput("tmux", [
+    "-L",
+    "default",
+    "show",
+    "-t",
+    pane,
+    "-pv",
+    key,
+  ], {
     stdout: "piped",
     stderr: "piped",
     timeoutMs: TMUX_COORDINATION_TIMEOUT_MS,
@@ -1245,47 +1267,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  const pane = Deno.env.get("TMUX_PANE");
-  if (!pane) {
-    console.error("codex-pane-status: early_exit=no-tmux-pane");
-    await appendRunLog(buildRunLog({
-      event,
-      data: {},
-      pane: null,
-      state: null,
-      ops: [],
-      earlyExit: "no-tmux-pane",
-      stdinEventMismatch: false,
-    }));
-    return;
-  }
-  if (!/^%\d+$/.test(pane)) {
-    console.error("codex-pane-status: early_exit=invalid-pane-id");
-    await appendRunLog(buildRunLog({
-      event,
-      data: {},
-      pane,
-      state: null,
-      ops: [],
-      earlyExit: "invalid-pane-id",
-      stdinEventMismatch: false,
-    }));
-    return;
-  }
-
-  if (await isEmbedded(Deno.pid, fetchParent)) {
-    await appendRunLog(buildRunLog({
-      event,
-      data: {},
-      pane,
-      state: null,
-      ops: [],
-      earlyExit: "embedded",
-      stdinEventMismatch: false,
-    }));
-    return;
-  }
-
   let data: HookData = {};
   const raw = await new Response(Deno.stdin.readable).text();
   if (raw.trim()) {
@@ -1299,7 +1280,7 @@ async function main(): Promise<void> {
       await appendRunLog(buildRunLog({
         event,
         data,
-        pane,
+        pane: null,
         state: null,
         ops: [],
         earlyExit: "json-parse-error",
@@ -1317,19 +1298,84 @@ async function main(): Promise<void> {
     );
   }
 
-  const state = await readPaneState(pane);
-  const ops = await eventToOps(event, data, state);
-  for (const op of ops) await applyOp(pane, op);
+  const resolver = new CodexPaneResolver({
+    codexHome: `${Deno.env.get("HOME")}/.codex`,
+  });
+  const sessionId = str(data.session_id);
+  const deadline = Date.now() + (event === "SessionStart" ? 2000 : 0);
+  let resolution = await resolver.resolve(sessionId);
+  while (
+    resolution.targets.length === 0 &&
+    resolution.reason === "no-matching-pane" && Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    resolution = await resolver.resolve(sessionId);
+  }
+  if (resolution.targets.length === 0) {
+    await appendRunLog(buildRunLog({
+      event,
+      data,
+      pane: null,
+      state: null,
+      ops: [],
+      earlyExit: resolution.reason,
+      stdinEventMismatch: mismatch,
+    }));
+  }
+  for (const target of resolution.targets) {
+    const pane = target.paneId;
+    const lockName = `codex-pane-status-event-${pane.slice(1)}`;
+    const lock = await tmuxRun(["wait-for", "-L", lockName]);
+    if (lock.code !== 0) {
+      await appendRunLog(
+        buildRunLog({
+          event,
+          data,
+          pane,
+          state: null,
+          ops: [],
+          earlyExit: "event-lock-failed",
+          stdinEventMismatch: mismatch,
+        }),
+      );
+      continue;
+    }
+    try {
+      const state = await readPaneState(pane);
+      const ops = target.source === "direct"
+        ? await eventToOps(event, data, state)
+        : await resolvedEventToOps(event, data, state, target.sessionId);
+      if (!await resolver.isCurrent(target, sessionId)) {
+        await appendRunLog(
+          buildRunLog({
+            event,
+            data,
+            pane,
+            state,
+            ops: [],
+            earlyExit: "target-changed",
+            stdinEventMismatch: mismatch,
+          }),
+        );
+        continue;
+      }
+      for (const op of ops) await applyOp(pane, op);
+      await appendRunLog(
+        buildRunLog({
+          event,
+          data,
+          pane,
+          state,
+          ops,
+          earlyExit: ops.length ? null : "no-ops",
+          stdinEventMismatch: mismatch,
+        }),
+      );
+    } finally {
+      await tmuxRun(["wait-for", "-U", lockName]);
+    }
+  }
   await publishRateLimits(data);
-  await appendRunLog(buildRunLog({
-    event,
-    data,
-    pane,
-    state,
-    ops,
-    earlyExit: ops.length === 0 ? "no-ops" : null,
-    stdinEventMismatch: mismatch,
-  }));
 }
 
 if (import.meta.main) {

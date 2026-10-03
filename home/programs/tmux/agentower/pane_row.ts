@@ -2,6 +2,12 @@
 // Extracted from agentower.tsx so non-TUI tools (agentower-doctor, tests) can reuse
 // the SSOT without pulling in React / Ink.
 
+import {
+  type AgentProcess,
+  parseTitleIdentity,
+  topLevelCodexPid,
+} from "../shared/agent-presence.ts";
+
 export type PaneStatus = "running" | "waiting" | "idle" | "error" | "";
 
 // User-defined session label. Written by Agentower itself (not by agent
@@ -36,6 +42,7 @@ export function isLivePaneCommand(agent: string, cmd: string): boolean {
 }
 
 export interface PaneRow {
+  startup?: boolean;
   paneId: string;
   target: string;
   currentCommand: string;
@@ -236,4 +243,71 @@ export function parseRow(line: string): PaneRow | null {
     contextUsedPct: parseIntOrNull(contextUsedPct),
     userLabel: effectiveUserLabel,
   };
+}
+
+export interface PaneSnapshot {
+  row: PaneRow;
+  panePid: number;
+  title: string;
+}
+
+export const PANE_SNAPSHOT_FORMAT =
+  `${TMUX_FORMAT}\x1f#{pane_pid}\x1f#{pane_title}`;
+const ROW_FIELD_COUNT = TMUX_FORMAT.split("\x1f").length;
+
+export function parsePaneSnapshot(line: string): PaneSnapshot | null {
+  const fields = line.split("\x1f");
+  if (fields.length !== ROW_FIELD_COUNT + 2) return null;
+  const row = parseRow(fields.slice(0, ROW_FIELD_COUNT).join("\x1f"));
+  const panePid = parseIntOrNull(fields[ROW_FIELD_COUNT]);
+  if (!row || panePid === null || panePid <= 0) return null;
+  return { row, panePid, title: fields[ROW_FIELD_COUNT + 1] };
+}
+
+export function isStartupCodex({ row, title }: PaneSnapshot): boolean {
+  if (!isLivePaneCommand("codex", row.currentCommand)) return false;
+  const identity = parseTitleIdentity(title);
+  return identity !== null &&
+    !(row.agent === "codex" && row.sessionId.startsWith(identity));
+}
+
+function startupRow(row: PaneRow): PaneRow {
+  return {
+    paneId: row.paneId,
+    target: row.target,
+    currentCommand: row.currentCommand,
+    currentPath: row.currentPath,
+    startup: true,
+    agent: "codex",
+    status: "idle",
+    sessionId: "",
+    cwd: row.currentPath,
+    worktreeBranch: "",
+    subagents: "",
+    prompt: "",
+    waitReason: "",
+    currentTool: "",
+    lastTool: "",
+    lastEditFile: "",
+    currentToolSubject: "",
+    lastToolSubject: "",
+    lastToolError: "",
+    startedAtSec: null,
+    lastActivityAtSec: null,
+    contextUsedPct: null,
+    userLabel: "",
+  };
+}
+
+export function selectPaneRows(
+  snapshots: PaneSnapshot[],
+  procs: Map<number, AgentProcess>,
+): PaneRow[] {
+  return snapshots.flatMap((snapshot) => {
+    const { row, panePid } = snapshot;
+    if (isStartupCodex(snapshot)) {
+      return topLevelCodexPid(panePid, procs) === null ? [] : [startupRow(row)];
+    }
+    return isLivePaneCommand(row.agent, row.currentCommand) ? [row] : [];
+  });
 }

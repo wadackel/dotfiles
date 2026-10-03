@@ -22,10 +22,14 @@ import {
 import {
   type Agent,
   isLivePaneCommand,
+  isStartupCodex,
   nextUserLabel,
+  PANE_SNAPSHOT_FORMAT,
   type PaneRow,
   type PaneStatus,
+  parsePaneSnapshot,
   parseRow,
+  selectPaneRows,
   STATUS_META,
   TMUX_FORMAT,
   USER_LABEL_CYCLE,
@@ -87,6 +91,7 @@ import {
 } from "./components.tsx";
 import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
 import { trace } from "./trace.ts";
+import { parseProcesses } from "../shared/agent-presence.ts";
 
 // The ink + React module graph is ~100ms of this file's cost, and it is
 // already evaluated by the time this line runs.
@@ -630,6 +635,7 @@ async function readCodexTaskProgress(
 export async function readTaskProgressForRow(
   row: PaneRow,
 ): Promise<TaskProgress | null> {
+  if (row.startup) return null;
   if (row.agent === "codex") {
     return await readCodexTaskProgress(row.cwd || row.currentPath);
   }
@@ -646,20 +652,34 @@ export async function readTaskProgressForRow(
 // agentower-doctor.ts:detectAgentCommand which scans full `ps -o command` substrings.
 
 async function fetchPanes(): Promise<PaneRow[]> {
-  const { stdout } = await tmuxRun(["list-panes", "-a", "-F", TMUX_FORMAT]);
-  const rows: PaneRow[] = [];
-  for (const line of stdout.split("\n")) {
-    if (!line) continue;
-    const row = parseRow(line);
-    if (
-      row &&
-      (row.agent === "claude" || row.agent === "opencode" ||
-        row.agent === "codex") &&
-      isLivePaneCommand(row.agent, row.currentCommand)
-    ) {
-      rows.push(row);
+  const { stdout } = await tmuxRun([
+    "list-panes",
+    "-a",
+    "-F",
+    PANE_SNAPSHOT_FORMAT,
+  ]);
+  const snapshots = stdout.split("\n").flatMap((line) => {
+    const snapshot = parsePaneSnapshot(line);
+    return snapshot ? [snapshot] : [];
+  });
+  let procs = parseProcesses("");
+  if (snapshots.some(isStartupCodex)) {
+    try {
+      const result = await new Deno.Command("ps", {
+        args: ["-A", "-o", "pid=,ppid=,comm="],
+        stdin: "null",
+        stdout: "piped",
+        stderr: "null",
+        signal: AbortSignal.timeout(500),
+      }).output();
+      if (result.success) {
+        procs = parseProcesses(new TextDecoder().decode(result.stdout));
+      }
+    } catch {
+      // An unavailable process snapshot cannot establish ownership of an unregistered pane.
     }
   }
+  const rows = selectPaneRows(snapshots, procs);
   // Resolve the repository location and fill in a missing worktreeBranch from
   // the pane's cwd (falling back to pane_current_path when @pane_cwd is unset,
   // e.g. when the latest hook event for a Claude pane carried no cwd payload)
@@ -888,6 +908,10 @@ function App({
         // accept canonical values again (self-healing on external writes).
         const pending = pendingLabelWrites.current;
         const merged = pending.size === 0 ? r : r.map((row) => {
+          if (row.startup) {
+            pending.delete(row.paneId);
+            return row;
+          }
           const want = pending.get(row.paneId);
           if (want === undefined) return row;
           if (row.userLabel === want) {
@@ -973,6 +997,7 @@ function App({
     label: UserLabel,
     sessionId: string,
   ) => {
+    if (rows.find((row: PaneRow) => row.paneId === paneId)?.startup) return;
     // Optimistic local update + pending guard. The tick's merge keeps showing
     // `label` until tmux SSOT acknowledges it, so a fetchPanes that races
     // ahead of the in-flight tmuxRun cannot revert the visible value. The

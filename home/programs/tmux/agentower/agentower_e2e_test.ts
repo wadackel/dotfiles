@@ -20,6 +20,151 @@ import {
 import { codexCwdHash, MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 
+Deno.test("S68: startup Codex is idle, filterable and selectable before hook registration", async () => {
+  await setupServer();
+  const traceFile = await Deno.makeTempFile({
+    dir: "/tmp",
+    prefix: "agentower-startup-",
+  });
+  try {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const pane = await createClaudePane({ agent: "codex" });
+    await tmux(["set-option", "-p", "-u", "-t", pane, "@pane_agent"]);
+    await tmux([
+      "select-pane",
+      "-t",
+      pane,
+      "-T",
+      `codex | ${id.slice(0, 29)}... | startup`,
+    ]);
+    const agentower = await spawnAgentower({
+      env: { AGENTOWER_TRACE: "1" },
+      traceFile,
+    });
+    const out = await waitFor(
+      agentower,
+      (o) =>
+        selectedLine(o).includes(" codex ") &&
+        selectedLine(o).includes(" idle "),
+    );
+    assertFalse(out.includes("未入力"));
+    assertEquals(
+      (await tmux(["display-message", "-p", "-t", pane, "#{@pane_agent}"]))
+        .trim(),
+      "",
+    );
+    await sendKey(agentower, "m");
+    const deadline = Date.now() + 2000;
+    while (!(await Deno.readTextFile(traceFile)).includes("input-received")) {
+      if (Date.now() > deadline) {
+        throw new Error("startup label key was not processed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await sendKey(agentower, "w");
+    const filtered = await waitFor(agentower, (o) => o.includes("wait/idle"));
+    assertStringIncludes(selectedLine(filtered), " idle ");
+    assertEquals(
+      (await tmux(["display-message", "-p", "-t", pane, "#{@pane_user_label}"]))
+        .trim(),
+      "",
+    );
+    await sendKey(agentower, "w");
+    await waitFor(agentower, (o) => !o.includes("wait/idle"));
+    for (
+      const [key, value] of [
+        ["@pane_agent", "codex"],
+        ["@pane_session_id", id],
+        ["@pane_status", "running"],
+        ["@pane_prompt", "registered-S68"],
+      ]
+    ) {
+      await tmux(["set-option", "-p", "-t", pane, key, value]);
+    }
+    const running = await waitFor(
+      agentower,
+      selectedIncludes("registered-S68"),
+    );
+    assertStringIncludes(selectedLine(running), " run ");
+    assertEquals(
+      running.split("\n").filter((l) => l.includes(" codex ")).length,
+      1,
+    );
+    await sendKey(agentower, "m");
+    await waitFor(agentower, (o) => selectedLine(o).includes("review"));
+    await sendKey(agentower, "M");
+    await tmux(["set-option", "-p", "-t", pane, "@pane_status", "idle"]);
+    await waitFor(agentower, (o) => selectedLine(o).includes(" idle "));
+    await sendKey(agentower, "Enter");
+    await waitForExit();
+    assertEquals(
+      (await tmux(["display-message", "-p", "-t", pane, "#{pane_active}"]))
+        .trim(),
+      "1",
+    );
+  } finally {
+    await teardown();
+    await Deno.remove(traceFile);
+  }
+});
+
+Deno.test("S69: startup discovery drops old session data and removes exited Codex", async () => {
+  await setupServer();
+  try {
+    const pane = await createClaudePane({
+      agent: "codex",
+      status: "running",
+      sessionId: "old-session",
+      prompt: "old-prompt-S69",
+      currentTool: "old-tool-S69",
+      userLabel: "review",
+      userLabelSession: "old-session",
+      subagents: "old-child-S69:1",
+    });
+    await tmux([
+      "select-pane",
+      "-t",
+      pane,
+      "-T",
+      "codex | 22222222-2222-4222-8222-22222... | new",
+    ]);
+    const shell = await createClaudePane({
+      agent: "codex",
+      liveCommand: false,
+    });
+    await tmux([
+      "select-pane",
+      "-t",
+      shell,
+      "-T",
+      "codex | 33333333-3333-4333-8333-33333... | fake",
+    ]);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(
+      agentower,
+      (o) => selectedLine(o).includes(" idle "),
+    );
+    for (
+      const marker of [
+        "old-prompt-S69",
+        "old-tool-S69",
+        "old-child-S69",
+        "review",
+      ]
+    ) assertFalse(out.includes(marker));
+    assertEquals(
+      out.split("\n").filter((l) => l.includes(" codex ")).length,
+      1,
+    );
+    await tmux(["kill-pane", "-t", pane]);
+    await waitFor(agentower, (o) => !o.includes(" codex "));
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
 // Row 1 of the selected pane, which carries the prompt the scenarios identify
 // panes by. The "▌" marker runs down all four rows of the selected card, and
 // the first of them is the card's padding row, so row 1 is the second.

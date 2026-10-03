@@ -40,6 +40,13 @@ let
     };
 
     tui = {
+      terminal_title = [
+        "app-name"
+        "thread-id"
+        "activity"
+        "thread-name"
+        "project-name"
+      ];
       status_line = [
         "model-with-reasoning"
         "project-name"
