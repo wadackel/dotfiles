@@ -26,7 +26,7 @@ Then: move `updated` to today, add the source to `sources`, and — when the mat
 2. That section stands as an independent topic other notes could link to.
 3. Splitting makes the material easier to follow, not merely shorter.
 
-How to split: create the new note from the conventions template, then replace the original section with a one-line summary and `[[新ノート]]`. Never delete it outright. Add the new note to the original's `related`, and record `分割: [[元ノート]] → [[新ノート]]` in the log.
+How to split: [split.md](split.md). The model writes a spec — which sections, the new name, its lead, the summary left behind — and `scripts/split-note.ts apply` does the rest. The original keeps a summary and `[[新ノート]]` in place of what left; nothing is deleted outright.
 
 ## Create a synthesis note
 

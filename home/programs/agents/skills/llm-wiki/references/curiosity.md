@@ -25,6 +25,7 @@ Notes touched in the last 30 days, from `98_Maintenance/logs/*.md`:
 - From `curiosity:` lines, take every `[[note]]` on the line itself.
 - From `query:` lines, take the `[[notes]]` under `- 参照:`.
 - From `ingest:` / `save:` / `recompile:` lines, take the `[[notes]]` in the child bullets (`- 新規:`, `- 更新:`, `- 分割:`) — **not** the article on the verb line, which is a source, not a note.
+- From top-level `分割:` lines (written by `split`), take both `[[notes]]` on the line.
 
 ### Candidates
 

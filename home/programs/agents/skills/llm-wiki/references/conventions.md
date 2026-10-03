@@ -231,7 +231,7 @@ The two Bases views are a self-updating convenience catalog, so **no separate in
 
 **Never wrap the knowledge map in a code fence.** Obsidian does not resolve `[[...]]` inside fenced blocks or inline code, so a fenced tree turns the genre's entire navigation into inert text — the opposite of what the map is for. Use nested bullets. The same rule is why [lint.md](lint.md) observation 7 excludes code spans when counting unresolved links.
 
-`## 知識マップ` is updated only when the genre's structure changes: a new category appears, a category grows past ~3 notes on one sub-theme and wants splitting, a split promotes a new parent concept, or a new tension belongs in `## 横断テーマ`. A single new note that fits an existing category is not a structural change. When unsure, do not update.
+`## 知識マップ` is updated only when the genre's structure changes: a new category appears, a category grows past ~3 notes on one sub-theme and wants splitting, a split promotes a new parent concept, or a new tension belongs in `## 横断テーマ`. A single new note that fits an existing category is not a structural change. When unsure, do not update. A note split out of another is the exception: it always goes in, as a child of the note it came from, because its title rarely matches the `## Notes` filter and the map is the only way to it.
 
 ### Naming a MOC
 
@@ -253,6 +253,18 @@ Follow the existing vault: Japanese where Japanese reads naturally (`アクセ�
   - 更新: [[ノートC]]（<理由>）
   - 分割: [[元ノート]] → [[新ノート]]
   - 知識マップ更新: <理由>（該当時のみ）
+```
+
+**Split form** — written by `split-note.ts`, under the MOC whose knowledge map took the new note ([split.md](split.md)):
+
+```markdown
+## YYYY-MM-DD
+
+- 分割: [[元ノート]] → [[新ノート]]
+  - 移した節: <節名>。元のノートには要約とリンクを残した
+  - 知識マップ更新: [[元ノート]] の下に追加
+  - 出典 <N> 本の `generated_pages` に [[新ノート]] を追加
+  - 見出しリンクを付け替えた: [[ノート]], ...（該当時のみ）
 ```
 
 **Batch form** — a whole genre compiled at once (`ingest <tag>`, and the backfill in general). Writing one entry per article would produce hundreds of lines, so the batch is recorded as a single entry naming the count and the notes produced:

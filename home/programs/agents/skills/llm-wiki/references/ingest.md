@@ -142,7 +142,7 @@ Follow [decision-rules.md](decision-rules.md) for create / update / split.
 
 - **Create** — `$VAULT/02_Notes/<name>.md` from the conventions template. Check for a filename collision first, against **both `02_Notes/` and `03_Books/`**: `02_Notes/` is flat, and chapter-note titles like `解像度を上げる 4 つの視点` sit in the same conceptual namespace a new note is named from. Do not widen the check to the whole vault — `02_Notes/` and `04_Literature/` already collide on `Figma.md`, and a vault-wide check would trip on that every run.
 - **Update** — `Edit` the relevant section or append. Move `updated` to today.
-- **Split** — cut the section into a new note, leave a summary and `[[新ノート]]` behind.
+- **Split** — write the spec and run `split-note.ts apply` as in [split.md](split.md). It leaves a summary and `[[新ノート]]` behind and logs `分割:` itself; do not repeat that line in this run's entry.
 
 Set `sources` and `related` on every note touched.
 
