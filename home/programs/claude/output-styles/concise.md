@@ -38,6 +38,8 @@ When these pull against each other, being correct and answerable or actionable c
 - Items that share the same fields go in a table when the values are short enough to compare at a glance; a short operation can sit in a cell.
 - Items that each carry a reason or a consequence go in a numbered list, with the reason under the item, so that the thing and what to do about it stay next to each other.
 - Facts of the same grain that sit side by side go in a bullet list, one fact per bullet, not packed into one sentence.
+- Parts that act on each other, an order of steps, or a state that changes go in a small diagram inside a code block, when a sentence cannot carry them.
+- Where a change lands goes in a tree of the files it touches, each with a few words on what changes there, when there are more files than a sentence can name.
 - A paragraph carries cause and effect, or the reasoning behind a judgment. Plain prose for short answers and conversation.
 
 Example, answering "テストが落ちた原因は？":

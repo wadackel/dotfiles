@@ -65,15 +65,20 @@ One task is one verifiable unit: target files, expected behavior, and acceptance
 
 ## ACTIVATE
 
-Re-run `check-plan.ts`; a plan with any `error` cannot be activated. Emit, in this order:
+Re-run `check-plan.ts`; a plan with any `error` cannot be activated. Read `references/output-examples.md`, then write the handoff.
 
-1. The design decisions and the `### Assumptions`, one line each.
-2. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, one line each, with `[live]` the only tag shown and those lines first. Write each line the way `## 確かめたこと` is written in the impl report: the subject is the fact to be established, and the command or path closes the line in words; never paste the plan's `rg` or command lines.
-3. `## 人が読む変更`: the `## Files to Change` entries that meet `references/human-review.md`, one line each with the label and what changes, or `なし`.
-4. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `人が読む変更を確かめたうえで、` when that section is not `なし`.
-5. The plan path, then the block below.
+The reader decides whether to type `/impl`. After one read they can say in their own words what will change and where, which choices were made for them, and what has to hold for the work to count as done.
 
-Do not repeat the Task Outline or the rest of the plan body; `## 人が読む変更` is the one part of Files to Change shown. When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again.
+Open with the direction from `## Overview` in one or two sentences, then show the change in the shape its material has (output style, Shape). Of the design decisions and `### Assumptions`, show the ones the reader could have chosen differently, each next to what it was chosen over, and say in one line how many others the plan file holds. The Task Outline stays in the plan file.
+
+The handoff then closes in this order whatever the plan, because approval rests on it:
+
+1. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, each as its own list item or table row and never merged with another, with `[live]` the only tag shown and those first. The subject of each is the fact to be established, and the command or path closes it in words; never paste the plan's `rg` or command lines. A label line, not a list item, may group them so the ones that carry the weight stand out.
+2. `## 人が読む変更`: the `## Files to Change` entries that meet `references/human-review.md`, each with its label and what changes, or `なし`.
+3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `人が読む変更を確かめたうえで、` when that section is not `なし`.
+4. The plan path, then the block below.
+
+When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again.
 
 ```
 ## Plan ready
