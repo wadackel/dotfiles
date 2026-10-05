@@ -199,8 +199,9 @@
 
       # 3本指ジェスチャー
       TrackpadThreeFingerTapGesture = 2; # 「調べる」機能
-      TrackpadThreeFingerHorizSwipeGesture = 2; # フルスクリーン間のスワイプ
-      TrackpadThreeFingerVertSwipeGesture = 2; # Mission Control/App Exposé
+      # 3本指スワイプを有効にすると3本指ドラッグを奪う。スワイプは4本指に任せる
+      TrackpadThreeFingerHorizSwipeGesture = 0;
+      TrackpadThreeFingerVertSwipeGesture = 0;
 
       # 4本指ジェスチャー
       TrackpadFourFingerHorizSwipeGesture = 2; # デスクトップ間の切り替え
@@ -424,8 +425,7 @@
     # アクセシビリティ: Control + スクロールでズーム
     # com.apple.universalaccess は TCC で保護され、darwin-rebuild を実行するターミナルに
     # Full Disk Access が無いと書き込めない。CustomUserPreferences に置くと失敗が set -e で
-    # activation 全体 (launchd, homebrew など) を止めるため、ここで警告に留める。
-    # 書き込んだ値は動作中のズーム処理に通知されず、再ログインまで効かない
+    # activation 全体 (launchd, homebrew など) を止めるため、ここで警告に留める
     if ! launchctl asuser "$(id -u -- ${username})" sudo --user=${username} -- /bin/sh -c '
       defaults write com.apple.universalaccess closeViewScrollWheelToggle -bool true &&
       defaults write com.apple.universalaccess HIDScrollZoomModifierMask -int 262144
@@ -439,8 +439,11 @@
     # Finder設定を即座に反映
     killall Finder 2>/dev/null || true
 
-    # Spotlightショートカット設定を即座に反映（ログアウト不要）
-    /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u 2>/dev/null || true
+    # ショートカット・トラックパッド・スクロールズームの設定を HID に即座に反映（ログアウト不要）
+    # activateSettings は実行したユーザーの設定を流し込む。root のまま実行すると root の
+    # 初期値で上書きされ、3本指ドラッグや Control + スクロールのズームが効かなくなる
+    launchctl asuser "$(id -u -- ${username})" sudo --user=${username} -- \
+      /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u 2>/dev/null || true
 
   '';
 }
