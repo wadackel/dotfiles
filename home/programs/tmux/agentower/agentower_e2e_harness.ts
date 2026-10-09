@@ -15,12 +15,16 @@
 //     await teardown();
 //   }
 
+import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { sanitizeAnsi } from "./ansi.ts";
 import type { UserLabel } from "./pane_row.ts";
 
 // ---- Constants ----
 
-const SOCKET = `agentower-e2e-${Deno.pid}`;
+const SOCKET = `agentower-e2e-${process.pid}`;
 const SESSION = "test";
 const AGENTOWER_WINDOW_NAME = "agentower";
 const POLL_INTERVAL_MS = 50;
@@ -34,7 +38,7 @@ const POLL_INTERVAL_MS = 50;
 // /usr/bin/cc is the one path that reliably makes the kernel's p_comm match
 // the binary's basename. The opencode stub uses the 15-char form
 // `.opencode-wrapp` so MAXCOMLEN truncation is a no-op.
-const LIVE_BIN_DIR = `/tmp/agentower-e2e-bin-${Deno.pid}`;
+const LIVE_BIN_DIR = `/tmp/agentower-e2e-bin-${process.pid}`;
 const LIVE_BIN_PATHS: Record<string, string> = {
   claude: `${LIVE_BIN_DIR}/.claude-wrapped`,
   opencode: `${LIVE_BIN_DIR}/.opencode-wrapp`,
@@ -53,7 +57,7 @@ int main(int argc, char **argv) {
 }
 `;
 const DEFAULT_TIMEOUT_MS = (() => {
-  const raw = Deno.env.get("AGENTOWER_E2E_TIMEOUT_MS");
+  const raw = process.env.AGENTOWER_E2E_TIMEOUT_MS;
   if (!raw) return 5000;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 5000;
@@ -111,29 +115,30 @@ const TMUX_PREFIX = ["-f", "/dev/null", "-L", SOCKET] as const;
 // stderr included (fail-fast; differs from agentower.tsx:tmuxRun which logs and
 // continues — tests want hard failures).
 async function tmuxRun(args: string[]): Promise<string> {
-  const { code, stdout, stderr } = await new Deno.Command("tmux", {
-    args: [...TMUX_PREFIX, ...args],
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  const out = new TextDecoder().decode(stdout);
+  const { code, stdout, stderr } = await run("tmux", [
+    ...TMUX_PREFIX,
+    ...args,
+  ]);
   if (code !== 0) {
-    const err = new TextDecoder().decode(stderr).trim();
+    const err = stderr.trim();
     throw new Error(`tmux ${args.join(" ")} failed (code ${code}): ${err}`);
   }
-  return out;
+  return stdout;
+}
+
+// Exit code of a command whose output nobody reads.
+function runSilent(cmd: string, args: string[]): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: "ignore" });
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code));
+  });
 }
 
 // Best-effort tmux call: ignores exit code and all output. Used for cleanup
 // commands like kill-server where "server was already gone" is expected.
 async function tmuxRunAllowFail(args: string[]): Promise<void> {
-  await new Deno.Command("tmux", {
-    args: [...TMUX_PREFIX, ...args],
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).output();
+  await runSilent("tmux", [...TMUX_PREFIX, ...args]);
 }
 
 // ---- Public API ----
@@ -167,39 +172,21 @@ export async function setupServer(opts: ServerOpts = {}): Promise<void> {
 
 // Compile per-agent stubs used by liveCommand-mode panes. Idempotent across
 // setupServer calls within a single test run: each binary is compiled once
-// per process and cached across Deno.test cases on the same PID.
+// per process and cached across test cases on the same PID.
 async function ensureLiveBin(): Promise<void> {
-  const mkdir = await new Deno.Command("mkdir", {
-    args: ["-p", LIVE_BIN_DIR],
-    stdin: "null",
-    stdout: "null",
-    stderr: "piped",
-  }).output();
+  const mkdir = await run("mkdir", ["-p", LIVE_BIN_DIR]);
   if (mkdir.code !== 0) {
-    const err = new TextDecoder().decode(mkdir.stderr).trim();
+    const err = mkdir.stderr.trim();
     throw new Error(`Failed to create ${LIVE_BIN_DIR}: ${err}`);
   }
   for (const path of Object.values(LIVE_BIN_PATHS)) {
-    const exists = await new Deno.Command("test", {
-      args: ["-f", path],
-      stdin: "null",
-      stdout: "null",
-      stderr: "null",
-    }).output();
-    if (exists.code === 0) continue;
+    if (await runSilent("test", ["-f", path]) === 0) continue;
 
-    const child = new Deno.Command("cc", {
-      args: ["-x", "c", "-o", path, "-"],
-      stdin: "piped",
-      stdout: "null",
-      stderr: "piped",
-    }).spawn();
-    const writer = child.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(LIVE_BIN_SOURCE));
-    await writer.close();
-    const { code, stderr } = await child.output();
+    const { code, stderr } = await run("cc", ["-x", "c", "-o", path, "-"], {
+      stdin: LIVE_BIN_SOURCE,
+    });
     if (code !== 0) {
-      const err = new TextDecoder().decode(stderr).trim();
+      const err = stderr.trim();
       throw new Error(
         `Failed to compile live stub ${path} with /usr/bin/cc: ${err}`,
       );
@@ -327,13 +314,7 @@ let sandboxHome: string | null = null;
 // read, without having to invent its own temp dir.
 export async function sandboxHomePath(): Promise<string> {
   if (sandboxHome === null) {
-    // `dir: "/tmp"` is not cosmetic: agentower-verify runs the suite under
-    // --allow-write=$HOME/.claude/tasks,/tmp, and makeTempDir's default lands
-    // in $TMPDIR (/var/folders/… on macOS), which that scope excludes.
-    sandboxHome = await Deno.makeTempDir({
-      dir: "/tmp",
-      prefix: "agentower-e2e-home-",
-    });
+    sandboxHome = await mkdtemp("/tmp/agentower-e2e-home-");
   }
   return sandboxHome;
 }
@@ -346,20 +327,23 @@ async function sandboxEnv(): Promise<Record<string, string>> {
     // initial selection off the first row.
     AGENTOWER_FROM_PANE: "",
   };
-  // Replacing HOME orphans the Deno module cache, so aim it back at the real
-  // one. S8/S8b inject it inline for the same reason.
-  const realHome = Deno.env.get("HOME");
-  const denoDir = Deno.env.get("DENO_DIR") ??
-    (realHome ? `${realHome}/Library/Caches/deno` : undefined);
-  if (denoDir) env.DENO_DIR = denoDir;
+  // Bun keeps its transpiler cache under HOME, so a replaced HOME would start
+  // every scenario cold and collect cache files; aim it back at the real one.
+  // An inherited value passes through as it is, since an empty one is how the
+  // cache is turned off. S8/S8b/S55 inject it inline for the same reason, and
+  // S8's HOME is a tracked fixture directory.
+  const realHome = process.env.HOME;
+  const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??
+    (realHome ? `${realHome}/Library/Caches/bun/@t@` : undefined);
+  if (cacheDir !== undefined) env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = cacheDir;
   return env;
 }
 
 // Spawn Agentower as the direct command of a new tmux window. tmux passes the
 // command to /bin/sh -c; agentower-main.ts is executable and carries its own
-// shebang (`#!/usr/bin/env -S deno run --allow-env --allow-read --allow-run --no-prompt`),
-// so passing the bare path lets the shebang declare the permission set —
-// no drift risk between this string and agentower-main.ts:1.
+// shebang (`#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null`),
+// so passing the bare path lets the shebang declare the flags — no drift risk
+// between this string and agentower-main.ts:1.
 //
 // AGENTOWER_E2E_BIN swaps in a compiled binary instead. It is read here rather
 // than taken as an option because most scenarios call spawnAgentower() with no
@@ -386,12 +370,8 @@ export async function spawnAgentower(
     args?: string[];
   } = {},
 ): Promise<string> {
-  // URL.pathname is percent-encoded; decode so paths containing spaces or
-  // non-ASCII characters reach tmux/sh as a real filesystem path.
-  const agentowerPath = Deno.env.get("AGENTOWER_E2E_BIN") ??
-    decodeURIComponent(
-      new URL("./agentower-main.ts", import.meta.url).pathname,
-    );
+  const agentowerPath = process.env.AGENTOWER_E2E_BIN ??
+    join(import.meta.dirname, "agentower-main.ts");
   // The path is interpolated into an sh -c string that tmux hands to /bin/sh,
   // so anything sh would re-read there is refused rather than escaped.
   if (/['"$`\\]/.test(agentowerPath)) {
@@ -588,7 +568,7 @@ export async function waitForExit(
 
 // Kill the isolated server. Best-effort; safe to call multiple times.
 // The compiled LIVE_BIN_DIR stub is intentionally NOT removed here — it is
-// reused across every Deno.test call within the same process (the file is
+// reused across every test within the same process (the file is
 // only 33 KB and recompiling per-test would add ~50ms * N overhead). The
 // `/tmp/agentower-e2e-bin-$PID` path is claimed by PID so concurrent test runs
 // do not collide; the OS reclaims /tmp on reboot.
@@ -597,6 +577,6 @@ export async function teardown(): Promise<void> {
   if (sandboxHome !== null) {
     const dir = sandboxHome;
     sandboxHome = null;
-    await Deno.remove(dir, { recursive: true }).catch(() => {});
+    await rm(dir, { recursive: true }).catch(() => {});
   }
 }

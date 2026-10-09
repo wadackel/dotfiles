@@ -1,10 +1,22 @@
-#!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
+
+import type { Stats } from "node:fs";
+// readFile is called as fs.readFile: the lock test pauses a reader by replacing
+// it on this object, and a named import binds past the replacement.
+import fs, {
+  type FileHandle,
+  lstat,
+  mkdir,
+  open,
+  realpath,
+  rename,
+  rm,
+  rmdir,
+  writeFile,
+} from "node:fs/promises";
 
 // Agentower reads the marker format and TTL independently; changing them here
 // would leave display behavior inconsistent with plan resolution.
-
-// The shebang uses broad write permission because Deno shebang arguments cannot
-// expand HOME; all write paths are still constrained by markerPaths().
 const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Canonicalize a path even if its leaf does not yet exist. Walks up to the
@@ -13,7 +25,7 @@ const MARKER_TTL_MS = 24 * 60 * 60 * 1000;
 // — a non-canonical leaf would hash differently from Agentower's canonical cwd.
 export async function canonical(p: string): Promise<string> {
   try {
-    return await Deno.realPath(p);
+    return await realpath(p);
   } catch {
     // fall through
   }
@@ -25,7 +37,7 @@ export async function canonical(p: string): Promise<string> {
     tail.unshift(cur.slice(idx + 1));
     cur = idx === 0 ? "/" : cur.slice(0, idx);
     try {
-      const real = await Deno.realPath(cur);
+      const real = await realpath(cur);
       return real === "/" ? "/" + tail.join("/") : real + "/" + tail.join("/");
     } catch {
       // keep walking up
@@ -83,11 +95,26 @@ function usage(): never {
       "  codex-plan-marker.ts clear-matching <plan-path> [cwd]",
     ].join("\n"),
   );
-  Deno.exit(1);
+  process.exit(1);
+}
+
+function isNotFound(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException | null)?.code === "ENOENT";
+}
+
+// rm alone refuses a directory, and a marker path left behind as an empty
+// directory would then block every later activation.
+async function removeMarker(path: string): Promise<void> {
+  try {
+    await rm(path);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ERR_FS_EISDIR") throw err;
+    await rmdir(path);
+  }
 }
 
 function homeDir(): string {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) {
     throw new Error("HOME is not set");
   }
@@ -115,7 +142,7 @@ function absentStatus(paths: MarkerPaths): MarkerStatus {
 }
 
 async function ensurePlansDir(plansDir: string): Promise<string> {
-  await Deno.mkdir(plansDir, { recursive: true });
+  await mkdir(plansDir, { recursive: true });
   return await assertPlansDir(plansDir);
 }
 
@@ -123,7 +150,7 @@ async function existingPlansDir(plansDir: string): Promise<string | null> {
   try {
     return await assertPlansDir(plansDir);
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    if (isNotFound(err)) {
       return null;
     }
     throw err;
@@ -131,11 +158,11 @@ async function existingPlansDir(plansDir: string): Promise<string | null> {
 }
 
 async function assertPlansDir(plansDir: string): Promise<string> {
-  const info = await Deno.lstat(plansDir);
-  if (!info.isDirectory || info.isSymlink) {
+  const info = await lstat(plansDir);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
     throw new Error(`plans directory must be a regular directory: ${plansDir}`);
   }
-  return await Deno.realPath(plansDir);
+  return await realpath(plansDir);
 }
 
 function assertNever(value: never): never {
@@ -151,18 +178,15 @@ async function atomicWriteText(path: string, content: string): Promise<void> {
   const basename = path.slice(slash + 1);
   const tmp = `${dir}/.${basename}.${crypto.randomUUID()}.tmp`;
   try {
-    await Deno.writeTextFile(tmp, content, {
-      createNew: true,
-      mode: 0o600,
-    });
-    const info = await Deno.lstat(tmp);
-    if (!info.isFile || info.isSymlink) {
+    await writeFile(tmp, content, { flag: "wx", mode: 0o600 });
+    const info = await lstat(tmp);
+    if (!info.isFile() || info.isSymbolicLink()) {
       throw new Error("temporary marker is not a regular file");
     }
-    await Deno.rename(tmp, path);
+    await rename(tmp, path);
   } catch (err) {
     try {
-      await Deno.remove(tmp);
+      await rm(tmp);
     } catch {
       // tmp may not exist or may already have been renamed.
     }
@@ -173,9 +197,9 @@ async function atomicWriteText(path: string, content: string): Promise<void> {
 async function assertRegularFile(
   path: string,
   label: string,
-): Promise<Deno.FileInfo> {
-  const info = await Deno.lstat(path);
-  if (!info.isFile || info.isSymlink) {
+): Promise<Stats> {
+  const info = await lstat(path);
+  if (!info.isFile() || info.isSymbolicLink()) {
     throw new Error(`${label} must be a regular file: ${path}`);
   }
   return info;
@@ -189,7 +213,7 @@ async function validatePlanPath(
     throw new Error("plan path must be an absolute .md file");
   }
   await assertRegularFile(planPath, "plan file");
-  const realPlanPath = await Deno.realPath(planPath);
+  const realPlanPath = await realpath(planPath);
   if (!realPlanPath.endsWith(".md")) {
     throw new Error("plan path must resolve to a .md file");
   }
@@ -208,22 +232,21 @@ async function readMarkerPlanPath(
 ): Promise<string | null> {
   try {
     await assertRegularFile(path, "marker");
-    const planPath = (await Deno.readTextFile(path)).trim();
+    const planPath = (await fs.readFile(path, "utf8")).trim();
     return await validatePlanPath(planPath, realPlansDir);
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    if (isNotFound(err)) {
       return null;
     }
     throw err;
   }
 }
 
-function isFresh(info: Deno.FileInfo): boolean {
-  const mtime = info.mtime?.getTime() ?? 0;
-  return Date.now() - mtime < MARKER_TTL_MS;
+function isFresh(info: Stats): boolean {
+  return Date.now() - info.mtime.getTime() < MARKER_TTL_MS;
 }
 
-export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
+export async function getStatus(cwd = process.cwd()): Promise<MarkerStatus> {
   const paths = await markerPaths(cwd);
   const realPlansDir = await existingPlansDir(paths.plansDir);
   if (!realPlansDir) {
@@ -240,7 +263,7 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
       reason: fresh ? "active marker is valid" : "active marker is expired",
     };
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!(isNotFound(err))) {
       throw err;
     }
   }
@@ -260,7 +283,7 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
         : "pending marker is expired",
     };
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!(isNotFound(err))) {
       throw err;
     }
     return absentStatus(paths);
@@ -269,7 +292,7 @@ export async function getStatus(cwd = Deno.cwd()): Promise<MarkerStatus> {
 
 async function activatePendingUnlocked(
   planPath: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<MarkerPaths> {
   if (!planPath.startsWith("/")) {
     throw new Error("plan path must be absolute");
@@ -278,9 +301,9 @@ async function activatePendingUnlocked(
   const realPlansDir = await ensurePlansDir(paths.plansDir);
   const realPlanPath = await validatePlanPath(planPath, realPlansDir);
   try {
-    await Deno.remove(paths.activePath);
+    await removeMarker(paths.activePath);
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!(isNotFound(err))) {
       throw err;
     }
   }
@@ -288,7 +311,7 @@ async function activatePendingUnlocked(
   return paths;
 }
 
-export async function requireActive(cwd = Deno.cwd()): Promise<string> {
+export async function requireActive(cwd = process.cwd()): Promise<string> {
   const status = await getStatus(cwd);
   switch (status.state) {
     case "active":
@@ -314,10 +337,10 @@ export async function requireActive(cwd = Deno.cwd()): Promise<string> {
 async function clearActiveUnlocked(cwd: string): Promise<boolean> {
   const paths = await markerPaths(cwd);
   try {
-    await Deno.remove(paths.activePath);
+    await removeMarker(paths.activePath);
     return true;
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
+    if (isNotFound(err)) {
       return false;
     }
     throw err;
@@ -326,7 +349,7 @@ async function clearActiveUnlocked(cwd: string): Promise<boolean> {
 
 async function resolvePlanUnlocked(
   planPath?: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<string> {
   const paths = await markerPaths(cwd);
   const dir = await existingPlansDir(paths.plansDir);
@@ -339,7 +362,7 @@ async function resolvePlanUnlocked(
       (!active || active === selected) && (!pending || pending === selected)
     ) {
       await atomicWriteText(paths.activePath, `${selected}\n`);
-      if (pending === selected) await Deno.remove(paths.pendingPath);
+      if (pending === selected) await rm(paths.pendingPath);
     }
     return selected;
   }
@@ -356,13 +379,13 @@ async function resolvePlanUnlocked(
     );
   }
   await atomicWriteText(paths.activePath, `${unique[0]}\n`);
-  if (candidates[1]) await Deno.remove(paths.pendingPath);
+  if (candidates[1]) await rm(paths.pendingPath);
   return unique[0];
 }
 
 async function clearMatchingUnlocked(
   planPath: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<boolean> {
   const paths = await markerPaths(cwd);
   const dir = await existingPlansDir(paths.plansDir);
@@ -371,7 +394,7 @@ async function clearMatchingUnlocked(
   let removed = false;
   for (const path of [paths.activePath, paths.pendingPath]) {
     if (await readMarkerPlanPath(path, dir) === expected) {
-      await Deno.remove(path);
+      await rm(path);
       removed = true;
     }
   }
@@ -408,7 +431,7 @@ async function promoteUnlocked(cwd: string): Promise<PromoteResult> {
       }
       try {
         await atomicWriteText(status.activePath, `${status.planPath}\n`);
-        await Deno.remove(status.pendingPath);
+        await rm(status.pendingPath);
         return { promoted: true, reason: "promoted" };
       } catch (err) {
         return {
@@ -429,11 +452,11 @@ async function withMarkerLock<T>(
   const paths = await markerPaths(cwd);
   await ensurePlansDir(paths.plansDir);
   const path = `${paths.plansDir}/.marker-lock-${paths.hash}`;
-  let lock: Deno.FsFile;
+  let lock: FileHandle;
   try {
-    lock = await Deno.open(path, { createNew: true, write: true, mode: 0o600 });
+    lock = await open(path, "wx", 0o600);
   } catch (err) {
-    if (err instanceof Deno.errors.AlreadyExists) {
+    if ((err as NodeJS.ErrnoException | null)?.code === "EEXIST") {
       throw new Error(
         `marker is locked; check the writer before recovering ${path}`,
       );
@@ -443,42 +466,42 @@ async function withMarkerLock<T>(
   try {
     await lock.write(
       new TextEncoder().encode(
-        JSON.stringify({ pid: Deno.pid, started: new Date().toISOString() }),
+        JSON.stringify({ pid: process.pid, started: new Date().toISOString() }),
       ),
     );
     return await operation();
   } finally {
-    lock.close();
-    await Deno.remove(path);
+    await lock.close();
+    await rm(path);
   }
 }
 
 export function activatePending(
   planPath: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<MarkerPaths> {
   return withMarkerLock(cwd, () => activatePendingUnlocked(planPath, cwd));
 }
 
-export function clearActive(cwd = Deno.cwd()): Promise<boolean> {
+export function clearActive(cwd = process.cwd()): Promise<boolean> {
   return withMarkerLock(cwd, () => clearActiveUnlocked(cwd));
 }
 
 export function resolvePlan(
   planPath?: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<string> {
   return withMarkerLock(cwd, () => resolvePlanUnlocked(planPath, cwd));
 }
 
 export function clearMatching(
   planPath: string,
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
 ): Promise<boolean> {
   return withMarkerLock(cwd, () => clearMatchingUnlocked(planPath, cwd));
 }
 
-export async function promote(cwd = Deno.cwd()): Promise<PromoteResult> {
+export async function promote(cwd = process.cwd()): Promise<PromoteResult> {
   try {
     return await withMarkerLock(cwd, () => promoteUnlocked(cwd));
   } catch (err) {
@@ -500,29 +523,31 @@ export async function run(args: string[]): Promise<void> {
     if (!first) {
       usage();
     }
-    const paths = await activatePending(first, second ?? Deno.cwd());
+    const paths = await activatePending(first, second ?? process.cwd());
     console.log(paths.pendingPath);
     return;
   }
 
   if (command === "promote") {
-    const result = await promote(first ?? Deno.cwd());
+    const result = await promote(first ?? process.cwd());
     console.log(result.reason);
     return;
   }
 
   if (command === "status") {
-    console.log(JSON.stringify(await getStatus(first ?? Deno.cwd()), null, 2));
+    console.log(
+      JSON.stringify(await getStatus(first ?? process.cwd()), null, 2),
+    );
     return;
   }
 
   if (command === "require-active") {
-    console.log(await requireActive(first ?? Deno.cwd()));
+    console.log(await requireActive(first ?? process.cwd()));
     return;
   }
 
   if (command === "clear-active") {
-    const removed = await clearActive(first ?? Deno.cwd());
+    const removed = await clearActive(first ?? process.cwd());
     console.log(removed ? "active-cleared" : "active-absent");
     return;
   }
@@ -531,7 +556,7 @@ export async function run(args: string[]): Promise<void> {
     console.log(
       await resolvePlan(
         first === "-" ? undefined : first,
-        second ?? Deno.cwd(),
+        second ?? process.cwd(),
       ),
     );
     return;
@@ -540,7 +565,7 @@ export async function run(args: string[]): Promise<void> {
   if (command === "clear-matching") {
     if (!first) usage();
     console.log(
-      await clearMatching(first, second ?? Deno.cwd())
+      await clearMatching(first, second ?? process.cwd())
         ? "active-cleared"
         : "active-preserved",
     );
@@ -552,9 +577,9 @@ export async function run(args: string[]): Promise<void> {
 
 if (import.meta.main) {
   try {
-    await run(Deno.args);
+    await run(process.argv.slice(2));
   } catch (err) {
     console.error((err as Error).message);
-    Deno.exit(1);
+    process.exit(1);
   }
 }

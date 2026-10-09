@@ -1,7 +1,7 @@
 // ANSI escape sanitization + ANSI-aware line truncation.
 // Pure module — extracted from agentower.tsx so that non-React tooling and
-// e2e harnesses can import these helpers without dragging in npm:react /
-// npm:ink at parse time.
+// e2e harnesses can import these helpers without dragging in react /
+// ink at parse time.
 
 import { charCells } from "./cell_width.ts";
 
@@ -17,11 +17,8 @@ import { charCells } from "./cell_width.ts";
 // Parameter byte range per ECMA-48 is 0x30-0x3F (covers `<`, `=`, `>`, `?`
 // in addition to digits and `;:`). Using the full range prevents e.g.
 // `\x1b[>0c` (primary device attributes request) from bypassing the sanitizer.
-// deno-lint-ignore no-control-regex
 export const OSC_LIKE = /\x1b[\]P_^][\s\S]*?(?:\x07|\x1b\\)/g;
-// deno-lint-ignore no-control-regex
 export const CSI_SEQUENCE = /\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/g;
-// deno-lint-ignore no-control-regex
 export const SIMPLE_ESC = /\x1b[^\[\]P_^]/g;
 
 export function sanitizeAnsi(input: string): string {
@@ -57,7 +54,6 @@ export function truncateAnsiLine(line: string, maxCols: number): string {
     if (ch === "\x1b") {
       if (used >= maxCols) break;
       const rest = line.slice(i);
-      // deno-lint-ignore no-control-regex
       const m = rest.match(/^\x1b\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]/);
       if (m) {
         out += m[0];

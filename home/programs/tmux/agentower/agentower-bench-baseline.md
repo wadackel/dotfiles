@@ -125,3 +125,42 @@ frames=83  p10=4.3ms  p50=6.7ms  p90=11.0ms  max=23.6ms
 この結果、`string-width` を自前の幅関数に差し替えてもフレーム単価の改善はノイズに埋もれる。
 残る利得は起動時のモジュール評価だけで、それには ANSI 除去・絵文字・ZWJ・結合文字を扱う
 幅モデルの新規実装と、今は 1 本も無い絵文字・CJK・preview 本文の e2e が要る。
+
+## Deno から Bun へ（2026-10-10）
+
+- マシン: wadackels-Mac-mini (arm64)、`bun --version`: 1.4.2、比較対象の Deno 版は 2.9.6 でビルドされた当時の出荷物
+- 3 つのバイナリを 1 回ずつ交互に 3 巡。値は中央値、括弧内は 3 回の実測
+
+```
+agentower-bench.ts --after <binary>     # deno → bun → bun --bytecode の順で 3 巡
+hyperfine -N --ignore-failure --warmup 5 --runs 40 --input /dev/null 'env -u TMUX <binary>'
+```
+
+| 指標 | Deno 版 | Bun 版 | Bun 版 `--bytecode --format=esm`（採用） |
+|---|---|---|---|
+| `raw_on_ms` | 13 (14, 13, 13) | 15 (15, 14, 15) | 4 (4, 4, 4) |
+| `module_eval_ms` | 38 (40, 38, 38) | 22 (22, 21, 22) | 9 (9, 8, 9) |
+| `io_done_ms` | 47 (50, 47, 47) | 32 (32, 31, 33) | 20 (20, 19, 20) |
+| `first_commit_ms` | 66 (71, 66, 66) | 55 (56, 55, 55) | 39 (40, 38, 39) |
+| `render_us_p50` | 5534 (5534, 5560, 4780) | 6727 (6060, 7166, 6727) | 5759 (5759, 5378, 6553) |
+| `tick_us_p50` | 18962 (17063, 19068, 18962) | 18056 (17682, 18056, 19512) | 18189 (18762, 18189, 17223) |
+| `pre_frame_key.latency_ms` | 4 (4, 4, 3) | 2 (2, 1, 2) | 1 (1, 1, 1) |
+| `fresh_first_exec_s` | 0.509 | 0.455 | 0.480 |
+| `fresh_after_warmup_s` | 0.040 | 0.026 | 0.017 |
+| exit 2 までのプロセス全体（hyperfine） | 38.8ms ± 0.7 | 21.5ms ± 0.5 | 11.3ms ± 0.7 |
+
+`frames_per_tick` 3、`commits_per_tick` 1、`pre_frame_key.moves` 1、`burst_jjj_moves` 3、
+`arrow_twice_moves` 2、`wheel_thrice_moves` 3、`ctrl_c_during_load_exits` と
+`ctrl_c_before_mount_exits` が true、は 3 つとも同じ。
+
+trace のマークは各ランタイムの `performance.now()` で、ランタイム自体の起動を含まない。
+ランタイムをまたいで比べるときは、最下段のプロセス全体の時間を併せて読む。
+
+bytecode はモジュールグラフの構文解析をビルド時に済ませる。効くのは起動だけで、
+フレーム単価（`render_us_p50`）と tick は Deno 版と同じ水準のまま。素の Bun 版は
+`render_us_p50` が 2 割ほど高く出たが、bytecode 版では差が消えている。
+
+`ctrl_c_before_mount_exits` は今回足した指標で、raw に切り替わった後・ink の mount 前に
+届いた Ctrl+C で popup が閉じるかを見る。Bun の入口は cbreak ではなく raw にするので
+この区間の Ctrl+C はシグナルにならず、mount した ink が入力として受け取って終了する。
+`main()` が mount 前に固まった場合は Ctrl+C で抜けられない。

@@ -1,7 +1,7 @@
 {
-  config,
   lib,
   pkgs,
+  dotfiles,
   ...
 }:
 
@@ -13,6 +13,6 @@
   # a rebuild that fails here is easier to notice than hooks failing later.
   home.activation.installDotfilesDeps = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     run --quiet ${pkgs.bun}/bin/bun install --frozen-lockfile --ignore-scripts \
-      --cwd "${config.home.homeDirectory}/dotfiles"
+      --cwd "${dotfiles.root}"
   '';
 }

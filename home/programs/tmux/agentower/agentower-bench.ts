@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env --allow-read --allow-write=/tmp --allow-run --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Startup and input-latency bench for Agentower. Each number maps to one line
 // of agentower-bench-baseline.md, so a regression lands on a phase instead of
@@ -6,6 +6,17 @@
 // isolated tmux server and reads the AGENTOWER_TRACE marks it writes to stderr.
 // Absolute values move with the machine — read the before/after pair.
 
+import { randomUUID } from "node:crypto";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import {
   captureOutput,
@@ -22,6 +33,8 @@ import {
 
 const ROWS = ["row-a", "row-b", "row-c", "row-d"];
 const REPEATS = 5;
+// Long enough for the trace file to be watched before the binary execs.
+const CTRL_C_START_DELAY_MS = 300;
 
 interface Marks {
   [mark: string]: number[];
@@ -47,14 +60,20 @@ function median(values: number[]): number | null {
 }
 
 async function readTrace(path: string): Promise<Marks> {
-  return parseMarks(await Deno.readTextFile(path));
+  return parseMarks(await readFile(path, "utf8"));
+}
+
+async function makeTraceFile(prefix: string): Promise<string> {
+  const path = join("/tmp", `${prefix}${randomUUID()}`);
+  await writeFile(path, "", { flag: "wx", mode: 0o600 });
+  return path;
 }
 
 async function withSandbox<T>(
   bin: string,
   body: () => Promise<T>,
 ): Promise<T> {
-  Deno.env.set("AGENTOWER_E2E_BIN", bin);
+  process.env.AGENTOWER_E2E_BIN = bin;
   await setupServer();
   try {
     for (const prompt of ROWS) {
@@ -72,10 +91,10 @@ async function withSandbox<T>(
 // anyway, which would hide the repaint count the bench is there to measure.
 async function writeUsageFixture(): Promise<void> {
   const dir = `${await sandboxHomePath()}/.local/state/agent-usage`;
-  await Deno.mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   const now = Math.floor(Date.now() / 1000);
   for (const agent of ["claude", "codex"]) {
-    await Deno.writeTextFile(
+    await writeFile(
       `${dir}/${agent}.json`,
       JSON.stringify({
         agent,
@@ -117,10 +136,7 @@ async function measurePhases(bin: string): Promise<Phases> {
 
   await withSandbox(bin, async () => {
     for (let i = 0; i < REPEATS; i++) {
-      const traceFile = await Deno.makeTempFile({
-        dir: "/tmp",
-        prefix: "agentower-bench-trace-",
-      });
+      const traceFile = await makeTraceFile("agentower-bench-trace-");
       const target = await spawnAgentower({
         env: { AGENTOWER_TRACE: "1" },
         traceFile,
@@ -131,7 +147,7 @@ async function measurePhases(bin: string): Promise<Phases> {
       await waitForExit();
 
       const marks = await readTrace(traceFile);
-      await Deno.remove(traceFile);
+      await rm(traceFile);
       if (marks["raw-on"]) rawOn.push(marks["raw-on"][0]);
       if (marks["ink-module-eval-done"]) {
         moduleEval.push(marks["ink-module-eval-done"][0]);
@@ -195,10 +211,7 @@ interface PreFrameKey {
 // A key that reaches the tty before the process starts.
 async function preFrameKey(bin: string): Promise<PreFrameKey> {
   return await withSandbox(bin, async () => {
-    const traceFile = await Deno.makeTempFile({
-      dir: "/tmp",
-      prefix: "agentower-bench-input-",
-    });
+    const traceFile = await makeTraceFile("agentower-bench-input-");
     const target = await spawnAgentower({
       env: { AGENTOWER_TRACE: "1" },
       traceFile,
@@ -217,7 +230,7 @@ async function preFrameKey(bin: string): Promise<PreFrameKey> {
     await waitForExit();
 
     const marks = await readTrace(traceFile);
-    await Deno.remove(traceFile);
+    await rm(traceFile);
     const firstCommit = marks["first-commit"]?.[0];
     const received = marks["input-received"]?.[0];
     return {
@@ -229,6 +242,8 @@ async function preFrameKey(bin: string): Promise<PreFrameKey> {
   });
 }
 
+// Sent right after the spawn, the C-c can reach the tty before the process
+// has switched it to raw mode, where it is still a SIGINT.
 async function ctrlCDuringLoadExits(bin: string): Promise<boolean> {
   return await withSandbox(bin, async () => {
     const target = await spawnAgentower({ waitForReady: false });
@@ -244,6 +259,49 @@ async function ctrlCDuringLoadExits(bin: string): Promise<boolean> {
   });
 }
 
+// The C-c is held until the binary reports raw-on, so it arrives as input to a
+// process that has not mounted ink yet. A fixed sleep after startDelayMs cannot
+// promise that window: it is a few tens of milliseconds wide and moves with the
+// binary. The trace is read again once the key is sent, and a run where
+// first-commit was already there measured the mounted app instead, so it is
+// repeated.
+async function ctrlCBeforeMountExits(bin: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const result = await withSandbox(bin, async () => {
+      const traceFile = await makeTraceFile("agentower-bench-ctrlc-");
+      try {
+        const target = await spawnAgentower({
+          env: { AGENTOWER_TRACE: "1" },
+          traceFile,
+          waitForReady: false,
+          startDelayMs: CTRL_C_START_DELAY_MS,
+        });
+        const deadline = Date.now() + CTRL_C_START_DELAY_MS + 5000;
+        while (!(await readTrace(traceFile))["raw-on"]) {
+          if (Date.now() > deadline) {
+            throw new Error(`${bin} never reported raw-on`);
+          }
+          await new Promise((r) => setTimeout(r, 1));
+        }
+        await sendKey(target, "C-c");
+        const mounted = "first-commit" in await readTrace(traceFile);
+        try {
+          await waitForExit();
+          return mounted ? null : true;
+        } catch {
+          await sendKey(target, "Escape");
+          await waitForExit().catch(() => {});
+          return mounted ? null : false;
+        }
+      } finally {
+        await rm(traceFile);
+      }
+    });
+    if (result !== null) return result;
+  }
+  throw new Error(`${bin}: C-c never landed before ink mounted`);
+}
+
 // ---- fresh-binary exec cost ----
 
 // The activation writes a new Mach-O and renames it into place; macOS charges
@@ -253,43 +311,32 @@ async function freshExec(
   bin: string,
   warmUpFirst: boolean,
 ): Promise<number> {
-  // A 0700 directory rather than makeTempFile: copyFile carries the source's
-  // mode over, so the copy is briefly world-readable before any chmod lands.
-  const dir = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-bench-fresh-",
-  });
+  // A 0700 directory rather than a bare temp file: copyFile carries the
+  // source's mode over, so the copy is briefly world-readable before any chmod
+  // lands.
+  const dir = await mkdtemp("/tmp/agentower-bench-fresh-");
   const copy = `${dir}/agentower`;
   try {
-    await Deno.copyFile(bin, copy);
+    await copyFile(bin, copy);
     // PATH alone: the binary only has to reach its TMUX guard, and handing a
     // path named on the command line the whole shell environment would put
     // every token in it inside a process this script did not write.
-    const env = { PATH: Deno.env.get("PATH") ?? "" };
+    const env = { PATH: process.env.PATH ?? "" };
     // Exit 2 is main()'s own guard on the missing TMUX, so it doubles as proof
     // that the module graph evaluated. Any other code means the binary died
     // early, which would otherwise be timed as a very fast startup.
-    const run = async () => {
-      const { code, stderr } = await new Deno.Command(copy, {
-        env,
-        clearEnv: true,
-        stdout: "null",
-        stderr: "piped",
-      }).output();
+    const runOnce = async () => {
+      const { code, stderr } = await run(copy, [], { env, clearEnv: true });
       if (code !== 2) {
-        throw new Error(
-          `${bin} exited ${code}, expected 2: ${
-            new TextDecoder().decode(stderr).trim()
-          }`,
-        );
+        throw new Error(`${bin} exited ${code}, expected 2: ${stderr.trim()}`);
       }
     };
-    if (warmUpFirst) await run();
+    if (warmUpFirst) await runOnce();
     const started = performance.now();
-    await run();
+    await runOnce();
     return Number(((performance.now() - started) / 1000).toFixed(3));
   } finally {
-    await Deno.remove(dir, { recursive: true }).catch(() => {});
+    await rm(dir, { recursive: true }).catch(() => {});
   }
 }
 
@@ -332,6 +379,7 @@ async function measure(bin: string) {
         `\x1b[<${MOUSE_WHEEL_DOWN};3;3M`.repeat(3),
       ),
       ctrl_c_during_load_exits: await ctrlCDuringLoadExits(bin),
+      ctrl_c_before_mount_exits: await ctrlCBeforeMountExits(bin),
     },
     exec: {
       fresh_first_exec_s: await freshExec(bin, false),
@@ -341,12 +389,12 @@ async function measure(bin: string) {
 }
 
 if (import.meta.main) {
-  const { after, before, pretty } = parseArgs(Deno.args);
+  const { after, before, pretty } = parseArgs(process.argv.slice(2));
   const result = {
     check: "agentower-bench",
     repeats: REPEATS,
     measured_at: new Date().toISOString(),
-    deno: Deno.version.deno,
+    runtime: `bun ${process.versions.bun}`,
     after: await measure(after),
     before: before ? await measure(before) : null,
   };

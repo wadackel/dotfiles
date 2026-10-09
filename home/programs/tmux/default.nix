@@ -21,15 +21,26 @@ let
         (file.hasExt "ts" || file.hasExt "tsx")
         && !(lib.hasSuffix "_test.ts" file.name)
         && file.name != "agentower_e2e_harness.ts"
-        # Measurement only: editing it must not cost a 68MB recompile plus the
+        # Measurement only: editing it must not cost a 60MB recompile plus the
         # warm-up run on the next activation.
         && file.name != "agentower-bench.ts";
       files =
         lib.fileset.toList (lib.fileset.fileFilter isSrc ./agentower)
         ++ lib.fileset.toList (lib.fileset.fileFilter isSrc ./shared);
+      # What decides the binary besides its sources: the one module imported
+      # from outside this directory, the dependency versions, the type-check
+      # settings, and this file, whose build flags include the two that keep
+      # the binary from loading a bunfig.toml or .env out of the pane's cwd.
+      inputs = [
+        ../agents/lib/proc.ts
+        ../../../bun.lock
+        ../../../tsconfig.json
+        ./agentower/tsconfig.json
+        ./default.nix
+      ];
     in
     assert lib.assertMsg (builtins.length files >= 8) "Agentower source fileset unexpectedly small";
-    builtins.hashString "sha256" (lib.concatMapStrings builtins.readFile files);
+    builtins.hashString "sha256" (lib.concatMapStrings builtins.readFile (files ++ inputs));
 
   # Released tmux (3.7b) lets a repainting background pane draw over an open
   # popup's top border row, so the border blinks out and back while an agent
@@ -63,19 +74,10 @@ in
   home.file.".local/bin/tmux-popup-session.sh".source =
     dotfiles.linkHere ./. "scripts/popup-session.sh";
 
-  # Agentower (prefix+w: ink + React on Deno)
+  # Agentower (prefix+w: ink + React on Bun). The source entry, for a manual
+  # run without the compiled binary.
   home.file.".local/bin/agentower-main.ts".source =
     dotfiles.linkHere ./. "agentower/agentower-main.ts";
-
-  # Agentower source siblings for direct/manual Deno runs.
-  home.file.".local/bin/agentower.tsx".source = dotfiles.linkHere ./. "agentower/agentower.tsx";
-  home.file.".local/bin/trace.ts".source = dotfiles.linkHere ./. "agentower/trace.ts";
-  home.file.".local/bin/pane_row.ts".source = dotfiles.linkHere ./. "agentower/pane_row.ts";
-  home.file.".local/bin/ansi.ts".source = dotfiles.linkHere ./. "agentower/ansi.ts";
-  home.file.".local/bin/cell_width.ts".source = dotfiles.linkHere ./. "agentower/cell_width.ts";
-  home.file.".local/bin/format_helpers.ts".source =
-    dotfiles.linkHere ./. "agentower/format_helpers.ts";
-  home.file.".local/bin/components.tsx".source = dotfiles.linkHere ./. "agentower/components.tsx";
 
   # Agentower diagnostic CLI (manual: when a Claude Code pane fails to appear)
   home.file.".local/bin/agentower-doctor.ts".source =
@@ -84,14 +86,14 @@ in
   # Dev layout script
   home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "scripts/dev-layout.sh";
 
-  # Evaluating the React+Ink module graph dominates Agentower's startup, and
-  # Deno's npm cache does not amortize it (cold == warm), so AOT is the only
-  # way to pay it once. Bundling first collapses the graph further, but breaks
-  # `deno compile` — hence the post-process stage (agentower/bundle-postprocess.ts).
-  # `deno compile` type-checks its input, and a `.js` bundle under --no-check
-  # does not, so the check is run explicitly.
-  home.activation.compileAgentowerBin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    SRC="${./.}"
+  # Evaluating the React+Ink module graph dominates Agentower's startup, so it
+  # is compiled ahead of time. The build reads the worktree, not a store copy:
+  # it needs the node_modules that installDotfilesDeps puts there. The hash
+  # above is still taken from the flake source, so the two agree only when the
+  # flake being switched is ~/dotfiles itself.
+  home.activation.compileAgentowerBin = lib.hm.dag.entryAfter [ "installDotfilesDeps" ] ''
+    ROOT="${dotfiles.root}"
+    SRC="$ROOT/home/programs/tmux/agentower"
     OUT="$HOME/.local/share/agentower"
     BIN="$OUT/agentower"
     STAMP="$OUT/.src-hash"
@@ -107,70 +109,47 @@ in
       # cannot leave a corrupt binary in place (the stamp would then disagree
       # with the truncated file, and next activation retries the compile).
       TMP="$BIN.tmp.$$"
-      # `--allow-run` を裸 (scope 無し) で渡す: Ink が依存する signal-exit は
-      # popup 閉鎖時の SIGHUP ハンドラで `process.kill(process.pid, sig)` を
-      # 呼ぶ。Deno はこれを `--allow-run` 権限で gate するが、partial scope
-      # (`tmux,git` 等) では拒否され runtime prompt が popup に表示される
-      # (denoland/deno#15217)。
-      #
-      # `--no-prompt` 必須: 何らかの未許可 op が runtime に呼ばれた瞬間、
-      # Deno の `TtyPrompter::prompt` 内 `clear_stdin` (runtime/permissions/
-      # prompter.rs) が `loop { tcflush; select(timeout=100ms); ... }` で
-      # 永久ループに突入する (tmux popup 上では stdin に常時データが流れる
-      # ため select が 0 を返さない)。main thread が完全に詰まり JS が動か
-      # ず、ESC/q の byte は届くが useInput が発火しない (Ctrl+C は SIGINT
-      # interrupt → signal-exit → 抜けられる)。`--no-prompt` を付けると
-      # prompt 経路自体が抑止され「未許可なら即 throw」になるので Agentower
-      # 側の fetchPanes tick の try/catch (agentower.tsx) で吸収され継続稼働する。
-      # Kept after the build rather than cleaned up: when a rebuild ships a
-      # binary that misbehaves, this is the input that produced it.
-      BUNDLE="$OUT/agentower.bundle.js"
-      # Neither `deno bundle` nor `deno compile --no-check` looks at types, so
-      # without this the activation would happily ship a binary built from
-      # source that does not type-check.
-      run ${pkgs.deno}/bin/deno check "$SRC/agentower/agentower-main.ts"
-      # --minify is for React, not size: it is the only switch that makes
-      # esbuild fold NODE_ENV to production (--conditions, DENO_CONDITIONS and
-      # NODE_ENV at bundle time all keep development, and drop the production
-      # body so it cannot be patched in later). The source hash does not cover
-      # this file, so a flag change alone is never rebuilt.
-      run ${pkgs.deno}/bin/deno bundle \
-        --minify \
-        --external ws --external react-devtools-core \
-        -o "$BUNDLE" \
-        "$SRC/agentower/agentower-main.ts"
-      # `exit` would abort the activation fragments that follow, so a failed
-      # post-process branches instead and leaves the previous binary and stamp
-      # untouched for the next activation to retry. `run` on the condition so
-      # that --dry-run echoes the whole branch instead of running this one step.
-      if run ${pkgs.deno}/bin/deno run \
-        --allow-read="$SRC/agentower","$OUT" --allow-write="$BUNDLE" \
-        "$SRC/agentower/bundle-postprocess.ts" "$BUNDLE"; then
-        run ${pkgs.deno}/bin/deno compile \
-          --no-check \
-          --allow-env --allow-read --allow-run \
-          --no-prompt \
-          --output "$TMP" \
-          "$BUNDLE"
-        run /bin/mv -f "$TMP" "$BIN"
-        # macOS charges ~1.4s to the first exec of a freshly written Mach-O of
-        # this size, so without this the next `prefix+w` after every rebuild
-        # waits for it. The exit code doubles as the only check that the binary
-        # starts at all: 2 is main()'s own guard on the missing TMUX, so
-        # anything else means the graph did not evaluate and the stamp must not
-        # claim this build is current.
-        WARM=0
-        run --silence /usr/bin/env -u TMUX "$BIN" </dev/null 2>"$OUT/.warm.log" || WARM=$?
-        if [ "$WARM" = 2 ]; then
-          run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
-        else
-          echo "agentower: fresh binary exited $WARM, expected 2 — keeping the previous stamp so the next activation rebuilds" >&2
-          /bin/cat "$OUT/.warm.log" >&2 || true
-        fi
-        /bin/rm -f "$OUT/.warm.log"
+      # Neither Bun nor its bundler looks at types, so without this the
+      # activation would happily ship a binary built from source that does not
+      # type-check. tsc is called by path: `bun x tsc` outside the project
+      # resolves an unrelated npm package of that name.
+      run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
+        "$ROOT/node_modules/typescript/bin/tsc" --noEmit -p "$SRC/tsconfig.json"
+      # --bytecode: the module graph is parsed at build time instead of on every
+      # start, which took first paint from 55ms to 39ms (agentower-bench-baseline.md).
+      # It defaults to CommonJS output, and the entry uses top-level await.
+      # --bytecode: the module graph is parsed at build time instead of on
+      # every start, which took first paint from 55ms to 39ms
+      # (agentower-bench-baseline.md). It defaults to CommonJS output, and the
+      # entry uses top-level await, hence --format=esm.
+      # --no-compile-autoload-*: a compiled binary otherwise runs the preload
+      # of a bunfig.toml and loads the .env found in its working directory, and
+      # the popup's working directory is whatever repository the pane is in.
+      # DEV: ink connects to react-devtools when DEV is "true" in the
+      # environment, which a tmux session can carry.
+      run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
+        build --compile --minify --bytecode --format=esm \
+        --define 'process.env.NODE_ENV="production"' \
+        --define 'process.env.DEV="false"' \
+        --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
+        --outfile "$TMP" \
+        "$SRC/agentower-main.ts"
+      run /bin/mv -f "$TMP" "$BIN"
+      # macOS charges ~0.5s to the first exec of a freshly written Mach-O of
+      # this size, so without this the next `prefix+w` after every rebuild
+      # waits for it. The exit code doubles as the only check that the binary
+      # starts at all: 2 is main()'s own guard on the missing TMUX, so
+      # anything else means the graph did not evaluate and the stamp must not
+      # claim this build is current.
+      WARM=0
+      run --silence /usr/bin/env -u TMUX "$BIN" </dev/null 2>"$OUT/.warm.log" || WARM=$?
+      if [ "$WARM" = 2 ]; then
+        run /bin/sh -c "printf '%s\n' \"$HASH\" > \"$STAMP\""
       else
-        echo "agentower: bundle post-process failed, keeping the previous binary" >&2
+        echo "agentower: fresh binary exited $WARM, expected 2 — keeping the previous stamp so the next activation rebuilds" >&2
+        /bin/cat "$OUT/.warm.log" >&2 || true
       fi
+      /bin/rm -f "$OUT/.warm.log"
     fi
   '';
 }

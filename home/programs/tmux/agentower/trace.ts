@@ -1,8 +1,9 @@
 // Startup phase marks for agentower-bench.ts, which matches on the mark names
-// verbatim. stderr rather than a file, so the shipped binary needs no
-// --allow-write.
+// verbatim and reads them from stderr.
 
-const TRACE_ENABLED = (Deno.env.get("AGENTOWER_TRACE") ?? "") !== "";
+import { writeSync } from "node:fs";
+
+const TRACE_ENABLED = (process.env.AGENTOWER_TRACE ?? "") !== "";
 
 // `value` carries a duration instead of a timestamp; agentower-bench.ts knows
 // which marks are which. Omitted, the mark is the milliseconds since process
@@ -11,7 +12,8 @@ const TRACE_ENABLED = (Deno.env.get("AGENTOWER_TRACE") ?? "") !== "";
 export function trace(mark: string, value?: number): void {
   if (!TRACE_ENABLED) return;
   try {
-    Deno.stderr.writeSync(
+    writeSync(
+      2,
       new TextEncoder().encode(
         `AGT ${mark} ${Math.round(value ?? performance.now())}\n`,
       ),

@@ -15,7 +15,7 @@ allowed-tools: Bash(*agentower-verify.ts*)
 # agentower-verify
 
 Verify Agentower end-to-end against a fresh isolated tmux server.
-Warms the Deno module cache, runs every scenario in
+Runs every scenario in
 `home/programs/tmux/agentower/agentower_e2e_test.ts`, and writes a machine-readable
 JSON result to stdout.
 
@@ -35,12 +35,12 @@ JSON result to stdout.
 
 The script is self-contained. It:
 
-1. Runs `deno cache home/programs/tmux/agentower/agentower-main.ts` to warm npm modules.
-2. Runs `agentower_e2e_test.ts` under `deno test` with the permission scopes the
-   script defines (see the `runDeno` call and its scope-rationale comments in
-   `agentower-verify.ts` — that file is the source of truth for the exact flags).
-3. Parses the test runner output (scenario names + ok/FAILED).
-4. Emits a single JSON object on stdout.
+1. Runs `agentower_e2e_test.ts` under `bun test` with a per-test timeout of
+   60 seconds, or six times `AGENTOWER_E2E_TIMEOUT_MS` when that is larger.
+2. Parses the report from stderr: one `(pass)` / `(fail)` line per scenario,
+   cross-checked against the ` N pass` / ` N fail` summary. A mismatch, or a
+   missing summary, is reported in `errors` and makes `ok` false.
+3. Emits a single JSON object on stdout.
 
 ### Step 2: Read the JSON result
 
@@ -104,8 +104,7 @@ It does NOT cover:
 
 ## Timing
 
-Runtime varies with the machine, the Deno cache state, and the scenario
-count. A run that produces no new scenario output for a long stretch
+Runtime varies with the machine and the scenario count. A run that produces no new scenario output for a long stretch
 indicates a hung scenario.
 
 Override the per-wait timeout via env var if a slow environment trips

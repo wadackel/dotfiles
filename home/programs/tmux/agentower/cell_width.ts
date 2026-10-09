@@ -1,7 +1,7 @@
 // Display-cell width helpers + ellipsis-aware truncation.
 // Pure module — extracted from agentower.tsx so non-React tooling can compute
 // terminal-cell widths (CJK / fullwidth aware) without dragging in
-// npm:react / npm:ink.
+// react / ink.
 
 // East Asian Wide + Fullwidth ranges (Unicode EAW W + F). Other categories
 // (narrow / ambiguous / neutral) fall back to 1 cell, matching default

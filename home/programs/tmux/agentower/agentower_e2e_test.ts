@@ -1,8 +1,18 @@
+import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import {
-  assertEquals,
-  assertFalse,
-  assertStringIncludes,
-} from "jsr:@std/assert@1";
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import {
   attachClient,
   captureOutput,
@@ -20,12 +30,10 @@ import {
 import { codexCwdHash, MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 
-Deno.test("S68: startup Codex is idle, filterable and selectable before hook registration", async () => {
+test("S68: startup Codex is idle, filterable and selectable before hook registration", async () => {
   await setupServer();
-  const traceFile = await Deno.makeTempFile({
-    dir: "/tmp",
-    prefix: "agentower-startup-",
-  });
+  const traceFile = join("/tmp", `agentower-startup-${randomUUID()}`);
+  await writeFile(traceFile, "", { flag: "wx", mode: 0o600 });
   try {
     const id = "11111111-1111-4111-8111-111111111111";
     const pane = await createClaudePane({ agent: "codex" });
@@ -55,7 +63,7 @@ Deno.test("S68: startup Codex is idle, filterable and selectable before hook reg
     );
     await sendKey(agentower, "m");
     const deadline = Date.now() + 2000;
-    while (!(await Deno.readTextFile(traceFile)).includes("input-received")) {
+    while (!(await readFile(traceFile, "utf8")).includes("input-received")) {
       if (Date.now() > deadline) {
         throw new Error("startup label key was not processed");
       }
@@ -104,11 +112,11 @@ Deno.test("S68: startup Codex is idle, filterable and selectable before hook reg
     );
   } finally {
     await teardown();
-    await Deno.remove(traceFile);
+    await rm(traceFile);
   }
 });
 
-Deno.test("S69: startup discovery drops old session data and removes exited Codex", async () => {
+test("S69: startup discovery drops old session data and removes exited Codex", async () => {
   await setupServer();
   try {
     const pane = await createClaudePane({
@@ -188,12 +196,12 @@ async function writeCodexProgressFixture(
   home: string,
   cwd: string,
 ): Promise<void> {
-  await Deno.mkdir(cwd, { recursive: true });
+  await mkdir(cwd, { recursive: true });
   const plansDir = `${home}/.codex/plans`;
-  await Deno.mkdir(plansDir, { recursive: true });
+  await mkdir(plansDir, { recursive: true });
   const planPath = `${plansDir}/agentower-e2e-plan.md`;
-  await Deno.writeTextFile(planPath, "## agentower e2e plan\n");
-  await Deno.writeTextFile(
+  await writeFile(planPath, "## agentower e2e plan\n");
+  await writeFile(
     `${plansDir}/agentower-e2e-plan.evidence.json`,
     JSON.stringify(
       {
@@ -210,13 +218,13 @@ async function writeCodexProgressFixture(
   );
   const hash = await codexCwdHash(cwd);
   if (!hash) throw new Error("failed to hash codex e2e cwd");
-  await Deno.writeTextFile(`${plansDir}/.active-${hash}`, `${planPath}\n`);
+  await writeFile(`${plansDir}/.active-${hash}`, `${planPath}\n`);
 }
 
 // S0: Smoke test — exercises the harness itself. No Claude panes in the
 // session, so Agentower should immediately render "No panes available." and
 // exit cleanly on Escape. If this fails, the harness is broken — not Agentower.
-Deno.test("S0: harness smoke (no panes)", async () => {
+test("S0: harness smoke (no panes)", async () => {
   await setupServer();
   try {
     const agentower = await spawnAgentower();
@@ -234,7 +242,7 @@ Deno.test("S0: harness smoke (no panes)", async () => {
 // S2: summaryOf in agentower.tsx:220-226 picks waitReason when status is
 // waiting/error (even if prompt is set), otherwise picks prompt. Assert both
 // branches fire in a single capture to avoid a second cold start.
-Deno.test("S2: summary switches between waitReason and prompt by status", async () => {
+test("S2: summary switches between waitReason and prompt by status", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -260,7 +268,7 @@ Deno.test("S2: summary switches between waitReason and prompt by status", async 
 
 // S3: j/k and arrow keys move the "▌" selection marker between rows. Pointer is
 // rendered by agentower.tsx:401 only on the row whose index matches state.
-Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
+test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
@@ -297,7 +305,7 @@ Deno.test("S3: navigation (Down/Up/jk moves the pointer)", async () => {
 // Also exercises the post-idle Enter path: a 2200ms wait (TICK_INTERVAL_MS=1000ms × 2+)
 // lets App + Preview tick chains accumulate before Enter, so the regression
 // catches event-loop drain stalls after jumpTo / Ink unmount.
-Deno.test("S4: enter selects target window+pane", async () => {
+test("S4: enter selects target window+pane", async () => {
   await setupServer();
   try {
     // paneA is the initial selection (index 0); paneB is the jump target.
@@ -342,7 +350,7 @@ Deno.test("S4: enter selects target window+pane", async () => {
 // S5: All four status short names render simultaneously, and a garbage
 // (agent=shell) pane does NOT leak into the output. Doubles as regression
 // detection for the `agent === "claude"` filter.
-Deno.test("S5: multi-status + self-filter", async () => {
+test("S5: multi-status + self-filter", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -370,7 +378,7 @@ Deno.test("S5: multi-status + self-filter", async () => {
 // fetchPanes keeps only `agent === "claude"` (agentower.tsx:313), so a "shell"
 // pane should produce the same empty-list UI as S0. Also double-checks that
 // the garbage pane's prompt never leaks into the capture.
-Deno.test("S1: empty list (agent filter excludes non-claude)", async () => {
+test("S1: empty list (agent filter excludes non-claude)", async () => {
   await setupServer();
   try {
     await createClaudePane({ agent: "shell", prompt: "garbage-pane" });
@@ -392,7 +400,7 @@ Deno.test("S1: empty list (agent filter excludes non-claude)", async () => {
 // should render the bare tool name (gray color distinguishes past from
 // current; the prior `last: ` prefix was removed). Primary fallback against
 // the "empty row 2 after PostToolUse" failure mode.
-Deno.test("S6: last-tool fallback renders bare tool name (no `last: ` prefix)", async () => {
+test("S6: last-tool fallback renders bare tool name (no `last: ` prefix)", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -416,7 +424,7 @@ Deno.test("S6: last-tool fallback renders bare tool name (no `last: ` prefix)", 
 
 // S7: @pane_last_edit_file holds a raw file path; Agentower applies basename
 // at render time. Verify the directory components are stripped.
-Deno.test("S7: last-edit-file renders basename only", async () => {
+test("S7: last-edit-file renders basename only", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -441,16 +449,14 @@ Deno.test("S7: last-edit-file renders basename only", async () => {
 });
 
 // S8: readTaskProgress enumerates ~/.claude/tasks/<sessionId>/*.json.
-// Point HOME at a checked-in read-only fixture so this e2e keeps the same
-// permission profile as the rest of the Agentower tests.
-Deno.test("S8: task progress 2/3 from tasks dir", async () => {
-  const originalHome = Deno.env.get("HOME");
-  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
-    .pathname;
-  const denoDir = Deno.env.get("DENO_DIR") ??
-    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+// HOME points at a checked-in fixture, which the run must leave unchanged.
+test("S8: task progress 2/3 from tasks dir", async () => {
+  const originalHome = process.env.HOME;
+  const fixtureHome = join(import.meta.dirname, "fixtures/task-progress-home");
+  const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??
+    (originalHome ? `${originalHome}/Library/Caches/bun/@t@` : undefined);
   const env: Record<string, string> = { HOME: fixtureHome };
-  if (denoDir) env.DENO_DIR = denoDir;
+  if (cacheDir !== undefined) env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = cacheDir;
   await setupServer();
   try {
     await createClaudePane({
@@ -472,18 +478,15 @@ Deno.test("S8: task progress 2/3 from tasks dir", async () => {
 // S8b: Codex progress reads ~/.codex/plans/.active-<cwd-hash> and its
 // sibling evidence JSON. The pane carries @pane_cwd so the hash is
 // deterministic and independent of tmux's default current_path.
-Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
-  const originalHome = Deno.env.get("HOME");
-  const tempHome = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-codex-e2e-",
-  });
-  const denoDir = Deno.env.get("DENO_DIR") ??
-    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+test("S8b: codex task progress 2/3 from evidence json", async () => {
+  const originalHome = process.env.HOME;
+  const tempHome = await mkdtemp("/tmp/agentower-codex-e2e-");
+  const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??
+    (originalHome ? `${originalHome}/Library/Caches/bun/@t@` : undefined);
   const cwd = `${tempHome}/work/project`;
   await writeCodexProgressFixture(tempHome, cwd);
   const env: Record<string, string> = { HOME: tempHome };
-  if (denoDir) env.DENO_DIR = denoDir;
+  if (cacheDir !== undefined) env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = cacheDir;
   await setupServer();
   try {
     await createClaudePane({
@@ -501,14 +504,14 @@ Deno.test("S8b: codex task progress 2/3 from evidence json", async () => {
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(tempHome, { recursive: true }).catch(() => undefined);
+    await rm(tempHome, { recursive: true }).catch(() => undefined);
   }
 });
 
 // S9: an idle pane's elapsed column counts from its last activity. Using a
 // fixed timestamp 42s in the past keeps the assertion deterministic without
 // depending on precise scheduling.
-Deno.test("S9: idle pane shows time since last activity in the elapsed column", async () => {
+test("S9: idle pane shows time since last activity in the elapsed column", async () => {
   await setupServer();
   try {
     const nowSec = Math.floor(Date.now() / 1000);
@@ -538,7 +541,7 @@ Deno.test("S9: idle pane shows time since last activity in the elapsed column", 
 // cols 60 gives listWidth 40 and a row-2 segment budget of 18 once the fixed
 // right block is reserved: the tool segment (14 cells) fits, the file segment
 // behind it does not.
-Deno.test("S10: narrow width drops low-priority segments first", async () => {
+test("S10: narrow width drops low-priority segments first", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     const nowSec = Math.floor(Date.now() / 1000);
@@ -576,7 +579,7 @@ Deno.test("S10: narrow width drops low-priority segments first", async () => {
 // Agentower's child env via `tmux new-window -e`, reproducing the interactive
 // key-binding path (where tmux.conf's `bind-key w` writes the same env name to
 // session env via `set-environment` before `display-popup`).
-Deno.test("S11: self-launching Claude pane remains visible", async () => {
+test("S11: self-launching Claude pane remains visible", async () => {
   await setupServer();
   try {
     const paneA = await createClaudePane({
@@ -603,7 +606,7 @@ Deno.test("S11: self-launching Claude pane remains visible", async () => {
 // first row to the last, and Down at the last row to the first. Verify both
 // directions within a single 2-pane scenario to keep agentower-verify's 30 s
 // budget comfortable.
-Deno.test("S12: navigation wraps at boundaries", async () => {
+test("S12: navigation wraps at boundaries", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
@@ -635,7 +638,7 @@ Deno.test("S12: navigation wraps at boundaries", async () => {
 // here. The default 80-col path had just enough budget under the old
 // `listWidth - 4` formula but now lies on the drop threshold, which is why
 // the scenario pins cols=100 explicitly.
-Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
+test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
   await setupServer({ cols: 100, rows: 20 });
   try {
     await createClaudePane({
@@ -664,7 +667,7 @@ Deno.test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async (
 // dropped). S14 covers the same scenario at the icon layer — the tool icon
 // must remain visible while the file icon must NOT leak into the render. Guards
 // against regressions where icons are emitted outside the budget-drop path.
-Deno.test("S14: narrow width drops low-priority icon along with its segment", async () => {
+test("S14: narrow width drops low-priority icon along with its segment", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     const nowSec = Math.floor(Date.now() / 1000);
@@ -701,7 +704,7 @@ Deno.test("S14: narrow width drops low-priority icon along with its segment", as
 // row.target.length in the budget AND pre-truncates the top segment at a code
 // point boundary, so the rendered output never contains a half-surrogate or a
 // mid-word Ink clip artifact.
-Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-clip", async () => {
+test("S15: long tool name is code-point-safe truncated without Ink hard-clip", async () => {
   // cols=60 → listWidth=40. target "test:W.P" ≈ 8. New budget ≈ 30.
   // Tool name chosen to exceed the new budget so the truncate guard fires,
   // which is exactly the condition that used to leak through to Ink.
@@ -735,7 +738,7 @@ Deno.test("S15: long tool name is code-point-safe truncated without Ink hard-cli
 // body as two sibling <Text> nodes; this scenario pins the fix by asserting
 // the full "TaskOutput" literal survives even when both tool and file
 // segments coexist with plenty of listWidth slack.
-Deno.test("S16: tool segment with icon + sibling file segment renders full tool name", async () => {
+test("S16: tool segment with icon + sibling file segment renders full tool name", async () => {
   // cols=120 → listWidth=72. tool seg (12 cells) + " · " (3) + file seg
   // (24 cells) = 39 cells; budget = 72 - 2 - 20 (right block) = 50. No
   // truncation path is expected to fire — pure layout regression check.
@@ -774,7 +777,7 @@ Deno.test("S16: tool segment with icon + sibling file segment renders full tool 
 // must be filtered out by Agentower. Reproduced via liveCommand: false, which
 // skips the compiled `.claude-wrapped` stub so pane_current_command defaults
 // to the window's `zsh`.
-Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async () => {
+test("S17: stale claude pane (currentCommand=zsh) is filtered out", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -803,7 +806,7 @@ Deno.test("S17: stale claude pane (currentCommand=zsh) is filtered out", async (
 // S18: Fresh-session pane with no tool / subagent / edit / task / idle
 // activity produces an empty Row 2 segs array; agentower.tsx renders
 // `(no activity)` gray instead of collapsing to an indent-only blank line.
-Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
+test("S18: empty row-2 renders (no activity) placeholder", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -837,7 +840,7 @@ Deno.test("S18: empty row-2 renders (no activity) placeholder", async () => {
 // "<gauge> NN%" with threshold-based color. Values <50 green (ok), 50–74
 // yellow (warn), ≥75 red (err). The percentages share one column down the
 // list, and a pane without the option set draws neither gauge nor percent.
-Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + color)", async () => {
+test("S19: context gauge sits in a fixed right column (gauge + percent + color)", async () => {
   await setupServer({ cols: 120, rows: 20 });
   try {
     const paneGreen = await createClaudePane({
@@ -909,7 +912,6 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
       const idx = raw.indexOf(needle);
       if (idx < 0) return null;
       const prefix = raw.slice(Math.max(0, idx - 40), idx);
-      // deno-lint-ignore no-control-regex
       const m = prefix.match(/\x1b\[38;(?:5;\d+|2;\d+;\d+;\d+)m(?=[^\x1b]*$)/);
       return m ? m[0] : null;
     };
@@ -958,7 +960,7 @@ Deno.test("S19: context gauge sits in a fixed right column (gauge + percent + co
 // creation order, so pc is reliably NOT rows[0]. Sub-case B's discriminative
 // power depends on this — if fetchPanes ever sorts rows, this test must be
 // updated to pick a paneId that is provably not rows[0].
-Deno.test("S20: launching pane is initially selected when present in list", async () => {
+test("S20: launching pane is initially selected when present in list", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-A" });
@@ -1013,9 +1015,9 @@ Deno.test("S20: launching pane is initially selected when present in list", asyn
 // The runtime assertion (popup actually opens with the right pane highlighted)
 // stays a manual user check — that is the second tier of the two-stage
 // verification (conf-shape + runtime).
-Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
-  const confPath = new URL("../config/tmux.conf", import.meta.url).pathname;
-  const conf = await Deno.readTextFile(confPath);
+test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
+  const confPath = join(import.meta.dirname, "../config/tmux.conf");
+  const conf = await readFile(confPath, "utf8");
 
   const bindLines = conf
     .split("\n")
@@ -1080,7 +1082,7 @@ Deno.test("S21: tmux.conf bind-key w uses source-pane capture pattern", async ()
 // Note: status row text uses `wait`/`idle` without the `/` separator, so
 // `wait/idle` substring matching is unambiguously the hint-bar pill.
 
-Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
+test("S22: w toggles wait/idle filter (round-trip)", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -1122,7 +1124,7 @@ Deno.test("S22: w toggles wait/idle filter (round-trip)", async () => {
 // message and `useInput` remains live so a second `w` press clears the filter.
 // The empty-state branch returns a 2-line <Box> rather than the full layout, so
 // this test guards against accidentally killing keyboard input in that branch.
-Deno.test(
+test(
   "S23: filter with zero matches shows hint and stays interactive",
   async () => {
     await setupServer();
@@ -1168,7 +1170,7 @@ Deno.test(
 // accepts `agent === "claude" || agent === "opencode"` AND
 // isLivePaneCommand(agent, currentCommand) — opencode panes spawn under the
 // `.opencode-wrapp` stub so liveCommand=true selects the right binary.
-Deno.test("S24: opencode pane visible in Agentower", async () => {
+test("S24: opencode pane visible in Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1191,7 +1193,7 @@ Deno.test("S24: opencode pane visible in Agentower", async () => {
 // the repo column. Each agent's canonical name (`claude`, `opencode`) is
 // padded to 8 cells (length of the longest name) plus a 1-cell separator so
 // the repo column lines up vertically across mixed-agent rows.
-Deno.test("S25: claude+opencode mixed list renders both with agent column", async () => {
+test("S25: claude+opencode mixed list renders both with agent column", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1223,7 +1225,7 @@ Deno.test("S25: claude+opencode mixed list renders both with agent column", asyn
 
 // S26: stale opencode pane (no live `.opencode-wrapp` process — fallback to
 // the login shell zsh) must be filtered out, mirroring S17 for opencode.
-Deno.test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async () => {
+test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1253,7 +1255,7 @@ Deno.test("S26: stale opencode pane (currentCommand=zsh) is filtered out", async
 
 // S27: codex pane is included in Agentower output. Codex panes spawn under
 // the `.codex-wrapped` stub so liveCommand=true selects the right binary.
-Deno.test("S27: codex pane visible in Agentower", async () => {
+test("S27: codex pane visible in Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1276,7 +1278,7 @@ Deno.test("S27: codex pane visible in Agentower", async () => {
 // (`claude`, `opencode`, `codex`) padded to 8 cells immediately before the
 // repo column. Pads keep the repo column aligned vertically across all 3
 // agent rows.
-Deno.test("S28: claude+opencode+codex mixed list renders all agent columns", async () => {
+test("S28: claude+opencode+codex mixed list renders all agent columns", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1314,7 +1316,7 @@ Deno.test("S28: claude+opencode+codex mixed list renders all agent columns", asy
 
 // S29: stale codex pane (no live `.codex-wrapped` process — fallback to the
 // login shell zsh) must be filtered out, mirroring S17/S26.
-Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async () => {
+test("S29: stale codex pane (currentCommand=zsh) is filtered out", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1350,7 +1352,7 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
 // Signal: the key-hint bar is 84 cells, spans the list column, and is clipped
 // from the right, so its last hint " quit" is cut at cols 60 (list 40) and
 // shown at cols 150 (list 90).
-Deno.test("S30: Agentower re-layouts after tmux resize-window", async () => {
+test("S30: Agentower re-layouts after tmux resize-window", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({ status: "waiting", prompt: "row-a" });
@@ -1383,7 +1385,7 @@ Deno.test("S30: Agentower re-layouts after tmux resize-window", async () => {
 // S-N1: User-defined label overrides PaneStatus in row-1 display.
 // When @pane_user_label is set, Agentower renders the label's text + icon
 // instead of the pane's automatic status (run/wait/idle/err).
-Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => {
+test("S-N1: userLabel='feedback' renders label text in row-1", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1412,7 +1414,7 @@ Deno.test("S-N1: userLabel='feedback' renders label text in row-1", async () => 
 // S-N2: m keypress on a row writes @pane_user_label via set-option, and
 // the next fetchPanes tick reflects it in the capture. We don't poll
 // tmux directly — the on-screen label text is the user-visible contract.
-Deno.test("S-N2: m keypress cycles userLabel none → review", async () => {
+test("S-N2: m keypress cycles userLabel none → review", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1439,7 +1441,7 @@ Deno.test("S-N2: m keypress cycles userLabel none → review", async () => {
 // agent chip and repo columns start at the same horizontal offset on
 // both rows. We assert this indirectly by checking both labels render
 // AND both rows reach the repo column.
-Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
+test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1476,7 +1478,7 @@ Deno.test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async 
 // 'parked' is chosen over 'review' because the Preview header text contains
 // the substring 'review' ("P[review]w"), which would make a naive
 // includes() assertion trivially true even after the label is cleared.
-Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
+test("S-N4: M keypress clears userLabel back to none", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1506,7 +1508,7 @@ Deno.test("S-N4: M keypress clears userLabel back to none", async () => {
 // automatic status instead. This is the core fix: stale labels are gated on
 // session identity, not on unreliable close hooks. 'parked' is used for the same
 // reason as S-N4 (the Preview header contains the substring 'review').
-Deno.test("S-N5: stale label from a closed session is not shown after a new session starts", async () => {
+test("S-N5: stale label from a closed session is not shown after a new session starts", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1554,9 +1556,9 @@ async function writeUsageFixture(
   updatedSecAgo = 0,
 ): Promise<void> {
   const dir = `${await sandboxHomePath()}/.local/state/agent-usage`;
-  await Deno.mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   const now = Math.floor(Date.now() / 1000);
-  await Deno.writeTextFile(
+  await writeFile(
     `${dir}/${agent}.json`,
     JSON.stringify({
       agent,
@@ -1595,7 +1597,7 @@ function columnStart(line: string, label: string): number {
   return stringCells(line.slice(0, at));
 }
 
-Deno.test("S31: usage card gives each agent its own row with aligned columns", async () => {
+test("S31: usage card gives each agent its own row with aligned columns", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "footer-row-xxx" });
@@ -1632,7 +1634,7 @@ Deno.test("S31: usage card gives each agent its own row with aligned columns", a
   }
 });
 
-Deno.test("S32: expired window renders -- instead of a percentage", async () => {
+test("S32: expired window renders -- instead of a percentage", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "expired-xxx" });
@@ -1658,7 +1660,7 @@ Deno.test("S32: expired window renders -- instead of a percentage", async () => 
   }
 });
 
-Deno.test("S33: no usage files → no usage card, body keeps its rows", async () => {
+test("S33: no usage files → no usage card, body keeps its rows", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "no-footer-xxx" });
@@ -1678,7 +1680,7 @@ Deno.test("S33: no usage files → no usage card, body keeps its rows", async ()
   }
 });
 
-Deno.test("S34: narrow width suppresses the usage card and draws no title row", async () => {
+test("S34: narrow width suppresses the usage card and draws no title row", async () => {
   await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({ status: "running", prompt: "narrow-xxx" });
@@ -1704,7 +1706,7 @@ Deno.test("S34: narrow width suppresses the usage card and draws no title row", 
   }
 });
 
-Deno.test("S35: the 152-column popup drops the bars and keeps one line per agent", async () => {
+test("S35: the 152-column popup drops the bars and keeps one line per agent", async () => {
   // cols 150 is the inner width of the narrowest 152-column popup: the preview
   // is 58 wide, 54 inside the card — room for bar-less rows (42) but not for
   // the gauges (60).
@@ -1741,7 +1743,7 @@ Deno.test("S35: the 152-column popup drops the bars and keeps one line per agent
   }
 });
 
-Deno.test("S37: an agent missing a window leaves the column blank, not shifted", async () => {
+test("S37: an agent missing a window leaves the column blank, not shifted", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "asymmetric-xxx" });
@@ -1780,7 +1782,7 @@ Deno.test("S37: an agent missing a window leaves the column blank, not shifted",
 // the behaviour there is untested by construction. Asserting the text *after*
 // the glyph is what makes this a rendering test rather than a restatement of the
 // toolSegmentText unit test.
-Deno.test("S36: row-2 tool error keeps its text after the error mark", async () => {
+test("S36: row-2 tool error keeps its text after the error mark", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -1804,31 +1806,24 @@ Deno.test("S36: row-2 tool error keeps its text after the error mark", async () 
 // Runs git with the user's global and system config shut out, so a hooksPath
 // or signing setting on the developer machine cannot leak into the fixture.
 async function git(cwd: string, ...args: string[]): Promise<void> {
-  const { code, stderr } = await new Deno.Command("git", {
-    args: ["-c", "user.name=t", "-c", "user.email=t@t", ...args],
-    cwd,
-    env: { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
-    stdout: "null",
-    stderr: "piped",
-  }).output();
+  const { code, stderr } = await run(
+    "git",
+    ["-c", "user.name=t", "-c", "user.email=t@t", ...args],
+    { cwd, env: { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } },
+  );
   if (code !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${new TextDecoder().decode(stderr)}`,
-    );
+    throw new Error(`git ${args.join(" ")} failed: ${stderr}`);
   }
 }
 
 // S38: the repo column names the repository, not the cwd's basename. A pane in
 // a subdirectory of the main checkout shows the repo name, and a pane in a
 // linked worktree shows `repo(worktree)`.
-Deno.test("S38: repo column shows repo(worktree) from git", async () => {
+test("S38: repo column shows repo(worktree) from git", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-git-",
-  });
+  const root = await mkdtemp("/tmp/agentower-git-");
   try {
-    await Deno.mkdir(`${root}/proj/sub`, { recursive: true });
+    await mkdir(`${root}/proj/sub`, { recursive: true });
     await git(`${root}/proj`, "init", "-q", "-b", "main");
     await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
     await git(
@@ -1869,13 +1864,13 @@ Deno.test("S38: repo column shows repo(worktree) from git", async () => {
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
 // S39: `n` moves the selection to the next waiting pane, skipping others, and
 // wraps past the end of the list.
-Deno.test("S39: n jumps to the next waiting pane and wraps", async () => {
+test("S39: n jumps to the next waiting pane and wraps", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-run" });
@@ -1901,7 +1896,7 @@ Deno.test("S39: n jumps to the next waiting pane and wraps", async () => {
 });
 
 // S40: with no waiting pane, `n` leaves the selection where it is.
-Deno.test("S40: n without a waiting pane keeps the selection", async () => {
+test("S40: n without a waiting pane keeps the selection", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-first" });
@@ -1924,7 +1919,7 @@ Deno.test("S40: n without a waiting pane keeps the selection", async () => {
 // At 20 panes and the default 50 rows the list gets 47 rows, room for 11
 // four-row cards between the two indicator lines; wrapping to the last pane
 // scrolls the first nine out of view.
-Deno.test("S41: 20 panes scroll with the selection and keep rows intact", async () => {
+test("S41: 20 panes scroll with the selection and keep rows intact", async () => {
   await setupServer();
   try {
     for (let i = 1; i <= 20; i++) {
@@ -1960,7 +1955,7 @@ Deno.test("S41: 20 panes scroll with the selection and keep rows intact", async 
 
 // S42: each pane is a four-row card — a padding row above and below its two
 // content rows — and the selection marker runs down all four rows.
-Deno.test("S42: the selected card carries the marker on all four rows", async () => {
+test("S42: the selected card carries the marker on all four rows", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "card-first" });
@@ -1990,7 +1985,7 @@ Deno.test("S42: the selected card carries the marker on all four rows", async ()
 // S43: a popup under 30 rows switches to compact cards — no padding rows, so
 // the marker covers only the two content rows — and starts the list on the top
 // row.
-Deno.test("S43: a short popup drops the card padding and starts at the top row", async () => {
+test("S43: a short popup drops the card padding and starts at the top row", async () => {
   await setupServer({ cols: 150, rows: 24 });
   try {
     await createClaudePane({ status: "running", prompt: "compact-first" });
@@ -2013,7 +2008,7 @@ Deno.test("S43: a short popup drops the card padding and starts at the top row",
 // S44/S45: inside a popup tmux hands every key to Agentower, so the
 // `prefix w` that opened it arrives as two keys. The harness server runs with
 // `-f /dev/null`, so the prefix is read back instead of assuming C-b.
-Deno.test("S44: prefix then w closes Agentower instead of toggling the filter", async () => {
+test("S44: prefix then w closes Agentower instead of toggling the filter", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -2028,7 +2023,7 @@ Deno.test("S44: prefix then w closes Agentower instead of toggling the filter", 
   }
 });
 
-Deno.test("S45: prefix then another key keeps Agentower open and handles the key", async () => {
+test("S45: prefix then another key keeps Agentower open and handles the key", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a-xxx" });
@@ -2052,7 +2047,7 @@ Deno.test("S45: prefix then another key keeps Agentower open and handles the key
 
 // One send-keys call writes both keys back to back, so they usually reach
 // Agentower in a single read — the unsplit-chunk path S44 rarely takes.
-Deno.test("S46: prefix and w sent together still close Agentower", async () => {
+test("S46: prefix and w sent together still close Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -2087,7 +2082,7 @@ async function sendClick(
 const CARD_0 = { x: 2, y: 2 };
 const CARD_1 = { x: 2, y: 6 };
 
-Deno.test("S47: Agentower turns on SGR mouse reporting", async () => {
+test("S47: Agentower turns on SGR mouse reporting", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -2108,7 +2103,7 @@ Deno.test("S47: Agentower turns on SGR mouse reporting", async () => {
   }
 });
 
-Deno.test("S48: clicking a card selects it and clicking it again jumps", async () => {
+test("S48: clicking a card selects it and clicking it again jumps", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2140,7 +2135,7 @@ Deno.test("S48: clicking a card selects it and clicking it again jumps", async (
 // A wheel event past either end must leave the selection where it is, which a
 // waitFor cannot observe, so those steps check the screen after a settle delay
 // long enough for a wrap-around render to have landed.
-Deno.test("S49: the wheel moves the selection and stops at both ends", async () => {
+test("S49: the wheel moves the selection and stops at both ends", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2172,7 +2167,7 @@ Deno.test("S49: the wheel moves the selection and stops at both ends", async () 
   }
 });
 
-Deno.test("S50: right-clicking a card selects it and cycles its label", async () => {
+test("S50: right-clicking a card selects it and cycles its label", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2207,7 +2202,7 @@ Deno.test("S50: right-clicking a card selects it and cycles its label", async ()
   }
 });
 
-Deno.test("S51: a key typed before the first frame still reaches the list", async () => {
+test("S51: a key typed before the first frame still reaches the list", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2231,7 +2226,7 @@ Deno.test("S51: a key typed before the first frame still reaches the list", asyn
   }
 });
 
-Deno.test("S52: Ctrl+C during load still closes the popup", async () => {
+test("S52: Ctrl+C during load still closes the popup", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2249,7 +2244,7 @@ function wheelDown(cell: { x: number; y: number }): string {
   return `\x1b[<${MOUSE_WHEEL_DOWN};${cell.x + 1};${cell.y + 1}M`;
 }
 
-Deno.test("S53: a burst of j in one write moves one row per key", async () => {
+test("S53: a burst of j in one write moves one row per key", async () => {
   await setupServer();
   try {
     for (const prompt of ["row-a", "row-b", "row-c", "row-d"]) {
@@ -2268,7 +2263,7 @@ Deno.test("S53: a burst of j in one write moves one row per key", async () => {
   }
 });
 
-Deno.test("S54: a wheel burst moves per event and clamps at the end", async () => {
+test("S54: a wheel burst moves per event and clamps at the end", async () => {
   await setupServer();
   try {
     for (const prompt of ["row-a", "row-b", "row-c", "row-d"]) {
@@ -2299,29 +2294,23 @@ Deno.test("S54: a wheel burst moves per event and clamps at the end", async () =
 // before render, so it is on the frame spawnAgentower waits for. A corrupt
 // usage file rides along: the footer read sits behind the same tick body, and
 // the list and the progress segment must survive it.
-Deno.test("S55: task progress is on the first frame, past a corrupt usage file", async () => {
-  const originalHome = Deno.env.get("HOME");
-  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
-    .pathname;
-  // /tmp explicitly: agentower-verify.ts narrows --allow-write to
-  // $HOME/.claude/tasks and /tmp, so TMPDIR is out of scope there.
-  const tempHome = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-e2e-home-",
-  });
-  await Deno.mkdir(`${tempHome}/.claude`, { recursive: true });
+test("S55: task progress is on the first frame, past a corrupt usage file", async () => {
+  const originalHome = process.env.HOME;
+  const fixtureHome = join(import.meta.dirname, "fixtures/task-progress-home");
+  const tempHome = await mkdtemp("/tmp/agentower-e2e-home-");
+  await mkdir(`${tempHome}/.claude`, { recursive: true });
   await copyDirRecursive(
     `${fixtureHome}/.claude/tasks`,
     `${tempHome}/.claude/tasks`,
   );
   const usageDir = `${tempHome}/.local/state/agent-usage`;
-  await Deno.mkdir(usageDir, { recursive: true });
-  await Deno.writeTextFile(`${usageDir}/claude.json`, "{not json at all");
+  await mkdir(usageDir, { recursive: true });
+  await writeFile(`${usageDir}/claude.json`, "{not json at all");
 
-  const denoDir = Deno.env.get("DENO_DIR") ??
-    (originalHome ? `${originalHome}/Library/Caches/deno` : undefined);
+  const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??
+    (originalHome ? `${originalHome}/Library/Caches/bun/@t@` : undefined);
   const env: Record<string, string> = { HOME: tempHome };
-  if (denoDir) env.DENO_DIR = denoDir;
+  if (cacheDir !== undefined) env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = cacheDir;
 
   await setupServer();
   try {
@@ -2343,31 +2332,28 @@ Deno.test("S55: task progress is on the first frame, past a corrupt usage file",
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(tempHome, { recursive: true });
+    await rm(tempHome, { recursive: true });
   }
 });
 
 async function copyDirRecursive(from: string, to: string): Promise<void> {
-  await Deno.mkdir(to, { recursive: true });
-  for await (const entry of Deno.readDir(from)) {
+  await mkdir(to, { recursive: true });
+  for (const entry of await readdir(from, { withFileTypes: true })) {
     const src = `${from}/${entry.name}`;
     const dst = `${to}/${entry.name}`;
-    if (entry.isDirectory) await copyDirRecursive(src, dst);
-    else if (entry.isFile) await Deno.copyFile(src, dst);
+    if (entry.isDirectory()) await copyDirRecursive(src, dst);
+    else if (entry.isFile()) await copyFile(src, dst);
   }
 }
 
 // The branch column is read from HEAD on every tick rather than cached, so a
 // checkout inside the pane has to move it. Nothing pinned that before: S38 only
 // looks at the branch a repository was created with.
-Deno.test("S56: a checkout while the popup is open moves the branch column", async () => {
+test("S56: a checkout while the popup is open moves the branch column", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-git-",
-  });
+  const root = await mkdtemp("/tmp/agentower-git-");
   try {
-    await Deno.mkdir(`${root}/proj`, { recursive: true });
+    await mkdir(`${root}/proj`, { recursive: true });
     await git(`${root}/proj`, "init", "-q", "-b", "main");
     await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
 
@@ -2387,21 +2373,18 @@ Deno.test("S56: a checkout while the popup is open moves the branch column", asy
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
 // branchMax used to be measured in UTF-16 units while repoMax a line above used
 // display cells, so a CJK branch got half the room it needed and was cut short
 // even with the column wide enough to hold it.
-Deno.test("S57: a CJK branch name gets the width it actually occupies", async () => {
+test("S57: a CJK branch name gets the width it actually occupies", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-git-",
-  });
+  const root = await mkdtemp("/tmp/agentower-git-");
   try {
-    await Deno.mkdir(`${root}/proj`, { recursive: true });
+    await mkdir(`${root}/proj`, { recursive: true });
     await git(`${root}/proj`, "init", "-q", "-b", "機能追加");
     await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
 
@@ -2421,7 +2404,7 @@ Deno.test("S57: a CJK branch name gets the width it actually occupies", async ()
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
@@ -2433,7 +2416,7 @@ function listColumn(out: string): string[] {
 // Row-2 segment widths used to be code-point counts, so a CJK file or subagent
 // name passed the budget at half its real width and Ink wrapped the row, which
 // pushed every pane below it down one line.
-Deno.test("S58: CJK row-2 segments stay on their row", async () => {
+test("S58: CJK row-2 segments stay on their row", async () => {
   await setupServer({ cols: 120, rows: 40 });
   try {
     await createClaudePane({
@@ -2465,7 +2448,7 @@ Deno.test("S58: CJK row-2 segments stay on their row", async () => {
 
 // cell_width counted an emoji as one cell while tmux draws two, so an emoji
 // prompt overflowed row 1 and wrapped the card.
-Deno.test("S59: an emoji prompt is truncated to the row instead of wrapping", async () => {
+test("S59: an emoji prompt is truncated to the row instead of wrapping", async () => {
   await setupServer({ cols: 120, rows: 40 });
   try {
     await createClaudePane({ status: "idle", prompt: "🎉".repeat(40) });
@@ -2486,7 +2469,7 @@ Deno.test("S59: an emoji prompt is truncated to the row instead of wrapping", as
 
 // capture-pane ends its last row with a newline too; split as-is, that became
 // an empty preview row under the pane's real bottom row.
-Deno.test("S60: the preview's last row is the pane's last row", async () => {
+test("S60: the preview's last row is the pane's last row", async () => {
   await setupServer({ cols: 120, rows: 40 });
   try {
     await printingClaudePane(
@@ -2507,10 +2490,10 @@ Deno.test("S60: the preview's last row is the pane's last row", async () => {
 
 // tmux accepts ':' in a session name, but `name:win.pane` built from it cannot
 // be resolved again, so preview and jump both addressed nothing.
-Deno.test("S61: a pane in a session named with ':' previews and is jumped to", async () => {
+test("S61: a pane in a session named with ':' previews and is jumped to", async () => {
   await setupServer({ cols: 120, rows: 40 });
   try {
-    const stub = `/tmp/agentower-e2e-bin-${Deno.pid}/.claude-wrapped`;
+    const stub = `/tmp/agentower-e2e-bin-${process.pid}/.claude-wrapped`;
     const paneId = (await tmux([
       "new-session",
       "-d",
@@ -2559,7 +2542,7 @@ Deno.test("S61: a pane in a session named with ':' previews and is jumped to", a
 // takes over. Printed by the pane itself: the suite's write scope does not
 // reach the pane's tty.
 async function printingClaudePane(script: string): Promise<string> {
-  const stub = `/tmp/agentower-e2e-bin-${Deno.pid}/.claude-wrapped`;
+  const stub = `/tmp/agentower-e2e-bin-${process.pid}/.claude-wrapped`;
   if (script.includes("'")) throw new Error("script must not contain '");
   const paneId = (await tmux([
     "new-window",
@@ -2595,7 +2578,7 @@ async function waitForCommand(paneId: string, cmd: string): Promise<void> {
 
 // A selected pane hidden by the filter left selectedPaneId pointing at it, so
 // the cursor sat on another row and then jumped back when the pane returned.
-Deno.test("S62: a filtered-out selection stays on the row it moved to", async () => {
+test("S62: a filtered-out selection stays on the row it moved to", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "idle", prompt: "row-a" });
@@ -2627,7 +2610,7 @@ Deno.test("S62: a filtered-out selection stays on the row it moved to", async ()
 // capture-pane returns tabs as a literal \t. Counted as one cell and expanded
 // by the terminal afterwards, a tab pushed the rest of its preview line, and
 // the card's right border with it, several columns right.
-Deno.test("S63: a tab in the pane keeps the preview's right border in place", async () => {
+test("S63: a tab in the pane keeps the preview's right border in place", async () => {
   await setupServer({ cols: 120, rows: 40 });
   try {
     await printingClaudePane(
@@ -2713,7 +2696,7 @@ async function windowAlive(): Promise<boolean> {
   return names.split("\n").includes("agentower");
 }
 
-Deno.test("S64: dashboard Enter jumps the attached client and stays open", async () => {
+test("S64: dashboard Enter jumps the attached client and stays open", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2744,7 +2727,7 @@ Deno.test("S64: dashboard Enter jumps the attached client and stays open", async
   }
 });
 
-Deno.test("S65: dashboard ignores Escape and quits on q", async () => {
+test("S65: dashboard ignores Escape and quits on q", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2762,7 +2745,7 @@ Deno.test("S65: dashboard ignores Escape and quits on q", async () => {
   }
 });
 
-Deno.test("S66: dashboard click on the selected card jumps and stays open", async () => {
+test("S66: dashboard click on the selected card jumps and stays open", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2793,7 +2776,7 @@ Deno.test("S66: dashboard click on the selected card jumps and stays open", asyn
 
 // B attaches last, so it starts out as the most recent client; typing into A
 // has to overtake it for A to be the one that moves.
-Deno.test("S67: dashboard jumps the client that had input last", async () => {
+test("S67: dashboard jumps the client that had input last", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2872,7 +2855,7 @@ async function selectFreeRow(agentower: string, name: string): Promise<void> {
   throw new Error(`free window ${name} never became the selection`);
 }
 
-Deno.test("S70: f lists the windows without an agent and f again restores the agent list", async () => {
+test("S70: f lists the windows without an agent and f again restores the agent list", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2911,7 +2894,7 @@ Deno.test("S70: f lists the windows without an agent and f again restores the ag
   }
 });
 
-Deno.test("S71: dashboard Enter on a free window moves the client into it", async () => {
+test("S71: dashboard Enter on a free window moves the client into it", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -2939,21 +2922,18 @@ Deno.test("S71: dashboard Enter on a free window moves the client into it", asyn
   }
 });
 
-Deno.test("S72: only a worktree with leftover changes carries the mark", async () => {
+test("S72: only a worktree with leftover changes carries the mark", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-free-",
-  });
+  const root = await mkdtemp("/tmp/agentower-free-");
   try {
     for (const dir of ["dirty-a", "dirty-b", "clean-c"]) {
-      await Deno.mkdir(`${root}/${dir}`);
+      await mkdir(`${root}/${dir}`);
       await git(`${root}/${dir}`, "init", "-q", "-b", "main");
       await git(`${root}/${dir}`, "commit", "-q", "--allow-empty", "-m", "i");
     }
-    await Deno.mkdir(`${root}/plain-d`);
-    await Deno.writeTextFile(`${root}/dirty-a/leftover.txt`, "x");
-    await Deno.writeTextFile(`${root}/dirty-b/leftover.txt`, "x");
+    await mkdir(`${root}/plain-d`);
+    await writeFile(`${root}/dirty-a/leftover.txt`, "x");
+    await writeFile(`${root}/dirty-b/leftover.txt`, "x");
 
     await createClaudePane({ status: "running", prompt: "row-a" });
     await createFreeSession("s-one", `${root}/dirty-a`);
@@ -2981,11 +2961,11 @@ Deno.test("S72: only a worktree with leftover changes carries the mark", async (
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
-Deno.test("S73: with no agent pane, f still reaches the free windows", async () => {
+test("S73: with no agent pane, f still reaches the free windows", async () => {
   await setupServer();
   try {
     await createFreeSession("free-solo");
@@ -3007,7 +2987,7 @@ Deno.test("S73: with no agent pane, f still reaches the free windows", async () 
   }
 });
 
-Deno.test("S73b: with an agent in every window, the free screen says so and f goes back", async () => {
+test("S73b: with an agent in every window, the free screen says so and f goes back", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -3034,7 +3014,7 @@ Deno.test("S73b: with an agent in every window, the free screen says so and f go
   }
 });
 
-Deno.test("S74: the agent-only keys do nothing on the free screen", async () => {
+test("S74: the agent-only keys do nothing on the free screen", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });
@@ -3077,14 +3057,11 @@ Deno.test("S74: the agent-only keys do nothing on the free screen", async () => 
   }
 });
 
-Deno.test("S75: a window whose agent has exited is free and shows none of its old values", async () => {
+test("S75: a window whose agent has exited is free and shows none of its old values", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-free-",
-  });
+  const root = await mkdtemp("/tmp/agentower-free-");
   try {
-    await Deno.mkdir(`${root}/fresh-place`);
+    await mkdir(`${root}/fresh-place`);
     await createClaudePane({ status: "running", prompt: "row-a" });
     const pane = await createFreeSession("stale-sess", `${root}/fresh-place`);
     for (
@@ -3116,19 +3093,16 @@ Deno.test("S75: a window whose agent has exited is free and shows none of its ol
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
-Deno.test("S76: free rows stay on their own two lines at the narrowest width", async () => {
+test("S76: free rows stay on their own two lines at the narrowest width", async () => {
   await setupServer({ cols: 60 });
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-free-",
-  });
+  const root = await mkdtemp("/tmp/agentower-free-");
   try {
     const long = "a-directory-name-longer-than-the-list-column-is-wide";
-    await Deno.mkdir(`${root}/${long}`);
+    await mkdir(`${root}/${long}`);
     await git(
       `${root}/${long}`,
       "init",
@@ -3168,24 +3142,21 @@ Deno.test("S76: free rows stay on their own two lines at the narrowest width", a
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
-Deno.test("S77: the leftover check does not run a program a repository's config names", async () => {
+test("S77: the leftover check does not run a program a repository's config names", async () => {
   await setupServer();
-  const root = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-free-",
-  });
+  const root = await mkdtemp("/tmp/agentower-free-");
   try {
     const repo = `${root}/hooked`;
     const marker = `${root}/fsmonitor-ran`;
-    await Deno.mkdir(repo);
+    await mkdir(repo);
     await git(repo, "init", "-q", "-b", "main");
     await git(repo, "commit", "-q", "--allow-empty", "-m", "i");
-    await Deno.writeTextFile(`${repo}/leftover.txt`, "x");
-    await Deno.writeTextFile(
+    await writeFile(`${repo}/leftover.txt`, "x");
+    await writeFile(
       `${root}/hook.sh`,
       `#!/bin/sh\ntouch ${marker}\n`,
       { mode: 0o755 },
@@ -3198,7 +3169,7 @@ Deno.test("S77: the leftover check does not run a program a repository's config 
     await sendKey(agentower, "f");
     await waitFor(agentower, (o) => freeRow(o, "s-hooked").includes("±"));
     assertFalse(
-      await Deno.stat(marker).then(() => true, () => false),
+      await stat(marker).then(() => true, () => false),
       "core.fsmonitor from the repository's config was executed",
     );
 
@@ -3206,11 +3177,11 @@ Deno.test("S77: the leftover check does not run a program a repository's config 
     await waitForExit();
   } finally {
     await teardown();
-    await Deno.remove(root, { recursive: true }).catch(() => {});
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
-Deno.test("S78: a spare window beside an agent's, in the same session, is free", async () => {
+test("S78: a spare window beside an agent's, in the same session, is free", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running", prompt: "row-a" });

@@ -13,5 +13,13 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["home/programs/agents/lib/**/*.ts"]
+  "include": [
+    "home/programs/agents/lib/**/*.ts",
+    "home/programs/tmux/**/*.ts",
+    "home/programs/tmux/**/*.tsx",
+    "home/programs/codex/scripts/codex-plan-marker.ts",
+    "home/programs/codex/scripts/codex-plan-marker_test.ts",
+    ".claude/skills/agentower-verify/*.ts",
+    ".agents/skills/agentower-verify/*.ts"
+  ]
 }

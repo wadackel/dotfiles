@@ -1,7 +1,7 @@
 // Pure formatters used by the Agentower UI: status accessors, elapsed-time
 // formatter, path/branch utilities, summary/tool-segment text, and subagent
 // list parsing/rendering. Extracted from agentower.tsx so each helper can be
-// unit-tested without npm:react / npm:ink at parse time.
+// unit-tested without react / ink at parse time.
 
 import { type PaneRow, type PaneStatus, STATUS_META } from "./pane_row.ts";
 import { stringCells, truncateToCells } from "./cell_width.ts";

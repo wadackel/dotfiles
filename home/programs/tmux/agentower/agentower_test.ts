@@ -1,4 +1,16 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
 import {
   bodyHeightFor,
   cardIndexAt,
@@ -42,7 +54,7 @@ import {
   usageRowWidth,
   type UsageToken,
 } from "./components.tsx";
-import { type AgentUsage } from "../shared/agent-usage.ts";
+import type { AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
 import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
 import {
@@ -75,7 +87,7 @@ function startupSnapshot(overrides: Partial<PaneRow> = {}): PaneSnapshot {
   };
 }
 
-Deno.test("startup snapshot preserves the existing row format and adds title and pid", () => {
+test("startup snapshot preserves the existing row format and adds title and pid", () => {
   const fields = Array(23).fill("");
   fields[0] = "%10";
   const snapshot = parsePaneSnapshot(
@@ -104,7 +116,7 @@ Deno.test("startup snapshot preserves the existing row format and adds title and
   );
 });
 
-Deno.test("parsePaneSnapshot: session name is stripped and a blank activity is null", () => {
+test("parsePaneSnapshot: session name is stripped and a blank activity is null", () => {
   const fields = Array(23).fill("");
   fields[0] = "%10";
   const snapshot = parsePaneSnapshot(
@@ -146,7 +158,7 @@ function freeSnapshot(
 const LIVE_CLAUDE = { agent: "claude", currentCommand: "claude" };
 const label = (w: FreeWindow) => `${w.sessionName}:${w.windowIndex}`;
 
-Deno.test("selectFreeWindows: a window without a live agent pane is free, even beside one that has it", () => {
+test("selectFreeWindows: a window without a live agent pane is free, even beside one that has it", () => {
   const snapshots = [
     freeSnapshot({ paneId: "%1", window: "1", row: LIVE_CLAUDE }),
     freeSnapshot({ paneId: "%2", window: "1", active: false }),
@@ -164,7 +176,7 @@ Deno.test("selectFreeWindows: a window without a live agent pane is free, even b
   );
 });
 
-Deno.test("selectFreeWindows: the window Agentower runs in is not offered", () => {
+test("selectFreeWindows: the window Agentower runs in is not offered", () => {
   const snapshots = [
     freeSnapshot({ paneId: "%1", window: "1" }),
     freeSnapshot({ paneId: "%2", window: "2" }),
@@ -175,7 +187,7 @@ Deno.test("selectFreeWindows: the window Agentower runs in is not offered", () =
   );
 });
 
-Deno.test("selectFreeWindows: a stale agent pane leaves the window free and drops its old values", () => {
+test("selectFreeWindows: a stale agent pane leaves the window free and drops its old values", () => {
   const snapshots = [
     freeSnapshot({
       paneId: "%1",
@@ -208,7 +220,7 @@ Deno.test("selectFreeWindows: a stale agent pane leaves the window free and drop
   assertEquals(free.row.userLabel, "");
 });
 
-Deno.test("selectFreeWindows: the window's active pane represents it", () => {
+test("selectFreeWindows: the window's active pane represents it", () => {
   const snapshots = [
     freeSnapshot({ paneId: "%1", window: "1", active: false }),
     freeSnapshot({ paneId: "%2", window: "1", active: true }),
@@ -222,7 +234,7 @@ Deno.test("selectFreeWindows: the window's active pane represents it", () => {
   );
 });
 
-Deno.test("selectFreeWindows: longest untouched first, then by session and window number", () => {
+test("selectFreeWindows: longest untouched first, then by session and window number", () => {
   const snapshots = [
     freeSnapshot({ paneId: "%1", window: "1", activity: 300 }),
     freeSnapshot({ paneId: "%2", window: "10", activity: 100 }),
@@ -238,7 +250,7 @@ Deno.test("selectFreeWindows: longest untouched first, then by session and windo
   );
 });
 
-Deno.test("unregistered Codex is idle with no previous session data", () => {
+test("unregistered Codex is idle with no previous session data", () => {
   const s = startupSnapshot({
     agent: "claude",
     status: "running",
@@ -276,7 +288,7 @@ Deno.test("unregistered Codex is idle with no previous session data", () => {
   ]);
 });
 
-Deno.test("registered current session supersedes startup without changing its pane identity", () => {
+test("registered current session supersedes startup without changing its pane identity", () => {
   const s = startupSnapshot({
     agent: "codex",
     status: "running",
@@ -297,7 +309,7 @@ Deno.test("registered current session supersedes startup without changing its pa
   ]);
 });
 
-Deno.test("startup discovery rejects shells, invalid titles, missing processes and embedded Codex", () => {
+test("startup discovery rejects shells, invalid titles, missing processes and embedded Codex", () => {
   const s = startupSnapshot();
   const top = parseProcesses("100 1 codex");
   assertEquals(selectPaneRows([{ ...s, title: "ordinary title" }], top), []);
@@ -315,7 +327,7 @@ Deno.test("startup discovery rejects shells, invalid titles, missing processes a
   );
 });
 
-Deno.test("startup rows never read old task progress from their directory", async () => {
+test("startup rows never read old task progress from their directory", async () => {
   const [row] = selectPaneRows(
     [startupSnapshot()],
     parseProcesses("100 1 codex"),
@@ -323,12 +335,12 @@ Deno.test("startup rows never read old task progress from their directory", asyn
   assertEquals(await readTaskProgressForRow(row), null);
 });
 
-Deno.test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
+test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
   assertEquals(fields.length, 23);
 });
 
-Deno.test("parseRow: full row with all fields present", () => {
+test("parseRow: full row with all fields present", () => {
   const line = [
     "%42",
     "0:1.2",
@@ -382,7 +394,7 @@ Deno.test("parseRow: full row with all fields present", () => {
   assertEquals(row, expected);
 });
 
-Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
+test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : (i === 3 ? "/home/me" : v)
   )
@@ -406,21 +418,21 @@ Deno.test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
   assertEquals(row?.userLabel, "");
 });
 
-Deno.test("parseRow: unknown status normalized to empty string", () => {
+test("parseRow: unknown status normalized to empty string", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
-Deno.test("parseRow: unknown userLabel normalized to empty string", () => {
+test("parseRow: unknown userLabel normalized to empty string", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 21 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.userLabel, "");
 });
 
-Deno.test("parseRow: valid userLabel preserved", () => {
+test("parseRow: valid userLabel preserved", () => {
   for (const label of ["review", "parked", "feedback", "pending"] as const) {
     const line = Array(23).fill("").map((v, i) =>
       i === 0 ? "%1" : i === 21 ? label : v
@@ -452,51 +464,51 @@ function rowWithLabelSession(
   ).join("\x1f");
 }
 
-Deno.test("parseRow: userLabel kept when label session matches current session", () => {
+test("parseRow: userLabel kept when label session matches current session", () => {
   const line = rowWithLabelSession("sess-A", "review", "sess-A");
   assertEquals(parseRow(line)?.userLabel, "review");
 });
 
-Deno.test("parseRow: userLabel dropped when label session != current session", () => {
+test("parseRow: userLabel dropped when label session != current session", () => {
   // Stale label left over from a previous session on the same pane.
   const line = rowWithLabelSession("sess-NEW", "review", "sess-OLD");
   assertEquals(parseRow(line)?.userLabel, "");
 });
 
-Deno.test("parseRow: userLabel none when both session ids empty", () => {
+test("parseRow: userLabel none when both session ids empty", () => {
   const line = rowWithLabelSession("", "", "");
   assertEquals(parseRow(line)?.userLabel, "");
 });
 
-Deno.test("parseRow: non-numeric started_at → null (safe parse)", () => {
+test("parseRow: non-numeric started_at → null (safe parse)", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
-Deno.test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
+test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
-Deno.test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
+test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, null);
 });
 
-Deno.test("parseRow: valid context_used_pct parsed as integer", () => {
+test("parseRow: valid context_used_pct parsed as integer", () => {
   const line = Array(23).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "75" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, 75);
 });
 
-Deno.test("nextUserLabel: cycles none → review → parked → feedback → pending → none", () => {
+test("nextUserLabel: cycles none → review → parked → feedback → pending → none", () => {
   assertEquals(nextUserLabel(""), "review");
   assertEquals(nextUserLabel("review"), "parked");
   assertEquals(nextUserLabel("parked"), "feedback");
@@ -504,7 +516,7 @@ Deno.test("nextUserLabel: cycles none → review → parked → feedback → pen
   assertEquals(nextUserLabel("pending"), "");
 });
 
-Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to space", () => {
+test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to space", () => {
   // Adversarial input: attacker-controlled cwd / branch / prompt embed ESC, BEL,
   // NUL bytes. parseRow must replace each with a space so Ink rendering cannot
   // execute terminal escape sequences. `\x1b` `\x07` `\x00` differ from `\x1f`
@@ -551,7 +563,7 @@ Deno.test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped t
   assertEquals(row?.lastToolError, "err msg");
 });
 
-Deno.test("parseRow: malformed input returns null", () => {
+test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(""), null);
   assertEquals(parseRow("only\x1ftwo"), null);
   // 22 fields (one short of 23) → null
@@ -562,24 +574,24 @@ Deno.test("parseRow: malformed input returns null", () => {
   assertEquals(parseRow(emptyId), null);
 });
 
-Deno.test("isLivePaneCommand: accepts live claude entry points", () => {
+test("isLivePaneCommand: accepts live claude entry points", () => {
   assertEquals(isLivePaneCommand("claude", ".claude-wrapped"), true);
   assertEquals(isLivePaneCommand("claude", "claude"), true);
   assertEquals(isLivePaneCommand("claude", "node"), true);
 });
 
-Deno.test("isLivePaneCommand: accepts live opencode entry points", () => {
+test("isLivePaneCommand: accepts live opencode entry points", () => {
   assertEquals(isLivePaneCommand("opencode", ".opencode-wrapp"), true);
   assertEquals(isLivePaneCommand("opencode", ".opencode-wrapped"), true);
   assertEquals(isLivePaneCommand("opencode", "opencode"), true);
 });
 
-Deno.test("isLivePaneCommand: accepts live codex entry points", () => {
+test("isLivePaneCommand: accepts live codex entry points", () => {
   assertEquals(isLivePaneCommand("codex", ".codex-wrapped"), true);
   assertEquals(isLivePaneCommand("codex", "codex"), true);
 });
 
-Deno.test("isLivePaneCommand: cross-agent rejection", () => {
+test("isLivePaneCommand: cross-agent rejection", () => {
   // claude pane running opencode binary or vice versa is not a live session
   assertEquals(isLivePaneCommand("claude", ".opencode-wrapp"), false);
   assertEquals(isLivePaneCommand("opencode", ".claude-wrapped"), false);
@@ -587,7 +599,7 @@ Deno.test("isLivePaneCommand: cross-agent rejection", () => {
   assertEquals(isLivePaneCommand("codex", ".claude-wrapped"), false);
 });
 
-Deno.test("isLivePaneCommand: rejects non-AI commands", () => {
+test("isLivePaneCommand: rejects non-AI commands", () => {
   assertEquals(isLivePaneCommand("claude", "zsh"), false);
   assertEquals(isLivePaneCommand("claude", "bash"), false);
   assertEquals(isLivePaneCommand("opencode", "zsh"), false);
@@ -595,7 +607,7 @@ Deno.test("isLivePaneCommand: rejects non-AI commands", () => {
   assertEquals(isLivePaneCommand("claude", ""), false);
 });
 
-Deno.test("isLivePaneCommand: rejects unknown agent", () => {
+test("isLivePaneCommand: rejects unknown agent", () => {
   assertEquals(isLivePaneCommand("shell", ".claude-wrapped"), false);
   assertEquals(isLivePaneCommand("", ".claude-wrapped"), false);
   assertEquals(isLivePaneCommand("opencode_v2", ".opencode-wrapp"), false);
@@ -606,33 +618,32 @@ Deno.test("isLivePaneCommand: rejects unknown agent", () => {
 async function withFixtureHome<T>(
   fn: (homeDir: string) => Promise<T>,
 ): Promise<T> {
-  const fixtureHome = new URL("./fixtures/task-progress-home", import.meta.url)
-    .pathname;
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", fixtureHome);
+  const fixtureHome = join(
+    import.meta.dirname,
+    "fixtures/task-progress-home",
+  );
+  const originalHome = process.env.HOME;
+  process.env.HOME = fixtureHome;
   try {
     return await fn(fixtureHome);
   } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
-    else Deno.env.delete("HOME");
+    if (originalHome !== undefined) process.env.HOME = originalHome;
+    else delete process.env.HOME;
   }
 }
 
 async function withTempHome<T>(
   fn: (homeDir: string) => Promise<T>,
 ): Promise<T> {
-  const home = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "agentower-codex-home-",
-  });
-  const originalHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
+  const home = await mkdtemp("/tmp/agentower-codex-home-");
+  const originalHome = process.env.HOME;
+  process.env.HOME = home;
   try {
     return await fn(home);
   } finally {
-    if (originalHome !== undefined) Deno.env.set("HOME", originalHome);
-    else Deno.env.delete("HOME");
-    await Deno.remove(home, { recursive: true }).catch(() => undefined);
+    if (originalHome !== undefined) process.env.HOME = originalHome;
+    else delete process.env.HOME;
+    await rm(home, { recursive: true }).catch(() => undefined);
   }
 }
 
@@ -675,14 +686,14 @@ async function writeCodexPlanState(
   },
 ): Promise<{ markerPath: string; planPath: string; evidencePath: string }> {
   const plansDir = `${home}/.codex/plans`;
-  await Deno.mkdir(plansDir, { recursive: true });
-  await Deno.mkdir(cwd, { recursive: true });
+  await mkdir(plansDir, { recursive: true });
+  await mkdir(cwd, { recursive: true });
   const hash = await codexCwdHash(cwd);
   if (!hash) throw new Error("failed to hash codex cwd");
 
   const planPath = `${plansDir}/sample-plan.md`;
   const evidencePath = `${plansDir}/sample-plan.evidence.json`;
-  await Deno.writeTextFile(planPath, "## sample plan\n");
+  await writeFile(planPath, "## sample plan\n");
   const tasks = opts.tasks ?? ["completed", "in_progress", "pending"];
   const taskObjects = tasks.map((status, i) => {
     const task: Record<string, unknown> = {
@@ -692,40 +703,40 @@ async function writeCodexPlanState(
     if (status !== undefined) task.status = status;
     return task;
   });
-  await Deno.writeTextFile(
+  await writeFile(
     evidencePath,
     opts.evidenceText ??
       JSON.stringify({ plan: "sample-plan.md", tasks: taskObjects }, null, 2),
   );
 
   const markerPath = `${plansDir}/.${opts.marker}-${hash}`;
-  await Deno.writeTextFile(markerPath, opts.markerContent ?? `${planPath}\n`);
+  await writeFile(markerPath, opts.markerContent ?? `${planPath}\n`);
   if (opts.expired) {
     const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await Deno.utime(markerPath, old, old);
+    await utimes(markerPath, old, old);
   }
   return { markerPath, planPath, evidencePath };
 }
 
-Deno.test("readTaskProgress: empty sessionId → null", async () => {
+test("readTaskProgress: empty sessionId → null", async () => {
   assertEquals(await readTaskProgress(""), null);
 });
 
-Deno.test("readTaskProgress: sessionId with path-traversal chars → null", async () => {
+test("readTaskProgress: sessionId with path-traversal chars → null", async () => {
   assertEquals(await readTaskProgress("../etc"), null);
   assertEquals(await readTaskProgress("./."), null);
   assertEquals(await readTaskProgress("foo/bar"), null);
   assertEquals(await readTaskProgress(".."), null);
 });
 
-Deno.test("readTaskProgress: missing dir → null", async () => {
+test("readTaskProgress: missing dir → null", async () => {
   await withFixtureHome(async () => {
     const result = await readTaskProgress("nonexistent-session");
     assertEquals(result, null);
   });
 });
 
-Deno.test("readTaskProgress: aggregates completed/total counts", async () => {
+test("readTaskProgress: aggregates completed/total counts", async () => {
   await withFixtureHome(async () => {
     const sessionId = "sess-A";
     const result = await readTaskProgress(sessionId);
@@ -733,7 +744,7 @@ Deno.test("readTaskProgress: aggregates completed/total counts", async () => {
   });
 });
 
-Deno.test("readTaskProgress: empty dir → null", async () => {
+test("readTaskProgress: empty dir → null", async () => {
   await withFixtureHome(async () => {
     const sessionId = "sess-empty";
     const result = await readTaskProgress(sessionId);
@@ -741,7 +752,7 @@ Deno.test("readTaskProgress: empty dir → null", async () => {
   });
 });
 
-Deno.test("readTaskProgress: skips malformed json", async () => {
+test("readTaskProgress: skips malformed json", async () => {
   await withFixtureHome(async () => {
     const sessionId = "sess-broken";
     const result = await readTaskProgress(sessionId);
@@ -749,7 +760,7 @@ Deno.test("readTaskProgress: skips malformed json", async () => {
   });
 });
 
-Deno.test("readTaskProgress: non-json files ignored", async () => {
+test("readTaskProgress: non-json files ignored", async () => {
   await withFixtureHome(async () => {
     const sessionId = "sess-mixed";
     const result = await readTaskProgress(sessionId);
@@ -757,7 +768,7 @@ Deno.test("readTaskProgress: non-json files ignored", async () => {
   });
 });
 
-Deno.test("readTaskProgressForRow: codex active marker aggregates evidence tasks", async () => {
+test("readTaskProgressForRow: codex active marker aggregates evidence tasks", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -771,15 +782,15 @@ Deno.test("readTaskProgressForRow: codex active marker aggregates evidence tasks
   });
 });
 
-Deno.test("codexCwdHash: matches codex-plan-marker cwdHash", async () => {
+test("codexCwdHash: matches codex-plan-marker cwdHash", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
-    await Deno.mkdir(cwd, { recursive: true });
+    await mkdir(cwd, { recursive: true });
     assertEquals(await codexCwdHash(cwd), await markerCwdHash(cwd));
   });
 });
 
-Deno.test("readTaskProgressForRow: codex pending marker used when active absent", async () => {
+test("readTaskProgressForRow: codex pending marker used when active absent", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -793,7 +804,7 @@ Deno.test("readTaskProgressForRow: codex pending marker used when active absent"
   });
 });
 
-Deno.test("readTaskProgressForRow: codex expired active marker blocks pending fallback", async () => {
+test("readTaskProgressForRow: codex expired active marker blocks pending fallback", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -809,7 +820,7 @@ Deno.test("readTaskProgressForRow: codex expired active marker blocks pending fa
   });
 });
 
-Deno.test("readTaskProgressForRow: codex invalid marker path returns null", async () => {
+test("readTaskProgressForRow: codex invalid marker path returns null", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -820,75 +831,61 @@ Deno.test("readTaskProgressForRow: codex invalid marker path returns null", asyn
   });
 });
 
-Deno.test({
-  name: "readTaskProgressForRow: codex symlink evidence returns null",
-  // Deno.symlink requires unscoped write permission on macOS even when both
-  // paths sit under /tmp (the target canonicalizes through /private/tmp and
-  // test permissions cannot escalate a parent --allow-write=/tmp profile).
-  // The plan's unit verification command intentionally uses --allow-write.
-  async fn() {
-    await withTempHome(async (home) => {
-      const cwd = `${home}/work/project`;
-      const { evidencePath } = await writeCodexPlanState(home, cwd, {
-        marker: "active",
-      });
-      const outside = `${home}/outside-evidence.json`;
-      await Deno.writeTextFile(
-        outside,
-        JSON.stringify({
-          plan: "sample-plan.md",
-          tasks: [{ id: "task-1", subject: "one", status: "completed" }],
-        }),
-      );
-      const outsideReal = await Deno.realPath(outside);
-      await Deno.remove(evidencePath);
-      await Deno.symlink(outsideReal, evidencePath);
-      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+test("readTaskProgressForRow: codex symlink evidence returns null", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    const { evidencePath } = await writeCodexPlanState(home, cwd, {
+      marker: "active",
     });
-  },
+    const outside = `${home}/outside-evidence.json`;
+    await writeFile(
+      outside,
+      JSON.stringify({
+        plan: "sample-plan.md",
+        tasks: [{ id: "task-1", subject: "one", status: "completed" }],
+      }),
+    );
+    const outsideReal = await realpath(outside);
+    await rm(evidencePath);
+    await symlink(outsideReal, evidencePath);
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
 });
 
-Deno.test({
-  name: "readTaskProgressForRow: codex symlink plan marker returns null",
-  async fn() {
-    await withTempHome(async (home) => {
-      const cwd = `${home}/work/project`;
-      const { markerPath } = await writeCodexPlanState(home, cwd, {
-        marker: "active",
-      });
-      const plansDir = `${home}/.codex/plans`;
-      const outside = `${home}/outside-plan.md`;
-      const linked = `${plansDir}/linked-plan.md`;
-      await Deno.writeTextFile(outside, "## outside\n");
-      const outsideReal = await Deno.realPath(outside);
-      await Deno.symlink(outsideReal, linked);
-      await Deno.writeTextFile(markerPath, `${linked}\n`);
-      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+test("readTaskProgressForRow: codex symlink plan marker returns null", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    const { markerPath } = await writeCodexPlanState(home, cwd, {
+      marker: "active",
     });
-  },
+    const plansDir = `${home}/.codex/plans`;
+    const outside = `${home}/outside-plan.md`;
+    const linked = `${plansDir}/linked-plan.md`;
+    await writeFile(outside, "## outside\n");
+    const outsideReal = await realpath(outside);
+    await symlink(outsideReal, linked);
+    await writeFile(markerPath, `${linked}\n`);
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
 });
 
-Deno.test({
-  name:
-    "readTaskProgressForRow: codex active marker symlink blocks pending fallback",
-  async fn() {
-    await withTempHome(async (home) => {
-      const cwd = `${home}/work/project`;
-      const { markerPath } = await writeCodexPlanState(home, cwd, {
-        marker: "pending",
-        tasks: ["completed", "completed", "completed"],
-      });
-      const hash = await codexCwdHash(cwd);
-      if (!hash) throw new Error("failed to hash codex cwd");
-      const activePath = `${home}/.codex/plans/.active-${hash}`;
-      await Deno.symlink(`${home}/missing-active-marker`, activePath);
-      assertEquals(markerPath.endsWith(hash), true);
-      assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+test("readTaskProgressForRow: codex active marker symlink blocks pending fallback", async () => {
+  await withTempHome(async (home) => {
+    const cwd = `${home}/work/project`;
+    const { markerPath } = await writeCodexPlanState(home, cwd, {
+      marker: "pending",
+      tasks: ["completed", "completed", "completed"],
     });
-  },
+    const hash = await codexCwdHash(cwd);
+    if (!hash) throw new Error("failed to hash codex cwd");
+    const activePath = `${home}/.codex/plans/.active-${hash}`;
+    await symlink(`${home}/missing-active-marker`, activePath);
+    assertEquals(markerPath.endsWith(hash), true);
+    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
+  });
 });
 
-Deno.test("readTaskProgressForRow: codex malformed evidence returns null", async () => {
+test("readTaskProgressForRow: codex malformed evidence returns null", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -899,7 +896,7 @@ Deno.test("readTaskProgressForRow: codex malformed evidence returns null", async
   });
 });
 
-Deno.test("readTaskProgressForRow: codex legacy missing status counts as pending", async () => {
+test("readTaskProgressForRow: codex legacy missing status counts as pending", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
     await writeCodexPlanState(home, cwd, {
@@ -913,10 +910,10 @@ Deno.test("readTaskProgressForRow: codex legacy missing status counts as pending
   });
 });
 
-Deno.test("readTaskProgressForRow: codex missing marker returns null", async () => {
+test("readTaskProgressForRow: codex missing marker returns null", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
-    await Deno.mkdir(cwd, { recursive: true });
+    await mkdir(cwd, { recursive: true });
     assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
   });
 });
@@ -932,27 +929,27 @@ function mkSeg(overrides: Partial<Row2Seg> = {}): Row2Seg {
   };
 }
 
-Deno.test("truncateTopSegBody: tool seg with `)` terminator → appends `…)` preserving paren", () => {
+test("truncateTopSegBody: tool seg with `)` terminator → appends `…)` preserving paren", () => {
   // budget 15 → maxBodyCells 13 → keep first 11 cps + "…)"
   const seg = mkSeg({ body: "Bash(pnpm test here ok)" });
   assertEquals(truncateTopSegBody(seg, 15), "Bash(pnpm t…)");
 });
 
-Deno.test("truncateTopSegBody: bare tool name (no paren) → generic slice", () => {
+test("truncateTopSegBody: bare tool name (no paren) → generic slice", () => {
   // No `)` terminator → fall through to raw code-point slice, no ellipsis.
   // budget 12 → maxBodyCells 10 → first 10 cps.
   const seg = mkSeg({ body: "BashToolXYZWriteTailChunk" });
   assertEquals(truncateTopSegBody(seg, 12), "BashToolXY");
 });
 
-Deno.test("truncateTopSegBody: tool seg with error suffix → generic slice", () => {
+test("truncateTopSegBody: tool seg with error suffix → generic slice", () => {
   // Body ends with error text, not `)`, so paren-preservation does not fire.
   // budget 16 → maxBodyCells 14 → cut inside the error tail, no ellipsis.
   const seg = mkSeg({ body: "Bash(test) \u{F0156} Exit code 1" });
   assertEquals(truncateTopSegBody(seg, 16), "Bash(test) \u{F0156} E");
 });
 
-Deno.test("truncateTopSegBody: CJK body is cut by display cells", () => {
+test("truncateTopSegBody: CJK body is cut by display cells", () => {
   // budget 12 → maxBodyCells 10; each kana is 2 cells.
   const seg = mkSeg({ key: "file", body: "設計ドキュメント.md" });
   const out = truncateTopSegBody(seg, 12);
@@ -960,47 +957,44 @@ Deno.test("truncateTopSegBody: CJK body is cut by display cells", () => {
   assertEquals(stringCells(out) <= 10, true);
 });
 
-Deno.test("truncateTopSegBody: CJK tool subject keeps its paren within the cell budget", () => {
+test("truncateTopSegBody: CJK tool subject keeps its paren within the cell budget", () => {
   const seg = mkSeg({ body: "Edit(設計ドキュメント.md)" });
   const out = truncateTopSegBody(seg, 16);
   assertEquals(out, "Edit(設計ド…)");
   assertEquals(stringCells(out) <= 14, true);
 });
 
-Deno.test("truncateTopSegBody: budget with slack → body returned unchanged", () => {
+test("truncateTopSegBody: budget with slack → body returned unchanged", () => {
   // maxBodyCells >= cps.length → slice returns full body.
   const seg = mkSeg({ body: "Bash(ok)" });
   assertEquals(truncateTopSegBody(seg, 100), "Bash(ok)");
 });
 
-Deno.test("default.nix passes --no-prompt to deno compile (prevents Agentower hang from Deno permission prompter)", async () => {
-  // Regression guard. Without --no-prompt, an unauthorized runtime op causes
-  // Deno's TtyPrompter::prompt to call clear_stdin (runtime/permissions/
-  // prompter.rs), which loops on tcflush + select with a 100ms timeout. Inside
-  // a tmux popup, stdin is steadily readable, so select never returns 0 and
-  // the loop never exits. Agentower's main thread spins inside this loop,
-  // starving the JS event loop. ESC/q bytes arrive at stdin but useInput
-  // never fires; only SIGINT (Ctrl+C) breaks out via signal-exit. Adding
-  // --no-prompt converts unauthorized ops into thrown errors caught by the
-  // fetchPanes tick try/catch in agentower.tsx, preserving input responsiveness.
-  const url = new URL("../default.nix", import.meta.url);
-  const text = await Deno.readTextFile(url);
-  const m = text.match(
-    /run \$\{pkgs\.deno\}\/bin\/deno compile[\s\S]*?--output/,
+test("default.nix builds the binary without bunfig.toml and .env autoload", async () => {
+  // The popup's working directory is the pane's, so any repository's. A
+  // compiled Bun binary runs the preload named in a bunfig.toml there and
+  // loads its .env unless both autoloads are turned off at build time.
+  const text = await readFile(
+    new URL("../default.nix", import.meta.url),
+    "utf8",
   );
+  const m = text.match(/build --compile[\s\S]*?--outfile/);
   if (!m) {
-    throw new Error("Could not locate deno compile invocation in default.nix");
+    throw new Error("Could not locate the bun build invocation in default.nix");
   }
-  if (!m[0].includes("--no-prompt")) {
-    throw new Error(
-      "Missing --no-prompt in deno compile invocation. Without it, Deno's " +
-        "permission prompter can infinite-loop on tcflush+select inside " +
-        "TtyPrompter::prompt, hanging Agentower.",
-    );
+  for (
+    const flag of [
+      "--no-compile-autoload-bunfig",
+      "--no-compile-autoload-dotenv",
+    ]
+  ) {
+    if (!m[0].includes(flag)) {
+      throw new Error(`Missing ${flag} in the bun build invocation`);
+    }
   }
 });
 
-Deno.test("truncateTopSegBody: budget too small for `…)` → generic slice fallback", () => {
+test("truncateTopSegBody: budget too small for `…)` → generic slice fallback", () => {
   // maxBodyCells < 3 → paren-preservation guard fails, fall back to slice.
   const seg = mkSeg({ body: "Bash(x)" });
   assertEquals(truncateTopSegBody(seg, 4), "Ba");
@@ -1054,34 +1048,34 @@ function colStart(row: UsageToken[], label: string): number {
   return stringCells(text.slice(0, at));
 }
 
-Deno.test("showUsageCard: hidden without data regardless of size", () => {
+test("showUsageCard: hidden without data regardless of size", () => {
   assertEquals(showUsageCard([], 74, 48), false);
   assertEquals(showUsageCard([mkUsage("claude")], 74, 48), true);
 });
 
-Deno.test("showUsageCard: needs an inner width that fits a bar-less row", () => {
+test("showUsageCard: needs an inner width that fits a bar-less row", () => {
   const usages = [mkUsage("claude"), mkCodex7d()];
   // Preview 46 leaves 42 inside the card, the bar-less row width.
   assertEquals(showUsageCard(usages, 45, 48), false);
   assertEquals(showUsageCard(usages, 46, 48), true);
 });
 
-Deno.test("showUsageCard: the preview keeps 8 rows under the card", () => {
+test("showUsageCard: the preview keeps 8 rows under the card", () => {
   assertEquals(showUsageCard([mkUsage("claude")], 74, 10), false);
   assertEquals(showUsageCard([mkUsage("claude")], 74, 11), true);
   assertEquals(showUsageCard([mkUsage("claude"), mkCodex7d()], 74, 11), false);
   assertEquals(showUsageCard([mkUsage("claude"), mkCodex7d()], 74, 12), true);
 });
 
-Deno.test("bodyHeightFor: a top blank row plus the key-hint bar and its margin take three rows", () => {
+test("bodyHeightFor: a top blank row plus the key-hint bar and its margin take three rows", () => {
   assertEquals(bodyHeightFor(50), 47);
 });
 
-Deno.test("bodyHeightFor: floor stays at 5", () => {
+test("bodyHeightFor: floor stays at 5", () => {
   assertEquals(bodyHeightFor(6), 5);
 });
 
-Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
+test("splitLayout: columns plus gutter never exceed the terminal", () => {
   for (const cols of [20, 30, 41, 60, 61, 67, 80, 113, 150, 200]) {
     const { listWidth, previewWidth } = splitLayout(cols);
     const used = listWidth + (previewWidth > 0 ? 2 + previewWidth : 0);
@@ -1093,15 +1087,15 @@ Deno.test("splitLayout: columns plus gutter never exceed the terminal", () => {
   }
 });
 
-Deno.test("splitLayout: cols 60 keeps the 40-cell list the e2e fixtures assume", () => {
+test("splitLayout: cols 60 keeps the 40-cell list the e2e fixtures assume", () => {
   assertEquals(splitLayout(60), { listWidth: 40, previewWidth: 18 });
 });
 
-Deno.test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () => {
+test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () => {
   assertEquals(splitLayout(150), { listWidth: 90, previewWidth: 58 });
 });
 
-Deno.test("row1Columns: repo plus branch never overflow the list column", () => {
+test("row1Columns: repo plus branch never overflow the list column", () => {
   for (const listWidth of [34, 36, 40, 45, 50, 67, 90, 118]) {
     const { repoMax, branchMax } = row1Columns(listWidth, 8, 4);
     assertEquals(
@@ -1112,43 +1106,43 @@ Deno.test("row1Columns: repo plus branch never overflow the list column", () => 
   }
 });
 
-Deno.test("row1Columns: a wide list seats both columns at their natural width", () => {
+test("row1Columns: a wide list seats both columns at their natural width", () => {
   assertEquals(row1Columns(90, 8, 20), { repoMax: 8, branchMax: 20 });
   assertEquals(row1Columns(112, 30, 40), { repoMax: 24, branchMax: 28 });
 });
 
-Deno.test("row1Columns: the 152-column popup keeps repo(worktree) whole and narrows branch", () => {
+test("row1Columns: the 152-column popup keeps repo(worktree) whole and narrows branch", () => {
   assertEquals(row1Columns(90, 30, 40), { repoMax: 24, branchMax: 20 });
 });
 
-Deno.test("row1Columns: branch shrinks before repo when the summary is starved", () => {
+test("row1Columns: branch shrinks before repo when the summary is starved", () => {
   assertEquals(row1Columns(60, 8, 20), { repoMax: 8, branchMax: 6 });
 });
 
-Deno.test("row1Columns: the 4-cell floors give way rather than overflow", () => {
+test("row1Columns: the 4-cell floors give way rather than overflow", () => {
   assertEquals(row1Columns(40, 8, 4), { repoMax: 8, branchMax: 1 });
   assertEquals(row1Columns(31, 8, 4), { repoMax: 0, branchMax: 0 });
 });
 
-Deno.test("splitLayout: preview drops once the remainder is too thin", () => {
+test("splitLayout: preview drops once the remainder is too thin", () => {
   assertEquals(splitLayout(30), { listWidth: 30, previewWidth: 0 });
   assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 0 });
   assertEquals(splitLayout(56), { listWidth: 40, previewWidth: 14 });
 });
 
-Deno.test("usageRowWidth: the sub-slot sum is 60 with bars and 42 without", () => {
+test("usageRowWidth: the sub-slot sum is 60 with bars and 42 without", () => {
   const base = { cols: ["5h", "7d"], agentW: 8, labelW: 2 };
   assertEquals(usageRowWidth({ ...base, bars: true }), 60);
   assertEquals(usageRowWidth({ ...base, bars: false }), 42);
 });
 
-Deno.test("usageLayout: bars survive at the exact row width and drop one cell under", () => {
+test("usageLayout: bars survive at the exact row width and drop one cell under", () => {
   const usages = [mkUsage("claude"), mkCodex7d()];
   assertEquals(usageLayout(usages, 60)?.bars, true);
   assertEquals(usageLayout(usages, 59)?.bars, false);
 });
 
-Deno.test("usageLayout: columns are the union in encounter order", () => {
+test("usageLayout: columns are the union in encounter order", () => {
   assertEquals(usageLayout([mkCodex7d(), mkUsage("claude")], WIDE)?.cols, [
     "7d",
     "5h",
@@ -1159,18 +1153,18 @@ Deno.test("usageLayout: columns are the union in encounter order", () => {
   ]);
 });
 
-Deno.test("usageLayout: agent and label columns size to their widest member", () => {
+test("usageLayout: agent and label columns size to their widest member", () => {
   const layout = usageLayout([mkUsage("claude"), mkCodex7d()], WIDE);
   assertEquals(layout?.agentW, 8);
   assertEquals(layout?.labelW, 2);
 });
 
-Deno.test("usageLayout: no agent with windows yields no layout", () => {
+test("usageLayout: no agent with windows yields no layout", () => {
   assertEquals(usageLayout([], WIDE), null);
   assertEquals(usageLayout([mkUsage("claude", { windows: [] })], WIDE), null);
 });
 
-Deno.test("usageRows: one row per agent, agents without windows skipped", () => {
+test("usageRows: one row per agent, agents without windows skipped", () => {
   const rows = usageRows(
     [mkUsage("claude"), mkUsage("opencode", { windows: [] }), mkCodex7d()],
     USAGE_NOW,
@@ -1181,7 +1175,7 @@ Deno.test("usageRows: one row per agent, agents without windows skipped", () => 
   assertEquals(rowText(rows[1]).startsWith("codex"), true);
 });
 
-Deno.test("usageRows: a missing window leaves a same-width gap so 7d stays aligned", () => {
+test("usageRows: a missing window leaves a same-width gap so 7d stays aligned", () => {
   const [claude, codex] = usageRows(
     [mkUsage("claude"), mkCodex7d()],
     USAGE_NOW,
@@ -1191,7 +1185,7 @@ Deno.test("usageRows: a missing window leaves a same-width gap so 7d stays align
   assertEquals(colStart(codex, "7d"), 34);
 });
 
-Deno.test("usageRows: the 7d column stays aligned once bars are dropped", () => {
+test("usageRows: the 7d column stays aligned once bars are dropped", () => {
   const [claude, codex] = usageRows(
     [mkUsage("claude"), mkCodex7d()],
     USAGE_NOW,
@@ -1201,7 +1195,7 @@ Deno.test("usageRows: the 7d column stays aligned once bars are dropped", () => 
   assertEquals(colStart(codex, "7d"), 25);
 });
 
-Deno.test("usageRows: bars appear only when the row width fits the budget", () => {
+test("usageRows: bars appear only when the row width fits the budget", () => {
   const withBars = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   const without = usageRows([mkUsage("claude")], USAGE_NOW, 59);
   assertEquals(rowText(withBars[0]).includes("━"), true);
@@ -1210,14 +1204,14 @@ Deno.test("usageRows: bars appear only when the row width fits the budget", () =
   assertEquals(rowText(without[0]).includes("─"), false);
 });
 
-Deno.test("usageRows: a countdown rides the 5h window alone", () => {
+test("usageRows: a countdown rides the 5h window alone", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   const text = rowText(row);
   assertEquals(text.split(COUNTDOWN_ICON).length - 1, 1);
   assertStringIncludes(text, `${COUNTDOWN_ICON} 1h47m`);
 });
 
-Deno.test("usageRows: a used window lights at least one cell", () => {
+test("usageRows: a used window lights at least one cell", () => {
   const barOf = (pct: number) => {
     const usage = mkUsage("claude", {
       windows: [{ label: "5h", usedPct: pct, resetsAt: USAGE_NOW + 6420 }],
@@ -1229,7 +1223,7 @@ Deno.test("usageRows: a used window lights at least one cell", () => {
   assertStringIncludes(barOf(100), "5h ━━━━━━━━ ");
 });
 
-Deno.test("usageRows: an expired window drops its bar and countdown but keeps the slots", () => {
+test("usageRows: an expired window drops its bar and countdown but keeps the slots", () => {
   const expired = mkUsage("claude", {
     windows: [
       { label: "5h", usedPct: 42, resetsAt: USAGE_NOW - 10 },
@@ -1244,7 +1238,7 @@ Deno.test("usageRows: an expired window drops its bar and countdown but keeps th
   assertEquals(colStart(row, "7d"), 34);
 });
 
-Deno.test("usageRows: only a percentage at or above 80 takes the alert color", () => {
+test("usageRows: only a percentage at or above 80 takes the alert color", () => {
   const usage = mkUsage("claude", {
     windows: [
       { label: "5h", usedPct: 79, resetsAt: USAGE_NOW + 6420 },
@@ -1257,7 +1251,7 @@ Deno.test("usageRows: only a percentage at or above 80 takes the alert color", (
   assertEquals(row.find((t) => t.text === " 79%")?.color, DOGRUN.fgDim);
 });
 
-Deno.test("usageRows: the unused track is dimmer than the filled run", () => {
+test("usageRows: the unused track is dimmer than the filled run", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   const track = row.find((t) => t.text.startsWith("─"));
   const filled = row.find((t) => t.text.startsWith("━"));
@@ -1265,7 +1259,7 @@ Deno.test("usageRows: the unused track is dimmer than the filled run", () => {
   assertEquals(filled?.color, DOGRUN.fgDim);
 });
 
-Deno.test("usageRows: stale data carries an age suffix, fresh data does not", () => {
+test("usageRows: stale data carries an age suffix, fresh data does not", () => {
   const stale = mkUsage("claude", { updatedAt: USAGE_NOW - 29 * 86400 });
   assertStringIncludes(
     rowText(usageRows([stale], USAGE_NOW, WIDE)[0]),
@@ -1277,12 +1271,12 @@ Deno.test("usageRows: stale data carries an age suffix, fresh data does not", ()
   );
 });
 
-Deno.test("clampUsageTokens: budget with slack keeps every token", () => {
+test("clampUsageTokens: budget with slack keeps every token", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   assertEquals(clampUsageTokens(row, 200), row);
 });
 
-Deno.test("clampUsageTokens: trims the straddling token and drops the rest", () => {
+test("clampUsageTokens: trims the straddling token and drops the rest", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   const clamped = clampUsageTokens(row, 10);
   const text = clamped.map((t) => t.text).join("");
@@ -1290,12 +1284,12 @@ Deno.test("clampUsageTokens: trims the straddling token and drops the rest", () 
   assertEquals(text.startsWith("claude"), true);
 });
 
-Deno.test("clampUsageTokens: zero budget yields nothing", () => {
+test("clampUsageTokens: zero budget yields nothing", () => {
   const [row] = usageRows([mkUsage("claude")], USAGE_NOW, WIDE);
   assertEquals(clampUsageTokens(row, 0), []);
 });
 
-Deno.test("clampUsageTokens: a row one cell over budget is truncated, not wrapped", () => {
+test("clampUsageTokens: a row one cell over budget is truncated, not wrapped", () => {
   // usageRows reserves the stale suffix on every row but only emits it when the
   // file is actually stale, so the over-budget case has to be built by hand.
   const stale = mkUsage("claude", { updatedAt: USAGE_NOW - 29 * 86400 });
@@ -1316,24 +1310,24 @@ function statusRows(...statuses: PaneRow["status"][]): PaneRow[] {
   }));
 }
 
-Deno.test("nextWaitingIndex: skips non-waiting rows forward", () => {
+test("nextWaitingIndex: skips non-waiting rows forward", () => {
   const rows = statusRows("running", "idle", "waiting", "waiting");
   assertEquals(nextWaitingIndex(rows, 0), 2);
   assertEquals(nextWaitingIndex(rows, 2), 3);
 });
 
-Deno.test("nextWaitingIndex: wraps past the end", () => {
+test("nextWaitingIndex: wraps past the end", () => {
   assertEquals(
     nextWaitingIndex(statusRows("waiting", "idle", "running"), 1),
     0,
   );
 });
 
-Deno.test("nextWaitingIndex: the only waiting row selected stays put", () => {
+test("nextWaitingIndex: the only waiting row selected stays put", () => {
   assertEquals(nextWaitingIndex(statusRows("idle", "waiting"), 1), 1);
 });
 
-Deno.test("nextWaitingIndex: no waiting row → no move", () => {
+test("nextWaitingIndex: no waiting row → no move", () => {
   assertEquals(nextWaitingIndex(statusRows("running", "idle"), 1), 1);
   assertEquals(nextWaitingIndex([], 0), 0);
 });
@@ -1343,7 +1337,7 @@ Deno.test("nextWaitingIndex: no waiting row → no move", () => {
 const hintText = (filter: boolean) =>
   hintTokens(filter, "agents").map((t) => t.text).join("");
 
-Deno.test("hintTokens: jump leads so a right-side clip never removes it", () => {
+test("hintTokens: jump leads so a right-side clip never removes it", () => {
   const text = hintText(false);
   assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
   assertEquals(
@@ -1355,20 +1349,20 @@ Deno.test("hintTokens: jump leads so a right-side clip never removes it", () => 
   );
 });
 
-Deno.test("hintTokens: the wait/idle pill and `clear` appear only with the filter on", () => {
+test("hintTokens: the wait/idle pill and `clear` appear only with the filter on", () => {
   assertEquals(hintText(false).includes("wait/idle"), false);
   assertStringIncludes(hintText(false), " filter");
   assertStringIncludes(hintText(true), "wait/idle");
   assertStringIncludes(hintText(true), " clear");
 });
 
-Deno.test("hintTokens: the agent list names f as the way to the free windows", () => {
+test("hintTokens: the agent list names f as the way to the free windows", () => {
   const text = hintText(false);
   assertStringIncludes(text, " free   ");
   assertEquals(text.includes("free windows"), false);
 });
 
-Deno.test("hintTokens: the free view keeps only the keys that act there", () => {
+test("hintTokens: the free view keeps only the keys that act there", () => {
   const text = hintTokens(true, "free").map((t) => t.text).join("");
   assertStringIncludes(text, " free windows ");
   assertStringIncludes(text, " agents   ");
@@ -1378,14 +1372,14 @@ Deno.test("hintTokens: the free view keeps only the keys that act there", () => 
   }
 });
 
-Deno.test("hintTokens: key chips carry the chip fill", () => {
+test("hintTokens: key chips carry the chip fill", () => {
   const chip = hintTokens(false, "agents").find((t) => t.text === "n")!;
   assertEquals(chip.backgroundColor, DOGRUN.bgChip);
 });
 
 // --- visibleWindow ---
 
-Deno.test("visibleWindow: a list that fits shows every card without indicators", () => {
+test("visibleWindow: a list that fits shows every card without indicators", () => {
   assertEquals(visibleWindow(0, 0, 10, 0), {
     offset: 0,
     count: 0,
@@ -1398,7 +1392,7 @@ Deno.test("visibleWindow: a list that fits shows every card without indicators",
   assertEquals(visibleWindow(5, 4, 20, 0).count, 5);
 });
 
-Deno.test("visibleWindow: one row short scrolls and reserves both indicators", () => {
+test("visibleWindow: one row short scrolls and reserves both indicators", () => {
   // 19 rows: 2 indicators + 4 cards (16 rows).
   assertEquals(visibleWindow(5, 0, 19, 0), {
     offset: 0,
@@ -1409,7 +1403,7 @@ Deno.test("visibleWindow: one row short scrolls and reserves both indicators", (
   });
 });
 
-Deno.test("visibleWindow: the cards plus indicators never exceed the height", () => {
+test("visibleWindow: the cards plus indicators never exceed the height", () => {
   for (let height = 6; height <= 60; height++) {
     const view = visibleWindow(40, 0, height, 0);
     const rows = 2 + view.count * 4;
@@ -1417,7 +1411,7 @@ Deno.test("visibleWindow: the cards plus indicators never exceed the height", ()
   }
 });
 
-Deno.test("visibleWindow: capacity covers each remainder of (height - 2) / 4", () => {
+test("visibleWindow: capacity covers each remainder of (height - 2) / 4", () => {
   assertEquals(visibleWindow(20, 0, 22, 0).count, 5);
   assertEquals(visibleWindow(20, 0, 23, 0).count, 5);
   assertEquals(visibleWindow(20, 0, 24, 0).count, 5);
@@ -1425,7 +1419,7 @@ Deno.test("visibleWindow: capacity covers each remainder of (height - 2) / 4", (
   assertEquals(visibleWindow(20, 0, 26, 0).count, 6);
 });
 
-Deno.test("visibleWindow: selecting the last card scrolls just far enough", () => {
+test("visibleWindow: selecting the last card scrolls just far enough", () => {
   assertEquals(visibleWindow(20, 19, 48, 0), {
     offset: 9,
     count: 11,
@@ -1435,17 +1429,17 @@ Deno.test("visibleWindow: selecting the last card scrolls just far enough", () =
   });
 });
 
-Deno.test("visibleWindow: moving inside the window keeps the offset", () => {
+test("visibleWindow: moving inside the window keeps the offset", () => {
   assertEquals(visibleWindow(20, 12, 48, 5).offset, 5);
   assertEquals(visibleWindow(20, 4, 48, 5).offset, 4);
 });
 
-Deno.test("visibleWindow: a shrinking list clamps a stale offset", () => {
+test("visibleWindow: a shrinking list clamps a stale offset", () => {
   // Offset 10 was valid for 30 cards; with 15 the window can start at 4 at most.
   assertEquals(visibleWindow(15, 5, 48, 10).offset, 4);
 });
 
-Deno.test("visibleWindow: a tiny height still shows the selected card", () => {
+test("visibleWindow: a tiny height still shows the selected card", () => {
   const view = visibleWindow(10, 7, 3, 0);
   assertEquals(view.count, 1);
   assertEquals(view.offset, 7);
@@ -1453,19 +1447,19 @@ Deno.test("visibleWindow: a tiny height still shows the selected card", () => {
 
 // --- compact layout ---
 
-Deno.test("isCompact: a popup under 30 rows uses the compact layout", () => {
+test("isCompact: a popup under 30 rows uses the compact layout", () => {
   assertEquals(isCompact(29), true);
   assertEquals(isCompact(30), false);
 });
 
-Deno.test("topRowsFor / bodyHeightFor: the compact layout starts on the top row", () => {
+test("topRowsFor / bodyHeightFor: the compact layout starts on the top row", () => {
   assertEquals(topRowsFor(24), 0);
   assertEquals(bodyHeightFor(24), 22);
   assertEquals(topRowsFor(50), 1);
   assertEquals(bodyHeightFor(50), 47);
 });
 
-Deno.test("visibleWindow: compact cards cost two rows plus a gap between them", () => {
+test("visibleWindow: compact cards cost two rows plus a gap between them", () => {
   // 5 compact cards = 5 × 2 + 4 gaps = 14.
   assertEquals(visibleWindow(5, 0, 14, 0, COMPACT_CARD).scrolling, false);
   assertEquals(visibleWindow(5, 0, 13, 0, COMPACT_CARD), {
@@ -1477,7 +1471,7 @@ Deno.test("visibleWindow: compact cards cost two rows plus a gap between them", 
   });
 });
 
-Deno.test("visibleWindow: compact cards plus indicators never exceed the height", () => {
+test("visibleWindow: compact cards plus indicators never exceed the height", () => {
   for (let height = 5; height <= 40; height++) {
     const view = visibleWindow(40, 0, height, 0, COMPACT_CARD);
     const rows = 2 + view.count * 3 - 1;
@@ -1485,7 +1479,7 @@ Deno.test("visibleWindow: compact cards plus indicators never exceed the height"
   }
 });
 
-Deno.test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {
+test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {
   assertEquals(parsePrefixKey("C-s\n"), "s");
   assertEquals(parsePrefixKey("C-b"), "b");
   assertEquals(parsePrefixKey("C-m"), null);
@@ -1496,7 +1490,7 @@ Deno.test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", (
 
 // --- mouse ---
 
-Deno.test("parseMouse: an SGR report becomes a 0-based press or release", () => {
+test("parseMouse: an SGR report becomes a 0-based press or release", () => {
   assertEquals(parseMouse("[<0;3;6M"), {
     button: MOUSE_LEFT,
     x: 2,
@@ -1509,7 +1503,7 @@ Deno.test("parseMouse: an SGR report becomes a 0-based press or release", () => 
   assertEquals(parseMouse("[<2;1;1M")?.button, MOUSE_RIGHT);
 });
 
-Deno.test("parseMouse: anything but a whole SGR report is not a mouse event", () => {
+test("parseMouse: anything but a whole SGR report is not a mouse event", () => {
   assertEquals(parseMouse("m"), null);
   assertEquals(parseMouse("M"), null);
   assertEquals(parseMouse("[<0;3;6"), null);
@@ -1526,7 +1520,7 @@ const geometryAt = (
   selected = 0,
 ) => listGeometry({ columns, rows, total, selected, prevOffset: 0 });
 
-Deno.test("cardIndexAt: full cards own their padding rows", () => {
+test("cardIndexAt: full cards own their padding rows", () => {
   const g = geometryAt(200, 50, 2);
   assertEquals(cardIndexAt(g, { x: 0, y: 0 }), null);
   assertEquals(cardIndexAt(g, { x: 0, y: 1 }), 0);
@@ -1538,13 +1532,13 @@ Deno.test("cardIndexAt: full cards own their padding rows", () => {
   assertEquals(cardIndexAt(g, { x: 0, y: 49 }), null);
 });
 
-Deno.test("cardIndexAt: the preview column and the gutter are not cards", () => {
+test("cardIndexAt: the preview column and the gutter are not cards", () => {
   const g = geometryAt(200, 50, 2);
   assertEquals(cardIndexAt(g, { x: g.listWidth - 1, y: 1 }), 0);
   assertEquals(cardIndexAt(g, { x: g.listWidth, y: 1 }), null);
 });
 
-Deno.test("cardIndexAt: a scrolled list skips the indicators and adds the offset", () => {
+test("cardIndexAt: a scrolled list skips the indicators and adds the offset", () => {
   const g = geometryAt(200, 50, 20, 15);
   assertEquals(g.view.offset, 5);
   assertEquals(cardIndexAt(g, { x: 0, y: 1 }), null);
@@ -1553,7 +1547,7 @@ Deno.test("cardIndexAt: a scrolled list skips the indicators and adds the offset
   assertEquals(cardIndexAt(g, { x: 0, y: 46 }), null);
 });
 
-Deno.test("cardIndexAt: compact gap rows belong to no card", () => {
+test("cardIndexAt: compact gap rows belong to no card", () => {
   const g = geometryAt(150, 24, 2);
   assertEquals(cardIndexAt(g, { x: 0, y: 0 }), 0);
   assertEquals(cardIndexAt(g, { x: 0, y: 1 }), 0);
@@ -1564,20 +1558,20 @@ Deno.test("cardIndexAt: compact gap rows belong to no card", () => {
 
 // --- isKeyBurst ---
 
-Deno.test("isKeyBurst: a run of navigation keys splits", () => {
+test("isKeyBurst: a run of navigation keys splits", () => {
   assertEquals(isKeyBurst("jj"), true);
   assertEquals(isKeyBurst("jjj"), true);
   assertEquals(isKeyBurst("kkn"), true);
   assertEquals(isKeyBurst("jjjjjjjj"), true);
 });
 
-Deno.test("isKeyBurst: a terminal reply Ink stripped the ESC from does not", () => {
+test("isKeyBurst: a terminal reply Ink stripped the ESC from does not", () => {
   // `\x1b[0n` (DSR) reaches useInput as `[0n`; splitting it would fire `n`.
   assertEquals(isKeyBurst("[0n"), false);
   assertEquals(isKeyBurst("[24;80R"), false);
 });
 
-Deno.test("isKeyBurst: pastes and single keys do not", () => {
+test("isKeyBurst: pastes and single keys do not", () => {
   assertEquals(isKeyBurst("jjjjjjjjj"), false);
   assertEquals(isKeyBurst("j"), false);
   assertEquals(isKeyBurst("mm"), false);
@@ -1587,7 +1581,7 @@ Deno.test("isKeyBurst: pastes and single keys do not", () => {
 
 // --- selection resolvers ---
 
-Deno.test("wrapStep: moves and wraps at both ends", () => {
+test("wrapStep: moves and wraps at both ends", () => {
   const rows = statusRows("running", "running", "running");
   assertEquals(wrapStep(1)(0, rows), 1);
   assertEquals(wrapStep(1)(2, rows), 0);
@@ -1595,14 +1589,14 @@ Deno.test("wrapStep: moves and wraps at both ends", () => {
   assertEquals(wrapStep(-1)(1, rows), 0);
 });
 
-Deno.test("clampStep: stops at both ends instead of wrapping", () => {
+test("clampStep: stops at both ends instead of wrapping", () => {
   const rows = statusRows("running", "running", "running");
   assertEquals(clampStep(1)(2, rows), 2);
   assertEquals(clampStep(-1)(0, rows), 0);
   assertEquals(clampStep(1)(0, rows), 1);
 });
 
-Deno.test("resolvers: a burst advances step by step", () => {
+test("resolvers: a burst advances step by step", () => {
   const rows = statusRows("running", "running", "running", "running");
   let cur = 0;
   for (let i = 0; i < 3; i++) cur = wrapStep(1)(cur, rows);
@@ -1612,7 +1606,7 @@ Deno.test("resolvers: a burst advances step by step", () => {
   assertEquals(cur, 3);
 });
 
-Deno.test("resolvers: a missing prevId resolves from index 0", () => {
+test("resolvers: a missing prevId resolves from index 0", () => {
   // App falls back to 0 when the selected pane left the list; the resolvers
   // must behave the same as they would on a real starting index.
   const rows = statusRows("running", "running");
@@ -1621,10 +1615,10 @@ Deno.test("resolvers: a missing prevId resolves from index 0", () => {
   assertEquals(nextWaitingIndex(rows, 0), 0);
 });
 
-Deno.test("clampPreview: capture-pane's final newline does not take a row", () => {
+test("clampPreview: capture-pane's final newline does not take a row", () => {
   assertEquals(clampPreview("L1\nL2\nL3\n", 80, 2), "L2\nL3");
 });
 
-Deno.test("clampPreview: blank rows the pane itself ends with are kept", () => {
+test("clampPreview: blank rows the pane itself ends with are kept", () => {
   assertEquals(clampPreview("L1\n\n\n", 80, 3), "L1\n\n");
 });

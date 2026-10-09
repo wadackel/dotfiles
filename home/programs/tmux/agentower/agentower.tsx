@@ -1,18 +1,11 @@
 // Agentower: the tmux prefix+w popup that lists AI agent panes.
-// ink + React on Deno. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
+// ink + React on Bun. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
 
-/** @jsx React.createElement */
-/** @jsxFrag React.Fragment */
-import React, { useEffect, useRef, useState } from "npm:react@19.2.0";
-import {
-  Box,
-  type Key,
-  render,
-  Text,
-  useApp,
-  useInput,
-  useStdout,
-} from "npm:ink@7.1.1";
+import { spawn } from "node:child_process";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { useEffect, useRef, useState } from "react";
+import { Box, type Key, render, Text, useApp, useInput, useStdout } from "ink";
+import { run } from "../../agents/lib/proc.ts";
 
 // ---- Types + row parsing SSOT ----
 
@@ -192,7 +185,7 @@ export function row1Columns(
 // hundred bytes and are rewritten by other processes, so there is no local
 // signal that would tell Agentower its copy went stale.
 export async function readAllAgentUsage(): Promise<AgentUsage[]> {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return [];
   const both = await Promise.all([
     readAgentUsage(home, "claude"),
@@ -387,18 +380,36 @@ export function clampStep(step: number): SelectionResolver {
 async function tmuxRun(
   args: string[],
 ): Promise<{ stdout: string; code: number }> {
-  const proc = new Deno.Command("tmux", {
-    args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const { code, stdout, stderr } = await proc.output();
+  const { code, stdout, stderr } = await run("tmux", args);
   if (code !== 0) {
-    const errText = new TextDecoder().decode(stderr).trim();
+    const errText = stderr.trim();
     if (errText) console.error(`tmux ${args[0]} failed: ${errText}`);
   }
-  return { stdout: new TextDecoder().decode(stdout), code };
+  return { stdout, code };
+}
+
+// stdout only, with stderr discarded instead of piped, and an optional
+// deadline after which the child is sent SIGTERM. `code` is null for a child
+// that died by a signal. Rejects when the child cannot be started, which
+// includes a `cwd` that does not exist.
+function capture(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; timeout?: number } = {},
+): Promise<{ code: number | null; stdout: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      timeout: opts.timeout,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const out: Buffer[] = [];
+    child.stdout!.on("data", (chunk: Buffer) => out.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ code, stdout: Buffer.concat(out).toString("utf8") });
+    });
+  });
 }
 
 // Resolve the current git branch for cwd. Returns "" when cwd is not a git
@@ -406,7 +417,7 @@ async function tmuxRun(
 async function readHeadBranch(gitDir: string): Promise<string> {
   if (!gitDir) return "";
   try {
-    return branchFromHead(await Deno.readTextFile(`${gitDir}/HEAD`));
+    return branchFromHead(await readFile(`${gitDir}/HEAD`, "utf8"));
   } catch {
     return "";
   }
@@ -426,24 +437,18 @@ async function gitLocation(dir: string): Promise<GitLocation> {
   if (cached) return cached;
   let location: GitLocation | null = null;
   try {
-    const { code, stdout } = await new Deno.Command("git", {
-      args: [
-        "rev-parse",
-        "--path-format=absolute",
-        "--show-toplevel",
-        "--git-dir",
-        "--git-common-dir",
-      ],
-      cwd: dir,
-      stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-    }).output();
+    const { code, stdout } = await capture("git", [
+      "rev-parse",
+      "--path-format=absolute",
+      "--show-toplevel",
+      "--git-dir",
+      "--git-common-dir",
+    ], { cwd: dir });
     if (code === 0) {
-      location = parseGitLocation(new TextDecoder().decode(stdout));
+      location = parseGitLocation(stdout);
     }
   } catch {
-    // Deno.Command throws when cwd does not exist.
+    // spawn fails with ENOENT when cwd does not exist.
   }
   const resolved = location ??
     { repo: basename(dir), worktree: "", gitDir: "" };
@@ -467,17 +472,17 @@ export async function readTaskProgress(
   sessionId: string,
 ): Promise<TaskProgress | null> {
   if (!SESSION_ID_RE.test(sessionId)) return null;
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return null;
   const dir = `${home}/.claude/tasks/${sessionId}`;
   let done = 0;
   let total = 0;
   try {
-    for await (const e of Deno.readDir(dir)) {
-      if (!e.isFile || !e.name.endsWith(".json")) continue;
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith(".json")) continue;
       try {
         const raw: unknown = JSON.parse(
-          await Deno.readTextFile(`${dir}/${e.name}`),
+          await readFile(`${dir}/${e.name}`, "utf8"),
         );
         if (
           raw !== null && typeof raw === "object" && "status" in raw &&
@@ -507,7 +512,7 @@ const CODEX_TASK_STATUSES = new Set([
 // as the marker writer even when the leaf path has disappeared.
 async function canonical(p: string): Promise<string> {
   try {
-    return await Deno.realPath(p);
+    return await realpath(p);
   } catch {
     // fall through
   }
@@ -519,7 +524,7 @@ async function canonical(p: string): Promise<string> {
     tail.unshift(cur.slice(idx + 1));
     cur = idx === 0 ? "/" : cur.slice(0, idx);
     try {
-      const real = await Deno.realPath(cur);
+      const real = await realpath(cur);
       return real === "/" ? "/" + tail.join("/") : real + "/" + tail.join("/");
     } catch {
       // keep walking up
@@ -545,11 +550,11 @@ export async function codexCwdHash(cwd: string): Promise<string | null> {
 
 async function readFreshMarker(path: string): Promise<string | null> {
   try {
-    const stat = await Deno.lstat(path);
-    if (!stat.isFile || stat.isSymlink) return null;
-    const mtime = stat.mtime?.getTime() ?? 0;
+    const stat = await lstat(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    const mtime = stat.mtime.getTime();
     if (Date.now() - mtime >= CODEX_MARKER_TTL_MS) return null;
-    return (await Deno.readTextFile(path)).trim();
+    return (await readFile(path, "utf8")).trim();
   } catch {
     return null;
   }
@@ -559,10 +564,12 @@ async function activeMarkerPresence(
   path: string,
 ): Promise<"present" | "absent" | "blocked"> {
   try {
-    await Deno.lstat(path);
+    await lstat(path);
     return "present";
   } catch (err) {
-    return err instanceof Deno.errors.NotFound ? "absent" : "blocked";
+    return (err as NodeJS.ErrnoException).code === "ENOENT"
+      ? "absent"
+      : "blocked";
   }
 }
 
@@ -576,8 +583,8 @@ async function evidencePathFromMarker(
   let plansDirReal = "";
   let planReal = "";
   try {
-    plansDirReal = await Deno.realPath(plansDir);
-    planReal = await Deno.realPath(marker);
+    plansDirReal = await realpath(plansDir);
+    planReal = await realpath(marker);
   } catch {
     return null;
   }
@@ -585,8 +592,8 @@ async function evidencePathFromMarker(
 
   const evidence = `${plansDirReal}/${basename.slice(0, -3)}.evidence.json`;
   try {
-    const info = await Deno.lstat(evidence);
-    if (!info.isFile || info.isSymlink) return null;
+    const info = await lstat(evidence);
+    if (!info.isFile() || info.isSymbolicLink()) return null;
   } catch {
     return null;
   }
@@ -596,7 +603,7 @@ async function evidencePathFromMarker(
 async function readCodexTaskProgress(
   cwd: string,
 ): Promise<TaskProgress | null> {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return null;
   const hash = await codexCwdHash(cwd);
   if (!hash) return null;
@@ -615,7 +622,7 @@ async function readCodexTaskProgress(
   if (!evidence) return null;
 
   try {
-    const raw: unknown = JSON.parse(await Deno.readTextFile(evidence));
+    const raw: unknown = JSON.parse(await readFile(evidence, "utf8"));
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const tasks = (raw as { tasks?: unknown }).tasks;
     if (!Array.isArray(tasks)) return null;
@@ -675,15 +682,11 @@ async function fetchPanes(
   let procs = parseProcesses("");
   if (snapshots.some(isStartupCodex)) {
     try {
-      const result = await new Deno.Command("ps", {
-        args: ["-A", "-o", "pid=,ppid=,comm="],
-        stdin: "null",
-        stdout: "piped",
-        stderr: "null",
-        signal: AbortSignal.timeout(500),
-      }).output();
-      if (result.success) {
-        procs = parseProcesses(new TextDecoder().decode(result.stdout));
+      const result = await capture("ps", ["-A", "-o", "pid=,ppid=,comm="], {
+        timeout: 500,
+      });
+      if (result.code === 0) {
+        procs = parseProcesses(result.stdout);
       }
     } catch {
       // An unavailable process snapshot cannot establish ownership of an unregistered pane.
@@ -691,7 +694,7 @@ async function fetchPanes(
   }
   const rows = selectPaneRows(snapshots, procs);
   const free = withFree
-    ? selectFreeWindows(snapshots, rows, Deno.env.get("TMUX_PANE") ?? null)
+    ? selectFreeWindows(snapshots, rows, process.env.TMUX_PANE ?? null)
     : null;
   // Resolve the repository location and fill in a missing worktreeBranch from
   // the pane's cwd (falling back to pane_current_path when @pane_cwd is unset,
@@ -720,28 +723,21 @@ async function fetchPanes(
 // over here", which a failed or timed-out check has not established.
 async function gitDirty(dir: string): Promise<DirtyState> {
   try {
-    const { code, stdout } = await new Deno.Command("git", {
-      // The directory is whatever a pane happens to sit in, and this runs
-      // without the user typing git there: core.fsmonitor in its config would
-      // name a program to execute, and a bare repository embedded in a clone
-      // would be picked up as the repository. Without --no-optional-locks,
-      // status refreshes the index under index.lock and can fail a git command
-      // the user is running there.
-      args: [
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        "safe.bareRepository=explicit",
-        "--no-optional-locks",
-        "status",
-        "--porcelain",
-      ],
-      cwd: dir,
-      stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-      signal: AbortSignal.timeout(2000),
-    }).output();
+    // The directory is whatever a pane happens to sit in, and this runs
+    // without the user typing git there: core.fsmonitor in its config would
+    // name a program to execute, and a bare repository embedded in a clone
+    // would be picked up as the repository. Without --no-optional-locks,
+    // status refreshes the index under index.lock and can fail a git command
+    // the user is running there.
+    const { code, stdout } = await capture("git", [
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "safe.bareRepository=explicit",
+      "--no-optional-locks",
+      "status",
+      "--porcelain",
+    ], { cwd: dir, timeout: 2000 });
     if (code !== 0) return "unknown";
     return stdout.length > 0 ? "dirty" : "clean";
   } catch {
@@ -796,7 +792,7 @@ export function clampPreview(
 // Shown under the card title so the selected pane's full location is readable
 // even where the list column truncates it.
 function displayPath(path: string): string {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   return home && (path === home || path.startsWith(home + "/"))
     ? "~" + path.slice(home.length)
     : path;
@@ -1435,12 +1431,12 @@ function App({
 // ---- Main ----
 
 export async function main(): Promise<void> {
-  const mode: AgentowerMode = Deno.args.includes("--dashboard")
+  const mode: AgentowerMode = process.argv.slice(2).includes("--dashboard")
     ? "dashboard"
     : "popup";
-  if (mode === "popup" && !Deno.env.get("TMUX")) {
+  if (mode === "popup" && !process.env.TMUX) {
     console.error("agentower must run inside tmux");
-    Deno.exit(2);
+    process.exit(2);
   }
   // Parallel with fetchPanes so the footer costs the popup no extra startup
   // latency — the whole reason Agentower is AOT-compiled in the first place.
@@ -1460,7 +1456,7 @@ export async function main(): Promise<void> {
   // diagnostic samples captured in plan 20260429T1822-picker-cursor-from-pane-fix. Routing the
   // value through session env, set BEFORE display-popup, sidesteps that quirk.
   // Reserved TMUX_PANE is unsuitable: tmux overwrites it with the popup's own pane id at spawn.
-  const fromPane = Deno.env.get("AGENTOWER_FROM_PANE") ?? null;
+  const fromPane = process.env.AGENTOWER_FROM_PANE ?? null;
   const initialSelectedPaneId =
     fromPane && rows.some((r) => r.paneId === fromPane)
       ? fromPane

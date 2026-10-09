@@ -91,7 +91,7 @@ export const STATUS_META = {
 // hex values matching DOGRUN.* in components.tsx. PUA code points are emitted
 // inline here because pane_row.ts ships through the Nix store unmodified;
 // the CLAUDE.md "Private Use Area glyphs at runtime" rule applies to files
-// generated at install time, not to TypeScript sources read by Deno.
+// generated at install time, not to TypeScript sources read by Bun.
 export const USER_LABEL_META = {
   "": { color: "#9ea3c0", short: "", icon: " " },
   review: { color: "#929be5", short: "review", icon: "\u{F0996}" }, // nf-md-comment-eye
@@ -171,7 +171,6 @@ function normalizeUserLabel(raw: string): UserLabel {
 // `\x1f` (US, field separator) is intentionally out of scope: it is excluded
 // from the strip set so injecting it into a value would still desync the
 // 23-field layout (parseRow returns null on `fields.length < 23`).
-// deno-lint-ignore no-control-regex
 const CONTROL_BYTE_RE = /[\x00-\x1e\x7f]/g;
 
 function stripControlBytes(raw: string): string {

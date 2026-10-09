@@ -3,13 +3,16 @@
 // Agentower to render its bottom usage footer. Reachable from ~/.codex/ through
 // the same in-worktree symlink + home-manager wiring as pane-shared.ts.
 //
-// Unlike pane-shared.ts, this module DOES use Deno.* — file I/O is its whole
-// point, and no Bun-hosted caller imports it (opencode has no rolling-window
-// limits, so it is not covered here).
+// Unlike pane-shared.ts, this module is not Web-standard-only — file I/O is
+// its whole point, and the opencode plugin does not import it (opencode has no
+// rolling-window limits, so it is not covered here).
 //
-// No import statements. A relative import here would resolve against
-// ~/.codex/ when Codex loads this file through its symlink, not against the
-// real directory — the same constraint that keeps pane-shared.ts import-free.
+// node:* imports only. codex-pane-status.ts still runs on Deno, which resolves
+// a relative import against ~/.codex/ when it loads this file through its
+// symlink, not against the real directory, and finds no node_modules from
+// there for a bare package name.
+
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 
 // --- Schema ---
 
@@ -77,7 +80,7 @@ export const USAGE_LABEL_RE = /^[0-9a-z]{1,8}$/;
 
 // Both writers emit a few hundred bytes and at most two windows. The ceilings
 // exist for what Agentower does on the read side: it re-reads on every tick,
-// where readTextFile against a FIFO would hang the frame forever and a bloated
+// where readFile against a FIFO would hang the frame forever and a bloated
 // windows array would be re-tokenized once a second.
 const MAX_USAGE_BYTES = 64 * 1024;
 const MAX_WINDOWS = 8;
@@ -110,11 +113,11 @@ export async function readAgentUsage(
 ): Promise<AgentUsage | null> {
   try {
     const path = usageFilePath(homeDir, agent);
-    // stat before read: readTextFile on a FIFO never returns, and Agentower
+    // stat before read: readFile on a FIFO never returns, and Agentower
     // awaits this before its first frame.
-    const stat = await Deno.stat(path);
-    if (!stat.isFile || stat.size > MAX_USAGE_BYTES) return null;
-    const raw: unknown = JSON.parse(await Deno.readTextFile(path));
+    const info = await stat(path);
+    if (!info.isFile() || info.size > MAX_USAGE_BYTES) return null;
+    const raw: unknown = JSON.parse(await readFile(path, "utf8"));
     if (!isAgentUsage(raw)) return null;
     // A body that disagrees with its own filename would render the wrong label
     // in the footer — two "codex" segments, say. Neither side is trustworthy
@@ -127,9 +130,9 @@ export async function readAgentUsage(
 
 // --- Write ---
 
-// The temp file goes next to the target rather than through
-// Deno.makeTempFile(): TMPDIR is outside codex-pane-status.ts's --allow-env
-// scope, and rename is only atomic within one filesystem. The pid suffix keeps
+// The temp file goes next to the target rather than under os.tmpdir(): rename
+// is only atomic within one filesystem, and codex-pane-status.ts still runs on
+// Deno with an --allow-env scope that leaves TMPDIR out. The pid suffix keeps
 // concurrent writers — several Codex hooks, several Claude statusline renders —
 // from truncating each other's temp before the rename lands.
 // Exported so both properties are testable without racing an actual write.
@@ -146,15 +149,15 @@ export async function writeAgentUsage(
   agent: UsageAgent,
   usage: AgentUsage,
 ): Promise<void> {
-  const temp = usageTempPath(homeDir, agent, Deno.pid);
-  await Deno.mkdir(usageDir(homeDir), { recursive: true });
+  const temp = usageTempPath(homeDir, agent, process.pid);
+  await mkdir(usageDir(homeDir), { recursive: true });
   try {
-    await Deno.writeTextFile(temp, `${JSON.stringify(usage)}\n`);
-    await Deno.rename(temp, usageFilePath(homeDir, agent));
+    await writeFile(temp, `${JSON.stringify(usage)}\n`);
+    await rename(temp, usageFilePath(homeDir, agent));
   } catch (e) {
     // The sole caller swallows write failures, so a leftover temp would sit in
     // the state dir unnoticed until a pid happened to repeat.
-    await Deno.remove(temp).catch(() => {});
+    await rm(temp).catch(() => {});
     throw e;
   }
 }

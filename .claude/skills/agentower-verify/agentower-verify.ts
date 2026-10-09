@@ -1,7 +1,10 @@
-#!/usr/bin/env -S deno run --allow-run=tmux,deno --allow-env --allow-read --allow-write
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-// agentower-verify: warm Deno module cache, run Agentower e2e suite against an
-// isolated tmux server, emit a JSON summary on stdout. Exit code mirrors ok.
+// agentower-verify: run Agentower e2e suite against an isolated tmux server,
+// emit a JSON summary on stdout. Exit code mirrors ok.
+
+import { join } from "node:path";
+import { run } from "../../../home/programs/agents/lib/proc.ts";
 
 interface Result {
   check: "agentower-e2e";
@@ -15,103 +18,105 @@ interface Result {
   errors: string[];
 }
 
-// URL.pathname is percent-encoded; decode so paths containing spaces or
-// non-ASCII characters reach deno as a real filesystem path.
-const REPO_ROOT = decodeURIComponent(
-  new URL("../../../", import.meta.url).pathname,
+const TEST_PATH = join(
+  import.meta.dirname,
+  "../../../home/programs/tmux/agentower/agentower_e2e_test.ts",
 );
-const AGENTOWER_PATH =
-  `${REPO_ROOT}home/programs/tmux/agentower/agentower-main.ts`;
-const TEST_PATH =
-  `${REPO_ROOT}home/programs/tmux/agentower/agentower_e2e_test.ts`;
 
-async function runDeno(args: string[]): Promise<{
-  code: number;
-  stdout: string;
-  stderr: string;
-}> {
-  const { code, stdout, stderr } = await new Deno.Command("deno", {
-    args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  const dec = new TextDecoder();
-  return {
-    code,
-    stdout: dec.decode(stdout),
-    stderr: dec.decode(stderr),
-  };
+// Bun's default of 5 s per test is the harness's own wait timeout, so a stuck
+// scenario would be cut off before waitFor could throw its "Last capture"
+// diagnostic, and its teardown would then overlap the next scenario.
+function testTimeoutMs(): number {
+  const parsed = Number.parseInt(
+    process.env.AGENTOWER_E2E_TIMEOUT_MS ?? "",
+    10,
+  );
+  const harnessWait = Number.isFinite(parsed) && parsed > 0 ? parsed : 5000;
+  return Math.max(60000, 6 * harnessWait);
 }
 
-// Extract scenario-level pass/fail from `deno test` stdout. Lines of interest:
-//   "S0: harness smoke (no panes) ... ok (811ms)"
-//   "S3: navigation (...) ... FAILED (578ms)"
-function parseScenarios(stdout: string): {
-  passed: number;
-  failed: number;
-  names_failed: string[];
+// `bun test` reports on stderr. Lines of interest:
+//   "(pass) S0: harness smoke (no panes) [811.02ms]"
+//   "(fail) S3: navigation (...) [578.10ms]"   (a timeout is a (fail) too)
+//   " 85 pass"
+//   " 1 fail"
+function parseReport(stderr: string): {
+  scenarios: Result["scenarios"];
+  summary: { pass: number | null; fail: number | null };
 } {
-  const OK_RE = /^(.+?) \.\.\. ok \(/;
-  const FAIL_RE = /^(.+?) \.\.\. FAILED /;
+  const TEST_RE = /^\((pass|fail)\) (.+?)(?: \[\d+(?:\.\d+)?m?s\])?$/;
+  const SUMMARY_RE = /^ (\d+) (pass|fail)$/;
   let passed = 0;
-  let failed = 0;
   const names_failed: string[] = [];
-  for (const line of stdout.split("\n")) {
-    const trimmed = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
-    if (OK_RE.test(trimmed)) passed++;
-    const m = trimmed.match(FAIL_RE);
-    if (m) {
-      failed++;
-      names_failed.push(m[1]);
+  const summary: { pass: number | null; fail: number | null } = {
+    pass: null,
+    fail: null,
+  };
+  for (const raw of stderr.split("\n")) {
+    const line = raw.replace(/\x1b\[[0-9;]*m/g, "").trimEnd();
+    const test = line.match(TEST_RE);
+    if (test) {
+      if (test[1] === "pass") passed++;
+      else names_failed.push(test[2]);
+      continue;
     }
+    const total = line.match(SUMMARY_RE);
+    if (total) summary[total[2] as "pass" | "fail"] = Number(total[1]);
   }
-  return { passed, failed, names_failed };
+  return {
+    scenarios: { passed, failed: names_failed.length, names_failed },
+    summary,
+  };
 }
 
 async function main(): Promise<number> {
   const start = Date.now();
   const errors: string[] = [];
 
-  const cache = await runDeno(["cache", AGENTOWER_PATH]);
-  if (cache.code !== 0) {
-    errors.push(
-      `deno cache failed (code ${cache.code}): ${cache.stderr.trim()}`,
-    );
-  }
+  const test = await run(
+    process.execPath,
+    [
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      "test",
+      "--timeout",
+      String(testTimeoutMs()),
+      TEST_PATH,
+    ],
+    // With CLAUDECODE=1, which every agent session sets, bun prints no line
+    // per passing test.
+    { env: { CLAUDECODE: "" } },
+  );
 
-  const home = Deno.env.get("HOME");
-  // --allow-write scopes: $HOME/.claude/tasks for S8's disposable tasks dir,
-  // /tmp for the harness-compiled .claude-wrapped stub directory.
-  // --allow-run includes git so S38 can build a repository with a linked
-  // worktree, and mkdir/test/cc so the harness can create/cache its
-  // `.claude-wrapped` stub (see agentower_e2e_harness.ts:LIVE_BIN_*) — Darwin
-  // rejects copies of Apple-signed binaries, making compile the only path
-  // that makes tmux's #{pane_current_command} match `.claude-wrapped`.
-  const writeScope = home
-    ? `--allow-write=${home}/.claude/tasks,/tmp`
-    : "--allow-write";
-  const test = await runDeno([
-    "test",
-    "--allow-run=tmux,cc,mkdir,test,git",
-    "--allow-env",
-    "--allow-read",
-    writeScope,
-    TEST_PATH,
-  ]);
-
-  const scenarios = parseScenarios(test.stdout);
-  const ok = test.code === 0 && scenarios.failed === 0 &&
-    scenarios.passed > 0 && errors.length === 0;
+  const { scenarios, summary } = parseReport(test.stderr);
 
   if (test.code !== 0 && scenarios.failed === 0) {
     errors.push(
-      `deno test exited ${test.code} but no scenarios parsed as failed — see stderr`,
+      `bun test exited ${test.code} but no scenarios parsed as failed — see stderr`,
     );
   }
   if (scenarios.passed === 0) {
     errors.push("no scenarios ran — test file may be empty or filtered");
   }
+  if (summary.pass !== scenarios.passed) {
+    errors.push(
+      `parsed ${scenarios.passed} (pass) lines but the summary says ${
+        summary.pass ?? "nothing"
+      } pass`,
+    );
+  }
+  // Bun prints " 0 fail" on a clean run.
+  if (summary.fail !== scenarios.failed) {
+    errors.push(
+      `parsed ${scenarios.failed} (fail) lines but the summary says ${
+        summary.fail ?? "nothing"
+      } fail`,
+    );
+  }
+
+  const ok = test.code === 0 && scenarios.failed === 0 &&
+    scenarios.passed > 0 && errors.length === 0;
 
   const result: Result = {
     check: "agentower-e2e",
@@ -125,13 +130,13 @@ async function main(): Promise<number> {
 
   // Failed runs: surface stderr under the JSON so the caller can diagnose.
   if (!ok) {
-    console.error("--- deno test stderr ---");
+    console.error("--- bun test stderr ---");
     console.error(test.stderr);
-    console.error("--- deno test stdout ---");
+    console.error("--- bun test stdout ---");
     console.error(test.stdout);
   }
 
   return ok ? 0 : 1;
 }
 
-Deno.exit(await main());
+process.exit(await main());

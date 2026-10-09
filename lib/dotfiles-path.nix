@@ -33,5 +33,6 @@ in
 {
   _module.args.dotfiles = {
     inherit linkHere pathHere;
+    root = worktreeRoot;
   };
 }

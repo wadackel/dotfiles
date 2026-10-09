@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-env=HOME --allow-run=tmux,ps --allow-read
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Diagnostic snapshot for Agentower.
 //
@@ -18,6 +18,8 @@
 // we'd widen Agentower's filter; instead we keep Agentower's single-predicate SSOT
 // and use this tool to diagnose why the SSOT is out of sync with reality.
 
+import { readFile } from "node:fs/promises";
+import { run } from "../../agents/lib/proc.ts";
 import { type PaneRow, parseRow, TMUX_FORMAT } from "./pane_row.ts";
 
 // --- Types ---
@@ -142,27 +144,6 @@ export function classifyPane(
 
 // --- tmux / ps I/O ---
 
-interface TmuxRunResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
-async function run(cmd: string, args: string[]): Promise<TmuxRunResult> {
-  const { code, stdout, stderr } = await new Deno.Command(cmd, {
-    args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  const dec = new TextDecoder();
-  return {
-    code,
-    stdout: dec.decode(stdout),
-    stderr: dec.decode(stderr),
-  };
-}
-
 async function fetchPanesWithPid(): Promise<
   Array<{ row: PaneRow; panePid: number }>
 > {
@@ -196,11 +177,11 @@ async function fetchAllProcs(): Promise<ProcInfo[]> {
 }
 
 async function readLogTail(maxLines: number): Promise<string[]> {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return [];
   const path = `${home}/.claude/logs/claude-pane-status.log`;
   try {
-    const text = await Deno.readTextFile(path);
+    const text = await readFile(path, "utf8");
     const lines = text.split("\n").filter((l) => l.length > 0);
     return lines.slice(-maxLines);
   } catch {
@@ -282,7 +263,7 @@ export function parseArgs(argv: string[]): CliOptions {
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(Deno.args);
+  const opts = parseArgs(process.argv.slice(2));
   const [panes, procs] = await Promise.all([
     fetchPanesWithPid(),
     fetchAllProcs(),

@@ -1,9 +1,19 @@
-import {
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from "jsr:@std/assert@1.0.19";
-import { fromFileUrl } from "jsr:@std/path@1.1.4/from-file-url";
+import { test } from "bun:test";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { randomUUID } from "node:crypto";
+import fs, {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { run as runCommand } from "../../agents/lib/proc.ts";
 import {
   activatePending,
   clearActive,
@@ -16,30 +26,26 @@ import {
   run,
 } from "./codex-plan-marker.ts";
 
+const SCRIPT = join(import.meta.dirname, "codex-plan-marker.ts");
+
 async function withHome<T>(
   run: (ctx: { home: string; cwd: string; hash: string }) => Promise<T>,
 ): Promise<T> {
-  const originalHome = Deno.env.get("HOME");
-  const home = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "codex-marker-home-",
-  });
-  const cwd = await Deno.makeTempDir({
-    dir: "/tmp",
-    prefix: "codex-marker-cwd-",
-  });
-  Deno.env.set("HOME", home);
+  const originalHome = process.env.HOME;
+  const home = await mkdtemp(join("/tmp", "codex-marker-home-"));
+  const cwd = await mkdtemp(join("/tmp", "codex-marker-cwd-"));
+  process.env.HOME = home;
   const hash = await cwdHash(cwd);
   try {
     return await run({ home, cwd, hash });
   } finally {
     if (originalHome === undefined) {
-      Deno.env.delete("HOME");
+      delete process.env.HOME;
     } else {
-      Deno.env.set("HOME", originalHome);
+      process.env.HOME = originalHome;
     }
-    await Deno.remove(home, { recursive: true });
-    await Deno.remove(cwd, { recursive: true });
+    await rm(home, { recursive: true });
+    await rm(cwd, { recursive: true });
   }
 }
 
@@ -47,17 +53,20 @@ function pendingPath(home: string, hash: string): string {
   return `${home}/.codex/plans/.pending-${hash}`;
 }
 
-Deno.test("marker mutations cannot replace a pointer during matching cleanup", async () => {
+test("marker mutations cannot replace a pointer during matching cleanup", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const first = await writePlan(home);
     const second = await writePlan(home, "second.md");
     await activatePending(first, cwd);
     await resolvePlan(first, cwd);
-    const read = Deno.readTextFile;
+    const read = fs.readFile;
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     let paused = false;
-    Deno.readTextFile = async (path, options) => {
+    fs.readFile = (async (
+      path: Parameters<typeof read>[0],
+      options: Parameters<typeof read>[1],
+    ) => {
       const result = await read(path, options);
       if (String(path) === activePath(home, hash) && !paused) {
         paused = true;
@@ -65,7 +74,7 @@ Deno.test("marker mutations cannot replace a pointer during matching cleanup", a
         await release.promise;
       }
       return result;
-    };
+    }) as typeof fs.readFile;
     const clearing = clearMatching(first, cwd);
     try {
       await entered.promise;
@@ -81,7 +90,7 @@ Deno.test("marker mutations cannot replace a pointer during matching cleanup", a
       assertEquals((await promote(cwd)).reason, "io-error");
     } finally {
       release.resolve();
-      Deno.readTextFile = read;
+      fs.readFile = read;
       await clearing;
     }
     await activatePending(second, cwd);
@@ -90,12 +99,12 @@ Deno.test("marker mutations cannot replace a pointer during matching cleanup", a
   });
 });
 
-Deno.test("resolve accepts expired markers and pins explicit plans across another run", async () => {
+test("resolve accepts expired markers and pins explicit plans across another run", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const plan = await writePlan(home);
     await activatePending(plan, cwd);
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await Deno.utime(pendingPath(home, hash), stale, stale);
+    await utimes(pendingPath(home, hash), stale, stale);
     assertEquals(await resolvePlan(undefined, cwd), plan);
     assertEquals((await getStatus(cwd)).state, "active");
     const other = await writePlan(home, "other.md");
@@ -108,15 +117,15 @@ Deno.test("resolve accepts expired markers and pins explicit plans across anothe
   });
 });
 
-Deno.test("resolve rejects ambiguous plans and explicit symlinks", async () => {
+test("resolve rejects ambiguous plans and explicit symlinks", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const first = await writePlan(home);
     const second = await writePlan(home, "second.md");
-    await Deno.writeTextFile(activePath(home, hash), first);
-    await Deno.writeTextFile(pendingPath(home, hash), second);
+    await writeFile(activePath(home, hash), first);
+    await writeFile(pendingPath(home, hash), second);
     await assertRejects(() => resolvePlan(undefined, cwd), Error, "ambiguous");
     const link = `${home}/.codex/plans/link.md`;
-    await Deno.symlink(first, link);
+    await symlink(first, link);
     await assertRejects(() => resolvePlan(link, cwd), Error, "regular file");
   });
 });
@@ -125,7 +134,7 @@ function activePath(home: string, hash: string): string {
   return `${home}/.codex/plans/.active-${hash}`;
 }
 
-Deno.test("explicit resolution promotes its own pending marker and clears completion", async () => {
+test("explicit resolution promotes its own pending marker and clears completion", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
     await activatePending(plan, cwd);
@@ -141,27 +150,27 @@ Deno.test("explicit resolution promotes its own pending marker and clears comple
 
 async function writePlan(home: string, name = "plan.md"): Promise<string> {
   const path = `${home}/.codex/plans/${name}`;
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  await Deno.writeTextFile(path, "# Plan\n");
-  return await Deno.realPath(path);
+  await mkdir(`${home}/.codex/plans`, { recursive: true });
+  await writeFile(path, "# Plan\n");
+  return await realpath(path);
 }
 
-Deno.test("activatePending writes pending marker and removes existing active marker", async () => {
+test("activatePending writes pending marker and removes existing active marker", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const oldPlan = await writePlan(home, "old.md");
     const newPlan = await writePlan(home, "new.md");
-    await Deno.writeTextFile(activePath(home, hash), `${oldPlan}\n`);
+    await writeFile(activePath(home, hash), `${oldPlan}\n`);
 
     const paths = await activatePending(newPlan, cwd);
 
     assertEquals(paths.pendingPath, pendingPath(home, hash));
     assertEquals(
-      await Deno.readTextFile(pendingPath(home, hash)),
+      await readFile(pendingPath(home, hash), "utf8"),
       `${newPlan}\n`,
     );
     let activeExists = true;
     try {
-      await Deno.stat(activePath(home, hash));
+      await stat(activePath(home, hash));
     } catch {
       activeExists = false;
     }
@@ -169,7 +178,7 @@ Deno.test("activatePending writes pending marker and removes existing active mar
   });
 });
 
-Deno.test("activatePending rejects relative plan paths", async () => {
+test("activatePending rejects relative plan paths", async () => {
   await withHome(async ({ cwd }) => {
     let message = "";
     try {
@@ -181,7 +190,7 @@ Deno.test("activatePending rejects relative plan paths", async () => {
   });
 });
 
-Deno.test("getStatus reports pending, active, expired active, and absent states", async () => {
+test("getStatus reports pending, active, expired active, and absent states", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const plan = await writePlan(home);
     assertEquals((await getStatus(cwd)).state, "absent");
@@ -198,12 +207,12 @@ Deno.test("getStatus reports pending, active, expired active, and absent states"
     assertEquals(active.planPath, plan);
 
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await Deno.utime(activePath(home, hash), stale, stale);
+    await utimes(activePath(home, hash), stale, stale);
     assertEquals((await getStatus(cwd)).state, "active-expired");
   });
 });
 
-Deno.test("requireActive prints only valid active plan path", async () => {
+test("requireActive prints only valid active plan path", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
     await activatePending(plan, cwd);
@@ -212,7 +221,7 @@ Deno.test("requireActive prints only valid active plan path", async () => {
   });
 });
 
-Deno.test("requireActive rejects pending-only marker", async () => {
+test("requireActive rejects pending-only marker", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
     await activatePending(plan, cwd);
@@ -226,7 +235,7 @@ Deno.test("requireActive rejects pending-only marker", async () => {
   });
 });
 
-Deno.test("clearActive is idempotent", async () => {
+test("clearActive is idempotent", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
     await activatePending(plan, cwd);
@@ -237,35 +246,46 @@ Deno.test("clearActive is idempotent", async () => {
   });
 });
 
-Deno.test("promote preserves active marker when one already exists", async () => {
+test("an active marker left as an empty directory is removed", async () => {
+  await withHome(async ({ home, cwd, hash }) => {
+    const active = `${home}/.codex/plans/.active-${hash}`;
+    await mkdir(active, { recursive: true });
+    assertEquals(await clearActive(cwd), true);
+    await mkdir(active);
+    await activatePending(await writePlan(home), cwd);
+    assertEquals((await getStatus(cwd)).state, "pending");
+  });
+});
+
+test("promote preserves active marker when one already exists", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const oldPlan = await writePlan(home, "old.md");
     const newPlan = await writePlan(home, "new.md");
-    await Deno.writeTextFile(activePath(home, hash), `${oldPlan}\n`);
-    await Deno.writeTextFile(pendingPath(home, hash), `${newPlan}\n`);
+    await writeFile(activePath(home, hash), `${oldPlan}\n`);
+    await writeFile(pendingPath(home, hash), `${newPlan}\n`);
 
     const result = await promote(cwd);
 
     assertEquals(result.promoted, false);
     assertEquals(result.reason, "already-active");
     assertEquals(
-      await Deno.readTextFile(activePath(home, hash)),
+      await readFile(activePath(home, hash), "utf8"),
       `${oldPlan}\n`,
     );
     assertEquals(
-      await Deno.readTextFile(pendingPath(home, hash)),
+      await readFile(pendingPath(home, hash), "utf8"),
       `${newPlan}\n`,
     );
   });
 });
 
-Deno.test("promote rejects expired pending marker", async () => {
+test("promote rejects expired pending marker", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const plan = await writePlan(home);
     const pending = pendingPath(home, hash);
-    await Deno.writeTextFile(pending, `${plan}\n`);
+    await writeFile(pending, `${plan}\n`);
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await Deno.utime(pending, stale, stale);
+    await utimes(pending, stale, stale);
 
     const result = await promote(cwd);
 
@@ -275,7 +295,7 @@ Deno.test("promote rejects expired pending marker", async () => {
   });
 });
 
-Deno.test("run command parser activates, requires, and clears markers", async () => {
+test("run command parser activates, requires, and clears markers", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
     await run(["activate-pending", plan, cwd]);
@@ -297,69 +317,42 @@ Deno.test("run command parser activates, requires, and clears markers", async ()
   });
 });
 
-Deno.test("subprocess require-active validates absent, pending, active, and expired states", async () => {
-  const scriptPath = fromFileUrl(
-    new URL("./codex-plan-marker.ts", import.meta.url),
-  );
-  const runPermission = await Deno.permissions.query({
-    name: "run",
-    command: scriptPath,
-  });
-  if (runPermission.state !== "granted") {
-    console.log("skipping subprocess assertions; run permission not granted");
-    return;
-  }
-
+test("subprocess require-active validates absent, pending, active, and expired states", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const plan = await writePlan(home);
-    const requireActive = () =>
-      new Deno.Command(scriptPath, {
-        args: ["require-active", cwd],
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
+    const requireActive = () => runCommand(SCRIPT, ["require-active", cwd]);
 
     const absent = await requireActive();
     assertEquals(absent.code, 1);
-    assertStringIncludes(
-      new TextDecoder().decode(absent.stderr),
-      "no plan marker",
-    );
+    assertStringIncludes(absent.stderr, "no plan marker");
 
-    const activate = await new Deno.Command(scriptPath, {
-      args: ["activate-pending", plan, cwd],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
+    const activate = await runCommand(SCRIPT, ["activate-pending", plan, cwd]);
     assertEquals(activate.code, 0);
 
     const pending = await requireActive();
     assertEquals(pending.code, 1);
-    assertStringIncludes(
-      new TextDecoder().decode(pending.stderr),
-      "not promoted",
-    );
+    assertStringIncludes(pending.stderr, "not promoted");
 
     assertEquals((await promote(cwd)).reason, "promoted");
     const active = await requireActive();
     assertEquals(active.code, 0);
-    assertEquals(new TextDecoder().decode(active.stdout), `${plan}\n`);
+    assertEquals(active.stdout, `${plan}\n`);
 
     const stale = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await Deno.utime(activePath(home, hash), stale, stale);
+    await utimes(activePath(home, hash), stale, stale);
     const expired = await requireActive();
     assertEquals(expired.code, 1);
     assertStringIncludes(
-      new TextDecoder().decode(expired.stderr),
+      expired.stderr,
       "active plan marker for this cwd is expired",
     );
   });
 });
 
-Deno.test("getStatus rejects symlinked markers", async () => {
+test("getStatus rejects symlinked markers", async () => {
   await withHome(async ({ home, cwd, hash }) => {
     const plan = await writePlan(home);
-    await Deno.symlink(plan, activePath(home, hash));
+    await symlink(plan, activePath(home, hash));
 
     let message = "";
     try {
@@ -371,31 +364,29 @@ Deno.test("getStatus rejects symlinked markers", async () => {
   });
 });
 
-Deno.test("activatePending rejects plan paths outside the plans directory", async () => {
+test("activatePending rejects plan paths outside the plans directory", async () => {
   await withHome(async ({ cwd }) => {
-    const outside = await Deno.makeTempFile({ dir: "/tmp", suffix: ".md" });
+    const outside = join("/tmp", `${randomUUID()}.md`);
+    await writeFile(outside, "", { flag: "wx" });
     let message = "";
     try {
       await activatePending(outside, cwd);
     } catch (err) {
       message = (err as Error).message;
     } finally {
-      await Deno.remove(outside);
+      await rm(outside);
     }
     assertStringIncludes(message, "under");
   });
 });
 
-Deno.test("activatePending rejects a symlinked plans directory", async () => {
+test("activatePending rejects a symlinked plans directory", async () => {
   await withHome(async ({ home, cwd }) => {
-    const target = await Deno.makeTempDir({
-      dir: "/tmp",
-      prefix: "codex-marker-plans-target-",
-    });
-    await Deno.mkdir(`${home}/.codex`, { recursive: true });
-    await Deno.symlink(target, `${home}/.codex/plans`);
+    const target = await mkdtemp(join("/tmp", "codex-marker-plans-target-"));
+    await mkdir(`${home}/.codex`, { recursive: true });
+    await symlink(target, `${home}/.codex/plans`);
     const plan = `${home}/.codex/plans/plan.md`;
-    await Deno.writeTextFile(plan, "# Plan\n");
+    await writeFile(plan, "# Plan\n");
 
     let message = "";
     try {
@@ -403,50 +394,27 @@ Deno.test("activatePending rejects a symlinked plans directory", async () => {
     } catch (err) {
       message = (err as Error).message;
     } finally {
-      await Deno.remove(target, { recursive: true });
+      await rm(target, { recursive: true });
     }
 
     assertStringIncludes(message, "regular directory");
   });
 });
 
-Deno.test("subprocess promote command promotes a pending marker to active", async () => {
-  const scriptPath = fromFileUrl(
-    new URL("./codex-plan-marker.ts", import.meta.url),
-  );
-  const runPermission = await Deno.permissions.query({
-    name: "run",
-    command: scriptPath,
-  });
-  if (runPermission.state !== "granted") {
-    console.log("skipping subprocess assertions; run permission not granted");
-    return;
-  }
-
+test("subprocess promote command promotes a pending marker to active", async () => {
   await withHome(async ({ home, cwd }) => {
     const plan = await writePlan(home);
 
     // No pending marker yet → promote reports no-pending.
-    const noPending = await new Deno.Command(scriptPath, {
-      args: ["promote", cwd],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
+    const noPending = await runCommand(SCRIPT, ["promote", cwd]);
     assertEquals(noPending.code, 0);
-    assertStringIncludes(
-      new TextDecoder().decode(noPending.stdout),
-      "no-pending",
-    );
+    assertStringIncludes(noPending.stdout, "no-pending");
 
     await run(["activate-pending", plan, cwd]);
 
-    const promoted = await new Deno.Command(scriptPath, {
-      args: ["promote", cwd],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
+    const promoted = await runCommand(SCRIPT, ["promote", cwd]);
     assertEquals(promoted.code, 0);
-    assertStringIncludes(new TextDecoder().decode(promoted.stdout), "promoted");
+    assertStringIncludes(promoted.stdout, "promoted");
     assertEquals((await getStatus(cwd)).state, "active");
   });
 });

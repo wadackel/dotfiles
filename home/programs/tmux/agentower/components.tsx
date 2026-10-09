@@ -8,10 +8,8 @@
 // chrome (hint bar, filter chip, summary budget, task-progress shape) shares
 // a single source.
 
-/** @jsx React.createElement */
-/** @jsxFrag React.Fragment */
-import React from "npm:react@19.2.0";
-import { Box, Text } from "npm:ink@7.1.1";
+import React from "react";
+import { Box, Text } from "ink";
 
 import {
   type FreeWindow,

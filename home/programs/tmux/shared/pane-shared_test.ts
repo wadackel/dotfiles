@@ -1,4 +1,7 @@
-import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertFalse } from "@std/assert";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   AGENTOWER_OWNED_KEYS,
   ALL_PANE_OPTIONS_FOR_CLAUDE,
@@ -37,7 +40,7 @@ function tmuxFormatKeys(): Set<string> {
   return new Set(TMUX_FORMAT.match(re) ?? []);
 }
 
-Deno.test("TMUX_FORMAT keys ⊆ union of all writer ALL_PANE_OPTIONS (or Agentower-owned)", () => {
+test("TMUX_FORMAT keys ⊆ union of all writer ALL_PANE_OPTIONS (or Agentower-owned)", () => {
   const allWriter = new Set<string>([
     ...ALL_PANE_OPTIONS_FOR_CLAUDE,
     ...ALL_PANE_OPTIONS_FOR_CODEX,
@@ -53,7 +56,7 @@ Deno.test("TMUX_FORMAT keys ⊆ union of all writer ALL_PANE_OPTIONS (or Agentow
   }
 });
 
-Deno.test("AGENTOWER_OWNED_KEYS members are absent from all writer ALL_PANE_OPTIONS", () => {
+test("AGENTOWER_OWNED_KEYS members are absent from all writer ALL_PANE_OPTIONS", () => {
   const allWriter = new Set<string>([
     ...ALL_PANE_OPTIONS_FOR_CLAUDE,
     ...ALL_PANE_OPTIONS_FOR_CODEX,
@@ -68,7 +71,7 @@ Deno.test("AGENTOWER_OWNED_KEYS members are absent from all writer ALL_PANE_OPTI
   }
 });
 
-Deno.test("AGENTOWER_OWNED_KEYS members appear in TMUX_FORMAT", () => {
+test("AGENTOWER_OWNED_KEYS members appear in TMUX_FORMAT", () => {
   const formatKeys = tmuxFormatKeys();
   for (const key of AGENTOWER_OWNED_KEYS) {
     if (!formatKeys.has(key)) {
@@ -79,7 +82,7 @@ Deno.test("AGENTOWER_OWNED_KEYS members appear in TMUX_FORMAT", () => {
   }
 });
 
-Deno.test("ALL_PANE_OPTIONS_FOR_OPENCODE ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
+test("ALL_PANE_OPTIONS_FOR_OPENCODE ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
   // opencode's key set is a subset of claude's (it sets fewer keys).
   const claudeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CLAUDE);
   for (const key of ALL_PANE_OPTIONS_FOR_OPENCODE) {
@@ -91,7 +94,7 @@ Deno.test("ALL_PANE_OPTIONS_FOR_OPENCODE ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () =>
   }
 });
 
-Deno.test("CLAUDE_ONLY_KEYS ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
+test("CLAUDE_ONLY_KEYS ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
   const claudeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CLAUDE);
   for (const key of CLAUDE_ONLY_KEYS) {
     if (!claudeKeys.has(key)) {
@@ -102,7 +105,7 @@ Deno.test("CLAUDE_ONLY_KEYS ⊆ ALL_PANE_OPTIONS_FOR_CLAUDE", () => {
   }
 });
 
-Deno.test("codex pending subagent notification counter is codex-scoped", () => {
+test("codex pending subagent notification counter is codex-scoped", () => {
   const codexKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CODEX);
   const claudeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_CLAUDE);
   const opencodeKeys = new Set<string>(ALL_PANE_OPTIONS_FOR_OPENCODE);
@@ -119,7 +122,7 @@ Deno.test("codex pending subagent notification counter is codex-scoped", () => {
 
 // --- Constants ---
 
-Deno.test("constants match pre-refactor writer values", () => {
+test("constants match pre-refactor writer values", () => {
   assertEquals(PROMPT_MAX_CHARS, 40);
   assertEquals(TOOL_SUBJECT_MAX_CHARS, 24);
   assertEquals(TOOL_ERROR_MAX_CHARS, 40);
@@ -127,99 +130,99 @@ Deno.test("constants match pre-refactor writer values", () => {
 
 // --- truncate ---
 
-Deno.test("truncate: short input passes through unchanged", () => {
+test("truncate: short input passes through unchanged", () => {
   assertEquals(truncate("hello", 10), "hello");
 });
 
-Deno.test("truncate: exact-max input passes through unchanged (no ellipsis)", () => {
+test("truncate: exact-max input passes through unchanged (no ellipsis)", () => {
   assertEquals(truncate("0123456789", 10), "0123456789");
 });
 
-Deno.test("truncate: over-max input is sliced + ellipsis appended (default …)", () => {
+test("truncate: over-max input is sliced + ellipsis appended (default …)", () => {
   assertEquals(truncate("0123456789abc", 10), "0123456789…");
 });
 
-Deno.test("truncate: codex-style 3-dot ellipsis honored", () => {
+test("truncate: codex-style 3-dot ellipsis honored", () => {
   assertEquals(truncate("0123456789abc", 10, "..."), "0123456789...");
 });
 
-Deno.test("truncate: control chars collapse to single space", () => {
+test("truncate: control chars collapse to single space", () => {
   // \x00\x00\x00 (3 NUL run) → 1 space
   assertEquals(truncate("a\x00\x00\x00b", 10), "a b");
 });
 
-Deno.test("truncate: ESC byte neutralized to space (CSI body chars stay printable)", () => {
+test("truncate: ESC byte neutralized to space (CSI body chars stay printable)", () => {
   // \x1b is 0x1b (control range); '[2J' are 0x5b/0x32/0x4a (printable
   // ASCII). Only the ESC is replaced — but that alone is sufficient to
   // disarm CSI interpretation (terminals require ESC to enter CSI state).
   assertEquals(truncate("a\x1b[2Jb", 10), "a [2Jb");
 });
 
-Deno.test("truncate: multi-byte input counted in code units (string length)", () => {
+test("truncate: multi-byte input counted in code units (string length)", () => {
   // "あいう" = 3 chars (UTF-16 code units). max=2 ⇒ slice to 2 + ellipsis.
   assertEquals(truncate("あいう", 2), "あい…");
 });
 
 // --- maskPrompt ---
 
-Deno.test("maskPrompt: non-string input returns empty", () => {
+test("maskPrompt: non-string input returns empty", () => {
   assertEquals(maskPrompt(undefined), "");
   assertEquals(maskPrompt(null), "");
   assertEquals(maskPrompt(123), "");
   assertEquals(maskPrompt(""), "");
 });
 
-Deno.test("maskPrompt: clean short input passes through", () => {
+test("maskPrompt: clean short input passes through", () => {
   assertEquals(maskPrompt("hello world"), "hello world");
 });
 
-Deno.test("maskPrompt: collapses multi-space runs to single space", () => {
+test("maskPrompt: collapses multi-space runs to single space", () => {
   assertEquals(maskPrompt("hello    world"), "hello world");
 });
 
-Deno.test("maskPrompt: trims surrounding whitespace", () => {
+test("maskPrompt: trims surrounding whitespace", () => {
   assertEquals(maskPrompt("   hello   "), "hello");
 });
 
-Deno.test("maskPrompt: control bytes neutralized then collapsed", () => {
+test("maskPrompt: control bytes neutralized then collapsed", () => {
   // \x00\x1b \t = 3 controls → 1 space (control run replaced by single
   // space, then multi-space collapse leaves single space).
   assertEquals(maskPrompt("a\x00\x1b\tb"), "a b");
 });
 
-Deno.test("maskPrompt: over-max input sliced + default … ellipsis", () => {
+test("maskPrompt: over-max input sliced + default … ellipsis", () => {
   const long = "a".repeat(50);
   const out = maskPrompt(long);
   assertEquals(out, "a".repeat(40) + "…");
   assertEquals(out.length, 41);
 });
 
-Deno.test("maskPrompt: custom ellipsis honored (codex compat)", () => {
+test("maskPrompt: custom ellipsis honored (codex compat)", () => {
   const long = "a".repeat(50);
   assertEquals(maskPrompt(long, { ellipsis: "..." }), "a".repeat(40) + "...");
 });
 
-Deno.test("maskPrompt: custom max honored", () => {
+test("maskPrompt: custom max honored", () => {
   assertEquals(maskPrompt("0123456789abc", { max: 5 }), "01234…");
 });
 
 // --- formatToolError ---
 
-Deno.test("formatToolError: strips leading 'Error: ' prefix", () => {
+test("formatToolError: strips leading 'Error: ' prefix", () => {
   assertEquals(formatToolError("Error: file not found"), "file not found");
 });
 
-Deno.test("formatToolError: bare error message passes through", () => {
+test("formatToolError: bare error message passes through", () => {
   assertEquals(formatToolError("file not found"), "file not found");
 });
 
-Deno.test("formatToolError: long message truncated with default max", () => {
+test("formatToolError: long message truncated with default max", () => {
   const long = "Error: " + "x".repeat(50);
   // After strip: 50 'x'. max=40 → 40 'x' + …
   assertEquals(formatToolError(long), "x".repeat(40) + "…");
 });
 
-Deno.test("formatToolError: control chars in message neutralized", () => {
+test("formatToolError: control chars in message neutralized", () => {
   assertEquals(
     formatToolError("Error: file\x00not\x00found"),
     "file not found",
@@ -228,11 +231,11 @@ Deno.test("formatToolError: control chars in message neutralized", () => {
 
 // --- unsetOps ---
 
-Deno.test("unsetOps: empty keys returns empty array", () => {
+test("unsetOps: empty keys returns empty array", () => {
   assertEquals(unsetOps([]), []);
 });
 
-Deno.test("unsetOps: produces { kind: 'unset', key } per input key", () => {
+test("unsetOps: produces { kind: 'unset', key } per input key", () => {
   assertEquals(unsetOps(["@pane_a", "@pane_b"]), [
     { kind: "unset", key: "@pane_a" },
     { kind: "unset", key: "@pane_b" },
@@ -241,7 +244,7 @@ Deno.test("unsetOps: produces { kind: 'unset', key } per input key", () => {
 
 // --- sessionStartBody ---
 
-Deno.test("sessionStartBody: empty staleKeys → status idle + last_activity only", () => {
+test("sessionStartBody: empty staleKeys → status idle + last_activity only", () => {
   const ops = sessionStartBody({ staleKeys: [], nowSec: "1700000000" });
   assertEquals(
     ops,
@@ -252,7 +255,7 @@ Deno.test("sessionStartBody: empty staleKeys → status idle + last_activity onl
   );
 });
 
-Deno.test("sessionStartBody: staleKeys produce unsets in order", () => {
+test("sessionStartBody: staleKeys produce unsets in order", () => {
   const ops = sessionStartBody({
     staleKeys: ["@pane_started_at", "@pane_prompt"],
     nowSec: "1700000123",
@@ -270,7 +273,7 @@ Deno.test("sessionStartBody: staleKeys produce unsets in order", () => {
 
 // --- promptStartTrio ---
 
-Deno.test("promptStartTrio: emits status=running + started_at + last_activity_at", () => {
+test("promptStartTrio: emits status=running + started_at + last_activity_at", () => {
   const ops = promptStartTrio({ nowSec: "1700000000" });
   assertEquals(
     ops,
@@ -284,7 +287,7 @@ Deno.test("promptStartTrio: emits status=running + started_at + last_activity_at
 
 // --- toolStartOps ---
 
-Deno.test("toolStartOps: with subject", () => {
+test("toolStartOps: with subject", () => {
   assertEquals(
     toolStartOps({ tool: "Bash", subject: "ls -la" }),
     [
@@ -294,7 +297,7 @@ Deno.test("toolStartOps: with subject", () => {
   );
 });
 
-Deno.test("toolStartOps: without subject unsets @pane_current_tool_subject", () => {
+test("toolStartOps: without subject unsets @pane_current_tool_subject", () => {
   assertEquals(
     toolStartOps({ tool: "Read" }),
     [
@@ -312,36 +315,36 @@ Deno.test("toolStartOps: without subject unsets @pane_current_tool_subject", () 
 
 // --- SESSION_ID_RE boundary cases ---
 
-Deno.test("SESSION_ID_RE: empty string rejected", () => {
+test("SESSION_ID_RE: empty string rejected", () => {
   assertFalse(SESSION_ID_RE.test(""));
 });
 
-Deno.test("SESSION_ID_RE: 1-char alphanumeric accepted", () => {
+test("SESSION_ID_RE: 1-char alphanumeric accepted", () => {
   assert(SESSION_ID_RE.test("a"));
   assert(SESSION_ID_RE.test("A"));
   assert(SESSION_ID_RE.test("0"));
 });
 
-Deno.test("SESSION_ID_RE: 128-char accepted (boundary)", () => {
+test("SESSION_ID_RE: 128-char accepted (boundary)", () => {
   assert(SESSION_ID_RE.test("a".repeat(128)));
 });
 
-Deno.test("SESSION_ID_RE: 129-char rejected (over boundary)", () => {
+test("SESSION_ID_RE: 129-char rejected (over boundary)", () => {
   assertFalse(SESSION_ID_RE.test("a".repeat(129)));
 });
 
-Deno.test("SESSION_ID_RE: hyphen and underscore accepted", () => {
+test("SESSION_ID_RE: hyphen and underscore accepted", () => {
   assert(SESSION_ID_RE.test("550e8400-e29b-41d4-a716-446655440000"));
   assert(SESSION_ID_RE.test("sess_001"));
 });
 
-Deno.test("SESSION_ID_RE: path-traversal patterns rejected", () => {
+test("SESSION_ID_RE: path-traversal patterns rejected", () => {
   assertFalse(SESSION_ID_RE.test(".."));
   assertFalse(SESSION_ID_RE.test("../bad"));
   assertFalse(SESSION_ID_RE.test("/etc/passwd"));
 });
 
-Deno.test("SESSION_ID_RE: special characters rejected", () => {
+test("SESSION_ID_RE: special characters rejected", () => {
   assertFalse(SESSION_ID_RE.test("sess:001")); // colon
   assertFalse(SESSION_ID_RE.test("sess id")); // space
   assertFalse(SESSION_ID_RE.test("sess.001")); // dot
@@ -349,9 +352,11 @@ Deno.test("SESSION_ID_RE: special characters rejected", () => {
 
 // --- Web-standard API guard (smoke check) ---
 
-Deno.test("module source has no Deno.* / Bun.* / node: references", async () => {
-  const url = new URL("./pane-shared.ts", import.meta.url);
-  const src = await Deno.readTextFile(url);
+test("module source has no Deno.* / Bun.* / node: references", async () => {
+  const src = await readFile(
+    join(import.meta.dirname, "pane-shared.ts"),
+    "utf8",
+  );
   // Comments referencing these names ARE allowed (e.g. "Deno.* / Bun.* / node:*"
   // documentation); strip line comments + block comments before scanning.
   const stripped = src
@@ -366,11 +371,11 @@ Deno.test("module source has no Deno.* / Bun.* / node: references", async () => 
 
 // String#slice counts UTF-16 units, so a cut through a surrogate pair left a
 // lone high surrogate, which tmux draws as U+FFFD.
-Deno.test("maskPrompt: a cut never splits a surrogate pair", () => {
+test("maskPrompt: a cut never splits a surrogate pair", () => {
   const out = maskPrompt("x".repeat(39) + "𠮷abc");
   assertEquals(out, "x".repeat(39) + "𠮷…");
 });
 
-Deno.test("truncate: a cut never splits a surrogate pair", () => {
+test("truncate: a cut never splits a surrogate pair", () => {
   assertEquals(truncate("ab🎉cd", 3), "ab🎉…");
 });
