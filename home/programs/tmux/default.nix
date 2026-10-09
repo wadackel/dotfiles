@@ -28,20 +28,27 @@ let
         lib.fileset.toList (lib.fileset.fileFilter isSrc ./agentower)
         ++ lib.fileset.toList (lib.fileset.fileFilter isSrc ./shared);
       # What decides the binary besides its sources: the one module imported
-      # from outside this directory, the dependency versions, the type-check
-      # settings, and this file, whose build flags include the two that keep
-      # the binary from loading a bunfig.toml or .env out of the pane's cwd.
+      # from outside this directory, the dependency versions, and the
+      # type-check settings.
       inputs = [
         ../agents/lib/proc.ts
         ../../../bun.lock
         ../../../tsconfig.json
         ./agentower/tsconfig.json
-        ./default.nix
       ];
       root = toString ../../..;
+      relative = map (file: lib.removePrefix "${root}/" (toString file)) (files ++ inputs);
     in
     assert lib.assertMsg (builtins.length files >= 8) "Agentower source fileset unexpectedly small";
-    map (file: lib.removePrefix "${root}/" (toString file)) (files ++ inputs);
+    assert lib.assertMsg (lib.all (
+      path: !lib.hasPrefix "/" path
+    ) relative) "Agentower input outside the repository root";
+    relative;
+
+  # The build flags come from this file as evaluated, not from the worktree's
+  # copy of it, so they enter the stamp from here. They include the two that
+  # keep the binary from loading a bunfig.toml or .env out of the pane's cwd.
+  agentowerRecipeHash = builtins.hashString "sha256" (builtins.readFile ./default.nix);
 
   # Released tmux (3.7b) lets a repainting background pane draw over an open
   # popup's top border row, so the border blinks out and back while an agent
@@ -99,7 +106,7 @@ in
     BIN="$OUT/agentower"
     STAMP="$OUT/.src-hash"
     # The Bun store path is part of the key: the binary embeds the runtime.
-    HASH="$(cd "$ROOT" && /bin/cat ${lib.escapeShellArgs agentowerInputs} | /usr/bin/shasum -a 256 | /usr/bin/cut -d' ' -f1) ${pkgs.bun}"
+    HASH="$(cd "$ROOT" && /bin/cat ${lib.escapeShellArgs agentowerInputs} | /usr/bin/shasum -a 256 | /usr/bin/cut -d' ' -f1) ${pkgs.bun} ${agentowerRecipeHash}"
     # home-manager concatenates activation fragments into one shell script,
     # so `exit` here would abort later fragments. Gate the cold path with an
     # inverted if/else instead.

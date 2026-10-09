@@ -12,9 +12,9 @@ trace("entry-start");
 // Measured under Bun 1.4.2: with this early switch, keys sent to the tty
 // before exec arrive 2 ms after ink mounts; without it they never arrive.
 // ISIG is off from here on, so a Ctrl+C typed during startup is delivered to
-// ink as input once it mounts rather than as a signal. Ink restores the
-// terminal on unmount, so nothing is restored here — main() exits through
-// process.exit, which skips finally blocks.
+// ink as input once it mounts rather than as a signal. Nothing is restored
+// here: ink does it on unmount, and Bun itself at exit for a run that never
+// mounts (the exit-2 guard), which process.exit would take past any finally.
 try {
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
 } catch {

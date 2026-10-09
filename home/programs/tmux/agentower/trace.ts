@@ -12,12 +12,7 @@ const TRACE_ENABLED = (process.env.AGENTOWER_TRACE ?? "") !== "";
 export function trace(mark: string, value?: number): void {
   if (!TRACE_ENABLED) return;
   try {
-    writeSync(
-      2,
-      new TextEncoder().encode(
-        `AGT ${mark} ${Math.round(value ?? performance.now())}\n`,
-      ),
-    );
+    writeSync(2, `AGT ${mark} ${Math.round(value ?? performance.now())}\n`);
   } catch {
     // stderr closed under the popup; a lost mark must not take the frame down
   }
