@@ -604,8 +604,7 @@ test("S11: self-launching Claude pane remains visible", async () => {
 
 // S12: navigation wraps at boundaries. agentower.tsx:607-616 wraps Up at the
 // first row to the last, and Down at the last row to the first. Verify both
-// directions within a single 2-pane scenario to keep agentower-verify's 30 s
-// budget comfortable.
+// directions within a single 2-pane scenario to keep the suite short.
 test("S12: navigation wraps at boundaries", async () => {
   await setupServer();
   try {

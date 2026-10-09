@@ -52,9 +52,12 @@ function parseReport(stderr: string): {
     pass: null,
     fail: null,
   };
+  let recap = false;
   for (const raw of stderr.split("\n")) {
     const line = raw.replace(/\x1b\[[0-9;]*m/g, "").trimEnd();
-    const test = line.match(TEST_RE);
+    // After the last test bun lists every failure again under this heading.
+    if (/^\d+ tests? failed:$/.test(line)) recap = true;
+    const test = recap ? null : line.match(TEST_RE);
     if (test) {
       if (test[1] === "pass") passed++;
       else names_failed.push(test[2]);

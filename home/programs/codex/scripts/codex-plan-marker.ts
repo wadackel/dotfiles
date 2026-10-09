@@ -471,8 +471,11 @@ async function withMarkerLock<T>(
     );
     return await operation();
   } finally {
-    await lock.close();
-    await rm(path);
+    try {
+      await lock.close();
+    } finally {
+      await rm(path);
+    }
   }
 }
 

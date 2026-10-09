@@ -6,15 +6,15 @@
 }:
 
 let
-  # Computing the hash at Nix eval time instead of in the activation shell:
-  # a shell `find`-based enumeration can silently match zero files (path or
-  # expression bug) and hash an empty stream, pinning the stamp so recompiles
-  # are skipped forever — eval-time filtering with the assert below turns that
-  # failure class into a loud evaluation error.
+  # The files that decide the Agentower binary, relative to the repository
+  # root. The list is built at eval time rather than with a shell `find`: an
+  # enumeration that silently matches nothing would hash an empty stream and
+  # pin the stamp, and the assert below turns that into an evaluation error.
+  # The contents are hashed by the activation, from the worktree it builds.
   # `./shared` is included wholesale even though only pane-shared.ts is a
   # runtime dependency today; a spurious recompile costs seconds while a
   # missed dependency ships a stale binary to `prefix+w`.
-  agentowerSrcHash =
+  agentowerInputs =
     let
       isSrc =
         file:
@@ -38,9 +38,10 @@ let
         ./agentower/tsconfig.json
         ./default.nix
       ];
+      root = toString ../../..;
     in
     assert lib.assertMsg (builtins.length files >= 8) "Agentower source fileset unexpectedly small";
-    builtins.hashString "sha256" (lib.concatMapStrings builtins.readFile (files ++ inputs));
+    map (file: lib.removePrefix "${root}/" (toString file)) (files ++ inputs);
 
   # Released tmux (3.7b) lets a repainting background pane draw over an open
   # popup's top border row, so the border blinks out and back while an agent
@@ -88,16 +89,17 @@ in
 
   # Evaluating the React+Ink module graph dominates Agentower's startup, so it
   # is compiled ahead of time. The build reads the worktree, not a store copy:
-  # it needs the node_modules that installDotfilesDeps puts there. The hash
-  # above is still taken from the flake source, so the two agree only when the
-  # flake being switched is ~/dotfiles itself.
+  # it needs the node_modules that installDotfilesDeps puts there. The stamp is
+  # therefore a hash of the worktree's files too: taken from the flake source,
+  # it would mark a binary built from a different checkout as current.
   home.activation.compileAgentowerBin = lib.hm.dag.entryAfter [ "installDotfilesDeps" ] ''
     ROOT="${dotfiles.root}"
     SRC="$ROOT/home/programs/tmux/agentower"
     OUT="$HOME/.local/share/agentower"
     BIN="$OUT/agentower"
     STAMP="$OUT/.src-hash"
-    HASH="${agentowerSrcHash}"
+    # The Bun store path is part of the key: the binary embeds the runtime.
+    HASH="$(cd "$ROOT" && /bin/cat ${lib.escapeShellArgs agentowerInputs} | /usr/bin/shasum -a 256 | /usr/bin/cut -d' ' -f1) ${pkgs.bun}"
     # home-manager concatenates activation fragments into one shell script,
     # so `exit` here would abort later fragments. Gate the cold path with an
     # inverted if/else instead.
@@ -115,18 +117,12 @@ in
       # resolves an unrelated npm package of that name.
       run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
         "$ROOT/node_modules/typescript/bin/tsc" --noEmit -p "$SRC/tsconfig.json"
-      # --bytecode: the module graph is parsed at build time instead of on every
-      # start, which took first paint from 55ms to 39ms (agentower-bench-baseline.md).
-      # It defaults to CommonJS output, and the entry uses top-level await.
-      # --bytecode: the module graph is parsed at build time instead of on
-      # every start, which took first paint from 55ms to 39ms
-      # (agentower-bench-baseline.md). It defaults to CommonJS output, and the
-      # entry uses top-level await, hence --format=esm.
-      # --no-compile-autoload-*: a compiled binary otherwise runs the preload
-      # of a bunfig.toml and loads the .env found in its working directory, and
-      # the popup's working directory is whatever repository the pane is in.
-      # DEV: ink connects to react-devtools when DEV is "true" in the
-      # environment, which a tmux session can carry.
+      # --bytecode parses the module graph at build time (first paint 55ms →
+      # 39ms); it defaults to CommonJS and the entry uses top-level await, hence
+      # --format=esm. NODE_ENV picks React's production build (--compile alone
+      # ships the development one; --minify is size only). --no-compile-autoload-*:
+      # the binary would otherwise run a bunfig.toml preload and load the .env of
+      # the pane's repository. DEV: ink loads react-devtools when it is "true".
       run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
         build --compile --minify --bytecode --format=esm \
         --define 'process.env.NODE_ENV="production"' \

@@ -388,10 +388,9 @@ async function tmuxRun(
   return { stdout, code };
 }
 
-// stdout only, with stderr discarded instead of piped, and an optional
-// deadline after which the child is sent SIGTERM. `code` is null for a child
-// that died by a signal. Rejects when the child cannot be started, which
-// includes a `cwd` that does not exist.
+// `code` is null for a child that died by a signal, the timeout included.
+// Rejects when the child cannot be started, which includes a `cwd` that does
+// not exist.
 function capture(
   cmd: string,
   args: string[],

@@ -89,9 +89,8 @@ export const STATUS_META = {
 // components.tsx can pick from either. Icons are Nerd Font Material Design
 // (1 cell wide in CaskaydiaCove Nerd Font Mono); colors are dogrun palette
 // hex values matching DOGRUN.* in components.tsx. PUA code points are emitted
-// inline here because pane_row.ts ships through the Nix store unmodified;
-// the CLAUDE.md "Private Use Area glyphs at runtime" rule applies to files
-// generated at install time, not to TypeScript sources read by Bun.
+// inline here because the CLAUDE.md "Private Use Area glyphs at runtime" rule
+// applies to files generated at install time, not to TypeScript sources.
 export const USER_LABEL_META = {
   "": { color: "#9ea3c0", short: "", icon: " " },
   review: { color: "#929be5", short: "review", icon: "\u{F0996}" }, // nf-md-comment-eye

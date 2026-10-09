@@ -126,7 +126,6 @@ async function tmuxRun(args: string[]): Promise<string> {
   return stdout;
 }
 
-// Exit code of a command whose output nobody reads.
 function runSilent(cmd: string, args: string[]): Promise<number | null> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: "ignore" });
