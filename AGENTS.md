@@ -177,6 +177,16 @@ sudo darwin-rebuild switch --flake .#private
 
 For rollback commands and generation management, see [README.md](README.md#rollback).
 
+### Scripts on Bun
+
+The TypeScript scripts in this repository are moving from Deno to Bun. A ported script has a `#!/usr/bin/env bun` shebang; one not yet ported still has a `deno run` shebang and runs on Deno. Ported code is written against `node:*` APIs and web standards: no `Bun.*` API, and from `bun:test` only the names `node:test` also exports, so the runtime stays replaceable. `home/programs/opencode/plugin.ts` is the exception, because it runs inside opencode's own Bun.
+
+- **Dependencies** live in one root `package.json` with `bun.lock`; scripts import them by bare name (`import { z } from "zod"`). Bun resolves a script through its real path, so one reached through a published symlink such as `~/.claude/scripts/` still finds the repository's `node_modules`. JSR packages (`@std/assert`, `@std/yaml`, `@std/cli`, `@std/streams`, `@ein/bash-parser`) come through the `@jsr` registry in `.npmrc`, aliased in `package.json` as `npm:@jsr/<scope>__<name>`. Versions are pinned exactly. Add one with `bun add --exact <name>`, or `bunx jsr add <@scope/name>` for JSR (then drop the `^` it writes), and commit `package.json` and `bun.lock` together. Do not rely on Bun's auto-install: with a version already cached it failed on some specifiers with `Unexpected while resolving package`, and `bun build --compile` ignores it.
+- **Install**: `home.activation.installDotfilesDeps` (`home/programs/bun/default.nix`) runs `bun install --frozen-lockfile --ignore-scripts --cwd ~/dotfiles` on every switch. It needs the network only after `bun.lock` changed. A failure stops the whole `darwin-rebuild switch` there: the activation fragments after it do not run and `/run/current-system` is not updated. Run `bun install --frozen-lockfile --ignore-scripts` in `~/dotfiles`, then switch again. An activation step that runs a Bun script is ordered `entryAfter [ "installDotfilesDeps" ]`. A worktree under `.claude/worktrees/` has no `node_modules` until `bun install --frozen-lockfile` is run in it.
+- **Running commands**: `run()` in `home/programs/agents/lib/proc.ts` returns `{ code, signal, stdout, stderr }` as text with no output limit; `env` is layered over the parent environment unless `clearEnv` is set. Use `spawn` from `node:child_process` directly for a streamed or long-lived child, and never `execFile` / `exec`, whose 1 MiB `maxBuffer` throws.
+- **Tests**: `bun test <dir or files>` from the repository root, with `import { test } from "bun:test"` and assertions from `@std/assert`. Every test file runs in one process, so a test that changes the working directory, `process.env`, or a signal handler restores it in `finally`.
+- **Types**: `bunx tsc --noEmit` (TypeScript 7, `tsconfig.json` at the root). `erasableSyntaxOnly` is on: no `enum`, `namespace`, or constructor parameter properties, and relative imports keep their `.ts` extension. `include` lists the ported directories.
+
 ## Troubleshooting
 
 ### Hot-reloading tmux Configuration

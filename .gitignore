@@ -8,3 +8,6 @@ vim/swap
 
 # Nix build outputs
 /result
+
+# Bun dependencies (bun install --frozen-lockfile)
+/node_modules
