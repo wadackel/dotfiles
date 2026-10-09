@@ -248,20 +248,47 @@ export function parseRow(line: string): PaneRow | null {
 export interface PaneSnapshot {
   row: PaneRow;
   panePid: number;
+  windowId: string;
+  sessionName: string;
+  windowIndex: string;
+  // The pane a client switching to this window would land on.
+  active: boolean;
+  windowActivitySec: number | null;
   title: string;
 }
 
-export const PANE_SNAPSHOT_FORMAT =
-  `${TMUX_FORMAT}\x1f#{pane_pid}\x1f#{pane_title}`;
+// pane_title stays last: it is free text, and a title carrying the separator
+// then fails the field count instead of shifting the fields after it.
+export const PANE_SNAPSHOT_FORMAT = `${TMUX_FORMAT}\x1f#{pane_pid}` +
+  "\x1f#{window_id}\x1f#{session_name}\x1f#{window_index}" +
+  "\x1f#{pane_active}\x1f#{window_activity}\x1f#{pane_title}";
 const ROW_FIELD_COUNT = TMUX_FORMAT.split("\x1f").length;
 
 export function parsePaneSnapshot(line: string): PaneSnapshot | null {
   const fields = line.split("\x1f");
-  if (fields.length !== ROW_FIELD_COUNT + 2) return null;
+  if (fields.length !== ROW_FIELD_COUNT + 7) return null;
   const row = parseRow(fields.slice(0, ROW_FIELD_COUNT).join("\x1f"));
-  const panePid = parseIntOrNull(fields[ROW_FIELD_COUNT]);
-  if (!row || panePid === null || panePid <= 0) return null;
-  return { row, panePid, title: fields[ROW_FIELD_COUNT + 1] };
+  const [
+    panePid,
+    windowId,
+    sessionName,
+    windowIndex,
+    paneActive,
+    windowActivity,
+    title,
+  ] = fields.slice(ROW_FIELD_COUNT);
+  const pid = parseIntOrNull(panePid);
+  if (!row || pid === null || pid <= 0) return null;
+  return {
+    row,
+    panePid: pid,
+    windowId,
+    sessionName: stripControlBytes(sessionName),
+    windowIndex: stripControlBytes(windowIndex),
+    active: paneActive === "1",
+    windowActivitySec: parseIntOrNull(windowActivity),
+    title,
+  };
 }
 
 export function isStartupCodex({ row, title }: PaneSnapshot): boolean {
@@ -271,15 +298,17 @@ export function isStartupCodex({ row, title }: PaneSnapshot): boolean {
     !(row.agent === "codex" && row.sessionId.startsWith(identity));
 }
 
-function startupRow(row: PaneRow): PaneRow {
+// The pane with nothing an agent wrote: a pane that is not, or not yet, a
+// registered agent session must not show the @pane_* values a previous
+// session left behind.
+function blankRow(row: PaneRow): PaneRow {
   return {
     paneId: row.paneId,
     target: row.target,
     currentCommand: row.currentCommand,
     currentPath: row.currentPath,
-    startup: true,
-    agent: "codex",
-    status: "idle",
+    agent: "",
+    status: "",
     sessionId: "",
     cwd: row.currentPath,
     worktreeBranch: "",
@@ -299,6 +328,10 @@ function startupRow(row: PaneRow): PaneRow {
   };
 }
 
+function startupRow(row: PaneRow): PaneRow {
+  return { ...blankRow(row), startup: true, agent: "codex", status: "idle" };
+}
+
 export function selectPaneRows(
   snapshots: PaneSnapshot[],
   procs: Map<number, AgentProcess>,
@@ -310,4 +343,56 @@ export function selectPaneRows(
     }
     return isLivePaneCommand(row.agent, row.currentCommand) ? [row] : [];
   });
+}
+
+// A tmux window no agent is running in, shown as the pane a client would land
+// on. inRepo is filled by agentower.tsx's fetchPanes from the same git lookup
+// that fills repoName.
+export interface FreeWindow {
+  // Shown as `session:window`, for reading only: a session name may itself
+  // hold ':', so a jump goes by row.paneId.
+  sessionName: string;
+  windowIndex: string;
+  activitySec: number | null;
+  inRepo: boolean;
+  row: PaneRow;
+}
+
+// Longest untouched first: the window least likely to hold work in progress.
+// selfPaneId is the pane Agentower itself runs in, when it runs in one: its
+// window would otherwise list as free and preview its own screen.
+export function selectFreeWindows(
+  snapshots: PaneSnapshot[],
+  agentRows: PaneRow[],
+  selfPaneId: string | null,
+): FreeWindow[] {
+  const taken = new Set(agentRows.map((row) => row.paneId));
+  if (selfPaneId) taken.add(selfPaneId);
+  const byWindow = new Map<string, PaneSnapshot[]>();
+  for (const snapshot of snapshots) {
+    const panes = byWindow.get(snapshot.windowId);
+    if (panes) panes.push(snapshot);
+    else byWindow.set(snapshot.windowId, [snapshot]);
+  }
+  const free: FreeWindow[] = [];
+  for (const panes of byWindow.values()) {
+    if (panes.some((pane) => taken.has(pane.row.paneId))) continue;
+    const shown = panes.find((pane) => pane.active) ?? panes[0];
+    free.push({
+      sessionName: shown.sessionName,
+      windowIndex: shown.windowIndex,
+      activitySec: shown.windowActivitySec,
+      inRepo: false,
+      row: blankRow(shown.row),
+    });
+  }
+  return free.sort((a, b) =>
+    (a.activitySec ?? -1) - (b.activitySec ?? -1) ||
+    (a.sessionName < b.sessionName
+      ? -1
+      : a.sessionName > b.sessionName
+      ? 1
+      : 0) ||
+    Number(a.windowIndex) - Number(b.windowIndex)
+  );
 }

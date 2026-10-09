@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { stringCells, truncateToCells } from "./cell_width.ts";
+import { charCells, stringCells, truncateToCells } from "./cell_width.ts";
 
 // --- stringCells ---
 
@@ -99,4 +99,11 @@ Deno.test("stringCells: VS16 widens the symbol before it", () => {
 
 Deno.test("truncateToCells: emoji counted as 2 cells", () => {
   assertEquals(truncateToCells("🎉🎉🎉", 4), "🎉…");
+});
+
+Deno.test("charCells: Private Use Area glyphs take one cell", () => {
+  assertEquals(charCells("\u{E0B6}"), 1);
+  assertEquals(charCells("\u{F0311}"), 1);
+  assertEquals(charCells("\u{F900}"), 2);
+  assertEquals(charCells("\u{8C48}"), 2);
 });

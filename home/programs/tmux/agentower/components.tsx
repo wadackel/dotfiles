@@ -13,7 +13,12 @@
 import React from "npm:react@19.2.0";
 import { Box, Text } from "npm:ink@7.1.1";
 
-import { type PaneRow, STATUS_META, USER_LABEL_META } from "./pane_row.ts";
+import {
+  type FreeWindow,
+  type PaneRow,
+  STATUS_META,
+  USER_LABEL_META,
+} from "./pane_row.ts";
 import {
   basename,
   elapsedSource,
@@ -427,6 +432,122 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
   );
 };
 
+// --- FreeWindowLine ---
+
+// "agents" lists the panes an agent runs in; "free" lists the tmux windows
+// none runs in.
+export type ListScreen = "agents" | "free";
+
+// What `git status` said about a free window's directory. "pending" until the
+// check returns; "unknown" when it failed or timed out, so that once the check
+// is back a blank mark never stands for a tree nobody could read.
+export type DirtyState = "pending" | "dirty" | "clean" | "unknown";
+
+const DIRTY_MARK: Record<DirtyState, string> = {
+  pending: " ",
+  dirty: "±",
+  clean: " ",
+  unknown: "?",
+};
+
+// Widest `session:window` column: a long name gives way to the location beside it.
+const FREE_NAME_MAX = 20;
+
+export function freeNameColumn(windows: FreeWindow[]): number {
+  return Math.min(
+    FREE_NAME_MAX,
+    Math.max(
+      0,
+      ...windows.map((w) => stringCells(`${w.sessionName}:${w.windowIndex}`)),
+    ),
+  );
+}
+
+// marker(2) + gap after the name(2) + gap before the mark(1) + mark(1).
+const FREE_ROW1_OVERHEAD = 6;
+
+const FREE_ROW2_RIGHT_CELLS = 2 + ELAPSED_CELLS + 2;
+
+interface FreeWindowLineProps {
+  entry: FreeWindow;
+  dirty: DirtyState | undefined;
+  now: number;
+  selected: boolean;
+  listWidth: number;
+  nameMax: number;
+  padded: boolean;
+}
+
+// Same height as PaneRowLine, so listGeometry and the mouse hit-test serve
+// both lists.
+export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
+  { entry, dirty, now, selected, listWidth, nameMax, padded }:
+    FreeWindowLineProps,
+) => {
+  const marker = selected ? "▌ " : "  ";
+  // The window index is what tells two rows of one session apart, so a long
+  // session name gives way before it.
+  const index = ":" + entry.windowIndex;
+  const name = truncateToCells(
+    entry.sessionName,
+    Math.max(0, nameMax - stringCells(index)),
+  ) + index;
+  const namePad = " ".repeat(Math.max(0, nameMax - stringCells(name)));
+  const { repo, worktree, branch } = locationParts(entry.row);
+  const budget = Math.max(0, listWidth - FREE_ROW1_OVERHEAD - nameMax);
+  const repoText = repoLabel(repo, worktree, budget);
+  const repoCells = stringCells(repoText.head + repoText.suffix);
+  const separator = " · ";
+  const branchText = truncateToCells(
+    branch,
+    Math.max(0, budget - repoCells - separator.length),
+  );
+  const locationCells = repoCells +
+    (branchText ? separator.length + stringCells(branchText) : 0);
+  const command = truncateToCells(
+    entry.row.currentCommand,
+    Math.max(0, listWidth - 2 - FREE_ROW2_RIGHT_CELLS),
+  );
+  return (
+    <Box
+      flexDirection="column"
+      backgroundColor={selected ? DOGRUN.band : undefined}
+    >
+      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+      <Box>
+        <Text color={DOGRUN.accent}>{marker}</Text>
+        <Text color={DOGRUN.fg} bold={selected}>{name}</Text>
+        <Text>{namePad + "  "}</Text>
+        <Text color={DOGRUN.fg}>{repoText.head}</Text>
+        {repoText.suffix
+          ? <Text color={DOGRUN.fgDim}>{repoText.suffix}</Text>
+          : null}
+        {branchText
+          ? (
+            <>
+              <Text color={DOGRUN.muted}>{separator}</Text>
+              <Text color={DOGRUN.accent}>{branchText}</Text>
+            </>
+          )
+          : null}
+        <Text>{" ".repeat(Math.max(0, budget - locationCells) + 1)}</Text>
+        <Text color={DOGRUN.warn}>{DIRTY_MARK[dirty ?? "clean"]}</Text>
+      </Box>
+      <Box>
+        <Text color={DOGRUN.accent}>{marker}</Text>
+        <Text color={DOGRUN.fgDim}>{command}</Text>
+        <Box flexGrow={1} />
+        <Text color={DOGRUN.fgDim}>
+          {"  " +
+            formatElapsed(entry.activitySec, now).padStart(ELAPSED_CELLS) +
+            "  "}
+        </Text>
+      </Box>
+      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+    </Box>
+  );
+};
+
 // --- Usage rows ---
 
 export interface UsageToken {
@@ -755,25 +876,40 @@ function chipTokens(
   ];
 }
 
-// The bottom row: the wait/idle filter pill while `w` is on, then each key as
-// a chip followed by what it does. Built as tokens so clampUsageTokens can cut
-// it from the right on a narrow popup — "jump" sits first so the harness'
-// spawn marker survives the narrowest e2e width.
-export function hintTokens(filterEnabled: boolean): UsageToken[] {
-  const keys: [string, string][] = [
-    [ENTER_ICON, "jump"],
-    ["j k", "move"],
-    ["n", "next wait"],
-    ["w", filterEnabled ? "clear" : "filter"],
-    ["m", "label"],
-    ["q", "quit"],
-  ];
-  const out: UsageToken[] = filterEnabled
+// The bottom row: a pill naming the view when it is not the plain agent list
+// (the wait/idle filter, or the free windows), then each key as a chip
+// followed by what it does. Built as tokens so clampUsageTokens can cut it
+// from the right on a narrow popup — "jump" sits first so the harness' spawn
+// marker survives the narrowest e2e width.
+export function hintTokens(
+  filterEnabled: boolean,
+  screen: ListScreen,
+): UsageToken[] {
+  const keys: [string, string][] = screen === "free"
     ? [
-      ...chipTokens(" wait/idle ", DOGRUN.fg, DOGRUN.muted),
-      { text: HINT_GAP, color: DOGRUN.muted },
+      [ENTER_ICON, "jump"],
+      ["j k", "move"],
+      ["f", "agents"],
+      ["q", "quit"],
     ]
-    : [];
+    : [
+      [ENTER_ICON, "jump"],
+      ["j k", "move"],
+      ["n", "next wait"],
+      ["w", filterEnabled ? "clear" : "filter"],
+      ["f", "free"],
+      ["m", "label"],
+      ["q", "quit"],
+    ];
+  const pill = screen === "free"
+    ? " free windows "
+    : filterEnabled
+    ? " wait/idle "
+    : null;
+  const out: UsageToken[] = pill === null ? [] : [
+    ...chipTokens(pill, DOGRUN.fg, DOGRUN.muted),
+    { text: HINT_GAP, color: DOGRUN.muted },
+  ];
   keys.forEach(([key, label], i) => {
     if (i > 0) out.push({ text: HINT_GAP, color: DOGRUN.muted });
     out.push(...chipTokens(key, DOGRUN.accent, DOGRUN.bgChip));
@@ -784,14 +920,15 @@ export function hintTokens(filterEnabled: boolean): UsageToken[] {
 
 interface HintBarProps {
   filterEnabled: boolean;
+  screen: ListScreen;
   width: number;
 }
 
 export const HintBar: React.FC<HintBarProps> = (
-  { filterEnabled, width }: HintBarProps,
+  { filterEnabled, screen, width }: HintBarProps,
 ) => (
   <Box marginTop={1}>
-    {clampUsageTokens(hintTokens(filterEnabled), width).map((t, i) => (
+    {clampUsageTokens(hintTokens(filterEnabled, screen), width).map((t, i) => (
       <React.Fragment key={i}>
         <Text color={t.color} backgroundColor={t.backgroundColor}>
           {t.text}

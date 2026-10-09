@@ -46,9 +46,11 @@ import { type AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
 import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
 import {
+  type FreeWindow,
   isStartupCodex,
   type PaneSnapshot,
   parsePaneSnapshot,
+  selectFreeWindows,
   selectPaneRows,
 } from "./pane_row.ts";
 import { parseProcesses } from "../shared/agent-presence.ts";
@@ -64,6 +66,11 @@ function startupSnapshot(overrides: Partial<PaneRow> = {}): PaneSnapshot {
   return {
     row,
     panePid: 100,
+    windowId: "@0",
+    sessionName: "test",
+    windowIndex: "0",
+    active: true,
+    windowActivitySec: null,
     title: `codex | ${STARTUP_ID.slice(0, 29)}... | project`,
   };
 }
@@ -72,11 +79,163 @@ Deno.test("startup snapshot preserves the existing row format and adds title and
   const fields = Array(23).fill("");
   fields[0] = "%10";
   const snapshot = parsePaneSnapshot(
-    [...fields, "100", `codex | ${STARTUP_ID}`].join("\x1f"),
+    [
+      ...fields,
+      "100",
+      "@3",
+      "wt:a",
+      "2",
+      "1",
+      "1700000000",
+      `codex | ${STARTUP_ID}`,
+    ].join("\x1f"),
   );
   assertEquals(snapshot?.panePid, 100);
   assertEquals(snapshot?.title, `codex | ${STARTUP_ID}`);
+  assertEquals(snapshot?.windowId, "@3");
+  assertEquals(snapshot?.sessionName, "wt:a");
+  assertEquals(snapshot?.windowIndex, "2");
+  assertEquals(snapshot?.active, true);
+  assertEquals(snapshot?.windowActivitySec, 1700000000);
   assertEquals(parsePaneSnapshot(fields.join("\x1f")), null);
+  assertEquals(
+    parsePaneSnapshot([...fields, "100", `codex | ${STARTUP_ID}`].join("\x1f")),
+    null,
+  );
+});
+
+Deno.test("parsePaneSnapshot: session name is stripped and a blank activity is null", () => {
+  const fields = Array(23).fill("");
+  fields[0] = "%10";
+  const snapshot = parsePaneSnapshot(
+    [...fields, "100", "@3", "s\x1bname", "0", "0", "", "t"].join("\x1f"),
+  );
+  assertEquals(snapshot?.active, false);
+  assertEquals(snapshot?.windowActivitySec, null);
+  assertEquals(snapshot?.sessionName, "s name");
+});
+
+function freeSnapshot(
+  opts: {
+    paneId: string;
+    window: string;
+    session?: string;
+    active?: boolean;
+    activity?: number | null;
+    row?: Partial<PaneRow>;
+  },
+): PaneSnapshot {
+  const session = opts.session ?? "s";
+  const fields = Array(23).fill("");
+  fields[0] = opts.paneId;
+  fields[1] = `${session}:${opts.window}.0`;
+  fields[2] = "zsh";
+  fields[3] = `/work/${opts.window}`;
+  return {
+    row: { ...parseRow(fields.join("\x1f"))!, ...opts.row },
+    panePid: 100,
+    windowId: `@${session}-${opts.window}`,
+    sessionName: session,
+    windowIndex: opts.window,
+    active: opts.active ?? true,
+    windowActivitySec: opts.activity === undefined ? 100 : opts.activity,
+    title: "",
+  };
+}
+
+const LIVE_CLAUDE = { agent: "claude", currentCommand: "claude" };
+const label = (w: FreeWindow) => `${w.sessionName}:${w.windowIndex}`;
+
+Deno.test("selectFreeWindows: a window without a live agent pane is free, even beside one that has it", () => {
+  const snapshots = [
+    freeSnapshot({ paneId: "%1", window: "1", row: LIVE_CLAUDE }),
+    freeSnapshot({ paneId: "%2", window: "1", active: false }),
+    freeSnapshot({ paneId: "%3", window: "2" }),
+    freeSnapshot({ paneId: "%4", window: "0", session: "other" }),
+  ];
+  const free = selectFreeWindows(
+    snapshots,
+    selectPaneRows(snapshots, parseProcesses("")),
+    null,
+  );
+  assertEquals(
+    free.map((w) => [label(w), w.row.paneId, w.inRepo]),
+    [["other:0", "%4", false], ["s:2", "%3", false]],
+  );
+});
+
+Deno.test("selectFreeWindows: the window Agentower runs in is not offered", () => {
+  const snapshots = [
+    freeSnapshot({ paneId: "%1", window: "1" }),
+    freeSnapshot({ paneId: "%2", window: "2" }),
+  ];
+  assertEquals(
+    selectFreeWindows(snapshots, [], "%2").map(label),
+    ["s:1"],
+  );
+});
+
+Deno.test("selectFreeWindows: a stale agent pane leaves the window free and drops its old values", () => {
+  const snapshots = [
+    freeSnapshot({
+      paneId: "%1",
+      window: "3",
+      row: {
+        agent: "claude",
+        status: "running",
+        cwd: "/old/place",
+        prompt: "old prompt",
+        worktreeBranch: "old-branch",
+        sessionId: "abc",
+        userLabel: "review",
+      },
+    }),
+  ];
+  const [free] = selectFreeWindows(
+    snapshots,
+    selectPaneRows(snapshots, parseProcesses("")),
+    null,
+  );
+  assertEquals(label(free), "s:3");
+  assertEquals(free.row.cwd, "/work/3");
+  assertEquals(free.row.currentPath, "/work/3");
+  assertEquals(free.row.currentCommand, "zsh");
+  assertEquals(free.row.agent, "");
+  assertEquals(free.row.status, "");
+  assertEquals(free.row.prompt, "");
+  assertEquals(free.row.worktreeBranch, "");
+  assertEquals(free.row.sessionId, "");
+  assertEquals(free.row.userLabel, "");
+});
+
+Deno.test("selectFreeWindows: the window's active pane represents it", () => {
+  const snapshots = [
+    freeSnapshot({ paneId: "%1", window: "1", active: false }),
+    freeSnapshot({ paneId: "%2", window: "1", active: true }),
+    freeSnapshot({ paneId: "%3", window: "1", active: false }),
+    freeSnapshot({ paneId: "%4", window: "2", active: false }),
+    freeSnapshot({ paneId: "%5", window: "2", active: false }),
+  ];
+  assertEquals(
+    selectFreeWindows(snapshots, [], null).map((w) => [label(w), w.row.paneId]),
+    [["s:1", "%2"], ["s:2", "%4"]],
+  );
+});
+
+Deno.test("selectFreeWindows: longest untouched first, then by session and window number", () => {
+  const snapshots = [
+    freeSnapshot({ paneId: "%1", window: "1", activity: 300 }),
+    freeSnapshot({ paneId: "%2", window: "10", activity: 100 }),
+    freeSnapshot({ paneId: "%3", window: "2", activity: 100 }),
+    freeSnapshot({ paneId: "%5", window: "3", session: "a", activity: 100 }),
+    freeSnapshot({ paneId: "%4", window: "4", activity: null }),
+  ];
+  assertEquals(
+    selectFreeWindows(snapshots, [], null).map((
+      w,
+    ) => [label(w), w.activitySec]),
+    [["s:4", null], ["a:3", 100], ["s:2", 100], ["s:10", 100], ["s:1", 300]],
+  );
 });
 
 Deno.test("unregistered Codex is idle with no previous session data", () => {
@@ -1182,13 +1341,15 @@ Deno.test("nextWaitingIndex: no waiting row → no move", () => {
 // --- hintTokens ---
 
 const hintText = (filter: boolean) =>
-  hintTokens(filter).map((t) => t.text).join("");
+  hintTokens(filter, "agents").map((t) => t.text).join("");
 
 Deno.test("hintTokens: jump leads so a right-side clip never removes it", () => {
   const text = hintText(false);
   assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
   assertEquals(
-    clampUsageTokens(hintTokens(false), 20).map((t) => t.text).join("")
+    clampUsageTokens(hintTokens(false, "agents"), 20).map((t) => t.text).join(
+      "",
+    )
       .includes("jump"),
     true,
   );
@@ -1201,8 +1362,24 @@ Deno.test("hintTokens: the wait/idle pill and `clear` appear only with the filte
   assertStringIncludes(hintText(true), " clear");
 });
 
+Deno.test("hintTokens: the agent list names f as the way to the free windows", () => {
+  const text = hintText(false);
+  assertStringIncludes(text, " free   ");
+  assertEquals(text.includes("free windows"), false);
+});
+
+Deno.test("hintTokens: the free view keeps only the keys that act there", () => {
+  const text = hintTokens(true, "free").map((t) => t.text).join("");
+  assertStringIncludes(text, " free windows ");
+  assertStringIncludes(text, " agents   ");
+  assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
+  for (const absent of ["next wait", "filter", "clear", "label", "wait/idle"]) {
+    assertEquals(text.includes(absent), false, absent);
+  }
+});
+
 Deno.test("hintTokens: key chips carry the chip fill", () => {
-  const chip = hintTokens(false).find((t) => t.text === "n")!;
+  const chip = hintTokens(false, "agents").find((t) => t.text === "n")!;
   assertEquals(chip.backgroundColor, DOGRUN.bgChip);
 });
 

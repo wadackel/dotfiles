@@ -21,6 +21,7 @@ import {
 // without dragging in React + Ink at import time.
 import {
   type Agent,
+  type FreeWindow,
   isLivePaneCommand,
   isStartupCodex,
   nextUserLabel,
@@ -29,6 +30,7 @@ import {
   type PaneStatus,
   parsePaneSnapshot,
   parseRow,
+  selectFreeWindows,
   selectPaneRows,
   STATUS_META,
   TMUX_FORMAT,
@@ -79,8 +81,12 @@ import {
 import {
   Card,
   CARD_CHROME_COLS,
+  type DirtyState,
   DOGRUN,
+  freeNameColumn,
+  FreeWindowLine,
   HintBar,
+  type ListScreen,
   PaneRowLine,
   ROW1_FIXED_OVERHEAD,
   type TaskProgress,
@@ -651,7 +657,11 @@ export async function readTaskProgressForRow(
 // (kernel p_comm basename, ≤15 bytes on macOS) — distinct from
 // agentower-doctor.ts:detectAgentCommand which scans full `ps -o command` substrings.
 
-async function fetchPanes(): Promise<PaneRow[]> {
+// Free windows are resolved only on request: each costs a git lookup, and the
+// popup's startup pays for nothing the first frame does not show.
+async function fetchPanes(
+  withFree: boolean,
+): Promise<{ rows: PaneRow[]; free: FreeWindow[] | null }> {
   const { stdout } = await tmuxRun([
     "list-panes",
     "-a",
@@ -680,22 +690,63 @@ async function fetchPanes(): Promise<PaneRow[]> {
     }
   }
   const rows = selectPaneRows(snapshots, procs);
+  const free = withFree
+    ? selectFreeWindows(snapshots, rows, Deno.env.get("TMUX_PANE") ?? null)
+    : null;
   // Resolve the repository location and fill in a missing worktreeBranch from
   // the pane's cwd (falling back to pane_current_path when @pane_cwd is unset,
   // e.g. when the latest hook event for a Claude pane carried no cwd payload)
   // in parallel.
-  await Promise.all(
-    rows.map(async (row) => {
-      const source = row.cwd || row.currentPath;
-      if (!source) return;
-      const location = await gitLocation(source);
-      row.repoName = location.repo;
-      row.worktreeName = location.worktree;
-      row.worktreeBranch = row.worktreeBranch ||
-        await readHeadBranch(location.gitDir);
+  const locate = async (row: PaneRow): Promise<boolean> => {
+    const source = row.cwd || row.currentPath;
+    if (!source) return false;
+    const location = await gitLocation(source);
+    row.repoName = location.repo;
+    row.worktreeName = location.worktree;
+    row.worktreeBranch = row.worktreeBranch ||
+      await readHeadBranch(location.gitDir);
+    return location.gitDir !== "";
+  };
+  await Promise.all([
+    ...rows.map(locate),
+    ...(free ?? []).map(async (entry) => {
+      entry.inRepo = await locate(entry.row);
     }),
-  );
-  return rows;
+  ]);
+  return { rows, free };
+}
+
+// Anything but a clean exit is "unknown": a blank mark reads as "nothing left
+// over here", which a failed or timed-out check has not established.
+async function gitDirty(dir: string): Promise<DirtyState> {
+  try {
+    const { code, stdout } = await new Deno.Command("git", {
+      // The directory is whatever a pane happens to sit in, and this runs
+      // without the user typing git there: core.fsmonitor in its config would
+      // name a program to execute, and a bare repository embedded in a clone
+      // would be picked up as the repository. Without --no-optional-locks,
+      // status refreshes the index under index.lock and can fail a git command
+      // the user is running there.
+      args: [
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "safe.bareRepository=explicit",
+        "--no-optional-locks",
+        "status",
+        "--porcelain",
+      ],
+      cwd: dir,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "null",
+      signal: AbortSignal.timeout(2000),
+    }).output();
+    if (code !== 0) return "unknown";
+    return stdout.length > 0 ? "dirty" : "clean";
+  } catch {
+    return "unknown";
+  }
 }
 
 async function capturePane(paneId: string): Promise<string> {
@@ -888,6 +939,18 @@ function App({
   const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   const [filterEnabled, setFilterEnabled] = useState(false);
+  const [screen, setScreen] = useState<ListScreen>("agents");
+  // The tick effect below never re-subscribes, so it reads the screen here.
+  const screenRef = useRef<ListScreen>("agents");
+  const [free, setFree] = useState<FreeWindow[]>([]);
+  // Keyed by the window's directory; emptied on every entry to the free
+  // screen, so the marks are as of that moment and `f` twice re-reads them.
+  const [dirty, setDirty] = useState<Map<string, DirtyState>>(new Map());
+  const dirtyEpoch = useRef(0);
+  const freeLoading = useRef(false);
+  const agentSelection = useRef(initialSelectedPaneId);
+  const selectedRef = useRef(initialSelectedPaneId);
+  selectedRef.current = selectedPaneId;
   // `now` re-reads Date.now() on every render; the periodic setRows below
   // triggers a re-render every TICK_INTERVAL_MS, so elapsed time advances
   // naturally without a dedicated tick state.
@@ -901,7 +964,9 @@ function App({
     const tick = async () => {
       const started = performance.now();
       try {
-        const r = await fetchPanes();
+        const { rows: r, free: nextFree } = await fetchPanes(
+          screenRef.current === "free",
+        );
         if (cancelled) return;
         // Merge in any pending m/M writes whose tmux SSOT hasn't caught up.
         // When SSOT matches the pending label, clear the guard so future ticks
@@ -937,6 +1002,7 @@ function App({
         // at the price of that extra frame every second.
         if (!cancelled) {
           setRows(merged);
+          if (nextFree) setFree(nextFree);
           setTaskProgressMap(new Map(entries));
           if (nextUsages) setUsages(nextUsages);
         }
@@ -957,9 +1023,67 @@ function App({
   // Filter-on-demand: pressing `w` toggles filterEnabled. derivedRows is the
   // source of truth for everything visible (selection, navigation, layout).
   // Inline filter — N is small (≤20 panes typical), useMemo would add no value.
-  const derivedRows = filterEnabled
+  const derivedRows = screen === "free"
+    ? free.map((s: FreeWindow) => s.row)
+    : filterEnabled
     ? rows.filter((r: PaneRow) => r.status === "waiting" || r.status === "idle")
     : rows;
+
+  useEffect(() => {
+    if (screen !== "free") return;
+    const unchecked = [
+      ...new Set<string>(
+        free
+          .filter((s: FreeWindow) => s.inRepo && !dirty.has(s.row.currentPath))
+          .map((s: FreeWindow) => s.row.currentPath),
+      ),
+    ];
+    if (unchecked.length === 0) return;
+    const epoch = dirtyEpoch.current;
+    setDirty((prev: Map<string, DirtyState>) => {
+      const next = new Map(prev);
+      for (const dir of unchecked) next.set(dir, "pending");
+      return next;
+    });
+    for (const dir of unchecked) {
+      gitDirty(dir).then((state) => {
+        // An answer from an earlier visit must not fill the entry the
+        // current visit is still waiting on.
+        if (epoch !== dirtyEpoch.current) return;
+        setDirty((prev: Map<string, DirtyState>) =>
+          new Map(prev).set(dir, state)
+        );
+      });
+    }
+  }, [screen, free, dirty]);
+
+  const toggleScreen = () => {
+    if (screenRef.current === "free") {
+      screenRef.current = "agents";
+      setScreen("agents");
+      setSelectedPaneId(agentSelection.current);
+      return;
+    }
+    if (freeLoading.current) return;
+    freeLoading.current = true;
+    // The switch waits for the rows and their locations so the list is drawn
+    // once, complete. `rows` stays with the tick, which merges pending labels.
+    fetchPanes(true)
+      .then(({ free: next }) => {
+        if (!next) return;
+        agentSelection.current = selectedRef.current;
+        screenRef.current = "free";
+        setScreen("free");
+        setFree(next);
+        dirtyEpoch.current += 1;
+        setDirty(new Map());
+        setSelectedPaneId(next[0]?.row.paneId ?? "");
+      })
+      .catch((e) => console.error("agentower: free windows failed:", e))
+      .finally(() => {
+        freeLoading.current = false;
+      });
+  };
   const foundIdx = derivedRows.findIndex((r: PaneRow) =>
     r.paneId === selectedPaneId
   );
@@ -997,6 +1121,8 @@ function App({
     label: UserLabel,
     sessionId: string,
   ) => {
+    // Labels belong to agent sessions; a free window's pane has none to bind to.
+    if (screenRef.current === "free") return;
     if (rows.find((row: PaneRow) => row.paneId === paneId)?.startup) return;
     // Optimistic local update + pending guard. The tick's merge keeps showing
     // `label` until tmux SSOT acknowledges it, so a fetchPanes that races
@@ -1097,6 +1223,12 @@ function App({
     if (key.downArrow || input === "j") {
       updateSelection(wrapStep(1));
     }
+    if (input === "f") {
+      toggleScreen();
+      return;
+    }
+    // The keys below act on an agent's state, which a free window lacks.
+    if (screenRef.current === "free") return;
     if (input === "n") {
       updateSelection((cur, rows) => nextWaitingIndex(rows, cur));
       return;
@@ -1162,10 +1294,23 @@ function App({
     dispatch(input, key);
   });
 
-  if (rows.length === 0) {
-    return <Text color={DOGRUN.warn}>No panes available.</Text>;
-  }
-  if (filterEnabled && derivedRows.length === 0) {
+  if (screen === "free") {
+    if (free.length === 0) {
+      return (
+        <Box flexDirection="column">
+          <Text color={DOGRUN.warn}>No free windows</Text>
+          <Text color={DOGRUN.muted}>Press f to go back</Text>
+        </Box>
+      );
+    }
+  } else if (rows.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Text color={DOGRUN.warn}>No panes available.</Text>
+        <Text color={DOGRUN.muted}>Press f for free windows</Text>
+      </Box>
+    );
+  } else if (filterEnabled && derivedRows.length === 0) {
     return (
       <Box flexDirection="column">
         <Text color={DOGRUN.warn}>No waiting/idle panes</Text>
@@ -1215,6 +1360,7 @@ function App({
     ),
     Math.max(0, ...rowsParts.map((p) => stringCells(p.branch))),
   );
+  const freeNameMax = freeNameColumn(free);
 
   return (
     <Box flexDirection="row" width={totalCols} height={totalRows}>
@@ -1226,21 +1372,36 @@ function App({
             </Text>
           )}
           <Box flexDirection="column" gap={card.gap}>
-            {derivedRows
-              .slice(view.offset, view.offset + view.count)
-              .map((row: PaneRow, i: number) => (
-                <PaneRowLine
-                  key={row.paneId}
-                  row={row}
-                  now={now}
-                  selected={view.offset + i === index}
-                  taskProgress={taskProgressMap.get(row.paneId) ?? null}
-                  listWidth={listWidth}
-                  repoMax={repoMax}
-                  branchMax={branchMax}
-                  padded={card === FULL_CARD}
-                />
-              ))}
+            {screen === "free"
+              ? free
+                .slice(view.offset, view.offset + view.count)
+                .map((entry: FreeWindow, i: number) => (
+                  <FreeWindowLine
+                    key={entry.row.paneId}
+                    entry={entry}
+                    dirty={dirty.get(entry.row.currentPath)}
+                    now={now}
+                    selected={view.offset + i === index}
+                    listWidth={listWidth}
+                    nameMax={freeNameMax}
+                    padded={card === FULL_CARD}
+                  />
+                ))
+              : derivedRows
+                .slice(view.offset, view.offset + view.count)
+                .map((row: PaneRow, i: number) => (
+                  <PaneRowLine
+                    key={row.paneId}
+                    row={row}
+                    now={now}
+                    selected={view.offset + i === index}
+                    taskProgress={taskProgressMap.get(row.paneId) ?? null}
+                    listWidth={listWidth}
+                    repoMax={repoMax}
+                    branchMax={branchMax}
+                    padded={card === FULL_CARD}
+                  />
+                ))}
           </Box>
           {view.scrolling && (
             <Text color={DOGRUN.muted}>
@@ -1248,7 +1409,11 @@ function App({
             </Text>
           )}
         </Box>
-        <HintBar filterEnabled={filterEnabled} width={listWidth} />
+        <HintBar
+          filterEnabled={filterEnabled}
+          screen={screen}
+          width={listWidth}
+        />
       </Box>
       {current && previewWidth > 0 && (
         <Box
@@ -1281,8 +1446,8 @@ export async function main(): Promise<void> {
   // latency — the whole reason Agentower is AOT-compiled in the first place.
   // The prefix chord exists to close a popup that swallows every key, so the
   // dashboard skips it.
-  const [rows, usages, prefixKey] = await Promise.all([
-    fetchPanes(),
+  const [{ rows }, usages, prefixKey] = await Promise.all([
+    fetchPanes(false),
     readAllAgentUsage(),
     mode === "popup" ? readPrefixKey() : null,
   ]);

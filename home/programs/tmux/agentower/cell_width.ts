@@ -7,8 +7,11 @@
 // (narrow / ambiguous / neutral) fall back to 1 cell, matching default
 // terminal rendering outside East Asian locales. Called per code point from
 // Array.from iteration so surrogate pairs are already merged.
+// Written as escapes: U+F900 typed literally is NFC-normalized by editors to
+// U+8C48, which turned its range into U+8C48-U+FAFF and counted every Private
+// Use Area glyph (the pill caps, Nerd Font icons) as two cells.
 export const EAST_ASIAN_WIDE_RE =
-  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{2FFFD}]/u;
+  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{2FFFD}]/u;
 
 // Combining marks and zero-width format characters draw into the previous
 // cell. Checked before EAST_ASIAN_WIDE_RE because the kana block it spans also

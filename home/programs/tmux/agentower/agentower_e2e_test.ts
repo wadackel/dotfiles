@@ -1347,7 +1347,7 @@ Deno.test("S29: stale codex pane (currentCommand=zsh) is filtered out", async ()
 // resize-tracking useEffect subscribes to stdout 'resize' so the layout
 // (listWidth / previewWidth / bodyHeight / hint bar width) updates live.
 //
-// Signal: the key-hint bar is ~73 cells, spans the list column, and is clipped
+// Signal: the key-hint bar is 84 cells, spans the list column, and is clipped
 // from the right, so its last hint " quit" is cut at cols 60 (list 40) and
 // shown at cols 150 (list 90).
 Deno.test("S30: Agentower re-layouts after tmux resize-window", async () => {
@@ -2820,6 +2820,432 @@ Deno.test("S67: dashboard jumps the client that had input last", async () => {
 
     await sendKey(agentower, "q");
     await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- Free windows (f) ----
+//
+// The free unit is a window. These scenarios mostly make one in a session of
+// its own, which runs `cat`, as `away` does: a login shell would put the
+// developer's own prompt into the preview. The session's name differs from its
+// directory's, so a match on the name is a match on the list row. `test:0`
+// (the shell setupServer starts), `away` and attachClient's `clienthost-N`
+// are free windows too, which is why every scenario picks its target by name.
+// Agentower's own window is not: it leaves out the pane it runs in.
+
+async function createFreeSession(name: string, cwd = "/tmp"): Promise<string> {
+  return (await tmux([
+    "new-session",
+    "-d",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    "-s",
+    name,
+    "-x",
+    "200",
+    "-y",
+    "50",
+    "-c",
+    cwd,
+    "cat",
+  ])).trim();
+}
+
+function freeRow(out: string, name: string): string {
+  return listColumn(out).find((l) => l.includes(name)) ?? "";
+}
+
+// The pill's left cap is part of the match: the agent list's empty state says
+// "Press f for free windows" too.
+const onFreeScreen = (o: string) => o.includes("\u{E0B6} free windows");
+
+async function selectFreeRow(agentower: string, name: string): Promise<void> {
+  for (let i = 0; i < 8; i++) {
+    if (selectedLine(await captureOutput(agentower)).includes(name)) return;
+    const before = selectedLine(await captureOutput(agentower));
+    await sendKey(agentower, "j");
+    await waitFor(agentower, (o) => selectedLine(o) !== before);
+  }
+  throw new Error(`free window ${name} never became the selection`);
+}
+
+Deno.test("S70: f lists the windows without an agent and f again restores the agent list", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await createClaudePane({ status: "running", prompt: "row-b" });
+    await createFreeSession("free-alpha");
+    await createFreeSession("free-beta");
+    const agentower = await spawnAgentower();
+    assertFalse((await captureOutput(agentower)).includes("free-alpha"));
+    await sendKey(agentower, "Down");
+    await waitFor(agentower, selectedIncludes("row-b"));
+
+    await sendKey(agentower, "f");
+    const free = await waitFor(agentower, onFreeScreen);
+    const rows = listColumn(free).join("\n");
+    assertStringIncludes(rows, "free-alpha");
+    assertStringIncludes(rows, "free-beta");
+    assertFalse(free.includes("row-a") || free.includes("row-b"), free);
+    const labelled = listColumn(free).filter((l) =>
+      ["free-alpha", "free-beta", "test:0"].some((name) => l.includes(name))
+    );
+    assertEquals(labelled.length, 3, free);
+    assertStringIncludes(labelled[0], "▌", free);
+    assertStringIncludes(freeRow(free, "free-alpha"), "tmp");
+
+    await sendKey(agentower, "f");
+    const back = await waitFor(agentower, (o) => !onFreeScreen(o));
+    assertStringIncludes(selectedLine(back), "row-b");
+    assertFalse(listColumn(back).join("\n").includes("free-alpha"), back);
+
+    await sendKey(agentower, "f");
+    await waitFor(agentower, onFreeScreen);
+    await sendKey(agentower, "Enter");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S71: dashboard Enter on a free window moves the client into it", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const target = await createFreeSession("free-target");
+    await createAwaySession();
+    const { clientName } = await attachClient("away");
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+
+    await sendKey(agentower, "f");
+    await waitFor(agentower, onFreeScreen);
+    await selectFreeRow(agentower, "free-target");
+    await sendKey(agentower, "Enter");
+
+    assertEquals(
+      await waitForClientPane(clientName, target),
+      { session: "free-target", pane: target },
+    );
+    assertEquals(await windowAlive(), true);
+    assertEquals(onFreeScreen(await captureOutput(agentower)), true);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S72: only a worktree with leftover changes carries the mark", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-free-",
+  });
+  try {
+    for (const dir of ["dirty-a", "dirty-b", "clean-c"]) {
+      await Deno.mkdir(`${root}/${dir}`);
+      await git(`${root}/${dir}`, "init", "-q", "-b", "main");
+      await git(`${root}/${dir}`, "commit", "-q", "--allow-empty", "-m", "i");
+    }
+    await Deno.mkdir(`${root}/plain-d`);
+    await Deno.writeTextFile(`${root}/dirty-a/leftover.txt`, "x");
+    await Deno.writeTextFile(`${root}/dirty-b/leftover.txt`, "x");
+
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await createFreeSession("s-one", `${root}/dirty-a`);
+    await createFreeSession("s-two", `${root}/dirty-b`);
+    await createFreeSession("s-three", `${root}/clean-c`);
+    await createFreeSession("s-four", `${root}/plain-d`);
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "f");
+    const out = await waitFor(
+      agentower,
+      (o) =>
+        freeRow(o, "s-one").includes("±") && freeRow(o, "s-two").includes("±"),
+    );
+
+    assertStringIncludes(freeRow(out, "s-one"), "dirty-a");
+    assertStringIncludes(freeRow(out, "s-one"), "main");
+    assertStringIncludes(freeRow(out, "s-three"), "clean-c");
+    assertStringIncludes(freeRow(out, "s-three"), "main");
+    assertFalse(/[±?]/.test(freeRow(out, "s-three")), freeRow(out, "s-three"));
+    assertStringIncludes(freeRow(out, "s-four"), "plain-d");
+    assertFalse(freeRow(out, "s-four").includes("main"));
+    assertFalse(/[±?]/.test(freeRow(out, "s-four")), freeRow(out, "s-four"));
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("S73: with no agent pane, f still reaches the free windows", async () => {
+  await setupServer();
+  try {
+    await createFreeSession("free-solo");
+    const agentower = await spawnAgentower();
+    const empty = await captureOutput(agentower);
+    assertStringIncludes(empty, "No panes available.");
+    assertStringIncludes(empty, "Press f for free windows");
+
+    await sendKey(agentower, "f");
+    const free = await waitFor(agentower, onFreeScreen);
+    assertStringIncludes(listColumn(free).join("\n"), "free-solo");
+
+    await sendKey(agentower, "f");
+    await waitFor(agentower, (o) => o.includes("No panes available."));
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S73b: with an agent in every window, the free screen says so and f goes back", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await tmux(["kill-window", "-t", "test:0"]);
+    const agentower = await spawnAgentower();
+
+    await sendKey(agentower, "w");
+    await waitFor(agentower, (o) => o.includes("No waiting/idle panes"));
+    await sendKey(agentower, "f");
+    const none = await waitFor(
+      agentower,
+      (o) => o.includes("No free windows"),
+    );
+    assertStringIncludes(none, "Press f to go back");
+
+    await sendKey(agentower, "f");
+    await waitFor(agentower, (o) => o.includes("No waiting/idle panes"));
+    await sendKey(agentower, "w");
+    await waitFor(agentower, selectedIncludes("row-a"));
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S74: the agent-only keys do nothing on the free screen", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const panes = [
+      await createFreeSession("free-one"),
+      await createFreeSession("free-two"),
+    ];
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "f");
+    const first = selectedLine(await waitFor(agentower, onFreeScreen));
+
+    await sendKey(agentower, "m");
+    await sendKey(agentower, "w");
+    await sendClick(agentower, 2, CARD_0);
+    // The move is handled after the three above, so once it shows they have
+    // all been through dispatch.
+    await sendKey(agentower, "j");
+    const moved = await waitFor(agentower, (o) => selectedLine(o) !== first);
+    assertFalse(moved.includes("wait/idle"), moved);
+    for (const pane of panes) {
+      const label = await tmux([
+        "show-options",
+        "-pqv",
+        "-t",
+        pane,
+        "@pane_user_label",
+      ]);
+      assertEquals(label.trim(), "");
+    }
+
+    await sendKey(agentower, "f");
+    const back = await waitFor(agentower, (o) => !onFreeScreen(o));
+    assertFalse(back.includes("wait/idle"), back);
+    assertStringIncludes(selectedLine(back), "row-a");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+Deno.test("S75: a window whose agent has exited is free and shows none of its old values", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-free-",
+  });
+  try {
+    await Deno.mkdir(`${root}/fresh-place`);
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const pane = await createFreeSession("stale-sess", `${root}/fresh-place`);
+    for (
+      const [key, value] of [
+        ["@pane_agent", "claude"],
+        ["@pane_status", "running"],
+        ["@pane_cwd", "/tmp/old-place-S75"],
+        ["@pane_prompt", "stale-prompt-S75"],
+        ["@pane_worktree_branch", "stale-branch-S75"],
+      ]
+    ) {
+      await tmux(["set-option", "-p", "-t", pane, key, value]);
+    }
+    const agentower = await spawnAgentower();
+    assertFalse((await captureOutput(agentower)).includes("stale-prompt-S75"));
+
+    await sendKey(agentower, "f");
+    await waitFor(agentower, onFreeScreen);
+    await selectFreeRow(agentower, "stale-sess");
+    const out = await waitFor(agentower, (o) => o.includes("stale-sess"));
+    assertStringIncludes(freeRow(out, "stale-sess"), "fresh-place");
+    for (
+      const old of ["old-place-S75", "stale-prompt-S75", "stale-branch-S75"]
+    ) {
+      assertFalse(out.includes(old), `${old} leaked:\n${out}`);
+    }
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("S76: free rows stay on their own two lines at the narrowest width", async () => {
+  await setupServer({ cols: 60 });
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-free-",
+  });
+  try {
+    const long = "a-directory-name-longer-than-the-list-column-is-wide";
+    await Deno.mkdir(`${root}/${long}`);
+    await git(
+      `${root}/${long}`,
+      "init",
+      "-q",
+      "-b",
+      "a-rather-long-branch-name",
+    );
+    await git(`${root}/${long}`, "commit", "-q", "--allow-empty", "-m", "i");
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const names = ["nm-one", "nm-two", "nm-three-with-a-long-session-name"];
+    for (const name of names) await createFreeSession(name, `${root}/${long}`);
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "f");
+    const out = await waitFor(
+      agentower,
+      (o) => onFreeScreen(o) && listColumn(o).some((l) => l.includes("nm-two")),
+    );
+    const lines = listColumn(out);
+
+    for (const name of names) {
+      const short = name.slice(0, 12);
+      const at = lines.findIndex((l) => l.includes(short));
+      assertEquals(at >= 0, true, `${name} missing:\n${out}`);
+      assertEquals(
+        lines.filter((l) => l.includes(short)).length,
+        1,
+        `${name} drawn more than once:\n${out}`,
+      );
+      assertStringIncludes(lines[at + 1], "cat", out);
+      assertStringIncludes(lines[at], ":0 ", out);
+    }
+    for (const line of lines) {
+      assertEquals(stringCells(line.trimEnd()) <= 40, true, line);
+    }
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("S77: the leftover check does not run a program a repository's config names", async () => {
+  await setupServer();
+  const root = await Deno.makeTempDir({
+    dir: "/tmp",
+    prefix: "agentower-free-",
+  });
+  try {
+    const repo = `${root}/hooked`;
+    const marker = `${root}/fsmonitor-ran`;
+    await Deno.mkdir(repo);
+    await git(repo, "init", "-q", "-b", "main");
+    await git(repo, "commit", "-q", "--allow-empty", "-m", "i");
+    await Deno.writeTextFile(`${repo}/leftover.txt`, "x");
+    await Deno.writeTextFile(
+      `${root}/hook.sh`,
+      `#!/bin/sh\ntouch ${marker}\n`,
+      { mode: 0o755 },
+    );
+    await git(repo, "config", "core.fsmonitor", `${root}/hook.sh`);
+
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    await createFreeSession("s-hooked", repo);
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "f");
+    await waitFor(agentower, (o) => freeRow(o, "s-hooked").includes("±"));
+    assertFalse(
+      await Deno.stat(marker).then(() => true, () => false),
+      "core.fsmonitor from the repository's config was executed",
+    );
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await Deno.remove(root, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("S78: a spare window beside an agent's, in the same session, is free", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a" });
+    const spare = (await tmux([
+      "new-window",
+      "-d",
+      "-t",
+      "test",
+      "-P",
+      "-F",
+      "#{pane_id}\t#{window_index}",
+      "cat",
+    ])).trim().split("\t");
+    const agentower = await spawnAgentower();
+    await sendKey(agentower, "f");
+    await waitFor(agentower, onFreeScreen);
+    await selectFreeRow(agentower, `test:${spare[1]}`);
+    const out = await captureOutput(agentower);
+    // Neither the agent's window nor Agentower's own is among them.
+    assertEquals(
+      listColumn(out).flatMap((l) => l.match(/\btest:\d+/) ?? []).sort(),
+      ["test:0", `test:${spare[1]}`].sort(),
+      out,
+    );
+
+    await sendKey(agentower, "Enter");
+    await waitForExit();
+    const active = (await tmux([
+      "display-message",
+      "-p",
+      "-t",
+      spare[0],
+      "#{window_active}",
+    ])).trim();
+    assertEquals(active, "1", "the spare window was not selected");
   } finally {
     await teardown();
   }
