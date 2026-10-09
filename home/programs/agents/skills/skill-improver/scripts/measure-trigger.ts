@@ -271,7 +271,10 @@ const runQuery = async (query: string, timeoutMs: number): Promise<Attempt> => {
     // and start a process of its own choosing.
     await new Promise<void>((resolve, reject) => {
       child.stdin.once("error", reject);
-      child.stdin.end(query, () => resolve());
+      child.stdin.end(
+        query,
+        (err?: Error | null) => err ? reject(err) : resolve(),
+      );
     });
     while (!use) {
       const { done, value } = await reader.read();

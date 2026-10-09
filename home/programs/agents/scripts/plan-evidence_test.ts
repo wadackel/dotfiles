@@ -56,7 +56,8 @@ async function fixture(test: (path: string) => Promise<void>) {
     await test(path);
   } finally {
     process.chdir(previous.cwd);
-    process.env.HOME = previous.home;
+    if (previous.home === undefined) delete process.env.HOME;
+    else process.env.HOME = previous.home;
     await rm(temp, { recursive: true });
   }
 }

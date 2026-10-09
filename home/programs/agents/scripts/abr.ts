@@ -759,6 +759,12 @@ function discoverWsUrl(home: string): string {
     console.error(`abr: ${portFile} has no port.`);
     throw new SilentExit(1);
   }
+  // A port such as `9222@other-host` would turn 127.0.0.1 into userinfo and
+  // send the cookie harvest to another machine.
+  if (!/^\d+$/.test(port) || (path !== "" && !path.startsWith("/"))) {
+    console.error(`abr: ${portFile} does not hold a port and a path.`);
+    throw new SilentExit(1);
+  }
   return `ws://127.0.0.1:${port}${path}`;
 }
 

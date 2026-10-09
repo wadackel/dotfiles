@@ -616,6 +616,27 @@ test("CLI: missing DevToolsActivePort gives the actionable message", async () =>
   }
 });
 
+test("CLI: a DevToolsActivePort that could redirect the connection is refused", async () => {
+  for (
+    const content of [
+      "9222@other.example\n/devtools/browser/x\n",
+      "9222\nother.example/x\n",
+    ]
+  ) {
+    const home = await makeFakeHome();
+    try {
+      const dir = `${home}/Library/Application Support/Google/Chrome`;
+      await mkdir(dir, { recursive: true });
+      await writeFile(`${dir}/DevToolsActivePort`, content);
+      const r = await runScript(home, ["https://a.example"]);
+      assertEquals(r.code, 1);
+      assert(r.stderr.includes("does not hold a port and a path"), r.stderr);
+    } finally {
+      await rm(home, { recursive: true });
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // End-to-end against the mock CDP server
 // ---------------------------------------------------------------------------
