@@ -1,4 +1,15 @@
-import { assertEquals, assertMatch, assertRejects } from "jsr:@std/assert@^1";
+import { test } from "bun:test";
+import { assertEquals, assertMatch, assertRejects } from "@std/assert";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { initPlanEvidence, normalizePlanEvidence, run } from "./plan-state.ts";
 
 const SUBJECTS = ["State helper", "Final Audit + Review"];
@@ -13,16 +24,29 @@ const SKILL_HELPER_COMMAND = [
   "~/.agents/scripts/plan-state.ts",
 ].join(" ");
 
+async function withHome(
+  body: (home: string) => Promise<void>,
+): Promise<void> {
+  const previous = process.env.HOME;
+  const home = await mkdtemp(join(tmpdir(), "plan-state-home-"));
+  process.env.HOME = home;
+  try {
+    await body(home);
+  } finally {
+    if (previous === undefined) delete process.env.HOME;
+    else process.env.HOME = previous;
+  }
+}
+
 async function tempEvidence(
+  home: string,
   data = initPlanEvidence("plan.md", SUBJECTS),
 ): Promise<string> {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
+  await mkdir(`${home}/.codex/plans`, { recursive: true });
   const path = `${home}/.codex/plans/${
     data.plan.replace(/\.md$/, ".evidence.json")
   }`;
-  await Deno.writeTextFile(path, JSON.stringify(data, null, 2));
+  await writeFile(path, JSON.stringify(data, null, 2));
   return path;
 }
 
@@ -30,7 +54,7 @@ function stream(text: string): ReadableStream<Uint8Array> {
   return new Blob([text]).stream();
 }
 
-Deno.test("initPlanEvidence creates canonical v1 tasks with final gate trailing", () => {
+test("initPlanEvidence creates canonical v1 tasks with final gate trailing", () => {
   const data = initPlanEvidence("plan.md", SUBJECTS);
 
   assertEquals(data, {
@@ -54,7 +78,7 @@ Deno.test("initPlanEvidence creates canonical v1 tasks with final gate trailing"
   });
 });
 
-Deno.test("initPlanEvidence rejects subjects without trailing final gate", () => {
+test("initPlanEvidence rejects subjects without trailing final gate", () => {
   assertRejects(
     async () => initPlanEvidence("plan.md", ["Only task"]),
     Error,
@@ -62,7 +86,7 @@ Deno.test("initPlanEvidence rejects subjects without trailing final gate", () =>
   );
 });
 
-Deno.test("normalizePlanEvidence accepts legacy name, missing id, object evidence, and null evidence", () => {
+test("normalizePlanEvidence accepts legacy name, missing id, object evidence, and null evidence", () => {
   const data = normalizePlanEvidence({
     plan: "legacy.md",
     tasks: [
@@ -88,7 +112,7 @@ Deno.test("normalizePlanEvidence accepts legacy name, missing id, object evidenc
   assertEquals(data.tasks[1].evidence, null);
 });
 
-Deno.test("normalizePlanEvidence rejects unknown status instead of reopening corrupted state", () => {
+test("normalizePlanEvidence rejects unknown status instead of reopening corrupted state", () => {
   assertRejects(
     async () =>
       normalizePlanEvidence({
@@ -103,32 +127,33 @@ Deno.test("normalizePlanEvidence rejects unknown status instead of reopening cor
   );
 });
 
-Deno.test("run init writes canonical JSON through the command surface", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  const path = `${home}/.codex/plans/plan.evidence.json`;
+test("run init writes canonical JSON through the command surface", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.codex/plans`, { recursive: true });
+    const path = `${home}/.codex/plans/plan.evidence.json`;
 
-  await run([
-    "init",
-    path,
-    "plan.md",
-    JSON.stringify(SUBJECTS),
-  ]);
+    await run([
+      "init",
+      path,
+      "plan.md",
+      JSON.stringify(SUBJECTS),
+    ]);
 
-  const data = JSON.parse(await Deno.readTextFile(path));
-  assertEquals(
-    data.tasks.map((task: { subject: string }) => task.subject),
-    SUBJECTS,
-  );
-});
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(
+      data.tasks.map((task: { subject: string }) => task.subject),
+      SUBJECTS,
+    );
+  }));
 
-Deno.test("documents the permissioned CLI invocation used by skills", async () => {
-  const planSkill = await Deno.readTextFile(
+test("documents the permissioned CLI invocation used by skills", async () => {
+  const planSkill = await readFile(
     "home/programs/codex/skills/plan/SKILL.md",
+    "utf8",
   );
-  const implSkill = await Deno.readTextFile(
+  const implSkill = await readFile(
     "home/programs/codex/skills/impl/references/evidence.md",
+    "utf8",
   );
 
   assertEquals(
@@ -141,9 +166,10 @@ Deno.test("documents the permissioned CLI invocation used by skills", async () =
   );
 });
 
-Deno.test("impl skill documents the combined final review contract", async () => {
-  const implSkill = await Deno.readTextFile(
+test("impl skill documents the combined final review contract", async () => {
+  const implSkill = await readFile(
     "home/programs/codex/skills/impl/SKILL.md",
+    "utf8",
   );
 
   const required = [
@@ -191,197 +217,197 @@ Deno.test("impl skill documents the combined final review contract", async () =>
   }
 });
 
-Deno.test("rejects writes outside the Codex plans evidence namespace", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
+test("rejects writes outside the Codex plans evidence namespace", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.codex/plans`, { recursive: true });
 
-  await assertRejects(
-    () =>
-      run([
-        "init",
-        `${home}/.codex/plans/.active-abc123`,
-        "plan.md",
-        JSON.stringify(SUBJECTS),
-      ]),
-    Error,
-    "evidence path must end with .evidence.json",
-  );
+    await assertRejects(
+      () =>
+        run([
+          "init",
+          `${home}/.codex/plans/.active-abc123`,
+          "plan.md",
+          JSON.stringify(SUBJECTS),
+        ]),
+      Error,
+      "evidence path must end with .evidence.json",
+    );
 
-  const outside = await Deno.makeTempDir();
-  await assertRejects(
-    () =>
-      run([
-        "init",
-        `${outside}/plan.evidence.json`,
-        "plan.md",
-        JSON.stringify(SUBJECTS),
-      ]),
-    Error,
-    "evidence path must be under",
-  );
+    const outside = await mkdtemp(join(tmpdir(), "tmp-"));
+    await assertRejects(
+      () =>
+        run([
+          "init",
+          `${outside}/plan.evidence.json`,
+          "plan.md",
+          JSON.stringify(SUBJECTS),
+        ]),
+      Error,
+      "evidence path must be under",
+    );
 
-  await assertRejects(
-    () =>
-      run([
-        "init",
-        "relative.evidence.json",
-        "plan.md",
-        JSON.stringify(SUBJECTS),
-      ]),
-    Error,
-    "evidence path must be absolute",
-  );
-});
+    await assertRejects(
+      () =>
+        run([
+          "init",
+          "relative.evidence.json",
+          "plan.md",
+          JSON.stringify(SUBJECTS),
+        ]),
+      Error,
+      "evidence path must be absolute",
+    );
+  }));
 
-Deno.test("rejects symlink evidence paths", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  const target = `${home}/target.evidence.json`;
-  const link = `${home}/.codex/plans/link.evidence.json`;
-  await Deno.writeTextFile(target, "{}");
-  await Deno.symlink(target, link);
+test("rejects symlink evidence paths", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.codex/plans`, { recursive: true });
+    const target = `${home}/target.evidence.json`;
+    const link = `${home}/.codex/plans/link.evidence.json`;
+    await writeFile(target, "{}");
+    await symlink(target, link);
 
-  await assertRejects(
-    () => run(["normalize", link]),
-    Error,
-    "evidence path must not be a symlink",
-  );
-});
+    await assertRejects(
+      () => run(["normalize", link]),
+      Error,
+      "evidence path must not be a symlink",
+    );
+  }));
 
-Deno.test("atomic writes do not follow predictable sibling tmp symlinks", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  const path = `${home}/.codex/plans/plan.evidence.json`;
-  const predictableTmp = `${path}.tmp`;
-  const target = `${home}/target`;
-  await Deno.writeTextFile(target, "unchanged");
-  await Deno.symlink(target, predictableTmp);
+test("atomic writes do not follow predictable sibling tmp symlinks", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.codex/plans`, { recursive: true });
+    const path = `${home}/.codex/plans/plan.evidence.json`;
+    const predictableTmp = `${path}.tmp`;
+    const target = `${home}/target`;
+    await writeFile(target, "unchanged");
+    await symlink(target, predictableTmp);
 
-  await run([
-    "init",
-    path,
-    "plan.md",
-    JSON.stringify(SUBJECTS),
-  ]);
+    await run([
+      "init",
+      path,
+      "plan.md",
+      JSON.stringify(SUBJECTS),
+    ]);
 
-  assertEquals(await Deno.readTextFile(target), "unchanged");
-  assertEquals((await Deno.lstat(predictableTmp)).isSymlink, true);
-});
+    assertEquals(await readFile(target, "utf8"), "unchanged");
+    assertEquals((await lstat(predictableTmp)).isSymbolicLink(), true);
+  }));
 
-Deno.test("append-evidence reads multiline stdin and appends with separator", async () => {
-  const path = await tempEvidence();
+test("append-evidence reads multiline stdin and appends with separator", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(home);
 
-  await run(["append-evidence", path, "task-1"], stream("first\nline"));
-  await run(["append-evidence", path, "task-1"], stream("second\nline"));
+    await run(["append-evidence", path, "task-1"], stream("first\nline"));
+    await run(["append-evidence", path, "task-1"], stream("second\nline"));
 
-  const data = JSON.parse(await Deno.readTextFile(path));
-  assertEquals(data.tasks[0].evidence, "first\nline\n---\nsecond\nline");
-});
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].evidence, "first\nline\n---\nsecond\nline");
+  }));
 
-Deno.test("legacy completion is not accepted without current verification", async () => {
-  const path = await tempEvidence({
-    plan: "legacy.md",
-    tasks: [
+test("legacy completion is not accepted without current verification", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(
+      home,
       {
-        id: "",
-        // deno-lint-ignore no-explicit-any
-        name: "Legacy task",
-        baseline_sha: "",
-        evidence: { output: "ok" },
-      } as any,
-      {
-        // deno-lint-ignore no-explicit-any
-        name: "Final Audit + Review",
-      } as any,
-    ],
-  } as ReturnType<typeof initPlanEvidence>);
+        plan: "legacy.md",
+        tasks: [
+          {
+            id: "",
+            name: "Legacy task",
+            baseline_sha: "",
+            evidence: { output: "ok" },
+          } as any,
+          {
+            name: "Final Audit + Review",
+          } as any,
+        ],
+      } as ReturnType<typeof initPlanEvidence>,
+    );
 
-  await assertRejects(
-    () => run(["complete", path, "task-1"]),
-    Error,
-    "required checks",
-  );
+    await assertRejects(
+      () => run(["complete", path, "task-1"]),
+      Error,
+      "required checks",
+    );
 
-  const data = normalizePlanEvidence(JSON.parse(await Deno.readTextFile(path)));
-  assertEquals(data.tasks[0].subject, "Legacy task");
-  assertEquals(data.tasks[0].status, "pending");
-  assertEquals(data.tasks[0].evidence, '{\n  "output": "ok"\n}');
-});
+    const data = normalizePlanEvidence(
+      JSON.parse(await readFile(path, "utf8")),
+    );
+    assertEquals(data.tasks[0].subject, "Legacy task");
+    assertEquals(data.tasks[0].status, "pending");
+    assertEquals(data.tasks[0].evidence, '{\n  "output": "ok"\n}');
+  }));
 
-Deno.test("start records baseline only once from the repository root", async () => {
-  const path = await tempEvidence();
+test("start records baseline only once from the repository root", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(home);
 
-  await run(["start", path, "task-1"]);
-  const first = JSON.parse(await Deno.readTextFile(path));
-  const baseline = first.tasks[0].baseline_sha;
+    await run(["start", path, "task-1"]);
+    const first = JSON.parse(await readFile(path, "utf8"));
+    const baseline = first.tasks[0].baseline_sha;
 
-  await run(["start", path, "task-1"]);
-  const second = JSON.parse(await Deno.readTextFile(path));
+    await run(["start", path, "task-1"]);
+    const second = JSON.parse(await readFile(path, "utf8"));
 
-  assertMatch(baseline, /^[0-9a-f]{40}$/);
-  assertEquals(second.tasks[0].baseline_sha, baseline);
-  assertEquals(second.tasks[0].status, "in_progress");
-});
+    assertMatch(baseline, /^[0-9a-f]{40}$/);
+    assertEquals(second.tasks[0].baseline_sha, baseline);
+    assertEquals(second.tasks[0].status, "in_progress");
+  }));
 
-Deno.test("missing task rejects mutation commands", async () => {
-  const path = await tempEvidence();
+test("missing task rejects mutation commands", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(home);
 
-  await assertRejects(
-    () => run(["complete", path, "task-404"]),
-    Error,
-    "task not found: task-404",
-  );
-});
+    await assertRejects(
+      () => run(["complete", path, "task-404"]),
+      Error,
+      "task not found: task-404",
+    );
+  }));
 
-Deno.test("accepts evidence under ~/.claude/plans when it is the only plans dir", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
-  const path = `${home}/.claude/plans/plan.evidence.json`;
+test("accepts evidence under ~/.claude/plans when it is the only plans dir", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.claude/plans`, { recursive: true });
+    const path = `${home}/.claude/plans/plan.evidence.json`;
 
-  await run(["init", path, "plan.md", JSON.stringify(SUBJECTS)]);
+    await run(["init", path, "plan.md", JSON.stringify(SUBJECTS)]);
 
-  const data = JSON.parse(await Deno.readTextFile(path));
-  assertEquals(data.tasks.length, 2);
-});
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks.length, 2);
+  }));
 
-Deno.test("rejects evidence outside both plans dirs and names both", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.codex/plans`, { recursive: true });
-  await Deno.mkdir(`${home}/.claude/plans`, { recursive: true });
-  const outside = await Deno.makeTempDir();
+test("rejects evidence outside both plans dirs and names both", () =>
+  withHome(async (home) => {
+    await mkdir(`${home}/.codex/plans`, { recursive: true });
+    await mkdir(`${home}/.claude/plans`, { recursive: true });
+    const outside = await mkdtemp(join(tmpdir(), "tmp-"));
 
-  const error = await assertRejects(
-    () =>
-      run([
-        "init",
-        `${outside}/plan.evidence.json`,
-        "plan.md",
-        JSON.stringify(SUBJECTS),
-      ]),
-    Error,
-    "evidence path must be under",
-  );
-  assertMatch(error.message, /\.codex\/plans or .*\.claude\/plans/);
-});
+    const error = await assertRejects(
+      () =>
+        run([
+          "init",
+          `${outside}/plan.evidence.json`,
+          "plan.md",
+          JSON.stringify(SUBJECTS),
+        ]),
+      Error,
+      "evidence path must be under",
+    );
+    assertMatch(error.message, /\.codex\/plans or .*\.claude\/plans/);
+  }));
 
-Deno.test("refuses to run when neither plans dir exists", async () => {
-  const home = await Deno.makeTempDir({ prefix: "plan-state-home-" });
-  Deno.env.set("HOME", home);
-
-  await assertRejects(
-    () =>
-      run([
-        "init",
-        `${home}/plan.evidence.json`,
-        "plan.md",
-        JSON.stringify(SUBJECTS),
-      ]),
-    Error,
-    "neither",
-  );
-});
+test("refuses to run when neither plans dir exists", () =>
+  withHome(async (home) => {
+    await assertRejects(
+      () =>
+        run([
+          "init",
+          `${home}/plan.evidence.json`,
+          "plan.md",
+          JSON.stringify(SUBJECTS),
+        ]),
+      Error,
+      "neither",
+    );
+  }));

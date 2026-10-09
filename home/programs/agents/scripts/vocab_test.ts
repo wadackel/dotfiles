@@ -1,21 +1,38 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { readdirSync } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run as runCommand } from "../lib/proc.ts";
 import { init, vaultPaths } from "./vocab-lib.ts";
 
-const script = new URL("./vocab.ts", import.meta.url).pathname;
+const script = join(import.meta.dirname, "vocab.ts");
+// The script runs with a throwaway HOME, where Bun would otherwise leave its
+// transpiler cache.
+const TRANSPILER_CACHE = `${process.env.HOME}/Library/Caches/bun/@t@`;
 
 async function withHome(test: (home: string) => Promise<void>) {
-  const home = await Deno.makeTempDir({ prefix: "vocab-cli-" });
+  const home = await mkdtemp(join(tmpdir(), "vocab-cli-"));
   try {
     const p = vaultPaths(home);
-    await Deno.mkdir(p.root, { recursive: true });
+    await mkdir(p.root, { recursive: true });
     await init(p);
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/gate.md`,
       "---\ntype: vocab\nkind: term\nstatus: approved\nvocab_aliases: [ゲート]\n---\n最後の監査とレビュー。\n",
     );
     await test(home);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 }
 
@@ -24,35 +41,19 @@ async function run(
   args: string[],
   opts: { stdin?: string; env?: Record<string, string> } = {},
 ) {
-  const child = new Deno.Command("deno", {
-    args: [
-      "run",
-      "--allow-read",
-      "--allow-write",
-      "--allow-env=HOME,VOCAB_DIGEST",
-      "--allow-run=git",
-      "--no-prompt",
-      script,
-      ...args,
-    ],
-    env: { HOME: home, ...(opts.env ?? {}) },
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(opts.stdin ?? ""));
-  await writer.close();
-  const out = await child.output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  const out = await runCommand(script, args, {
+    env: {
+      HOME: home,
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: TRANSPILER_CACHE,
+      ...(opts.env ?? {}),
+    },
+    stdin: opts.stdin ?? "",
+  });
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 for (const agent of ["claude", "codex"]) {
-  Deno.test(`hook ${agent} prints SessionStart additionalContext`, async () => {
+  test(`hook ${agent} prints SessionStart additionalContext`, async () => {
     await withHome(async (home) => {
       const r = await run(home, ["hook", agent], {
         stdin: JSON.stringify({ cwd: home }),
@@ -68,7 +69,7 @@ for (const agent of ["claude", "codex"]) {
   });
 }
 
-Deno.test("hook prints nothing when VOCAB_DIGEST=off", async () => {
+test("hook prints nothing when VOCAB_DIGEST=off", async () => {
   await withHome(async (home) => {
     const r = await run(home, ["hook", "claude"], {
       stdin: JSON.stringify({ cwd: home }),
@@ -79,29 +80,29 @@ Deno.test("hook prints nothing when VOCAB_DIGEST=off", async () => {
   });
 });
 
-Deno.test("hook exits 0 with no output when the vault is broken", async () => {
+test("hook exits 0 with no output when the vault is broken", async () => {
   await withHome(async (home) => {
     const p = vaultPaths(home);
-    await Deno.writeTextFile(`${p.vocabDir}/gate.md`, "---\nkind: [\n---\nx\n");
-    await Deno.chmod(p.vocabDir, 0o000);
+    await writeFile(`${p.vocabDir}/gate.md`, "---\nkind: [\n---\nx\n");
+    await chmod(p.vocabDir, 0o000);
     try {
       const r = await run(home, ["hook", "codex"], { stdin: "not json" });
       assertEquals(r.code, 0);
       assertEquals(r.stdout, "");
     } finally {
-      await Deno.chmod(p.vocabDir, 0o755);
+      await chmod(p.vocabDir, 0o755);
     }
   });
 });
 
-Deno.test("digest --repo prints only that repo's terms with --repo-only", async () => {
+test("digest --repo prints only that repo's terms with --repo-only", async () => {
   await withHome(async (home) => {
     const p = vaultPaths(home);
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/dotfiles.md`,
       "---\ntype: vocab\nkind: repo\nstatus: approved\n---\nこのリポジトリ。\n",
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/agentower.md`,
       '---\ntype: vocab\nkind: term\nstatus: approved\napplies_in: ["[[dotfiles]]"]\n---\nprefix+w のポップアップ。\n',
     );
@@ -115,14 +116,15 @@ Deno.test("digest --repo prints only that repo's terms with --repo-only", async 
 async function proposalFiles(home: string) {
   const p = vaultPaths(home);
   try {
-    return [...Deno.readDirSync(p.proposalsDir)].filter((e) => e.isFile)
+    return readdirSync(p.proposalsDir, { withFileTypes: true })
+      .filter((e) => e.isFile())
       .map((e) => e.name).sort();
   } catch {
     return [];
   }
 }
 
-Deno.test("add writes a pending proposal even for an owner-written definition", async () => {
+test("add writes a pending proposal even for an owner-written definition", async () => {
   await withHome(async (home) => {
     const r = await run(home, [
       "add",
@@ -137,20 +139,19 @@ Deno.test("add writes a pending proposal even for an owner-written definition", 
     assertEquals(r.code, 0, r.stderr);
     const [file] = await proposalFiles(home);
     assert(file.endsWith("__vocab-new__explicit-1.md"), file);
-    const text = await Deno.readTextFile(
+    const text = await readFile(
       `${vaultPaths(home).proposalsDir}/${file}`,
+      "utf8",
     );
     assertStringIncludes(text, "status: pending");
     assertStringIncludes(text, "ユーザーが自分で述べた定義");
     assert(
-      !(await Deno.stat(`${vaultPaths(home).vocabDir}/impl.md`).catch(() =>
-        null
-      )),
+      !(await stat(`${vaultPaths(home).vocabDir}/impl.md`).catch(() => null)),
     );
   });
 });
 
-Deno.test("add --draft marks the definition as agent-written", async () => {
+test("add --draft marks the definition as agent-written", async () => {
   await withHome(async (home) => {
     const r = await run(home, [
       "add",
@@ -164,13 +165,13 @@ Deno.test("add --draft marks the definition as agent-written", async () => {
     assertEquals(r.code, 0, r.stderr);
     const [file] = await proposalFiles(home);
     assertStringIncludes(
-      await Deno.readTextFile(`${vaultPaths(home).proposalsDir}/${file}`),
+      await readFile(`${vaultPaths(home).proposalsDir}/${file}`, "utf8"),
       "定義はエージェントが起こした",
     );
   });
 });
 
-Deno.test("add on an existing term proposes a change and leaves the note alone", async () => {
+test("add on an existing term proposes a change and leaves the note alone", async () => {
   await withHome(async (home) => {
     const r = await run(home, ["add", "gate", "--definition", "別の定義。"]);
     assertEquals(r.code, 0, r.stderr);
@@ -182,16 +183,16 @@ Deno.test("add on an existing term proposes a change and leaves the note alone",
       (await proposalFiles(home)).some((f) => f.includes("__vocab-alias__")),
     );
     assertStringIncludes(
-      await Deno.readTextFile(`${vaultPaths(home).vocabDir}/gate.md`),
+      await readFile(`${vaultPaths(home).vocabDir}/gate.md`, "utf8"),
       "最後の監査とレビュー。",
     );
   });
 });
 
-Deno.test("an approved definition change keeps the note's refers_to", async () => {
+test("an approved definition change keeps the note's refers_to", async () => {
   await withHome(async (home) => {
     const p = vaultPaths(home);
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/gate.md`,
       '---\ntype: vocab\nkind: term\nstatus: approved\nrefers_to: ["~/.claude/skills/gate/SKILL.md"]\n---\n最後の監査とレビュー。\n',
     );
@@ -199,22 +200,22 @@ Deno.test("an approved definition change keeps the note's refers_to", async () =
     assertEquals(r.code, 0, r.stderr);
     const [file] = await proposalFiles(home);
     const proposal = `${p.proposalsDir}/${file}`;
-    await Deno.writeTextFile(
+    await writeFile(
       proposal,
-      (await Deno.readTextFile(proposal)).replace(
+      (await readFile(proposal, "utf8")).replace(
         "status: pending",
         "status: approved",
       ),
     );
     const applied = await run(home, ["apply"]);
     assertEquals(applied.code, 0, applied.stderr);
-    const note = await Deno.readTextFile(`${p.vocabDir}/gate.md`);
+    const note = await readFile(`${p.vocabDir}/gate.md`, "utf8");
     assertStringIncludes(note, "別の定義。");
     assertStringIncludes(note, "~/.claude/skills/gate/SKILL.md");
   });
 });
 
-Deno.test("add --origin weekly refuses once five automatic proposals wait", async () => {
+test("add --origin weekly refuses once five automatic proposals wait", async () => {
   await withHome(async (home) => {
     for (let i = 0; i < 5; i++) {
       const r = await run(home, [
@@ -247,7 +248,7 @@ Deno.test("add --origin weekly refuses once five automatic proposals wait", asyn
   });
 });
 
-Deno.test("add refuses a relation outside the schema and a value with a line break", async () => {
+test("add refuses a relation outside the schema and a value with a line break", async () => {
   await withHome(async (home) => {
     const unknown = await run(home, [
       "add",
@@ -269,10 +270,10 @@ Deno.test("add refuses a relation outside the schema and a value with a line bre
   });
 });
 
-Deno.test("lint exits 1 on errors and 0 on a clean vault", async () => {
+test("lint exits 1 on errors and 0 on a clean vault", async () => {
   await withHome(async (home) => {
     assertEquals((await run(home, ["lint"])).code, 0);
-    await Deno.writeTextFile(
+    await writeFile(
       `${vaultPaths(home).vocabDir}/bad.md`,
       "---\ntype: vocab\nkind: widget\nstatus: approved\n---\nx\n",
     );

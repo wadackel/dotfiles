@@ -3,7 +3,20 @@ import {
   assertEquals,
   assertRejects,
   assertStringIncludes,
-} from "jsr:@std/assert@1";
+} from "@std/assert";
+import { test } from "bun:test";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rmdir,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   applyPlan,
   PartialWriteError,
@@ -118,20 +131,20 @@ const SPEC: Spec = {
 };
 
 async function vault(over: Record<string, string | null> = {}) {
-  const dir = await Deno.makeTempDir();
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   for (const d of ["02_Notes", "04_Literature", "03_Books"]) {
-    await Deno.mkdir(`${dir}/${d}`, { recursive: true });
+    await mkdir(`${dir}/${d}`, { recursive: true });
   }
   for (const [p, c] of Object.entries({ ...BASE, ...over })) {
     if (c === null) continue;
-    await Deno.mkdir(`${dir}/${p.slice(0, p.lastIndexOf("/") + 1) || "."}`, {
+    await mkdir(`${dir}/${p.slice(0, p.lastIndexOf("/") + 1) || "."}`, {
       recursive: true,
     });
-    await Deno.writeTextFile(`${dir}/${p}`, c);
+    await writeFile(`${dir}/${p}`, c);
   }
   return dir;
 }
-const read = (v: string, p: string) => Deno.readTextFile(`${v}/${p}`);
+const read = (v: string, p: string) => readFile(`${v}/${p}`, "utf8");
 const split = async (v: string, spec: Spec = SPEC) => {
   const plan = await planSplit(v, spec, "2026-10-03");
   await applyPlan(v, plan, `${v}.backup`);
@@ -145,7 +158,7 @@ const fails = async (v: string, spec: Spec, needle: string) => {
   assertStringIncludes(e.message, needle);
 };
 
-Deno.test("apply: 節を切り出し、周辺を全部更新する", async () => {
+test("apply: 節を切り出し、周辺を全部更新する", async () => {
   const v = await vault();
   // spec の並びではなく、元のノートでの出現順で移る
   const plan = await split(v, { ...SPEC, sections: ["次も動く", "動く節"] });
@@ -251,7 +264,7 @@ updated: 2026-10-03
   assertEquals(await read(`${v}.backup`, "02_Notes/LLM.md"), MOC);
 });
 
-Deno.test("apply: stubHeading と quote、同じ日の見出しへの追記", async () => {
+test("apply: stubHeading と quote、同じ日の見出しへの追記", async () => {
   const v = await vault({
     "98_Maintenance/logs/LLM 操作ログ.md":
       "[[LLM]]\n\n操作ログ。追記専用。\n\n## 2026-10-03\n\n- ingest: x\n",
@@ -276,7 +289,7 @@ Deno.test("apply: stubHeading と quote、同じ日の見出しへの追記", as
   assertEquals(log.match(/## 2026-10-03/g)?.length, 1);
 });
 
-Deno.test("apply: related も関連ページも無いノートで作り、ソースの後ろの節は残す", async () => {
+test("apply: related も関連ページも無いノートで作り、ソースの後ろの節は残す", async () => {
   const v = await vault({
     "02_Notes/元ノート.md": `---
 type: concept
@@ -319,7 +332,7 @@ updated: 2026-01-01
   );
 });
 
-Deno.test("apply: タブ字下げの MOC と、ログが無い MOC", async () => {
+test("apply: タブ字下げの MOC と、ログが無い MOC", async () => {
   const v = await vault({
     "02_Notes/LLM.md": MOC.replaceAll("    ", "\t").replace(
       "updated: 2026-01-01\n",
@@ -340,7 +353,7 @@ Deno.test("apply: タブ字下げの MOC と、ログが無い MOC", async () =>
   );
 });
 
-Deno.test("apply: 1 行に複数リンクがある MOC でも最初のリンクだけで照合する", async () => {
+test("apply: 1 行に複数リンクがある MOC でも最初のリンクだけで照合する", async () => {
   const v = await vault({
     "02_Notes/LLM.md": MOC.replace(
       "    - [[他]] — y",
@@ -354,7 +367,7 @@ Deno.test("apply: 1 行に複数リンクがある MOC でも最初のリンク�
   );
 });
 
-Deno.test("apply: map: false は親 MOC のログに書き、知識マップに触らない", async () => {
+test("apply: map: false は親 MOC のログに書き、知識マップに触らない", async () => {
   const v = await vault();
   await split(v, { ...SPEC, map: false });
   assertEquals(await read(v, "02_Notes/LLM.md"), MOC);
@@ -365,14 +378,14 @@ Deno.test("apply: map: false は親 MOC のログに書き、知識マップに�
   );
 });
 
-Deno.test("apply: 失敗するときは何も書かない", async () => {
+test("apply: 失敗するときは何も書かない", async () => {
   const v = await vault({
     "03_Books/本/衝突.md": "章\n",
     "04_Literature/記事C.md": article(""),
   });
   const snapshot = async () => {
     const out: string[] = [];
-    for await (const e of Deno.readDir(`${v}/02_Notes`)) {
+    for (const e of await readdir(`${v}/02_Notes`, { withFileTypes: true })) {
       out.push(e.name + (await read(v, `02_Notes/${e.name}`)));
     }
     return out.sort();
@@ -407,10 +420,10 @@ Deno.test("apply: 失敗するときは何も書かない", async () => {
   );
   await fails(v, { ...SPEC, rewrites: [{ from: "無い", to: "x" }] }, "0 回");
   assertEquals(await snapshot(), before);
-  assert(!await Deno.stat(`${v}/02_Notes/新ノート.md`).catch(() => null));
+  assert(!await stat(`${v}/02_Notes/新ノート.md`).catch(() => null));
 });
 
-Deno.test("apply: 移した節への「上の」参照が元に残れば失敗する", async () => {
+test("apply: 移した節への「上の」参照が元に残れば失敗する", async () => {
   const v = await vault({
     "02_Notes/元ノート.md": ORIGINAL.replace(
       "本文。\n",
@@ -431,7 +444,7 @@ Deno.test("apply: 移した節への「上の」参照が元に残れば失敗�
   );
 });
 
-Deno.test("apply: 残る節への『上の』参照が新しいノートに残れば失敗する", async () => {
+test("apply: 残る節への『上の』参照が新しいノートに残れば失敗する", async () => {
   const v = await vault({
     "02_Notes/元ノート.md": ORIGINAL.replace(
       "動く本文。",
@@ -441,12 +454,12 @@ Deno.test("apply: 残る節への『上の』参照が新しいノートに残�
   await fails(v, SPEC, "元のノートの節への参照が残る");
 });
 
-Deno.test("apply: 知識マップで 2 つの MOC が当たれば失敗する", async () => {
+test("apply: 知識マップで 2 つの MOC が当たれば失敗する", async () => {
   const v = await vault({ "02_Notes/LLM2.md": MOC });
   await fails(v, SPEC, "2 件");
 });
 
-Deno.test("scan: 閾値、フェンス、判定記録の字数", async () => {
+test("scan: 閾値、フェンス、判定記録の字数", async () => {
   const long = "あ".repeat(40);
   const v = await vault({
     "02_Notes/元ノート.md": ORIGINAL.replace("動く本文。", long),
@@ -470,10 +483,10 @@ Deno.test("scan: 閾値、フェンス、判定記録の字数", async () => {
   );
 });
 
-Deno.test("apply: 作成で落ちたら既存のノートは書き換えない", async () => {
+test("apply: 作成で落ちたら既存のノートは書き換えない", async () => {
   const v = await vault({ "98_Maintenance/logs/LLM 操作ログ.md": null });
-  await Deno.mkdir(`${v}/98_Maintenance/logs`, { recursive: true });
-  await Deno.chmod(`${v}/98_Maintenance/logs`, 0o555);
+  await mkdir(`${v}/98_Maintenance/logs`, { recursive: true });
+  await chmod(`${v}/98_Maintenance/logs`, 0o555);
   try {
     const plan = await planSplit(v, SPEC, "2026-10-03");
     const e = await assertRejects(
@@ -485,23 +498,23 @@ Deno.test("apply: 作成で落ちたら既存のノートは書き換えない",
     assertEquals(await read(v, "02_Notes/元ノート.md"), ORIGINAL);
     assertEquals(await read(v, "02_Notes/LLM.md"), MOC);
   } finally {
-    await Deno.chmod(`${v}/98_Maintenance/logs`, 0o755);
+    await chmod(`${v}/98_Maintenance/logs`, 0o755);
   }
 });
 
-Deno.test("apply: 作成先とバックアップ先が既にあれば何も書かない", async () => {
+test("apply: 作成先とバックアップ先が既にあれば何も書かない", async () => {
   const v = await vault();
   const plan = await planSplit(v, SPEC, "2026-10-03");
-  await Deno.mkdir(`${v}.backup`);
+  await mkdir(`${v}.backup`);
   await assertRejects(() => applyPlan(v, plan, `${v}.backup`), SplitError);
-  await Deno.remove(`${v}.backup`);
-  await Deno.writeTextFile(`${v}/02_Notes/新ノート.md`, "先に置かれた\n");
+  await rmdir(`${v}.backup`);
+  await writeFile(`${v}/02_Notes/新ノート.md`, "先に置かれた\n");
   await assertRejects(() => applyPlan(v, plan, `${v}.backup`), SplitError);
   assertEquals(await read(v, "02_Notes/元ノート.md"), ORIGINAL);
-  assert(!await Deno.stat(`${v}.backup`).catch(() => null));
+  assert(!await stat(`${v}.backup`).catch(() => null));
 });
 
-Deno.test("apply: ブロック形式の related は書き換えずに止まる", async () => {
+test("apply: ブロック形式の related は書き換えずに止まる", async () => {
   const v = await vault({
     "02_Notes/元ノート.md": ORIGINAL.replace(
       `related: ["[[LLM]]", "[[他]]"]`,
@@ -511,7 +524,7 @@ Deno.test("apply: ブロック形式の related は書き換えずに止まる",
   await fails(v, SPEC, "ブロック形式");
 });
 
-Deno.test("apply: 親 MOC のリンクは実ファイル名で書き戻す", async () => {
+test("apply: 親 MOC のリンクは実ファイル名で書き戻す", async () => {
   const v = await vault({
     "02_Notes/元ノート.md": ORIGINAL.replace(
       "---\n[[LLM]]\n",
@@ -523,8 +536,6 @@ Deno.test("apply: 親 MOC のリンクは実ファイル名で書き戻す", asy
     (await read(v, "02_Notes/新ノート.md")).includes("---\n[[LLM]]\n"),
   );
   assert(
-    !await Deno.stat(`${v}/98_Maintenance/logs/ LLM  操作ログ.md`).catch(() =>
-      null
-    ),
+    !await stat(`${v}/98_Maintenance/logs/ LLM  操作ログ.md`).catch(() => null),
   );
 });

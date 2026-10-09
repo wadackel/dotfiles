@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { lstat, readFile, readlink, realpath } from "node:fs/promises";
 import type { PlanEvidence, PlanTask } from "./plan-state.ts";
 
 export interface Requirement {
@@ -94,25 +96,42 @@ export function check(value: unknown): Check {
   return result;
 }
 
-async function git(args: string[], cwd = Deno.cwd()): Promise<string> {
-  const result = await new Deno.Command("git", {
-    args,
-    cwd,
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
+// spawn rather than execFile: execFile throws once the output passes its 1 MiB
+// maxBuffer, which a large `git ls-files` reaches.
+export function runGit(
+  args: string[],
+  cwd = process.cwd(),
+): Promise<{ success: boolean; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        success: code === 0,
+        stdout: new TextDecoder().decode(Buffer.concat(out)),
+        stderr: new TextDecoder().decode(Buffer.concat(err)),
+      });
+    });
+  });
+}
+
+async function git(args: string[], cwd = process.cwd()): Promise<string> {
+  const result = await runGit(args, cwd);
   if (!result.success) {
-    throw new Error(
-      `git ${args[0]} failed: ${
-        new TextDecoder().decode(result.stderr).trim()
-      }`,
-    );
+    throw new Error(`git ${args[0]} failed: ${result.stderr.trim()}`);
   }
-  return new TextDecoder().decode(result.stdout);
+  return result.stdout;
 }
 
 export async function repository(): Promise<string> {
-  return await Deno.realPath(
+  return await realpath(
     (await git(["rev-parse", "--show-toplevel"])).trim(),
   );
 }
@@ -146,8 +165,8 @@ export async function artifactSnapshot(
 ): Promise<string> {
   const root = await assertRepository(data);
   const planPath = `${path.slice(0, path.lastIndexOf("/"))}/${data.plan}`;
-  const planInfo = await Deno.lstat(planPath);
-  if (!planInfo.isFile || planInfo.isSymlink) {
+  const planInfo = await lstat(planPath);
+  if (!planInfo.isFile() || planInfo.isSymbolicLink()) {
     throw new Error("plan must be a regular file");
   }
   const names = (await git(
@@ -159,24 +178,24 @@ export async function artifactSnapshot(
   for (const name of [...new Set(names)].sort()) {
     const file = `${root}/${name}`;
     try {
-      const parent = await Deno.realPath(file.slice(0, file.lastIndexOf("/")));
+      const parent = await realpath(file.slice(0, file.lastIndexOf("/")));
       if (parent !== root && !parent.startsWith(`${root}/`)) {
         throw new Error(`snapshot path escapes repository: ${name}`);
       }
-      const info = await Deno.lstat(file);
-      if (info.isSymlink) {
-        entries.push([name, "link", await Deno.readLink(file)]);
-      } else if (info.isFile) {
+      const info = await lstat(file);
+      if (info.isSymbolicLink()) {
+        entries.push([name, "link", await readlink(file)]);
+      } else if (info.isFile()) {
         entries.push([
           name,
-          (info.mode ?? 0) & 0o111,
-          await digest(await Deno.readFile(file)),
+          info.mode & 0o111,
+          await digest(await readFile(file)),
         ]);
       } else {
         throw new Error(`cannot fingerprint non-file or submodule: ${name}`);
       }
     } catch (err) {
-      if (!(err instanceof Deno.errors.NotFound)) throw err;
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       entries.push([name, "missing"]);
     }
   }
@@ -184,8 +203,8 @@ export async function artifactSnapshot(
     root,
     (await git(["rev-parse", "HEAD"], root)).trim(),
     await git(["ls-files", "--stage", "-z"], root),
-    await Deno.realPath(planPath),
-    await digest(await Deno.readFile(planPath)),
+    await realpath(planPath),
+    await digest(await readFile(planPath)),
     entries,
   ]));
 }
@@ -296,11 +315,11 @@ export async function assertLive(
   } else if ("identity" in source) expected = source.identity;
   else {
     const root = await repository();
-    const file = await Deno.realPath(`${root}/${source.file}`);
+    const file = await realpath(`${root}/${source.file}`);
     if (!file.startsWith(`${root}/`)) {
       throw new Error("expected artifact must be inside repository");
     }
-    expected = await digest(await Deno.readFile(file));
+    expected = await digest(await readFile(file));
   }
   if (record.expected !== expected) {
     throw new Error(

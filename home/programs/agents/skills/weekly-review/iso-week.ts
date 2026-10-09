@@ -1,3 +1,5 @@
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
+
 /** ISO 週の月〜日の日付と前後の週番号を計算する */
 export function computeIsoWeekDates(isoWeek: string): {
   dates: string[]; // 7 elements: Mon–Sun "YYYY-MM-DD"
@@ -27,7 +29,7 @@ export function computeIsoWeekDates(isoWeek: string): {
 }
 
 if (import.meta.main) {
-  const result = computeIsoWeekDates(Deno.args[0]);
+  const result = computeIsoWeekDates(process.argv.slice(2)[0]);
   result.dates.forEach((d) => console.log(d));
   console.log(`PREV:${result.prev}`);
   console.log(`NEXT:${result.next}`);

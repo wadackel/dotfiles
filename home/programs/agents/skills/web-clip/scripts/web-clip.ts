@@ -1,7 +1,9 @@
-#!/usr/bin/env -S deno run --allow-run=obsidian
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 // 起動中の Obsidian の Web Clip プラグインに URL を渡し、終わるまで待って結果を出す。使い方と終了コードは SKILL.md。
 // 秘密は SecretStorage に置いたまま、取得も要約もプラグインが行う。
 // `obsidian eval` は Promise を 200ms ほどしか待たないので、clip は run の id だけを受け取り、status を繰り返し読む。
+
+import { run } from "../../../lib/proc.ts";
 
 export type EvalOutput =
   | { kind: "value"; value: string }
@@ -260,25 +262,24 @@ export const main = async (argv: string[], io: Io): Promise<number> => {
 };
 
 if (import.meta.main) {
-  const args = parseArgs(Deno.args);
+  const args = parseArgs(process.argv.slice(2));
   const vault = typeof args === "string" ? "Main" : args.vault;
-  const decoder = new TextDecoder();
   const io: Io = {
     evaluate: async (code) => {
       try {
-        const result = await new Deno.Command("obsidian", {
-          args: [`vault=${vault}`, "eval", `code=${code}`],
-          stdout: "piped",
-          stderr: "piped",
-        }).output();
+        const result = await run("obsidian", [
+          `vault=${vault}`,
+          "eval",
+          `code=${code}`,
+        ]);
         // Electron が stderr に出す警告を値に混ぜない。stdout が空のときだけ診断に使う
-        const stdout = decoder.decode(result.stdout);
-        const stderr = decoder.decode(result.stderr).trim();
+        const stdout = result.stdout;
+        const stderr = result.stderr.trim();
         return stdout.trim() === "" && stderr !== ""
           ? `Error: ${stderr}`
           : stdout;
       } catch (e) {
-        if (e instanceof Deno.errors.NotFound) {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT") {
           return "Error: obsidian CLI が見つからない";
         }
         throw e;
@@ -289,5 +290,5 @@ if (import.meta.main) {
     out: (line) => console.log(line),
     err: (line) => console.error(line),
   };
-  Deno.exit(await main(Deno.args, io));
+  process.exit(await main(process.argv.slice(2), io));
 }

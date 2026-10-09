@@ -11,7 +11,7 @@ description: >-
   conversation.
 argument-hint: "[url ...]"
 allowed-tools:
-  - Bash(deno run --allow-run=obsidian ~/.agents/skills/web-clip/scripts/web-clip.ts *)
+  - Bash(~/.agents/skills/web-clip/scripts/web-clip.ts *)
 ---
 
 # Web Clip
@@ -25,7 +25,7 @@ Pass only URLs the user asked to save: the ones in the request, or sources from 
 ## Run
 
 ```bash
-deno run --allow-run=obsidian ~/.agents/skills/web-clip/scripts/web-clip.ts <url> [<url> ...]
+~/.agents/skills/web-clip/scripts/web-clip.ts <url> [<url> ...]
 ```
 
 - Set the Bash tool's `timeout` to `660000`. The script waits up to 600 seconds by default, which is exactly the Bash default timeout, so without the override the tool kills it before it can report.
@@ -52,7 +52,7 @@ Report the created paths to the user. Read a created note only when the task nee
 
 ## When it does not finish
 
-- **Timeout, or the tool killed the script.** The run keeps going inside Obsidian. Do not pass the URLs again. Resume polling with the id from the `started` line: `deno run --allow-run=obsidian ~/.agents/skills/web-clip/scripts/web-clip.ts --run <id>`.
+- **Timeout, or the tool killed the script.** The run keeps going inside Obsidian. Do not pass the URLs again. Resume polling with the id from the `started` line: `~/.agents/skills/web-clip/scripts/web-clip.ts --run <id>`.
 - **Exit 2 with a Reload message.** The plugin in that vault predates this API. Ask the user to run "Reload app without saving" in that vault.
 - **Exit 2 saying Obsidian is not running.** Ask the user to open Obsidian with that vault; the script cannot start it.
 - **`cancelled` rows.** The user pressed 中断 in the progress pane. A row that was mid-fetch at that moment may still become a note afterward.

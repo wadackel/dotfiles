@@ -1,4 +1,15 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   apply,
   buildDigest,
@@ -16,23 +27,23 @@ import {
 } from "./vocab-lib.ts";
 
 async function vault(test: (p: VaultPaths) => Promise<void>) {
-  const home = await Deno.makeTempDir({ prefix: "vocab-lib-" });
+  const home = await mkdtemp(join(tmpdir(), "vocab-lib-"));
   try {
     const p = vaultPaths(home);
-    await Deno.mkdir(p.root, { recursive: true });
+    await mkdir(p.root, { recursive: true });
     await init(p);
     await test(p);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 }
 
 const note = (p: VaultPaths, name: string, fm: string, body = "定義。") =>
-  Deno.writeTextFile(`${p.vocabDir}/${name}.md`, `---\n${fm}\n---\n${body}\n`);
+  writeFile(`${p.vocabDir}/${name}.md`, `---\n${fm}\n---\n${body}\n`);
 
 const proposal = (p: VaultPaths, file: string, fm: string) =>
-  Deno.mkdir(p.proposalsDir, { recursive: true }).then(() =>
-    Deno.writeTextFile(
+  mkdir(p.proposalsDir, { recursive: true }).then(() =>
+    writeFile(
       `${p.proposalsDir}/${file}.md`,
       `---\n${fm}\n---\n## 根拠\n`,
     )
@@ -41,23 +52,23 @@ const proposal = (p: VaultPaths, file: string, fm: string) =>
 const errors = async (p: VaultPaths) =>
   (await lint(p)).filter((f) => f.level === "error").map((f) => f.message);
 
-Deno.test("init writes the schema and the review note once", async () => {
+test("init writes the schema and the review note once", async () => {
   await vault(async (p) => {
     assertStringIncludes(
-      await Deno.readTextFile(`${p.vocabDir}/_schema.md`),
+      await readFile(`${p.vocabDir}/_schema.md`, "utf8"),
       DEFAULT_SCHEMA_YAML.trim(),
     );
-    await Deno.writeTextFile(`${p.vocabDir}/_schema.md`, "edited");
+    await writeFile(`${p.vocabDir}/_schema.md`, "edited");
     await init(p);
-    assertEquals(await Deno.readTextFile(`${p.vocabDir}/_schema.md`), "edited");
+    assertEquals(await readFile(`${p.vocabDir}/_schema.md`, "utf8"), "edited");
     assertStringIncludes(
-      await Deno.readTextFile(`${p.vocabDir}/語彙レビュー.md`),
+      await readFile(`${p.vocabDir}/語彙レビュー.md`, "utf8"),
       "98_Maintenance/proposals/Vocabulary",
     );
   });
 });
 
-Deno.test("lint accepts a well-formed vocabulary", async () => {
+test("lint accepts a well-formed vocabulary", async () => {
   await vault(async (p) => {
     await note(p, "dotfiles", "type: vocab\nkind: repo\nstatus: approved");
     await note(p, "impl", "type: vocab\nkind: term\nstatus: approved");
@@ -70,7 +81,7 @@ Deno.test("lint accepts a well-formed vocabulary", async () => {
   });
 });
 
-Deno.test("lint reports each kind of violation", async () => {
+test("lint reports each kind of violation", async () => {
   await vault(async (p) => {
     await note(p, "dotfiles", "type: vocab\nkind: repo\nstatus: approved");
     await note(p, "impl", "type: vocab\nkind: term\nstatus: approved");
@@ -101,8 +112,8 @@ Deno.test("lint reports each kind of violation", async () => {
       "dotfiles-path",
       "type: vocab\nkind: repo\nstatus: approved\npath: /nonexistent-repo-root",
     );
-    await Deno.mkdir(`${p.root}/02_Notes`, { recursive: true });
-    await Deno.writeTextFile(`${p.root}/02_Notes/impl.md`, "user note");
+    await mkdir(`${p.root}/02_Notes`, { recursive: true });
+    await writeFile(`${p.root}/02_Notes/impl.md`, "user note");
     await proposal(
       p,
       "2026-09-28__vocab-new__session-1",
@@ -128,9 +139,9 @@ Deno.test("lint reports each kind of violation", async () => {
   });
 });
 
-Deno.test("lint reports a missing refers_to target under the repo path", async () => {
+test("lint reports a missing refers_to target under the repo path", async () => {
   await vault(async (p) => {
-    const repo = await Deno.makeTempDir({ prefix: "vocab-repo-" });
+    const repo = await mkdtemp(join(tmpdir(), "vocab-repo-"));
     try {
       await note(
         p,
@@ -147,18 +158,18 @@ Deno.test("lint reports a missing refers_to target under the repo path", async (
           "gate: refers_to の参照切れ skills/gate/SKILL.md",
         ),
       );
-      await Deno.mkdir(`${repo}/skills/gate`, { recursive: true });
-      await Deno.writeTextFile(`${repo}/skills/gate/SKILL.md`, "x");
+      await mkdir(`${repo}/skills/gate`, { recursive: true });
+      await writeFile(`${repo}/skills/gate/SKILL.md`, "x");
       assertEquals(await errors(p), []);
     } finally {
-      await Deno.remove(repo, { recursive: true });
+      await rm(repo, { recursive: true });
     }
   });
 });
 
-Deno.test("lint reports a broken schema and conflicting approved proposals", async () => {
+test("lint reports a broken schema and conflicting approved proposals", async () => {
   await vault(async (p) => {
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/_schema.md`,
       "```yaml\nkinds: [\n```\n",
     );
@@ -184,7 +195,7 @@ Deno.test("lint reports a broken schema and conflicting approved proposals", asy
   });
 });
 
-Deno.test("digest merges approved notes and approved proposals, not pending ones", async () => {
+test("digest merges approved notes and approved proposals, not pending ones", async () => {
   await vault(async (p) => {
     await note(p, "dotfiles", "type: vocab\nkind: repo\nstatus: approved");
     await note(
@@ -235,7 +246,7 @@ Deno.test("digest merges approved notes and approved proposals, not pending ones
   });
 });
 
-Deno.test("digest puts repo terms first, skips other repos, and truncates by characters", async () => {
+test("digest puts repo terms first, skips other repos, and truncates by characters", async () => {
   await vault(async (p) => {
     await note(p, "dotfiles", "type: vocab\nkind: repo\nstatus: approved");
     await note(p, "other", "type: vocab\nkind: repo\nstatus: approved");
@@ -290,9 +301,9 @@ Deno.test("digest puts repo terms first, skips other repos, and truncates by cha
   });
 });
 
-Deno.test("digest works when the schema cannot be parsed", async () => {
+test("digest works when the schema cannot be parsed", async () => {
   await vault(async (p) => {
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/_schema.md`,
       "```yaml\nkinds: [\n```\n",
     );
@@ -310,7 +321,7 @@ Deno.test("digest works when the schema cannot be parsed", async () => {
   });
 });
 
-Deno.test("apply creates notes, links only existing targets, and archives proposals", async () => {
+test("apply creates notes, links only existing targets, and archives proposals", async () => {
   await vault(async (p) => {
     await note(p, "impl", "type: vocab\nkind: term\nstatus: approved");
     await proposal(
@@ -329,7 +340,7 @@ Deno.test("apply creates notes, links only existing targets, and archives propos
       "type: proposal\norigin: seed\nstatus: pending\nkind: vocab-new\nterm: later\nvocab_kind: term\ndefinition: x\ncreated: 2026-09-28",
     );
     await apply(p, "2026-09-29");
-    const gate = await Deno.readTextFile(`${p.vocabDir}/gate.md`);
+    const gate = await readFile(`${p.vocabDir}/gate.md`, "utf8");
     assertStringIncludes(gate, "[[impl]]");
     assertStringIncludes(gate, "notyet");
     assert(!gate.includes("[[notyet]]"));
@@ -339,20 +350,21 @@ Deno.test("apply creates notes, links only existing targets, and archives propos
       "approved_from: '[[2026-09-28__vocab-new__seed-1]]'",
     );
     assertStringIncludes(gate, "監査。");
-    const applied = await Deno.readTextFile(
+    const applied = await readFile(
       `${p.proposalsDir}/applied/2026-09-28__vocab-new__seed-1.md`,
+      "utf8",
     );
     assertStringIncludes(applied, "status: applied");
     assertStringIncludes(applied, "applied: 2026-09-29");
-    await Deno.stat(
+    await stat(
       `${p.proposalsDir}/rejected/2026-09-28__vocab-new__seed-2.md`,
     );
-    await Deno.stat(`${p.proposalsDir}/2026-09-28__vocab-new__seed-3.md`);
+    await stat(`${p.proposalsDir}/2026-09-28__vocab-new__seed-3.md`);
     assert(!(await exists(`${p.vocabDir}/nope.md`)));
   });
 });
 
-Deno.test("apply never overwrites an existing note with a new-term proposal", async () => {
+test("apply never overwrites an existing note with a new-term proposal", async () => {
   await vault(async (p) => {
     await note(
       p,
@@ -367,15 +379,15 @@ Deno.test("apply never overwrites an existing note with a new-term proposal", as
     );
     const report = await apply(p, "2026-09-29");
     assertStringIncludes(
-      await Deno.readTextFile(`${p.vocabDir}/gate.md`),
+      await readFile(`${p.vocabDir}/gate.md`, "utf8"),
       "元の定義。",
     );
     assert(report.some((l) => l.includes("既にある")), report.join("\n"));
-    await Deno.stat(`${p.proposalsDir}/2026-09-28__vocab-new__session-1.md`);
+    await stat(`${p.proposalsDir}/2026-09-28__vocab-new__session-1.md`);
   });
 });
 
-Deno.test("apply merges relation, alias, and definition proposals into existing notes", async () => {
+test("apply merges relation, alias, and definition proposals into existing notes", async () => {
   await vault(async (p) => {
     await note(p, "impl", "type: vocab\nkind: term\nstatus: approved");
     await note(
@@ -400,7 +412,7 @@ Deno.test("apply merges relation, alias, and definition proposals into existing 
       "type: proposal\nstatus: approved\nkind: vocab-definition\nterm: gate\ndefinition: 新しい。\ncreated: 2026-09-28",
     );
     await apply(p, "2026-09-29");
-    const gate = await Deno.readTextFile(`${p.vocabDir}/gate.md`);
+    const gate = await readFile(`${p.vocabDir}/gate.md`, "utf8");
     assertStringIncludes(gate, "[[impl]]");
     assertStringIncludes(gate, "ゲート");
     assertStringIncludes(gate, "新しい。");
@@ -408,14 +420,14 @@ Deno.test("apply merges relation, alias, and definition proposals into existing 
   });
 });
 
-Deno.test("private names are read without contents and filter unsafe text", async () => {
+test("private names are read without contents and filter unsafe text", async () => {
   await vault(async (p) => {
-    await Deno.mkdir(`${p.root}/05_Private/sub`, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(`${p.root}/05_Private/sub`, { recursive: true });
+    await writeFile(
       `${p.root}/05_Private/sub/マイナンバー控え.md`,
       "secret",
     );
-    await Deno.writeTextFile(`${p.root}/05_Private/abc.md`, "short");
+    await writeFile(`${p.root}/05_Private/abc.md`, "short");
     const names = await privateNames(p);
     assert(names.includes("マイナンバー控え"));
     assert(!isSafeText("マイナンバー控え を開いて", names));
@@ -430,7 +442,7 @@ Deno.test("private names are read without contents and filter unsafe text", asyn
   });
 });
 
-Deno.test("writeProposal numbers per date and origin and never overwrites", async () => {
+test("writeProposal numbers per date and origin and never overwrites", async () => {
   await vault(async (p) => {
     const base = {
       origin: "session",
@@ -453,7 +465,7 @@ Deno.test("writeProposal numbers per date and origin and never overwrites", asyn
     );
     assertEquals(a?.split("/").pop(), "2026-09-28__vocab-new__session-1.md");
     assertEquals(b?.split("/").pop(), "2026-09-28__vocab-new__session-2.md");
-    const body = await Deno.readTextFile(a!);
+    const body = await readFile(a!, "utf8");
     assertStringIncludes(body, "status: pending");
     assertStringIncludes(body, "created: 2026-09-28");
     assertStringIncludes(body, "- セッション `abc`: `gate して`");
@@ -463,14 +475,14 @@ Deno.test("writeProposal numbers per date and origin and never overwrites", asyn
 
 async function exists(path: string) {
   try {
-    await Deno.stat(path);
+    await stat(path);
     return true;
   } catch {
     return false;
   }
 }
 
-Deno.test("a repo proposal carries its path into the note", async () => {
+test("a repo proposal carries its path into the note", async () => {
   await vault(async (p) => {
     await writeProposal(
       p,
@@ -488,13 +500,13 @@ Deno.test("a repo proposal carries its path into the note", async () => {
     );
     await apply(p, "2026-09-29");
     assertStringIncludes(
-      await Deno.readTextFile(`${p.vocabDir}/dotfiles.md`),
+      await readFile(`${p.vocabDir}/dotfiles.md`, "utf8"),
       "path: ~/dotfiles",
     );
   });
 });
 
-Deno.test("digest fills in the other side of any symmetric relation it is given", async () => {
+test("digest fills in the other side of any symmetric relation it is given", async () => {
   await vault(async (p) => {
     await note(
       p,
@@ -513,7 +525,7 @@ Deno.test("digest fills in the other side of any symmetric relation it is given"
   });
 });
 
-Deno.test("the newest of two approved new-term proposals wins, and apply keeps the older one", async () => {
+test("the newest of two approved new-term proposals wins, and apply keeps the older one", async () => {
   await vault(async (p) => {
     await proposal(
       p,
@@ -532,7 +544,7 @@ Deno.test("the newest of two approved new-term proposals wins, and apply keeps t
     assertStringIncludes(text, "- wip: 新しい。");
     const report = await apply(p, "2026-09-29");
     assertStringIncludes(
-      await Deno.readTextFile(`${p.vocabDir}/wip.md`),
+      await readFile(`${p.vocabDir}/wip.md`, "utf8"),
       "新しい。",
     );
     assert(
@@ -542,7 +554,7 @@ Deno.test("the newest of two approved new-term proposals wins, and apply keeps t
       ),
       report.join("\n"),
     );
-    await Deno.stat(`${p.proposalsDir}/2026-09-27__vocab-new__session-1.md`);
+    await stat(`${p.proposalsDir}/2026-09-27__vocab-new__session-1.md`);
     const after = buildDigest(
       effectiveEntries(await loadNotes(p), await loadProposals(p)),
       { repo: null, includeGlobal: true },

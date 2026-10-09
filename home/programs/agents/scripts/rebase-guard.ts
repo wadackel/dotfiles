@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-run=git
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Checks that the changes parked in a WIP commit by the rebase skill are still
 // in the working tree after the rebase was unwound.
@@ -16,40 +16,45 @@
 // that also exists elsewhere in the file would make a lost hunk look absorbed,
 // and the reverse-apply demands the surrounding context too.
 
+import { spawn } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { constants } from "node:os";
+
 const WIP_SUBJECT = "wip: auto-commit before rebase";
 
 type GitResult = { code: number; stdout: Uint8Array; stderr: string };
 
-async function git(
+function git(
   cwd: string,
   args: string[],
   stdin?: Uint8Array,
 ): Promise<GitResult> {
-  // The LOST/PRESENT split reads git's English messages, so a translated locale
-  // would turn a dropped mode into a false PRESENT.
-  const cmd = new Deno.Command("git", {
-    args,
-    cwd,
-    env: { LC_ALL: "C" },
-    stdin: stdin ? "piped" : "null",
-    stdout: "piped",
-    stderr: "piped",
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, {
+      cwd,
+      // The LOST/PRESENT split reads git's English messages, so a translated
+      // locale would turn a dropped mode into a false PRESENT.
+      env: { ...process.env, LC_ALL: "C" },
+      stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout!.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr!.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      resolve({
+        code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+        stdout: Buffer.concat(out),
+        stderr: new TextDecoder().decode(Buffer.concat(err)),
+      });
+    });
+    if (child.stdin) {
+      // A patch git stopped reading is a guard failure (exit 2), never a verdict.
+      child.stdin.on("error", reject);
+      child.stdin.end(stdin);
+    }
   });
-  const child = cmd.spawn();
-  // Start draining stdout before writing stdin: a child that fills its pipe
-  // buffer while we are still writing would deadlock the write.
-  const output = child.output();
-  if (stdin) {
-    const writer = child.stdin.getWriter();
-    await writer.write(stdin);
-    await writer.close();
-  }
-  const out = await output;
-  return {
-    code: out.code,
-    stdout: out.stdout,
-    stderr: new TextDecoder().decode(out.stderr),
-  };
 }
 
 function text(bytes: Uint8Array): string {
@@ -58,15 +63,15 @@ function text(bytes: Uint8Array): string {
 
 function fail(message: string): never {
   console.error(`rebase-guard: ${message}`);
-  Deno.exit(2);
+  process.exit(2);
 }
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await stat(path);
     return true;
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return false;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw e;
   }
 }
@@ -123,7 +128,7 @@ async function classify(
 }
 
 async function verify(wip: string): Promise<number> {
-  const topResult = await git(Deno.cwd(), ["rev-parse", "--show-toplevel"]);
+  const topResult = await git(process.cwd(), ["rev-parse", "--show-toplevel"]);
   if (topResult.code !== 0) fail("not inside a git repository");
   // Pathspecs are cwd-relative while --name-status prints root-relative
   // paths, so every git call runs from the toplevel.
@@ -204,14 +209,15 @@ async function verify(wip: string): Promise<number> {
 }
 
 if (import.meta.main) {
-  const [command, sha] = Deno.args;
+  const [command, sha] = process.argv.slice(2);
   if (command !== "verify" || !sha || !/^[0-9a-f]{4,64}$/i.test(sha)) {
     fail("usage: rebase-guard.ts verify <wip-sha> (hex object id)");
   }
-  // An unexpected exception must not fall through to Deno's default exit 1,
-  // which the rebase skill reads as "changes could not be confirmed".
+  // An unexpected exception must not fall through to the default exit 1 of an
+  // uncaught error, which the rebase skill reads as "changes could not be
+  // confirmed".
   try {
-    Deno.exit(await verify(sha));
+    process.exit(await verify(sha));
   } catch (e) {
     fail(`internal failure: ${e instanceof Error ? e.message : String(e)}`);
   }

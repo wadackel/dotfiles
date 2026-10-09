@@ -1,4 +1,5 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
 import { type Io, literal, main, parseArgs, parseEval } from "./web-clip.ts";
 
 type Harness = { io: Io; calls: string[]; out: string[]; err: string[] };
@@ -48,7 +49,7 @@ const status = (phase: string, items: ReturnType<typeof item>[]) =>
 
 const PROBE_OK = "=> function\n";
 
-Deno.test("parseEval は接頭辞で値・例外・空を見分ける", () => {
+test("parseEval は接頭辞で値・例外・空を見分ける", () => {
   assertEquals(parseEval('=> {"a":"x\\"y"}\n'), {
     kind: "value",
     value: '{"a":"x\\"y"}',
@@ -58,7 +59,7 @@ Deno.test("parseEval は接頭辞で値・例外・空を見分ける", () => {
   assertEquals(parseEval(""), { kind: "empty" });
 });
 
-Deno.test("parseArgs は重複を除き、不正な URL と空を拒む", () => {
+test("parseArgs は重複を除き、不正な URL と空を拒む", () => {
   const args = parseArgs([
     "https://a.test/p",
     "https://a.test/p",
@@ -89,7 +90,7 @@ Deno.test("parseArgs は重複を除き、不正な URL と空を拒む", () => 
   assertStringIncludes(String(parseArgs(["--run", 'a"b'])), "run id");
 });
 
-Deno.test("全件 created なら TSV を出して exit 0", async () => {
+test("全件 created なら TSV を出して exit 0", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"id":"k-1"}',
@@ -108,7 +109,7 @@ Deno.test("全件 created なら TSV を出して exit 0", async () => {
   assertStringIncludes(h.calls[2], `api.status(${literal("k-1")})`);
 });
 
-Deno.test("failed を含めば exit 1 で、理由を出す", async () => {
+test("failed を含めば exit 1 で、理由を出す", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"id":"k-1"}',
@@ -129,14 +130,14 @@ Deno.test("failed を含めば exit 1 で、理由を出す", async () => {
   ]);
 });
 
-Deno.test("probe の空出力だけをやり直し、5 回とも空なら exit 2", async () => {
+test("probe の空出力だけをやり直し、5 回とも空なら exit 2", async () => {
   const h = harness(["", "", "", "", ""]);
   assertEquals(await main(["https://a.test/p"], h.io), 2);
   assertEquals(h.calls.length, 5);
   assertStringIncludes(h.err[0], "起動していない");
 });
 
-Deno.test("probe が空のあと function を返せば続ける", async () => {
+test("probe が空のあと function を返せば続ける", async () => {
   const h = harness([
     "",
     PROBE_OK,
@@ -146,19 +147,19 @@ Deno.test("probe が空のあと function を返せば続ける", async () => {
   assertEquals(await main(["https://a.test/p"], h.io), 0);
 });
 
-Deno.test("api が無ければ Reload を促して exit 2", async () => {
+test("api が無ければ Reload を促して exit 2", async () => {
   const h = harness(["=> undefined"]);
   assertEquals(await main(["https://a.test/p"], h.io), 2);
   assertStringIncludes(h.err[0], "Reload");
 });
 
-Deno.test("clip の空出力はやり直さずに exit 2", async () => {
+test("clip の空出力はやり直さずに exit 2", async () => {
   const h = harness([PROBE_OK, ""]);
   assertEquals(await main(["https://a.test/p"], h.io), 2);
   assertEquals(h.calls.length, 2);
 });
 
-Deno.test("busy の間は待ってから始める", async () => {
+test("busy の間は待ってから始める", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"error":"busy"}',
@@ -170,7 +171,7 @@ Deno.test("busy の間は待ってから始める", async () => {
   assertEquals(h.out[0], "started\tk-2");
 });
 
-Deno.test("始まる前に時間切れなら not started で exit 1", async () => {
+test("始まる前に時間切れなら not started で exit 1", async () => {
   const h = harness([
     PROBE_OK,
     ...Array.from({ length: 10 }, () => '=> {"error":"busy"}'),
@@ -179,7 +180,7 @@ Deno.test("始まる前に時間切れなら not started で exit 1", async () =
   assertEquals(h.out, ["busy\t-\t-\tnot started"]);
 });
 
-Deno.test("missing は理由を出して exit 2", async () => {
+test("missing は理由を出して exit 2", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"error":"missing","missing":["認証トークン"]}',
@@ -188,7 +189,7 @@ Deno.test("missing は理由を出して exit 2", async () => {
   assertStringIncludes(h.err[0], "認証トークン");
 });
 
-Deno.test("時間切れなら最後の状態と run id を出して exit 1", async () => {
+test("時間切れなら最後の状態と run id を出して exit 1", async () => {
   const running = status("running", [
     item("https://a.test/p", "summarizing", "04_Literature/p.md"),
   ]);
@@ -205,7 +206,7 @@ Deno.test("時間切れなら最後の状態と run id を出して exit 1", asy
   assertStringIncludes(h.err[0], "still running in Obsidian (run k-1)");
 });
 
-Deno.test("途中で unknown-id になったら最後の状態を出して exit 1", async () => {
+test("途中で unknown-id になったら最後の状態を出して exit 1", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"id":"k-1"}',
@@ -217,7 +218,7 @@ Deno.test("途中で unknown-id になったら最後の状態を出して exit 
   assertStringIncludes(h.err[0], "再読込");
 });
 
-Deno.test("--run は clip を呼ばずに既存の run を追う", async () => {
+test("--run は clip を呼ばずに既存の run を追う", async () => {
   const h = harness([
     PROBE_OK,
     status("done", [item("https://a.test/p", "created", "04_Literature/p.md")]),
@@ -227,12 +228,12 @@ Deno.test("--run は clip を呼ばずに既存の run を追う", async () => {
   assertEquals(h.out, ["created\thttps://a.test/p\t04_Literature/p.md\t"]);
 });
 
-Deno.test("--run の id が最初から無ければ exit 2", async () => {
+test("--run の id が最初から無ければ exit 2", async () => {
   const h = harness([PROBE_OK, '=> {"error":"unknown-id"}']);
   assertEquals(await main(["--run", "old-1"], h.io), 2);
 });
 
-Deno.test("埋め込むコードに引用符とバックスラッシュを残さず、元の値に戻せる", () => {
+test("埋め込むコードに引用符とバックスラッシュを残さず、元の値に戻せる", () => {
   const urls = ['https://a.test/?q="),alert(1)//'];
   const code = literal(urls);
   assertEquals(
@@ -242,13 +243,13 @@ Deno.test("埋め込むコードに引用符とバックスラッシュを残さ
   assertEquals(new Function(`return ${code}`)(), urls);
 });
 
-Deno.test("clip の応答が JSON でなければ、開始したか不明として exit 2", async () => {
+test("clip の応答が JSON でなければ、開始したか不明として exit 2", async () => {
   const h = harness([PROBE_OK, "=> not json"]);
   assertEquals(await main(["https://a.test/p"], h.io), 2);
   assertStringIncludes(h.err[0], "開始したか分からない");
 });
 
-Deno.test("status の失敗が続けば時間切れを待たずに exit 1", async () => {
+test("status の失敗が続けば時間切れを待たずに exit 1", async () => {
   const h = harness([
     PROBE_OK,
     '=> {"id":"k-1"}',

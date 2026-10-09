@@ -1,18 +1,26 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env --allow-write
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 // split-note — 長くなった概念ノートの節を新しいノートへ切り出す、機械的な部分。
 // どの節を、何という名前で、どう要約して残すかは判断なので spec に書かれて渡ってくる。
 // ここが受け持つのは、手でやると毎回どこかを書き漏らす周辺の更新だけ。
 //
-//   deno run --allow-read --allow-env split-note.ts scan \\
-//     [--min-body 6000] [--min-section 1500]
-//   deno run --allow-read --allow-env --allow-write split-note.ts apply \\
-//     --today YYYY-MM-DD [--dry-run]
+//   split-note.ts scan [--min-body 6000] [--min-section 1500]
+//   split-note.ts apply --today YYYY-MM-DD [--dry-run]
 //
 // apply の入力は $LLM_WIKI_VAULT_ROOT/98_Maintenance/split-mining/apply-spec.json。
 // タイトルは記事由来なので、シェルの引数に載せずにファイルで受ける。
 //
 // 終了コード: 0 = 成功、1 = 検証失敗（何も書いていない）、2 = 引数・環境の不備、
 // 3 = 書き込みの途中で失敗（書けたファイルとバックアップ先を出力する）。
+
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 
 export type Spec = {
   source: string;
@@ -41,18 +49,22 @@ export type Plan = {
 };
 
 export class SplitError extends Error {
-  constructor(readonly problems: string[]) {
+  readonly problems: string[];
+  constructor(problems: string[]) {
     super(problems.join("\n"));
+    this.problems = problems;
   }
 }
 
 export class PartialWriteError extends Error {
-  constructor(
-    readonly backup: string,
-    readonly written: string[],
-    readonly reason: unknown,
-  ) {
+  readonly backup: string;
+  readonly written: string[];
+  readonly reason: unknown;
+  constructor(backup: string, written: string[], reason: unknown) {
     super(`書き込みの途中で失敗: ${(reason as Error)?.message ?? reason}`);
+    this.backup = backup;
+    this.written = written;
+    this.reason = reason;
   }
 }
 
@@ -157,11 +169,11 @@ const parentOf = (body: string) =>
 async function listMd(dir: string, recursive: boolean): Promise<string[]> {
   const out: string[] = [];
   try {
-    for await (const e of Deno.readDir(dir)) {
-      if (e.isSymlink || e.name.startsWith(".")) continue;
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      if (e.isSymbolicLink() || e.name.startsWith(".")) continue;
       const p = `${dir}/${e.name}`;
-      if (e.isDirectory && recursive) out.push(...await listMd(p, true));
-      else if (e.isFile && e.name.endsWith(".md")) out.push(p);
+      if (e.isDirectory() && recursive) out.push(...await listMd(p, true));
+      else if (e.isFile() && e.name.endsWith(".md")) out.push(p);
     }
   } catch { /* 無いディレクトリは空として扱う */ }
   return out;
@@ -181,7 +193,7 @@ async function bookFiles(vault: string) {
 export async function checkVault(vault: string): Promise<string | null> {
   if (!vault.startsWith("/")) return "LLM_WIKI_VAULT_ROOT が絶対パスではない";
   for (const p of ["Home.md", "02_Notes", "04_Literature", "03_Books"]) {
-    if (!await Deno.stat(`${vault}/${p}`).catch(() => null)) {
+    if (!await stat(`${vault}/${p}`).catch(() => null)) {
       return `vault に ${p} が無い: ${vault}`;
     }
   }
@@ -206,7 +218,7 @@ export async function scan(
   for (const p of (await listMd(`${vault}/${RECORD_DIR}`, false)).sort()) {
     if (!baseName(p).startsWith("分割候補の判定記録")) continue;
     let note = "";
-    for (const l of (await Deno.readTextFile(p)).split("\n")) {
+    for (const l of (await readFile(p, "utf8")).split("\n")) {
       const h = l.match(/^### \[\[([^\]|#]+)/);
       if (h) note = key(h[1]);
       const n = l.match(/^- 長さ: 本文 ([\d,]+) 字/);
@@ -215,7 +227,7 @@ export async function scan(
   }
   const rows: ScanRow[] = [];
   for (const p of await listMd(`${vault}/02_Notes`, false)) {
-    const doc = parseDoc(await Deno.readTextFile(p));
+    const doc = parseDoc(await readFile(p, "utf8"));
     if (!doc || !NOTE_TYPES.has(fmScalar(doc.fm, "type"))) continue;
     const lines = doc.body.split("\n");
     const secs = sectionsOf(lines);
@@ -259,7 +271,7 @@ export async function planSplit(
   const noteByKey = new Map(notePaths.map((p) => [key(baseName(p)), p]));
   const contents = new Map<string, string>();
   const read = async (p: string) => {
-    if (!contents.has(p)) contents.set(p, await Deno.readTextFile(p));
+    if (!contents.has(p)) contents.set(p, await readFile(p, "utf8"));
     return contents.get(p)!;
   };
 
@@ -681,7 +693,7 @@ export async function planSplit(
       : []),
     ...(spec.logNotes ?? []).map((n) => `  - ${n.trim()}`),
   ].join("\n");
-  const log = await Deno.readTextFile(logPath).catch(() => null);
+  const log = await readFile(logPath, "utf8").catch(() => null);
   if (log === null) {
     put(
       logPath,
@@ -717,10 +729,10 @@ const isWritable = (vault: string, p: string, bookIndex: string[]) =>
 
 const missing = async (p: string) => {
   try {
-    await Deno.lstat(p);
+    await lstat(p);
     return false;
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return true;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return true;
     throw e;
   }
 };
@@ -741,8 +753,8 @@ export async function applyPlan(
   for (const w of plan.writes) {
     if (!w.existed) continue;
     const to = `${backupRoot}/${w.path.slice(vault.length + 1)}`;
-    await Deno.mkdir(to.slice(0, to.lastIndexOf("/")), { recursive: true });
-    await Deno.copyFile(w.path, to);
+    await mkdir(to.slice(0, to.lastIndexOf("/")), { recursive: true });
+    await copyFile(w.path, to);
   }
   // 作成を先に書く。新しいファイルのほうが失敗しやすく、そこで落ちれば既存のノートは
   // 節を抜かれる前のまま残る。更新を先にすると、移した節が vault から消えた状態で止まる。
@@ -753,10 +765,10 @@ export async function applyPlan(
   const written: string[] = [];
   try {
     for (const w of order) {
-      await Deno.mkdir(w.path.slice(0, w.path.lastIndexOf("/")), {
+      await mkdir(w.path.slice(0, w.path.lastIndexOf("/")), {
         recursive: true,
       });
-      await Deno.writeTextFile(w.path, w.content);
+      await writeFile(w.path, w.content);
       written.push(w.path);
     }
   } catch (e) {
@@ -768,22 +780,22 @@ export async function applyPlan(
 // ---- CLI ----
 
 if (import.meta.main) {
-  const args = Deno.args;
+  const args = process.argv.slice(2);
   const opt = (name: string) => {
     const i = args.indexOf(name);
     if (i < 0) return null;
     const v = args[i + 1];
     if (!v || v.startsWith("--")) {
       console.error(`${name} に値が無い`);
-      Deno.exit(2);
+      process.exit(2);
     }
     return v;
   };
-  const vault = (Deno.env.get("LLM_WIKI_VAULT_ROOT") ?? "").replace(/\/+$/, "");
+  const vault = (process.env.LLM_WIKI_VAULT_ROOT ?? "").replace(/\/+$/, "");
   const vaultError = await checkVault(vault);
   if (vaultError) {
     console.error(vaultError);
-    Deno.exit(2);
+    process.exit(2);
   }
   const cmd = args[0];
   if (cmd === "scan") {
@@ -791,7 +803,7 @@ if (import.meta.main) {
     const minSection = Number(opt("--min-section") ?? 1500);
     if (!Number.isFinite(minBody) || !Number.isFinite(minSection)) {
       console.error("--min-body / --min-section は数値");
-      Deno.exit(2);
+      process.exit(2);
     }
     const rows = await scan(vault, { minBody, minSection });
     console.log(JSON.stringify(rows, null, 2));
@@ -799,24 +811,24 @@ if (import.meta.main) {
     const today = opt("--today");
     if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(today)) {
       console.error("--today YYYY-MM-DD が要る（date +%Y-%m-%d の値）");
-      Deno.exit(2);
+      process.exit(2);
     }
     let spec: Spec;
     try {
-      spec = JSON.parse(await Deno.readTextFile(`${vault}/${SPEC_PATH}`));
+      spec = JSON.parse(await readFile(`${vault}/${SPEC_PATH}`, "utf8"));
     } catch (e) {
       console.error(`spec を読めない: ${SPEC_PATH}: ${(e as Error).message}`);
-      Deno.exit(2);
+      process.exit(2);
     }
     try {
       const plan = await planSplit(vault, spec, today);
       const r = (p: string) => p.slice(vault.length + 1);
       const dry = args.includes("--dry-run");
       if (!dry) {
-        const home = Deno.env.get("HOME");
+        const home = process.env.HOME;
         if (!home) {
           console.error("HOME が未設定");
-          Deno.exit(2);
+          process.exit(2);
         }
         const stamp = new Date().toISOString().replace(/[-:.]/g, "").slice(
           0,
@@ -843,16 +855,16 @@ if (import.meta.main) {
         for (const p of e.written) {
           console.log(`written\t${p.slice(vault.length + 1)}`);
         }
-        Deno.exit(3);
+        process.exit(3);
       }
       if (!(e instanceof SplitError)) throw e;
       for (const p of e.problems) console.log(`NG\t${p}`);
-      Deno.exit(1);
+      process.exit(1);
     }
   } else {
     console.error(
       "usage: split-note.ts scan | apply --today YYYY-MM-DD [--dry-run]",
     );
-    Deno.exit(2);
+    process.exit(2);
   }
 }

@@ -1,4 +1,8 @@
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
+
 /** 週次ノートの Notes セクションが分量バジェットに収まっているかを判定する */
+
+import { readFileSync } from "node:fs";
 
 const LIMIT_S1 = 300;
 const LIMIT_S3 = 120;
@@ -230,19 +234,19 @@ export function formatResult(r: BudgetResult): string[] {
 }
 
 if (import.meta.main) {
-  const path = Deno.args[0];
+  const path = process.argv.slice(2)[0];
   if (!path) {
     console.error("usage: check-budget.ts <weekly-note.md>");
-    Deno.exit(2);
+    process.exit(2);
   }
   let source: string;
   try {
-    source = Deno.readTextFileSync(path);
+    source = readFileSync(path, "utf8");
   } catch (e) {
     // 読めなかったことを exit 1 で返すと、呼び出し側が予算 FAIL と取り違えて
     // 本文を書き直す再試行ループに入る
     console.error(`cannot read ${path}: ${e instanceof Error ? e.message : e}`);
-    Deno.exit(2);
+    process.exit(2);
   }
   const result = checkBudget(source);
   formatResult(result).forEach((l) => console.log(l));
@@ -250,7 +254,7 @@ if (import.meta.main) {
     console.error(
       "Notes 見出しまたは番号付きサブセクションを検出できません。生成物の構造を確認してください。",
     );
-    Deno.exit(2);
+    process.exit(2);
   }
-  Deno.exit(result.pass ? 0 : 1);
+  process.exit(result.pass ? 0 : 1);
 }

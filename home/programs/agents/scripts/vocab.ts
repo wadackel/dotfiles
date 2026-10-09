@@ -1,10 +1,11 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,VOCAB_DIGEST --allow-run=git --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Entry point for the vocabulary ontology in the Obsidian vault. The library
 // (`vocab-lib.ts`) is shared with the memo scripts and the Hermes task runner;
 // only this entry reads the environment.
 
-import { parseArgs } from "jsr:@std/cli@1/parse-args";
+import { text as readText } from "node:stream/consumers";
+import { parseArgs } from "@std/cli/parse-args";
 import { repoNameFor } from "./memo-shared.ts";
 import {
   apply,
@@ -39,7 +40,7 @@ const USAGE = `Usage:
 const today = () => new Date().toLocaleDateString("sv-SE");
 
 function paths() {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) throw new Error("HOME is empty or not set");
   return vaultPaths(home);
 }
@@ -60,9 +61,9 @@ async function hook(agent: string): Promise<void> {
   if (agent !== "claude" && agent !== "codex") {
     throw new Error(`unknown agent: ${agent}`);
   }
-  if (Deno.env.get("VOCAB_DIGEST") === "off") return;
-  const raw = await new Response(Deno.stdin.readable).text();
-  let cwd = Deno.cwd();
+  if (process.env.VOCAB_DIGEST === "off") return;
+  const raw = await readText(process.stdin);
+  let cwd = process.cwd();
   try {
     const input = JSON.parse(raw);
     if (typeof input.cwd === "string" && input.cwd) cwd = input.cwd;
@@ -235,7 +236,7 @@ export async function main(args: string[]): Promise<number> {
         console.error(USAGE);
         return 2;
       }
-      const home = Deno.env.get("HOME");
+      const home = process.env.HOME;
       if (!home) throw new Error("HOME is empty or not set");
       const { report, packet } = await weeklyProposals({
         home,
@@ -251,4 +252,4 @@ export async function main(args: string[]): Promise<number> {
   }
 }
 
-if (import.meta.main) Deno.exit(await main(Deno.args));
+if (import.meta.main) process.exit(await main(process.argv.slice(2)));

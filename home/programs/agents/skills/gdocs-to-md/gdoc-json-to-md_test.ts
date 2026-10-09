@@ -1,4 +1,5 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
+import { test } from "bun:test";
 import { convertGdocToMarkdown } from "./gdoc-json-to-md.ts";
 import type { GdocDocument } from "./gdoc-json-to-md.ts";
 
@@ -39,28 +40,28 @@ function bulletPara(
 
 // --- Headings ---
 
-Deno.test("heading: TITLE -> #", () => {
+test("heading: TITLE -> #", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("My Title", "TITLE")])),
     "# My Title\n",
   );
 });
 
-Deno.test("heading: HEADING_2 -> ##", () => {
+test("heading: HEADING_2 -> ##", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("Section", "HEADING_2")])),
     "## Section\n",
   );
 });
 
-Deno.test("heading: HEADING_3 -> ###", () => {
+test("heading: HEADING_3 -> ###", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("Sub", "HEADING_3")])),
     "### Sub\n",
   );
 });
 
-Deno.test("heading: HEADING_4 -> ####", () => {
+test("heading: HEADING_4 -> ####", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("Deep", "HEADING_4")])),
     "#### Deep\n",
@@ -69,14 +70,14 @@ Deno.test("heading: HEADING_4 -> ####", () => {
 
 // --- Normal text ---
 
-Deno.test("normal text: plain paragraph", () => {
+test("normal text: plain paragraph", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("Hello world")])),
     "Hello world\n",
   );
 });
 
-Deno.test("normal text: empty paragraph", () => {
+test("normal text: empty paragraph", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("")])),
     "\n",
@@ -85,21 +86,21 @@ Deno.test("normal text: empty paragraph", () => {
 
 // --- Inline styles ---
 
-Deno.test("inline: bold", () => {
+test("inline: bold", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("word", "NORMAL_TEXT", { bold: true })])),
     "**word**\n",
   );
 });
 
-Deno.test("inline: italic", () => {
+test("inline: italic", () => {
   assertEquals(
     convertGdocToMarkdown(doc([para("word", "NORMAL_TEXT", { italic: true })])),
     "*word*\n",
   );
 });
 
-Deno.test("inline: bold+italic", () => {
+test("inline: bold+italic", () => {
   assertEquals(
     convertGdocToMarkdown(
       doc([para("word", "NORMAL_TEXT", { bold: true, italic: true })]),
@@ -108,7 +109,7 @@ Deno.test("inline: bold+italic", () => {
   );
 });
 
-Deno.test("inline: strikethrough", () => {
+test("inline: strikethrough", () => {
   assertEquals(
     convertGdocToMarkdown(
       doc([para("word", "NORMAL_TEXT", { strikethrough: true })]),
@@ -117,7 +118,7 @@ Deno.test("inline: strikethrough", () => {
   );
 });
 
-Deno.test("inline: code (monospace weighted)", () => {
+test("inline: code (monospace weighted)", () => {
   assertEquals(
     convertGdocToMarkdown(
       doc([
@@ -130,7 +131,7 @@ Deno.test("inline: code (monospace weighted)", () => {
   );
 });
 
-Deno.test("inline: link", () => {
+test("inline: link", () => {
   assertEquals(
     convertGdocToMarkdown(
       doc([
@@ -141,7 +142,7 @@ Deno.test("inline: link", () => {
   );
 });
 
-Deno.test("inline: empty text with bold -> no marker", () => {
+test("inline: empty text with bold -> no marker", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -162,7 +163,7 @@ Deno.test("inline: empty text with bold -> no marker", () => {
 
 // --- Lists ---
 
-Deno.test("list: unordered bullet", () => {
+test("list: unordered bullet", () => {
   const lists = {
     "list1": {
       listProperties: {
@@ -176,7 +177,7 @@ Deno.test("list: unordered bullet", () => {
   );
 });
 
-Deno.test("list: ordered (DECIMAL)", () => {
+test("list: ordered (DECIMAL)", () => {
   const lists = {
     "list1": {
       listProperties: {
@@ -190,7 +191,7 @@ Deno.test("list: ordered (DECIMAL)", () => {
   );
 });
 
-Deno.test("list: nested (level 1)", () => {
+test("list: nested (level 1)", () => {
   const lists = {
     "list1": {
       listProperties: {
@@ -206,7 +207,7 @@ Deno.test("list: nested (level 1)", () => {
 
 // --- Table ---
 
-Deno.test("table: simple 2-column", () => {
+test("table: simple 2-column", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -272,7 +273,7 @@ Deno.test("table: simple 2-column", () => {
   );
 });
 
-Deno.test("table: pipe in cell is escaped", () => {
+test("table: pipe in cell is escaped", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -304,7 +305,7 @@ Deno.test("table: pipe in cell is escaped", () => {
 
 // --- Special elements ---
 
-Deno.test("person element: Name (email)", () => {
+test("person element: Name (email)", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -327,7 +328,7 @@ Deno.test("person element: Name (email)", () => {
   assertEquals(convertGdocToMarkdown(d), "Alice Smith (alice@example.com)\n");
 });
 
-Deno.test("dateElement: displayText", () => {
+test("dateElement: displayText", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -347,7 +348,7 @@ Deno.test("dateElement: displayText", () => {
   assertEquals(convertGdocToMarkdown(d), "2026年3月5日\n");
 });
 
-Deno.test("inlineObjectElement: placeholder comment", () => {
+test("inlineObjectElement: placeholder comment", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -364,7 +365,7 @@ Deno.test("inlineObjectElement: placeholder comment", () => {
   assertEquals(convertGdocToMarkdown(d), "<!-- image omitted -->\n");
 });
 
-Deno.test("sectionBreak: skipped", () => {
+test("sectionBreak: skipped", () => {
   const d: GdocDocument = {
     title: "Test",
     body: {
@@ -384,7 +385,7 @@ Deno.test("sectionBreak: skipped", () => {
 
 // --- Compound ---
 
-Deno.test("compound: heading + paragraph + list", () => {
+test("compound: heading + paragraph + list", () => {
   const lists = {
     "l1": { listProperties: { nestingLevels: [{ glyphSymbol: "●" }] } },
   };

@@ -9,6 +9,9 @@
 // debounce I/O, repo-name resolution, LLM output parsing, Obsidian escape) live
 // here.
 
+import { type ChildProcess, spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+
 export interface LLMResult {
   summary: string;
   details: string[];
@@ -35,19 +38,40 @@ export function resolveRepoName(cwd: string, gitCommonDir: string): string {
   return gitDir.replace(/\/\.git\/?$/, "").split("/").at(-1) ?? "";
 }
 
+interface Output {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+// Resolves once the child has exited and its pipes are drained; a child that
+// cannot be started, or that closes its stdin early, rejects.
+function output(child: ChildProcess): Promise<Output> {
+  return new Promise((resolve, reject) => {
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => err.push(chunk));
+    child.stdin?.on("error", reject);
+    child.on("error", reject);
+    child.on("close", (code) =>
+      resolve({
+        code,
+        stdout: Buffer.concat(out).toString("utf8"),
+        stderr: Buffer.concat(err).toString("utf8"),
+      }));
+  });
+}
+
 export async function repoNameFor(cwd: string): Promise<string> {
   try {
-    const cmd = new Deno.Command("git", {
-      cwd,
-      args: ["rev-parse", "--git-common-dir"],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const { stdout } = await cmd.output();
-    const repoName = resolveRepoName(
-      cwd,
-      new TextDecoder().decode(stdout).trim(),
+    const { stdout } = await output(
+      spawn("git", ["rev-parse", "--git-common-dir"], {
+        cwd,
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
     );
+    const repoName = resolveRepoName(cwd, stdout.trim());
     if (repoName) return repoName;
   } catch {
     // fall through
@@ -59,7 +83,7 @@ export async function repoNameFor(cwd: string): Promise<string> {
 
 export function dailyNotePath(): string {
   const today = new Date().toLocaleDateString("sv-SE");
-  return `${Deno.env.get("HOME")}/Documents/Main/99_Tracking/Daily/${today}.md`;
+  return `${process.env.HOME}/Documents/Main/99_Tracking/Daily/${today}.md`;
 }
 
 export function nowTimestamp(): string {
@@ -194,7 +218,7 @@ export function upsertDailyNote(
   sessionShort: string,
   entryLines: string[],
 ): void {
-  const content = Deno.readTextFileSync(dailyPath);
+  const content = readFileSync(dailyPath, "utf8");
   const lines = content.split("\n");
   const existingIdx = lines.findIndex((line) =>
     line.includes(`/${sessionShort})`)
@@ -205,7 +229,7 @@ export function upsertDailyNote(
       endIdx++;
     }
     lines.splice(existingIdx, endIdx - existingIdx, ...entryLines);
-    Deno.writeTextFileSync(dailyPath, lines.join("\n"));
+    writeFileSync(dailyPath, lines.join("\n"));
     return;
   }
 
@@ -215,7 +239,7 @@ export function upsertDailyNote(
     ? readingIdx - 1
     : readingIdx;
   lines.splice(insertAt, 0, ...entryLines);
-  Deno.writeTextFileSync(dailyPath, lines.join("\n"));
+  writeFileSync(dailyPath, lines.join("\n"));
 }
 
 // --- Debounce ---
@@ -225,7 +249,7 @@ export function debounceStatePath(
   sessionShort: string,
 ): string {
   return `${
-    Deno.env.get("TMPDIR") ?? "/tmp"
+    process.env.TMPDIR ?? "/tmp"
   }/${prefix}-memo-llm-${sessionShort}.json`;
 }
 
@@ -235,7 +259,7 @@ export function shouldRunLLM(
 ): boolean {
   try {
     const state: DebounceState = JSON.parse(
-      Deno.readTextFileSync(stateFilePath),
+      readFileSync(stateFilePath, "utf8"),
     );
     return currentUserCount > state.userMessageCount;
   } catch {
@@ -247,7 +271,7 @@ export function saveDebounceState(
   stateFilePath: string,
   userCount: number,
 ): void {
-  Deno.writeTextFileSync(
+  writeFileSync(
     stateFilePath,
     JSON.stringify({ userMessageCount: userCount } satisfies DebounceState),
   );
@@ -267,17 +291,15 @@ export interface CallClaudeOptions {
 // The summary `claude -p` must not inherit the hook's cwd: Claude Code files the
 // child's transcript under the project dir derived from cwd, so every `cd` a
 // session made spawned a fake project dir and real project dirs filled up with
-// summary sessions. `$HOME/.cache` is used instead of `XDG_CACHE_HOME` because
-// codex-memo and opencode-memo run with `--allow-env=HOME,TMPDIR`; reading any
-// other variable throws NotCapable. An empty or unset HOME throws instead of
-// falling back to /tmp: transcripts written there escape the 30-day cleanup and
-// callClaude already reports the failure and inherits the cwd.
-export function memoRunDir(home = Deno.env.get("HOME")): string {
+// summary sessions. An empty or unset HOME throws instead of falling back to
+// /tmp: transcripts written there escape the 30-day cleanup and callClaude
+// already reports the failure and inherits the cwd.
+export function memoRunDir(home = process.env.HOME): string {
   if (!home) {
     throw new Error("HOME is empty or not set; cannot place the memo run dir");
   }
   const dir = `${home}/.cache/claude-memo`;
-  Deno.mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true });
   return dir;
 }
 
@@ -314,20 +336,20 @@ export async function callClaude(
     "補足が不要なほど単純なセッションなら1行目だけでもOK。\n" +
     "出力は要約のみ。説明や前置きは不要です。";
 
-  let proc: Deno.ChildProcess | null = null;
+  let proc: ChildProcess | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const cmd = new Deno.Command("claude", {
-      args: ["-p", "--safe-mode", "--model", CLAUDE_MODEL],
+    proc = spawn("claude", ["-p", "--safe-mode", "--model", CLAUDE_MODEL], {
       cwd,
       // ANTHROPIC_API_KEY を空文字で上書きすることで、親環境にキーが設定されていても
       // API 従量課金ではなくサブスク OAuth 経由の実行を強制する。
-      env: { ANTHROPIC_API_KEY: "", ...(extraEnv ?? {}) },
-      stdin: "piped",
-      stdout: "piped",
-      stderr: "piped",
+      env: { ...process.env, ANTHROPIC_API_KEY: "", ...(extraEnv ?? {}) },
+      stdio: ["pipe", "pipe", "pipe"],
     });
-    proc = cmd.spawn();
+    const done = output(proc);
+    // Awaited below; this keeps a failed start from also surfacing as an
+    // unhandled rejection when the write to stdin throws first.
+    done.catch(() => {});
     timer = setTimeout(() => {
       try {
         proc?.kill("SIGTERM");
@@ -336,19 +358,17 @@ export async function callClaude(
       }
     }, timeoutMs);
 
-    const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(`${prompt}\n\n${condensed}`));
-    await writer.close();
+    proc.stdin!.end(`${prompt}\n\n${condensed}`);
 
-    const { code, stdout, stderr } = await proc.output();
+    const { code, stdout, stderr } = await done;
     if (code !== 0) {
       if (onStderr) {
-        const msg = new TextDecoder().decode(stderr).trim().slice(0, 500);
+        const msg = stderr.trim().slice(0, 500);
         await onStderr(msg);
       }
       return null;
     }
-    return parseLLMOutput(new TextDecoder().decode(stdout));
+    return parseLLMOutput(stdout);
   } catch {
     return null;
   } finally {

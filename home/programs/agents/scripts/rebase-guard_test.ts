@@ -1,6 +1,11 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run as runCommand } from "../lib/proc.ts";
 
-const SCRIPT = new URL("./rebase-guard.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "rebase-guard.ts");
 const WIP_SUBJECT = "wip: auto-commit before rebase";
 
 type Outcome = { code: number; stdout: string; stderr: string };
@@ -22,18 +27,8 @@ async function run(
   cmd: string,
   args: string[],
 ): Promise<Outcome> {
-  const out = await new Deno.Command(cmd, {
-    args,
-    cwd,
-    env: gitEnv(root),
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  const out = await runCommand(cmd, args, { cwd, env: gitEnv(root) });
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 async function git(
@@ -49,14 +44,7 @@ async function git(
 }
 
 function verify(cwd: string, root: string, sha: string): Promise<Outcome> {
-  return run(cwd, root, Deno.execPath(), [
-    "run",
-    "--allow-read",
-    "--allow-run=git",
-    SCRIPT,
-    "verify",
-    sha,
-  ]);
+  return run(cwd, root, SCRIPT, ["verify", sha]);
 }
 
 type Fixture = { root: string; a: string; b: string };
@@ -64,7 +52,7 @@ type Fixture = { root: string; a: string; b: string };
 const TRACKED_LINES = Array.from({ length: 30 }, (_, i) => `l${i + 1}`);
 
 async function write(path: string, content: string): Promise<void> {
-  await Deno.writeTextFile(path, content);
+  await writeFile(path, content);
 }
 
 function tracked(edits: Record<number, string> = {}): string {
@@ -78,7 +66,7 @@ async function configureUser(dir: string, root: string): Promise<void> {
 }
 
 async function makeFixture(): Promise<Fixture> {
-  const root = await Deno.makeTempDir({ prefix: "rebase-guard-test-" });
+  const root = await mkdtemp(join(tmpdir(), "rebase-guard-test-"));
   await write(`${root}/gitconfig`, "");
   await git(
     root,
@@ -97,7 +85,7 @@ async function makeFixture(): Promise<Fixture> {
   await write(`${a}/todelete.txt`, "del1\ndel2\n");
   await write(`${a}/staged.txt`, "sA\nsB\n");
   await write(`${a}/modeonly.txt`, "mode\n");
-  await Deno.mkdir(`${a}/sub`);
+  await mkdir(`${a}/sub`);
   await write(`${a}/sub/inner.txt`, "inner\n");
   await git(a, root, "add", "-A");
   await git(a, root, "commit", "-q", "-m", "init");
@@ -119,7 +107,7 @@ async function withFixture(
   try {
     await body(f);
   } finally {
-    await Deno.remove(f.root, { recursive: true });
+    await rm(f.root, { recursive: true });
   }
 }
 
@@ -158,7 +146,7 @@ async function standardRoundTrip(f: Fixture): Promise<string> {
   await write(`${f.a}/newfile.txt`, "new1\nnew2\n");
   await write(`${f.a}/staged.txt`, "sA\nsB-STAGED\n");
   await git(f.a, f.root, "add", "staged.txt");
-  await Deno.remove(`${f.a}/todelete.txt`);
+  await rm(`${f.a}/todelete.txt`);
   await write(`${f.a}/日本語ファイル.txt`, "日本語\n");
   const wip = await wipCommit(f);
   await advanceBase(f, async (b) => {
@@ -171,7 +159,7 @@ async function standardRoundTrip(f: Fixture): Promise<string> {
   return wip;
 }
 
-Deno.test("verify: all five change kinds are PRESENT after a clean round trip", () =>
+test("verify: all five change kinds are PRESENT after a clean round trip", () =>
   withFixture(async (f) => {
     const wip = await standardRoundTrip(f);
     const out = await verify(f.a, f.root, wip);
@@ -193,17 +181,17 @@ Deno.test("verify: all five change kinds are PRESENT after a clean round trip", 
     );
   }));
 
-Deno.test("verify: a deleted untracked file is LOST", () =>
+test("verify: a deleted untracked file is LOST", () =>
   withFixture(async (f) => {
     const wip = await standardRoundTrip(f);
-    await Deno.remove(`${f.a}/newfile.txt`);
+    await rm(`${f.a}/newfile.txt`);
     const out = await verify(f.a, f.root, wip);
     assertEquals(out.code, 1, out.stdout + out.stderr);
     assertStringIncludes(out.stdout, "rebase-guard: LOST newfile.txt\n");
     assertStringIncludes(out.stdout, "could not confirm 1 file(s)");
   }));
 
-Deno.test("verify: a WIP skipped as already applied reports IN_HEAD without reset", () =>
+test("verify: a WIP skipped as already applied reports IN_HEAD without reset", () =>
   withFixture(async (f) => {
     await write(`${f.a}/tracked.txt`, tracked({ 3: "l3-SAME" }));
     const wip = await wipCommit(f);
@@ -223,7 +211,7 @@ Deno.test("verify: a WIP skipped as already applied reports IN_HEAD without rese
     );
   }));
 
-Deno.test("verify: a non-WIP or unknown sha exits 2", () =>
+test("verify: a non-WIP or unknown sha exits 2", () =>
   withFixture(async (f) => {
     const head = await git(f.a, f.root, "rev-parse", "HEAD");
     const notWip = await verify(f.a, f.root, head);
@@ -241,11 +229,11 @@ Deno.test("verify: a non-WIP or unknown sha exits 2", () =>
     assertStringIncludes(notHex.stderr, "usage:");
   }));
 
-Deno.test("verify: binary and mode changes are PRESENT, and their loss is LOST", () =>
+test("verify: binary and mode changes are PRESENT, and their loss is LOST", () =>
   withFixture(async (f) => {
     const blob = new Uint8Array([0, 1, 2, 255, 254]);
-    await Deno.writeFile(`${f.a}/bin.dat`, blob);
-    await Deno.chmod(`${f.a}/modeonly.txt`, 0o755);
+    await writeFile(`${f.a}/bin.dat`, blob);
+    await chmod(`${f.a}/modeonly.txt`, 0o755);
     const wip = await wipCommit(f);
     await advanceBase(f, async (b) => {
       await write(`${b}/other.txt`, "other\nmore\n");
@@ -259,13 +247,13 @@ Deno.test("verify: binary and mode changes are PRESENT, and their loss is LOST",
     assertStringIncludes(ok.stdout, "rebase-guard: PRESENT bin.dat\n");
     assertStringIncludes(ok.stdout, "rebase-guard: PRESENT modeonly.txt\n");
 
-    await Deno.remove(`${f.a}/bin.dat`);
+    await rm(`${f.a}/bin.dat`);
     const noBlob = await verify(f.a, f.root, wip);
     assertEquals(noBlob.code, 1, noBlob.stdout + noBlob.stderr);
     assertStringIncludes(noBlob.stdout, "rebase-guard: LOST bin.dat\n");
 
-    await Deno.writeFile(`${f.a}/bin.dat`, blob);
-    await Deno.chmod(`${f.a}/modeonly.txt`, 0o644);
+    await writeFile(`${f.a}/bin.dat`, blob);
+    await chmod(`${f.a}/modeonly.txt`, 0o644);
     const noMode = await verify(f.a, f.root, wip);
     assertEquals(noMode.code, 1, noMode.stdout + noMode.stderr);
     assertStringIncludes(noMode.stdout, "rebase-guard: LOST modeonly.txt\n");
@@ -284,7 +272,7 @@ async function conflictingRebase(f: Fixture): Promise<string> {
   return wip;
 }
 
-Deno.test("verify: exits 2 while a rebase is stopped on a conflict", () =>
+test("verify: exits 2 while a rebase is stopped on a conflict", () =>
   withFixture(async (f) => {
     const wip = await conflictingRebase(f);
     const out = await verify(f.a, f.root, wip);
@@ -294,7 +282,7 @@ Deno.test("verify: exits 2 while a rebase is stopped on a conflict", () =>
     assertEquals(await headSubject(f), WIP_SUBJECT);
   }));
 
-Deno.test("verify: a conflict resolved by taking the base side is UNCONFIRMED", () =>
+test("verify: a conflict resolved by taking the base side is UNCONFIRMED", () =>
   withFixture(async (f) => {
     const wip = await conflictingRebase(f);
     await write(`${f.a}/tracked.txt`, tracked({ 3: "l3-BASE" }));
@@ -310,7 +298,7 @@ Deno.test("verify: a conflict resolved by taking the base side is UNCONFIRMED", 
     assertStringIncludes(out.stdout, "rebase-guard: PRESENT newfile.txt\n");
   }));
 
-Deno.test("verify: works from a subdirectory of the repository", () =>
+test("verify: works from a subdirectory of the repository", () =>
   withFixture(async (f) => {
     const wip = await standardRoundTrip(f);
     const out = await verify(`${f.a}/sub`, f.root, wip);

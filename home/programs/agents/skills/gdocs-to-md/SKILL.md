@@ -2,7 +2,7 @@
 name: gdocs-to-md
 description: >-
   Convert a Google Docs document to GitHub Flavored Markdown via Docs API.
-  Fetches document structure as JSON via gws docs, then converts with a Deno
+  Fetches document structure as JSON via gws docs, then converts with a Bun
   script. Use when asked to "convert Google Docs to Markdown",
   "Google DocsをMarkdownに変換して", "docsをmdにして",
   "MarkdownにExportして", or when a Google Docs URL is provided with intent to
@@ -12,13 +12,13 @@ argument-hint: "[Google Docs URL or ID]"
 
 # Google Docs to Markdown
 
-Convert a Google Docs document to GitHub Flavored Markdown. Fetches the document via `gws docs documents get` (Google Docs API), then converts the JSON structure to GFM using a Deno script.
+Convert a Google Docs document to GitHub Flavored Markdown. Fetches the document via `gws docs documents get` (Google Docs API), then converts the JSON structure to GFM using a Bun script.
 
 ## Prerequisites
 
 - **gws CLI** — for Google Docs API access. See the **gws-shared skill** for auth setup.
 - **jq** — for JSON parsing.
-- **Deno** — for running the conversion script.
+- **Bun** — for running the conversion script.
 - **Google Docs API** must be enabled for your GCP project.
 
 ## Quick Start
@@ -69,7 +69,7 @@ If validation fails: print the raw content of `$TMP_JSON` and `"temp file preser
 
 **On gws failure**: print the error and `"temp file at: $TMP_JSON"`. If the error is an auth/permission issue, suggest running `gws auth login`. If the error mentions Docs API not enabled, direct user to enable it in GCP Console. Do not proceed to conversion.
 
-### Step 4 — Convert with Deno script
+### Step 4 — Convert with the Bun script
 
 ```bash
 OUTPUT_STEM=$(echo "$TITLE" | tr '/' '-')

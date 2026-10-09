@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,AB_STATE_REFRESH_CONNECT_TIMEOUT_MS,AB_STATE_REFRESH_REQUEST_TIMEOUT_MS,AB_STATE_REFRESH_LOAD_TIMEOUT_MS,AB_STATE_REFRESH_SETTLE_MS,AB_STATE_REFRESH_TARGET_DEADLINE_MS --allow-net=127.0.0.1 --allow-run=fzf,osascript
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Import the running Chrome's auth state into ~/.agent-browser-state/main.json
 // so headless agent-browser sessions can replay it.
@@ -18,6 +18,21 @@
 // the browser-session Storage domain (no page involved) and storage comes from
 // a throwaway tab we opened ourselves, so no pre-existing tab is ever touched.
 
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { run } from "../lib/proc.ts";
+
+const errorCode = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code;
+
 const DEVTOOLS_PORT_FILE =
   "Library/Application Support/Google/Chrome/DevToolsActivePort";
 
@@ -34,7 +49,7 @@ const TARGET_DEADLINE_MS = envInt(
 );
 
 function envInt(name: string, fallback: number): number {
-  const raw = Deno.env.get(name);
+  const raw = process.env[name];
   if (!raw) return fallback;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -618,30 +633,32 @@ async function listTabs(client: CdpClient): Promise<TabRow[]> {
 
 async function pickWithFzf(rows: TabRow[]): Promise<TabRow[]> {
   const index = new Map(rows.map((r) => [r.display, r]));
-  const child = new Deno.Command("fzf", {
-    args: [
-      "--height",
-      "40%",
-      "--reverse",
-      "--border",
-      "--multi",
-      "--header",
-      "Select origins to refresh (TAB to mark, ESC to cancel)",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "inherit",
-  }).spawn();
+  const child = spawn("fzf", [
+    "--height",
+    "40%",
+    "--reverse",
+    "--border",
+    "--multi",
+    "--header",
+    "Select origins to refresh (TAB to mark, ESC to cancel)",
+  ], { stdio: ["pipe", "pipe", "inherit"] });
 
-  const writer = child.stdin.getWriter();
-  await writer.write(
-    new TextEncoder().encode(rows.map((r) => r.display).join("\n") + "\n"),
+  const out = await new Promise<{ code: number | null; stdout: string }>(
+    (resolve, reject) => {
+      const chunks: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      child.stdin.on("error", reject);
+      child.on("error", reject);
+      child.on(
+        "close",
+        (code) =>
+          resolve({ code, stdout: Buffer.concat(chunks).toString("utf8") }),
+      );
+      child.stdin.end(rows.map((r) => r.display).join("\n") + "\n");
+    },
   );
-  await writer.close();
-
-  const out = await child.output();
   if (out.code !== 0) return [];
-  return new TextDecoder().decode(out.stdout)
+  return out.stdout
     .split("\n")
     .map((line) => index.get(line))
     .filter((r): r is TabRow => r !== undefined);
@@ -649,16 +666,12 @@ async function pickWithFzf(rows: TabRow[]): Promise<TabRow[]> {
 
 async function activeTabUrl(): Promise<string | null> {
   try {
-    const out = await new Deno.Command("osascript", {
-      args: [
-        "-e",
-        'tell application "Google Chrome" to get URL of active tab of front window',
-      ],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
+    const out = await run("osascript", [
+      "-e",
+      'tell application "Google Chrome" to get URL of active tab of front window',
+    ]);
     if (out.code !== 0) return null;
-    const url = new TextDecoder().decode(out.stdout).trim();
+    const url = out.stdout.trim();
     return originOf(url) === null ? null : url;
   } catch {
     return null;
@@ -672,9 +685,9 @@ async function activeTabUrl(): Promise<string | null> {
 async function readSeed(statePath: string): Promise<unknown | null> {
   let text: string;
   try {
-    text = await Deno.readTextFile(statePath);
+    text = await readFile(statePath, "utf8");
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return null;
+    if (errorCode(e) === "ENOENT") return null;
     throw e;
   }
   if (text.trim() === "") return null;
@@ -693,23 +706,23 @@ async function writeState(
   statePath: string,
   state: StateFile,
 ): Promise<void> {
-  await Deno.mkdir(stateDir, { recursive: true, mode: 0o700 });
-  await Deno.chmod(stateDir, 0o700);
+  await mkdir(stateDir, { recursive: true, mode: 0o700 });
+  await chmod(stateDir, 0o700);
 
-  const tmp = `${stateDir}/.main.json.tmp.${Deno.pid}.${
+  const tmp = `${stateDir}/.main.json.tmp.${process.pid}.${
     crypto.randomUUID().slice(0, 8)
   }`;
   try {
-    await Deno.writeTextFile(tmp, JSON.stringify(state, null, 2) + "\n", {
+    await writeFile(tmp, JSON.stringify(state, null, 2) + "\n", {
       mode: 0o600,
     });
-    // writeTextFile's mode is masked by umask; chmod closes the window before
+    // writeFile's mode is masked by umask; chmod closes the window before
     // the file becomes main.json.
-    await Deno.chmod(tmp, 0o600);
-    await Deno.rename(tmp, statePath);
+    await chmod(tmp, 0o600);
+    await rename(tmp, statePath);
   } finally {
     try {
-      await Deno.remove(tmp);
+      await rm(tmp);
     } catch {
       // Already renamed away, or never created.
     }
@@ -726,7 +739,7 @@ function discoverWsUrl(home: string): string {
   const portFile = `${home}/${DEVTOOLS_PORT_FILE}`;
   let text: string;
   try {
-    text = Deno.readTextFileSync(portFile);
+    text = readFileSync(portFile, "utf8");
   } catch {
     console.error(
       `abr: DevToolsActivePort not found at ${portFile}.`,
@@ -750,15 +763,17 @@ function discoverWsUrl(home: string): string {
 }
 
 class SilentExit extends Error {
-  constructor(public code: number) {
+  code: number;
+  constructor(code: number) {
     super("silent exit");
+    this.code = code;
   }
 }
 
 async function main(): Promise<number> {
   let parsed: ParsedArgs;
   try {
-    parsed = parseArgs(Deno.args);
+    parsed = parseArgs(process.argv.slice(2));
   } catch (e) {
     if (e instanceof UsageError) {
       console.error(`abr: ${e.message}`);
@@ -769,26 +784,25 @@ async function main(): Promise<number> {
   }
 
   if (parsed.mode === "interactive") {
-    if (!Deno.stdin.isTerminal()) {
+    if (process.stdin.isTTY !== true) {
       console.error(
         "abr -i: requires TTY (fzf cannot run on piped stdin)",
       );
       return 1;
     }
     try {
-      await new Deno.Command("fzf", {
-        args: ["--version"],
-        stdout: "null",
-        stderr: "null",
-      })
-        .output();
+      await new Promise<void>((resolve, reject) => {
+        const probe = spawn("fzf", ["--version"], { stdio: "ignore" });
+        probe.on("error", reject);
+        probe.on("close", () => resolve());
+      });
     } catch {
       console.error("abr -i: fzf not found in PATH");
       return 1;
     }
   }
 
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) throw new Error("HOME is not set");
   const stateDir = `${home}/.agent-browser-state`;
   const statePath = `${stateDir}/main.json`;
@@ -819,10 +833,10 @@ async function main(): Promise<number> {
       ),
       sleep(3_000),
     ]);
-    Deno.exit(130);
+    process.exit(130);
   };
-  Deno.addSignalListener("SIGINT", onSignal);
-  Deno.addSignalListener("SIGTERM", onSignal);
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
 
   try {
     await client.send("Browser.getVersion", {});
@@ -918,26 +932,26 @@ async function main(): Promise<number> {
       );
     }
 
-    const size = (await Deno.stat(statePath)).size;
+    const size = (await stat(statePath)).size;
     console.log(
       `state saved: ${statePath} (${size} bytes, ${new Date().toString()})`,
     );
     return 0;
   } finally {
-    Deno.removeSignalListener("SIGINT", onSignal);
-    Deno.removeSignalListener("SIGTERM", onSignal);
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
     await client.close();
   }
 }
 
 if (import.meta.main) {
   try {
-    Deno.exit(await main());
+    process.exit(await main());
   } catch (e) {
-    if (e instanceof SilentExit) Deno.exit(e.code);
+    if (e instanceof SilentExit) process.exit(e.code);
     console.error(
       `abr: ${e instanceof Error ? e.message : String(e)}`,
     );
-    Deno.exit(1);
+    process.exit(1);
   }
 }

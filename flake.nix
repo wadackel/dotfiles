@@ -200,15 +200,15 @@
       # フォーマットチェック（CI用）
       checks.${system} = {
         formatting = treefmtEval.config.build.check self;
-        # Overlays are not applied here, same as treefmtEval; the lint only needs deno.
+        # Overlays are not applied here, same as treefmtEval; the lint only needs bun.
         config-lint =
           let
             checkPkgs = nixpkgs.legacyPackages.${system};
           in
-          checkPkgs.runCommand "config-lint" { nativeBuildInputs = [ checkPkgs.deno ]; } ''
+          checkPkgs.runCommand "config-lint" { nativeBuildInputs = [ checkPkgs.bun ]; } ''
             cd "${self}"
-            export DENO_DIR=$TMPDIR/deno HOME=$TMPDIR
-            deno run --no-remote --no-prompt --allow-read=. \
+            export HOME=$TMPDIR BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+            bun --no-env-file --no-install --config=/dev/null \
               home/programs/agents/scripts/config-lint.ts .
             touch $out
           '';

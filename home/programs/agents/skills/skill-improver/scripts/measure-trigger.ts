@@ -1,6 +1,16 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME --allow-run=claude --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-import { TextLineStream } from "jsr:@std/streams@1/text-line-stream";
+import { TextLineStream } from "@std/streams/text-line-stream";
+import { type ChildProcess, spawn } from "node:child_process";
+import {
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { Readable } from "node:stream";
+import { text } from "node:stream/consumers";
 
 const BACKUP_SUFFIX = ".measure-trigger.bak";
 
@@ -28,7 +38,7 @@ backup from an aborted run.`;
 
 const die = (message: string, code = 2): never => {
   console.error(message);
-  Deno.exit(code);
+  process.exit(code);
 };
 
 // ---------------------------------------------------------------- frontmatter
@@ -175,11 +185,11 @@ export const passes = (result: QueryResult): boolean =>
 
 // ----------------------------------------------------------------- measuring
 
-const live = new Set<Deno.ChildProcess>();
+const live = new Set<ChildProcess>();
 
 const terminate = (
-  child: Deno.ChildProcess,
-  signal: Deno.Signal = "SIGTERM",
+  child: ChildProcess,
+  signal: NodeJS.Signals = "SIGTERM",
 ) => {
   try {
     child.kill(signal);
@@ -211,26 +221,37 @@ const settleWithin = <T>(
   });
 
 const runQuery = async (query: string, timeoutMs: number): Promise<Attempt> => {
-  const child = new Deno.Command("claude", {
-    args: [
-      "-p",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      "--max-turns",
-      "1",
-      "--no-session-persistence",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
+  const child = spawn("claude", [
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--max-turns",
+    "1",
+    "--no-session-persistence",
+  ]);
   live.add(child);
+  // "exit" rather than "close": "close" also waits for the stdio pipes, which
+  // a grandchild can hold open long after the child is gone.
+  const exited = new Promise<void>((resolve) =>
+    child.once("exit", () => resolve())
+  );
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
+  } catch (error) {
+    live.delete(child);
+    throw error;
+  }
   // Killing the child does not end the read: stdout reaches EOF only once every
   // process holding the write end has closed it, and a grandchild the child
   // left behind holds it open. The timeout has to close this side too, or an
   // attempt outlives its own limit with the candidate still installed.
-  const reader = child.stdout
+  const reader = (
+    Readable.toWeb(child.stdout) as ReadableStream<Uint8Array<ArrayBuffer>>
+  )
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new TextLineStream())
     .getReader();
@@ -241,16 +262,17 @@ const runQuery = async (query: string, timeoutMs: number): Promise<Attempt> => {
   // Consumed from the start so a full stderr pipe cannot block the child, and
   // caught so a stream error cannot surface as an unhandled rejection while the
   // real SKILL.md still holds the candidate.
-  const stderrText = new Response(child.stderr).text().catch(() => "");
+  const stderrText = text(child.stderr).catch(() => "");
   let use: ToolUse | null = null;
   let failure = "";
   try {
-    const writer = child.stdin.getWriter();
     // The query goes in over stdin rather than argv: `claude` reads a leading
     // `-` as a flag, so an eval file could otherwise smuggle in --mcp-config
     // and start a process of its own choosing.
-    await writer.write(new TextEncoder().encode(query));
-    await writer.close();
+    await new Promise<void>((resolve, reject) => {
+      child.stdin.once("error", reject);
+      child.stdin.end(query, () => resolve());
+    });
     while (!use) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -269,7 +291,7 @@ const runQuery = async (query: string, timeoutMs: number): Promise<Attempt> => {
     // ignores SIGTERM is killed 5 s after being asked rather than 5 s after
     // the full timeout it may never have reached.
     const hardTimer = setTimeout(() => terminate(child, "SIGKILL"), 5_000);
-    await child.status.catch(() => undefined);
+    await exited;
     clearTimeout(hardTimer);
   }
   const stderr = await settleWithin(stderrText, 2_000, "");
@@ -351,11 +373,11 @@ const report = (results: QueryResult[], skillName: string): string => {
 const resolveSkill = (target: string): { dir: string; name: string } => {
   const candidates = target.includes("/") ? [target] : [
     `.claude/skills/${target}`,
-    `${Deno.env.get("HOME") ?? ""}/.claude/skills/${target}`,
+    `${process.env.HOME ?? ""}/.claude/skills/${target}`,
   ];
   for (const dir of candidates) {
     try {
-      if (Deno.statSync(`${dir}/SKILL.md`).isFile) {
+      if (statSync(`${dir}/SKILL.md`).isFile()) {
         return { dir, name: target.split("/").filter((s) => s !== "").pop()! };
       }
     } catch {
@@ -406,7 +428,7 @@ const main = async (args: string[]): Promise<number> => {
 
   const readEvalSet = (path: string): EvalItem[] => {
     try {
-      return parseEvalSet(Deno.readTextFileSync(path));
+      return parseEvalSet(readFileSync(path, "utf8"));
     } catch (error) {
       return die(`${path}: ${(error as Error).message}`);
     }
@@ -414,24 +436,24 @@ const main = async (args: string[]): Promise<number> => {
   const items = readEvalSet(evalArg);
 
   try {
-    Deno.statSync(backupPath);
+    statSync(backupPath);
     die(
       `${backupPath} exists — a previous run was interrupted.\n` +
         `Compare it against ${skillPath} with diff, then restore whichever is intact.`,
     );
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
   try {
-    Deno.removeSync(`${backupPath}.partial`);
+    rmSync(`${backupPath}.partial`);
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 
   const descriptionFile = flag("description");
   const candidate = descriptionFile === undefined ? undefined : (() => {
     try {
-      return Deno.readTextFileSync(descriptionFile);
+      return readFileSync(descriptionFile, "utf8");
     } catch (error) {
       return die(`${descriptionFile}: ${(error as Error).message}`);
     }
@@ -442,17 +464,17 @@ const main = async (args: string[]): Promise<number> => {
   const timeoutMs = num("timeout", 180) * 1000;
 
   const asJson = args.includes("--json");
-  const original = Deno.readTextFileSync(skillPath);
+  const original = readFileSync(skillPath, "utf8");
   let swapped = false;
 
   const restore = () => {
     if (!swapped) return;
-    Deno.writeTextFileSync(skillPath, original);
-    Deno.removeSync(backupPath);
+    writeFileSync(skillPath, original);
+    rmSync(backupPath);
     swapped = false;
   };
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    Deno.addSignalListener(signal, () => {
+    process.on(signal, () => {
       try {
         killLiveChildren();
         restore();
@@ -461,12 +483,12 @@ const main = async (args: string[]): Promise<number> => {
           `restore failed — the original is in ${backupPath}: ${error}`,
         );
       } finally {
-        Deno.exit(130);
+        process.exit(130);
       }
     });
   }
 
-  // Nothing below may call die(): Deno.exit() inside the try block would skip
+  // Nothing below may call die(): process.exit() inside the try block would skip
   // the finally and leave the candidate description in the real skill. Every
   // argument that can be rejected is settled above.
   let code = 0;
@@ -480,10 +502,10 @@ const main = async (args: string[]): Promise<number> => {
       //
       // A truncated backup is worse than none: a half-written file is what the
       // interrupted-run message would tell the next run to restore from.
-      Deno.writeTextFileSync(`${backupPath}.partial`, original);
-      Deno.renameSync(`${backupPath}.partial`, backupPath);
+      writeFileSync(`${backupPath}.partial`, original);
+      renameSync(`${backupPath}.partial`, backupPath);
       swapped = true;
-      Deno.writeTextFileSync(
+      writeFileSync(
         skillPath,
         replaceDescription(original, candidate),
       );
@@ -516,13 +538,13 @@ const main = async (args: string[]): Promise<number> => {
 };
 
 if (import.meta.main) {
-  const args = Deno.args;
+  const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
     console.log(USAGE);
-    Deno.exit(0);
+    process.exit(0);
   }
   try {
-    Deno.exit(await main(args));
+    process.exit(await main(args));
   } catch (error) {
     // Exit 1 is reserved for "a query landed on the wrong side"; anything
     // thrown here is the environment, not the description.

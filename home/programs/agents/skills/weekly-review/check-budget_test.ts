@@ -1,4 +1,5 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "@std/assert";
+import { test } from "bun:test";
 import {
   checkBudget,
   type CheckKey,
@@ -69,7 +70,7 @@ function rawNote(
 const checkOf = (md: string, key: CheckKey) =>
   checkBudget(md).checks.find((c) => c.key === key)!;
 
-Deno.test("S1 は 300 字ちょうどで PASS", () => {
+test("S1 は 300 字ちょうどで PASS", () => {
   const c = checkOf(
     note({ s1: [...Array.from({ length: 7 }, () => rep(40)), rep(20)] }),
     "S1",
@@ -78,7 +79,7 @@ Deno.test("S1 は 300 字ちょうどで PASS", () => {
   assert(c.pass);
 });
 
-Deno.test("S1 は 301 字で FAIL", () => {
+test("S1 は 301 字で FAIL", () => {
   const c = checkOf(
     note({ s1: [...Array.from({ length: 7 }, () => rep(40)), rep(21)] }),
     "S1",
@@ -87,19 +88,19 @@ Deno.test("S1 は 301 字で FAIL", () => {
   assert(!c.pass);
 });
 
-Deno.test("S3 は 120 字ちょうどで PASS、121 字で FAIL", () => {
+test("S3 は 120 字ちょうどで PASS、121 字で FAIL", () => {
   assert(checkOf(note({ s3: [rep(120)] }), "S3").pass);
   assert(!checkOf(note({ s3: [rep(121)] }), "S3").pass);
 });
 
-Deno.test("S1MAX は 40 字ちょうどで PASS、41 字で FAIL", () => {
+test("S1MAX は 40 字ちょうどで PASS、41 字で FAIL", () => {
   const ok = checkOf(note({ s1: [rep(40)] }), "S1MAX");
   assertEquals(ok.value, 40);
   assert(ok.pass);
   assert(!checkOf(note({ s1: [rep(41)] }), "S1MAX").pass);
 });
 
-Deno.test("禁止トークンを 4 種とも検出する", () => {
+test("禁止トークンを 4 種とも検出する", () => {
   for (
     const t of ["対応 ＃276", "対応 #276", "commit 3fe8ee9b", "テスト 5 件"]
   ) {
@@ -109,7 +110,7 @@ Deno.test("禁止トークンを 4 種とも検出する", () => {
   }
 });
 
-Deno.test("全角数字・大文字でも取りこぼさない", () => {
+test("全角数字・大文字でも取りこぼさない", () => {
   assertEquals(checkOf(note({ s1: ["テスト ５件"] }), "TOKENS").value, 1);
   assertEquals(checkOf(note({ s1: ["テスト １２ 件"] }), "TOKENS").value, 1);
   assertEquals(checkOf(note({ s1: ["対応 ＃２７６"] }), "TOKENS").value, 1);
@@ -131,12 +132,12 @@ Deno.test("全角数字・大文字でも取りこぼさない", () => {
   );
 });
 
-Deno.test("禁止トークンは §0 / §2 でも検出する", () => {
+test("禁止トークンは §0 / §2 でも検出する", () => {
   assertEquals(checkOf(note({ s0: ["対応 ＃276"] }), "TOKENS").value, 1);
   assertEquals(checkOf(note({ s2: ["対応 ＃276"] }), "TOKENS").value, 1);
 });
 
-Deno.test("パスは拡張子付きのみ検出し、略語の並記は誤検出しない", () => {
+test("パスは拡張子付きのみ検出し、略語の並記は誤検出しない", () => {
   assertEquals(
     checkOf(note({ s1: ["app/routes/foo.tsx を修正"] }), "TOKENS").value,
     1,
@@ -152,7 +153,7 @@ Deno.test("パスは拡張子付きのみ検出し、略語の並記は誤検出
   assertEquals(checkOf(note({ s1: ["設計 A / B を比較"] }), "TOKENS").value, 0);
 });
 
-Deno.test("SHA は英数が混在するものだけ検出する", () => {
+test("SHA は英数が混在するものだけ検出する", () => {
   assertEquals(
     checkOf(note({ s1: ["日付 20260803 の記録"] }), "TOKENS").value,
     0,
@@ -164,7 +165,7 @@ Deno.test("SHA は英数が混在するものだけ検出する", () => {
   assertEquals(checkOf(note({ s1: ["commit 3fe8ee9b"] }), "TOKENS").value, 1);
 });
 
-Deno.test("空セクションと tba は 0 字として PASS", () => {
+test("空セクションと tba は 0 字として PASS", () => {
   const r = checkBudget(note({}));
   assertEquals(checkOf(note({}), "S1").value, 0);
   assert(r.pass);
@@ -174,7 +175,7 @@ Deno.test("空セクションと tba は 0 字として PASS", () => {
   assert(checkBudget(tba).pass);
 });
 
-Deno.test("番号付き見出しが 1 つでも欠けたら UNPARSEABLE", () => {
+test("番号付き見出しが 1 つでも欠けたら UNPARSEABLE", () => {
   // 欠けた見出しの中身は別セクションへ流れ込むか孤児行になるため、0 字 PASS にしない
   const md = ["## 🦄 Notes", "", "### 1.今週やったこと", "", "- 短い", ""].join(
     "\n",
@@ -200,7 +201,7 @@ Deno.test("番号付き見出しが 1 つでも欠けたら UNPARSEABLE", () => 
   assert(checkBudget(drifted).unparseable);
 });
 
-Deno.test("サブセクションの外に置いた本文行は孤児として FAIL", () => {
+test("サブセクションの外に置いた本文行は孤児として FAIL", () => {
   const md = [
     "---",
     "tags:",
@@ -229,13 +230,13 @@ Deno.test("サブセクションの外に置いた本文行は孤児として FA
   assert(!r.unparseable);
 });
 
-Deno.test("Analysis 以降は集計にも禁止トークン検出にも含めない", () => {
+test("Analysis 以降は集計にも禁止トークン検出にも含めない", () => {
   const r = checkBudget(note({ s1: ["短い成果"] }));
   assertEquals(r.checks.find((c) => c.key === "TOKENS")!.value, 0);
   assert(!extractNotes(note({}))!.includes("dataviewjs"));
 });
 
-Deno.test("構造を検出できない入力は PASS にせず UNPARSEABLE にする", () => {
+test("構造を検出できない入力は PASS にせず UNPARSEABLE にする", () => {
   // 見出しが `### 1.` から `## 1.` へ化けた生成事故を、沈黙の PASS で通さない
   const drifted = ["## 🦄 Notes", "", "## 1.今週やったこと", "", "- 何か", ""]
     .join("\n");
@@ -253,7 +254,7 @@ Deno.test("構造を検出できない入力は PASS にせず UNPARSEABLE に�
   assertEquals(checkBudget("").unparseable, true);
 });
 
-Deno.test("formatResult は SKILL.md が依存する契約どおりの行を返す", () => {
+test("formatResult は SKILL.md が依存する契約どおりの行を返す", () => {
   const r = checkBudget(note({ s1: ["対応 ＃276"], s3: ["短い感想"] }));
   const lines = formatResult(r);
   assert(lines.includes("S1:7 LIMIT:300 PASS"));
@@ -267,7 +268,7 @@ Deno.test("formatResult は SKILL.md が依存する契約どおりの行を返�
   assert(!ok.some((l) => l.startsWith("FOUND:")));
 });
 
-Deno.test("bullet をやめて散文にしても字数から逃げられない", () => {
+test("bullet をやめて散文にしても字数から逃げられない", () => {
   // マーカーなしの素の行と、`*` / `1.` の別マーカーを混ぜる
   const r = checkBudget(
     rawNote({ s1: [rep(200)], s3: ["* 別マーカーの行", "1. 番号付きの行"] }),
@@ -281,7 +282,7 @@ Deno.test("bullet をやめて散文にしても字数から逃げられない",
   assert(!r.pass);
 });
 
-Deno.test("番号外の見出しを作ってもそこへ本文を逃がせない", () => {
+test("番号外の見出しを作ってもそこへ本文を逃がせない", () => {
   const escaped = note({ s1: ["短い成果"] }).replace(
     "### 3.感想",
     ["### 4.補足", "", "- " + rep(500), "", "### 3.感想"].join("\n"),
@@ -292,7 +293,7 @@ Deno.test("番号外の見出しを作ってもそこへ本文を逃がせない
   assert(!r.pass);
 });
 
-Deno.test("深い見出しに入れ子にしても字数から逃げられない", () => {
+test("深い見出しに入れ子にしても字数から逃げられない", () => {
   const nested = rawNote({ s1: ["#### Atlas", rep(60)] });
   const r = checkBudget(nested);
   assert(!r.unparseable);
@@ -302,7 +303,7 @@ Deno.test("深い見出しに入れ子にしても字数から逃げられない
   assert(!r.pass);
 });
 
-Deno.test("§0 / §2 の長文は S1 / S3 に混ざらない", () => {
+test("§0 / §2 の長文は S1 / S3 に混ざらない", () => {
   const r = checkBudget(note({ s0: [rep(500)], s2: [rep(500)] }));
   assertEquals(r.checks.find((c) => c.key === "S1")!.value, 0);
   assertEquals(r.checks.find((c) => c.key === "S3")!.value, 0);
@@ -310,14 +311,14 @@ Deno.test("§0 / §2 の長文は S1 / S3 に混ざらない", () => {
   assert(r.pass);
 });
 
-Deno.test("グループラベル行も字数に含める", () => {
+test("グループラベル行も字数に含める", () => {
   const grouped = rawNote({ s1: ["- Atlas", "    - 認証基盤を移行"] });
   assert(!checkBudget(grouped).unparseable);
   // "Atlas"(5) + "認証基盤を移行"(7)
   assertEquals(checkOf(grouped, "S1").value, 12);
 });
 
-Deno.test("bullets は足場を除いた字数、notes は生の字数", () => {
+test("bullets は足場を除いた字数、notes は生の字数", () => {
   const r = checkBudget(note({ s1: [rep(200)], s3: [rep(5)] }));
   assertEquals(r.bullets, 205);
   assert(r.notes > r.bullets);

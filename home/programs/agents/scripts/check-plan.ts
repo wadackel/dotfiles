@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Deterministic lint for /plan output. Both plan skills run it right after DRAFT
 // and again before ACTIVATE.
@@ -19,6 +19,8 @@
 // wrong prose — neither is decidable from the plan file. Meaning-level checks
 // (whether a Self-resolved claim is true, whether a `[live]` item is required)
 // stay with the critic and the adversarial agent.
+
+import { readFile, stat } from "node:fs/promises";
 
 const REQUIRED_SECTIONS = [
   "## Context",
@@ -67,7 +69,7 @@ export type Finding = {
 
 function fail(msg: string): never {
   console.error(`check-plan.ts: ${msg}`);
-  Deno.exit(2);
+  process.exit(2);
 }
 
 type Line = { no: number; text: string };
@@ -290,14 +292,14 @@ export function checkPlan(source: string): Finding[] {
 }
 
 if (import.meta.main) {
-  const asJson = Deno.args.includes("--json");
-  const args = Deno.args.filter((a) => a !== "--json");
+  const asJson = process.argv.slice(2).includes("--json");
+  const args = process.argv.slice(2).filter((a) => a !== "--json");
   if (args.length !== 1) fail("usage: check-plan.ts <plan.md> [--json]");
   const path = args[0];
   let source: string;
   try {
-    if ((await Deno.stat(path)).isDirectory) fail(`directory given: ${path}`);
-    source = await Deno.readTextFile(path);
+    if ((await stat(path)).isDirectory()) fail(`directory given: ${path}`);
+    source = await readFile(path, "utf8");
   } catch (e) {
     fail(
       `cannot read: ${path} (${e instanceof Error ? e.message : String(e)})`,
@@ -314,5 +316,5 @@ if (import.meta.main) {
     }
     console.log(`${errors} errors, ${warnings} warnings`);
   }
-  Deno.exit(errors > 0 ? 1 : 0);
+  process.exit(errors > 0 ? 1 : 0);
 }

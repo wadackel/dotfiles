@@ -1,10 +1,20 @@
 // Vocabulary ontology in the Obsidian vault: approved notes in 06_Vocabulary/,
 // agent proposals in 98_Maintenance/proposals/Vocabulary/ approved via `status`.
 // Reads no environment variable and imports nothing from the memo scripts: the
-// memo workers, the Hermes task runner, and the opencode plugin all load it
-// under narrow Deno permissions, and any other read throws.
+// memo workers, the Hermes task runner, and the opencode plugin all load it,
+// and each passes in the home directory the vault is under.
 
-import { parse as parseYaml, stringify } from "jsr:@std/yaml@1";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { parse as parseYaml, stringify } from "@std/yaml";
+
+const errorCode = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code;
 
 // The default schema turns `created: 2026-09-28` into a Date; the core schema
 // keeps dates as the strings Obsidian shows and sorts.
@@ -96,7 +106,7 @@ views:
 `;
 
 export async function init(p: VaultPaths): Promise<string[]> {
-  await Deno.mkdir(p.vocabDir, { recursive: true });
+  await mkdir(p.vocabDir, { recursive: true });
   const created: string[] = [];
   for (
     const [name, content] of [["_schema.md", SCHEMA_NOTE], [
@@ -105,12 +115,12 @@ export async function init(p: VaultPaths): Promise<string[]> {
     ]]
   ) {
     try {
-      await Deno.writeTextFile(`${p.vocabDir}/${name}`, content, {
-        createNew: true,
+      await writeFile(`${p.vocabDir}/${name}`, content, {
+        flag: "wx",
       });
       created.push(name);
     } catch (e) {
-      if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+      if (errorCode(e) !== "EEXIST") throw e;
     }
   }
   return created;
@@ -174,7 +184,7 @@ export async function loadSchema(
   p: VaultPaths,
 ): Promise<{ schema: Schema; error?: string }> {
   try {
-    const text = await Deno.readTextFile(`${p.vocabDir}/_schema.md`);
+    const text = await readFile(`${p.vocabDir}/_schema.md`, "utf8");
     const block = text.match(/```yaml\n([\s\S]*?)```/);
     if (!block) return { schema: DEFAULT_SCHEMA, error: "yaml ブロックがない" };
     const s = parse(block[1]) as Partial<Schema>;
@@ -224,11 +234,11 @@ export interface VocabNote {
 async function mdFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
   try {
-    for await (const e of Deno.readDir(dir)) {
-      if (e.isFile && e.name.endsWith(".md")) out.push(`${dir}/${e.name}`);
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      if (e.isFile() && e.name.endsWith(".md")) out.push(`${dir}/${e.name}`);
     }
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
+    if (errorCode(e) !== "ENOENT") throw e;
   }
   return out.sort();
 }
@@ -243,7 +253,7 @@ export async function loadNotes(
   for (const path of await mdFiles(p.vocabDir)) {
     let fm;
     try {
-      fm = splitFrontmatter(await Deno.readTextFile(path));
+      fm = splitFrontmatter(await readFile(path, "utf8"));
     } catch (e) {
       onError(baseName(path), `解析できない（${String(e).split("\n")[0]}）`);
       continue;
@@ -306,7 +316,7 @@ export async function loadProposals(
   for (const path of await mdFiles(dir)) {
     let fm;
     try {
-      fm = splitFrontmatter(await Deno.readTextFile(path));
+      fm = splitFrontmatter(await readFile(path, "utf8"));
     } catch (e) {
       onError(baseName(path), `解析できない（${String(e).split("\n")[0]}）`);
       continue;
@@ -523,7 +533,7 @@ export interface Finding {
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await stat(path);
     return true;
   } catch {
     return false;
@@ -537,14 +547,14 @@ async function walkNames(
 ): Promise<string[]> {
   const out: string[] = [];
   try {
-    for await (const e of Deno.readDir(dir)) {
-      if (skip(e.name) || e.isSymlink) continue;
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      if (skip(e.name) || e.isSymbolicLink()) continue;
       const path = `${dir}/${e.name}`;
-      if (e.isDirectory) out.push(...await walkNames(path, skip));
+      if (e.isDirectory()) out.push(...await walkNames(path, skip));
       else out.push(path);
     }
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
+    if (errorCode(e) !== "ENOENT") throw e;
   }
   return out;
 }
@@ -704,10 +714,10 @@ export async function lint(
 // --- Apply approved and rejected proposals ---
 
 async function moveNoClobber(from: string, dir: string): Promise<void> {
-  await Deno.mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   const to = `${dir}/${from.split("/").pop()}`;
   if (await exists(to)) throw new Error(`${to} が既にある`);
-  await Deno.rename(from, to);
+  await rename(from, to);
 }
 
 function relationValue(
@@ -762,7 +772,7 @@ export async function apply(p: VaultPaths, today: string): Promise<string[]> {
       continue;
     }
     if (pr.status === "rejected") {
-      await Deno.writeTextFile(
+      await writeFile(
         pr.path,
         renderNote({ ...pr.data, rejected: today }, pr.body),
       );
@@ -790,13 +800,13 @@ export async function apply(p: VaultPaths, today: string): Promise<string[]> {
           ...(pr.repoPath ? { path: pr.repoPath } : {}),
           ...provenance,
         };
-        await Deno.writeTextFile(
+        await writeFile(
           notePath,
           renderNote(data, pr.definition ?? ""),
-          { createNew: true },
+          { flag: "wx" },
         );
       } else {
-        const fm = splitFrontmatter(await Deno.readTextFile(notePath));
+        const fm = splitFrontmatter(await readFile(notePath, "utf8"));
         if (!fm) throw new Error(`${name} の語彙ノートがない`);
         const data: Data = { ...fm.data, ...provenance };
         if (pr.aliases.length) {
@@ -820,16 +830,16 @@ export async function apply(p: VaultPaths, today: string): Promise<string[]> {
         const body = pr.kind === "vocab-definition" && pr.definition
           ? pr.definition
           : fm.body;
-        await Deno.writeTextFile(notePath, renderNote(data, body));
+        await writeFile(notePath, renderNote(data, body));
       }
     } catch (e) {
-      const message = e instanceof Deno.errors.AlreadyExists
+      const message = errorCode(e) === "EEXIST"
         ? `${name} の語彙ノートが既にある`
         : String(e).split("\n")[0];
       report.push(`skipped: ${pr.file}（${message}）`);
       continue;
     }
-    await Deno.writeTextFile(
+    await writeFile(
       pr.path,
       renderNote({ ...pr.data, status: "applied", applied: today }, pr.body),
     );
@@ -853,7 +863,7 @@ export async function apply(p: VaultPaths, today: string): Promise<string[]> {
       }
     }
     if (changed) {
-      await Deno.writeTextFile(n.path, renderNote(data, n.body));
+      await writeFile(n.path, renderNote(data, n.body));
       report.push(`linked: ${n.name}`);
     }
   }
@@ -881,7 +891,7 @@ export async function writeProposal(
   evidence: string[],
   today: string,
 ): Promise<string | null> {
-  await Deno.mkdir(p.proposalsDir, { recursive: true });
+  await mkdir(p.proposalsDir, { recursive: true });
   const prefix = `${today}__${input.kind}__${input.origin}-`;
   const serials: number[] = [];
   for (const dir of ["", "/applied", "/rejected"]) {
@@ -917,12 +927,12 @@ export async function writeProposal(
   for (let attempt = 0; attempt < 5; attempt++, serial++) {
     const path = `${p.proposalsDir}/${prefix}${serial}.md`;
     try {
-      await Deno.writeTextFile(path, renderNote(data, body), {
-        createNew: true,
+      await writeFile(path, renderNote(data, body), {
+        flag: "wx",
       });
       return path;
     } catch (e) {
-      if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+      if (errorCode(e) !== "EEXIST") throw e;
     }
   }
   return null;

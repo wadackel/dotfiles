@@ -1,4 +1,8 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { init, loadProposals, vaultPaths, writeProposal } from "./vocab-lib.ts";
 import {
   AUTO_PENDING_LIMIT,
@@ -20,7 +24,7 @@ interface Fixture {
 
 async function jsonl(path: string) {
   try {
-    return (await Deno.readTextFile(path)).trim().split("\n").filter(Boolean)
+    return (await readFile(path, "utf8")).trim().split("\n").filter(Boolean)
       .map((l) => JSON.parse(l));
   } catch {
     return [];
@@ -28,13 +32,13 @@ async function jsonl(path: string) {
 }
 
 async function fixture(test: (f: Fixture) => Promise<void>) {
-  const home = await Deno.makeTempDir({ prefix: "vocab-propose-" });
-  const tmp = await Deno.makeTempDir({ prefix: "vocab-propose-tmp-" });
+  const home = await mkdtemp(join(tmpdir(), "vocab-propose-"));
+  const tmp = await mkdtemp(join(tmpdir(), "vocab-propose-tmp-"));
   try {
     const p = vaultPaths(home);
-    await Deno.mkdir(p.root, { recursive: true });
+    await mkdir(p.root, { recursive: true });
     await init(p);
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/gate.md`,
       "---\ntype: vocab\nkind: term\nstatus: approved\n---\n最後の監査。\n",
     );
@@ -55,15 +59,15 @@ async function fixture(test: (f: Fixture) => Promise<void>) {
       candidates: () => jsonl(`${home}/.local/state/vocab/candidates.jsonl`),
     });
   } finally {
-    await Deno.remove(home, { recursive: true });
-    await Deno.remove(tmp, { recursive: true });
+    await rm(home, { recursive: true });
+    await rm(tmp, { recursive: true });
   }
 }
 
 const u = (text: string): Turn => ({ role: "user", text });
 const a = (text: string): Turn => ({ role: "assistant", text });
 
-Deno.test("a correction is recorded with the assistant turn it corrects", async () => {
+test("a correction is recorded with the assistant turn it corrects", async () => {
   await fixture(async (f) => {
     const r = await proposeFromSession(f.base([
       u("wip を戻して"),
@@ -86,7 +90,7 @@ Deno.test("a correction is recorded with the assistant turn it corrects", async 
   });
 });
 
-Deno.test("an answer to a clarifying question is recorded", async () => {
+test("an answer to a clarifying question is recorded", async () => {
   await fixture(async (f) => {
     await proposeFromSession(f.base([
       u("タワーを開いて"),
@@ -97,7 +101,7 @@ Deno.test("an answer to a clarifying question is recorded", async () => {
   });
 });
 
-Deno.test("an ordinary session records nothing", async () => {
+test("an ordinary session records nothing", async () => {
   await fixture(async (f) => {
     const r = await proposeFromSession(
       f.base([u("README を直して"), a("直しました。")]),
@@ -108,7 +112,7 @@ Deno.test("an ordinary session records nothing", async () => {
   });
 });
 
-Deno.test("the same utterances are processed only once per session", async () => {
+test("the same utterances are processed only once per session", async () => {
   await fixture(async (f) => {
     const turns = [u("x を戻して"), a("戻しました。"), u("ちがう、reset で")];
     await proposeFromSession(f.base(turns));
@@ -124,11 +128,11 @@ Deno.test("the same utterances are processed only once per session", async () =>
   });
 });
 
-Deno.test("excerpts with private names, links, or URLs are dropped", async () => {
+test("excerpts with private names, links, or URLs are dropped", async () => {
   await fixture(async (f) => {
     const p = vaultPaths(f.home);
-    await Deno.mkdir(p.privateDir, { recursive: true });
-    await Deno.writeTextFile(`${p.privateDir}/家の暗証番号メモ.md`, "x");
+    await mkdir(p.privateDir, { recursive: true });
+    await writeFile(`${p.privateDir}/家の暗証番号メモ.md`, "x");
     for (
       const [i, text] of [
         "ちがう、家の暗証番号メモ のこと",
@@ -145,7 +149,7 @@ Deno.test("excerpts with private names, links, or URLs are dropped", async () =>
   });
 });
 
-Deno.test("sessions inside the vault are not mined", async () => {
+test("sessions inside the vault are not mined", async () => {
   await fixture(async (f) => {
     const r = await proposeFromSession({
       ...f.base([u("x"), a("y？"), u("ちがう、z のこと")]),
@@ -156,7 +160,7 @@ Deno.test("sessions inside the vault are not mined", async () => {
   });
 });
 
-Deno.test("registered terms are not candidates", async () => {
+test("registered terms are not candidates", async () => {
   await fixture(async (f) => {
     await proposeFromSession(
       f.base([u("gate して"), a("しました。"), u("gate をもう一度")]),
@@ -169,25 +173,25 @@ Deno.test("registered terms are not candidates", async () => {
   });
 });
 
-Deno.test("weekly writes deterministic proposals and packs the week's material", async () => {
+test("weekly writes deterministic proposals and packs the week's material", async () => {
   await fixture(async (f) => {
     const p = vaultPaths(f.home);
     const repo = `${f.home}/repo`;
-    await Deno.mkdir(repo, { recursive: true });
-    await Deno.writeTextFile(`${repo}/kept.md`, "x");
-    await Deno.writeTextFile(
+    await mkdir(repo, { recursive: true });
+    await writeFile(`${repo}/kept.md`, "x");
+    await writeFile(
       `${p.vocabDir}/dotfiles.md`,
       `---\ntype: vocab\nkind: repo\nstatus: approved\npath: ${repo}\n---\nrepo\n`,
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/tower.md`,
       '---\ntype: vocab\nkind: term\nstatus: approved\napplies_in: ["[[dotfiles]]"]\nrefers_to: [kept.md, gone.md]\n---\nポップアップ。\n',
     );
     const state = `${f.home}/.local/state/vocab`;
-    await Deno.mkdir(state, { recursive: true });
+    await mkdir(state, { recursive: true });
     const at = "2026-09-26T10:00:00Z";
     const old = "2026-08-01T00:00:00Z";
-    await Deno.writeTextFile(
+    await writeFile(
       `${state}/candidates.jsonl`,
       [
         {
@@ -203,7 +207,7 @@ Deno.test("weekly writes deterministic proposals and packs the week's material",
         { term: "stale", session: "s2", agent: "claude", repo: "x", at: old },
       ].map((l) => JSON.stringify(l)).join("\n") + "\n",
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${state}/excerpts.jsonl`,
       JSON.stringify({
         signal: "correction",
@@ -216,19 +220,19 @@ Deno.test("weekly writes deterministic proposals and packs the week's material",
       }) + "\n",
     );
     const skills = `${f.home}/.claude/skills`;
-    await Deno.mkdir(`${skills}/weekly-review`, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(`${skills}/weekly-review`, { recursive: true });
+    await writeFile(
       `${skills}/weekly-review/SKILL.md`,
       "---\nname: weekly-review\ndescription: >-\n  Generates weekly review content in Obsidian. Use when asked.\ndisable-model-invocation: true\n---\n",
     );
-    await Deno.mkdir(`${skills}/auto-skill`, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(`${skills}/auto-skill`, { recursive: true });
+    await writeFile(
       `${skills}/auto-skill/SKILL.md`,
       "---\nname: auto-skill\ndescription: Model invoked.\n---\n",
     );
     const plans = `${f.home}/.claude/plans`;
-    await Deno.mkdir(plans, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(plans, { recursive: true });
+    await writeFile(
       `${plans}/20260925T1000-sample.md`,
       "# Plan\n\n### Alternatives Considered\n\n- キャッシュを挟む案は遅延が 200ms を超えたときだけ足す\n\n## NOT Building\n",
     );
@@ -257,13 +261,13 @@ Deno.test("weekly writes deterministic proposals and packs the week's material",
     assertStringIncludes(packet, "### 20260925T1000-sample.md");
     assertStringIncludes(packet, "遅延が 200ms を超えたときだけ足す");
     assert(
-      !(await Deno.readTextFile(`${state}/candidates.jsonl`)).includes("stale"),
+      !(await readFile(`${state}/candidates.jsonl`, "utf8")).includes("stale"),
       "records older than 30 days are pruned",
     );
   });
 });
 
-Deno.test("weekly proposals stop at the pending cap", async () => {
+test("weekly proposals stop at the pending cap", async () => {
   await fixture(async (f) => {
     const p = vaultPaths(f.home);
     for (let i = 0; i < AUTO_PENDING_LIMIT; i++) {
@@ -275,8 +279,8 @@ Deno.test("weekly proposals stop at the pending cap", async () => {
       );
     }
     const skills = `${f.home}/.claude/skills/plan`;
-    await Deno.mkdir(skills, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(skills, { recursive: true });
+    await writeFile(
       `${skills}/SKILL.md`,
       "---\nname: plan\ndescription: Plans.\ndisable-model-invocation: true\n---\n",
     );
@@ -291,10 +295,10 @@ Deno.test("weekly proposals stop at the pending cap", async () => {
   });
 });
 
-Deno.test("short utterances keep the next skill and skip long or command lines", async () => {
+test("short utterances keep the next skill and skip long or command lines", async () => {
   await fixture(async (f) => {
     const dir = `${f.home}/.claude/projects/-repo`;
-    await Deno.mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     const ts = new Date().toISOString();
     const user = (text: string) =>
       JSON.stringify({
@@ -304,7 +308,7 @@ Deno.test("short utterances keep the next skill and skip long or command lines",
         timestamp: ts,
         message: { role: "user", content: text },
       });
-    await Deno.writeTextFile(
+    await writeFile(
       `${dir}/s.jsonl`,
       [
         user("hermes 再起動して"),
@@ -329,7 +333,7 @@ Deno.test("short utterances keep the next skill and skip long or command lines",
   });
 });
 
-Deno.test("sessions sharing a time-based id prefix keep separate state", async () => {
+test("sessions sharing a time-based id prefix keep separate state", async () => {
   await fixture(async (f) => {
     const turns = [u("x を戻して"), a("戻しました。"), u("ちがう、reset で")];
     await proposeFromSession({ ...f.base(turns), sessionId: "01a0e1ba-0001" });
@@ -341,22 +345,22 @@ Deno.test("sessions sharing a time-based id prefix keep separate state", async (
   });
 });
 
-Deno.test("weekly does not repeat a rejected skill or a pending reference fix", async () => {
+test("weekly does not repeat a rejected skill or a pending reference fix", async () => {
   await fixture(async (f) => {
     const p = vaultPaths(f.home);
     const repo = `${f.home}/repo`;
-    await Deno.mkdir(repo, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(repo, { recursive: true });
+    await writeFile(
       `${p.vocabDir}/dotfiles.md`,
       `---\ntype: vocab\nkind: repo\nstatus: approved\npath: ${repo}\n---\nrepo\n`,
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${p.vocabDir}/tower.md`,
       '---\ntype: vocab\nkind: term\nstatus: approved\napplies_in: ["[[dotfiles]]"]\nrefers_to: [gone.md]\n---\nポップアップ。\n',
     );
     const skills = `${f.home}/.claude/skills/plan`;
-    await Deno.mkdir(skills, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(skills, { recursive: true });
+    await writeFile(
       `${skills}/SKILL.md`,
       "---\nname: plan\ndescription: Plans.\ndisable-model-invocation: true\n---\n",
     );
@@ -367,9 +371,9 @@ Deno.test("weekly does not repeat a rejected skill or a pending reference fix", 
     const terms = (await loadProposals(p)).map((x) => x.term).sort();
     assertEquals(terms, ["plan", "tower"]);
     const planFile = (await loadProposals(p)).find((x) => x.term === "plan")!;
-    await Deno.writeTextFile(
+    await writeFile(
       planFile.path,
-      (await Deno.readTextFile(planFile.path)).replace(
+      (await readFile(planFile.path, "utf8")).replace(
         "status: pending",
         "status: rejected",
       ),
@@ -384,11 +388,11 @@ Deno.test("weekly does not repeat a rejected skill or a pending reference fix", 
   });
 });
 
-Deno.test("an Alternatives Considered section at the end of a plan is still read", async () => {
+test("an Alternatives Considered section at the end of a plan is still read", async () => {
   await fixture(async (f) => {
     const plans = `${f.home}/.claude/plans`;
-    await Deno.mkdir(plans, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(plans, { recursive: true });
+    await writeFile(
       `${plans}/20260926T0900-last.md`,
       "# Plan\n\n### Alternatives Considered\n\n- 末尾の節にある案\n",
     );

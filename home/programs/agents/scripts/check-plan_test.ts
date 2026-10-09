@@ -1,33 +1,30 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../lib/proc.ts";
 
 import type { Finding } from "./check-plan.ts";
 
-const SCRIPT = new URL("./check-plan.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "check-plan.ts");
 
 type Outcome = { code: number; stdout: string; stderr: string };
 
 async function runOn(content: string, extra: string[] = []): Promise<Outcome> {
-  const dir = await Deno.makeTempDir({ prefix: "check-plan-test-" });
+  const dir = await mkdtemp(join(tmpdir(), "check-plan-test-"));
   try {
     const path = `${dir}/plan.md`;
-    await Deno.writeTextFile(path, content);
+    await writeFile(path, content);
     return await runPath(path, extra);
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 }
 
 async function runPath(path: string, extra: string[] = []): Promise<Outcome> {
-  const out = await new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--no-prompt", SCRIPT, path, ...extra],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  const out = await run(SCRIPT, [path, ...extra]);
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 const RUC_ITEM =
@@ -68,13 +65,13 @@ function plan(opts: {
   ].join("\n");
 }
 
-Deno.test("a well-formed plan exits 0 with no findings", async () => {
+test("a well-formed plan exits 0 with no findings", async () => {
   const r = await runOn(plan({}));
   assertEquals(r.code, 0, r.stdout + r.stderr);
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-Deno.test("missing section, untagged bullet, and bad Needs value are errors", async () => {
+test("missing section, untagged bullet, and bad Needs value are errors", async () => {
   const r = await runOn(plan({
     sections: ["## Context", "## Files to Change"],
     av: ["- the file exists", "- [live] ok"],
@@ -89,14 +86,14 @@ Deno.test("missing section, untagged bullet, and bad Needs value are errors", as
   assertStringIncludes(r.stdout, "[error] ruc-format: Needs: must list values");
 });
 
-Deno.test("no [live] under Autonomous Verification is a warning only", async () => {
+test("no [live] under Autonomous Verification is a warning only", async () => {
   const r = await runOn(plan({ av: ["- [file-state] the file exists"] }));
   assertEquals(r.code, 0, r.stdout + r.stderr);
   assertStringIncludes(r.stdout, "[warn] live-missing:");
   assertStringIncludes(r.stdout, "0 errors, 1 warnings");
 });
 
-Deno.test("the item-format section and its fenced template are ignored", async () => {
+test("the item-format section and its fenced template are ignored", async () => {
   const extra = [
     "### Requires User Confirmation item format",
     "",
@@ -112,7 +109,7 @@ Deno.test("the item-format section and its fenced template are ignored", async (
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-Deno.test("--json returns findings with line, severity, rule, message", async () => {
+test("--json returns findings with line, severity, rule, message", async () => {
   const r = await runOn(plan({ av: ["- untagged"] }), ["--json"]);
   assertEquals(r.code, 1);
   const findings = JSON.parse(r.stdout) as Finding[];
@@ -122,27 +119,27 @@ Deno.test("--json returns findings with line, severity, rule, message", async ()
   assertEquals(tag.severity, "error");
 });
 
-Deno.test("a missing file or a directory exits 2", async () => {
+test("a missing file or a directory exits 2", async () => {
   const r = await runPath("/nonexistent/plan.md");
   assertEquals(r.code, 2);
   assertStringIncludes(r.stderr, "cannot read");
-  const dir = await Deno.makeTempDir({ prefix: "check-plan-test-" });
+  const dir = await mkdtemp(join(tmpdir(), "check-plan-test-"));
   try {
     const d = await runPath(dir);
     assertEquals(d.code, 2);
     assertStringIncludes(d.stderr, "directory given");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("trailing whitespace and CRLF do not break whole-line matches", async () => {
+test("trailing whitespace and CRLF do not break whole-line matches", async () => {
   const r = await runOn(plan({ ruc: "- None " }).replace(/\n/g, "\r\n"));
   assertEquals(r.code, 0, r.stdout + r.stderr);
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-Deno.test("continuation lines, a trailing paragraph, and slashes inside Observe are accepted", async () => {
+test("continuation lines, a trailing paragraph, and slashes inside Observe are accepted", async () => {
   const ruc = [
     "- [live] Observe: the list shows done / in-flight / next in that order",
     "  and the footer stays visible / Why not autonomous: needs a real device",
@@ -155,7 +152,7 @@ Deno.test("continuation lines, a trailing paragraph, and slashes inside Observe 
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-Deno.test("`- なし` is not `- None`", async () => {
+test("`- なし` is not `- None`", async () => {
   const r = await runOn(plan({ ruc: "- なし" }));
   assertEquals(r.code, 1);
   assertStringIncludes(r.stdout, "[error] ruc-format:");
@@ -165,7 +162,7 @@ function selfResolved(lines: string[]): string {
   return ["### Self-resolved", "", ...lines, ""].join("\n");
 }
 
-Deno.test("graded Self-resolved entries pass in every accepted shape", async () => {
+test("graded Self-resolved entries pass in every accepted shape", async () => {
   const extra = selfResolved([
     "- observation: a / value: b / source: [Direct] `rg -n foo bar.md`",
     "- observation: next line / value: b",
@@ -182,7 +179,7 @@ Deno.test("graded Self-resolved entries pass in every accepted shape", async () 
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-Deno.test("missing source, missing grade, [Unknown], unbacked [Direct] and [Supported], and an unknown grade are errors", async () => {
+test("missing source, missing grade, [Unknown], unbacked [Direct] and [Supported], and an unknown grade are errors", async () => {
   const extra = selfResolved([
     "- observation: a / value: b",
     "- observation: a / value: b / source: confirmed by grep",
@@ -212,7 +209,7 @@ Deno.test("missing source, missing grade, [Unknown], unbacked [Direct] and [Supp
   );
 });
 
-Deno.test("a source after a blank line is not part of the bullet", async () => {
+test("a source after a blank line is not part of the bullet", async () => {
   const extra = selfResolved([
     "- observation: a / value: b",
     "",
@@ -224,7 +221,7 @@ Deno.test("a source after a blank line is not part of the bullet", async () => {
   assertStringIncludes(r.stdout, "[error] self-resolved-grade:");
 });
 
-Deno.test("an empty Self-resolved section produces no finding in any of its forms", async () => {
+test("an empty Self-resolved section produces no finding in any of its forms", async () => {
   for (const body of [["(none)"], [], ["- None"]]) {
     const r = await runOn(plan({ extra: selfResolved(body) }));
     assertEquals(r.code, 0, r.stdout + r.stderr);
@@ -232,7 +229,7 @@ Deno.test("an empty Self-resolved section produces no finding in any of its form
   }
 });
 
-Deno.test("a template quoted in backticks does not hide an ungraded source", async () => {
+test("a template quoted in backticks does not hide an ungraded source", async () => {
   const extra = selfResolved([
     "- observation: format / value: entries end with `source: [Direct|Supported|Inferred] <probe>` / source: confirmed by grep",
   ]);
@@ -242,7 +239,7 @@ Deno.test("a template quoted in backticks does not hide an ungraded source", asy
   assertStringIncludes(r.stdout, "entry needs");
 });
 
-Deno.test("an ungraded nested sub-bullet is checked on its own", async () => {
+test("an ungraded nested sub-bullet is checked on its own", async () => {
   const extra = selfResolved([
     "- observation: parent / value: b / source: [Direct] x.md:1",
     "  - observation: child / value: d",
@@ -252,7 +249,7 @@ Deno.test("an ungraded nested sub-bullet is checked on its own", async () => {
   assertStringIncludes(r.stdout, "1 errors, 0 warnings");
 });
 
-Deno.test("bullets inside an indented fence are ignored", async () => {
+test("bullets inside an indented fence are ignored", async () => {
   const ruc = [
     "- None",
     "",

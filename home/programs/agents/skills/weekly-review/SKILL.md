@@ -41,7 +41,7 @@ Parse `$ARGUMENTS`:
 Compute Monday-Sunday dates and prev/next week numbers:
 
 ```
-deno run ~/.claude/skills/weekly-review/iso-week.ts YYYY-WNN
+~/.claude/skills/weekly-review/iso-week.ts YYYY-WNN
 ```
 
 Output: 7 lines of dates (Mon-Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`.
@@ -181,7 +181,7 @@ A precondition for writing, not a review. Do not reach Step 7 until this passes.
 2. Run the checker:
 
    ```
-   deno run --allow-read ~/.claude/skills/weekly-review/check-budget.ts /tmp/weekly-YYYY-WNN.md
+   ~/.claude/skills/weekly-review/check-budget.ts /tmp/weekly-YYYY-WNN.md
    ```
 
    It reports `S1` / `S3` / `S1MAX` / `TOKENS` / `ORPHAN` against their limits, lists any forbidden tokens it found, and exits non-zero when anything fails.

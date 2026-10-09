@@ -1,6 +1,8 @@
-#!/usr/bin/env -S deno run
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 // Google Docs API JSON → GitHub Flavored Markdown converter.
-// Usage: gws docs documents get --params '{"documentId":"<ID>"}' | deno run gdoc-json-to-md.ts
+// Usage: gws docs documents get --params '{"documentId":"<ID>"}' | gdoc-json-to-md.ts
+
+import { text } from "node:stream/consumers";
 
 // --- Types ---
 
@@ -255,7 +257,7 @@ export function convertGdocToMarkdown(doc: GdocDocument): string {
 // --- CLI entry point ---
 
 if (import.meta.main) {
-  const json = await new Response(Deno.stdin.readable).text();
+  const json = await text(process.stdin);
   const doc = JSON.parse(json) as GdocDocument;
-  Deno.stdout.writeSync(new TextEncoder().encode(convertGdocToMarkdown(doc)));
+  process.stdout.write(convertGdocToMarkdown(doc));
 }

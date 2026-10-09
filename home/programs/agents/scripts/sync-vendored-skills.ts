@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=git
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Vendor third-party SKILL.md sets from their upstream repositories into
 // home/programs/agents/skills/<skill>. Per-skill atomic via staging + rename.
@@ -11,6 +11,21 @@
 // copy that REFUSES symlinks. A compromised upstream cannot smuggle a link
 // like `references/api-reference.md -> ~/.ssh/id_rsa` into the vendored
 // tree (which agents would then read as "trusted documentation").
+
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../lib/proc.ts";
 
 type Vendor = {
   name: string;
@@ -51,39 +66,18 @@ const VENDORS: readonly Vendor[] = [
   },
 ];
 
-const REPO_ROOT = new URL("../../../../", import.meta.url).pathname;
+const REPO_ROOT = join(import.meta.dirname, "../../../..") + "/";
 const SKILLS_DIR = `${REPO_ROOT}home/programs/agents/skills`;
 const STAGING_DIR = `${SKILLS_DIR}/.vendor-staging`;
 
-const decoder = new TextDecoder();
-
-type RunResult = { code: number; stdout: string; stderr: string };
-
-async function run(
-  cmd: string,
-  args: string[],
-  cwd?: string,
-): Promise<RunResult> {
-  const child = new Deno.Command(cmd, {
-    args,
-    cwd,
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const out = await child.output();
-  return {
-    code: out.code,
-    stdout: decoder.decode(out.stdout),
-    stderr: decoder.decode(out.stderr),
-  };
-}
+const errorCode = (e: unknown) => (e as NodeJS.ErrnoException | null)?.code;
 
 async function mustRun(
   cmd: string,
   args: string[],
   cwd?: string,
 ): Promise<string> {
-  const r = await run(cmd, args, cwd);
+  const r = await run(cmd, args, { cwd });
   if (r.code !== 0) {
     const msg = `Command failed (exit ${r.code}): ${cmd} ${args.join(" ")}`;
     if (r.stderr.trim()) throw new Error(`${msg}\n${r.stderr}`);
@@ -94,10 +88,10 @@ async function mustRun(
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.lstat(path);
+    await lstat(path);
     return true;
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return false;
+    if (errorCode(e) === "ENOENT") return false;
     throw e;
   }
 }
@@ -109,15 +103,15 @@ async function copyTreeRejectingSymlinks(
   src: string,
   dest: string,
 ): Promise<void> {
-  const stat = await Deno.lstat(src);
-  if (stat.isSymlink) {
+  const info = await lstat(src);
+  if (info.isSymbolicLink()) {
     throw new Error(
       `Refusing to copy symlink from upstream: ${src} — vendored upstreams MUST contain only regular files and directories.`,
     );
   }
-  if (stat.isDirectory) {
-    await Deno.mkdir(dest, { recursive: true });
-    for await (const entry of Deno.readDir(src)) {
+  if (info.isDirectory()) {
+    await mkdir(dest, { recursive: true });
+    for (const entry of await readdir(src, { withFileTypes: true })) {
       await copyTreeRejectingSymlinks(
         `${src}/${entry.name}`,
         `${dest}/${entry.name}`,
@@ -125,8 +119,8 @@ async function copyTreeRejectingSymlinks(
     }
     return;
   }
-  if (stat.isFile) {
-    await Deno.copyFile(src, dest);
+  if (info.isFile()) {
+    await copyFile(src, dest);
     return;
   }
   throw new Error(
@@ -141,11 +135,11 @@ function sourceFileName(vendor: Vendor): string {
 async function readSourceCommit(vendor: Vendor): Promise<string | null> {
   const path = `${SKILLS_DIR}/${vendor.skills[0]}/${sourceFileName(vendor)}`;
   try {
-    const text = await Deno.readTextFile(path);
+    const text = await readFile(path, "utf8");
     const match = text.match(/^commit:\s*([0-9a-f]{7,40})\s*$/m);
     return match?.[1] ?? null;
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return null;
+    if (errorCode(e) === "ENOENT") return null;
     throw e;
   }
 }
@@ -182,15 +176,13 @@ async function checkVendor(vendor: Vendor): Promise<number> {
 }
 
 async function syncVendor(vendor: Vendor): Promise<void> {
-  // Deno.makeTempDir reads $TMPDIR internally and produces an OS-unique
-  // name — no --allow-env=TMPDIR and no PID-collision risk.
-  const tmpDir = await Deno.makeTempDir({
-    prefix: `vendored-skills-${vendor.name}-`,
-  });
+  const tmpDir = await mkdtemp(
+    join(tmpdir(), `vendored-skills-${vendor.name}-`),
+  );
 
   // Hygiene: clear leftover staging from any prior interrupted run.
   if (await exists(STAGING_DIR)) {
-    await Deno.remove(STAGING_DIR, { recursive: true });
+    await rm(STAGING_DIR, { recursive: true });
   }
 
   try {
@@ -218,7 +210,7 @@ async function syncVendor(vendor: Vendor): Promise<void> {
       throw new Error(`Unexpected commit SHA: ${sha}`);
     }
 
-    await Deno.mkdir(STAGING_DIR, { recursive: true });
+    await mkdir(STAGING_DIR, { recursive: true });
     for (const skill of vendor.skills) {
       const src = `${tmpDir}/skills/${skill}`;
       const dest = `${STAGING_DIR}/${skill}`;
@@ -236,15 +228,15 @@ async function syncVendor(vendor: Vendor): Promise<void> {
     // recovers (staging is cleaned on entry, full re-sync follows).
     for (const skill of vendor.skills) {
       const target = `${SKILLS_DIR}/${skill}`;
-      if (await exists(target)) await Deno.remove(target, { recursive: true });
-      await Deno.rename(`${STAGING_DIR}/${skill}`, target);
+      if (await exists(target)) await rm(target, { recursive: true });
+      await rename(`${STAGING_DIR}/${skill}`, target);
     }
 
     const syncedAt = new Date().toISOString();
     for (const skill of vendor.skills) {
       const body =
         `upstream: ${vendor.upstream}\ncommit: ${sha}\nsynced_at: ${syncedAt}\n`;
-      await Deno.writeTextFile(
+      await writeFile(
         `${SKILLS_DIR}/${skill}/${sourceFileName(vendor)}`,
         body,
       );
@@ -256,7 +248,7 @@ async function syncVendor(vendor: Vendor): Promise<void> {
   } finally {
     for (const dir of [STAGING_DIR, tmpDir]) {
       try {
-        await Deno.remove(dir, { recursive: true });
+        await rm(dir, { recursive: true });
       } catch (_) {
         // Best effort cleanup.
       }
@@ -277,8 +269,9 @@ function selectVendors(names: string[]): Vendor[] {
 }
 
 async function main(): Promise<number> {
-  const check = Deno.args[0] === "--check";
-  const names = check ? Deno.args.slice(1) : Deno.args;
+  const args = process.argv.slice(2);
+  const check = args[0] === "--check";
+  const names = check ? args.slice(1) : args;
   if (names.some((n) => n.startsWith("-"))) {
     console.error("usage: sync-vendored-skills.ts [--check] [vendor...]");
     return 2;
@@ -298,8 +291,8 @@ async function main(): Promise<number> {
 }
 
 try {
-  Deno.exit(await main());
+  process.exit(await main());
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
-  Deno.exit(1);
+  process.exit(1);
 }

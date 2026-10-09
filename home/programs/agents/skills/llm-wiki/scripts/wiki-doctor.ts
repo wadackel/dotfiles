@@ -1,18 +1,21 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 // wiki-doctor — llm-wiki の構造的な欠陥を決定的に検査する。
 //
 // ここで見るのは「過去に実際に踏んだ欠陥クラス」だけ。LLM レビューに毎回
 // 同じものを再発見させるのは高くつくうえ、見落としが確率的に混じる。
 //
-//   deno run --allow-read --allow-env wiki-doctor.ts \\
-//     [--vault <path>] [--skill <path>] [--baseline <pre-change backup>]
+//   wiki-doctor.ts [--vault <path>] [--skill <path>] \\
+//     [--baseline <pre-change backup>]
 //
 // 終了コード: 0 = 全 green、1 = 1 件以上の失敗、2 = vault 未指定。
 //
 // --baseline を渡すと、privacy 検査の対象が「このスキルが実際に書いたファイル」に絞られる。
 // 渡さない場合は 98_Maintenance/ 配下だけが対象になり、生成した概念ノートは検査されない。
 
-const args = Deno.args;
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { join } from "node:path";
+
+const args = process.argv.slice(2);
 // フラグはあるのに値が無い場合に fallback へ落ちると、--baseline を渡したつもりの
 // 実行が黙って SKIP になる。渡し忘れと渡し損ねは実行者から区別できないので落とす。
 const argOf = (name: string, fallback: string) => {
@@ -21,14 +24,15 @@ const argOf = (name: string, fallback: string) => {
   const v = args[i + 1];
   if (!v || v.startsWith("--")) {
     console.error(`${name} に値が指定されていません。`);
-    Deno.exit(2);
+    process.exit(2);
   }
   return v;
 };
 // 末尾スラッシュを落とす。残っていると rel() が 1 文字ずれて isPrivate() が全て false になる。
-const VAULT = argOf("--vault", Deno.env.get("LLM_WIKI_VAULT_ROOT") ?? "")
+const VAULT = argOf("--vault", process.env.LLM_WIKI_VAULT_ROOT ?? "")
   .replace(/\/+$/, "");
-const SKILL = argOf("--skill", new URL("..", import.meta.url).pathname);
+// 末尾の / は残す。(skill) のラベルは p.slice(SKILL.length) で作っている。
+const SKILL = argOf("--skill", `${join(import.meta.dirname, "..")}/`);
 // llm-wiki が書いたファイルを、導入前のバックアップとの差分で特定する。
 // 「Vault 全体」を検査対象にすると、ユーザー自身が昔から書いているものまで
 // 指摘してしまい、検査が信用されなくなる。責任範囲は自分が書いたものだけ。
@@ -38,31 +42,31 @@ if (!VAULT) {
   console.error(
     "LLM_WIKI_VAULT_ROOT が未設定。--vault で指定するか環境変数を設定してください。",
   );
-  Deno.exit(2);
+  process.exit(2);
 }
 
 // 存在しない baseline を黙って受けると、全ファイルが「baseline に無い = 新規作成」
 // に落ちる。パスの打ち間違いが「ユーザーの手書きノートが改変された」という
 // 最も深刻な報告に化けるので、ここで止める。
 if (BASELINE_DIR) {
-  const st = await Deno.stat(BASELINE_DIR).catch(() => null);
-  if (!st?.isDirectory) {
+  const st = await stat(BASELINE_DIR).catch(() => null);
+  if (!st?.isDirectory()) {
     console.error(
       `--baseline のパスが存在しないかディレクトリではない: ${BASELINE_DIR}`,
     );
-    Deno.exit(2);
+    process.exit(2);
   }
   // baseline に vault 自身を渡されると全比較が自明に一致し、検査 4b も 5 も
   // 無言で green になる。誤ったパスより危険なのはこちら — 騒がずに通るため。
   const [bp, vp] = await Promise.all([
-    Deno.realPath(BASELINE_DIR),
-    Deno.realPath(VAULT),
+    realpath(BASELINE_DIR),
+    realpath(VAULT),
   ]);
   if (bp === vp || bp.startsWith(`${vp}/`)) {
     console.error(
       `--baseline が vault 自身かその配下を指している: ${BASELINE_DIR}`,
     );
-    Deno.exit(2);
+    process.exit(2);
   }
 }
 
@@ -87,14 +91,14 @@ const skip = (name: string, reason: string) =>
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
   try {
-    for await (const e of Deno.readDir(dir)) {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
       if (e.name === ".obsidian" || e.name === ".git") continue;
       // symlink は isDirectory が false になるためファイルとして拾われ、
       // 02_Notes/x.md -> 05_Private/... のようなリンクがあるとパス判定を
       // すり抜けて実体が読まれる。隔離はパスで判定している以上ここで落とす。
-      if (e.isSymlink) continue;
+      if (e.isSymbolicLink()) continue;
       const p = `${dir}/${e.name}`;
-      if (e.isDirectory) out.push(...await walk(p));
+      if (e.isDirectory()) out.push(...await walk(p));
       else out.push(p);
     }
   } catch { /* 存在しないディレクトリは無視 */ }
@@ -122,7 +126,7 @@ const isSource = (p: string) =>
 // 05_Private は読まない。ファイル名だけを索引に使う。
 const mdFiles = allFiles.filter((p) => p.endsWith(".md") && !isPrivate(p));
 const bodies = new Map<string, string>();
-for (const p of mdFiles) bodies.set(p, await Deno.readTextFile(p));
+for (const p of mdFiles) bodies.set(p, await readFile(p, "utf8"));
 
 const resolvable = new Set<string>();
 for (const p of allFiles) {
@@ -300,10 +304,10 @@ const written = new Set<string>();
         r.startsWith("04_Literature/") || isBookIndex(p);
       if (!inScope) continue;
       try {
-        const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
+        const before = await readFile(`${BASELINE_DIR}/${r}`, "utf8");
         if (before !== bodies.get(p)) written.add(p);
       } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e;
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
         written.add(p); // baseline に無い = 新規作成
       }
     }
@@ -364,10 +368,10 @@ if (!BASELINE_DIR) {
     if (!isChapter(r, p)) continue;
     now.add(r);
     try {
-      const before = await Deno.readTextFile(`${BASELINE_DIR}/${r}`);
+      const before = await readFile(`${BASELINE_DIR}/${r}`, "utf8");
       if (before !== bodies.get(p)) bad.push(`${r} が baseline と一致しない`);
     } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e;
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
       bad.push(`${r} は baseline に存在しない（章ノートが新規作成された）`);
     }
   }
@@ -404,12 +408,12 @@ if (!BASELINE_DIR) {
     try {
       targets.set(
         `(skill) ${p.slice(SKILL.length)}`,
-        await Deno.readTextFile(p),
+        await readFile(p, "utf8"),
       );
     } catch { /* 読めなければ飛ばす */ }
   }
   try {
-    targets.set("CLAUDE.md", await Deno.readTextFile(`${VAULT}/CLAUDE.md`));
+    targets.set("CLAUDE.md", await readFile(`${VAULT}/CLAUDE.md`, "utf8"));
   } catch { /* 無ければ飛ばす */ }
 
   // ユーザー自身が昔から書いている 05_Private へのリンクは正当（wikilink はリンク先を
@@ -418,7 +422,7 @@ if (!BASELINE_DIR) {
   const preexisting = async (label: string) => {
     if (!BASELINE_DIR || label.startsWith("(skill) ")) return "";
     try {
-      return await Deno.readTextFile(`${BASELINE_DIR}/${label}`);
+      return await readFile(`${BASELINE_DIR}/${label}`, "utf8");
     } catch {
       return "";
     }
@@ -556,7 +560,7 @@ if (!BASELINE_DIR) {
   for (const p of specFiles) {
     let t: string;
     try {
-      t = await Deno.readTextFile(p);
+      t = await readFile(p, "utf8");
     } catch {
       continue;
     }
@@ -564,7 +568,7 @@ if (!BASELINE_DIR) {
     for (const m of t.matchAll(/logs\/(<MOC>|<genre>)([^\s`)]*)\.md/g)) {
       if (!m[2].includes("操作ログ")) {
         bad.push(
-          `${p.replace(Deno.env.get("HOME") ?? "", "~")}: ログパスが旧形式 (${
+          `${p.replace(process.env.HOME ?? "", "~")}: ログパスが旧形式 (${
             m[0]
           })`,
         );
@@ -831,4 +835,4 @@ const graded = checks.length - skipped;
 console.log(
   `\n${graded - failed}/${graded} PASS${skipped ? ` (${skipped} SKIP)` : ""}`,
 );
-Deno.exit(failed ? 1 : 0);
+process.exit(failed ? 1 : 0);

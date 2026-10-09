@@ -61,10 +61,10 @@ Read `## 候補`. A candidate with no box ticked is left exactly as it is.
 ### 2. Harvest
 
 ```
-deno run --allow-read --allow-env <skill>/scripts/split-note.ts scan
+~/.claude/skills/llm-wiki/scripts/split-note.ts scan
 ```
 
-It prints JSON, longest first: each concept note (`concept` / `entity` / `comparison` / `synthesis`) whose body is at least 6,000 non-whitespace characters, with every `## ` section's count, a `long` flag at 1,500, and `recorded` — the body count when the note was last decided, or `null`. The body excludes frontmatter and everything from `## 関連ページ` / `## ソース` on. `--min-body` and `--min-section` change the thresholds.
+Codex and opencode start it as `~/.agents/skills/llm-wiki/scripts/split-note.ts`, here and for `apply` below. It prints JSON, longest first: each concept note (`concept` / `entity` / `comparison` / `synthesis`) whose body is at least 6,000 non-whitespace characters, with every `## ` section's count, a `long` flag at 1,500, and `recorded` — the body count when the note was last decided, or `null`. The body excludes frontmatter and everything from `## 関連ページ` / `## ソース` on. `--min-body` and `--min-section` change the thresholds.
 
 For each note:
 
@@ -122,8 +122,8 @@ Look for prose that points across the cut before running: 「上の『X』」「
 
 ```
 date +%Y-%m-%d
-deno run --allow-read --allow-env --allow-write <skill>/scripts/split-note.ts apply --today <date> --dry-run
-deno run --allow-read --allow-env --allow-write <skill>/scripts/split-note.ts apply --today <date>
+~/.claude/skills/llm-wiki/scripts/split-note.ts apply --today <date> --dry-run
+~/.claude/skills/llm-wiki/scripts/split-note.ts apply --today <date>
 ```
 
 The dry run validates everything and lists the files it would create and update. `NG` lines name what to fix in the spec; nothing has been written. Exit codes: 0 done, 1 validation failed, 2 bad arguments or environment, 3 a write failed partway.

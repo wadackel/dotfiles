@@ -3,7 +3,21 @@ import {
   assertEquals,
   assertStringIncludes,
   assertThrows,
-} from "jsr:@std/assert@1";
+} from "@std/assert";
+import { test } from "bun:test";
+import { spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { run } from "../../../lib/proc.ts";
 
 import {
   extractDescription,
@@ -15,7 +29,7 @@ import {
   replaceDescription,
 } from "./measure-trigger.ts";
 
-const SCRIPT = new URL("./measure-trigger.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "measure-trigger.ts");
 
 const SKILL_MD = `---
 name: demo
@@ -37,18 +51,18 @@ argument-hint: "[x]"
 # Demo
 `;
 
-Deno.test("extractDescription reads a plain scalar", () => {
+test("extractDescription reads a plain scalar", () => {
   assertEquals(extractDescription(SKILL_MD), "original one-liner.");
 });
 
-Deno.test("extractDescription reads a block scalar", () => {
+test("extractDescription reads a block scalar", () => {
   assertEquals(
     extractDescription(BLOCK_SKILL_MD),
     'first line.\nUse when: "a", "b".',
   );
 });
 
-Deno.test("replaceDescription swaps a scalar and keeps sibling keys", () => {
+test("replaceDescription swaps a scalar and keeps sibling keys", () => {
   const next = replaceDescription(SKILL_MD, "candidate.\nsecond line.");
   assertEquals(extractDescription(next), "candidate.\nsecond line.");
   assertStringIncludes(next, 'argument-hint: "[x]"');
@@ -56,29 +70,29 @@ Deno.test("replaceDescription swaps a scalar and keeps sibling keys", () => {
   assertStringIncludes(next, "# Demo");
 });
 
-Deno.test("replaceDescription swaps a block scalar without eating the next key", () => {
+test("replaceDescription swaps a block scalar without eating the next key", () => {
   const next = replaceDescription(BLOCK_SKILL_MD, "shorter.");
   assertEquals(extractDescription(next), "shorter.");
   assertStringIncludes(next, 'argument-hint: "[x]"');
 });
 
-Deno.test("replaceDescription takes $-sequences literally", () => {
+test("replaceDescription takes $-sequences literally", () => {
   const candidate = "cost is 100$& and $` and $' and $1";
   const next = replaceDescription(SKILL_MD, candidate);
   assertEquals(extractDescription(next), candidate);
   assertEquals(next.match(/^---$/gm)?.length, 2);
 });
 
-Deno.test("replaceDescription rejects a file without frontmatter", () => {
+test("replaceDescription rejects a file without frontmatter", () => {
   assertThrows(() => replaceDescription("# Demo\n", "x"), Error, "frontmatter");
 });
 
-Deno.test("parseEvalSet accepts the run_eval shape", () => {
+test("parseEvalSet accepts the run_eval shape", () => {
   const items = parseEvalSet('[{"query": "a", "should_trigger": true}]');
   assertEquals(items, [{ query: "a", shouldTrigger: true }]);
 });
 
-Deno.test("parseEvalSet rejects malformed sets", () => {
+test("parseEvalSet rejects malformed sets", () => {
   assertThrows(() => parseEvalSet("{"), Error, "valid JSON");
   assertThrows(() => parseEvalSet("[]"), Error, "non-empty array");
   assertThrows(() => parseEvalSet('[{"query": ""}]'), Error, "eval[0]: query");
@@ -93,7 +107,7 @@ const assistant = (name: string, skill?: string) =>
     },
   });
 
-Deno.test("firstToolUse takes the earliest tool call", () => {
+test("firstToolUse takes the earliest tool call", () => {
   const stdout = [
     "not json",
     JSON.stringify({ type: "system", subtype: "init" }),
@@ -104,13 +118,13 @@ Deno.test("firstToolUse takes the earliest tool call", () => {
   assertEquals(firedFor(stdout, "demo"), false);
 });
 
-Deno.test("firedFor matches the target skill only", () => {
+test("firedFor matches the target skill only", () => {
   const stdout = assistant("Skill", "demo");
   assertEquals(firedFor(stdout, "demo"), true);
   assertEquals(firedFor(stdout, "other"), false);
 });
 
-Deno.test("firstToolUse reads the stream_event shape", () => {
+test("firstToolUse reads the stream_event shape", () => {
   const stdout = JSON.stringify({
     type: "stream_event",
     event: {
@@ -125,14 +139,14 @@ Deno.test("firstToolUse reads the stream_event shape", () => {
   assertEquals(firstToolUse(stdout), { name: "Skill", skill: "demo" });
 });
 
-Deno.test("firedBy is the single verdict the report and the exit code share", () => {
+test("firedBy is the single verdict the report and the exit code share", () => {
   assertEquals(firedBy({ name: "Skill", skill: "demo" }, "demo"), true);
   assertEquals(firedBy({ name: "Skill", skill: "other" }, "demo"), false);
   assertEquals(firedBy({ name: "Bash" }, "demo"), false);
   assertEquals(firedBy(null, "demo"), false);
 });
 
-Deno.test("passes takes the majority of runs", () => {
+test("passes takes the majority of runs", () => {
   const row = (shouldTrigger: boolean, fired: number) => ({
     query: "q",
     shouldTrigger,
@@ -146,7 +160,7 @@ Deno.test("passes takes the majority of runs", () => {
   assertEquals(passes(row(false, 2)), false);
 });
 
-Deno.test("firstToolUse returns null when nothing ran", () => {
+test("firstToolUse returns null when nothing ran", () => {
   assertEquals(
     firstToolUse(JSON.stringify({ type: "result", result: "hi" })),
     null,
@@ -155,60 +169,49 @@ Deno.test("firstToolUse returns null when nothing ran", () => {
 
 type Outcome = { code: number; stdout: string; stderr: string };
 
+// The stub `claude` comes first; bun's own directory is there only so the
+// script's shebang resolves under a cleared environment.
+const stubPath = (stubDir: string) =>
+  `${stubDir}:/usr/bin:/bin:${dirname(process.execPath)}`;
+
 async function runScript(args: string[], stubDir?: string): Promise<Outcome> {
-  const out = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "--allow-read",
-      "--allow-write",
-      "--allow-env=HOME",
-      "--allow-run=claude",
-      "--no-prompt",
-      SCRIPT,
-      ...args,
-    ],
-    env: stubDir ? { PATH: `${stubDir}:/usr/bin:/bin` } : undefined,
+  const out = await run(SCRIPT, args, {
+    env: stubDir ? { PATH: stubPath(stubDir) } : undefined,
     clearEnv: stubDir !== undefined,
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  });
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 async function fixture(): Promise<string> {
-  const dir = await Deno.makeTempDir({ prefix: "measure-trigger-test-" });
-  await Deno.mkdir(`${dir}/demo`);
-  await Deno.writeTextFile(`${dir}/demo/SKILL.md`, SKILL_MD);
-  await Deno.writeTextFile(
+  const dir = await mkdtemp(join(tmpdir(), "measure-trigger-test-"));
+  await mkdir(`${dir}/demo`);
+  await writeFile(`${dir}/demo/SKILL.md`, SKILL_MD);
+  await writeFile(
     `${dir}/eval.json`,
     '[{"query": "hello", "should_trigger": true}]',
   );
-  await Deno.writeTextFile(`${dir}/desc.txt`, "candidate description.\n");
-  await Deno.mkdir(`${dir}/bin`);
-  await Deno.writeTextFile(
+  await writeFile(`${dir}/desc.txt`, "candidate description.\n");
+  await mkdir(`${dir}/bin`);
+  await writeFile(
     `${dir}/bin/claude`,
     `#!/bin/bash\ncat >/dev/null\nsleep "\${STUB_SLEEP:-0}"\necho '${
       assistant("Skill", "demo")
     }'\n`,
   );
-  await Deno.chmod(`${dir}/bin/claude`, 0o755);
+  await chmod(`${dir}/bin/claude`, 0o755);
   return dir;
 }
 
-Deno.test("--help exits 0 with usage", async () => {
+test("--help exits 0 with usage", async () => {
   const out = await runScript(["--help"]);
   assertEquals(out.code, 0);
   assertStringIncludes(out.stdout, "--skill=<name|path>");
 });
 
-Deno.test("a leftover backup blocks the run", async () => {
+test("a leftover backup blocks the run", async () => {
   const dir = await fixture();
   try {
-    await Deno.writeTextFile(
+    await writeFile(
       `${dir}/demo/SKILL.md.measure-trigger.bak`,
       SKILL_MD,
     );
@@ -220,14 +223,14 @@ Deno.test("a leftover backup blocks the run", async () => {
     assertEquals(out.code, 2);
     assertStringIncludes(out.stderr, "previous run was interrupted");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("a malformed eval set stops before measuring", async () => {
+test("a malformed eval set stops before measuring", async () => {
   const dir = await fixture();
   try {
-    await Deno.writeTextFile(`${dir}/bad.json`, '[{"query": "a"}]');
+    await writeFile(`${dir}/bad.json`, '[{"query": "a"}]');
     const out = await runScript([
       `--skill=${dir}/demo`,
       `--eval=${dir}/bad.json`,
@@ -235,11 +238,11 @@ Deno.test("a malformed eval set stops before measuring", async () => {
     assertEquals(out.code, 2);
     assertStringIncludes(out.stderr, "should_trigger");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("a measured run restores the description and drops the backup", async () => {
+test("a measured run restores the description and drops the backup", async () => {
   const dir = await fixture();
   try {
     const out = await runScript(
@@ -253,20 +256,20 @@ Deno.test("a measured run restores the description and drops the backup", async 
     );
     assertEquals(out.code, 0);
     assertStringIncludes(out.stdout, "1/1");
-    assertEquals(await Deno.readTextFile(`${dir}/demo/SKILL.md`), SKILL_MD);
+    assertEquals(await readFile(`${dir}/demo/SKILL.md`, "utf8"), SKILL_MD);
     assertEquals(
-      [...Deno.readDirSync(`${dir}/demo`)].map((e) => e.name),
+      readdirSync(`${dir}/demo`),
       ["SKILL.md"],
     );
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("a query that fires against expectation exits 1", async () => {
+test("a query that fires against expectation exits 1", async () => {
   const dir = await fixture();
   try {
-    await Deno.writeTextFile(
+    await writeFile(
       `${dir}/neg.json`,
       '[{"query": "hello", "should_trigger": false}]',
     );
@@ -276,11 +279,11 @@ Deno.test("a query that fires against expectation exits 1", async () => {
     );
     assertEquals(out.code, 1);
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("an unknown flag stops before measuring", async () => {
+test("an unknown flag stops before measuring", async () => {
   const dir = await fixture();
   try {
     const out = await runScript(
@@ -290,11 +293,11 @@ Deno.test("an unknown flag stops before measuring", async () => {
     assertEquals(out.code, 2);
     assertStringIncludes(out.stderr, "unknown argument: --run=1");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("a non-integer --runs is rejected", async () => {
+test("a non-integer --runs is rejected", async () => {
   const dir = await fixture();
   try {
     const out = await runScript(
@@ -304,55 +307,48 @@ Deno.test("a non-integer --runs is rejected", async () => {
     assertEquals(out.code, 2);
     assertStringIncludes(out.stderr, "--runs must be an integer");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("SIGINT mid-run restores the description", async () => {
+test("SIGINT mid-run restores the description", async () => {
   const dir = await fixture();
   try {
-    const child = new Deno.Command(Deno.execPath(), {
-      args: [
-        "run",
-        "--allow-read",
-        "--allow-write",
-        "--allow-env=HOME",
-        "--allow-run=claude",
-        "--no-prompt",
-        SCRIPT,
-        `--skill=${dir}/demo`,
-        `--eval=${dir}/eval.json`,
-        `--description=${dir}/desc.txt`,
-        "--runs=1",
-      ],
-      env: { PATH: `${dir}/bin:/usr/bin:/bin`, STUB_SLEEP: "30" },
-      clearEnv: true,
-      stdout: "piped",
-      stderr: "piped",
-    }).spawn();
+    const child = spawn(SCRIPT, [
+      `--skill=${dir}/demo`,
+      `--eval=${dir}/eval.json`,
+      `--description=${dir}/desc.txt`,
+      "--runs=1",
+    ], {
+      env: { PATH: stubPath(`${dir}/bin`), STUB_SLEEP: "30" },
+      stdio: ["inherit", "pipe", "pipe"],
+    });
+    const exited = new Promise<number | null>((resolve) =>
+      child.once("exit", (code) => resolve(code))
+    );
     let swappedDuringRun = false;
     for (let i = 0; i < 100 && !swappedDuringRun; i++) {
       await new Promise((resolve) => setTimeout(resolve, 100));
-      swappedDuringRun = (await Deno.readTextFile(`${dir}/demo/SKILL.md`))
+      swappedDuringRun = (await readFile(`${dir}/demo/SKILL.md`, "utf8"))
         .includes("candidate description");
     }
     assert(swappedDuringRun, "the candidate was never written");
     child.kill("SIGINT");
-    const status = await child.status;
-    await child.stdout.cancel();
-    await child.stderr.cancel();
-    assertEquals(status.code, 130);
-    assertEquals(await Deno.readTextFile(`${dir}/demo/SKILL.md`), SKILL_MD);
+    const code = await exited;
+    child.stdout.destroy();
+    child.stderr.destroy();
+    assertEquals(code, 130);
+    assertEquals(await readFile(`${dir}/demo/SKILL.md`, "utf8"), SKILL_MD);
     assertEquals(
-      [...Deno.readDirSync(`${dir}/demo`)].map((e) => e.name),
+      readdirSync(`${dir}/demo`),
       ["SKILL.md"],
     );
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
-});
+}, 30_000);
 
-Deno.test("a bad --runs is rejected before the description is swapped", async () => {
+test("a bad --runs is rejected before the description is swapped", async () => {
   const dir = await fixture();
   try {
     const out = await runScript(
@@ -365,12 +361,12 @@ Deno.test("a bad --runs is rejected before the description is swapped", async ()
       `${dir}/bin`,
     );
     assertEquals(out.code, 2);
-    assertEquals(await Deno.readTextFile(`${dir}/demo/SKILL.md`), SKILL_MD);
+    assertEquals(await readFile(`${dir}/demo/SKILL.md`, "utf8"), SKILL_MD);
     assertEquals(
-      [...Deno.readDirSync(`${dir}/demo`)].map((e) => e.name),
+      readdirSync(`${dir}/demo`),
       ["SKILL.md"],
     );
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });

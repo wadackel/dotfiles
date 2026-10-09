@@ -4,6 +4,15 @@
 // /weekly-review, which reads those moments in full; a small model given a few
 // excerpts proposed only generic tool names.
 
+import { readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFile,
+  mkdir,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import {
   effectiveEntries,
   isSafeText,
@@ -108,7 +117,7 @@ function statePath(input: SessionInput): string {
 
 function readState(path: string): State {
   try {
-    const s = JSON.parse(Deno.readTextFileSync(path));
+    const s = JSON.parse(readFileSync(path, "utf8"));
     return { userTurns: Number(s.userTurns) || 0, seen: s.seen ?? [] };
   } catch {
     return { userTurns: 0, seen: [] };
@@ -139,17 +148,16 @@ const stateDir = (home: string) => `${home}/.local/state/vocab`;
 
 async function appendJsonl(path: string, rows: unknown[]): Promise<void> {
   if (!rows.length) return;
-  await Deno.mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
-  await Deno.writeTextFile(
+  await mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
+  await appendFile(
     path,
     rows.map((r) => JSON.stringify(r)).join("\n") + "\n",
-    { append: true },
   );
 }
 
 async function readJsonl<T>(path: string): Promise<T[]> {
   try {
-    return (await Deno.readTextFile(path)).split("\n").filter(Boolean)
+    return (await readFile(path, "utf8")).split("\n").filter(Boolean)
       .flatMap((l) => {
         try {
           return [JSON.parse(l) as T];
@@ -223,7 +231,7 @@ export async function proposeFromSession(
     `${stateDir(input.home)}/candidates.jsonl`,
     repeated.map((term) => ({ term, ...origin })),
   );
-  Deno.writeTextFileSync(
+  writeFileSync(
     path,
     JSON.stringify(
       {
@@ -247,10 +255,10 @@ async function userInvokedSkills(
   const root = `${home}/.claude/skills`;
   const out: { name: string; description: string }[] = [];
   try {
-    for await (const e of Deno.readDir(root)) {
+    for (const e of await readdir(root, { withFileTypes: true })) {
       try {
         const fm = splitFrontmatter(
-          await Deno.readTextFile(`${root}/${e.name}/SKILL.md`),
+          await readFile(`${root}/${e.name}/SKILL.md`, "utf8"),
         );
         if (fm?.data["disable-model-invocation"] !== true) continue;
         const description = String(fm.data.description ?? "").trim();
@@ -279,7 +287,7 @@ async function prune(path: string, now: Date): Promise<void> {
   const rows = await readJsonl<{ at: string }>(path);
   const kept = rows.filter((r) => now.getTime() - Date.parse(r.at) <= KEEP_MS);
   if (kept.length === rows.length) return;
-  await Deno.writeTextFile(
+  await writeFile(
     path,
     kept.map((r) => JSON.stringify(r)).join("\n") + (kept.length ? "\n" : ""),
   );
@@ -399,12 +407,12 @@ export async function weeklyProposals(o: {
   const plansDir = `${o.home}/.claude/plans`;
   const plans: { name: string; section: string }[] = [];
   try {
-    for await (const e of Deno.readDir(plansDir)) {
+    for (const e of await readdir(plansDir, { withFileTypes: true })) {
       if (!/^\d{8}T\d{4}-[^.]+\.md$/.test(e.name)) continue;
-      const stat = await Deno.stat(`${plansDir}/${e.name}`);
-      if (o.now.getTime() - (stat.mtime?.getTime() ?? 0) > WEEK_MS) continue;
+      const info = await stat(`${plansDir}/${e.name}`);
+      if (o.now.getTime() - info.mtime.getTime() > WEEK_MS) continue;
       const section = alternativesSection(
-        await Deno.readTextFile(`${plansDir}/${e.name}`),
+        await readFile(`${plansDir}/${e.name}`, "utf8"),
       );
       if (section) plans.push({ name: e.name, section });
     }
@@ -468,10 +476,10 @@ const COMMAND_NOISE =
 
 async function* transcripts(dir: string): AsyncGenerator<string> {
   try {
-    for await (const e of Deno.readDir(dir)) {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
       if (e.name === "subagents") continue;
       const path = `${dir}/${e.name}`;
-      if (e.isDirectory) yield* transcripts(path);
+      if (e.isDirectory()) yield* transcripts(path);
       else if (e.name.endsWith(".jsonl")) yield path;
     }
   } catch {
@@ -490,10 +498,10 @@ export async function shortUtterances(
   const vault = vaultPaths(home).root;
   const out: Utterance[] = [];
   for await (const path of transcripts(`${home}/.claude/projects`)) {
-    const stat = await Deno.stat(path);
-    if ((stat.mtime?.getTime() ?? 0) < sinceMs) continue;
+    const info = await stat(path);
+    if (info.mtime.getTime() < sinceMs) continue;
     let current: Utterance | null = null;
-    for (const line of (await Deno.readTextFile(path)).split("\n")) {
+    for (const line of (await readFile(path, "utf8")).split("\n")) {
       let e;
       try {
         e = JSON.parse(line);

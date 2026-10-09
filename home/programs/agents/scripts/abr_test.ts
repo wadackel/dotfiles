@@ -1,4 +1,20 @@
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@^1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertThrows } from "@std/assert";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { createServer } from "node:http";
+import { type AddressInfo, createServer as createTcpServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type WebSocket as ServerSocket, WebSocketServer } from "ws";
+import { run } from "../lib/proc.ts";
 import {
   buildTabRows,
   type Cookie,
@@ -12,7 +28,10 @@ import {
   UsageError,
 } from "./abr.ts";
 
-const SCRIPT = new URL("./abr.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "abr.ts");
+// The script runs with a throwaway HOME, where Bun would otherwise leave its
+// transpiler cache.
+const TRANSPILER_CACHE = `${process.env.HOME}/Library/Caches/bun/@t@`;
 
 // ---------------------------------------------------------------------------
 // Mock CDP server
@@ -75,39 +94,54 @@ function startMockCdp(cfg: MockConfig = {}): Promise<MockServer> {
   let seq = 0;
   let refusalsLeft = cfg.rejectFirstUpgrades ?? 0;
 
-  const ac = new AbortController();
+  const refuse = (status: string, body: string) =>
+    `HTTP/1.1 ${status}\r\nContent-Type: text/plain\r\n` +
+    `Content-Length: ${body.length}\r\nConnection: close\r\n\r\n${body}`;
 
   return new Promise((resolveServer) => {
-    const server = Deno.serve({
-      hostname: "127.0.0.1",
-      port: 0,
-      signal: ac.signal,
-      onListen: ({ port }) => {
-        resolveServer({
-          port,
-          wsPath: WS_PATH,
-          calls,
-          createdTargets,
-          closedTargets,
-          navigated,
-          shutdown: async () => {
-            ac.abort();
-            await server.finished;
-          },
-        });
-      },
-    }, (req) => {
-      if (req.headers.get("upgrade") !== "websocket") {
-        return new Response("not a websocket", { status: 400 });
+    const server = createServer((_req, res) => {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("not a websocket");
+    });
+    const wss = new WebSocketServer({ noServer: true });
+    const open = new Set<ServerSocket>();
+
+    server.on("upgrade", (req, tcp, head) => {
+      if (req.headers.upgrade !== "websocket") {
+        tcp.end(refuse("400 Bad Request", "not a websocket"));
+        return;
       }
       if (refusalsLeft > 0) {
         refusalsLeft--;
-        return new Response("try again", { status: 503 });
+        tcp.end(refuse("503 Service Unavailable", "try again"));
+        return;
       }
-      const { socket, response } = Deno.upgradeWebSocket(req);
+      wss.handleUpgrade(req, tcp, head, (socket) => {
+        open.add(socket);
+        socket.on("close", () => open.delete(socket));
+        serve(socket);
+      });
+    });
 
+    server.listen(0, "127.0.0.1", () => {
+      resolveServer({
+        port: (server.address() as AddressInfo).port,
+        wsPath: WS_PATH,
+        calls,
+        createdTargets,
+        closedTargets,
+        navigated,
+        shutdown: () =>
+          new Promise<void>((resolve) => {
+            for (const socket of open) socket.terminate();
+            server.close(() => resolve());
+          }),
+      });
+    });
+
+    const serve = (socket: ServerSocket) => {
       const send = (payload: unknown) => {
-        if (socket.readyState === WebSocket.OPEN) {
+        if (socket.readyState === socket.OPEN) {
           socket.send(JSON.stringify(payload));
         }
       };
@@ -117,8 +151,8 @@ function startMockCdp(cfg: MockConfig = {}): Promise<MockServer> {
         sessionId?: string,
       ) => send(sessionId ? { id, result, sessionId } : { id, result });
 
-      socket.onmessage = (ev) => {
-        const msg = JSON.parse(String(ev.data)) as {
+      socket.on("message", (data) => {
+        const msg = JSON.parse(String(data)) as {
           id: number;
           method: string;
           params?: Record<string, unknown>;
@@ -228,10 +262,8 @@ function startMockCdp(cfg: MockConfig = {}): Promise<MockServer> {
           default:
             reply(msg.id, {}, msg.sessionId);
         }
-      };
-
-      return response;
-    });
+      });
+    };
   });
 }
 
@@ -242,11 +274,11 @@ function startMockCdp(cfg: MockConfig = {}): Promise<MockServer> {
 type RunOutcome = { code: number; stdout: string; stderr: string };
 
 async function makeFakeHome(server?: MockServer): Promise<string> {
-  const home = await Deno.makeTempDir({ prefix: "abr-test-" });
+  const home = await mkdtemp(join(tmpdir(), "abr-test-"));
   if (server) {
     const dir = `${home}/Library/Application Support/Google/Chrome`;
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(dir, { recursive: true });
+    await writeFile(
       `${dir}/DevToolsActivePort`,
       `${server.port}\n${server.wsPath}\n`,
     );
@@ -259,20 +291,11 @@ async function runScript(
   args: string[],
   extraEnv: Record<string, string> = {},
 ): Promise<RunOutcome> {
-  const cmd = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "--allow-read",
-      "--allow-write",
-      "--allow-env",
-      "--allow-net=127.0.0.1",
-      "--allow-run=fzf,osascript",
-      SCRIPT,
-      ...args,
-    ],
+  const out = await run(SCRIPT, args, {
     env: {
       HOME: home,
-      PATH: Deno.env.get("PATH") ?? "",
+      PATH: process.env.PATH ?? "",
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: TRANSPILER_CACHE,
       AB_STATE_REFRESH_CONNECT_TIMEOUT_MS: "1500",
       AB_STATE_REFRESH_REQUEST_TIMEOUT_MS: "400",
       AB_STATE_REFRESH_LOAD_TIMEOUT_MS: "400",
@@ -281,20 +304,13 @@ async function runScript(
       ...extraEnv,
     },
     clearEnv: true,
-    stdout: "piped",
-    stderr: "piped",
   });
-  const out = await cmd.output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 async function readState(home: string): Promise<Record<string, unknown>> {
   return JSON.parse(
-    await Deno.readTextFile(`${home}/.agent-browser-state/main.json`),
+    await readFile(`${home}/.agent-browser-state/main.json`, "utf8"),
   );
 }
 
@@ -318,7 +334,7 @@ function cookie(over: Partial<Cookie> = {}): Cookie {
 // Pure functions
 // ---------------------------------------------------------------------------
 
-Deno.test("projectCookie keeps exactly the on-disk key set", () => {
+test("projectCookie keeps exactly the on-disk key set", () => {
   const out = projectCookie({
     name: "sid",
     value: "v",
@@ -342,7 +358,7 @@ Deno.test("projectCookie keeps exactly the on-disk key set", () => {
   assertEquals(out.sameSite, "None");
 });
 
-Deno.test("projectCookie omits absent keys rather than emitting undefined", () => {
+test("projectCookie omits absent keys rather than emitting undefined", () => {
   const out = projectCookie({
     name: "sid",
     value: "v",
@@ -357,12 +373,12 @@ Deno.test("projectCookie omits absent keys rather than emitting undefined", () =
   assert(!Object.keys(out).includes("sameSite"));
 });
 
-Deno.test("mergeStates: seed alone round-trips", () => {
+test("mergeStates: seed alone round-trips", () => {
   const seed = { cookies: [cookie()], origins: [] };
   assertEquals(mergeStates([seed]), { cookies: [cookie()], origins: [] });
 });
 
-Deno.test("mergeStates: later input wins on [name, domain, path]", () => {
+test("mergeStates: later input wins on [name, domain, path]", () => {
   const seed = { cookies: [cookie({ value: "old" })], origins: [] };
   const fresh = { cookies: [cookie({ value: "new" })], origins: [] };
   const out = mergeStates([seed, fresh]);
@@ -370,7 +386,7 @@ Deno.test("mergeStates: later input wins on [name, domain, path]", () => {
   assertEquals(out.cookies[0].value, "new");
 });
 
-Deno.test("mergeStates: seed entries absent from later inputs survive", () => {
+test("mergeStates: seed entries absent from later inputs survive", () => {
   const seed = { cookies: [cookie({ name: "a" }), cookie({ name: "b" })] };
   const fresh = { cookies: [cookie({ name: "b", value: "new" })] };
   const out = mergeStates([seed, fresh]);
@@ -380,14 +396,14 @@ Deno.test("mergeStates: seed entries absent from later inputs survive", () => {
   ]);
 });
 
-Deno.test("mergeStates: same name+domain but different path stay separate", () => {
+test("mergeStates: same name+domain but different path stay separate", () => {
   const out = mergeStates([{
     cookies: [cookie({ path: "/" }), cookie({ path: "/app" })],
   }]);
   assertEquals(out.cookies.length, 2);
 });
 
-Deno.test("mergeStates: origins dedupe by origin, later wins", () => {
+test("mergeStates: origins dedupe by origin, later wins", () => {
   const seed = {
     origins: [{
       origin: "https://a.example",
@@ -407,17 +423,17 @@ Deno.test("mergeStates: origins dedupe by origin, later wins", () => {
   assertEquals(out.origins[0].localStorage[0].value, "new");
 });
 
-Deno.test("mergeStates ignores non-object inputs", () => {
+test("mergeStates ignores non-object inputs", () => {
   const out = mergeStates([null, "str", 42, { cookies: [cookie()] }]);
   assertEquals(out.cookies.length, 1);
   assertEquals(out.origins, []);
 });
 
-Deno.test("mergeStates output key order is cookies then origins", () => {
+test("mergeStates output key order is cookies then origins", () => {
   assertEquals(Object.keys(mergeStates([])), ["cookies", "origins"]);
 });
 
-Deno.test("mergeOriginStorage: empty incoming storage never clobbers a non-empty value", () => {
+test("mergeOriginStorage: empty incoming storage never clobbers a non-empty value", () => {
   const prev = {
     origin: "https://a.example",
     localStorage: [{ name: "k", value: "v" }],
@@ -431,7 +447,7 @@ Deno.test("mergeOriginStorage: empty incoming storage never clobbers a non-empty
   assertEquals(mergeOriginStorage(prev, next), prev);
 });
 
-Deno.test("mergeOriginStorage: non-empty incoming storage replaces the stored value", () => {
+test("mergeOriginStorage: non-empty incoming storage replaces the stored value", () => {
   const prev = {
     origin: "https://a.example",
     localStorage: [{ name: "k", value: "old" }],
@@ -449,7 +465,7 @@ Deno.test("mergeOriginStorage: non-empty incoming storage replaces the stored va
   });
 });
 
-Deno.test("filterCookiesByOrigins keeps the host and its parent domains only", () => {
+test("filterCookiesByOrigins keeps the host and its parent domains only", () => {
   const cookies = [
     cookie({ name: "exact", domain: "lightdash.kworkinc.com" }),
     cookie({ name: "parent", domain: ".kworkinc.com" }),
@@ -463,11 +479,11 @@ Deno.test("filterCookiesByOrigins keeps the host and its parent domains only", (
   assertEquals(kept.map((c) => c.name), ["exact", "parent"]);
 });
 
-Deno.test("filterCookiesByOrigins with no tracked origins keeps nothing", () => {
+test("filterCookiesByOrigins with no tracked origins keeps nothing", () => {
   assertEquals(filterCookiesByOrigins([cookie()], []), []);
 });
 
-Deno.test("originOf", () => {
+test("originOf", () => {
   assertEquals(originOf("https://h:3000/a?x=1"), "https://h:3000");
   assertEquals(originOf("https://h/"), "https://h");
   assertEquals(originOf("http://h:80/"), "http://h");
@@ -476,7 +492,7 @@ Deno.test("originOf", () => {
   assertEquals(originOf("not a url"), null);
 });
 
-Deno.test("buildTabRows filters, dedupes by origin, pads and truncates", () => {
+test("buildTabRows filters, dedupes by origin, pads and truncates", () => {
   const rows = buildTabRows([
     { targetId: "1", type: "page", url: "chrome://newtab/", title: "New Tab" },
     { targetId: "2", type: "page", url: "about:blank", title: "" },
@@ -518,7 +534,7 @@ Deno.test("buildTabRows filters, dedupes by origin, pads and truncates", () => {
   assertEquals(rows[0].display.endsWith("A".repeat(80)), true);
 });
 
-Deno.test("buildTabRows is order-independent", () => {
+test("buildTabRows is order-independent", () => {
   const targets = [
     { targetId: "1", type: "page", url: "https://c.example/", title: "C" },
     { targetId: "2", type: "page", url: "https://a.example/", title: "A" },
@@ -534,7 +550,7 @@ Deno.test("buildTabRows is order-independent", () => {
   ]);
 });
 
-Deno.test("parseArgs modes and validation", () => {
+test("parseArgs modes and validation", () => {
   assertEquals(parseArgs([]), {
     mode: "active",
     urls: [],
@@ -565,28 +581,28 @@ Deno.test("parseArgs modes and validation", () => {
 // CLI contract
 // ---------------------------------------------------------------------------
 
-Deno.test("CLI: -i combined with URLs is a usage error", async () => {
+test("CLI: -i combined with URLs is a usage error", async () => {
   const home = await makeFakeHome();
   try {
     const r = await runScript(home, ["-i", "https://a.example"]);
     assertEquals(r.code, 1);
     assert(r.stderr.includes("cannot combine -i"), r.stderr);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 });
 
-Deno.test("CLI: unknown flag and non-http URL are usage errors", async () => {
+test("CLI: unknown flag and non-http URL are usage errors", async () => {
   const home = await makeFakeHome();
   try {
     assertEquals((await runScript(home, ["--nope"])).code, 1);
     assertEquals((await runScript(home, ["ftp://x/"])).code, 1);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 });
 
-Deno.test("CLI: missing DevToolsActivePort gives the actionable message", async () => {
+test("CLI: missing DevToolsActivePort gives the actionable message", async () => {
   const home = await makeFakeHome();
   try {
     const r = await runScript(home, ["https://a.example"]);
@@ -596,7 +612,7 @@ Deno.test("CLI: missing DevToolsActivePort gives the actionable message", async 
       r.stderr,
     );
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 });
 
@@ -659,46 +675,50 @@ function frozenFixture(): MockConfig {
   };
 }
 
-Deno.test("never attaches to a target it did not create, even with 16 frozen tabs", async () => {
-  const server = await startMockCdp(frozenFixture());
-  const home = await makeFakeHome(server);
-  try {
-    const started = Date.now();
-    const r = await runScript(home, ["https://app.example/dash"]);
-    const elapsed = Date.now() - started;
-    assertEquals(r.code, 0, r.stderr);
-    assert(elapsed < 15_000, `took ${elapsed}ms`);
+test(
+  "never attaches to a target it did not create, even with 16 frozen tabs",
+  async () => {
+    const server = await startMockCdp(frozenFixture());
+    const home = await makeFakeHome(server);
+    try {
+      const started = Date.now();
+      const r = await runScript(home, ["https://app.example/dash"]);
+      const elapsed = Date.now() - started;
+      assertEquals(r.code, 0, r.stderr);
+      assert(elapsed < 15_000, `took ${elapsed}ms`);
 
-    const created = new Set(server.createdTargets.map((t) => t.targetId));
-    const attached = server.calls
-      .filter((c) => c.method === "Target.attachToTarget")
-      .map((c) => String(c.params.targetId));
-    assert(attached.length > 0, "expected at least one attach");
-    for (const id of attached) {
-      assert(created.has(id), `attached to a pre-existing target: ${id}`);
+      const created = new Set(server.createdTargets.map((t) => t.targetId));
+      const attached = server.calls
+        .filter((c) => c.method === "Target.attachToTarget")
+        .map((c) => String(c.params.targetId));
+      assert(attached.length > 0, "expected at least one attach");
+      for (const id of attached) {
+        assert(created.has(id), `attached to a pre-existing target: ${id}`);
+      }
+      assertEquals(
+        server.calls.filter((c) => c.method === "Target.setDiscoverTargets")
+          .length,
+        0,
+      );
+      assertEquals(
+        server.calls.filter((c) => c.method === "Target.setAutoAttach").length,
+        0,
+      );
+
+      const state = await readState(home);
+      assertEquals(
+        (state.origins as { origin: string }[])[0].origin,
+        "https://app.example",
+      );
+    } finally {
+      await rm(home, { recursive: true });
+      await server.shutdown();
     }
-    assertEquals(
-      server.calls.filter((c) => c.method === "Target.setDiscoverTargets")
-        .length,
-      0,
-    );
-    assertEquals(
-      server.calls.filter((c) => c.method === "Target.setAutoAttach").length,
-      0,
-    );
+  },
+  30_000,
+);
 
-    const state = await readState(home);
-    assertEquals(
-      (state.origins as { origin: string }[])[0].origin,
-      "https://app.example",
-    );
-  } finally {
-    await Deno.remove(home, { recursive: true });
-    await server.shutdown();
-  }
-});
-
-Deno.test("a refused CDP handshake is retried rather than surfaced", async () => {
+test("a refused CDP handshake is retried rather than surfaced", async () => {
   const cfg = frozenFixture();
   cfg.rejectFirstUpgrades = 2;
   const server = await startMockCdp(cfg);
@@ -712,22 +732,27 @@ Deno.test("a refused CDP handshake is retried rather than surfaced", async () =>
       "https://app.example",
     );
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("an unreachable CDP endpoint fails without hanging", async () => {
+test("an unreachable CDP endpoint fails without hanging", async () => {
   const home = await makeFakeHome();
   try {
     // Claim a port, then release it so nothing is listening on it.
-    const probe = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-    const deadPort = (probe.addr as Deno.NetAddr).port;
-    probe.close();
+    const deadPort = await new Promise<number>((resolve, reject) => {
+      const probe = createTcpServer();
+      probe.on("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const { port } = probe.address() as AddressInfo;
+        probe.close(() => resolve(port));
+      });
+    });
 
     const dir = `${home}/Library/Application Support/Google/Chrome`;
-    await Deno.mkdir(dir, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(dir, { recursive: true });
+    await writeFile(
       `${dir}/DevToolsActivePort`,
       `${deadPort}\n/devtools/browser/dead\n`,
     );
@@ -738,11 +763,11 @@ Deno.test("an unreachable CDP endpoint fails without hanging", async () => {
     assert(r.stderr.includes("failed to connect to"), r.stderr);
     assert(Date.now() - started < 20_000, "connect retries must be bounded");
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
-});
+}, 30_000);
 
-Deno.test("createTarget opens about:blank in the background and is always closed", async () => {
+test("createTarget opens about:blank in the background and is always closed", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
@@ -754,12 +779,12 @@ Deno.test("createTarget opens about:blank in the background and is always closed
     assertEquals(server.navigated[0].url, "https://app.example/dash");
     assertEquals(server.closedTargets, [server.createdTargets[0].targetId]);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("a frozen freshly-created tab aborts that origin only, and still closes", async () => {
+test("a frozen freshly-created tab aborts that origin only, and still closes", async () => {
   const cfg = frozenFixture();
   cfg.frozenTargetIds = new Set([...cfg.frozenTargetIds!, "mock-1"]);
   const server = await startMockCdp(cfg);
@@ -779,12 +804,12 @@ Deno.test("a frozen freshly-created tab aborts that origin only, and still close
     assertEquals((state.cookies as unknown[]).length, 2);
     assertEquals((state.origins as unknown[]).length, 0);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("missing loadEventFired still evaluates after the fallback timeout", async () => {
+test("missing loadEventFired still evaluates after the fallback timeout", async () => {
   const cfg = frozenFixture();
   cfg.neverFireLoad = new Set(["mock-1"]);
   const server = await startMockCdp(cfg);
@@ -802,12 +827,12 @@ Deno.test("missing loadEventFired still evaluates after the fallback timeout", a
       "https://app.example",
     );
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("socket closing mid-run fails cleanly instead of hanging", async () => {
+test("socket closing mid-run fails cleanly instead of hanging", async () => {
   const cfg = frozenFixture();
   cfg.closeAfterMethod = "Target.createTarget";
   const server = await startMockCdp(cfg);
@@ -817,12 +842,12 @@ Deno.test("socket closing mid-run fails cleanly instead of hanging", async () =>
     assertEquals(r.code, 1, r.stdout + r.stderr);
     assert(!r.stderr.includes("Unhandled"), r.stderr);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("Runtime.evaluate throwing drops that origin but keeps the run alive", async () => {
+test("Runtime.evaluate throwing drops that origin but keeps the run alive", async () => {
   const cfg = frozenFixture();
   cfg.evaluateThrowsForUrl = new Set(["https://app.example/dash"]);
   const server = await startMockCdp(cfg);
@@ -836,12 +861,12 @@ Deno.test("Runtime.evaluate throwing drops that origin but keeps the run alive",
     assert(r.stderr.includes("selected origins not saved"), r.stderr);
     assertEquals(server.closedTargets, ["mock-1"]);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("an SSO redirect is recorded under the actual origin and reported", async () => {
+test("an SSO redirect is recorded under the actual origin and reported", async () => {
   const cfg = frozenFixture();
   cfg.storageByUrl = {
     "https://app.example/dash": {
@@ -866,12 +891,12 @@ Deno.test("an SSO redirect is recorded under the actual origin and reported", as
       ["https://idp.example"],
     );
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("cookies are narrowed to tracked origins unless --all-cookies", async () => {
+test("cookies are narrowed to tracked origins unless --all-cookies", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
@@ -886,12 +911,12 @@ Deno.test("cookies are narrowed to tracked origins unless --all-cookies", async 
     // The CDP superset must not have leaked through.
     assertEquals(Object.keys((state.cookies as Cookie[])[0]), [...COOKIE_KEYS]);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("--all-cookies keeps every cookie", async () => {
+test("--all-cookies keeps every cookie", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
@@ -899,29 +924,27 @@ Deno.test("--all-cookies keeps every cookie", async () => {
     const state = await readState(home);
     assertEquals((state.cookies as Cookie[]).length, 2);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("state file and directory are written with tight modes and no residue", async () => {
+test("state file and directory are written with tight modes and no residue", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
     await runScript(home, ["https://app.example/dash"]);
     const dir = `${home}/.agent-browser-state`;
-    assertEquals((await Deno.stat(dir)).mode! & 0o777, 0o700);
-    assertEquals((await Deno.stat(`${dir}/main.json`)).mode! & 0o777, 0o600);
-    const names: string[] = [];
-    for await (const e of Deno.readDir(dir)) names.push(e.name);
-    assertEquals(names, ["main.json"]);
+    assertEquals((await stat(dir)).mode! & 0o777, 0o700);
+    assertEquals((await stat(`${dir}/main.json`)).mode! & 0o777, 0o600);
+    assertEquals(await readdir(dir), ["main.json"]);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("a run that captures nothing leaves main.json byte-identical", async () => {
+test("a run that captures nothing leaves main.json byte-identical", async () => {
   const cfg = frozenFixture();
   cfg.cookies = [];
   cfg.navigateErrorByUrl = { "https://app.example/dash": "net::ERR_FAILED" };
@@ -929,27 +952,27 @@ Deno.test("a run that captures nothing leaves main.json byte-identical", async (
   const home = await makeFakeHome(server);
   try {
     const dir = `${home}/.agent-browser-state`;
-    await Deno.mkdir(dir, { recursive: true, mode: 0o700 });
+    await mkdir(dir, { recursive: true, mode: 0o700 });
     const seed = JSON.stringify({ cookies: [], origins: [] }, null, 2) + "\n";
-    await Deno.writeTextFile(`${dir}/main.json`, seed, { mode: 0o600 });
+    await writeFile(`${dir}/main.json`, seed, { mode: 0o600 });
 
     const r = await runScript(home, ["https://app.example/dash"]);
     assertEquals(r.code, 1, r.stdout + r.stderr);
     assert(r.stderr.includes("no new state captured"), r.stderr);
-    assertEquals(await Deno.readTextFile(`${dir}/main.json`), seed);
+    assertEquals(await readFile(`${dir}/main.json`, "utf8"), seed);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("an unparseable seed is reported and rebuilt", async () => {
+test("an unparseable seed is reported and rebuilt", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
     const dir = `${home}/.agent-browser-state`;
-    await Deno.mkdir(dir, { recursive: true, mode: 0o700 });
-    await Deno.writeTextFile(`${dir}/main.json`, "{{garbage", { mode: 0o600 });
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    await writeFile(`${dir}/main.json`, "{{garbage", { mode: 0o600 });
 
     const r = await runScript(home, ["https://app.example/dash"]);
     assertEquals(r.code, 0, r.stderr);
@@ -957,18 +980,18 @@ Deno.test("an unparseable seed is reported and rebuilt", async () => {
     const state = await readState(home);
     assertEquals((state.origins as unknown[]).length, 1);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });
 
-Deno.test("seed origins keep their cookies across a narrowed run", async () => {
+test("seed origins keep their cookies across a narrowed run", async () => {
   const server = await startMockCdp(frozenFixture());
   const home = await makeFakeHome(server);
   try {
     const dir = `${home}/.agent-browser-state`;
-    await Deno.mkdir(dir, { recursive: true, mode: 0o700 });
-    await Deno.writeTextFile(
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    await writeFile(
       `${dir}/main.json`,
       JSON.stringify({
         cookies: [cookie({ name: "old", domain: ".tracker.example" })],
@@ -994,7 +1017,7 @@ Deno.test("seed origins keep their cookies across a narrowed run", async () => {
       ["https://app.example", "https://tracker.example"],
     );
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
     await server.shutdown();
   }
 });

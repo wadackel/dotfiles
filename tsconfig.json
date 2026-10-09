@@ -14,12 +14,15 @@
     "verbatimModuleSyntax": true
   },
   "include": [
-    "home/programs/agents/lib/**/*.ts",
+    "home/programs/agents/**/*.ts",
+    ".claude/skills/nvim-verify/*.ts",
+    ".agents/skills/nvim-verify/*.ts",
     "home/programs/tmux/**/*.ts",
     "home/programs/tmux/**/*.tsx",
     "home/programs/codex/scripts/codex-plan-marker.ts",
     "home/programs/codex/scripts/codex-plan-marker_test.ts",
     ".claude/skills/agentower-verify/*.ts",
     ".agents/skills/agentower-verify/*.ts"
-  ]
+  ],
+  "exclude": ["home/programs/agents/skills/figma-*/**"]
 }

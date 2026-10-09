@@ -10,7 +10,7 @@
 
 Output is the bare Google Docs API JSON response. Top-level keys: `body`, `documentId`, `documentStyle`, `lists`, `namedStyles`, `revisionId`, `suggestionsViewMode`, `title`.
 
-Pipe directly to the Deno script via stdin, or save to a temp file first:
+Pipe directly to the conversion script via stdin, or save to a temp file first:
 
 ```bash
 TMP_JSON=$(mktemp -t gdoc-XXXXXX.json)
@@ -27,7 +27,7 @@ Reads JSON from stdin, writes GitHub Flavored Markdown to stdout.
 ~/.claude/skills/gdocs-to-md/gdoc-json-to-md.ts < "$TMP_JSON" > output.md
 ```
 
-No Deno permission flags required (stdin-only, no file/network access).
+It runs on Bun through its shebang and touches nothing but stdin and stdout.
 
 ## Error Handling
 
@@ -39,7 +39,7 @@ No Deno permission flags required (stdin-only, no file/network access).
 | Docs API not enabled | Report the error message; direct user to enable Docs API in GCP Console |
 | `.body` missing in response | Print raw temp file content + path; stop |
 | Title empty | Print raw temp file content + path; stop |
-| Deno script fails | Print error + temp file path (JSON preserved); stop |
+| Conversion script fails | Print error + temp file path (JSON preserved); stop |
 
 ## Known Limitations
 

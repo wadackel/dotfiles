@@ -21,9 +21,12 @@ allowed-tools:
   - Bash(date:*)
   - Bash(mkdir:*)
   - Bash(mv -n:*)
-  - Bash(deno run --allow-read --allow-env */skills/llm-wiki/scripts/wiki-doctor.ts*)
-  - Bash(deno run --allow-read --allow-env */skills/llm-wiki/scripts/split-note.ts scan*)
-  - Bash(deno run --allow-read --allow-env --allow-write */skills/llm-wiki/scripts/split-note.ts apply *)
+  - Bash(~/.claude/skills/llm-wiki/scripts/wiki-doctor.ts *)
+  - Bash(~/.agents/skills/llm-wiki/scripts/wiki-doctor.ts *)
+  - Bash(~/.claude/skills/llm-wiki/scripts/split-note.ts scan*)
+  - Bash(~/.agents/skills/llm-wiki/scripts/split-note.ts scan*)
+  - Bash(~/.claude/skills/llm-wiki/scripts/split-note.ts apply *)
+  - Bash(~/.agents/skills/llm-wiki/scripts/split-note.ts apply *)
 ---
 
 # LLM Wiki
@@ -82,10 +85,10 @@ Read the matching reference under `references/` and follow it.
 `scripts/wiki-doctor.ts` checks, deterministically, the defect classes this skill has actually shipped before: unresolved wikilinks, filename collisions between `98_Maintenance/` and `02_Notes/` and between `02_Notes/` and `03_Books/`, knowledge maps trapped in code fences, raw wikilinks inside maintenance artifacts, `05_Private/` names leaking into output, unparseable frontmatter, chapter notes under `03_Books/` drifting from the baseline, compile-state integrity, bidirectional `generated_pages` ↔ `sources`, body sections drifting from frontmatter, load-bearing strings going out of sync across spec files, and `clip/*` tags without exactly one MOC.
 
 ```
-deno run --allow-read --allow-env scripts/wiki-doctor.ts --vault "$VAULT" [--baseline <pre-change backup>]
+~/.claude/skills/llm-wiki/scripts/wiki-doctor.ts --vault "$VAULT" [--baseline <pre-change backup>]
 ```
 
-Run it after any batch write — `ingest` over a genre, a bulk apply, an edit to these spec files. Exit code 1 means stop and fix.
+Codex and opencode start it as `~/.agents/skills/llm-wiki/scripts/wiki-doctor.ts`. Run it after any batch write — `ingest` over a genre, a bulk apply, an edit to these spec files. Exit code 1 means stop and fix.
 
 These checks are **not** a reviewer's job. Each one is here because a review caught it once; re-finding them by reading is slow and probabilistic, and every one of them is decidable by a script. `--baseline` scopes the privacy and artifact checks to files this skill actually wrote, so the report never flags the user's own long-standing notes. It also turns on the chapter-note check: without it that one reports `SKIP` and drops out of the denominator, so an unrun check never reads as a passing one. A missing or non-directory `--baseline` path exits 2 rather than reporting every file as newly created.
 

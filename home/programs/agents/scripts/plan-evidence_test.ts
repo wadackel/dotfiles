@@ -1,16 +1,33 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@^1";
+import { test } from "bun:test";
+import { assertEquals, assertRejects } from "@std/assert";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run as runCommand } from "../lib/proc.ts";
 import { run } from "./plan-state.ts";
+
+const REAL_HOME = process.env.HOME!;
 
 const input = (value: unknown) => new Blob([JSON.stringify(value)]).stream();
 
 async function fixture(test: (path: string) => Promise<void>) {
-  const previous = { cwd: Deno.cwd(), home: Deno.env.get("HOME")! };
-  const temp = await Deno.makeTempDir({ prefix: "plan-evidence-" });
+  const previous = { cwd: process.cwd(), home: process.env.HOME! };
+  const temp = await mkdtemp(join(tmpdir(), "plan-evidence-"));
   try {
-    Deno.env.set("HOME", temp);
-    await Deno.mkdir(`${temp}/.codex/plans`, { recursive: true });
-    await Deno.mkdir(`${temp}/repo`);
-    Deno.chdir(`${temp}/repo`);
+    process.env.HOME = temp;
+    await mkdir(`${temp}/.codex/plans`, { recursive: true });
+    await mkdir(`${temp}/repo`);
+    process.chdir(`${temp}/repo`);
     for (
       const args of [
         ["init", "-q"],
@@ -18,15 +35,14 @@ async function fixture(test: (path: string) => Promise<void>) {
         ["config", "user.name", "Test"],
       ]
     ) {
-      const result = await new Deno.Command("git", { args }).output();
-      assertEquals(result.success, true);
+      const result = await runCommand("git", args);
+      assertEquals(result.code, 0);
     }
-    await Deno.writeTextFile("main.txt", "initial\n");
-    await new Deno.Command("git", { args: ["add", "."] }).output();
-    await new Deno.Command("git", { args: ["commit", "-qm", "initial"] })
-      .output();
+    await writeFile("main.txt", "initial\n");
+    await runCommand("git", ["add", "."]);
+    await runCommand("git", ["commit", "-qm", "initial"]);
     const path = `${temp}/.codex/plans/plan.evidence.json`;
-    await Deno.writeTextFile(
+    await writeFile(
       `${temp}/.codex/plans/plan.md`,
       "Acceptance: main works\n",
     );
@@ -39,15 +55,15 @@ async function fixture(test: (path: string) => Promise<void>) {
     await run(["start", path, "task-1"]);
     await test(path);
   } finally {
-    Deno.chdir(previous.cwd);
-    Deno.env.set("HOME", previous.home);
-    await Deno.remove(temp, { recursive: true });
+    process.chdir(previous.cwd);
+    process.env.HOME = previous.home;
+    await rm(temp, { recursive: true });
   }
 }
 
 async function target(path: string): Promise<string> {
   const { snapshot } = await import("./plan-evidence.ts");
-  return await snapshot(path, JSON.parse(await Deno.readTextFile(path)));
+  return await snapshot(path, JSON.parse(await readFile(path, "utf8")));
 }
 
 async function declare(path: string, task = "task-1", kind = "file-state") {
@@ -81,7 +97,7 @@ async function record(path: string, overrides = {}, task = "task-1") {
   );
 }
 
-Deno.test("completion rejects missing verification and preserves legacy evidence", async () => {
+test("completion rejects missing verification and preserves legacy evidence", async () => {
   await fixture(async (path) => {
     await run(
       ["append-evidence", path, "task-1"],
@@ -93,17 +109,17 @@ Deno.test("completion rejects missing verification and preserves legacy evidence
       "required checks",
     );
     assertEquals(
-      JSON.parse(await Deno.readTextFile(path)).tasks[0].evidence,
+      JSON.parse(await readFile(path, "utf8")).tasks[0].evidence,
       "old PASS",
     );
   });
 });
 
-Deno.test("non-empty low-risk work completes with explicit main-session review evidence", async () => {
+test("non-empty low-risk work completes with explicit main-session review evidence", async () => {
   await fixture(async (path) => {
-    await Deno.writeTextFile("main.txt", "corrected prose\n");
+    await writeFile("main.txt", "corrected prose\n");
     await declare(path);
-    const observed = await Deno.readTextFile("main.txt");
+    const observed = await readFile("main.txt", "utf8");
     assertEquals(observed, "corrected prose\n");
     await record(path, { output: observed });
     await run(["complete", path, "task-1"]);
@@ -129,31 +145,31 @@ Deno.test("non-empty low-risk work completes with explicit main-session review e
       output,
     }, "task-2");
     await run(["complete", path, "task-2"]);
-    const final = JSON.parse(await Deno.readTextFile(path)).tasks[1];
+    const final = JSON.parse(await readFile(path, "utf8")).tasks[1];
     assertEquals(final.status, "completed");
     assertEquals(final.checks.at(-1).id, "main-review");
     assertEquals(final.checks.at(-1).output, output);
   });
 });
 
-Deno.test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS", async () => {
+test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
     await run(["complete", path, "task-1"]);
     for (
       const change of [
-        () => Deno.writeTextFile("main.txt", "changed\n"),
-        () => Deno.writeTextFile("new.txt", "new\n"),
-        () => Deno.chmod("new.txt", 0o755),
-        () => Deno.remove("new.txt"),
+        () => writeFile("main.txt", "changed\n"),
+        () => writeFile("new.txt", "new\n"),
+        () => chmod("new.txt", 0o755),
+        () => rm("new.txt"),
         () =>
-          Deno.writeTextFile(
+          writeFile(
             path.replace(".evidence.json", ".md"),
             "new acceptance\n",
           ),
         async () => {
-          await new Deno.Command("git", { args: ["add", "main.txt"] }).output();
+          await runCommand("git", ["add", "main.txt"]);
         },
       ]
     ) {
@@ -171,11 +187,11 @@ Deno.test("uncommitted, staged, untracked, modes and plan changes invalidate a P
   });
 });
 
-Deno.test("changed target during verification and blocked/live claims cannot pass", async () => {
+test("changed target during verification and blocked/live claims cannot pass", async () => {
   await fixture(async (path) => {
     await declare(path, "task-1", "live");
     const before = await target(path);
-    await Deno.writeTextFile("main.txt", "changed\n");
+    await writeFile("main.txt", "changed\n");
     await assertRejects(
       () => record(path, { target: before }),
       Error,
@@ -220,7 +236,7 @@ Deno.test("changed target during verification and blocked/live claims cannot pas
   });
 });
 
-Deno.test("final completion requires current audit, review and implementation evidence", async () => {
+test("final completion requires current audit, review and implementation evidence", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
@@ -241,7 +257,7 @@ Deno.test("final completion requires current audit, review and implementation ev
     await record(path, { id: "audit" }, "task-2");
     await record(path, { id: "generic" }, "task-2");
     await run(["complete", path, "task-2"]);
-    await Deno.writeTextFile("main.txt", "review fix\n");
+    await writeFile("main.txt", "review fix\n");
     await assertRejects(
       () => run(["complete", path, "task-2"]),
       Error,
@@ -259,19 +275,19 @@ Deno.test("final completion requires current audit, review and implementation ev
   });
 });
 
-Deno.test("reconcile reopens missing artifacts without discarding evidence", async () => {
+test("reconcile reopens missing artifacts without discarding evidence", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
     await run(["complete", path, "task-1"]);
-    await Deno.remove("main.txt");
+    await rm("main.txt");
     await run(["reconcile", path]);
-    const data = JSON.parse(await Deno.readTextFile(path));
+    const data = JSON.parse(await readFile(path, "utf8"));
     assertEquals(data.tasks[0].status, "in_progress");
     assertEquals(data.tasks[0].checks.length, 1);
-    await Deno.mkdir("other");
-    Deno.chdir("other");
-    await new Deno.Command("git", { args: ["init", "-q"] }).output();
+    await mkdir("other");
+    process.chdir("other");
+    await runCommand("git", ["init", "-q"]);
     await assertRejects(
       () => run(["reconcile", path]),
       Error,
@@ -280,9 +296,9 @@ Deno.test("reconcile reopens missing artifacts without discarding evidence", asy
   });
 });
 
-Deno.test("plan identity, initialization and writer locks preserve existing evidence", async () => {
+test("plan identity, initialization and writer locks preserve existing evidence", async () => {
   await fixture(async (path) => {
-    const original = await Deno.readTextFile(path);
+    const original = await readFile(path, "utf8");
     await assertRejects(
       () =>
         run([
@@ -294,22 +310,22 @@ Deno.test("plan identity, initialization and writer locks preserve existing evid
       Error,
       "already exists",
     );
-    await Deno.writeTextFile(`${path}.lock`, "another writer");
+    await writeFile(`${path}.lock`, "another writer");
     await assertRejects(
       () => run(["complete", path, "task-1"]),
       Error,
       "locked",
     );
-    assertEquals(await Deno.readTextFile(path), original);
-    await Deno.remove(`${path}.lock`);
+    assertEquals(await readFile(path, "utf8"), original);
+    await rm(`${path}.lock`);
     const data = JSON.parse(original);
     data.plan = "other.md";
-    await Deno.writeTextFile(path, JSON.stringify(data));
+    await writeFile(path, JSON.stringify(data));
     await assertRejects(() => run(["normalize", path]), Error, "plan identity");
   });
 });
 
-Deno.test("live expected artifact is independently hashed and checked again at completion", async () => {
+test("live expected artifact is independently hashed and checked again at completion", async () => {
   await fixture(async (path) => {
     await run(
       ["require", path, "task-1"],
@@ -343,19 +359,18 @@ Deno.test("live expected artifact is independently hashed and checked again at c
   });
 });
 
-Deno.test("snapshot rejects tracked paths redirected outside the repository", async () => {
+test("snapshot rejects tracked paths redirected outside the repository", async () => {
   await fixture(async (path) => {
-    await Deno.mkdir("nested");
-    await Deno.writeTextFile("nested/value.txt", "local");
-    await new Deno.Command("git", { args: ["add", "nested/value.txt"] })
-      .output();
-    await Deno.rename("nested", "../external");
-    await Deno.symlink("../external", "nested");
+    await mkdir("nested");
+    await writeFile("nested/value.txt", "local");
+    await runCommand("git", ["add", "nested/value.txt"]);
+    await rename("nested", "../external");
+    await symlink("../external", "nested");
     await assertRejects(() => target(path), Error, "escapes repository");
   });
 });
 
-Deno.test("final gate rejects missing verdicts and observations from a prior generation", async () => {
+test("final gate rejects missing verdicts and observations from a prior generation", async () => {
   await fixture(async (path) => {
     await run(
       ["require", path, "task-1"],
@@ -413,7 +428,7 @@ Deno.test("final gate rejects missing verdicts and observations from a prior gen
   });
 });
 
-Deno.test("a verification begun before a new gate cannot be recorded into it", async () => {
+test("a verification begun before a new gate cannot be recorded into it", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
@@ -435,33 +450,25 @@ Deno.test("a verification begun before a new gate cannot be recorded into it", a
   });
 });
 
-Deno.test("malformed CLI mutations release their lock", async () => {
-  const script = new URL("./plan-state.ts", import.meta.url).pathname;
+test("malformed CLI mutations release their lock", async () => {
+  const script = join(import.meta.dirname, "plan-state.ts");
   await fixture(async (path) => {
     for (const command of ["start", "init", "require", "record", "complete"]) {
-      const result = await new Deno.Command(Deno.execPath(), {
-        args: [
-          "run",
-          "--allow-env=HOME",
-          "--allow-read",
-          "--allow-write",
-          "--allow-run=git",
-          script,
-          command,
-          path,
-        ],
-      }).output();
+      const result = await runCommand(script, [command, path], {
+        env: {
+          BUN_RUNTIME_TRANSPILER_CACHE_PATH:
+            `${REAL_HOME}/Library/Caches/bun/@t@`,
+        },
+      });
       assertEquals(result.code, 1);
-      await assertRejects(
-        () => Deno.stat(`${path}.lock`),
-        Deno.errors.NotFound,
-      );
+      const missing = await assertRejects(() => stat(`${path}.lock`));
+      assertEquals((missing as NodeJS.ErrnoException).code, "ENOENT");
     }
     await declare(path);
   });
 });
 
-Deno.test("final task completes with a review check alone; audit is optional", async () => {
+test("final task completes with a review check alone; audit is optional", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
@@ -473,12 +480,12 @@ Deno.test("final task completes with a review check alone; audit is optional", a
     );
     await record(path, { id: "generic" }, "task-2");
     await run(["complete", path, "task-2"]);
-    const final = JSON.parse(await Deno.readTextFile(path)).tasks[1];
+    const final = JSON.parse(await readFile(path, "utf8")).tasks[1];
     assertEquals(final.status, "completed");
   });
 });
 
-Deno.test("final task without any review check cannot complete", async () => {
+test("final task without any review check cannot complete", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
@@ -497,10 +504,10 @@ Deno.test("final task without any review check cannot complete", async () => {
   });
 });
 
-Deno.test("coverage lists Autonomous Verification bullets without a cc-<n> check", async () => {
+test("coverage lists Autonomous Verification bullets without a cc-<n> check", async () => {
   await fixture(async (path) => {
     const plan = path.replace(/\.evidence\.json$/, ".md");
-    await Deno.writeTextFile(
+    await writeFile(
       plan,
       [
         "## Completion Criteria",
@@ -541,10 +548,10 @@ Deno.test("coverage lists Autonomous Verification bullets without a cc-<n> check
   });
 });
 
-Deno.test("coverage rejects a bullet declared with another check kind", async () => {
+test("coverage rejects a bullet declared with another check kind", async () => {
   await fixture(async (path) => {
     const plan = path.replace(/\.evidence\.json$/, ".md");
-    await Deno.writeTextFile(
+    await writeFile(
       plan,
       [
         "### Autonomous Verification",

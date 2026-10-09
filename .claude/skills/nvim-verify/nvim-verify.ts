@@ -1,4 +1,8 @@
-#!/usr/bin/env -S deno run --allow-run=nvim --allow-write --allow-read --allow-env
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
+
+import { spawn } from "node:child_process";
+import { rm, writeFile } from "node:fs/promises";
+import { constants } from "node:os";
 
 // --- Types ---
 
@@ -12,7 +16,7 @@ interface CheckResult {
 
 // --- Constants ---
 
-const TMPDIR = Deno.env.get("TMPDIR") ?? "/tmp";
+const TMPDIR = process.env.TMPDIR ?? "/tmp";
 const NVIM_TIMEOUT_MS = 15_000;
 const ERROR_PATTERN = /E\d+:/;
 const ALL_MODES = ["n", "v", "i", "c", "x", "s", "o", "t"];
@@ -159,16 +163,32 @@ vim.cmd("qa!")
 
 // --- Runner ---
 
-async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
-  const tmpFile = `${TMPDIR}/nvim-verify-${Deno.pid}-${Date.now()}.lua`;
-  try {
-    await Deno.writeTextFile(tmpFile, luaCode);
-
-    const cmd = new Deno.Command("nvim", {
-      args: ["--headless", "-c", `luafile ${tmpFile}`],
-      stdout: "piped",
-      stderr: "piped",
+// stdin is inherited rather than closed: nvim loads a non-terminal stdin into
+// a buffer, so what the config sees at startup depends on it.
+function runNvim(
+  args: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("nvim", args, { stdio: ["inherit", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      resolve({
+        code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+        stdout: Buffer.concat(out).toString("utf8"),
+        stderr: Buffer.concat(err).toString("utf8"),
+      });
     });
+  });
+}
+
+async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
+  const tmpFile = `${TMPDIR}/nvim-verify-${process.pid}-${Date.now()}.lua`;
+  try {
+    await writeFile(tmpFile, luaCode);
 
     const abortController = new AbortController();
     const timeoutId = setTimeout(
@@ -176,14 +196,16 @@ async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
       NVIM_TIMEOUT_MS,
     );
 
-    let proc;
     try {
-      proc = cmd.spawn();
-      const output = await proc.output();
+      const output = await runNvim([
+        "--headless",
+        "-c",
+        `luafile ${tmpFile}`,
+      ]);
       clearTimeout(timeoutId);
 
-      const stdout = new TextDecoder().decode(output.stdout).trim();
-      const stderr = new TextDecoder().decode(output.stderr).trim();
+      const stdout = output.stdout.trim();
+      const stderr = output.stderr.trim();
 
       // Layer 1: exit code
       if (output.code !== 0 && !stdout) {
@@ -241,7 +263,7 @@ async function runHeadlessCheck(luaCode: string): Promise<CheckResult> {
     }
   } finally {
     try {
-      await Deno.remove(tmpFile);
+      await rm(tmpFile);
     } catch {
       // ignore cleanup errors
     }
@@ -288,13 +310,13 @@ async function checkAll(): Promise<CheckResult[]> {
 // --- Main ---
 
 async function main(): Promise<void> {
-  const [subcommand, ...args] = Deno.args;
+  const [subcommand, ...args] = process.argv.slice(2);
 
   if (!subcommand) {
     console.error(
       "Usage: nvim-verify.ts <startup|plugins [name]|keymaps [lhs]|options <name...>|all>",
     );
-    Deno.exit(1);
+    process.exit(1);
   }
 
   let output: CheckResult | CheckResult[];
@@ -318,16 +340,16 @@ async function main(): Promise<void> {
     }
     default:
       console.error(`Unknown subcommand: ${subcommand}`);
-      Deno.exit(1);
+      process.exit(1);
   }
 
   console.log(JSON.stringify(output, null, 2));
 
   if (Array.isArray(output)) {
     const hasError = output.some((r) => !r.ok);
-    if (hasError) Deno.exit(1);
+    if (hasError) process.exit(1);
   } else {
-    if (!output.ok) Deno.exit(1);
+    if (!output.ok) process.exit(1);
   }
 }
 

@@ -1,10 +1,20 @@
-#!/usr/bin/env -S deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Shared by Codex `$impl` and Claude `/impl`. Refusing `complete` without current
 // evidence is the audit; an LLM-written `audit` record on top of it caught no
 // defect in 18 measured gates, so `audit` is accepted but not required and the
 // final task needs only a review.
 
+import {
+  type FileHandle,
+  lstat,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import {
   artifactSnapshot,
   assertLive,
@@ -16,6 +26,7 @@ import {
   repository,
   type Requirement,
   requirements,
+  runGit,
   snapshot,
   verificationSnapshot,
 } from "./plan-evidence.ts";
@@ -42,6 +53,26 @@ export interface PlanEvidence {
 
 const FINAL_TASK_SUBJECT = "Final Audit + Review";
 const STATUSES = new Set(["pending", "in_progress", "completed"]);
+
+function isNotFound(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException | null)?.code === "ENOENT";
+}
+
+// Reading starts with the first pull, not here: Readable.toWeb(process.stdin)
+// as the default would keep a command that never reads stdin (`snapshot`,
+// `start`) from exiting when stdin is a pipe. highWaterMark 0 keeps the stream
+// from pulling before anyone reads.
+function processStdin(): ReadableStream<Uint8Array> {
+  let chunks: AsyncIterator<Uint8Array> | undefined;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      chunks ??= process.stdin[Symbol.asyncIterator]();
+      const { done, value } = await chunks.next();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+  }, { highWaterMark: 0 });
+}
 
 function usage(): never {
   throw new Error(
@@ -87,7 +118,7 @@ function normalizeStatus(value: unknown): TaskStatus {
 
 async function canonicalExistingDir(path: string): Promise<string> {
   try {
-    return await Deno.realPath(path);
+    return await realpath(path);
   } catch (err) {
     throw new Error(
       `failed to resolve directory ${path}: ${(err as Error).message}`,
@@ -102,9 +133,9 @@ async function plansDirs(home: string): Promise<string[]> {
   const dirs: string[] = [];
   for (const agent of [".codex", ".claude"]) {
     try {
-      dirs.push(await Deno.realPath(`${home}/${agent}/plans`));
+      dirs.push(await realpath(`${home}/${agent}/plans`));
     } catch (err) {
-      if (!(err instanceof Deno.errors.NotFound)) throw err;
+      if (!isNotFound(err)) throw err;
     }
   }
   if (dirs.length === 0) {
@@ -120,7 +151,7 @@ async function assertEvidencePath(path: string): Promise<void> {
     throw new Error("evidence path must end with .evidence.json");
   }
 
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) {
     throw new Error("HOME is not set");
   }
@@ -143,12 +174,12 @@ async function assertEvidencePath(path: string): Promise<void> {
   }
 
   try {
-    const info = await Deno.lstat(path);
-    if (info.isSymlink) {
+    const info = await lstat(path);
+    if (info.isSymbolicLink()) {
       throw new Error("evidence path must not be a symlink");
     }
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!isNotFound(err)) {
       throw err;
     }
   }
@@ -291,7 +322,7 @@ export function autonomousBullets(
 async function readEvidence(path: string): Promise<PlanEvidence> {
   let raw: string;
   try {
-    raw = await Deno.readTextFile(path);
+    raw = await readFile(path, "utf8");
   } catch (err) {
     throw new Error(`failed to read ${path}: ${(err as Error).message}`);
   }
@@ -319,18 +350,18 @@ async function atomicWrite(path: string, data: PlanEvidence): Promise<void> {
   const basename = path.slice(slash + 1);
   const tmp = `${dir}/.${basename}.${crypto.randomUUID()}.tmp`;
   try {
-    await Deno.writeTextFile(tmp, JSON.stringify(data, null, 2) + "\n", {
-      createNew: true,
+    await writeFile(tmp, JSON.stringify(data, null, 2) + "\n", {
+      flag: "wx",
       mode: 0o600,
     });
-    const info = await Deno.lstat(tmp);
-    if (!info.isFile || info.isSymlink) {
+    const info = await lstat(tmp);
+    if (!info.isFile() || info.isSymbolicLink()) {
       throw new Error("temporary evidence file is not a regular file");
     }
-    await Deno.rename(tmp, path);
+    await rename(tmp, path);
   } catch (err) {
     try {
-      await Deno.remove(tmp);
+      await rm(tmp);
     } catch {
       // tmp may already have been renamed.
     }
@@ -347,35 +378,27 @@ function findTask(data: PlanEvidence, taskId: string): PlanTask {
 }
 
 async function currentGitHead(): Promise<string> {
-  const topLevel = await new Deno.Command("git", {
-    args: ["rev-parse", "--show-toplevel"],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
+  const topLevel = await runGit(["rev-parse", "--show-toplevel"]);
   if (!topLevel.success) {
-    const stderr = new TextDecoder().decode(topLevel.stderr).trim();
+    const stderr = topLevel.stderr.trim();
     throw new Error(
       `git rev-parse --show-toplevel failed${stderr ? `: ${stderr}` : ""}`,
     );
   }
 
-  const head = await new Deno.Command("git", {
-    args: ["rev-parse", "HEAD"],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
+  const head = await runGit(["rev-parse", "HEAD"]);
   if (!head.success) {
-    const stderr = new TextDecoder().decode(head.stderr).trim();
+    const stderr = head.stderr.trim();
     throw new Error(
       `git rev-parse HEAD failed${stderr ? `: ${stderr}` : ""}`,
     );
   }
-  return new TextDecoder().decode(head.stdout).trim();
+  return head.stdout.trim();
 }
 
 async function execute(
   args: string[],
-  stdin: ReadableStream<Uint8Array> = Deno.stdin.readable,
+  stdin: ReadableStream<Uint8Array> = processStdin(),
 ): Promise<void> {
   const [command, path, taskOrPlan, subjectsJson] = args;
   if (!command) {
@@ -391,12 +414,12 @@ async function execute(
       usage();
     }
     try {
-      await Deno.lstat(path);
+      await lstat(path);
       throw new Error(
         "evidence already exists; preserve it or choose a new plan name",
       );
     } catch (err) {
-      if (!(err instanceof Deno.errors.NotFound)) throw err;
+      if (!isNotFound(err)) throw err;
     }
     const data = initPlanEvidence(taskOrPlan, JSON.parse(subjectsJson));
     assertPlanIdentity(path, data);
@@ -490,18 +513,14 @@ async function execute(
     const planPath = `${path.slice(0, path.lastIndexOf("/"))}/${data.plan}`;
     let plan: string;
     try {
-      const file = await Deno.open(planPath);
+      const file = await open(planPath);
       try {
-        if (!(await file.stat()).isFile) {
+        if (!(await file.stat()).isFile()) {
           throw new Error("plan must be a regular file");
         }
-        plan = await new Response(file.readable).text();
+        plan = new TextDecoder().decode(await file.readFile());
       } finally {
-        try {
-          file.close();
-        } catch {
-          // readable already consumed and closed the handle
-        }
+        await file.close();
       }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -621,7 +640,7 @@ async function execute(
 
 export async function run(
   args: string[],
-  stdin: ReadableStream<Uint8Array> = Deno.stdin.readable,
+  stdin: ReadableStream<Uint8Array> = processStdin(),
 ): Promise<void> {
   const mutations = new Set([
     "init",
@@ -636,15 +655,11 @@ export async function run(
   const path = args[1];
   await assertEvidencePath(path);
   const lockPath = `${path}.lock`;
-  let lock: Deno.FsFile;
+  let lock: FileHandle;
   try {
-    lock = await Deno.open(lockPath, {
-      createNew: true,
-      write: true,
-      mode: 0o600,
-    });
+    lock = await open(lockPath, "wx", 0o600);
   } catch (err) {
-    if (err instanceof Deno.errors.AlreadyExists) {
+    if ((err as NodeJS.ErrnoException | null)?.code === "EEXIST") {
       throw new Error(
         `evidence is locked; check the writer before recovering ${lockPath}`,
       );
@@ -654,21 +669,24 @@ export async function run(
   try {
     await lock.write(
       new TextEncoder().encode(
-        JSON.stringify({ pid: Deno.pid, started: new Date().toISOString() }),
+        JSON.stringify({ pid: process.pid, started: new Date().toISOString() }),
       ),
     );
     await execute(args, stdin);
   } finally {
-    lock.close();
-    await Deno.remove(lockPath);
+    try {
+      await lock.close();
+    } finally {
+      await rm(lockPath);
+    }
   }
 }
 
 if (import.meta.main) {
   try {
-    await run(Deno.args);
+    await run(process.argv.slice(2));
   } catch (err) {
     console.error((err as Error).message);
-    Deno.exit(1);
+    process.exit(1);
   }
 }

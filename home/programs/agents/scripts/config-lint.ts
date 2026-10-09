@@ -1,11 +1,14 @@
-#!/usr/bin/env -S deno run --allow-read --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-// No import on purpose: the flake check (checks.config-lint) passes --no-remote, and a
-// sandboxed builder cannot resolve jsr: specifiers, so the glob translation is copied
+// Only node: imports on purpose: the flake check (checks.config-lint) runs in a
+// sandboxed builder that has no node_modules, so the glob translation is copied
 // from shell-utils.ts and the yaml reader only understands `- pattern: "<glob>"`.
 // Unlike bash-policy.ts, a fence line is matched whole: no bash-AST segment split, no
 // heredoc skipping, no `exclude:` support — a lint that is narrower than the hook by
 // design, so `cd x && git -C y` passes here and is still blocked at run time.
+
+import type { Stats } from "node:fs";
+import { readdir, readFile, stat } from "node:fs/promises";
 
 const POLICY_YAML = "home/programs/claude/scripts/bash-policy.yaml";
 const SKIP_DIRS = new Set([
@@ -36,18 +39,17 @@ function globToRegex(pattern: string): RegExp {
 }
 
 async function* walk(dir: string): AsyncGenerator<string> {
-  const entries: Deno.DirEntry[] = [];
-  for await (const entry of Deno.readDir(dir)) entries.push(entry);
+  const entries = await readdir(dir, { withFileTypes: true });
   // A vendored skill directory carries a `.<vendor>-source` marker; its upstream
   // fences are not ours to annotate, so the whole directory is skipped.
-  if (entries.some((e) => e.isFile && /^\..*-source$/.test(e.name))) return;
+  if (entries.some((e) => e.isFile() && /^\..*-source$/.test(e.name))) return;
   for (const entry of entries) {
-    if (entry.isSymlink) continue;
+    if (entry.isSymbolicLink()) continue;
     const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory) {
+    if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name)) continue;
       yield* walk(path);
-    } else if (entry.isFile) {
+    } else if (entry.isFile()) {
       yield path;
     }
   }
@@ -62,7 +64,7 @@ async function loadPatterns(
   findings: Finding[],
 ): Promise<RegExp[]> {
   const path = `${root}/${POLICY_YAML}`;
-  const lines = (await Deno.readTextFile(path)).split("\n");
+  const lines = (await readFile(path, "utf8")).split("\n");
   const patterns: RegExp[] = [];
   lines.forEach((line, i) => {
     if (!/^\s*-\s*pattern:/.test(line)) return;
@@ -163,11 +165,11 @@ export async function lintRepo(root: string): Promise<Finding[]> {
     if (
       rel.startsWith("home/programs/") && (base === "SKILL.md" || inReferences)
     ) {
-      lintFences(rel, await Deno.readTextFile(path), patterns, findings);
+      lintFences(rel, await readFile(path, "utf8"), patterns, findings);
     }
     const ext = base.slice(base.lastIndexOf("."));
     if (LITERAL_EXTENSIONS.has(ext) && !/(^|\/)fixtures?\//.test(rel)) {
-      lintHomeLiteral(rel, await Deno.readTextFile(path), findings);
+      lintHomeLiteral(rel, await readFile(path, "utf8"), findings);
     }
   }
   return findings.sort((a, b) =>
@@ -176,27 +178,27 @@ export async function lintRepo(root: string): Promise<Finding[]> {
 }
 
 if (import.meta.main) {
-  const root = (Deno.args[0] ?? ".").replace(/\/+$/, "");
+  const root = (process.argv[2] ?? ".").replace(/\/+$/, "");
   if (root === "") {
     console.error("config-lint: the repository root cannot be /");
-    Deno.exit(2);
+    process.exit(2);
   }
-  let stat: Deno.FileInfo;
+  let info: Stats;
   try {
-    stat = await Deno.stat(root);
-    await Deno.stat(`${root}/${POLICY_YAML}`);
+    info = await stat(root);
+    await stat(`${root}/${POLICY_YAML}`);
   } catch (e) {
     console.error(`config-lint: cannot read ${root}: ${(e as Error).message}`);
-    Deno.exit(2);
+    process.exit(2);
   }
-  if (!stat.isDirectory) {
+  if (!info.isDirectory()) {
     console.error(`config-lint: ${root} is not a directory`);
-    Deno.exit(2);
+    process.exit(2);
   }
   const findings = await lintRepo(root);
   for (const f of findings) {
     console.log(`${f.path}:${f.line}:[error] ${f.rule}: ${f.message}`);
   }
   console.log(`${findings.length} errors`);
-  Deno.exit(findings.length > 0 ? 1 : 0);
+  process.exit(findings.length > 0 ? 1 : 0);
 }

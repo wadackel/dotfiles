@@ -1,6 +1,18 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { test } from "bun:test";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run as runCommand } from "../lib/proc.ts";
 
-const SCRIPT = new URL("./config-lint.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "config-lint.ts");
 const POLICY = 'rules:\n  - pattern: "git -C *"\n    message: "no"\n';
 
 type Outcome = { code: number; stdout: string; stderr: string };
@@ -9,7 +21,7 @@ async function withRepo(
   files: Record<string, string>,
   fn: (root: string) => Promise<void>,
 ): Promise<void> {
-  const root = await Deno.makeTempDir({ prefix: "config-lint-test-" });
+  const root = await mkdtemp(join(tmpdir(), "config-lint-test-"));
   try {
     const all = {
       "home/programs/claude/scripts/bash-policy.yaml": POLICY,
@@ -17,33 +29,25 @@ async function withRepo(
     };
     for (const [rel, body] of Object.entries(all)) {
       const path = `${root}/${rel}`;
-      await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), {
+      await mkdir(path.slice(0, path.lastIndexOf("/")), {
         recursive: true,
       });
-      await Deno.writeTextFile(path, body);
+      await writeFile(path, body);
     }
     await fn(root);
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await rm(root, { recursive: true });
   }
 }
 
 async function run(root: string): Promise<Outcome> {
-  const out = await new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--no-prompt", SCRIPT, root],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: out.code,
-    stdout: new TextDecoder().decode(out.stdout),
-    stderr: new TextDecoder().decode(out.stderr),
-  };
+  const out = await runCommand(SCRIPT, [root]);
+  return { code: out.code, stdout: out.stdout, stderr: out.stderr };
 }
 
 const SKILL = "home/programs/agents/skills/x/SKILL.md";
 
-Deno.test("a bash fence command matching a policy pattern is an error, in SKILL.md and references", async () => {
+test("a bash fence command matching a policy pattern is an error, in SKILL.md and references", async () => {
   await withRepo({
     [SKILL]: "# x\n\n```bash\ngit -C /tmp status\n```\n",
     "home/programs/agents/skills/x/references/how.md":
@@ -60,7 +64,7 @@ Deno.test("a bash fence command matching a policy pattern is an error, in SKILL.
   });
 });
 
-Deno.test("yaml and text fences, comments, and blank lines are not commands", async () => {
+test("yaml and text fences, comments, and blank lines are not commands", async () => {
   await withRepo({
     [SKILL]:
       '```yaml\n- pattern: "git -C *"\n```\n\n```text\ngit -C x status\n```\n\n```bash\n# git -C x status\n\ngit status\n```\n',
@@ -71,7 +75,7 @@ Deno.test("yaml and text fences, comments, and blank lines are not commands", as
   });
 });
 
-Deno.test("an allow marker on the line above the fence skips it", async () => {
+test("an allow marker on the line above the fence skips it", async () => {
   await withRepo({
     [SKILL]: "<!-- config-lint: allow -->\n```bash\ngit -C x status\n```\n",
   }, async (root) => {
@@ -80,7 +84,7 @@ Deno.test("an allow marker on the line above the fence skips it", async () => {
   });
 });
 
-Deno.test("a vendored skill directory with a source marker is skipped", async () => {
+test("a vendored skill directory with a source marker is skipped", async () => {
   await withRepo({
     "home/programs/agents/skills/v/.figma-source": "upstream: x\n",
     "home/programs/agents/skills/v/SKILL.md": "```bash\ngit -C x status\n```\n",
@@ -90,7 +94,7 @@ Deno.test("a vendored skill directory with a source marker is skipped", async ()
   });
 });
 
-Deno.test("home literals are errors; templates, wildcards, allow lines, and fixtures pass", async () => {
+test("home literals are errors; templates, wildcards, allow lines, and fixtures pass", async () => {
   await withRepo({
     "home/programs/claude/settings.json": [
       '{"a": "Read(//Users/alice/Documents/**)",',
@@ -116,7 +120,7 @@ Deno.test("home literals are errors; templates, wildcards, allow lines, and fixt
   });
 });
 
-Deno.test("a single-quoted pattern is a policy-parse error", async () => {
+test("a single-quoted pattern is a policy-parse error", async () => {
   await withRepo({
     "home/programs/claude/scripts/bash-policy.yaml":
       "rules:\n  - pattern: 'git -C *'\n    message: no\n",
@@ -127,7 +131,7 @@ Deno.test("a single-quoted pattern is a policy-parse error", async () => {
   });
 });
 
-Deno.test("a policy with no rule is a policy-parse error", async () => {
+test("a policy with no rule is a policy-parse error", async () => {
   await withRepo({
     "home/programs/claude/scripts/bash-policy.yaml": "rules: []\n",
   }, async (root) => {
@@ -140,14 +144,14 @@ Deno.test("a policy with no rule is a policy-parse error", async () => {
   });
 });
 
-Deno.test("symlinks are not followed", async () => {
+test("symlinks are not followed", async () => {
   await withRepo({
     "outside/skills/y/SKILL.md": "```bash\ngit -C x status\n```\n",
   }, async (root) => {
-    await Deno.mkdir(`${root}/home/programs/claude/skills`, {
+    await mkdir(`${root}/home/programs/claude/skills`, {
       recursive: true,
     });
-    await Deno.symlink(
+    await symlink(
       `${root}/outside/skills/y`,
       `${root}/home/programs/claude/skills/y`,
     );
@@ -156,7 +160,19 @@ Deno.test("symlinks are not followed", async () => {
   });
 });
 
-Deno.test("the script has no import so it runs with --no-remote", async () => {
-  const src = await Deno.readTextFile(SCRIPT);
-  assert(!/^import /m.test(src), "config-lint.ts must not import");
+test("the script imports only node: modules so it runs without node_modules", async () => {
+  const src = await readFile(SCRIPT, "utf8");
+  const specifiers = [
+    ...src.matchAll(/^import\s[^;]*?from\s+"([^"]+)";$/gm),
+    ...src.matchAll(/^import\s+"([^"]+)";$/gm),
+    ...src.matchAll(/\bimport\(\s*"([^"]+)"/g),
+  ].map((m) => m[1]);
+  assert(specifiers.length > 0, "the import scan found nothing");
+  for (const specifier of specifiers) {
+    assert(
+      specifier.startsWith("node:"),
+      `config-lint.ts must import only node: modules, found ${specifier}`,
+    );
+  }
+  assertEquals(src.match(/^import\b/gm)?.length, specifiers.length);
 });
