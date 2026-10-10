@@ -3,8 +3,8 @@
 // opencode/plugin_logic.ts; the last one runs inside opencode's own Bun and
 // reaches this file through the symlink published next to the plugin.
 //
-// Web-standard API ONLY. Do NOT add Deno.* / Bun.* / node:* — the opencode
-// plugin imports this file in-process.
+// Web-standard API ONLY. Do NOT add Deno.* / Bun.* / node:* — this file holds
+// the contract and pure helpers, and I/O stays in each agent's writer.
 
 // --- Op type ---
 
@@ -168,7 +168,6 @@ export const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 // indistinguishable; codex's prior behavior on adversarial inputs converges
 // to claude/opencode shape after migration. Documented as an intentional
 // behavior unification — see plan Phase B.
-// deno-lint-ignore no-control-regex
 const CONTROL_RUN_RE = /[\x00-\x1f\x7f]+/g;
 
 // Counted in code points: String#slice counts UTF-16 units and would cut an

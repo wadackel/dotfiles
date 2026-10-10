@@ -267,7 +267,7 @@ export function buildLLMInput(entries: HookLogEntry[]): string {
   );
 }
 
-// argv[0] is the script itself, so the worker starts through the same shebang
+// The command is the script itself, so the worker starts through the same shebang
 // as the hook and gets the flags that keep the cwd's bunfig.toml and .env out.
 export function buildWorkerArgs(
   scriptPath: string,

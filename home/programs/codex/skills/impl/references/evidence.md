@@ -6,7 +6,7 @@ Use the existing helper; do not assemble sidecars or hashes inline. Every comman
 rtk proxy ~/.agents/scripts/plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
 ```
 
-Replace `normalize` with the command below, retaining the permission flags:
+Replace `normalize` with the command below, still starting the helper by its path so its shebang applies:
 
 | Command | Arguments / input | Effect |
 |---|---|---|

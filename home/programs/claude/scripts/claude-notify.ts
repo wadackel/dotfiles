@@ -196,8 +196,18 @@ async function send(sound: string): Promise<void> {
     // cannot find the interpreter: name it by absolute path.
     const bunPath = process.execPath;
     const scriptPath = `${process.env.HOME}/.claude/scripts/claude-notify.ts`;
-    const executeCmd =
-      `${bunPath} --no-env-file --no-install --config=/dev/null ${scriptPath} activate '${ctx.session}' '${ctx.window}' '${ctx.pane}' '${tmuxPath}'`;
+    const executeCmd = [
+      bunPath,
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      scriptPath,
+      "activate",
+      ctx.session,
+      ctx.window,
+      ctx.pane,
+      tmuxPath,
+    ].map((arg) => `'${arg.replace(/'/g, `'\\''`)}'`).join(" ");
     await log(`EXECUTE_CMD: ${executeCmd}`);
 
     const notifyArgs = [

@@ -218,8 +218,7 @@ test("usageTempPath: temp sits in the same directory as its target", () => {
   const target = usageFilePath("/tmp/h", "claude");
   const temp = usageTempPath("/tmp/h", "claude", 4242);
   const dirOf = (p: string) => p.slice(0, p.lastIndexOf("/"));
-  // rename is only atomic within one filesystem, and codex-pane-status.ts
-  // cannot reach $TMPDIR at all, so a temp anywhere else breaks both.
+  // rename is only atomic within one filesystem.
   assertEquals(dirOf(temp), dirOf(target));
   assertEquals(dirOf(temp), usageDir("/tmp/h"));
 });

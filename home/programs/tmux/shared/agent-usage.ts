@@ -52,9 +52,9 @@ export function labelFromWindowMinutes(minutes: number): string {
 
 // --- Paths ---
 
-// XDG_STATE_HOME is deliberately not consulted: codex-pane-status.ts runs with
-// --allow-env=HOME,TMUX_PANE, so reading it would throw NotCapable inside a
-// hook whose failures are invisible.
+// XDG_STATE_HOME is deliberately not consulted: statusline.sh writes the Claude
+// file to this fixed path with jq, and a writer and a reader that resolved the
+// variable differently would silently miss each other.
 export function usageDir(homeDir: string): string {
   return `${homeDir}/.local/state/agent-usage`;
 }

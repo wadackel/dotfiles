@@ -125,7 +125,7 @@ async function dispatch(
 }
 
 // The memo worker and vocab.ts are started by path, and their shebangs look up
-// `bun` on PATH. Both launches discard their output, so this lookup feeds the
+// `bun` on PATH. Both launches discard their stderr, so this lookup feeds the
 // one warning that explains an empty vocabulary or a missing memo; it does not
 // gate the launches.
 const BUN_BIN: string | null = Bun.which("bun");

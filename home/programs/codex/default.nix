@@ -85,7 +85,7 @@ in
   # node_modules that installDotfilesDeps puts there.
   home.activation.codexConfig = lib.hm.dag.entryAfter [ "installDotfilesDeps" ] ''
     run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
-      "${dotfiles.root}/home/programs/codex/scripts/apply-managed.ts" \
+      "${dotfiles.pathHere ./scripts "apply-managed.ts"}" \
       ${managedToml} "$HOME/.codex/config.toml"
   '';
 }
