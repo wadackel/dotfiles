@@ -35,8 +35,8 @@ export const QUESTIONS = {
 
 export type Score = Record<keyof typeof QUESTIONS, number>;
 
-// Every failure means "run without Jev", whatever kept the key from being
-// read.
+// A missing key or an unreadable secrets file is the normal setup for running
+// without Jev, so it comes back as a reason instead of being thrown.
 export async function jevKey(): Promise<{ key: string } | { reason: string }> {
   try {
     return { key: await readSecret("JEV_API_KEY") };

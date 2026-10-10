@@ -1,6 +1,8 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -98,5 +100,24 @@ test("fetchText refuses a URL that is not http or https before fetching", async 
     assertEquals(fetched, 0);
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+test("fetchText refuses a redirect from http to file", async () => {
+  const server = createServer((_req, res) => {
+    res.writeHead(302, { location: "file:///etc/hosts" });
+    res.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  try {
+    const outcome = await fetchText(`http://127.0.0.1:${port}/feed`).then(
+      (text) => ({ text }),
+      (error: unknown) => ({ error }),
+    );
+    assert("error" in outcome, `fetchText returned ${JSON.stringify(outcome)}`);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });

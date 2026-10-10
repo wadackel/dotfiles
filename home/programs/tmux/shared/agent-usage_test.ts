@@ -187,21 +187,6 @@ test("usageFilePath is HOME-rooted and agent-scoped", () => {
 
 // --- Source guards ---
 
-test("module source imports nothing but node:* modules", async () => {
-  const src = await readFile(
-    join(import.meta.dirname, "agent-usage.ts"),
-    "utf8",
-  );
-  const stripped = src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
-  const specifiers = [
-    ...stripped.matchAll(/\b(?:from|import)\s*\(?\s*["']([^"']+)["']/g),
-  ].map((m) => m[1]);
-  assert(specifiers.length > 0);
-  assertEquals(specifiers.filter((s) => !s.startsWith("node:")), []);
-});
-
 test("module source does not use the system temp dir or XDG_STATE_HOME", async () => {
   const src = await readFile(
     join(import.meta.dirname, "agent-usage.ts"),

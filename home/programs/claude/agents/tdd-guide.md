@@ -21,12 +21,12 @@ Improve the code while confirming that tests continue to pass.
 
 ## Context-Specific Application
 
-### Deno Scripts (True TDD)
+### Bun Scripts (True TDD)
 ```bash
 # 1. Write the test file first
 #    Existing patterns: bash-policy_test.ts, approve-piped-commands_test.ts
 # 2. Run tests → confirm failure
-deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
+bun test path/to/script_test.ts
 # 3. Implement → re-run tests → confirm passing
 ```
 

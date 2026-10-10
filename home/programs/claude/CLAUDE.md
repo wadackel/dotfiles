@@ -16,7 +16,7 @@
 
 ## Tooling
 
-- `fd` for files, `rg` for content. Deno/TypeScript for scripts that parse, hold state, or branch; short one-off chains may stay in Bash.
+- `fd` for files, `rg` for content. Bun/TypeScript for scripts that parse, hold state, or branch; short one-off chains may stay in Bash.
 - GitHub issue and PR URLs may be private: use `gh`. Inspect repository code locally via `/repo-dive`, not WebFetch.
 
 ## Gotchas
@@ -24,7 +24,7 @@
 - Before `git add -A` or `git add .`, run `git status --porcelain` and check for unintended files. For an unrelated fix, branch from the intended base and verify with `git diff <base>...HEAD`.
 - Bash quoting: wrap uncertain `$'...'` pipelines in `bash -c`; put `set +H &&` before a command with a literal `!` in double quotes; avoid BSD `sed` for bulk replacements containing `!`, `$`, or backticks; in `just` recipes shell variables are `$var`.
 - Start long-running processes with the tool's background mode, not `&`. Emit Private Use Area glyphs at runtime with `printf` rather than embedding them.
-- Deno 2.x: read stdin with `new Response(Deno.stdin.readable).text()`; inline code is `deno eval` (`deno run -e` does not exist); script directory is `new URL(".", import.meta.url).pathname`; on `Deno.Command` failures pipe and read `stderr`.
+- Bun: start a script by its path so its shebang (`bun --no-env-file --no-install --config=/dev/null`) applies, since a bare `bun x.ts` runs the `preload` of a `bunfig.toml` in the cwd and loads its `.env`; read stdin with `text(process.stdin)` from `node:stream/consumers` and only on a path that needs it (touching `process.stdin` keeps a piped process alive); `bun test` runs every file in one process, in UTC; run children with `spawn`, not `exec` / `execFile` (1 MiB output limit).
 - Pin GitHub Actions to full commit SHAs.
 
 ## Code

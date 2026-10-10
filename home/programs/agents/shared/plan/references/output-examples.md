@@ -15,7 +15,7 @@ Two files and one behavior, so sentences carry it. No diagram, no tree, no table
 
 - [live] `greet --version` が `greet 1.4.0` を出して exit 0 で終わる(ビルドした `dist/greet` を実行して確かめる)
 - `--version` をほかの引数と一緒に渡しても、バージョンだけを出して終わる(`cli_test.ts` の新しいテスト)
-- 既存のテストがすべて通る(`deno test`)
+- 既存のテストがすべて通る(`bun test`)
 
 ## 人が読む変更
 
@@ -67,7 +67,7 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 
 - Webhook が 500 を返しても、端末の通知は出て、終了コードはビルドの結果のまま(`notifier_test.ts`)
 - 環境変数がないまま on にすると、起動時に設定エラーで止まる(`config_test.ts`)
-- 既存のテストがすべて通る(`deno test`)
+- 既存のテストがすべて通る(`bun test`)
 
 **あなたが確かめる**
 
@@ -103,7 +103,7 @@ One behavior and two checks, so two sentences and two lines carry it. No table, 
 ## 確かめたこと
 
 - `dist/greet --version` が `greet 1.4.0` を出して exit 0 で終わる(ビルドして実行した)
-- 新しいテスト 2 件を含む全テストが通る(`deno test`)
+- 新しいテスト 2 件を含む全テストが通る(`bun test`)
 
 ## 決めてほしいこと
 
@@ -146,7 +146,7 @@ src/
 - `build --print-config` が、引数・環境変数・設定ファイルの 3 か所に同じキーを置いたとき、引数の値と出どころを表示する(ビルドした `dist/build` で実行した)
 - 設定ファイルに不正な値を入れると、起動時にキー名とファイルの行を示して exit 2 で止まる(同じバイナリ)
 - `watch` と `clean` が、変更前と同じ設定で同じ出力を返す(変更前に採った出力と `diff` で比べた)
-- 型検査、lint、全テスト 214 件が通る(`deno check`、`deno lint`、`deno test`)
+- 型検査と全テスト 214 件が通る(`tsc --noEmit`、`bun test`)
 
 確かめていないこと: Windows のパス区切りでの設定ファイルの探索。
 

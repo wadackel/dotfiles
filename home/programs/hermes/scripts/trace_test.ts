@@ -136,6 +136,22 @@ test("startTrace logs start and the exit code of the script", async () => {
   });
 });
 
+test("an uncaught exception leaves an exit 1 line", async () => {
+  await withHome(async (home, log) => {
+    const child = `${home}/child.ts`;
+    await writeFile(
+      child,
+      `import { startTrace } from ${TRACE};\nstartTrace();\nthrow new Error("boom");\n`,
+    );
+    const { code, stderr } = await runChild(child, home);
+    assertEquals(code, 1, stderr);
+    const lines = (await readFile(log, "utf8")).trim().split("\n");
+    assertEquals(lines.length, 2);
+    assertMatch(lines[0], / child\[\d+\] start$/);
+    assertMatch(lines[1], / child\[\d+\] exit 1 after \d+ms$/);
+  });
+});
+
 test("tracing into a log directory that refuses writes leaves the script running", async () => {
   await withHome(async (home, log) => {
     await chmod(`${home}/Library/Logs`, 0o555);

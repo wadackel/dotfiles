@@ -95,7 +95,8 @@ export function trace(
 
 // A script killed by a signal never reaches the exit event, so a start with
 // no exit line is a hang or a kill. An uncaught exception or a rejected
-// top-level await writes `exit 1`.
+// top-level await writes `exit 1`; a rejection nobody awaited can still end
+// the process with status 1 after an `exit 0` line.
 export function startTrace(): void {
   const started = Date.now();
   trace("start");

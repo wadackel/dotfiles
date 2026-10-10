@@ -5,11 +5,13 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "@std/assert";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { BridgeError, callBridge } from "./gas-client.ts";
 
 // A node:http server on a free local port whose handler is written against
@@ -171,6 +173,58 @@ test("callBridge marks an error the bridge itself reported", async () => {
       assertEquals(err.reported, true);
     },
   );
+});
+
+test("an uncaught BridgeError keeps its detail off stderr", async () => {
+  // Bun prints the source around the throwing line, so neither value may
+  // appear literally in gas-client.ts or in the child script.
+  const path = `/echo-${randomUUID()}`;
+  const marker = `marker-${randomUUID()}`;
+  const server = await serve((req) => {
+    const url = new URL(req.url);
+    if (req.method === "POST") {
+      return Response.redirect(new URL(path, url).href, 302);
+    }
+    return Response.json({ error: "boom", note: marker });
+  });
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  await mkdir(`${home}/.config/hermes-google`, { recursive: true });
+  await mkdir(`${home}/Library/Logs`, { recursive: true });
+  await writeFile(
+    `${home}/.config/hermes-google/bridge.json`,
+    JSON.stringify({
+      url: `http://127.0.0.1:${server.port}/exec`,
+      secret: "s",
+    }),
+  );
+  const child = `${home}/child.ts`;
+  await writeFile(
+    child,
+    `import { callBridge } from ${
+      JSON.stringify(join(import.meta.dirname, "gas-client.ts"))
+    };\nawait callBridge("createEvent", {});\n`,
+  );
+  try {
+    const { code, stderr } = await run(process.execPath, [
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      child,
+    ], { env: { HOME: home, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
+    assertEquals(code, 1, stderr);
+    assertStringIncludes(stderr, "createEvent: boom");
+    for (const leaked of [marker, path]) {
+      assert(!stderr.includes(leaked), `stderr leaks ${leaked}:\n${stderr}`);
+    }
+    // The stub was reached and the detail was built: it is in the trace log.
+    assertStringIncludes(
+      await readFile(`${home}/Library/Logs/hermes-scripts.log`, "utf8"),
+      marker,
+    );
+  } finally {
+    await server.close();
+    await rm(home, { recursive: true });
+  }
 });
 
 test("callBridge logs each failed try and the one that succeeded", async () => {

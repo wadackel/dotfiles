@@ -27,7 +27,7 @@ Enforces test-first development patterns. Work in the order "design verification
 
 Before starting implementation, concretely write out "what correct behavior looks like".
 
-- Deno scripts -> write test cases in `_test.ts`
+- Bun scripts -> write test cases in `_test.ts`
 - Nix configuration -> define expected output (`which <command>`, generation number changes)
 - Hooks -> enumerate input -> expected output pairs
 - Skills -> define positive/negative trigger test cases
@@ -35,8 +35,8 @@ Before starting implementation, concretely write out "what correct behavior look
 ### Step 2: Write Tests -> Confirm Failure (RED)
 
 ```bash
-# For Deno
-deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
+# For Bun
+bun test path/to/script_test.ts
 # -> Confirm FAILED output (expected since no implementation exists)
 ```
 
@@ -48,7 +48,7 @@ Write only enough code to make the tests pass. Do not add extra features.
 
 ```bash
 # Run tests again
-deno test --allow-env=HOME --allow-read --allow-write path/to/script_test.ts
+bun test path/to/script_test.ts
 # -> Confirm PASSED
 ```
 
@@ -62,14 +62,14 @@ Declare completion only after confirming all tests pass and expected behavior is
 
 ## Context-Specific Guide
 
-### Deno Scripts
+### Bun Scripts
 
 Follow existing test patterns:
 - `bash-policy_test.ts` -- glob pattern matching tests
 - `approve-piped-commands_test.ts` -- pipe command splitting tests
 - `shell-utils_test.ts` -- utility function tests
 
-Test execution: `deno test --allow-env=HOME --allow-read --allow-write <path>`
+Test execution: `bun test <path>`
 
 ### Nix Configuration
 
