@@ -1,27 +1,32 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assertEquals, assertRejects } from "@std/assert";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { call } from "./slack.ts";
 
 async function withSecrets<T>(fn: () => Promise<T>): Promise<T> {
-  const home = await Deno.makeTempDir();
-  const prev = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.config/hermes`, { recursive: true });
-  await Deno.writeTextFile(
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prev = process.env.HOME;
+  process.env.HOME = home;
+  await mkdir(`${home}/.config/hermes`, { recursive: true });
+  await writeFile(
     `${home}/.config/hermes/secrets.env`,
     'SLACK_BOT_TOKEN="xoxb-test"\n',
   );
   try {
     return await fn();
   } finally {
-    if (prev) Deno.env.set("HOME", prev);
-    await Deno.remove(home, { recursive: true });
+    if (prev) process.env.HOME = prev;
+    await rm(home, { recursive: true });
   }
 }
 
 function stubFetch(responses: (() => Response)[]) {
   const original = globalThis.fetch;
   let i = 0;
-  globalThis.fetch = () => Promise.resolve(responses[i++]());
+  globalThis.fetch =
+    (() => Promise.resolve(responses[i++]())) as unknown as typeof fetch;
   return { calls: () => i, restore: () => (globalThis.fetch = original) };
 }
 
@@ -36,7 +41,7 @@ const recordWaits = () => {
   return { waits, wait: (ms: number) => Promise.resolve(waits.push(ms)) };
 };
 
-Deno.test("call waits out Retry-After on 429 and then succeeds", async () => {
+test("call waits out Retry-After on 429 and then succeeds", async () => {
   const f = stubFetch([limited("3"), ok]);
   const { waits, wait } = recordWaits();
   try {
@@ -48,7 +53,7 @@ Deno.test("call waits out Retry-After on 429 and then succeeds", async () => {
   }
 });
 
-Deno.test("call treats ok:false ratelimited like a 429 and caps the wait", async () => {
+test("call treats ok:false ratelimited like a 429 and caps the wait", async () => {
   const f = stubFetch([
     () =>
       Response.json({ ok: false, error: "ratelimited" }, {
@@ -65,7 +70,7 @@ Deno.test("call treats ok:false ratelimited like a 429 and caps the wait", async
   }
 });
 
-Deno.test("call gives up after five retries", async () => {
+test("call gives up after five retries", async () => {
   const f = stubFetch(Array.from({ length: 6 }, () => limited()));
   const { waits, wait } = recordWaits();
   try {
@@ -83,7 +88,7 @@ Deno.test("call gives up after five retries", async () => {
   }
 });
 
-Deno.test("call does not retry other errors", async () => {
+test("call does not retry other errors", async () => {
   const f = stubFetch([
     () => Response.json({ ok: false, error: "invalid_auth" }),
   ]);

@@ -1,4 +1,5 @@
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import {
   cleanChecklist,
   getSection,
@@ -9,7 +10,7 @@ import {
   weeklyNoteName,
 } from "./daily-note.ts";
 
-Deno.test("cleanChecklist drops done items with their children and keeps the rest", () => {
+test("cleanChecklist drops done items with their children and keeps the rest", () => {
   const body = [
     "- [x] Unite - 移行手順書作成",
     "    - メモ",
@@ -30,7 +31,7 @@ Deno.test("cleanChecklist drops done items with their children and keeps the res
   );
 });
 
-Deno.test("getSection returns the body up to the next heading", () => {
+test("getSection returns the body up to the next heading", () => {
   const note =
     `${HEADINGS.todo}\n\n- [ ] a\n\n${HEADINGS.tasks}\n\n- b\n\n${HEADINGS.memo}\n`;
   assertEquals(getSection(note, HEADINGS.todo), "- [ ] a");
@@ -38,13 +39,13 @@ Deno.test("getSection returns the body up to the next heading", () => {
   assertEquals(getSection(note, HEADINGS.today), undefined);
 });
 
-Deno.test("weeklyNoteName follows ISO weeks like the template", () => {
+test("weeklyNoteName follows ISO weeks like the template", () => {
   assertEquals(weeklyNoteName("2026-09-18"), "2026-W38");
   assertEquals(weeklyNoteName("2026-09-21"), "2026-W39");
   assertEquals(weeklyNoteName("2027-01-01"), "2027-W53");
 });
 
-Deno.test("renderNote on a working day matches the template layout", () => {
+test("renderNote on a working day matches the template layout", () => {
   const note = renderNote({
     date: "2026-09-18",
     checklists: { todo: "- [ ] a", tasks: "- [ ] b" },
@@ -66,14 +67,14 @@ Deno.test("renderNote on a working day matches the template layout", () => {
   assert(note.includes('        - file.name != "2026-09-18"'));
 });
 
-Deno.test("renderNote without checklists omits To-Do and Tasks; the 1st adds Monthly Emotion", () => {
+test("renderNote without checklists omits To-Do and Tasks; the 1st adds Monthly Emotion", () => {
   const weekend = renderNote({ date: "2026-09-19" });
   assert(!weekend.includes(HEADINGS.todo));
   assert(!weekend.includes("Monthly Emotion"));
   assert(renderNote({ date: "2026-10-01" }).includes("## 📊 Monthly Emotion"));
 });
 
-Deno.test("renderNote falls back to the template placeholders", () => {
+test("renderNote falls back to the template placeholders", () => {
   const note = renderNote({
     date: "2026-09-18",
     checklists: { todo: "", tasks: "" },
@@ -82,7 +83,7 @@ Deno.test("renderNote falls back to the template placeholders", () => {
   assertEquals(getSection(note, HEADINGS.tasks), "- tba");
 });
 
-Deno.test("staleTodos counts consecutive days for open top-level items", () => {
+test("staleTodos counts consecutive days for open top-level items", () => {
   const newestFirst = [
     "- [ ] A\n- [-] B\n- [ ] C\n    - [ ] sub",
     "- [ ] A\n- [ ] B",
@@ -95,7 +96,7 @@ Deno.test("staleTodos counts consecutive days for open top-level items", () => {
   ]);
 });
 
-Deno.test("upsertBriefing inserts above To-Do, falls back to Memo, and replaces", () => {
+test("upsertBriefing inserts above To-Do, falls back to Memo, and replaces", () => {
   const working = renderNote({
     date: "2026-09-18",
     checklists: { todo: "- [ ] a", tasks: "" },

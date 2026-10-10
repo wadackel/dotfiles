@@ -35,8 +35,8 @@ export const QUESTIONS = {
 
 export type Score = Record<keyof typeof QUESTIONS, number>;
 
-// Every failure means "run without Jev": before darwin-rebuild grants the
-// secrets file, reading it throws NotCapable rather than NotFound.
+// Every failure means "run without Jev", whatever kept the key from being
+// read.
 export async function jevKey(): Promise<{ key: string } | { reason: string }> {
   try {
     return { key: await readSecret("JEV_API_KEY") };

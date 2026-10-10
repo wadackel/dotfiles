@@ -1,4 +1,5 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assertEquals } from "@std/assert";
 import { rankSites } from "./suggest-feeds.ts";
 
 const clip = (url: string, date = "2026-09-20", title = url) => ({
@@ -8,7 +9,7 @@ const clip = (url: string, date = "2026-09-20", title = url) => ({
   url,
 });
 
-Deno.test("rankSites keeps frequently clipped, unsubscribed sites", () => {
+test("rankSites keeps frequently clipped, unsubscribed sites", () => {
   const clips = [
     ...[1, 2, 3].map((n) => clip(`https://zenn.dev/mizchi/articles/${n}`)),
     ...[1, 2, 3, 4].map((n) => clip(`https://blog.example.com/p/${n}`)),
@@ -27,7 +28,7 @@ Deno.test("rankSites keeps frequently clipped, unsubscribed sites", () => {
   ]);
 });
 
-Deno.test("rankSites takes a lower threshold and skips press-release sites", () => {
+test("rankSites takes a lower threshold and skips press-release sites", () => {
   const clips = [
     ...[1, 2].map((n) => clip(`https://rare.test/${n}`, "2020-01-01")),
     ...[1, 2, 3].map((n) => clip(`https://prtimes.jp/main/html/rd/p/${n}`)),

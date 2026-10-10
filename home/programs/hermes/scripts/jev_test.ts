@@ -1,4 +1,5 @@
-import { assertEquals, assertMatch } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assertEquals, assertMatch } from "@std/assert";
 import {
   byScore,
   jevKey,
@@ -6,17 +7,20 @@ import {
   QUESTIONS,
   scoreEntries,
 } from "./jev.ts";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Entry } from "./feeds.ts";
 
 async function withHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await Deno.makeTempDir();
-  const prev = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prev = process.env.HOME;
+  process.env.HOME = home;
   try {
     return await fn(home);
   } finally {
-    if (prev) Deno.env.set("HOME", prev);
-    await Deno.remove(home, { recursive: true });
+    if (prev) process.env.HOME = prev;
+    await rm(home, { recursive: true });
   }
 }
 
@@ -42,7 +46,7 @@ const answers = (interest: number, practical: number, promo: number) =>
 function stubFetch(respond: (body: unknown) => Response) {
   const original = globalThis.fetch;
   const requests: { url: string; headers: Headers; body: unknown }[] = [];
-  globalThis.fetch = (input, init) => {
+  globalThis.fetch = ((input: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     requests.push({
       url: String(input),
@@ -50,17 +54,17 @@ function stubFetch(respond: (body: unknown) => Response) {
       body,
     });
     return Promise.resolve(respond(body));
-  };
+  }) as unknown as typeof fetch;
   return { requests, restore: () => (globalThis.fetch = original) };
 }
 
-Deno.test("jevKey reports why the key is unavailable instead of throwing", () =>
+test("jevKey reports why the key is unavailable instead of throwing", () =>
   withHome(async (home) => {
     const missingFile = await jevKey();
     assertEquals("reason" in missingFile, true);
 
-    await Deno.mkdir(`${home}/.config/hermes`, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(`${home}/.config/hermes`, { recursive: true });
+    await writeFile(
       `${home}/.config/hermes/secrets.env`,
       "SLACK_BOT_TOKEN=x\n",
     );
@@ -70,14 +74,14 @@ Deno.test("jevKey reports why the key is unavailable instead of throwing", () =>
       /JEV_API_KEY/,
     );
 
-    await Deno.writeTextFile(
+    await writeFile(
       `${home}/.config/hermes/secrets.env`,
       "JEV_API_KEY=jev-1\n",
     );
     assertEquals(await jevKey(), { key: "jev-1" });
   }));
 
-Deno.test("profileText matches the backtested sentence over the last year", () => {
+test("profileText matches the backtested sentence over the last year", () => {
   const clip = (date: string, genres: string[]) => ({
     date,
     genres,
@@ -95,7 +99,7 @@ Deno.test("profileText matches the backtested sentence over the last year", () =
   );
 });
 
-Deno.test("scoreEntries sends the backtested request shape", async () => {
+test("scoreEntries sends the backtested request shape", async () => {
   const f = stubFetch(() => answers(0.9, 0.5, 0.1));
   try {
     const { scores, errors } = await scoreEntries([entry(1)], {
@@ -120,7 +124,7 @@ Deno.test("scoreEntries sends the backtested request shape", async () => {
   }
 });
 
-Deno.test("scoreEntries retries 429 and leaves a failed article unscored", async () => {
+test("scoreEntries retries 429 and leaves a failed article unscored", async () => {
   let calls = 0;
   const f = stubFetch((body) => {
     const title = (body as { state: { article: { title: string } } }).state
@@ -149,7 +153,7 @@ Deno.test("scoreEntries retries 429 and leaves a failed article unscored", async
   }
 });
 
-Deno.test("scoreEntries rejects an answer outside 0..1", async () => {
+test("scoreEntries rejects an answer outside 0..1", async () => {
   const f = stubFetch(() => answers(1.5, 0.5, 0.1));
   try {
     const { scores, errors } = await scoreEntries([entry(1)], {
@@ -163,7 +167,7 @@ Deno.test("scoreEntries rejects an answer outside 0..1", async () => {
   }
 });
 
-Deno.test("byScore orders by interest - promo, then unscored by date", () => {
+test("byScore orders by interest - promo, then unscored by date", () => {
   const s = (interest: number, promo: number) => ({
     interest,
     practical: 0,

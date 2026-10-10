@@ -2,9 +2,10 @@
 // the `## 🌅 Today` briefing of today's note. The To-Do and Tasks lists are
 // prepared by prepare-daily.ts and stay out of the model's reach.
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
-import { z } from "npm:zod@4.6.5";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { readFile } from "node:fs/promises";
+import { z } from "zod";
 import {
   dailyDir,
   tokyoDate,
@@ -42,7 +43,7 @@ if (import.meta.main) {
       const path = `${dailyDir()}/${tokyoDate(new Date())}.md`;
       // Read and write back immediately: the Stop hook edits the same file
       // without a lock, so the window between the two must stay short.
-      const note = await Deno.readTextFile(path);
+      const note = await readFile(path, "utf8");
       await writeNoteAtomically(path, upsertBriefing(note, briefing));
       return {
         content: [{ type: "text", text: `Wrote the briefing to ${path}` }],

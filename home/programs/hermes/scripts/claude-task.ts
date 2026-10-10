@@ -5,6 +5,17 @@
 // and reports through a JSON schema; this script does every git and GitHub
 // write (commit, push, label, PR or issue, merge).
 
+import { spawn } from "node:child_process";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { run as runCommand } from "../../agents/lib/proc.ts";
 import { home } from "./feed-store.ts";
 import { postMessage } from "./slack.ts";
 
@@ -285,26 +296,26 @@ const taskFile = (thread: string) => `${stateDir()}/${thread}.json`;
 
 async function loadTask(thread: string): Promise<Task | undefined> {
   try {
-    return JSON.parse(await Deno.readTextFile(taskFile(thread)));
+    return JSON.parse(await readFile(taskFile(thread), "utf8"));
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return undefined;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw e;
   }
 }
 
 async function saveTask(t: Task, opts: { createNew?: boolean } = {}) {
-  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await mkdir(stateDir(), { recursive: true, mode: 0o700 });
   const text = JSON.stringify(t, null, 2) + "\n";
   if (opts.createNew) {
-    await Deno.writeTextFile(taskFile(t.thread), text, {
-      createNew: true,
+    await writeFile(taskFile(t.thread), text, {
+      flag: "wx",
       mode: 0o600,
     });
     return;
   }
   const tmp = `${taskFile(t.thread)}.${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(tmp, text, { mode: 0o600 });
-  await Deno.rename(tmp, taskFile(t.thread));
+  await writeFile(tmp, text, { mode: 0o600 });
+  await rename(tmp, taskFile(t.thread));
 }
 
 function gitConfigEnv(entries: [string, string][]): Record<string, string> {
@@ -332,7 +343,7 @@ const SAFE_GIT: [string, string][] = [
 function toolEnv(cfg: Config): Record<string, string> {
   return {
     HOME: home(),
-    USER: Deno.env.get("USER") ?? "",
+    USER: process.env.USER ?? "",
     PATH: `${dir(cfg.gh)}:${dir(cfg.git)}:/usr/bin:/bin`,
     ...gitConfigEnv([
       ...SAFE_GIT,
@@ -349,17 +360,14 @@ async function run(
   args: string[],
   cwd?: string,
 ): Promise<string> {
-  const out = await new Deno.Command(cmd, {
-    args,
+  const out = await runCommand(cmd, args, {
     cwd,
     env: toolEnv(cfg),
     clearEnv: true,
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  const stdout = new TextDecoder().decode(out.stdout);
-  if (!out.success) {
-    const stderr = new TextDecoder().decode(out.stderr).trim();
+  });
+  const stdout = out.stdout;
+  if (out.code !== 0) {
+    const stderr = out.stderr.trim();
     throw new Error(
       `${cmd.split("/").pop()} ${args.join(" ").slice(0, 80)}: ${
         stderr || stdout || `exit ${out.code}`
@@ -392,29 +400,29 @@ const ensureLabel = (cfg: Config, repo: string) =>
 
 async function withRepoLock<T>(t: Task, fn: () => Promise<T>): Promise<T> {
   const lock = `${clonePath(t)}.lock`;
-  await Deno.mkdir(dir(lock), { recursive: true });
+  await mkdir(dir(lock), { recursive: true });
   for (let i = 0;; i++) {
     try {
-      await Deno.writeTextFile(lock, String(Deno.pid), { createNew: true });
+      await writeFile(lock, String(process.pid), { flag: "wx" });
       break;
     } catch (e) {
-      if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
       if (i > 900) throw new Error(`${lock} is held by another run`);
-      const st = await Deno.stat(lock).catch((e) => {
-        if (e instanceof Deno.errors.NotFound) return null;
+      const st = await stat(lock).catch((e) => {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
         throw e;
       });
       // Only git commands run under the lock, so an old one was left by a
       // crashed script.
-      if (st && Date.now() - (st.mtime?.getTime() ?? 0) > LOCK_STALE_MS) {
-        await Deno.remove(lock);
+      if (st && Date.now() - st.mtime.getTime() > LOCK_STALE_MS) {
+        await rm(lock);
       } else if (st) await new Promise((r) => setTimeout(r, 1000));
     }
   }
   try {
     return await fn();
   } finally {
-    await Deno.remove(lock).catch(() => {});
+    await rm(lock).catch(() => {});
   }
 }
 
@@ -423,12 +431,12 @@ async function withRepoLock<T>(t: Task, fn: () => Promise<T>): Promise<T> {
 // the script runs afterwards can be trusted.
 async function gitMetadata(t: Task): Promise<string> {
   const read = (p: string) =>
-    Deno.readTextFile(p).catch((e) => {
-      if (e instanceof Deno.errors.NotFound) return "";
+    readFile(p, "utf8").catch((e) => {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return "";
       throw e;
     });
   const git = `${clonePath(t)}/.git`;
-  const hooks = await Array.fromAsync(Deno.readDir(`${git}/hooks`)).catch(
+  const hooks = await readdir(`${git}/hooks`, { withFileTypes: true }).catch(
     () => [],
   );
   const parts = [
@@ -455,7 +463,7 @@ async function gitMetadata(t: Task): Promise<string> {
 async function prepareWorktree(cfg: Config, t: Task) {
   await withRepoLock(t, async () => {
     const clone = clonePath(t);
-    const exists = await Deno.stat(clone).then(() => true, () => false);
+    const exists = await stat(clone).then(() => true, () => false);
     // HTTPS, so git authenticates through the gh credential helper instead
     // of an SSH agent the launchd environment does not have.
     if (!exists) {
@@ -503,7 +511,7 @@ async function removeWorktree(cfg: Config, t: Task) {
       clonePath(t),
     ).catch(() => {});
   });
-  await Deno.remove(`${pnpmDir()}/virtual/${t.thread}`, { recursive: true })
+  await rm(`${pnpmDir()}/virtual/${t.thread}`, { recursive: true })
     .catch(() => {});
 }
 
@@ -518,35 +526,36 @@ async function runClaude(
     clone: clonePath(t),
     pnpm: pnpmDir(),
   });
-  const child = new Deno.Command(cfg.claude, {
-    args: claudeArgv({
+  const child = spawn(
+    cfg.claude,
+    claudeArgv({
       settings,
       prompt,
       resume: t.sessionId,
       vocabulary: await repoVocabulary(t.repo),
     }),
-    cwd: worktreePath(t),
-    clearEnv: true,
-    env: {
-      // No credential helper: Claude has nothing to authenticate to.
-      HOME: home(),
-      USER: Deno.env.get("USER") ?? "",
-      ...gitConfigEnv(SAFE_GIT),
-      PATH: `${home()}/.local/share/mise/shims:${dir(cfg.git)}:/usr/bin:/bin`,
-      SHELL: "/bin/bash",
-      TMPDIR: Deno.env.get("TMPDIR") ?? "/tmp",
-      MISE_TRUSTED_CONFIG_PATHS: workDir(),
-      npm_config_store_dir: `${pnpmDir()}/store`,
-      npm_config_cache_dir: `${pnpmDir()}/cache`,
-      // Outside the worktree: the sandbox refuses writes to `.idea` and
-      // `.vscode` inside the working directory, and some packages ship them.
-      npm_config_virtual_store_dir: `${pnpmDir()}/virtual/${t.thread}`,
+    {
+      cwd: worktreePath(t),
+      env: {
+        // No credential helper: Claude has nothing to authenticate to.
+        HOME: home(),
+        USER: process.env.USER ?? "",
+        ...gitConfigEnv(SAFE_GIT),
+        PATH: `${home()}/.local/share/mise/shims:${dir(cfg.git)}:/usr/bin:/bin`,
+        SHELL: "/bin/bash",
+        TMPDIR: process.env.TMPDIR ?? "/tmp",
+        MISE_TRUSTED_CONFIG_PATHS: workDir(),
+        npm_config_store_dir: `${pnpmDir()}/store`,
+        npm_config_cache_dir: `${pnpmDir()}/cache`,
+        // Outside the worktree: the sandbox refuses writes to `.idea` and
+        // `.vscode` inside the working directory, and some packages ship them.
+        npm_config_virtual_store_dir: `${pnpmDir()}/virtual/${t.thread}`,
+      },
+      stdio: ["inherit", "pipe", "pipe"],
     },
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
+  );
   let timedOut = false;
-  const kill = (signal: Deno.Signal) => {
+  const kill = (signal: NodeJS.Signals) => {
     try {
       child.kill(signal);
     } catch {
@@ -558,9 +567,22 @@ async function runClaude(
     kill("SIGTERM");
   }, CLAUDE_TIMEOUT_MS);
   const hard = setTimeout(() => kill("SIGKILL"), CLAUDE_TIMEOUT_MS + 30_000);
-  const res = await child.output();
-  clearTimeout(term);
-  clearTimeout(hard);
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+  child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+  child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", () => resolve());
+    });
+  } finally {
+    // A claude that could not be started rejects above; a timer left running
+    // would keep this process alive for the full 45 minutes.
+    clearTimeout(term);
+    clearTimeout(hard);
+  }
+  const res = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) };
   if (timedOut) throw new Error("45 分で打ち切りました");
   const text = new TextDecoder().decode(res.stdout);
   let json: {
@@ -694,9 +716,9 @@ async function execute(cfg: Config, t: Task, prompt: string) {
       // through its config. It is cloned again from scratch.
       await withRepoLock(
         t,
-        () => Deno.remove(clonePath(t), { recursive: true }),
+        () => rm(clonePath(t), { recursive: true }),
       );
-      await Deno.remove(worktreePath(t), { recursive: true }).catch(() => {});
+      await rm(worktreePath(t), { recursive: true }).catch(() => {});
       throw new Error(
         "Claude の実行中に clone の git 設定か hook が変わったので、何も push せずに打ち切り、clone を消しました",
       );
@@ -719,7 +741,7 @@ async function execute(cfg: Config, t: Task, prompt: string) {
 }
 
 async function pruneOld(cfg: Config) {
-  const entries = await Array.fromAsync(Deno.readDir(stateDir())).catch(
+  const entries = await readdir(stateDir(), { withFileTypes: true }).catch(
     () => [],
   );
   for (const e of entries) {
@@ -727,7 +749,7 @@ async function pruneOld(cfg: Config) {
     const t = await loadTask(e.name.slice(0, -5)).catch(() => undefined);
     if (!t || Date.now() - t.startedAt < TASK_TTL_MS) continue;
     await removeWorktree(cfg, t);
-    await Deno.remove(taskFile(t.thread)).catch(() => {});
+    await rm(taskFile(t.thread)).catch(() => {});
   }
 }
 
@@ -748,7 +770,7 @@ async function begin(
     await saveTask(t, { createNew: true });
   } catch (e) {
     // Slack redelivered the same message.
-    if (e instanceof Deno.errors.AlreadyExists) return;
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") return;
     throw e;
   }
   if (opts.announce) {
@@ -898,7 +920,7 @@ async function explore(cfg: Config, target: string, promptFile: string) {
       ]),
     ).length;
   if (await open("issue") + await open("pr") > 0) return;
-  const task = await Deno.readTextFile(promptFile);
+  const task = await readFile(promptFile, "utf8");
   const thread = await postMessage(
     cfg.channel,
     `🔎 ${target} の探索を始めます`,
@@ -910,13 +932,11 @@ async function explore(cfg: Config, target: string, promptFile: string) {
 // config; every later git runs without it.
 async function gitIdentity(git: string): Promise<Config["identity"]> {
   const get = async (key: string) => {
-    const out = await new Deno.Command(git, {
-      args: ["config", "--global", "--get", key],
+    const out = await runCommand(git, ["config", "--global", "--get", key], {
       env: { HOME: home() },
       clearEnv: true,
-      stdout: "piped",
-    }).output();
-    const value = new TextDecoder().decode(out.stdout).trim();
+    });
+    const value = out.stdout.trim();
     if (!value) throw new Error(`git ${key} is not set`);
     return value;
   };
@@ -950,7 +970,7 @@ function parseArgs(
 const THREAD_TS = /^\d+\.\d+$/;
 
 if (import.meta.main) {
-  const parsed = parseArgs(Deno.args);
+  const parsed = parseArgs(process.argv.slice(2));
   const cfg = { ...parsed.cfg, identity: await gitIdentity(parsed.cfg.git) };
   const rest = parsed.rest;
   const [cmd, a, b] = rest;

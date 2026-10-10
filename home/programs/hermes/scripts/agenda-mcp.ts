@@ -5,9 +5,9 @@
 // labelled, and the Hermes trail (the bridge sends a flag, never the
 // description) is trusted only on the owner's own events.
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
-import { z } from "npm:zod@4.6.5";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import { callBridge } from "./gas-client.ts";
 import { startTrace } from "./trace.ts";
 import {

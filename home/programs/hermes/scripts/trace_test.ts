@@ -1,45 +1,78 @@
-import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertMatch } from "@std/assert";
+import { closeSync, openSync, renameSync, writeFileSync } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { logPath, rotateIfOver, trace } from "./trace.ts";
+
+const TRACE = JSON.stringify(join(import.meta.dirname, "trace.ts"));
 
 async function withHome(
   fn: (home: string, log: string) => Promise<void> | void,
   { logsDir = true } = {},
 ): Promise<void> {
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  if (logsDir) await Deno.mkdir(`${home}/Library/Logs`, { recursive: true });
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  if (logsDir) await mkdir(`${home}/Library/Logs`, { recursive: true });
   try {
     await fn(home, `${home}/Library/Logs/hermes-scripts.log`);
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    await rm(home, { recursive: true });
   }
 }
 
-Deno.test("trace appends one stamped line per call, whitespace collapsed", async () => {
+// The cache is turned off so that Bun writes nothing under the temporary HOME.
+const runChild = (child: string, home: string) =>
+  run(process.execPath, [
+    "--no-env-file",
+    "--no-install",
+    "--config=/dev/null",
+    child,
+  ], { env: { HOME: home, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
+
+test("trace appends one stamped line per call, whitespace collapsed", async () => {
   await withHome(async (_home, log) => {
     assertEquals(logPath(), log);
-    trace("first");
-    trace("second\n  line\twith   gaps\n");
-    const lines = (await Deno.readTextFile(log)).split("\n");
+    // `bun test` leaves the first test file of the run in argv, whichever
+    // file is executing.
+    const entry = process.argv[1];
+    process.argv[1] = import.meta.filename;
+    try {
+      trace("first");
+      trace("second\n  line\twith   gaps\n");
+    } finally {
+      process.argv[1] = entry;
+    }
+    const lines = (await readFile(log, "utf8")).split("\n");
     assertEquals(lines.length, 3);
     assertEquals(lines[2], "");
     assertMatch(
       lines[0],
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2} trace_test\[\d+\] first$/,
     );
-    assert(lines[1].endsWith(`[${Deno.pid}] second line with gaps`));
-    assertEquals((await Deno.stat(log)).mode! & 0o777, 0o600);
+    assert(lines[1].endsWith(`[${process.pid}] second line with gaps`));
+    assertEquals((await stat(log)).mode & 0o777, 0o600);
   });
 });
 
-Deno.test("trace drops URL queries and control characters", async () => {
+test("trace drops URL queries and control characters", async () => {
   await withHome(async (_home, log) => {
     trace(
       "fetch failed for https://script.googleusercontent.com/macros/echo?user_content_key=SECRETKEY&lib=x (reset) \x1b[2K\x1b[1Afake",
     );
-    const text = await Deno.readTextFile(log);
+    const text = await readFile(log, "utf8");
     assert(!text.includes("SECRETKEY"), text);
     assert(!text.includes("\x1b"), text);
     assert(
@@ -51,89 +84,69 @@ Deno.test("trace drops URL queries and control characters", async () => {
   });
 });
 
-Deno.test("trace never throws when the log cannot be written", async () => {
+test("trace never throws when the log cannot be written", async () => {
   await withHome(async (home) => {
     trace("dropped");
     assertEquals(
-      await Deno.stat(`${home}/Library`).then(() => true, () => false),
+      await stat(`${home}/Library`).then(() => true, () => false),
       false,
     );
   }, { logsDir: false });
 });
 
-Deno.test("trace moves a log over the limit to .1 and starts a new one", async () => {
+test("trace moves a log over the limit to .1 and starts a new one", async () => {
   await withHome(async (_home, log) => {
-    await Deno.writeTextFile(log, "x".repeat(100) + "\n");
+    await writeFile(log, "x".repeat(100) + "\n");
     trace("after rotation", { limit: 50 });
-    assertEquals(await Deno.readTextFile(`${log}.1`), "x".repeat(100) + "\n");
-    assert((await Deno.readTextFile(log)).endsWith("after rotation\n"));
+    assertEquals(await readFile(`${log}.1`, "utf8"), "x".repeat(100) + "\n");
+    assert((await readFile(log, "utf8")).endsWith("after rotation\n"));
   });
 });
 
-Deno.test("rotateIfOver leaves a log another process already replaced", async () => {
+test("rotateIfOver leaves a log another process already replaced", async () => {
   await withHome(async (_home, log) => {
-    await Deno.writeTextFile(log, "x".repeat(100));
-    const file = Deno.openSync(log, { append: true });
+    await writeFile(log, "x".repeat(100));
+    const fd = openSync(log, "a");
     try {
       // Another process rotated first: the path now names a fresh file.
-      Deno.renameSync(log, `${log}.1`);
-      Deno.writeTextFileSync(log, "fresh\n");
-      assertEquals(rotateIfOver(file, log, 50), false);
-      assertEquals(await Deno.readTextFile(log), "fresh\n");
-      assertEquals(await Deno.readTextFile(`${log}.1`), "x".repeat(100));
+      renameSync(log, `${log}.1`);
+      writeFileSync(log, "fresh\n");
+      assertEquals(rotateIfOver(fd, log, 50), false);
+      assertEquals(await readFile(log, "utf8"), "fresh\n");
+      assertEquals(await readFile(`${log}.1`, "utf8"), "x".repeat(100));
     } finally {
-      file.close();
+      closeSync(fd);
     }
   });
 });
 
-Deno.test("startTrace logs start and the exit code of the script", async () => {
+test("startTrace logs start and the exit code of the script", async () => {
   await withHome(async (home, log) => {
     const child = `${home}/child.ts`;
-    await Deno.writeTextFile(
+    await writeFile(
       child,
-      `import { startTrace } from ${
-        JSON.stringify(new URL("./trace.ts", import.meta.url).href)
-      };\nstartTrace();\nDeno.exit(3);\n`,
+      `import { startTrace } from ${TRACE};\nstartTrace();\nprocess.exit(3);\n`,
     );
-    const { code, stderr } = await new Deno.Command(Deno.execPath(), {
-      args: [
-        "run",
-        "--no-prompt",
-        "--allow-env=HOME",
-        `--allow-read=${home}`,
-        `--allow-write=${home}`,
-        child,
-      ],
-      env: { HOME: home },
-      stdout: "null",
-      stderr: "piped",
-    }).output();
-    assertEquals(code, 3, new TextDecoder().decode(stderr));
-    const lines = (await Deno.readTextFile(log)).trim().split("\n");
+    const { code, stderr } = await runChild(child, home);
+    assertEquals(code, 3, stderr);
+    const lines = (await readFile(log, "utf8")).trim().split("\n");
     assertEquals(lines.length, 2);
     assertMatch(lines[0], / child\[\d+\] start$/);
     assertMatch(lines[1], / child\[\d+\] exit 3 after \d+ms$/);
   });
 });
 
-Deno.test("tracing without any log permission leaves the script running", async () => {
+test("tracing into a log directory that refuses writes leaves the script running", async () => {
   await withHome(async (home, log) => {
+    await chmod(`${home}/Library/Logs`, 0o555);
     const child = `${home}/child.ts`;
-    await Deno.writeTextFile(
+    await writeFile(
       child,
-      `import { startTrace, trace } from ${
-        JSON.stringify(new URL("./trace.ts", import.meta.url).href)
-      };\nstartTrace();\ntrace("x");\nconsole.log("still running");\n`,
+      `import { startTrace, trace } from ${TRACE};\nstartTrace();\ntrace("x");\nconsole.log("still running");\n`,
     );
-    const { code, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
-      args: ["run", "--no-prompt", child],
-      env: { HOME: home },
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    assertEquals(code, 0, new TextDecoder().decode(stderr));
-    assertEquals(new TextDecoder().decode(stdout), "still running\n");
-    assertEquals(await Deno.stat(log).then(() => true, () => false), false);
+    const { code, stdout, stderr } = await runChild(child, home);
+    assertEquals(code, 0, stderr);
+    assertEquals(stdout, "still running\n");
+    assertEquals(await stat(log).then(() => true, () => false), false);
   });
 });

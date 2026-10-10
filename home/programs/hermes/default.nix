@@ -11,92 +11,42 @@
 let
   homeDir = config.home.homeDirectory;
   hermesHome = config.services.hermes-agent.hermesHome;
-  googleDir = "${homeDir}/.config/hermes-google";
-  dailyDir = "${homeDir}/Documents/Main/99_Tracking/Daily";
-  feedsDir = "${homeDir}/.config/hermes-feeds";
-  literatureDir = "${homeDir}/Documents/Main/04_Literature";
-  vocabDir = "${homeDir}/Documents/Main/06_Vocabulary";
-  vocabProposalsDir = "${homeDir}/Documents/Main/98_Maintenance/proposals/Vocabulary";
-  secretsFile = "${homeDir}/.config/hermes/secrets.env";
   # The owner's DM with the Hermes bot, where every report and digest goes.
   dmChannel = "D0C3V6SQABC";
   webClip = dotfiles.pathHere ../agents/skills/web-clip/scripts "web-clip.ts";
-  appsScript = [
-    "script.google.com"
-    "script.googleusercontent.com"
-  ];
   # Both platform_toolsets.slack and mcpServers use these names. A rename on
   # one side only drops that server from Slack silently, and Hermes hands
   # Slack every server, gcal's unapproved create_event included, once none of
   # the listed names is defined.
   slackMcpServer = "agenda";
   slackCalendarServer = "calendar";
-  deno = "${pkgs.deno}/bin/deno";
-  denoRun =
+  bun = "${pkgs.bun}/bin/bun";
+  bunRun =
     {
-      # null allows every host: feeds live on arbitrary sites.
-      net ? [ ],
-      read ? [ ],
-      write ? [ ],
-      run ? [ ],
-      env ? [ "HOME" ],
       script,
       args ? [ ],
     }:
     [
-      deno
-      "run"
-      "--no-prompt"
-      "--allow-env=${lib.concatStringsSep "," env}"
+      bun
+      "--no-env-file"
+      "--no-install"
+      "--config=/dev/null"
+      # The worktree copy, not a store copy: a script edit then reaches the next
+      # run without a rebuild, and whatever sits in ~/dotfiles is what runs.
+      (dotfiles.pathHere ./scripts script)
     ]
-    ++ lib.optional (net == null) "--allow-net"
-    ++ lib.optional (net != null && net != [ ]) "--allow-net=${lib.concatStringsSep "," net}"
-    ++ lib.optional (read != [ ]) "--allow-read=${lib.concatStringsSep "," read}"
-    ++ lib.optional (write != [ ]) "--allow-write=${lib.concatStringsSep "," write}"
-    ++ lib.optional (run != [ ]) "--allow-run=${lib.concatStringsSep "," run}"
-    # The worktree copy, not a store copy: a script edit then reaches the next
-    # run without a rebuild, and whatever sits in ~/dotfiles is what runs.
-    ++ [ (dotfiles.pathHere ./scripts script) ]
     ++ args;
-  feedAction = denoRun {
-    net = [ "slack.com" ];
-    read = [
-      feedsDir
-      secretsFile
-    ];
-    write = [ feedsDir ];
-    run = [ deno ];
-    env = [
-      "HOME"
-      "PATH"
-      "HERMES_WEB_CLIP"
-      "HERMES_DENO"
-    ];
-    script = "feed-action.ts";
-  };
-  # scripts/trace.ts appends here and rotates to .1; rename needs read too.
-  scriptLogs = [
-    "${homeDir}/Library/Logs/hermes-scripts.log"
-    "${homeDir}/Library/Logs/hermes-scripts.log.1"
-  ];
-  withScriptLogs =
-    args:
-    args
-    // {
-      read = (args.read or [ ]) ++ scriptLogs;
-      write = (args.write or [ ]) ++ scriptLogs;
-    };
+  feedAction = bunRun { script = "feed-action.ts"; };
   mcpServer = args: {
-    command = builtins.head (denoRun (withScriptLogs args));
-    args = builtins.tail (denoRun (withScriptLogs args));
+    command = builtins.head (bunRun args);
+    args = builtins.tail (bunRun args);
   };
   cronScript = args: ''
     #!/usr/bin/env bash
-    exec ${lib.escapeShellArgs (denoRun (withScriptLogs args))}
+    exec ${lib.escapeShellArgs (bunRun args)}
   '';
   claudeStateDir = "${homeDir}/.config/hermes-claude";
   explorePrompt = dotfiles.pathHere ./prompts "explore-web-clip.md";
-  claudeWorkDir = "${homeDir}/.local/share/hermes-claude";
   # Absolute paths: the gateway runs under launchd, whose PATH has none of these.
   claudeBin = "${
     inputs.nix-claude-code.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -105,30 +55,7 @@ let
   gitBin = "${pkgs.git}/bin/git";
   claudeTask =
     args:
-    denoRun {
-      net = [ "slack.com" ];
-      read = [
-        claudeStateDir
-        claudeWorkDir
-        secretsFile
-        explorePrompt
-        vocabDir
-        vocabProposalsDir
-      ];
-      write = [
-        claudeStateDir
-        claudeWorkDir
-      ];
-      run = [
-        claudeBin
-        ghBin
-        gitBin
-      ];
-      env = [
-        "HOME"
-        "USER"
-        "TMPDIR"
-      ];
+    bunRun {
       script = "claude-task.ts";
       args = [
         "--channel"
@@ -216,8 +143,6 @@ in
       mcpServers = {
         gcal =
           mcpServer {
-            net = appsScript;
-            read = [ googleDir ];
             script = "gcal-mcp.ts";
           }
           // {
@@ -225,8 +150,6 @@ in
           };
         ${slackCalendarServer} =
           mcpServer {
-            net = appsScript;
-            read = [ googleDir ];
             script = "gcal-mcp.ts";
             args = [ "--slack" ];
           }
@@ -239,11 +162,6 @@ in
           };
         ${slackMcpServer} =
           mcpServer {
-            net = appsScript;
-            read = [
-              googleDir
-              dailyDir
-            ];
             script = "agenda-mcp.ts";
           }
           // {
@@ -254,8 +172,6 @@ in
           };
         daily =
           mcpServer {
-            read = [ dailyDir ];
-            write = [ dailyDir ];
             script = "daily-mcp.ts";
           }
           // {
@@ -263,12 +179,6 @@ in
           };
         feeds =
           mcpServer {
-            net = [ "slack.com" ];
-            read = [
-              feedsDir
-              secretsFile
-            ];
-            write = [ feedsDir ];
             script = "feeds-mcp.ts";
             args = [
               "--channel"
@@ -288,38 +198,15 @@ in
       # module copies these files there rather than linking into the store.
       hermesHomeFiles = {
         "scripts/fetch-new-mail.sh" = cronScript {
-          net = appsScript;
-          read = [ googleDir ];
-          write = [ googleDir ];
           script = "fetch-new-mail.ts";
         };
         "scripts/prepare-daily.sh" = cronScript {
-          net = appsScript;
-          read = [
-            googleDir
-            dailyDir
-          ];
-          write = [ dailyDir ];
           script = "prepare-daily.ts";
         };
         "scripts/collect-feeds.sh" = cronScript {
-          net = null;
-          read = [
-            feedsDir
-            literatureDir
-            secretsFile
-          ];
-          write = [ feedsDir ];
           script = "collect-feeds.ts";
         };
         "scripts/suggest-feeds.sh" = cronScript {
-          net = null;
-          read = [
-            feedsDir
-            literatureDir
-            secretsFile
-          ];
-          write = [ feedsDir ];
           script = "suggest-feeds.ts";
           args = [
             "--channel"
@@ -355,7 +242,6 @@ in
                   "HOME": os.environ["HOME"],
                   "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                   "HERMES_WEB_CLIP": "${webClip}",
-                  "HERMES_DENO": "${deno}",
               }
               with open(LOG, "a") as log:
                   subprocess.Popen(

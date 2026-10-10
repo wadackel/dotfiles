@@ -27,7 +27,7 @@ export async function call(
     // A 429 may carry no JSON body, so its status is read before parsing.
     let json: Record<string, unknown> | undefined;
     if (res.status === 429) await res.body?.cancel();
-    else json = await res.json();
+    else json = await res.json() as Record<string, unknown>;
     if (json?.ok) return json;
     const limited = res.status === 429 || json?.error === "ratelimited";
     if (!limited || attempt >= MAX_RETRIES) {

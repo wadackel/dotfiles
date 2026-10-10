@@ -1,21 +1,52 @@
+import { test } from "bun:test";
 import {
   assert,
   assertEquals,
   assertRejects,
   assertStringIncludes,
-} from "jsr:@std/assert@1";
+} from "@std/assert";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BridgeError, callBridge } from "./gas-client.ts";
+
+// A node:http server on a free local port whose handler is written against
+// the fetch Request and Response types.
+async function serve(
+  handler: (req: Request) => Response | Promise<Response>,
+): Promise<{ port: number; close: () => Promise<void> }> {
+  const server = createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const response = await handler(
+      new Request(`http://${req.headers.host}${req.url}`, {
+        method: req.method,
+        headers: req.headers as Record<string, string>,
+        body: req.method === "POST" ? Buffer.concat(chunks) : undefined,
+      }),
+    );
+    res.writeHead(response.status, Object.fromEntries(response.headers));
+    res.end(Buffer.from(await response.arrayBuffer()));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (server.address() as AddressInfo).port,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
 
 async function withBridge(
   handler: (req: Request, body: unknown) => Response,
   fn: (log: () => Promise<string>) => Promise<void>,
 ): Promise<void> {
   let posted: unknown;
-  const server = Deno.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    onListen: () => {},
-  }, async (req) => {
+  const server = await serve(async (req) => {
     const url = new URL(req.url);
     // Mimics Apps Script: the POST is answered with a redirect that the
     // client must follow as a GET to read the result. The query stands in
@@ -23,38 +54,36 @@ async function withBridge(
     if (req.method === "POST" && url.pathname === "/exec") {
       posted = await req.json();
       return Response.redirect(
-        new URL("/echo?user_content_key=SECRETKEY", url),
+        new URL("/echo?user_content_key=SECRETKEY", url).href,
         302,
       );
     }
     return handler(req, posted);
   });
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.config/hermes-google`, { recursive: true });
-  await Deno.mkdir(`${home}/Library/Logs`, { recursive: true });
-  await Deno.writeTextFile(
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  await mkdir(`${home}/.config/hermes-google`, { recursive: true });
+  await mkdir(`${home}/Library/Logs`, { recursive: true });
+  await writeFile(
     `${home}/.config/hermes-google/bridge.json`,
     JSON.stringify({
-      url: `http://127.0.0.1:${server.addr.port}/exec`,
+      url: `http://127.0.0.1:${server.port}/exec`,
       secret: "s3cret",
     }),
   );
   const log = () =>
-    Deno.readTextFile(`${home}/Library/Logs/hermes-scripts.log`).catch(() =>
-      ""
-    );
+    readFile(`${home}/Library/Logs/hermes-scripts.log`, "utf8").catch(() => "");
   try {
     await fn(log);
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    await server.shutdown();
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    await server.close();
+    await rm(home, { recursive: true });
   }
 }
 
-Deno.test("callBridge sends the secret in the body and follows the redirect", async () => {
+test("callBridge sends the secret in the body and follows the redirect", async () => {
   await withBridge(
     (req, body) => Response.json({ result: { method: req.method, body } }),
     async () => {
@@ -67,7 +96,7 @@ Deno.test("callBridge sends the secret in the body and follows the redirect", as
   );
 });
 
-Deno.test("callBridge surfaces errors reported by the bridge", async () => {
+test("callBridge surfaces errors reported by the bridge", async () => {
   await withBridge(
     () => Response.json({ error: "unauthorized" }),
     async () => {
@@ -84,7 +113,7 @@ Deno.test("callBridge surfaces errors reported by the bridge", async () => {
 const GOOGLE_404 =
   `<!DOCTYPE html><html lang=en><meta charset=utf-8><meta name=viewport content="initial-scale=1, minimum-scale=1, width=device-width"><title>Error 404 (Not Found)!!1</title><style>*{margin:0;padding:0}html,code{font:15px/22px arial,sans-serif}</style><a href=//www.google.com/><span id=logo aria-label=Google></span></a><p><b>404.</b> <ins>That’s an error.</ins><p>The requested URL was not found on this server. <ins>That’s all we know.</ins>`;
 
-Deno.test("callBridge logs what a failed response was, never what was sent", async () => {
+test("callBridge logs what a failed response was, never what was sent", async () => {
   await withBridge(
     () =>
       new Response(GOOGLE_404, {
@@ -113,7 +142,7 @@ Deno.test("callBridge logs what a failed response was, never what was sent", asy
   );
 });
 
-Deno.test("callBridge summarizes a page without a title by its text", async () => {
+test("callBridge summarizes a page without a title by its text", async () => {
   await withBridge(
     () =>
       new Response("<html><body><p>Sorry,   unable to\n open the file</p>", {
@@ -130,7 +159,7 @@ Deno.test("callBridge summarizes a page without a title by its text", async () =
   );
 });
 
-Deno.test("callBridge marks an error the bridge itself reported", async () => {
+test("callBridge marks an error the bridge itself reported", async () => {
   await withBridge(
     () => Response.json({ error: "Exception: invalid time" }),
     async () => {
@@ -144,7 +173,7 @@ Deno.test("callBridge marks an error the bridge itself reported", async () => {
   );
 });
 
-Deno.test("callBridge logs each failed try and the one that succeeded", async () => {
+test("callBridge logs each failed try and the one that succeeded", async () => {
   let gets = 0;
   await withBridge(
     () =>
@@ -165,18 +194,14 @@ Deno.test("callBridge logs each failed try and the one that succeeded", async ()
   );
 });
 
-Deno.test("callBridge retries read actions but not createEvent", async () => {
+test("callBridge retries read actions but not createEvent", async () => {
   let posts = 0;
   let failFirst = true;
-  const server = Deno.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    onListen: () => {},
-  }, (req) => {
+  const server = await serve((req) => {
     const url = new URL(req.url);
     if (req.method === "POST") {
       posts++;
-      return Response.redirect(new URL("/echo", url), 302);
+      return Response.redirect(new URL("/echo", url).href, 302);
     }
     if (failFirst) {
       failFirst = false;
@@ -186,14 +211,14 @@ Deno.test("callBridge retries read actions but not createEvent", async () => {
     }
     return Response.json({ result: "ok" });
   });
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.config/hermes-google`, { recursive: true });
-  await Deno.writeTextFile(
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  await mkdir(`${home}/.config/hermes-google`, { recursive: true });
+  await writeFile(
     `${home}/.config/hermes-google/bridge.json`,
     JSON.stringify({
-      url: `http://127.0.0.1:${server.addr.port}/exec`,
+      url: `http://127.0.0.1:${server.port}/exec`,
       secret: "s",
     }),
   );
@@ -212,35 +237,31 @@ Deno.test("callBridge retries read actions but not createEvent", async () => {
     );
     assertEquals(posts, 1);
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    await server.shutdown();
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    await server.close();
+    await rm(home, { recursive: true });
   }
 });
 
-Deno.test("callBridge gives up on a bridge that stops answering", async () => {
+test("callBridge gives up on a bridge that stops answering", async () => {
   let posts = 0;
-  const server = Deno.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    onListen: () => {},
-  }, async (req) => {
+  const server = await serve(async (req) => {
     const url = new URL(req.url);
     if (req.method === "POST") {
       posts++;
-      return Response.redirect(new URL("/echo", url), 302);
+      return Response.redirect(new URL("/echo", url).href, 302);
     }
     await new Promise((r) => setTimeout(r, 300));
     return Response.json({ result: "late" });
   });
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/.config/hermes-google`, { recursive: true });
-  await Deno.writeTextFile(
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  await mkdir(`${home}/.config/hermes-google`, { recursive: true });
+  await writeFile(
     `${home}/.config/hermes-google/bridge.json`,
     JSON.stringify({
-      url: `http://127.0.0.1:${server.addr.port}/exec`,
+      url: `http://127.0.0.1:${server.port}/exec`,
       secret: "s",
     }),
   );
@@ -260,8 +281,8 @@ Deno.test("callBridge gives up on a bridge that stops answering", async () => {
     );
     assertEquals(posts, 1);
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    await server.shutdown();
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    await server.close();
+    await rm(home, { recursive: true });
   }
 });

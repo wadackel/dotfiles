@@ -17,18 +17,18 @@ import {
   writeJson,
 } from "./feed-store.ts";
 import { updateMessage } from "./slack.ts";
+import { run } from "../../agents/lib/proc.ts";
 
-const WEB_CLIP = Deno.env.get("HERMES_WEB_CLIP");
-const DENO = Deno.env.get("HERMES_DENO") ?? "deno";
+const WEB_CLIP = process.env.HERMES_WEB_CLIP;
 
-const [reaction, channel, ts] = Deno.args;
+const [reaction, channel, ts] = process.argv.slice(2);
 const messages = await readJson<Record<string, MessageRef>>(
   "messages.json",
   {},
 );
 const ref = messages[ts];
-if (!ref || ref.channel !== channel) Deno.exit(0);
-if (ref.done?.includes(reaction)) Deno.exit(0);
+if (!ref || ref.channel !== channel) process.exit(0);
+if (ref.done?.includes(reaction)) process.exit(0);
 
 async function finish(note: string) {
   await withStateLock(async () => {
@@ -58,16 +58,16 @@ if (ref.kind === "article") {
   if (reaction === "paperclip") {
     if (!WEB_CLIP) throw new Error("HERMES_WEB_CLIP is not set");
     // The Web Clip plugin runs inside Obsidian and is driven by the
-    // `obsidian` CLI, which Homebrew installs outside the launchd PATH.
-    const out = await new Deno.Command(DENO, {
-      args: ["run", "--allow-run=obsidian", WEB_CLIP, ref.url],
-      env: { PATH: `/opt/homebrew/bin:${Deno.env.get("PATH") ?? ""}` },
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    const rows = new TextDecoder().decode(out.stdout).split("\n").filter((l) =>
-      !l.startsWith("started")
-    );
+    // `obsidian` CLI, which Homebrew installs outside the launchd PATH. That
+    // PATH has no `bun` either, so the interpreter is named.
+    const out = await run(process.execPath, [
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      WEB_CLIP,
+      ref.url,
+    ], { env: { PATH: `/opt/homebrew/bin:${process.env.PATH ?? ""}` } });
+    const rows = out.stdout.split("\n").filter((l) => !l.startsWith("started"));
     const status = rows.find((l) => l.trim())?.split("\t")[0];
     await finish(
       status === "created"

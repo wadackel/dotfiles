@@ -134,7 +134,7 @@ await appendDigestLog(pool.items.map((e, i) => ({
 })));
 trace(`pool: ${pool.items.length} candidates`);
 if (failed.length) console.error(`failed feeds: ${failed.join(", ")}`);
-if (pool.items.length === 0) Deno.exit(0);
+if (pool.items.length === 0) process.exit(0);
 
 const profile = interestProfile(clips, await readFeedback(), today);
 const groups = groupByFeed(pool.items);
@@ -174,4 +174,6 @@ const out = [
     "```",
   ]),
 ];
-await Deno.stdout.write(new TextEncoder().encode(out.join("\n") + "\n"));
+await new Promise<void>((resolve, reject) =>
+  process.stdout.write(out.join("\n") + "\n", (e) => e ? reject(e) : resolve())
+);

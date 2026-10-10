@@ -1,5 +1,6 @@
 // One-off import of sites clipped at least twice into
-// ~/.config/hermes-feeds/feeds.json. Usage: import-clip-sites.ts [--dry-run]
+// ~/.config/hermes-feeds/feeds.json. Usage:
+//   bun --no-env-file --no-install --config=/dev/null import-clip-sites.ts [--dry-run]
 // Sites with no feed, a feed silent for a year, or a feed already subscribed
 // under another URL are skipped; the report lists them, plus added feeds whose
 // title matches a subscribed one, for a person to check.
@@ -38,7 +39,7 @@ async function mapLimit<T, R>(
   return out;
 }
 
-const dryRun = Deno.args.includes("--dry-run");
+const dryRun = process.argv.slice(2).includes("--dry-run");
 const existing = await loadFeeds();
 const suggested = await readJson<{ sites: string[] }>("suggested.json", {
   sites: [],

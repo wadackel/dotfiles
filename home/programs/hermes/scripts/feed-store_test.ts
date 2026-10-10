@@ -1,6 +1,11 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assertEquals, assertRejects } from "@std/assert";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   appendDigestLog,
+  fetchText,
   readJson,
   readSecret,
   withStateLock,
@@ -8,18 +13,18 @@ import {
 } from "./feed-store.ts";
 
 async function withHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await Deno.makeTempDir();
-  const prev = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prev = process.env.HOME;
+  process.env.HOME = home;
   try {
     return await fn(home);
   } finally {
-    if (prev) Deno.env.set("HOME", prev);
-    await Deno.remove(home, { recursive: true });
+    if (prev) process.env.HOME = prev;
+    await rm(home, { recursive: true });
   }
 }
 
-Deno.test("withStateLock serializes concurrent read-modify-write cycles", () =>
+test("withStateLock serializes concurrent read-modify-write cycles", () =>
   withHome(async () => {
     await writeJson("counter.json", { n: 0 });
     await Promise.all(
@@ -33,10 +38,10 @@ Deno.test("withStateLock serializes concurrent read-modify-write cycles", () =>
     assertEquals(await readJson("counter.json", { n: 0 }), { n: 10 });
   }));
 
-Deno.test("readSecret strips quotes and rejects a missing name", () =>
+test("readSecret strips quotes and rejects a missing name", () =>
   withHome(async (home) => {
-    await Deno.mkdir(`${home}/.config/hermes`, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(`${home}/.config/hermes`, { recursive: true });
+    await writeFile(
       `${home}/.config/hermes/secrets.env`,
       "SLACK_BOT_TOKEN='xoxb-1'\nJEV_API_KEY=\"jev-2\"\nOTHER=3\n",
     );
@@ -45,7 +50,7 @@ Deno.test("readSecret strips quotes and rejects a missing name", () =>
     await assertRejects(() => readSecret("MISSING"), Error, "MISSING");
   }));
 
-Deno.test("appendDigestLog appends one JSON line per row", () =>
+test("appendDigestLog appends one JSON line per row", () =>
   withHome(async (home) => {
     const at = "2026-09-26T09:30:00.000Z";
     await appendDigestLog([
@@ -71,9 +76,27 @@ Deno.test("appendDigestLog appends one JSON line per row", () =>
         bundle: false,
       },
     ]);
-    const lines = (await Deno.readTextFile(
+    const lines = (await readFile(
       `${home}/.config/hermes-feeds/digest-log.jsonl`,
+      "utf8",
     )).trim().split("\n").map((l) => JSON.parse(l));
     assertEquals(lines.map((l) => l.kind), ["candidate", "pick"]);
     assertEquals(lines[0].interest, 0.8);
   }));
+
+test("fetchText refuses a URL that is not http or https before fetching", async () => {
+  const original = globalThis.fetch;
+  let fetched = 0;
+  globalThis.fetch = (() => {
+    fetched++;
+    return Promise.resolve(new Response("leaked"));
+  }) as unknown as typeof fetch;
+  try {
+    for (const url of ["file:///etc/hosts", "data:text/plain,x"]) {
+      await assertRejects(() => fetchText(url), Error, "unsupported protocol");
+    }
+    assertEquals(fetched, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

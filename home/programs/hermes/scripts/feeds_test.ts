@@ -1,4 +1,5 @@
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import {
   articleMessage,
   type Entry,
@@ -40,7 +41,7 @@ const ATOM = `<?xml version="1.0" encoding="UTF-8"?>
 </entry>
 </feed>`;
 
-Deno.test("parseFeed reads RSS 2.0 items", () => {
+test("parseFeed reads RSS 2.0 items", () => {
   const f = parseFeed(RSS, "https://syu-m-5151.hatenablog.com/rss");
   assertEquals(f.title, "じゃあ、おうちで学べる");
   assertEquals(f.entries.length, 1);
@@ -52,7 +53,7 @@ Deno.test("parseFeed reads RSS 2.0 items", () => {
   assertEquals(e.published, Date.parse("2026-09-23T03:36:04Z"));
 });
 
-Deno.test("parseFeed reads Atom entries and picks the alternate link", () => {
+test("parseFeed reads Atom entries and picks the alternate link", () => {
   const f = parseFeed(ATOM, "https://blog.jxck.io/feeds/atom.xml");
   assertEquals(f.siteUrl, "https://blog.jxck.io/");
   assertEquals(
@@ -62,18 +63,18 @@ Deno.test("parseFeed reads Atom entries and picks the alternate link", () => {
   assertEquals(f.entries[0].id, "tag:blog.jxck.io,2026:1");
 });
 
-Deno.test("stripHtml decodes numeric character references", () => {
+test("stripHtml decodes numeric character references", () => {
   assertEquals(
     stripHtml("OpenAI&#8217;s GPT &#x2014; new"),
     "OpenAI\u2019s GPT \u2014 new",
   );
 });
 
-Deno.test("parseFeed rejects documents that are not feeds", () => {
+test("parseFeed rejects documents that are not feeds", () => {
   assertThrows(() => parseFeed("<html><body>404</body></html>", "x"));
 });
 
-Deno.test("parseOpml flattens nested outlines", () => {
+test("parseOpml flattens nested outlines", () => {
   const opml = `<opml version="1.0"><body>
     <outline text="01_REQUIRED">
       <outline type="rss" title="V8" xmlUrl="https://v8.dev/blog.atom" htmlUrl="https://v8.dev/"/>
@@ -90,7 +91,7 @@ Deno.test("parseOpml flattens nested outlines", () => {
   ]);
 });
 
-Deno.test("siteKey splits blog platforms by author", () => {
+test("siteKey splits blog platforms by author", () => {
   assertEquals(siteKey("https://www.example.com/a/b"), "example.com");
   assertEquals(
     siteKey("https://zenn.dev/mizchi/articles/x"),
@@ -102,7 +103,7 @@ Deno.test("siteKey splits blog platforms by author", () => {
   );
 });
 
-Deno.test("normalizeUrl drops tracking parameters, hashes and trailing slashes", () => {
+test("normalizeUrl drops tracking parameters, hashes and trailing slashes", () => {
   assertEquals(
     normalizeUrl("https://a.test/p/?utm_source=x&id=1#top"),
     "https://a.test/p/?id=1",
@@ -123,7 +124,7 @@ function entry(o: Partial<Entry>): Entry {
   };
 }
 
-Deno.test("selectCandidates drops old, seen, clipped, undated and duplicate entries", () => {
+test("selectCandidates drops old, seen, clipped, undated and duplicate entries", () => {
   const got = selectCandidates(
     [
       entry({ id: "old", url: "https://a.test/old", published: 500 }),
@@ -147,7 +148,7 @@ Deno.test("selectCandidates drops old, seen, clipped, undated and duplicate entr
   assertEquals(got.map((e) => e.id), ["newer", "dup"]);
 });
 
-Deno.test("parseClipHead reads date, genres and the source URL of web clips", () => {
+test("parseClipHead reads date, genres and the source URL of web clips", () => {
   const head = [
     "---",
     "tags:",
@@ -172,7 +173,7 @@ Deno.test("parseClipHead reads date, genres and the source URL of web clips", ()
   );
 });
 
-Deno.test("interestProfile counts genres within 60 days, newest titles first", () => {
+test("interestProfile counts genres within 60 days, newest titles first", () => {
   const p = interestProfile(
     [
       { date: "2026-09-20", genres: ["AI", "Frontend"], title: "b" },
@@ -186,7 +187,7 @@ Deno.test("interestProfile counts genres within 60 days, newest titles first", (
   assertEquals(p.titles, ["a", "b"]);
 });
 
-Deno.test("messages escape Slack control characters and mark explore picks", () => {
+test("messages escape Slack control characters and mark explore picks", () => {
   const e = entry({
     title: "A <b> & c",
     published: Date.parse("2026-09-23T03:00:00Z"),

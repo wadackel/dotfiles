@@ -5,12 +5,13 @@
 // its home into the Docker terminal, and colima only exposes HERMES_HOME to
 // the VM, so nothing inside a container can read the secret.
 
+import { readFile } from "node:fs/promises";
 import { trace } from "./trace.ts";
 
 type Bridge = { url: string; secret: string };
 
 export function configDir(): string {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) throw new Error("HOME is not set");
   return `${home}/.config/hermes-google`;
 }
@@ -37,13 +38,22 @@ const READ_ONLY: ReadonlySet<Action> = new Set([
 // any other failure (a Google error page, a timeout, a dropped connection)
 // may have come after the work was done. `name` stays "Error" so scripts that
 // print the error keep their output.
+// Private fields behind getters: Bun prints an uncaught error's own properties
+// to stderr, which Hermes forwards when a cron script fails, and `detail`
+// holds the bridge's path and part of its response.
 export class BridgeError extends Error {
-  constructor(
-    message: string,
-    readonly detail: string,
-    readonly reported = false,
-  ) {
+  readonly #detail: string;
+  readonly #reported: boolean;
+  constructor(message: string, detail: string, reported = false) {
     super(message);
+    this.#detail = detail;
+    this.#reported = reported;
+  }
+  get detail(): string {
+    return this.#detail;
+  }
+  get reported(): boolean {
+    return this.#reported;
   }
 }
 
@@ -115,7 +125,7 @@ export async function callBridge(
   } = {},
 ): Promise<unknown> {
   const bridge: Bridge = JSON.parse(
-    await Deno.readTextFile(`${configDir()}/bridge.json`),
+    await readFile(`${configDir()}/bridge.json`, "utf8"),
   );
   const delays = READ_ONLY.has(action) ? retryDelaysMs : [];
   for (let attempt = 0;; attempt++) {

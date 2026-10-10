@@ -36,8 +36,16 @@ function clip(text: string, limit: number): string {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 
-const args = Deno.args.filter((a) => a !== "--dry-run");
-const dryRun = args.length !== Deno.args.length;
+// Resolves once the text has been handed to the pipe, so that an exit right
+// after it cannot cut the output short.
+const print = (text: string) =>
+  new Promise<void>((resolve, reject) =>
+    process.stdout.write(text, (e) => e ? reject(e) : resolve())
+  );
+
+const argv = process.argv.slice(2);
+const args = argv.filter((a) => a !== "--dry-run");
+const dryRun = args.length !== argv.length;
 const today = args[0] ?? tokyoDate(new Date());
 
 const holidays = new Set(
@@ -80,13 +88,13 @@ if (!note) {
       : undefined,
   });
   if (dryRun) {
-    await Deno.stdout.write(new TextEncoder().encode(note));
-    Deno.exit(0);
+    await print(note);
+    process.exit(0);
   }
   await writeNoteAtomically(`${dailyDir()}/${today}.md`, note);
 }
 
-if (!isWorkday(today) || dryRun) Deno.exit(0);
+if (!isWorkday(today) || dryRun) process.exit(0);
 
 const todoHistory = [note, ...pastWorkdays.map((p) => p.note)]
   .map((n) => getSection(n, HEADINGS.todo))
@@ -113,4 +121,4 @@ const out = [
     clip(memo(p.note), i === 0 ? MEMO_LIMIT * 2 : MEMO_LIMIT),
   ]),
 ];
-await Deno.stdout.write(new TextEncoder().encode(out.join("\n") + "\n"));
+await print(out.join("\n") + "\n");

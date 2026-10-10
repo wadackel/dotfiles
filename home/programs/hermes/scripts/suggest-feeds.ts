@@ -76,8 +76,9 @@ export function rankSites(
 
 if (import.meta.main) {
   startTrace();
-  const i = Deno.args.indexOf("--channel");
-  const channel = i === -1 ? undefined : Deno.args[i + 1];
+  const argv = process.argv.slice(2);
+  const i = argv.indexOf("--channel");
+  const channel = i === -1 ? undefined : argv[i + 1];
   if (!channel) throw new Error("usage: suggest-feeds.ts --channel <id>");
 
   const today = tokyoDate(new Date());
@@ -106,7 +107,7 @@ if (import.meta.main) {
   await writeJson("suggested.json", {
     sites: [...new Set([...suggested.sites, ...tried])],
   });
-  if (found.length === 0) Deno.exit(0);
+  if (found.length === 0) process.exit(0);
 
   const [, m, d] = today.split("-").map(Number);
   const parent = await postMessage(

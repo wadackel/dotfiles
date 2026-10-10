@@ -16,9 +16,9 @@
 // It does list events in one case, to settle a create whose outcome is
 // unknown; what it reads there never goes back to the model.
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
-import { z } from "npm:zod@4.6.5";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import { BridgeError, callBridge } from "./gas-client.ts";
 import { startTrace, trace } from "./trace.ts";
 
@@ -274,7 +274,7 @@ const eventSchema = {
 if (import.meta.main) {
   startTrace();
   const server = new McpServer({ name: "gcal", version: "1.0.0" });
-  if (Deno.args.includes("--slack")) {
+  if (process.argv.slice(2).includes("--slack")) {
     server.server.oninitialized = () => {
       const form = server.server.getClientCapabilities()?.elicitation?.form;
       trace(`mode slack, client elicitation: ${form ? "form" : "none"}`);

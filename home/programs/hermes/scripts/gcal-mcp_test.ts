@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   assert,
   assertEquals,
   assertRejects,
   assertStringIncludes,
   assertThrows,
-} from "jsr:@std/assert@1";
+} from "@std/assert";
+import { test } from "bun:test";
 import { BridgeError } from "./gas-client.ts";
 import {
   addApprovedEvent,
@@ -20,13 +25,13 @@ import {
 const base = { summary: "課題の締切" };
 const trail = mailTrail("m1");
 
-Deno.test("an all-day event without end lasts one day (exclusive end)", () => {
+test("an all-day event without end lasts one day (exclusive end)", () => {
   const ev = buildEvent({ ...base, start: "2026-09-30" }, trail);
   assertEquals(ev.start, { date: "2026-09-30" });
   assertEquals(ev.end, { date: "2026-10-01" });
 });
 
-Deno.test("a timed event without end lasts 30 minutes in Asia/Tokyo", () => {
+test("a timed event without end lasts 30 minutes in Asia/Tokyo", () => {
   const ev = buildEvent({ ...base, start: "2026-09-30T09:45" }, trail);
   assertEquals(ev.start, {
     dateTime: "2026-09-30T09:45:00",
@@ -38,7 +43,7 @@ Deno.test("a timed event without end lasts 30 minutes in Asia/Tokyo", () => {
   });
 });
 
-Deno.test("timed events always carry seconds, which Calendar requires", () => {
+test("timed events always carry seconds, which Calendar requires", () => {
   const ev = buildEvent({
     ...base,
     start: "2026-10-03T17:00:30",
@@ -54,7 +59,7 @@ Deno.test("timed events always carry seconds, which Calendar requires", () => {
   });
 });
 
-Deno.test("the description always points back to the source mail", () => {
+test("the description always points back to the source mail", () => {
   assertStringIncludes(
     buildEvent({ ...base, start: "2026-09-30" }, trail).description,
     "message m1",
@@ -67,7 +72,7 @@ Deno.test("the description always points back to the source mail", () => {
   assertStringIncludes(ev.description, "レポート提出\n\nCreated by Hermes");
 });
 
-Deno.test("invalid or mixed times are rejected", () => {
+test("invalid or mixed times are rejected", () => {
   assertThrows(() => buildEvent({ ...base, start: "明日" }, trail));
   assertThrows(() =>
     buildEvent({ ...base, start: "2026-09-30T10:00+09:00" }, trail)
@@ -119,25 +124,26 @@ function fakeBridge(failure: Error | undefined, events: Listed[] | Error) {
 }
 
 async function withLog(fn: (log: () => string) => Promise<void>) {
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  await Deno.mkdir(`${home}/Library/Logs`, { recursive: true });
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  await mkdir(`${home}/Library/Logs`, { recursive: true });
   try {
     await fn(() => {
       try {
-        return Deno.readTextFileSync(`${home}/Library/Logs/hermes-scripts.log`);
+        return readFileSync(`${home}/Library/Logs/hermes-scripts.log`, "utf8");
       } catch {
         return "";
       }
     });
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    else delete process.env.HOME;
+    await rm(home, { recursive: true });
   }
 }
 
-Deno.test("a created event is returned without listing anything", async () => {
+test("a created event is returned without listing anything", async () => {
   await withLog(async () => {
     const { call, calls } = fakeBridge(undefined, []);
     assertEquals(await createEventChecked(allDay, { call }), {
@@ -147,7 +153,7 @@ Deno.test("a created event is returned without listing anything", async () => {
   });
 });
 
-Deno.test("an event saved before the bridge failed counts as created", async () => {
+test("an event saved before the bridge failed counts as created", async () => {
   await withLog(async (log) => {
     const { call, calls } = fakeBridge(http404(), [
       listed({ summary: "別の予定" }),
@@ -168,7 +174,7 @@ Deno.test("an event saved before the bridge failed counts as created", async () 
   });
 });
 
-Deno.test("a timed event matches the listed local date-time", async () => {
+test("a timed event matches the listed local date-time", async () => {
   await withLog(async () => {
     const { call, calls } = fakeBridge(new Error("createEvent: timed out"), [
       listed({ start: { dateTime: "2026-10-03T17:00:00+09:00" } }),
@@ -180,7 +186,7 @@ Deno.test("a timed event matches the listed local date-time", async () => {
   });
 });
 
-Deno.test("a near miss on the calendar is still a failure", async () => {
+test("a near miss on the calendar is still a failure", async () => {
   await withLog(async () => {
     for (
       const miss of [
@@ -203,7 +209,7 @@ Deno.test("a near miss on the calendar is still a failure", async () => {
   });
 });
 
-Deno.test("the original error stands when listing fails too", async () => {
+test("the original error stands when listing fails too", async () => {
   await withLog(async () => {
     await assertRejects(
       () =>
@@ -216,7 +222,7 @@ Deno.test("the original error stands when listing fails too", async () => {
   });
 });
 
-Deno.test("an error the bridge reported is not checked against the calendar", async () => {
+test("an error the bridge reported is not checked against the calendar", async () => {
   await withLog(async () => {
     const reported = new BridgeError(
       "createEvent: Exception: invalid time",
@@ -233,7 +239,7 @@ Deno.test("an error the bridge reported is not checked against the calendar", as
   });
 });
 
-Deno.test("a Slack event carries the Slack trail, never the Gmail one", () => {
+test("a Slack event carries the Slack trail, never the Gmail one", () => {
   const ev = buildEvent({ ...base, start: "2026-09-30" }, SLACK_TRAIL);
   assertStringIncludes(
     ev.description,
@@ -242,7 +248,7 @@ Deno.test("a Slack event carries the Slack trail, never the Gmail one", () => {
   assert(!ev.description.includes("Gmail message"));
 });
 
-Deno.test("without requireTrail an own event with the same title and start counts", async () => {
+test("without requireTrail an own event with the same title and start counts", async () => {
   await withLog(async () => {
     const { call } = fakeBridge(http404(), [listed({ hermesTrail: false })]);
     assertEquals(
@@ -268,7 +274,7 @@ const slackInput = {
   description: "持ち物:\n診察券",
 };
 
-Deno.test("an approved Slack event is shown in full, then created", async () => {
+test("an approved Slack event is shown in full, then created", async () => {
   await withLog(async (log) => {
     const asked: string[] = [];
     const { call, calls } = fakeBridge(undefined, []);
@@ -293,7 +299,7 @@ Deno.test("an approved Slack event is shown in full, then created", async () => 
   });
 });
 
-Deno.test("anything but an approval creates nothing", async () => {
+test("anything but an approval creates nothing", async () => {
   await withLog(async (log) => {
     const answers: (() => Promise<string>)[] = [
       () => Promise.resolve("decline"),
@@ -318,7 +324,7 @@ Deno.test("anything but an approval creates nothing", async () => {
   });
 });
 
-Deno.test("an all-day Slack event is shown by its dates", async () => {
+test("an all-day Slack event is shown by its dates", async () => {
   await withLog(async () => {
     const asked: string[] = [];
     await addApprovedEvent(
@@ -335,7 +341,7 @@ Deno.test("an all-day Slack event is shown by its dates", async () => {
   });
 });
 
-Deno.test("the approval waits past the SDK's 60-second default and can be withdrawn", async () => {
+test("the approval waits past the SDK's 60-second default and can be withdrawn", async () => {
   const seen: unknown[] = [];
   const signal = new AbortController().signal;
   const ask = elicitApproval((params, options) => {
@@ -351,7 +357,7 @@ Deno.test("the approval waits past the SDK's 60-second default and can be withdr
   assertEquals(ELICIT_TIMEOUT_MS, 330_000);
 });
 
-Deno.test("the card cannot hide a link or reorder text", async () => {
+test("the card cannot hide a link or reorder text", async () => {
   await withLog(async () => {
     const asked: string[] = [];
     const { call } = fakeBridge(undefined, []);
@@ -376,7 +382,7 @@ Deno.test("the card cannot hide a link or reorder text", async () => {
   });
 });
 
-Deno.test("what is saved is the text the card showed", async () => {
+test("what is saved is the text the card showed", async () => {
   await withLog(async () => {
     const asked: string[] = [];
     const { call, calls } = fakeBridge(undefined, []);
@@ -405,7 +411,7 @@ Deno.test("what is saved is the text the card showed", async () => {
   });
 });
 
-Deno.test("an event too long for the card is refused before asking", async () => {
+test("an event too long for the card is refused before asking", async () => {
   await withLog(async () => {
     let asked = false;
     const { call, calls } = fakeBridge(undefined, []);
@@ -429,7 +435,7 @@ Deno.test("an event too long for the card is refused before asking", async () =>
   });
 });
 
-Deno.test("an emoji keeps its joiner and an invisible-only title is refused", async () => {
+test("an emoji keeps its joiner and an invisible-only title is refused", async () => {
   await withLog(async () => {
     const { call, calls } = fakeBridge(undefined, []);
     await addApprovedEvent(

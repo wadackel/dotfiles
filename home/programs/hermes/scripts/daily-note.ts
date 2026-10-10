@@ -4,6 +4,7 @@
 // the Stop hook inserts memo entries before `## 📕 Reading`, and daily-mining
 // and /weekly-review find sections by these exact heading strings.
 
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { MONTHLY_EMOTION } from "./monthly-emotion.ts";
 
 export const HEADINGS = {
@@ -191,16 +192,16 @@ export function tokyoDate(now: Date): string {
 }
 
 export function dailyDir(): string {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) throw new Error("HOME is not set");
   return `${home}/Documents/Main/99_Tracking/Daily`;
 }
 
 export async function readNote(date: string): Promise<string | undefined> {
   try {
-    return await Deno.readTextFile(`${dailyDir()}/${date}.md`);
+    return await readFile(`${dailyDir()}/${date}.md`, "utf8");
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return undefined;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw e;
   }
 }
@@ -213,6 +214,6 @@ export async function writeNoteAtomically(
 ): Promise<void> {
   const dir = path.slice(0, path.lastIndexOf("/"));
   const tmp = `${dir}/.hermes-${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(tmp, content);
-  await Deno.rename(tmp, path);
+  await writeFile(tmp, content);
+  await rename(tmp, path);
 }

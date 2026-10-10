@@ -1,4 +1,9 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { assert, assertEquals } from "@std/assert";
+import { test } from "bun:test";
+import { run } from "../../agents/lib/proc.ts";
 import {
   claudeArgv,
   claudeSettings,
@@ -14,7 +19,7 @@ import {
 
 const owners = ["alice", "acme"];
 
-Deno.test("parseRequest defaults the owner and keeps the task text", () => {
+test("parseRequest defaults the owner and keeps the task text", () => {
   assertEquals(parseRequest("!claude tool README の typo を直して", owners), {
     owner: "alice",
     repo: "tool",
@@ -27,14 +32,14 @@ Deno.test("parseRequest defaults the owner and keeps the task text", () => {
   });
 });
 
-Deno.test("parseRequest rejects other owners, bad names and empty tasks", () => {
+test("parseRequest rejects other owners, bad names and empty tasks", () => {
   assert("error" in parseRequest("!claude work-org/app 直して", owners));
   assert("error" in parseRequest("!claude ../etc 直して", owners));
   assert("error" in parseRequest("!claude tool", owners));
   assert("error" in parseRequest("!claude", owners));
 });
 
-Deno.test("isMergeWord matches only the exact approval words", () => {
+test("isMergeWord matches only the exact approval words", () => {
   for (
     const w of ["merge", " Merge ", "マージ", "マージして", "lgtm", "LGTM"]
   ) {
@@ -52,7 +57,7 @@ Deno.test("isMergeWord matches only the exact approval words", () => {
   }
 });
 
-Deno.test("mergeReadiness needs mergeable and no failing or pending checks", () => {
+test("mergeReadiness needs mergeable and no failing or pending checks", () => {
   const ok = { conclusion: "SUCCESS", status: "COMPLETED" };
   assertEquals(
     mergeReadiness({ mergeable: "MERGEABLE", statusCheckRollup: [] }),
@@ -86,7 +91,7 @@ Deno.test("mergeReadiness needs mergeable and no failing or pending checks", () 
   );
 });
 
-Deno.test("touchesWorkflows flags changes under .github/", () => {
+test("touchesWorkflows flags changes under .github/", () => {
   assert(touchesWorkflows([".github/workflows/ci.yml", "README.md"]));
   assert(!touchesWorkflows(["src/.github.ts", "README.md"]));
 });
@@ -98,7 +103,7 @@ const paths = {
   pnpm: "/Users/me/.local/share/hermes-claude/pnpm",
 };
 
-Deno.test("claudeSettings reads only the allowlist and fails closed", () => {
+test("claudeSettings reads only the allowlist and fails closed", () => {
   const s = claudeSettings(paths);
   assertEquals(s.sandbox.enabled, true);
   assertEquals(s.sandbox.failIfUnavailable, true);
@@ -112,7 +117,7 @@ Deno.test("claudeSettings reads only the allowlist and fails closed", () => {
   assert(s.permissions.deny.includes("WebFetch"));
 });
 
-Deno.test("claudeArgv keeps restricted mode and the sandbox when resuming", () => {
+test("claudeArgv keeps restricted mode and the sandbox when resuming", () => {
   const base = {
     settings: claudeSettings(paths),
     prompt: "続き",
@@ -138,7 +143,7 @@ Deno.test("claudeArgv keeps restricted mode and the sandbox when resuming", () =
   assert(!claudeArgv(base).includes("--resume"));
 });
 
-Deno.test("mergeReadiness treats missing and expected checks safely", () => {
+test("mergeReadiness treats missing and expected checks safely", () => {
   assertEquals(
     mergeReadiness({ mergeable: "MERGEABLE", statusCheckRollup: null }),
     "ready",
@@ -159,18 +164,18 @@ Deno.test("mergeReadiness treats missing and expected checks safely", () => {
   );
 });
 
-Deno.test("splitNul keeps paths that git status would quote", () => {
+test("splitNul keeps paths that git status would quote", () => {
   assertEquals(splitNul(".github/workflows/\u00e9.yml\0README.md\0"), [
     ".github/workflows/\u00e9.yml",
     "README.md",
   ]);
 });
 
-Deno.test("decodeSlack restores the three escaped characters", () => {
+test("decodeSlack restores the three escaped characters", () => {
   assertEquals(decodeSlack("a &lt;b&gt; &amp;amp;"), "a <b> &amp;");
 });
 
-Deno.test("decideAction commits only for a pr outcome with changes", () => {
+test("decideAction commits only for a pr outcome with changes", () => {
   const base = { hasPr: false, pushed: false };
   assertEquals(
     decideAction({ ...base, outcome: "pr", files: ["a.ts"] }),
@@ -203,7 +208,7 @@ Deno.test("decideAction commits only for a pr outcome with changes", () => {
   );
 });
 
-Deno.test("claudeArgv appends the repository vocabulary to the system prompt", () => {
+test("claudeArgv appends the repository vocabulary to the system prompt", () => {
   const base = { settings: claudeSettings(paths), prompt: "直して" };
   const plain = claudeArgv(base);
   const i = plain.indexOf("--append-system-prompt") + 1;
@@ -213,7 +218,7 @@ Deno.test("claudeArgv appends the repository vocabulary to the system prompt", (
   assertEquals(withVocab.length, plain.length);
 });
 
-Deno.test("repoVocabulary returns empty text when the module fails to load", async () => {
+test("repoVocabulary returns empty text when the module fails to load", async () => {
   assertEquals(
     await repoVocabulary(
       "dotfiles",
@@ -224,52 +229,57 @@ Deno.test("repoVocabulary returns empty text when the module fails to load", asy
   );
 });
 
-Deno.test("repoVocabulary reads only the two vault folders and keeps the target repo's terms", async () => {
-  const home = await Deno.makeTempDir({ prefix: "claude-task-vocab-" });
+test("repoVocabulary keeps the target repo's terms from a vault and drops the global ones", async () => {
+  const home = await mkdtemp(join(tmpdir(), "claude-task-vocab-"));
   try {
     const vocab = `${home}/Documents/Main/06_Vocabulary`;
     const proposals =
       `${home}/Documents/Main/98_Maintenance/proposals/Vocabulary`;
-    await Deno.mkdir(vocab, { recursive: true });
-    await Deno.mkdir(proposals, { recursive: true });
-    await Deno.writeTextFile(
+    await mkdir(vocab, { recursive: true });
+    await mkdir(proposals, { recursive: true });
+    await writeFile(
       `${vocab}/dotfiles.md`,
       "---\ntype: vocab\nkind: repo\nstatus: approved\n---\nrepo\n",
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${vocab}/agentower.md`,
       '---\ntype: vocab\nkind: term\nstatus: approved\napplies_in: ["[[dotfiles]]"]\n---\nprefix+w のポップアップ。\n',
     );
-    await Deno.writeTextFile(
+    await writeFile(
       `${vocab}/gate.md`,
       "---\ntype: vocab\nkind: term\nstatus: approved\n---\n個人のワークフローの語。\n",
     );
     const probe = `${home}/probe.ts`;
-    await Deno.writeTextFile(
+    await writeFile(
       probe,
       `import { repoVocabulary } from ${
-        JSON.stringify(new URL("./claude-task.ts", import.meta.url).href)
+        JSON.stringify(join(import.meta.dirname, "claude-task.ts"))
       };\nconsole.log(await repoVocabulary("dotfiles", ${
         JSON.stringify(home)
       }));\n`,
     );
-    const out = await new Deno.Command("deno", {
-      args: [
-        "run",
-        "--no-prompt",
-        "--allow-env=HOME,USER,TMPDIR",
-        `--allow-read=${vocab},${proposals}`,
-        probe,
-      ],
-      env: { HOME: home },
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    const text = new TextDecoder().decode(out.stdout);
-    assertEquals(out.code, 0, new TextDecoder().decode(out.stderr));
-    assert(text.includes("- agentower: prefix+w のポップアップ。"), text);
-    assert(!text.includes("gate"), text);
+    // Hermes scripts have no shebang, so the interpreter is named, with the
+    // flags the Nix module passes. HOME is the fixture so a default that fell
+    // back to it could not reach the real vault.
+    const out = await run(process.execPath, [
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      probe,
+    ], {
+      env: {
+        HOME: home,
+        BUN_RUNTIME_TRANSPILER_CACHE_PATH:
+          `${process.env.HOME}/Library/Caches/bun/@t@`,
+      },
+    });
+    assertEquals(out.code, 0, out.stderr);
+    assert(
+      out.stdout.includes("- agentower: prefix+w のポップアップ。"),
+      out.stdout,
+    );
+    assert(!out.stdout.includes("gate"), out.stdout);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 });

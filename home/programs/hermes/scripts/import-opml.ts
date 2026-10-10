@@ -1,6 +1,7 @@
 // One-off import of a Feedly OPML export into ~/.config/hermes-feeds/feeds.json.
 //
-// Usage: import-opml.ts <export.opml>
+// Usage:
+//   bun --no-env-file --no-install --config=/dev/null import-opml.ts <export.opml>
 //
 // Every feed is fetched once. A feed that no longer answers is looked up again
 // from its site URL (most failures are moved blogs); one that still fails, or
@@ -9,15 +10,16 @@
 import { parseOpml, siteKey } from "./feeds.ts";
 import { discoverFeed, fetchFeed, loadFeeds, writeJson } from "./feed-store.ts";
 import type { Feed } from "./feeds.ts";
+import { readFile } from "node:fs/promises";
 
 const STALE_MS = 365 * 86_400_000;
 
-const file = Deno.args[0];
+const file = process.argv[2];
 if (!file) {
   console.error("usage: import-opml.ts <export.opml>");
-  Deno.exit(2);
+  process.exit(2);
 }
-const opml = parseOpml(await Deno.readTextFile(file));
+const opml = parseOpml(await readFile(file, "utf8"));
 const existing = await loadFeeds();
 const known = new Set(existing.map((f) => f.url));
 const now = new Date().toISOString();

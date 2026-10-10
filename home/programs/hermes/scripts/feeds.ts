@@ -1,7 +1,7 @@
 // Pure helpers for the Hermes feed digest: parsing feeds and OPML, narrowing
 // the day's candidates, and rendering the Slack messages.
 
-import { XMLParser } from "npm:fast-xml-parser@5.11.1";
+import { XMLParser } from "fast-xml-parser";
 
 export type Feed = {
   url: string;

@@ -5,6 +5,7 @@
 // nothing. The first run only records a starting point instead of feeding the
 // whole inbox backlog to the model.
 
+import { open, readFile } from "node:fs/promises";
 import { callBridge, configDir } from "./gas-client.ts";
 import { startTrace } from "./trace.ts";
 
@@ -143,17 +144,23 @@ function statePath(): string {
 
 async function readState(): Promise<MailState | undefined> {
   try {
-    return JSON.parse(await Deno.readTextFile(statePath()));
+    return JSON.parse(await readFile(statePath(), "utf8"));
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return undefined;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw e;
   }
 }
 
+// The mode given to open() only applies to a file it creates; the chmod
+// brings a state file that already exists with wider permissions to 0600.
 async function writeState(state: MailState): Promise<void> {
-  await Deno.writeTextFile(statePath(), JSON.stringify(state) + "\n", {
-    mode: 0o600,
-  });
+  const file = await open(statePath(), "w", 0o600);
+  try {
+    await file.chmod(0o600);
+    await file.writeFile(JSON.stringify(state) + "\n");
+  } finally {
+    await file.close();
+  }
 }
 
 async function fetchNewMails(state: MailState): Promise<Mail[]> {
@@ -182,7 +189,7 @@ if (import.meta.main) {
     // window has to be marked seen or the second run would report it as new.
     const start = { since: Math.floor(Date.now() / 1000), seen: [] };
     await writeState(nextState(start, await fetchNewMails(start)));
-    Deno.exit(0);
+    process.exit(0);
   }
   let mails: Mail[];
   try {
@@ -191,8 +198,11 @@ if (import.meta.main) {
     const { state: failed, alert } = recordFailure(state);
     await writeState(failed);
     console.error(`fetch failed (${failed.failures} in a row): ${e}`);
-    Deno.exit(alert ? 1 : 0);
+    process.exit(alert ? 1 : 0);
   }
   await writeState(nextState(state, mails));
-  await Deno.stdout.write(new TextEncoder().encode(formatMails(mails)));
+  const text = formatMails(mails);
+  await new Promise<void>((resolve, reject) =>
+    process.stdout.write(text, (e) => e ? reject(e) : resolve())
+  );
 }

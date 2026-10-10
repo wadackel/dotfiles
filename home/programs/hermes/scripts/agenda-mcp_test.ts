@@ -1,4 +1,8 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { assertEquals, assertThrows } from "@std/assert";
+import { test } from "bun:test";
 import {
   type AgendaEvent,
   bridgeParams,
@@ -24,7 +28,7 @@ function event(overrides: Partial<AgendaEvent>): AgendaEvent {
   };
 }
 
-Deno.test("checkRange defaults to a week from today and allows 14 days", () => {
+test("checkRange defaults to a week from today and allows 14 days", () => {
   assertEquals(checkRange({}, "2026-09-24"), {
     from: "2026-09-24",
     to: "2026-10-01",
@@ -39,7 +43,7 @@ Deno.test("checkRange defaults to a week from today and allows 14 days", () => {
   );
 });
 
-Deno.test("checkRange rejects 15 days, a reversed range and malformed dates", () => {
+test("checkRange rejects 15 days, a reversed range and malformed dates", () => {
   const today = "2026-09-24";
   assertThrows(
     () => checkRange({ from: "2026-09-24", to: "2026-10-08" }, today),
@@ -60,14 +64,14 @@ Deno.test("checkRange rejects 15 days, a reversed range and malformed dates", ()
   }
 });
 
-Deno.test("bridgeParams makes the inclusive end exclusive", () => {
+test("bridgeParams makes the inclusive end exclusive", () => {
   assertEquals(bridgeParams({ from: "2026-09-26", to: "2026-09-27" }), {
     from: "2026-09-26",
     to: "2026-09-28",
   });
 });
 
-Deno.test("visibleEvents keeps own, answered and mail-derived events, labelling others'", () => {
+test("visibleEvents keeps own, answered and mail-derived events, labelling others'", () => {
   const own = event({ summary: "own" });
   const accepted = event({
     summary: "accepted",
@@ -102,7 +106,7 @@ Deno.test("visibleEvents keeps own, answered and mail-derived events, labelling 
   assertEquals(pendingInvitations, 0);
 });
 
-Deno.test("visibleEvents counts pending invitations, even ones posing as Hermes", () => {
+test("visibleEvents counts pending invitations, even ones posing as Hermes", () => {
   const { shown, pendingInvitations } = visibleEvents([
     event({ organizerSelf: false, selfResponse: "needsAction" }),
     event({
@@ -117,7 +121,7 @@ Deno.test("visibleEvents counts pending invitations, even ones posing as Hermes"
   assertEquals(pendingInvitations, 2);
 });
 
-Deno.test("formatEvents writes one line per event in Tokyo wall-clock time", () => {
+test("formatEvents writes one line per event in Tokyo wall-clock time", () => {
   const text = formatEvents({
     shown: [
       {
@@ -181,7 +185,7 @@ Deno.test("formatEvents writes one line per event in Tokyo wall-clock time", () 
   );
 });
 
-Deno.test("formatEvents says so when nothing is scheduled", () => {
+test("formatEvents says so when nothing is scheduled", () => {
   assertEquals(formatEvents({ shown: [], pendingInvitations: 0 }), "予定なし");
   assertEquals(
     formatEvents({ shown: [], pendingInvitations: 1 }),
@@ -189,7 +193,7 @@ Deno.test("formatEvents says so when nothing is scheduled", () => {
   );
 });
 
-Deno.test("todayLine carries the weekday", () => {
+test("todayLine carries the weekday", () => {
   assertEquals(todayLine("2026-09-24"), "Today: 2026-09-24 (木)");
 });
 
@@ -197,20 +201,20 @@ async function withNotes(
   notes: Record<string, string>,
   fn: () => Promise<void>,
 ): Promise<void> {
-  const home = await Deno.makeTempDir();
-  const prevHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
   const dir = `${home}/Documents/Main/99_Tracking/Daily`;
-  await Deno.mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   for (const [date, body] of Object.entries(notes)) {
-    await Deno.writeTextFile(`${dir}/${date}.md`, body);
+    await writeFile(`${dir}/${date}.md`, body);
   }
   try {
     await fn();
   } finally {
-    if (prevHome) Deno.env.set("HOME", prevHome);
-    else Deno.env.delete("HOME");
-    await Deno.remove(home, { recursive: true });
+    if (prevHome) process.env.HOME = prevHome;
+    else delete process.env.HOME;
+    await rm(home, { recursive: true });
   }
 }
 
@@ -228,7 +232,7 @@ const WORKDAY_NOTE = [
   "## ✍️ Memo",
 ].join("\n");
 
-Deno.test("latestTodoNote skips weekend notes that have no To-Do", async () => {
+test("latestTodoNote skips weekend notes that have no To-Do", async () => {
   await withNotes({
     "2026-09-27": WEEKEND_NOTE,
     "2026-09-26": WEEKEND_NOTE,
@@ -239,14 +243,14 @@ Deno.test("latestTodoNote skips weekend notes that have no To-Do", async () => {
   });
 });
 
-Deno.test("latestTodoNote looks back today plus 30 days, no further", async () => {
+test("latestTodoNote looks back today plus 30 days, no further", async () => {
   await withNotes({ "2026-08-25": WORKDAY_NOTE }, async () => {
     assertEquals((await latestTodoNote("2026-09-24"))?.date, "2026-08-25");
     assertEquals(await latestTodoNote("2026-09-25"), undefined);
   });
 });
 
-Deno.test("formatTodos drops finished items and dates the list", () => {
+test("formatTodos drops finished items and dates the list", () => {
   assertEquals(
     formatTodos({ date: "2026-09-25", note: WORKDAY_NOTE }),
     [

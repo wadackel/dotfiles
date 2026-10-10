@@ -5,7 +5,17 @@
 // parts of its home into the Docker terminal, and nothing in a container
 // should be able to rewrite the subscriptions or the reaction map.
 
-import { parseHTML } from "npm:linkedom@0.18.13";
+import {
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { parseHTML } from "linkedom";
 import {
   type Clip,
   type Entry,
@@ -16,7 +26,7 @@ import {
 } from "./feeds.ts";
 
 export function home(): string {
-  const h = Deno.env.get("HOME");
+  const h = process.env.HOME;
   if (!h) throw new Error("HOME is not set");
   return h;
 }
@@ -25,7 +35,7 @@ export function home(): string {
 // from the environment of cron scripts and MCP servers, and a secret in the
 // Nix store would be world-readable.
 export async function readSecret(name: string): Promise<string> {
-  const text = await Deno.readTextFile(`${home()}/.config/hermes/secrets.env`);
+  const text = await readFile(`${home()}/.config/hermes/secrets.env`, "utf8");
   const line = text.split("\n").find((l) => l.startsWith(`${name}=`));
   const value = line?.slice(name.length + 1).trim().replace(/^["']|["']$/g, "");
   if (!value) throw new Error(`${name} is missing from secrets.env`);
@@ -61,42 +71,50 @@ export const SEEN_LIMIT = 5000;
 
 export async function readJson<T>(name: string, fallback: T): Promise<T> {
   try {
-    return JSON.parse(await Deno.readTextFile(`${stateDir()}/${name}`));
+    return JSON.parse(await readFile(`${stateDir()}/${name}`, "utf8"));
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return fallback;
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return fallback;
     throw e;
   }
 }
 
 export async function writeJson(name: string, value: unknown): Promise<void> {
-  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await mkdir(stateDir(), { recursive: true, mode: 0o700 });
   const path = `${stateDir()}/${name}`;
   const tmp = `${path}.${crypto.randomUUID()}.tmp`;
-  await Deno.writeTextFile(tmp, JSON.stringify(value, null, 2) + "\n", {
+  await writeFile(tmp, JSON.stringify(value, null, 2) + "\n", {
     mode: 0o600,
   });
-  await Deno.rename(tmp, path);
+  await rename(tmp, path);
 }
 
 export async function readFeedback(): Promise<Feedback[]> {
   try {
-    const text = await Deno.readTextFile(`${stateDir()}/feedback.jsonl`);
+    const text = await readFile(`${stateDir()}/feedback.jsonl`, "utf8");
     return text.split("\n").filter(Boolean).map((l) => JSON.parse(l));
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return [];
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw e;
   }
 }
 
+// The mode given to open() only applies to a file it creates; the chmod
+// brings a log that already exists with wider permissions back to 0600.
+async function appendPrivate(path: string, text: string): Promise<void> {
+  const file = await open(path, "a", 0o600);
+  try {
+    await file.chmod(0o600);
+    await file.writeFile(text);
+  } finally {
+    await file.close();
+  }
+}
+
 export async function appendFeedback(f: Feedback): Promise<void> {
-  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
-  await Deno.writeTextFile(
+  await mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await appendPrivate(
     `${stateDir()}/feedback.jsonl`,
     JSON.stringify(f) + "\n",
-    {
-      append: true,
-      mode: 0o600,
-    },
   );
 }
 
@@ -119,11 +137,10 @@ export type DigestRow =
 
 export async function appendDigestLog(rows: DigestRow[]): Promise<void> {
   if (rows.length === 0) return;
-  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
-  await Deno.writeTextFile(
+  await mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await appendPrivate(
     `${stateDir()}/digest-log.jsonl`,
     rows.map((r) => JSON.stringify(r) + "\n").join(""),
-    { append: true, mode: 0o600 },
   );
 }
 
@@ -133,6 +150,12 @@ export async function fetchText(
   url: string,
   timeoutMs = 15_000,
 ): Promise<string> {
+  // A feed URL can come from a clipped page's <link rel="alternate">, and
+  // fetch would read a file: URL from disk.
+  const { protocol } = new URL(url);
+  if (protocol !== "http:" && protocol !== "https:") {
+    throw new Error(`unsupported protocol ${protocol}`);
+  }
   const res = await fetch(url, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { "user-agent": UA },
@@ -163,7 +186,7 @@ export async function discoverFeed(
 ): Promise<{ url: string; title: string } | undefined> {
   const candidates: string[] = [];
   try {
-    // linkedom's typings assume the DOM lib, which Deno scripts do not load.
+    // linkedom's typings assume the DOM lib, which tsconfig.json leaves out.
     const { document } = parseHTML(await fetchText(pageUrl)) as unknown as {
       document: {
         querySelectorAll(
@@ -200,18 +223,18 @@ const HEAD_BYTES = 4096;
 export async function loadClips(dir = literatureDir()): Promise<Clip[]> {
   const clips: Clip[] = [];
   const buf = new Uint8Array(HEAD_BYTES);
-  for await (const e of Deno.readDir(dir)) {
-    if (!e.isFile || !e.name.endsWith(".md")) continue;
-    const f = await Deno.open(`${dir}/${e.name}`);
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    if (!e.isFile() || !e.name.endsWith(".md")) continue;
+    const f = await open(`${dir}/${e.name}`);
     try {
-      const n = (await f.read(buf)) ?? 0;
+      const { bytesRead } = await f.read(buf, 0, HEAD_BYTES, null);
       const clip = parseClipHead(
         e.name,
-        new TextDecoder().decode(buf.subarray(0, n)),
+        new TextDecoder().decode(buf.subarray(0, bytesRead)),
       );
       if (clip) clips.push(clip);
     } finally {
-      f.close();
+      await f.close();
     }
   }
   return clips;
@@ -225,18 +248,18 @@ export async function loadFeeds(): Promise<Feed[]> {
 // They all rewrite messages.json and feeds.json, so updates are serialized
 // with an exclusive lock file to keep one from clobbering another.
 export async function withStateLock<T>(fn: () => Promise<T>): Promise<T> {
-  await Deno.mkdir(stateDir(), { recursive: true, mode: 0o700 });
+  await mkdir(stateDir(), { recursive: true, mode: 0o700 });
   const lock = `${stateDir()}/.lock`;
   for (let i = 0;; i++) {
     try {
-      (await Deno.open(lock, { createNew: true, write: true })).close();
+      await (await open(lock, "wx")).close();
       break;
     } catch (e) {
-      if (!(e instanceof Deno.errors.AlreadyExists)) throw e;
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
       const age = Date.now() -
-        ((await Deno.stat(lock).catch(() => null))?.mtime?.getTime() ?? 0);
+        ((await stat(lock).catch(() => null))?.mtime?.getTime() ?? 0);
       // A crashed holder never removes its lock; one this old is abandoned.
-      if (age > 60_000) await Deno.remove(lock).catch(() => {});
+      if (age > 60_000) await rm(lock).catch(() => {});
       if (i > 300) throw new Error("state lock timed out");
       await new Promise((r) => setTimeout(r, 100));
     }
@@ -244,6 +267,6 @@ export async function withStateLock<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } finally {
-    await Deno.remove(lock).catch(() => {});
+    await rm(lock).catch(() => {});
   }
 }

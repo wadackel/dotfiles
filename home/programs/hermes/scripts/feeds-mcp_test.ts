@@ -1,9 +1,13 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   assertEquals,
   assertRejects,
   assertStringIncludes,
   assertThrows,
-} from "jsr:@std/assert@1";
+} from "@std/assert";
+import { test } from "bun:test";
 import { postDigest, resolveDigest } from "./feeds-mcp.ts";
 import { type Pool, readJson, writeJson } from "./feed-store.ts";
 
@@ -26,7 +30,7 @@ const pool: Pool = {
     ]),
 };
 
-Deno.test("resolveDigest maps ids to pool entries", () => {
+test("resolveDigest maps ids to pool entries", () => {
   const got = resolveDigest(pool, {
     picks: [{ id: "c1", reason: "r", explore: true }],
     bundles: [{
@@ -39,14 +43,14 @@ Deno.test("resolveDigest maps ids to pool entries", () => {
   assertEquals(got.bundles[0].items.length, 2);
 });
 
-Deno.test("resolveDigest accepts an empty digest", () => {
+test("resolveDigest accepts an empty digest", () => {
   assertEquals(resolveDigest(pool, { picks: [], bundles: [] }), {
     picks: [],
     bundles: [],
   });
 });
 
-Deno.test("resolveDigest rejects unknown ids, reuse, and bundle rule violations", () => {
+test("resolveDigest rejects unknown ids, reuse, and bundle rule violations", () => {
   const pick = (id: string, explore = false) => ({ id, reason: "r", explore });
   assertThrows(
     () => resolveDigest(pool, { picks: [pick("zz")], bundles: [] }),
@@ -80,7 +84,7 @@ Deno.test("resolveDigest rejects unknown ids, reuse, and bundle rule violations"
   );
 });
 
-Deno.test("resolveDigest accepts any number of picks and explore picks", () => {
+test("resolveDigest accepts any number of picks and explore picks", () => {
   const got = resolveDigest(pool, {
     picks: ["c1", "c2", "c3", "c4", "c5", "c6"].map((id) => ({
       id,
@@ -96,31 +100,33 @@ Deno.test("resolveDigest accepts any number of picks and explore picks", () => {
 });
 
 async function withPool<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await Deno.makeTempDir();
-  const prev = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
+  const home = await mkdtemp(join(tmpdir(), "tmp-"));
+  const prev = process.env.HOME;
+  process.env.HOME = home;
   try {
     await writeJson("pool.json", pool);
     await writeJson("seen.json", { ids: ["old"] });
     return await fn(home);
   } finally {
-    if (prev) Deno.env.set("HOME", prev);
-    await Deno.remove(home, { recursive: true });
+    if (prev) process.env.HOME = prev;
+    else delete process.env.HOME;
+    await rm(home, { recursive: true });
   }
 }
 
 const digestLog = async (home: string) => {
   try {
-    return (await Deno.readTextFile(
+    return (await readFile(
       `${home}/.config/hermes-feeds/digest-log.jsonl`,
+      "utf8",
     )).trim().split("\n").map((l) => JSON.parse(l));
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return [];
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw e;
   }
 };
 
-Deno.test("postDigest records what was posted when a later post fails", () =>
+test("postDigest records what was posted when a later post fails", () =>
   withPool(async (home) => {
     let n = 0;
     const post = (_channel: string, _text: string, thread?: string) => {
@@ -156,7 +162,7 @@ Deno.test("postDigest records what was posted when a later post fails", () =>
     ]);
   }));
 
-Deno.test("postDigest writes nothing when the parent post fails", () =>
+test("postDigest writes nothing when the parent post fails", () =>
   withPool(async (home) => {
     const post = () => Promise.reject(new Error("chat.postMessage: down"));
     await assertRejects(
@@ -175,7 +181,7 @@ Deno.test("postDigest writes nothing when the parent post fails", () =>
     assertEquals(await digestLog(home), []);
   }));
 
-Deno.test("postDigest logs bundle items and marks an empty digest seen", () =>
+test("postDigest logs bundle items and marks an empty digest seen", () =>
   withPool(async (home) => {
     let n = 0;
     const post = (_c: string, _t: string, thread?: string) =>
@@ -200,7 +206,7 @@ Deno.test("postDigest logs bundle items and marks an empty digest seen", () =>
     assertEquals(seen.ids.length, pool.items.length);
   }));
 
-Deno.test("postDigest answers a repeat call on a posted pool without posting", () =>
+test("postDigest answers a repeat call on a posted pool without posting", () =>
   withPool(async () => {
     let n = 0;
     const post = (_c: string, _t: string, thread?: string) =>
@@ -215,7 +221,7 @@ Deno.test("postDigest answers a repeat call on a posted pool without posting", (
     assertEquals(n, posts);
   }));
 
-Deno.test("postDigest keeps message refs written by a reaction meanwhile", () =>
+test("postDigest keeps message refs written by a reaction meanwhile", () =>
   withPool(async () => {
     let n = 0;
     const post = async (_c: string, _t: string, thread?: string) => {

@@ -4,9 +4,9 @@
 //
 // Usage: feeds-mcp.ts --channel <slack channel id>
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/stdio.js";
-import { z } from "npm:zod@4.6.5";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import {
   articleMessage,
   type Bundle,
@@ -201,8 +201,9 @@ async function markSeen(pool: Pool): Promise<void> {
 }
 
 if (import.meta.main) {
-  const i = Deno.args.indexOf("--channel");
-  const channel = i === -1 ? undefined : Deno.args[i + 1];
+  const args = process.argv.slice(2);
+  const i = args.indexOf("--channel");
+  const channel = i === -1 ? undefined : args[i + 1];
   if (!channel) throw new Error("usage: feeds-mcp.ts --channel <id>");
   startTrace();
 
