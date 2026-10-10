@@ -1,4 +1,7 @@
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals, assertThrows } from "@std/assert";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   analyzeLines,
   detectAll,
@@ -16,7 +19,7 @@ import {
 } from "./detectors.ts";
 
 const realDict = loadDictionaries(
-  await Deno.readTextFile(await resolveProtectedTermsPath()),
+  await readFile(await resolveProtectedTermsPath(), "utf8"),
 );
 
 function lines(text: string) {
@@ -25,20 +28,20 @@ function lines(text: string) {
 
 // --- 辞書ローダ -------------------------------------------------------------
 
-Deno.test("loadDictionaries: 実ファイルからワークフロー語彙11語が得られる", () => {
+test("loadDictionaries: 実ファイルからワークフロー語彙11語が得られる", () => {
   assertEquals(realDict.workflow.length, 11);
   assert(realDict.workflow.includes("step"));
   assert(realDict.workflow.includes("phase"));
   assert(realDict.workflow.includes("self-audit"));
 });
 
-Deno.test("loadDictionaries: 表の右セルの訳語が混入しない", () => {
+test("loadDictionaries: 表の右セルの訳語が混入しない", () => {
   for (const w of realDict.workflow) {
     assert(/^[a-z-]+$/.test(w), `non-ascii workflow word leaked: ${w}`);
   }
 });
 
-Deno.test("loadDictionaries: 許可語が20語以上あり、散文が混入しない", () => {
+test("loadDictionaries: 許可語が20語以上あり、散文が混入しない", () => {
   assert(realDict.allow.size >= 20);
   assert(realDict.allow.has("diff"));
   assert(realDict.allow.has("nix"));
@@ -48,7 +51,7 @@ Deno.test("loadDictionaries: 許可語が20語以上あり、散文が混入し�
   assert(!realDict.allow.has("these"));
 });
 
-Deno.test("loadDictionaries: allowlist フェンス欠落は例外", () => {
+test("loadDictionaries: allowlist フェンス欠落は例外", () => {
   assertThrows(
     () =>
       loadDictionaries(
@@ -59,7 +62,7 @@ Deno.test("loadDictionaries: allowlist フェンス欠落は例外", () => {
   );
 });
 
-Deno.test("loadDictionaries: 語数不足は例外（節はあるが中身が薄い）", () => {
+test("loadDictionaries: 語数不足は例外（節はあるが中身が薄い）", () => {
   const md = [
     "## Domain terms x",
     "",
@@ -84,7 +87,7 @@ Deno.test("loadDictionaries: 語数不足は例外（節はあるが中身が薄
 
 // --- analyzeLines -----------------------------------------------------------
 
-Deno.test("analyzeLines: コードフェンスで行番号が保存される", () => {
+test("analyzeLines: コードフェンスで行番号が保存される", () => {
   const ls = lines("a\n```\ncode1\ncode2\n```\nb");
   assertEquals(ls.length, 6);
   assertEquals(ls[5].no, 6);
@@ -93,7 +96,7 @@ Deno.test("analyzeLines: コードフェンスで行番号が保存される", (
   assertEquals(ls[3].kind, "fence");
 });
 
-Deno.test("analyzeLines: 見出し・表・太字ラベル・URL単独行を分類する", () => {
+test("analyzeLines: 見出し・表・太字ラベル・URL単独行を分類する", () => {
   const ls = lines(
     "## 見出し\n| a | b |\n- **設計判断**: 中身\nhttps://example.com/x\n地の文です",
   );
@@ -108,7 +111,7 @@ Deno.test("analyzeLines: 見出し・表・太字ラベル・URL単独行を分�
 
 // --- workflow_vocab ---------------------------------------------------------
 
-Deno.test("workflow_vocab: 地の文の語を検出し、複数形・大文字も同一視する", () => {
+test("workflow_vocab: 地の文の語を検出し、複数形・大文字も同一視する", () => {
   const f1 = detectWorkflowVocab(lines("この task を進める。"), realDict);
   assertEquals(f1.length, 1);
   assertEquals(f1[0].matched, "task");
@@ -119,7 +122,7 @@ Deno.test("workflow_vocab: 地の文の語を検出し、複数形・大文字�
   assertEquals(f3.length, 1);
 });
 
-Deno.test("workflow_vocab: ID 参照・鉤括弧引用・見出し・インラインコードは免除", () => {
+test("workflow_vocab: ID 参照・鉤括弧引用・見出し・インラインコードは免除", () => {
   const cases = [
     "Task 3 を実装した。",
     "「この task は複雑だ」という例を示す。",
@@ -136,14 +139,14 @@ Deno.test("workflow_vocab: ID 参照・鉤括弧引用・見出し・インラ�
   }
 });
 
-Deno.test("workflow_vocab: 複合語の内側では発火しない", () => {
+test("workflow_vocab: 複合語の内側では発火しない", () => {
   assertEquals(
     detectWorkflowVocab(lines("task-planning の話をする。"), realDict).length,
     0,
   );
 });
 
-Deno.test("workflow_vocab: 大文字複合名・スラッシュ複合・角括弧タグは免除", () => {
+test("workflow_vocab: 大文字複合名・スラッシュ複合・角括弧タグは免除", () => {
   const cases = [
     "plan の Task Outline が分解の正本になる。", // 大文字始まりの複合名
     "表の11語（step/phase 分割）に限定する。", // スラッシュ複合
@@ -161,13 +164,13 @@ Deno.test("workflow_vocab: 大文字複合名・スラッシュ複合・角括�
 
 // --- mixed_latin_word -------------------------------------------------------
 
-Deno.test("mixed_latin_word: 許可外の一般語を検出する", () => {
+test("mixed_latin_word: 許可外の一般語を検出する", () => {
   const f = detectMixedLatinWord(lines("この build は再現できる。"), realDict);
   assertEquals(f.length, 1);
   assertEquals(f[0].matched, "build");
 });
 
-Deno.test("mixed_latin_word: 許可語・略語・識別子・workflow語・ID参照は免除", () => {
+test("mixed_latin_word: 許可語・略語・識別子・workflow語・ID参照は免除", () => {
   const cases = [
     "deno で実装する。", // allowlist
     "複数の fixtures を使う。", // allowlist の複数形
@@ -192,7 +195,7 @@ Deno.test("mixed_latin_word: 許可語・略語・識別子・workflow語・ID�
   }
 });
 
-Deno.test("mixed_latin_word: 同一行の同一語は1件に集約する", () => {
+test("mixed_latin_word: 同一行の同一語は1件に集約する", () => {
   const f = detectMixedLatinWord(
     lines("この build と build を比べる。"),
     realDict,
@@ -202,7 +205,7 @@ Deno.test("mixed_latin_word: 同一行の同一語は1件に集約する", () =>
 
 // --- arrow_chain ------------------------------------------------------------
 
-Deno.test("arrow_chain: 1文中の矢印2回以上で検出、1回は許容", () => {
+test("arrow_chain: 1文中の矢印2回以上で検出、1回は許容", () => {
   assertEquals(
     detectArrowChain(lines("入力 → 検証 → 保存の順で進む。")).length,
     1,
@@ -217,7 +220,7 @@ Deno.test("arrow_chain: 1文中の矢印2回以上で検出、1回は許容", ()
 
 // --- telegraphic_fragment ---------------------------------------------------
 
-Deno.test("telegraphic_fragment: ひらがなゼロの電報体を検出する", () => {
+test("telegraphic_fragment: ひらがなゼロの電報体を検出する", () => {
   assertEquals(detectTelegraphicFragment(lines("idx stable exit 0")).length, 1);
   assertEquals(
     detectTelegraphicFragment(lines("設定変更完了 (再起動不要)")).length,
@@ -225,7 +228,7 @@ Deno.test("telegraphic_fragment: ひらがなゼロの電報体を検出する",
   );
 });
 
-Deno.test("telegraphic_fragment: 免除規則", () => {
+test("telegraphic_fragment: 免除規則", () => {
   const cases = [
     "設定を変更した (再起動は不要)", // ひらがなを含む
     "リファクタリング", // 単語1つだけ
@@ -249,7 +252,7 @@ Deno.test("telegraphic_fragment: 免除規則", () => {
 
 // --- paren_chain ------------------------------------------------------------
 
-Deno.test("paren_chain: 1文中の括弧2グループで検出、入れ子は1つと数える", () => {
+test("paren_chain: 1文中の括弧2グループで検出、入れ子は1つと数える", () => {
   assertEquals(
     detectParenChain(lines("この機能（試験）は環境（macOS）で動く。")).length,
     1,
@@ -270,11 +273,13 @@ Deno.test("paren_chain: 1文中の括弧2グループで検出、入れ子は1�
 
 // --- fixture 回帰 -----------------------------------------------------------
 
-const bad = await Deno.readTextFile(
-  new URL("./fixtures/bad.md", import.meta.url),
+const bad = await readFile(
+  join(import.meta.dirname, "fixtures/bad.md"),
+  "utf8",
 );
-const good = await Deno.readTextFile(
-  new URL("./fixtures/good.md", import.meta.url),
+const good = await readFile(
+  join(import.meta.dirname, "fixtures/good.md"),
+  "utf8",
 );
 
 function countBy(text: string, dict: Dictionaries): Record<string, number> {
@@ -285,7 +290,7 @@ function countBy(text: string, dict: Dictionaries): Record<string, number> {
   return counts;
 }
 
-Deno.test("fixture: bad.md のカテゴリ別期待件数", () => {
+test("fixture: bad.md のカテゴリ別期待件数", () => {
   assertEquals(countBy(bad, realDict), {
     workflow_vocab: 6,
     mixed_latin_word: 1,
@@ -295,7 +300,7 @@ Deno.test("fixture: bad.md のカテゴリ別期待件数", () => {
   });
 });
 
-Deno.test("fixture: bad.md の行番号がフェンスを跨いで正しい", () => {
+test("fixture: bad.md の行番号がフェンスを跨いで正しい", () => {
   const fs = detectAll(bad, realDict);
   assertEquals(
     fs.filter((f) => f.category === "workflow_vocab").map((f) => f.line),
@@ -307,13 +312,13 @@ Deno.test("fixture: bad.md の行番号がフェンスを跨いで正しい", ()
   );
 });
 
-Deno.test("fixture: good.md は全カテゴリ0件（誤検出4形を含む）", () => {
+test("fixture: good.md は全カテゴリ0件（誤検出4形を含む）", () => {
   assertEquals(countBy(good, realDict), {});
 });
 
 // --- 集計指標 ---------------------------------------------------------------
 
-Deno.test("proseStats: 文平均長は fence と表を除いた地の文の 。区切りで数える", () => {
+test("proseStats: 文平均長は fence と表を除いた地の文の 。区切りで数える", () => {
   const text = [
     "短い文です。もう少し長い文をここに置きます。",
     "```",
@@ -329,7 +334,7 @@ Deno.test("proseStats: 文平均長は fence と表を除いた地の文の 。�
   assertEquals(s.meanSentenceLength, 11);
 });
 
-Deno.test("proseStats: 句点で終わらない箇条書きとラベル行を断片として数える", () => {
+test("proseStats: 句点で終わらない箇条書きとラベル行を断片として数える", () => {
   const text = [
     "- **設定**: `enabled = true` で有効",
     "- 完全な文で書かれた項目です。",
@@ -345,7 +350,7 @@ Deno.test("proseStats: 句点で終わらない箇条書きとラベル行を断
 
 // --- 箇条書きの長さ ---------------------------------------------------------
 
-Deno.test("itemLengths: bullet 行の字数は marker と ** を除き、番号付き行とラベル行と fence は数えない", () => {
+test("itemLengths: bullet 行の字数は marker と ** を除き、番号付き行とラベル行と fence は数えない", () => {
   const text = [
     "- **対象**: `config.ts` を直す",
     "  - 入れ子も 1 行",
@@ -365,7 +370,7 @@ Deno.test("itemLengths: bullet 行の字数は marker と ** を除き、番号�
   assertEquals(r.linesProse, ["対象: ␣ を直す".length, "入れ子も 1 行".length]);
 });
 
-Deno.test("itemLengths: tight な入れ子では親の項目が子を含み、子も自分の項目を持つ", () => {
+test("itemLengths: tight な入れ子では親の項目が子を含み、子も自分の項目を持つ", () => {
   const text = [
     "- 親の事実です",
     "  - 子の補足です",
@@ -380,7 +385,7 @@ Deno.test("itemLengths: tight な入れ子では親の項目が子を含み、�
   for (const [i, b] of r.blocks.entries()) assert(b >= r.lines[i]);
 });
 
-Deno.test("itemLengths: loose list でも空行 1 行を跨いで子が親の項目に入り、連続 2 空行で閉じる", () => {
+test("itemLengths: loose list でも空行 1 行を跨いで子が親の項目に入り、連続 2 空行で閉じる", () => {
   const text = [
     "- 親",
     "",
@@ -394,7 +399,7 @@ Deno.test("itemLengths: loose list でも空行 1 行を跨いで子が親の項
   assertEquals(r.blocks[2], "別の段落の bullet".length);
 });
 
-Deno.test("itemLengths: 番号付き骨組みの配下の bullet は opener になり、骨組み自体は数えない", () => {
+test("itemLengths: 番号付き骨組みの配下の bullet は opener になり、骨組み自体は数えない", () => {
   const text = [
     "3. What the reader must decide",
     "   - 対象",
@@ -409,7 +414,7 @@ Deno.test("itemLengths: 番号付き骨組みの配下の bullet は opener に�
   ]);
 });
 
-Deno.test("replyKind: 質問・報告・Plan ready・その他を見出しと固定文字列で分ける", () => {
+test("replyKind: 質問・報告・Plan ready・その他を見出しと固定文字列で分ける", () => {
   assertEquals(
     replyKind("### どちらにしますか？\n\n- **A.** x\n\n> 推奨: A。"),
     "question",

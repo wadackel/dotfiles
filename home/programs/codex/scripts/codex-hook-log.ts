@@ -1,8 +1,10 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-const DEFAULT_LOG_FILE = `${
-  Deno.env.get("HOME") ?? "."
-}/.codex/logs/hooks.jsonl`;
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFile, mkdir } from "node:fs/promises";
+import { text } from "node:stream/consumers";
+
+const DEFAULT_LOG_FILE = `${process.env.HOME ?? "."}/.codex/logs/hooks.jsonl`;
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_LINES_KEEP = 50_000;
 const STRING_MAX = 2000;
@@ -92,13 +94,13 @@ export function buildLogEntry(
 
 export function rotateIfNeeded(logFile: string): void {
   try {
-    const stat = Deno.statSync(logFile);
+    const stat = statSync(logFile);
     if (stat.size <= MAX_FILE_SIZE) return;
-    const content = Deno.readTextFileSync(logFile);
+    const content = readFileSync(logFile, "utf8");
     const kept = content.split("\n").filter((line) => line.trim()).slice(
       -MAX_LINES_KEEP,
     );
-    Deno.writeTextFileSync(logFile, kept.join("\n") + "\n");
+    writeFileSync(logFile, kept.join("\n") + "\n");
   } catch {
     // no log yet
   }
@@ -106,7 +108,7 @@ export function rotateIfNeeded(logFile: string): void {
 
 async function readJsonFromStdin(): Promise<Record<string, unknown>> {
   try {
-    const raw = await new Response(Deno.stdin.readable).text();
+    const raw = await text(process.stdin);
     if (!raw.trim()) return {};
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -119,19 +121,17 @@ async function readJsonFromStdin(): Promise<Record<string, unknown>> {
 }
 
 async function appendLog(logFile: string, entry: LogEntry): Promise<void> {
-  await Deno.mkdir(logFile.split("/").slice(0, -1).join("/"), {
+  await mkdir(logFile.split("/").slice(0, -1).join("/"), {
     recursive: true,
   });
   rotateIfNeeded(logFile);
-  await Deno.writeTextFile(logFile, JSON.stringify(entry) + "\n", {
-    append: true,
-  });
+  await appendFile(logFile, JSON.stringify(entry) + "\n");
 }
 
 if (import.meta.main) {
   try {
     const input = await readJsonFromStdin();
-    const entry = buildLogEntry(Deno.args[0] ?? "", input);
+    const entry = buildLogEntry(process.argv.slice(2)[0] ?? "", input);
     await appendLog(DEFAULT_LOG_FILE, entry);
   } catch {
     // Never break Codex because observability failed.

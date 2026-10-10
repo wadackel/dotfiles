@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
 import {
   buildLLMInput,
   countToolUses,
@@ -42,7 +46,7 @@ const parts: PartRow[] = [
   { message_id: "m3", type: "text", text: "実装が完了しました。", tool: null },
 ];
 
-Deno.test("parseRows: groups by role, captures text + tool counts", () => {
+test("parseRows: groups by role, captures text + tool counts", () => {
   const out = parseRows(messages, parts);
   assertEquals(out.user, ["opencodeのhooksを改善したい"]);
   assertEquals(out.assistant, [
@@ -54,7 +58,7 @@ Deno.test("parseRows: groups by role, captures text + tool counts", () => {
   assertEquals(out.toolCounts.size, 2);
 });
 
-Deno.test("parseRows: ignores reasoning / step-start / step-finish / patch types", () => {
+test("parseRows: ignores reasoning / step-start / step-finish / patch types", () => {
   const out = parseRows(messages, parts);
   // assistant text count should be 2, not include reasoning string
   assertEquals(out.assistant.length, 2);
@@ -63,7 +67,7 @@ Deno.test("parseRows: ignores reasoning / step-start / step-finish / patch types
   }
 });
 
-Deno.test("parseRows: orphan part (unknown message_id) is silently dropped", () => {
+test("parseRows: orphan part (unknown message_id) is silently dropped", () => {
   const out = parseRows(messages, [
     { message_id: "missing", type: "text", text: "ghost", tool: null },
   ]);
@@ -71,13 +75,13 @@ Deno.test("parseRows: orphan part (unknown message_id) is silently dropped", () 
   assertEquals(out.assistant, []);
 });
 
-Deno.test("formatToolSummary: top-5, descending, comma-separated", () => {
+test("formatToolSummary: top-5, descending, comma-separated", () => {
   const m = new Map([["a", 5], ["b", 1], ["c", 3]]);
   assertEquals(formatToolSummary(m), "a: 5, c: 3, b: 1");
   assertEquals(formatToolSummary(new Map()), "");
 });
 
-Deno.test("isNoise: short / slash-prefixed / template noise / locale yes/no", () => {
+test("isNoise: short / slash-prefixed / template noise / locale yes/no", () => {
   assertEquals(isNoise("ok"), true);
   assertEquals(isNoise("はい"), true);
   assertEquals(isNoise("/plan"), true);
@@ -86,12 +90,12 @@ Deno.test("isNoise: short / slash-prefixed / template noise / locale yes/no", ()
   assertEquals(isNoise("実装したい機能の説明"), false);
 });
 
-Deno.test("heuristicSummary: prefers first non-noise user prompt", () => {
+test("heuristicSummary: prefers first non-noise user prompt", () => {
   const out = parseRows(messages, parts);
   assertEquals(heuristicSummary(out), "opencodeのhooksを改善したい");
 });
 
-Deno.test("heuristicSummary: falls back to first assistant text when user is noise", () => {
+test("heuristicSummary: falls back to first assistant text when user is noise", () => {
   const noisyUserParts: PartRow[] = [
     { message_id: "m1", type: "text", text: "ok", tool: null },
     { message_id: "m2", type: "text", text: "応答テキスト本文", tool: null },
@@ -100,7 +104,7 @@ Deno.test("heuristicSummary: falls back to first assistant text when user is noi
   assertEquals(heuristicSummary(out), "応答テキスト本文");
 });
 
-Deno.test("heuristicSummary: falls back to tool summary when no text at all", () => {
+test("heuristicSummary: falls back to tool summary when no text at all", () => {
   const onlyToolParts: PartRow[] = [
     { message_id: "m2", type: "tool", text: null, tool: "glob" },
   ];
@@ -108,7 +112,7 @@ Deno.test("heuristicSummary: falls back to tool summary when no text at all", ()
   assertEquals(heuristicSummary(out), "glob: 1 を使用");
 });
 
-Deno.test("buildLLMInput: includes user prompts and assistant text, not tools", () => {
+test("buildLLMInput: includes user prompts and assistant text, not tools", () => {
   const out = parseRows(messages, parts);
   const input = buildLLMInput(out);
   assertStringIncludes(input, "[User prompts]");
@@ -118,7 +122,7 @@ Deno.test("buildLLMInput: includes user prompts and assistant text, not tools", 
   assertEquals(input.includes("glob"), false);
 });
 
-Deno.test("countUserMessages: counts non-noise user prompts only", () => {
+test("countUserMessages: counts non-noise user prompts only", () => {
   const out = parseRows(messages, [
     { message_id: "m1", type: "text", text: "ok", tool: null },
     {
@@ -131,12 +135,12 @@ Deno.test("countUserMessages: counts non-noise user prompts only", () => {
   assertEquals(countUserMessages(out), 1);
 });
 
-Deno.test("countToolUses: sums every tool invocation", () => {
+test("countToolUses: sums every tool invocation", () => {
   assertEquals(countToolUses(parseRows(messages, parts)), 3);
   assertEquals(countToolUses(parseRows(messages, [])), 0);
 });
 
-Deno.test("validateHookData: accepts valid ses_-prefixed session_id", () => {
+test("validateHookData: accepts valid ses_-prefixed session_id", () => {
   assertEquals(
     validateHookData({
       session_id: "ses_207e2d5c2ffeuGCp036WZmtae3",
@@ -149,7 +153,7 @@ Deno.test("validateHookData: accepts valid ses_-prefixed session_id", () => {
   );
 });
 
-Deno.test("validateHookData: rejects malformed session_id (path traversal / shell metachars / wrong prefix)", () => {
+test("validateHookData: rejects malformed session_id (path traversal / shell metachars / wrong prefix)", () => {
   assertEquals(validateHookData({ session_id: "../../etc/passwd" }), null);
   assertEquals(
     validateHookData({ session_id: "ses_abc'; DROP TABLE--" }),
@@ -166,10 +170,10 @@ Deno.test("validateHookData: rejects malformed session_id (path traversal / shel
   );
 });
 
-Deno.test("integration: upsertDailyNote writes opencode entry in expected format", async () => {
-  const dir = await Deno.makeTempDir();
+test("integration: upsertDailyNote writes opencode entry in expected format", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   const daily = `${dir}/daily.md`;
-  await Deno.writeTextFile(
+  await writeFile(
     daily,
     [
       "## 🧠 Work",
@@ -186,7 +190,7 @@ Deno.test("integration: upsertDailyNote writes opencode entry in expected format
     "    - 詳細2",
   ]);
 
-  const after = await Deno.readTextFile(daily);
+  const after = await readFile(daily, "utf8");
   assertStringIncludes(after, `(dotfiles/${sessionShort})`);
   assertStringIncludes(after, "    - 詳細1");
   // Inserted before the Reading section.

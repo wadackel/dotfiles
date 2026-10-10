@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { test } from "bun:test";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import {
   denialMessage,
   GUARDED,
@@ -7,24 +11,15 @@ import {
   TEMPLATE,
 } from "./reviewer-dispatch-policy.ts";
 
-const SCRIPT =
-  new URL("./reviewer-dispatch-policy.ts", import.meta.url).pathname;
+const SCRIPT = join(import.meta.dirname, "reviewer-dispatch-policy.ts");
 
 async function runHook(
   payload: unknown,
 ): Promise<{ code: number; stderr: string }> {
-  const cmd = new Deno.Command("deno", {
-    args: ["run", "--no-prompt", SCRIPT],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
+  const { code, stderr } = await run(SCRIPT, [], {
+    stdin: JSON.stringify(payload),
   });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(JSON.stringify(payload)));
-  await writer.close();
-  const out = await child.output();
-  return { code: out.code, stderr: new TextDecoder().decode(out.stderr) };
+  return { code, stderr };
 }
 
 const READ_ONLY =
@@ -39,7 +34,7 @@ const SANTA_LOOP_CONTRACT = `Return JSON:
   "issues": []
 }`;
 
-Deno.test("isReviewerAgent matches the reviewers /gate dispatches", () => {
+test("isReviewerAgent matches the reviewers /gate dispatches", () => {
   assertEquals(isReviewerAgent("rust-reviewer"), true);
   assertEquals(isReviewerAgent("typescript-reviewer"), true);
   assertEquals(isReviewerAgent("security-auditor"), true);
@@ -50,13 +45,13 @@ Deno.test("isReviewerAgent matches the reviewers /gate dispatches", () => {
   assertEquals(isReviewerAgent(undefined), false);
 });
 
-Deno.test("isReviewerAgent leaves other workflows' reviewers alone", () => {
+test("isReviewerAgent leaves other workflows' reviewers alone", () => {
   // These end in -reviewer but belong to other workflows and have no template.
   assertEquals(isReviewerAgent("architect-reviewer"), false);
   assertEquals(isReviewerAgent("skill-guide-reviewer"), false);
 });
 
-Deno.test("hasVerdictRule detects the rule regardless of case", () => {
+test("hasVerdictRule detects the rule regardless of case", () => {
   assertEquals(hasVerdictRule(RULE), true);
   assertEquals(hasVerdictRule("... fail OTHERWISE]"), true);
   assertEquals(
@@ -66,18 +61,18 @@ Deno.test("hasVerdictRule detects the rule regardless of case", () => {
   assertEquals(hasVerdictRule(undefined), false);
 });
 
-Deno.test("hasVerdictRule accepts the santa-loop JSON contract", () => {
+test("hasVerdictRule accepts the santa-loop JSON contract", () => {
   assertEquals(hasVerdictRule(SANTA_LOOP_CONTRACT), true);
 });
 
-Deno.test("denialMessage names the agent and points at the template", () => {
+test("denialMessage names the agent and points at the template", () => {
   const msg = denialMessage("rust-reviewer");
   assertStringIncludes(msg, "rust-reviewer");
   assertStringIncludes(msg, "domain-reviewer-prompt.md");
   assertStringIncludes(msg, "how PASS and FAIL are decided");
 });
 
-Deno.test("blocks a reviewer dispatch missing the verdict rule", async () => {
+test("blocks a reviewer dispatch missing the verdict rule", async () => {
   const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -90,7 +85,7 @@ Deno.test("blocks a reviewer dispatch missing the verdict rule", async () => {
   assertStringIncludes(stderr, "reviewer-dispatch-policy");
 });
 
-Deno.test("allows a reviewer dispatch carrying the verdict rule", async () => {
+test("allows a reviewer dispatch carrying the verdict rule", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -101,7 +96,7 @@ Deno.test("allows a reviewer dispatch carrying the verdict rule", async () => {
   assertEquals(code, 0);
 });
 
-Deno.test("allows non-reviewer subagent types", async () => {
+test("allows non-reviewer subagent types", async () => {
   for (const subagent_type of ["Explore", "Plan", "code-simplifier"]) {
     const { code } = await runHook({
       tool_name: "Agent",
@@ -111,7 +106,7 @@ Deno.test("allows non-reviewer subagent types", async () => {
   }
 });
 
-Deno.test("ignores tools other than Agent/Task", async () => {
+test("ignores tools other than Agent/Task", async () => {
   const { code } = await runHook({
     tool_name: "Bash",
     tool_input: { subagent_type: "rust-reviewer", prompt: "no verdict rule" },
@@ -119,7 +114,7 @@ Deno.test("ignores tools other than Agent/Task", async () => {
   assertEquals(code, 0);
 });
 
-Deno.test("lets a santa-loop code-reviewer dispatch through", async () => {
+test("lets a santa-loop code-reviewer dispatch through", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -130,7 +125,7 @@ Deno.test("lets a santa-loop code-reviewer dispatch through", async () => {
   assertEquals(code, 0);
 });
 
-Deno.test("lets other workflows' reviewers through", async () => {
+test("lets other workflows' reviewers through", async () => {
   for (const subagent_type of ["architect-reviewer", "skill-guide-reviewer"]) {
     const { code } = await runHook({
       tool_name: "Agent",
@@ -140,23 +135,13 @@ Deno.test("lets other workflows' reviewers through", async () => {
   }
 });
 
-Deno.test("fails open on malformed stdin", async () => {
-  const cmd = new Deno.Command("deno", {
-    args: ["run", "--no-prompt", SCRIPT],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode("not json"));
-  await writer.close();
-  const out = await child.output();
+test("fails open on malformed stdin", async () => {
+  const out = await run(SCRIPT, [], { stdin: "not json" });
   // A guardrail must not wedge the workflow when the payload shape changes.
   assertEquals(out.code !== 2, true);
 });
 
-Deno.test("applies to the Task tool name as well", async () => {
+test("applies to the Task tool name as well", async () => {
   const { code } = await runHook({
     tool_name: "Task",
     tool_input: {
@@ -169,7 +154,7 @@ Deno.test("applies to the Task tool name as well", async () => {
 
 // --- Diff and read-only requirements (gate contract only) ---
 
-Deno.test("blocks a no-Bash reviewer dispatched without a diff", async () => {
+test("blocks a no-Bash reviewer dispatched without a diff", async () => {
   const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -182,7 +167,7 @@ Deno.test("blocks a no-Bash reviewer dispatched without a diff", async () => {
   assertStringIncludes(stderr, ".gate.diff");
 });
 
-Deno.test("allows a no-Bash reviewer given a .gate.diff path", async () => {
+test("allows a no-Bash reviewer given a .gate.diff path", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -193,7 +178,7 @@ Deno.test("allows a no-Bash reviewer given a .gate.diff path", async () => {
   assertEquals(code, 0);
 });
 
-Deno.test("allows a no-Bash reviewer given inline diff hunks", async () => {
+test("allows a no-Bash reviewer given inline diff hunks", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -204,7 +189,7 @@ Deno.test("allows a no-Bash reviewer given inline diff hunks", async () => {
   assertEquals(code, 0);
 });
 
-Deno.test("blocks a Bash reviewer dispatched without the read-only sentence", async () => {
+test("blocks a Bash reviewer dispatched without the read-only sentence", async () => {
   const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -216,7 +201,7 @@ Deno.test("blocks a Bash reviewer dispatched without the read-only sentence", as
   assertStringIncludes(stderr, "dispatched without the read-only sentence");
 });
 
-Deno.test("allows a diagnostic-shaped dispatch (read-only sentence plus inline fix diff)", async () => {
+test("allows a diagnostic-shaped dispatch (read-only sentence plus inline fix diff)", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -228,7 +213,7 @@ Deno.test("allows a diagnostic-shaped dispatch (read-only sentence plus inline f
   assertEquals(code, 0);
 });
 
-Deno.test("leaves the santa-loop JSON contract without a diff alone", async () => {
+test("leaves the santa-loop JSON contract without a diff alone", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
@@ -242,13 +227,11 @@ Deno.test("leaves the santa-loop JSON contract without a diff alone", async () =
 // The hook names files it never opens: the template path lands in a rejection
 // message and the reviewer names select agent definitions. A rename that lands
 // in only one place fails silently, so both are checked against the repository.
-Deno.test("template path and every guarded reviewer exist in the repository", async () => {
-  const repoRoot = new URL("../../../../", import.meta.url);
+test("template path and every guarded reviewer exist in the repository", async () => {
+  const repoRoot = join(import.meta.dirname, "../../../..");
   const template = TEMPLATE.replace(/^~\/\.claude\//, "home/programs/claude/");
-  await Deno.stat(new URL(template, repoRoot));
+  await stat(join(repoRoot, template));
   for (const name of GUARDED) {
-    await Deno.stat(
-      new URL(`home/programs/claude/agents/${name}.md`, repoRoot),
-    );
+    await stat(join(repoRoot, `home/programs/claude/agents/${name}.md`));
   }
 });

@@ -22,12 +22,12 @@
   # RTK plugin: opencode の bash/shell tool.execute.before を `rtk rewrite` に通す。
   home.file.".config/opencode/plugins/rtk.ts".source = dotfiles.linkHere ./. "plugins/rtk.ts";
 
-  # opencode-memo worker (Deno script). plugin.ts は session.idle 時に
-  # `new URL("./scripts/opencode-memo.ts", import.meta.url)` で兄弟解決して
-  # Bun.spawn で起動するため、scripts/ ディレクトリごと
-  # ~/.config/opencode/scripts/ に out-of-store symlink で公開する。配下の
-  # opencode-memo.ts は memo-shared.ts (in-worktree symlink → agents/memo)
-  # を import するので、ディレクトリごと公開すれば import path 解決も同時に
-  # 通る。
+  # opencode-memo worker (Bun script). plugin.ts は session.idle 時に
+  # `new URL("./scripts/opencode-memo.ts", import.meta.url)` で兄弟解決し、
+  # そのパスを直接実行する（shebang が bun を起動する）ため、scripts/
+  # ディレクトリごと ~/.config/opencode/scripts/ に out-of-store symlink で
+  # 公開する。opencode-memo.ts は共有ライブラリ（agents/memo、agents/scripts、
+  # agents/lib）を実体の相対パスで import する。Bun はスクリプトを実体パスで
+  # 解決するので、公開先に兄弟 symlink は要らない。
   home.file.".config/opencode/scripts".source = dotfiles.linkHere ./. "scripts";
 }

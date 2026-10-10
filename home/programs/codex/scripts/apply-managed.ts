@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Merges the Nix-managed settings into ~/.codex/config.toml as TOML values
 // rather than as a marked text block: the ChatGPT desktop app rewrites the
@@ -6,7 +6,8 @@
 // the block then duplicates every managed key. Keys outside the managed set
 // (e.g. [projects.*] / [notice], mutated by Codex at runtime) are kept.
 
-import { parse, stringify } from "npm:smol-toml@1.9.0";
+import { readFile, writeFile } from "node:fs/promises";
+import { parse, stringify } from "smol-toml";
 
 type Table = Record<string, unknown>;
 type KeyPath = string[];
@@ -96,7 +97,7 @@ function parseCommand(payload: unknown): string[] | null {
 // The desktop app wraps notify as `<client> turn-ended --previous-notify
 // '<JSON of the previous notify>'` for Computer Use. Keeping the wrapper and
 // swapping only its payload keeps both notifications; overwriting it would
-// drop the app's until it re-wraps, and the payload goes stale on every deno
+// drop the app's until it re-wraps, and the payload goes stale on every bun
 // store-path change.
 function mergeNotify(current: unknown, managed: unknown): unknown {
   if (!Array.isArray(current)) return managed;
@@ -153,9 +154,9 @@ export function spliceContent(
 
 async function readIfExists(path: string): Promise<string | null> {
   try {
-    return await Deno.readTextFile(path);
+    return await readFile(path, "utf8");
   } catch (err) {
-    if (err instanceof Deno.errors.NotFound) return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw err;
   }
 }
@@ -182,25 +183,25 @@ export async function apply(
   const statePath = `${targetPath}.nix-managed.json`;
   const { next, action, paths } = spliceContent(
     await readIfExists(targetPath),
-    await Deno.readTextFile(managedPath),
+    await readFile(managedPath, "utf8"),
     await readPreviousPaths(statePath),
   );
 
   // The config goes first: a state file ahead of a failed config write would
   // forget keys that are still in the config.
-  if (action !== "noop") await Deno.writeTextFile(targetPath, next);
+  if (action !== "noop") await writeFile(targetPath, next);
   const state = JSON.stringify({ paths }, null, 2) + "\n";
   if (await readIfExists(statePath) !== state) {
-    await Deno.writeTextFile(statePath, state);
+    await writeFile(statePath, state);
   }
   return action;
 }
 
 if (import.meta.main) {
-  const [managedPath, targetPath] = Deno.args;
+  const [managedPath, targetPath] = process.argv.slice(2);
   if (!managedPath || !targetPath) {
     console.error("usage: apply-managed.ts <managed-toml-path> <target-path>");
-    Deno.exit(2);
+    process.exit(2);
   }
   const action = await apply(managedPath, targetPath);
   console.error(`[codex-config] ${action}: ${targetPath}`);

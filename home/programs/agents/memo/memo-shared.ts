@@ -1,6 +1,4 @@
 // Shared memo library used by claude-memo / codex-memo / opencode-memo.
-// Each agent script imports from a sibling symlink at <agent>/scripts/memo-shared.ts
-// → ../../agents/memo/memo-shared.ts.
 //
 // Agent-specific concerns (transcript / DB parser, NOISE_PATTERNS,
 // heuristicSummary, extracting the texts for buildLLMInput, log path, hook
@@ -290,10 +288,8 @@ export interface CallClaudeOptions {
 // The summary `claude -p` must not inherit the hook's cwd: Claude Code files the
 // child's transcript under the project dir derived from cwd, so every `cd` a
 // session made spawned a fake project dir and real project dirs filled up with
-// summary sessions. `$HOME/.cache` rather than `XDG_CACHE_HOME`: codex-memo and
-// opencode-memo run on Deno with `--allow-env=HOME,TMPDIR`, where reading any
-// other variable throws. An empty or unset HOME throws instead of falling back
-// to /tmp: transcripts written there escape the 30-day cleanup and callClaude
+// summary sessions. An empty or unset HOME throws instead of falling back to
+// /tmp: transcripts written there escape the 30-day cleanup and callClaude
 // already reports the failure and inherits the cwd.
 export function memoRunDir(home = process.env.HOME): string {
   if (!home) {

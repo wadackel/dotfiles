@@ -20,12 +20,10 @@ let
     model_reasoning_summary = "concise";
     sandbox_mode = "danger-full-access";
     notify = [
-      "${pkgs.deno}/bin/deno"
-      "run"
-      "--allow-read"
-      "--allow-write"
-      "--allow-env=HOME,TMPDIR,TMUX_PANE,CODEX_THREAD_ID"
-      "--allow-run"
+      "${pkgs.bun}/bin/bun"
+      "--no-env-file"
+      "--no-install"
+      "--config=/dev/null"
       "${config.home.homeDirectory}/.codex/scripts/codex-notify.ts"
       "send"
     ];
@@ -80,26 +78,14 @@ in
   home.file.".codex/agents".source = dotfiles.linkHere ./. "agents";
   home.file.".agents/skills".source = dotfiles.linkHere ./. "skills";
 
-  # scripts/codex-pane-status.ts は `../agent-presence.ts` を import する。
-  # Deno は relative import を URL ベースで解決し symlink の realpath を辿らない
-  # ため、helper を ~/.codex/ 直下に共置する必要がある。
-  # 実体は home/programs/tmux/agent-presence.ts にあり、worktree 内では
-  # home/programs/codex/agent-presence.ts が in-worktree symlink で指している。
-  # ここではその worktree シンボリックリンクごと out-of-store symlink で公開する。
-  home.file.".codex/agent-presence.ts".source = dotfiles.linkHere ./. "agent-presence.ts";
-  # pane-shared.ts は claude/codex/opencode 共通の SSOT (型 / キー / formatter /
-  # transition builder)。worktree 内では home/programs/codex/pane-shared.ts が
-  # ../tmux/pane-shared.ts への in-worktree symlink。agent-presence.ts と同形。
-  home.file.".codex/pane-shared.ts".source = dotfiles.linkHere ./. "pane-shared.ts";
-  # agent-usage.ts は pane-shared.ts と違い Deno.* を使うが、Bun で動く opencode
-  # plugin からは import されないため Web 標準 API 限定の制約に触れない。
-  home.file.".codex/agent-usage.ts".source = dotfiles.linkHere ./. "agent-usage.ts";
-
   # Intentionally NOT terminated with `|| true` (unlike mise/default.nix):
   # a merge failure means ~/.codex/config.toml is in an unknown state, so
   # darwin-rebuild should fail loudly rather than complete with a silent broken config.
-  home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    run ${pkgs.deno}/bin/deno run --allow-read --allow-write \
-      ${./scripts/apply-managed.ts} ${managedToml} "$HOME/.codex/config.toml"
+  # The script is the one in the worktree, not a store copy: it needs the
+  # node_modules that installDotfilesDeps puts there.
+  home.activation.codexConfig = lib.hm.dag.entryAfter [ "installDotfilesDeps" ] ''
+    run ${pkgs.bun}/bin/bun --no-env-file --no-install --config=/dev/null \
+      "${dotfiles.root}/home/programs/codex/scripts/apply-managed.ts" \
+      ${managedToml} "$HOME/.codex/config.toml"
   '';
 }

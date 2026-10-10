@@ -1,13 +1,22 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // PermissionRequest / PostToolUse hook: logs permission requests and executed
 // tool calls to JSONL for later analysis via the permission-review skill.
 // IMPORTANT: stdout output is strictly forbidden — it would be interpreted as a
 // hook decision and break the approve-piped-commands.ts hook chain.
 
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { text } from "node:stream/consumers";
+
 // --- Constants ---
 
-const LOG_DIR = `${Deno.env.get("HOME")}/.claude/logs`;
+const LOG_DIR = `${process.env.HOME}/.claude/logs`;
 const LOG_FILE = `${LOG_DIR}/permission-requests.jsonl`;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_LINES_KEEP = 50_000;
@@ -116,13 +125,13 @@ export function sanitizeInput(
 
 export function rotateIfNeeded(logFile: string): void {
   try {
-    const stat = Deno.statSync(logFile);
+    const stat = statSync(logFile);
     if (stat.size <= MAX_FILE_SIZE) return;
 
-    const content = Deno.readTextFileSync(logFile);
+    const content = readFileSync(logFile, "utf8");
     const lines = content.split("\n").filter((l) => l.trim());
     const kept = lines.slice(-MAX_LINES_KEEP);
-    Deno.writeTextFileSync(logFile, kept.join("\n") + "\n");
+    writeFileSync(logFile, kept.join("\n") + "\n");
   } catch {
     // File doesn't exist or other error — nothing to rotate
   }
@@ -140,7 +149,7 @@ export function deriveProject(cwd: string): string {
 async function main(): Promise<void> {
   let raw: string;
   try {
-    raw = await new Response(Deno.stdin.readable).text();
+    raw = await text(process.stdin);
   } catch {
     return;
   }
@@ -163,7 +172,7 @@ async function main(): Promise<void> {
   const event = hookEventName === "PostToolUse" ? "executed" : "request";
 
   try {
-    Deno.mkdirSync(LOG_DIR, { recursive: true });
+    mkdirSync(LOG_DIR, { recursive: true });
   } catch {
     // Directory may already exist
   }
@@ -193,9 +202,7 @@ async function main(): Promise<void> {
   }
 
   try {
-    Deno.writeTextFileSync(LOG_FILE, JSON.stringify(entry) + "\n", {
-      append: true,
-    });
+    appendFileSync(LOG_FILE, JSON.stringify(entry) + "\n");
   } catch (e) {
     console.error(`permission-logger: write failed: ${e}`);
   }
@@ -203,6 +210,8 @@ async function main(): Promise<void> {
   // Exit 0, no stdout — critical for hook chain integrity
 }
 
-main().catch((e) => {
-  console.error(`permission-logger: ${e}`);
-});
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error(`permission-logger: ${e}`);
+  });
+}

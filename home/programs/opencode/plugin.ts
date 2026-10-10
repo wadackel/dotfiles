@@ -1,8 +1,8 @@
 // opencode plugin: bridges opencode session/chat/tool events → tmux pane
 // options consumed by ~/.local/share/agentower/agentower (the prefix+w popup
 // SSOT lives in ../tmux/agentower/pane_row.ts:TMUX_FORMAT). The Bun-specific I/O
-// boundary lives here; pure logic + types live in plugin_logic.ts so Deno
-// can test them.
+// boundary lives here; pure logic + types live in plugin_logic.ts so they can
+// be unit-tested outside opencode.
 //
 // Wiring lives in opencode.json's "plugin" array. opencode loads this file
 // in-process under its bundled Bun runtime and inherits the parent process
@@ -11,8 +11,8 @@
 
 import type { Plugin } from "@opencode-ai/plugin";
 import { eventToOps, type PaneState, vocabDigestFor } from "./plugin_logic.ts";
-// `Op` lives in pane-shared.ts (SSOT). plugin_logic.ts no longer re-exports
-// types — Bun resolves the relative import directly via the symlink chain.
+// `Op` lives in pane-shared.ts (SSOT), imported through the sibling symlink
+// that is published next to this file.
 import { type Op } from "./pane-shared.ts";
 import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
 
@@ -124,11 +124,11 @@ async function dispatch(
   applyOps(pane, ops);
 }
 
-// Resolve `deno` once at module load. Bun has no `Deno` global, so the worker
-// must be launched via the user's PATH-resolved deno binary (Nix profile or
-// equivalent). Cached because the lookup is identical for the lifetime of the
-// plugin process.
-const DENO_BIN: string | null = Bun.which("deno");
+// The memo worker and vocab.ts are started by path, and their shebangs look up
+// `bun` on PATH. Both launches discard their output, so this lookup feeds the
+// one warning that explains an empty vocabulary or a missing memo; it does not
+// gate the launches.
+const BUN_BIN: string | null = Bun.which("bun");
 
 interface MemoDispatchInput {
   sessionID: string;
@@ -169,7 +169,6 @@ function readMemoDispatch(
 }
 
 function spawnMemoWorker(input: MemoDispatchInput): void {
-  if (!DENO_BIN) return;
   let workerPath: string;
   try {
     workerPath =
@@ -181,15 +180,7 @@ function spawnMemoWorker(input: MemoDispatchInput): void {
   }
   try {
     const child = Bun.spawn(
-      [
-        DENO_BIN,
-        "run",
-        "--allow-read",
-        "--allow-write",
-        "--allow-env=HOME,TMPDIR",
-        "--allow-run=git,claude,sqlite3",
-        workerPath,
-      ],
+      [workerPath],
       { stdin: "pipe", stdout: "ignore", stderr: "ignore" },
     );
     child.stdin.write(JSON.stringify({
@@ -216,28 +207,22 @@ async function dispatchMemo(
 }
 
 // The vocabulary digest comes from vocab.ts, which reads the Obsidian vault.
-// Its permissions are given here explicitly because Bun does not honor the
-// script's shebang.
+// It is executed by path, so the kernel applies its shebang and with it the
+// flags that keep a bunfig.toml or .env in the session's cwd from loading.
 const vocabCache = new Map<string, string>();
 
 function buildVocabDigest(): string {
-  if (!DENO_BIN || !process.env.HOME) return "";
+  if (!process.env.HOME) return "";
   try {
     const result = Bun.spawnSync(
       [
-        DENO_BIN,
-        "run",
-        "--allow-read",
-        "--allow-env=HOME",
-        "--allow-run=git",
-        "--no-prompt",
         `${process.env.HOME}/.agents/scripts/vocab.ts`,
         "digest",
         "--cwd",
         process.cwd(),
       ],
       // The transform blocks the model call it runs before, so a stuck git or
-      // a cold module fetch costs at most this long, then no vocabulary.
+      // a slow vault read costs at most this long, then no vocabulary.
       { stdout: "pipe", stderr: "ignore", timeout: 5000 },
     );
     return result.exitCode === 0
@@ -257,9 +242,9 @@ function bootstrapWarning(): void {
       "opencode-pane-status: TMUX_PANE not set or malformed; plugin is no-op.",
     );
   }
-  if (!DENO_BIN) {
+  if (!BUN_BIN) {
     console.warn(
-      "opencode-memo: `deno` not on PATH; memo dispatch will be no-op.",
+      "opencode-memo: `bun` not on PATH; the memo worker and the vocabulary digest cannot start.",
     );
   }
 }

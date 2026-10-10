@@ -1,16 +1,10 @@
 // Cross-session rate-limit usage SSOT. Written by statusline.sh (Claude, via
 // jq) and codex-pane-status.ts (Codex, via writeAgentUsage), read by the tmux
-// Agentower to render its bottom usage footer. Reachable from ~/.codex/ through
-// the same in-worktree symlink + home-manager wiring as pane-shared.ts.
+// Agentower to render its bottom usage footer.
 //
 // Unlike pane-shared.ts, this module is not Web-standard-only — file I/O is
 // its whole point, and the opencode plugin does not import it (opencode has no
 // rolling-window limits, so it is not covered here).
-//
-// node:* imports only. codex-pane-status.ts still runs on Deno, which resolves
-// a relative import against ~/.codex/ when it loads this file through its
-// symlink, not against the real directory, and finds no node_modules from
-// there for a bare package name.
 
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 
@@ -131,10 +125,9 @@ export async function readAgentUsage(
 // --- Write ---
 
 // The temp file goes next to the target rather than under os.tmpdir(): rename
-// is only atomic within one filesystem, and codex-pane-status.ts still runs on
-// Deno with an --allow-env scope that leaves TMPDIR out. The pid suffix keeps
-// concurrent writers — several Codex hooks, several Claude statusline renders —
-// from truncating each other's temp before the rename lands.
+// is only atomic within one filesystem. The pid suffix keeps concurrent
+// writers — several Codex hooks, several Claude statusline renders — from
+// truncating each other's temp before the rename lands.
 // Exported so both properties are testable without racing an actual write.
 export function usageTempPath(
   homeDir: string,

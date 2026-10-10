@@ -13,16 +13,11 @@ import { join } from "node:path";
 import { initPlanEvidence, normalizePlanEvidence, run } from "./plan-state.ts";
 
 const SUBJECTS = ["State helper", "Final Audit + Review"];
-const SKILL_HELPER_COMMAND = [
-  "deno",
-  "run",
-  "--allow-env=HOME",
-  "--allow-read",
-  "--allow-write",
-  "--allow-run=git",
-  "--no-prompt",
-  "~/.agents/scripts/plan-state.ts",
-].join(" ");
+// The leading newline pins the helper to the start of its line: started by its
+// path, with no interpreter in front of it.
+const SKILL_HELPER_COMMAND = "\n~/.agents/scripts/plan-state.ts init ";
+const IMPL_HELPER_COMMAND =
+  "\nrtk proxy ~/.agents/scripts/plan-state.ts normalize ";
 
 async function withHome(
   body: (home: string) => Promise<void>,
@@ -146,7 +141,7 @@ test("run init writes canonical JSON through the command surface", () =>
     );
   }));
 
-test("documents the permissioned CLI invocation used by skills", async () => {
+test("documents the CLI invocation used by skills", async () => {
   const planSkill = await readFile(
     "home/programs/codex/skills/plan/SKILL.md",
     "utf8",
@@ -161,7 +156,7 @@ test("documents the permissioned CLI invocation used by skills", async () => {
     true,
   );
   assertEquals(
-    implSkill.includes(SKILL_HELPER_COMMAND),
+    implSkill.includes(IMPL_HELPER_COMMAND),
     true,
   );
 });

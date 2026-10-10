@@ -1,22 +1,24 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * 応答中の「Task」の出現文脈を分類する。
  * スキル語彙起源 (見出し・表・ツール名) と地の文使用を切り分け、語彙規範の効果測定に使う。
  */
-const HOME = Deno.env.get("HOME")!;
+import { readdir, readFile } from "node:fs/promises";
+
+const HOME = process.env.HOME!;
 const ctx = new Map<string, number>();
 const samples: string[] = [];
 async function* f(d: string): AsyncGenerator<string> {
-  for await (const e of Deno.readDir(d)) {
+  for (const e of await readdir(d, { withFileTypes: true })) {
     const p = `${d}/${e.name}`;
-    if (e.isDirectory) yield* f(p);
+    if (e.isDirectory()) yield* f(p);
     else if (e.name.endsWith(".jsonl")) yield p;
   }
 }
 for await (const path of f(`${HOME}/.claude/projects`)) {
   let c: string;
   try {
-    c = await Deno.readTextFile(path);
+    c = await readFile(path, "utf8");
   } catch {
     continue;
   }

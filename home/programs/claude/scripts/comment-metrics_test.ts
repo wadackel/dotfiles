@@ -1,4 +1,5 @@
-import { assertEquals } from "jsr:@std/assert";
+import { test } from "bun:test";
+import { assertEquals } from "@std/assert";
 import { measure, render } from "./comment-metrics.ts";
 
 function diff(file: string, start: number, added: string[]): string {
@@ -11,7 +12,7 @@ function diff(file: string, start: number, added: string[]): string {
   ].join("\n") + "\n";
 }
 
-Deno.test("a seven-line comment block is listed with its start line", () => {
+test("a seven-line comment block is listed with its start line", () => {
   const m = measure(diff("src/a.ts", 3, [
     "const a = 1;",
     ...Array.from({ length: 7 }, (_, i) => `// line ${i}`),
@@ -23,7 +24,7 @@ Deno.test("a seven-line comment block is listed with its start line", () => {
   assertEquals(render(m).split("\n")[3], "  src/a.ts:4 (7 lines)");
 });
 
-Deno.test("a shebang is code, a lone comment is not a block", () => {
+test("a shebang is code, a lone comment is not a block", () => {
   const m = measure(
     diff("bin/run.sh", 1, ["#!/usr/bin/env bash", "# one comment", "echo hi"]),
   );
@@ -36,7 +37,7 @@ Deno.test("a shebang is code, a lone comment is not a block", () => {
   );
 });
 
-Deno.test("test files and non-code files are skipped", () => {
+test("test files and non-code files are skipped", () => {
   const m = measure(
     diff("src/a_test.ts", 1, ["// x", "// y", "const a = 1;"]) +
       diff("docs/README.md", 1, ["# Heading", "# Another"]) +
@@ -46,7 +47,7 @@ Deno.test("test files and non-code files are skipped", () => {
   assertEquals(render(m).split("\n")[1], "added comment lines: 0 (n/a)");
 });
 
-Deno.test("two files with hunk offsets report the new-side line of each block", () => {
+test("two files with hunk offsets report the new-side line of each block", () => {
   const second = [
     "diff --git a/lib/b.rs b/lib/b.rs",
     "--- a/lib/b.rs",

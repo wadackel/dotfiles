@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * 対話履歴の和文応答に writing-clarity 検出器を当て、カテゴリ別の
  * 応答単位発火率と千字あたり件数を測る規範追跡ツール。
@@ -11,6 +11,7 @@
  *
  * `--from` は指定日の 00:00（+09:00 固定、ローカル TZ 非依存）以降を含む。
  */
+import { readdir, readFile } from "node:fs/promises";
 import {
   detectAll,
   type ItemLengths,
@@ -24,12 +25,12 @@ import {
 
 function fail(msg: string): never {
   console.error(`fire-rate.ts: ${msg}`);
-  Deno.exit(1);
+  process.exit(1);
 }
 
 let fromMs = -Infinity;
 {
-  const args = [...Deno.args];
+  const args = [...process.argv.slice(2)];
   const i = args.indexOf("--from");
   if (i >= 0) {
     const v = args[i + 1];
@@ -53,9 +54,9 @@ let fromMs = -Infinity;
 }
 
 const dict = loadDictionaries(
-  await Deno.readTextFile(await resolveProtectedTermsPath()),
+  await readFile(await resolveProtectedTermsPath(), "utf8"),
 );
-const HOME = Deno.env.get("HOME")!;
+const HOME = process.env.HOME!;
 
 let n = 0;
 let chars = 0;
@@ -119,9 +120,9 @@ function median(xs: number[]): number {
 }
 
 async function* files(dir: string): AsyncGenerator<string> {
-  for await (const e of Deno.readDir(dir)) {
+  for (const e of await readdir(dir, { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
-    if (e.isDirectory) yield* files(p);
+    if (e.isDirectory()) yield* files(p);
     else if (e.name.endsWith(".jsonl")) yield p;
   }
 }
@@ -129,7 +130,7 @@ async function* files(dir: string): AsyncGenerator<string> {
 for await (const path of files(`${HOME}/.claude/projects`)) {
   let content: string;
   try {
-    content = await Deno.readTextFile(path);
+    content = await readFile(path, "utf8");
   } catch {
     continue;
   }
@@ -190,7 +191,7 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
 
 if (n === 0) {
   console.log("対象応答 0 件（指定期間に和文のメイン対話応答がない）");
-  Deno.exit(0);
+  process.exit(0);
 }
 
 const CATS = [

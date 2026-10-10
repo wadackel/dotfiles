@@ -7,45 +7,43 @@
 // fixture spells the effort path itself, so a renamed payload field would still
 // satisfy them — that drift is only observable against a captured live payload.
 
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals } from "@std/assert";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { readAgentUsage } from "../../tmux/shared/agent-usage.ts";
 
-const STATUSLINE = new URL("./statusline.sh", import.meta.url).pathname;
+const STATUSLINE = join(import.meta.dirname, "statusline.sh");
+// A child started with a replaced HOME would otherwise put Bun's transpiler
+// cache inside the fixture directory.
+const TRANSPILER_CACHE = `${process.env.HOME}/Library/Caches/bun/@t@`;
 
 async function runStatusline(
   home: string,
   stdin: string,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  const child = new Deno.Command("bash", {
-    args: [STATUSLINE],
-    // clearEnv stays off so PATH reaches the script without this test needing
-    // env-read permission — the documented invocation is --allow-env=HOME.
+  const { code, stdout, stderr } = await run("bash", [STATUSLINE], {
     // TMUX_PANE is blanked instead of inherited: statusline.sh writes a tmux
     // pane option whenever it is set, and a test must not touch the
     // developer's live pane.
-    env: { HOME: home, TMUX_PANE: "" },
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(stdin));
-  await writer.close();
-  const { code, stdout, stderr } = await child.output();
-  const decoder = new TextDecoder();
-  return {
-    code,
-    stdout: decoder.decode(stdout),
-    stderr: decoder.decode(stderr),
-  };
+    env: {
+      HOME: home,
+      TMUX_PANE: "",
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH: TRANSPILER_CACHE,
+    },
+    stdin,
+  });
+  return { code, stdout, stderr };
 }
 
 async function withHome(fn: (home: string) => Promise<void>): Promise<void> {
-  const home = await Deno.makeTempDir({ prefix: "statusline-usage-test-" });
+  const home = await mkdtemp(join(tmpdir(), "statusline-usage-test-"));
   try {
     await fn(home);
   } finally {
-    await Deno.remove(home, { recursive: true });
+    await rm(home, { recursive: true });
   }
 }
 
@@ -63,7 +61,7 @@ const RATE_LIMITS = {
   seven_day: { used_percentage: 13, resets_at: 1786809600 },
 };
 
-Deno.test("statusline.sh writes a file readAgentUsage accepts", async () => {
+test("statusline.sh writes a file readAgentUsage accepts", async () => {
   await withHome(async (home) => {
     const { code, stderr } = await runStatusline(
       home,
@@ -85,18 +83,15 @@ Deno.test("statusline.sh writes a file readAgentUsage accepts", async () => {
   });
 });
 
-Deno.test("statusline.sh leaves no temp file behind", async () => {
+test("statusline.sh leaves no temp file behind", async () => {
   await withHome(async (home) => {
     await runStatusline(home, input({ rate_limits: RATE_LIMITS }));
-    const names: string[] = [];
-    for await (
-      const e of Deno.readDir(`${home}/.local/state/agent-usage`)
-    ) names.push(e.name);
+    const names = await readdir(`${home}/.local/state/agent-usage`);
     assertEquals(names, ["claude.json"]);
   });
 });
 
-Deno.test("statusline.sh writes nothing when rate_limits is absent", async () => {
+test("statusline.sh writes nothing when rate_limits is absent", async () => {
   await withHome(async (home) => {
     const { code } = await runStatusline(home, input({}));
     assertEquals(code, 0);
@@ -104,7 +99,7 @@ Deno.test("statusline.sh writes nothing when rate_limits is absent", async () =>
   });
 });
 
-Deno.test("statusline.sh emits only the window that is present", async () => {
+test("statusline.sh emits only the window that is present", async () => {
   await withHome(async (home) => {
     await runStatusline(
       home,
@@ -118,7 +113,7 @@ Deno.test("statusline.sh emits only the window that is present", async () => {
   });
 });
 
-Deno.test("statusline.sh skips a window missing used_percentage", async () => {
+test("statusline.sh skips a window missing used_percentage", async () => {
   await withHome(async (home) => {
     await runStatusline(
       home,
@@ -137,7 +132,7 @@ Deno.test("statusline.sh skips a window missing used_percentage", async () => {
   });
 });
 
-Deno.test("statusline.sh still succeeds when rate_limits is malformed", async () => {
+test("statusline.sh still succeeds when rate_limits is malformed", async () => {
   await withHome(async (home) => {
     const { code } = await runStatusline(
       home,
@@ -149,7 +144,7 @@ Deno.test("statusline.sh still succeeds when rate_limits is malformed", async ()
   });
 });
 
-Deno.test("statusline.sh clamps an out-of-range percentage", async () => {
+test("statusline.sh clamps an out-of-range percentage", async () => {
   await withHome(async (home) => {
     // The reader discards the whole file on an out-of-range percentage, so an
     // unclamped writer would make the claude segment vanish without a trace.
@@ -168,7 +163,7 @@ Deno.test("statusline.sh clamps an out-of-range percentage", async () => {
   });
 });
 
-Deno.test("statusline.sh appends the effort level to the model name", async () => {
+test("statusline.sh appends the effort level to the model name", async () => {
   await withHome(async (home) => {
     const { code, stdout } = await runStatusline(
       home,
@@ -182,7 +177,7 @@ Deno.test("statusline.sh appends the effort level to the model name", async () =
   });
 });
 
-Deno.test("statusline.sh renders the model alone when effort is absent", async () => {
+test("statusline.sh renders the model alone when effort is absent", async () => {
   await withHome(async (home) => {
     // Models without an effort parameter omit the field entirely, so the model
     // segment has to survive the absence rather than render a dangling separator.

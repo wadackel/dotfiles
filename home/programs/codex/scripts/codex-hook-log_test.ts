@@ -1,11 +1,15 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildLogEntry,
   rotateIfNeeded,
   sanitizePayload,
 } from "./codex-hook-log.ts";
 
-Deno.test("sanitizePayload: truncates long strings and redacts content body length", () => {
+test("sanitizePayload: truncates long strings and redacts content body length", () => {
   const payload = sanitizePayload({
     hook_event_name: "PreToolUse",
     tool_name: "Write",
@@ -20,7 +24,7 @@ Deno.test("sanitizePayload: truncates long strings and redacts content body leng
   assertEquals((payload.prompt as string).length, 2000);
 });
 
-Deno.test("sanitizePayload: total size guard keeps identifying fields", () => {
+test("sanitizePayload: total size guard keeps identifying fields", () => {
   const payload = sanitizePayload({
     hook_event_name: "PostToolUse",
     tool_name: "Bash",
@@ -35,7 +39,7 @@ Deno.test("sanitizePayload: total size guard keeps identifying fields", () => {
   assertEquals(payload.session_id, "s1");
 });
 
-Deno.test("buildLogEntry: prefers argv event and preserves hook metadata", () => {
+test("buildLogEntry: prefers argv event and preserves hook metadata", () => {
   const entry = buildLogEntry("PermissionRequest", {
     hook_event_name: "Other",
     session_id: "s1",
@@ -49,10 +53,10 @@ Deno.test("buildLogEntry: prefers argv event and preserves hook metadata", () =>
   assertEquals(entry.ts, "2026-05-04T00:00:00.000Z");
 });
 
-Deno.test("rotateIfNeeded: keeps valid jsonl tail for oversized file", async () => {
-  const dir = await Deno.makeTempDir();
+test("rotateIfNeeded: keeps valid jsonl tail for oversized file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   const file = `${dir}/hooks.jsonl`;
-  await Deno.writeTextFile(
+  await writeFile(
     file,
     Array.from(
       { length: 60_100 },
@@ -60,7 +64,7 @@ Deno.test("rotateIfNeeded: keeps valid jsonl tail for oversized file", async () 
     ).join("\n") + "\n",
   );
   rotateIfNeeded(file);
-  const content = await Deno.readTextFile(file);
+  const content = await readFile(file, "utf8");
   assert(content.split("\n").filter(Boolean).length <= 50_000);
   assertStringIncludes(content, '"i":60099');
 });

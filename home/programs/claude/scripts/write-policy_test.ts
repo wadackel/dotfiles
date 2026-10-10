@@ -1,33 +1,31 @@
 // write-policy: allow — this file holds the real identifier as test data.
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { test } from "bun:test";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import { findIdentifiers, isFixturePath, newContent } from "./write-policy.ts";
 
-const HOOK_SCRIPT = new URL("./write-policy.ts", import.meta.url).pathname;
+const HOOK_SCRIPT = join(import.meta.dirname, "write-policy.ts");
 
 async function invokeHook(
   hookInput: Record<string, unknown>,
 ): Promise<{ code: number; stderr: string }> {
-  const proc = new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--no-prompt", HOOK_SCRIPT],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
-  const writer = proc.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(JSON.stringify(hookInput)));
-  await writer.close();
-  const { code, stderr } = await proc.output();
-  return { code, stderr: new TextDecoder().decode(stderr) };
+  const { code, stderr } = await run(HOOK_SCRIPT, [], {
+    stdin: JSON.stringify(hookInput),
+  });
+  return { code, stderr };
 }
 
-Deno.test("isFixturePath matches test directories and test file names", () => {
+test("isFixturePath matches test directories and test file names", () => {
   assertEquals(isFixturePath("/r/tests/fixtures/a.json"), true);
   assertEquals(isFixturePath("/r/src/foo_test.ts"), true);
   assertEquals(isFixturePath("/r/src/foo.spec.ts"), true);
   assertEquals(isFixturePath("/r/src/foo.ts"), false);
 });
 
-Deno.test("findIdentifiers and newContent cover the three tools", () => {
+test("findIdentifiers and newContent cover the three tools", () => {
   assertEquals(findIdentifiers("x wadackels-MacBook y"), [
     "wadackels-MacBook",
     "wadackel",
@@ -49,7 +47,7 @@ Deno.test("findIdentifiers and newContent cover the three tools", () => {
   );
 });
 
-Deno.test("entry point: a fixture write with the user name is blocked (exit 2)", async () => {
+test("entry point: a fixture write with the user name is blocked (exit 2)", async () => {
   const { code, stderr } = await invokeHook({
     tool_name: "Write",
     tool_input: {
@@ -66,7 +64,7 @@ Deno.test("entry point: a fixture write with the user name is blocked (exit 2)",
   );
 });
 
-Deno.test("entry point: the same content outside a fixture path passes (exit 0)", async () => {
+test("entry point: the same content outside a fixture path passes (exit 0)", async () => {
   const { code } = await invokeHook({
     tool_name: "Write",
     tool_input: {
@@ -77,7 +75,7 @@ Deno.test("entry point: the same content outside a fixture path passes (exit 0)"
   assertEquals(code, 0);
 });
 
-Deno.test("entry point: a placeholder path in a fixture passes (exit 0)", async () => {
+test("entry point: a placeholder path in a fixture passes (exit 0)", async () => {
   const { code } = await invokeHook({
     tool_name: "Write",
     tool_input: {
@@ -88,7 +86,7 @@ Deno.test("entry point: a placeholder path in a fixture passes (exit 0)", async 
   assertEquals(code, 0);
 });
 
-Deno.test("entry point: MultiEdit is blocked when a later edit carries the identifier", async () => {
+test("entry point: MultiEdit is blocked when a later edit carries the identifier", async () => {
   const { code, stderr } = await invokeHook({
     tool_name: "MultiEdit",
     tool_input: {
@@ -103,12 +101,12 @@ Deno.test("entry point: MultiEdit is blocked when a later edit carries the ident
   assertStringIncludes(stderr, '"tsuyoshi.wada"');
 });
 
-Deno.test("entry point: an existing fixture that already carries the identifier stays editable", async () => {
-  const dir = await Deno.makeTempDir({ prefix: "write-policy-" });
+test("entry point: an existing fixture that already carries the identifier stays editable", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "write-policy-"));
   try {
     const path = `${dir}/fixtures/existing_test.ts`;
-    await Deno.mkdir(`${dir}/fixtures`);
-    await Deno.writeTextFile(path, 'const p = "/Users/wadackel/dotfiles";\n');
+    await mkdir(`${dir}/fixtures`);
+    await writeFile(path, 'const p = "/Users/wadackel/dotfiles";\n');
     const same = await invokeHook({
       tool_name: "Edit",
       tool_input: {
@@ -129,11 +127,11 @@ Deno.test("entry point: an existing fixture that already carries the identifier 
     assertEquals(longer.code, 2, longer.stderr);
     assertStringIncludes(longer.stderr, '"wadackels-MacBook"');
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("entry point: the allow marker in the new content passes (exit 0)", async () => {
+test("entry point: the allow marker in the new content passes (exit 0)", async () => {
   const { code } = await invokeHook({
     tool_name: "Write",
     tool_input: {
@@ -144,20 +142,12 @@ Deno.test("entry point: the allow marker in the new content passes (exit 0)", as
   assertEquals(code, 0);
 });
 
-Deno.test("entry point: other tools and malformed input are ignored (exit 0)", async () => {
+test("entry point: other tools and malformed input are ignored (exit 0)", async () => {
   const other = await invokeHook({
     tool_name: "Bash",
     tool_input: { command: "echo wadackel > tests/x" },
   });
   assertEquals(other.code, 0);
-  const proc = new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--no-prompt", HOOK_SCRIPT],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
-  const w = proc.stdin.getWriter();
-  await w.write(new TextEncoder().encode("not json"));
-  await w.close();
-  assertEquals((await proc.output()).code, 0);
+  const malformed = await run(HOOK_SCRIPT, [], { stdin: "not json" });
+  assertEquals(malformed.code, 0);
 });

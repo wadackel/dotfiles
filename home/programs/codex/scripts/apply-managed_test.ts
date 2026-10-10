@@ -3,8 +3,19 @@ import {
   assertRejects,
   assertStringIncludes,
   assertThrows,
-} from "jsr:@std/assert@^1";
-import { parse } from "npm:smol-toml@1.9.0";
+} from "@std/assert";
+import { test } from "bun:test";
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parse } from "smol-toml";
 import { apply, spliceContent } from "./apply-managed.ts";
 
 const DENO_NOTIFY = [
@@ -81,14 +92,14 @@ function legacyBlock(body: string): string {
   return "# nix-managed:start\n" + body + "# nix-managed:end\n";
 }
 
-Deno.test("absent target -> created with the managed values", () => {
+test("absent target -> created with the managed values", () => {
   const { next, action, paths } = spliceContent(null, MANAGED_BODY, []);
   assertEquals(action, "created");
   assertEquals(parse(next), parse(MANAGED_BODY));
   assertEquals(paths, MANAGED_PATHS);
 });
 
-Deno.test("legacy marker block -> block dropped, managed values applied, tail kept", () => {
+test("legacy marker block -> block dropped, managed values applied, tail kept", () => {
   const current =
     legacyBlock('model = "old-model"\nsandbox_mode = "workspace-write"\n') +
     "\n" + UNMANAGED_TAIL;
@@ -104,7 +115,7 @@ Deno.test("legacy marker block -> block dropped, managed values applied, tail ke
   assertEquals(doc.notice, { hide_xyz_migration_prompt: true });
 });
 
-Deno.test("legacy block followed by the app's duplicate of it -> one copy of each key", () => {
+test("legacy block followed by the app's duplicate of it -> one copy of each key", () => {
   // What `darwin-rebuild switch` produced after the app dropped the markers.
   const current = legacyBlock(MANAGED_BODY) + "\n" + APP_REWRITTEN;
 
@@ -118,7 +129,7 @@ Deno.test("legacy block followed by the app's duplicate of it -> one copy of eac
   assertEquals(doc.notify, wrapped(DENO_NOTIFY));
 });
 
-Deno.test("app-rewritten file without markers -> managed values win, app keys kept", () => {
+test("app-rewritten file without markers -> managed values win, app keys kept", () => {
   const drifted = APP_REWRITTEN.replace(
     'model = "gpt-5.4"',
     'model = "app-picked"',
@@ -138,7 +149,7 @@ Deno.test("app-rewritten file without markers -> managed values win, app keys ke
   assertEquals(doc.desktop, { followUpQueueMode: "steer" });
 });
 
-Deno.test("reapplying to its own output -> noop and content unchanged", () => {
+test("reapplying to its own output -> noop and content unchanged", () => {
   const first = spliceContent(
     APP_REWRITTEN + "\n[notice.more]\nvalue = true\n",
     MANAGED_BODY,
@@ -149,13 +160,13 @@ Deno.test("reapplying to its own output -> noop and content unchanged", () => {
   assertEquals(second.next, first.next);
 });
 
-Deno.test("unchanged hand-formatted file without a state file -> noop keeps its text", () => {
+test("unchanged hand-formatted file without a state file -> noop keeps its text", () => {
   const { next, action } = spliceContent(APP_REWRITTEN, MANAGED_BODY, []);
   assertEquals(action, "noop");
   assertEquals(next, APP_REWRITTEN);
 });
 
-Deno.test("key dropped from Nix -> removed, emptied ancestor pruned, pre-existing empty table kept", () => {
+test("key dropped from Nix -> removed, emptied ancestor pruned, pre-existing empty table kept", () => {
   const previous = [...MANAGED_PATHS, [
     "sandbox_workspace_write",
     "network_access",
@@ -171,7 +182,7 @@ Deno.test("key dropped from Nix -> removed, emptied ancestor pruned, pre-existin
   assertEquals(doc.empty_by_app, {});
 });
 
-Deno.test("dropped key whose table still holds other keys -> only that key goes", () => {
+test("dropped key whose table still holds other keys -> only that key goes", () => {
   const previous = [...MANAGED_PATHS, ["features", "view_image_tool"]];
   const current = APP_REWRITTEN.replace(
     "hooks = true",
@@ -183,7 +194,7 @@ Deno.test("dropped key whose table still holds other keys -> only that key goes"
   assertEquals(doc.features, { hooks: true, streamable_shell: true });
 });
 
-Deno.test("wrapped notify with a stale payload -> wrapper kept, payload replaced", () => {
+test("wrapped notify with a stale payload -> wrapper kept, payload replaced", () => {
   const stale = [
     "/nix/store/old-deno-2.9.5/bin/deno",
     ...DENO_NOTIFY.slice(1),
@@ -200,7 +211,7 @@ Deno.test("wrapped notify with a stale payload -> wrapper kept, payload replaced
   assertEquals(JSON.parse(notify[3]), DENO_NOTIFY);
 });
 
-Deno.test("notify that is not a wrapper -> managed value", () => {
+test("notify that is not a wrapper -> managed value", () => {
   for (
     const notify of [["other", "--previous-notify", "not json"], ["other"], "x"]
   ) {
@@ -210,7 +221,7 @@ Deno.test("notify that is not a wrapper -> managed value", () => {
   }
 });
 
-Deno.test("nested tables, arrays of tables, and datetimes survive a merge", () => {
+test("nested tables, arrays of tables, and datetimes survive a merge", () => {
   const extra = [
     "[tui.model_availability_nux]",
     '"gpt-5.5" = 4',
@@ -244,7 +255,7 @@ Deno.test("nested tables, arrays of tables, and datetimes survive a merge", () =
   });
 });
 
-Deno.test("duplicate keys or invalid TOML -> throws instead of writing", () => {
+test("duplicate keys or invalid TOML -> throws instead of writing", () => {
   for (
     const current of [
       "a = 1\na = 2\n",
@@ -256,7 +267,7 @@ Deno.test("duplicate keys or invalid TOML -> throws instead of writing", () => {
   }
 });
 
-Deno.test("managed key under a non-table value -> throws", () => {
+test("managed key under a non-table value -> throws", () => {
   assertThrows(
     () => spliceContent('features = "on"\n', MANAGED_BODY, []),
     Error,
@@ -264,33 +275,33 @@ Deno.test("managed key under a non-table value -> throws", () => {
   );
 });
 
-Deno.test("apply writes the state file next to the target and keeps the file mode", async () => {
-  const dir = await Deno.makeTempDir();
+test("apply writes the state file next to the target and keeps the file mode", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   try {
     const managedPath = `${dir}/managed.toml`;
     const targetPath = `${dir}/config.toml`;
-    await Deno.writeTextFile(managedPath, MANAGED_BODY);
-    await Deno.writeTextFile(targetPath, 'model = "old"\n', { mode: 0o600 });
-    await Deno.chmod(targetPath, 0o600);
+    await writeFile(managedPath, MANAGED_BODY);
+    await writeFile(targetPath, 'model = "old"\n', { mode: 0o600 });
+    await chmod(targetPath, 0o600);
 
     assertEquals(await apply(managedPath, targetPath), "updated");
 
-    assertEquals((await Deno.stat(targetPath)).mode! & 0o777, 0o600);
+    assertEquals((await stat(targetPath)).mode! & 0o777, 0o600);
     assertEquals(
-      JSON.parse(await Deno.readTextFile(`${targetPath}.nix-managed.json`)),
+      JSON.parse(await readFile(`${targetPath}.nix-managed.json`, "utf8")),
       { paths: MANAGED_PATHS },
     );
     assertEquals(await apply(managedPath, targetPath), "noop");
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });
 
-Deno.test("apply rejects a malformed state file", async () => {
-  const dir = await Deno.makeTempDir();
+test("apply rejects a malformed state file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   try {
-    await Deno.writeTextFile(`${dir}/managed.toml`, MANAGED_BODY);
-    await Deno.writeTextFile(
+    await writeFile(`${dir}/managed.toml`, MANAGED_BODY);
+    await writeFile(
       `${dir}/config.toml.nix-managed.json`,
       '{"paths": "model"}',
     );
@@ -298,6 +309,6 @@ Deno.test("apply rejects a malformed state file", async () => {
       apply(`${dir}/managed.toml`, `${dir}/config.toml`)
     );
   } finally {
-    await Deno.remove(dir, { recursive: true });
+    await rm(dir, { recursive: true });
   }
 });

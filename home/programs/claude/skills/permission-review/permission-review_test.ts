@@ -1,7 +1,9 @@
-import {
-  assertArrayIncludes,
-  assertEquals,
-} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { test } from "bun:test";
+import { assertArrayIncludes, assertEquals } from "@std/assert";
+import { randomUUID } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   aggregatePatterns,
   diagnoseReason,
@@ -14,93 +16,93 @@ import {
 
 // --- generalizeBashCommand ---
 
-Deno.test("generalizeBashCommand: simple command", () => {
+test("generalizeBashCommand: simple command", () => {
   const patterns = generalizeBashCommand("ls -la");
   assertArrayIncludes(patterns, ["Bash(ls *)"]);
 });
 
-Deno.test("generalizeBashCommand: git subcommand preserved", () => {
+test("generalizeBashCommand: git subcommand preserved", () => {
   const patterns = generalizeBashCommand("git push origin feature-1");
   assertArrayIncludes(patterns, ["Bash(git push *)"]);
 });
 
-Deno.test("generalizeBashCommand: docker compose subcommand", () => {
+test("generalizeBashCommand: docker compose subcommand", () => {
   const patterns = generalizeBashCommand("docker compose up -d");
   assertArrayIncludes(patterns, ["Bash(docker compose *)"]);
 });
 
-Deno.test("generalizeBashCommand: path arguments replaced with *", () => {
+test("generalizeBashCommand: path arguments replaced with *", () => {
   const patterns = generalizeBashCommand("cat ./src/main.ts");
   assertArrayIncludes(patterns, ["Bash(cat *)"]);
 });
 
-Deno.test("generalizeBashCommand: absolute path replaced", () => {
+test("generalizeBashCommand: absolute path replaced", () => {
   const patterns = generalizeBashCommand("chmod +x /usr/local/bin/foo");
   assertArrayIncludes(patterns, ["Bash(chmod *)"]);
 });
 
-Deno.test("generalizeBashCommand: hex hash replaced", () => {
+test("generalizeBashCommand: hex hash replaced", () => {
   const patterns = generalizeBashCommand("git show abc1234def");
   assertArrayIncludes(patterns, ["Bash(git show *)"]);
 });
 
-Deno.test("generalizeBashCommand: UUID replaced", () => {
+test("generalizeBashCommand: UUID replaced", () => {
   const patterns = generalizeBashCommand(
     "rm 550e8400-e29b-41d4-a716-446655440000",
   );
   assertArrayIncludes(patterns, ["Bash(rm *)"]);
 });
 
-Deno.test("generalizeBashCommand: env var prefix skipped", () => {
+test("generalizeBashCommand: env var prefix skipped", () => {
   const patterns = generalizeBashCommand("TMUX= tmux list-sessions");
   assertArrayIncludes(patterns, ["Bash(tmux *)"]);
 });
 
-Deno.test("generalizeBashCommand: nix subcommand", () => {
+test("generalizeBashCommand: nix subcommand", () => {
   const patterns = generalizeBashCommand("nix flake check --no-build");
   assertArrayIncludes(patterns, ["Bash(nix flake *)"]);
 });
 
-Deno.test("generalizeBashCommand: sudo darwin-rebuild", () => {
+test("generalizeBashCommand: sudo darwin-rebuild", () => {
   const patterns = generalizeBashCommand(
     "sudo darwin-rebuild switch --flake .#private",
   );
   assertArrayIncludes(patterns, ["Bash(sudo *)"]);
 });
 
-Deno.test("generalizeBashCommand: home path replaced", () => {
+test("generalizeBashCommand: home path replaced", () => {
   const patterns = generalizeBashCommand("cat ~/dotfiles/README.md");
   assertArrayIncludes(patterns, ["Bash(cat *)"]);
 });
 
-Deno.test("generalizeBashCommand: gh subcommand", () => {
+test("generalizeBashCommand: gh subcommand", () => {
   const patterns = generalizeBashCommand("gh pr create --title test");
   assertArrayIncludes(patterns, ["Bash(gh pr *)"]);
 });
 
-Deno.test("generalizeBashCommand: single command no args", () => {
+test("generalizeBashCommand: single command no args", () => {
   const patterns = generalizeBashCommand("whoami");
   assertArrayIncludes(patterns, ["Bash(whoami *)"]);
 });
 
-Deno.test("generalizeBashCommand: brew subcommand", () => {
+test("generalizeBashCommand: brew subcommand", () => {
   const patterns = generalizeBashCommand("brew install ripgrep");
   assertArrayIncludes(patterns, ["Bash(brew install *)"]);
 });
 
-Deno.test("generalizeBashCommand: pnpm subcommand", () => {
+test("generalizeBashCommand: pnpm subcommand", () => {
   const patterns = generalizeBashCommand("pnpm add -D typescript");
   assertArrayIncludes(patterns, ["Bash(pnpm add *)"]);
 });
 
 // --- extractNonBashExample ---
 
-Deno.test("extractNonBashExample: Read with file_path", () => {
+test("extractNonBashExample: Read with file_path", () => {
   const result = extractNonBashExample("Read", { file_path: "/src/main.ts" });
   assertEquals(result, "Read(/src/main.ts)");
 });
 
-Deno.test("extractNonBashExample: WebFetch with url", () => {
+test("extractNonBashExample: WebFetch with url", () => {
   const result = extractNonBashExample("WebFetch", {
     url: "https://example.com/api",
     prompt: "extract data",
@@ -108,18 +110,18 @@ Deno.test("extractNonBashExample: WebFetch with url", () => {
   assertEquals(result, "WebFetch(https://example.com/api)");
 });
 
-Deno.test("extractNonBashExample: empty input", () => {
+test("extractNonBashExample: empty input", () => {
   const result = extractNonBashExample("Glob", {});
   assertEquals(result, "Glob");
 });
 
-Deno.test("extractNonBashExample: string value truncated at 80 chars", () => {
+test("extractNonBashExample: string value truncated at 80 chars", () => {
   const longVal = "a".repeat(100);
   const result = extractNonBashExample("Grep", { pattern: longVal });
   assertEquals(result, `Grep(pattern=${"a".repeat(80)}...)`);
 });
 
-Deno.test("extractNonBashExample: non-string first value shows keys", () => {
+test("extractNonBashExample: non-string first value shows keys", () => {
   const result = extractNonBashExample("Edit", {
     changes: [{ line: 1 }],
     file_path: "/foo.ts",
@@ -128,7 +130,7 @@ Deno.test("extractNonBashExample: non-string first value shows keys", () => {
   assertEquals(result, "Edit(/foo.ts)");
 });
 
-Deno.test("extractNonBashExample: object-only input shows key names", () => {
+test("extractNonBashExample: object-only input shows key names", () => {
   const result = extractNonBashExample("SomeTool", {
     config: { nested: true },
   });
@@ -137,28 +139,28 @@ Deno.test("extractNonBashExample: object-only input shows key names", () => {
 
 // --- isPatternCovered ---
 
-Deno.test("isPatternCovered: exact match", () => {
+test("isPatternCovered: exact match", () => {
   assertEquals(
     isPatternCovered("Bash(git status)", ["Bash(git status)"]),
     true,
   );
 });
 
-Deno.test("isPatternCovered: suffix glob", () => {
+test("isPatternCovered: suffix glob", () => {
   assertEquals(
     isPatternCovered("Bash(git push origin main)", ["Bash(git push *)"]),
     true,
   );
 });
 
-Deno.test("isPatternCovered: wrapped glob Bash(*merge.ts*)", () => {
+test("isPatternCovered: wrapped glob Bash(*merge.ts*)", () => {
   assertEquals(
     isPatternCovered("Bash(merge.ts --check)", ["Bash(*merge.ts*)"]),
     true,
   );
 });
 
-Deno.test("isPatternCovered: wrapped glob with path", () => {
+test("isPatternCovered: wrapped glob with path", () => {
   assertEquals(
     isPatternCovered(
       "Bash(/Users/foo/.claude/scripts/merge.ts arg1)",
@@ -168,32 +170,32 @@ Deno.test("isPatternCovered: wrapped glob with path", () => {
   );
 });
 
-Deno.test("isPatternCovered: wrapped glob no match", () => {
+test("isPatternCovered: wrapped glob no match", () => {
   assertEquals(
     isPatternCovered("Bash(git status)", ["Bash(*merge.ts*)"]),
     false,
   );
 });
 
-Deno.test("isPatternCovered: mcp prefix match", () => {
+test("isPatternCovered: mcp prefix match", () => {
   assertEquals(
     isPatternCovered("mcp__codex__codex", ["mcp__codex"]),
     true,
   );
 });
 
-Deno.test("isPatternCovered: no match", () => {
+test("isPatternCovered: no match", () => {
   assertEquals(
     isPatternCovered("Bash(rm -rf /)", ["Bash(git *)"]),
     false,
   );
 });
 
-Deno.test("isPatternCovered: Tool(**) covers bare Tool name", () => {
+test("isPatternCovered: Tool(**) covers bare Tool name", () => {
   assertEquals(isPatternCovered("Read", ["Read(**)"]), true);
 });
 
-Deno.test("isPatternCovered: Tool(**) covers Tool(path)", () => {
+test("isPatternCovered: Tool(**) covers Tool(path)", () => {
   assertEquals(
     isPatternCovered("Read(/src/main.ts)", ["Read(**)"]),
     true,
@@ -201,14 +203,14 @@ Deno.test("isPatternCovered: Tool(**) covers Tool(path)", () => {
 });
 
 // Asymmetric: broad pattern covers specific, but not vice-versa
-Deno.test("isPatternCovered: git * covers git commit *", () => {
+test("isPatternCovered: git * covers git commit *", () => {
   assertEquals(
     isPatternCovered("Bash(git commit *)", ["Bash(git *)"]),
     true,
   );
 });
 
-Deno.test("isPatternCovered: git commit * does NOT cover git *", () => {
+test("isPatternCovered: git commit * does NOT cover git *", () => {
   assertEquals(
     isPatternCovered("Bash(git *)", ["Bash(git commit *)"]),
     false,
@@ -217,7 +219,7 @@ Deno.test("isPatternCovered: git commit * does NOT cover git *", () => {
 
 // --- diagnoseReason ---
 
-Deno.test("diagnoseReason: compound command with pipe", () => {
+test("diagnoseReason: compound command with pipe", () => {
   assertEquals(
     diagnoseReason("git status | head -5", ["Bash(git status *)"], [
       "Bash(git status *)",
@@ -226,7 +228,7 @@ Deno.test("diagnoseReason: compound command with pipe", () => {
   );
 });
 
-Deno.test("diagnoseReason: compound command with &&", () => {
+test("diagnoseReason: compound command with &&", () => {
   assertEquals(
     diagnoseReason("git add . && git commit -m msg", ["Bash(git add *)"], [
       "Bash(git *)",
@@ -235,7 +237,7 @@ Deno.test("diagnoseReason: compound command with &&", () => {
   );
 });
 
-Deno.test("diagnoseReason: pattern gap — same tool registered but subcmd missing", () => {
+test("diagnoseReason: pattern gap — same tool registered but subcmd missing", () => {
   assertEquals(
     diagnoseReason("git merge feature", ["Bash(git merge *)"], [
       "Bash(git commit *)",
@@ -244,7 +246,7 @@ Deno.test("diagnoseReason: pattern gap — same tool registered but subcmd missi
   );
 });
 
-Deno.test("diagnoseReason: no pattern at all", () => {
+test("diagnoseReason: no pattern at all", () => {
   assertEquals(
     diagnoseReason("whoami", ["Bash(whoami *)"], []),
     "no_pattern",
@@ -253,7 +255,7 @@ Deno.test("diagnoseReason: no pattern at all", () => {
 
 // --- aggregatePatterns ---
 
-Deno.test("aggregatePatterns: JSON mode collects many examples", () => {
+test("aggregatePatterns: JSON mode collects many examples", () => {
   const entries = Array.from({ length: 10 }, (_, i) => ({
     ts: `2025-01-0${Math.min(i + 1, 9)}T00:00:00Z`,
     sid: "s1",
@@ -274,7 +276,7 @@ Deno.test("aggregatePatterns: JSON mode collects many examples", () => {
   assertEquals(candidate!.examples.length, 10);
 });
 
-Deno.test("aggregatePatterns: subPatterns accumulated as union", () => {
+test("aggregatePatterns: subPatterns accumulated as union", () => {
   const entries = [
     {
       ts: "2025-01-01T00:00:00Z",
@@ -319,8 +321,8 @@ Deno.test("aggregatePatterns: subPatterns accumulated as union", () => {
 
 // --- purgeResolvedEntries ---
 
-Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only", () => {
-  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+test("purgeResolvedEntries: allowListOverride purges matching entries only", () => {
+  const tmpFile = join(tmpdir(), `${randomUUID()}.jsonl`);
   const lines = [
     JSON.stringify({
       ts: "2025-01-01T00:00:00Z",
@@ -347,7 +349,7 @@ Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only"
       project: "test",
     }),
   ];
-  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+  writeFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
   const removed = purgeResolvedEntries(tmpFile, settings, [
@@ -356,13 +358,13 @@ Deno.test("purgeResolvedEntries: allowListOverride purges matching entries only"
   assertEquals(removed, 1);
 
   // Remaining entries
-  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  const remaining = readFileSync(tmpFile, "utf8").trim().split("\n");
   assertEquals(remaining.length, 2);
-  Deno.removeSync(tmpFile);
+  rmSync(tmpFile);
 });
 
-Deno.test("purgeResolvedEntries: empty allowListOverride purges nothing", () => {
-  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+test("purgeResolvedEntries: empty allowListOverride purges nothing", () => {
+  const tmpFile = join(tmpdir(), `${randomUUID()}.jsonl`);
   const lines = [
     JSON.stringify({
       ts: "2025-01-01T00:00:00Z",
@@ -373,17 +375,17 @@ Deno.test("purgeResolvedEntries: empty allowListOverride purges nothing", () => 
       project: "test",
     }),
   ];
-  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+  writeFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
   const removed = purgeResolvedEntries(tmpFile, settings, []);
   assertEquals(removed, 0);
-  Deno.removeSync(tmpFile);
+  rmSync(tmpFile);
 });
 
 // --- isActionableTool ---
 
-Deno.test("isActionableTool: standard tools are actionable", () => {
+test("isActionableTool: standard tools are actionable", () => {
   assertEquals(isActionableTool("Bash"), true);
   assertEquals(isActionableTool("Edit"), true);
   assertEquals(isActionableTool("Write"), true);
@@ -394,12 +396,12 @@ Deno.test("isActionableTool: standard tools are actionable", () => {
   assertEquals(isActionableTool("WebSearch"), true);
 });
 
-Deno.test("isActionableTool: mcp__ prefix is actionable", () => {
+test("isActionableTool: mcp__ prefix is actionable", () => {
   assertEquals(isActionableTool("mcp__codex__codex"), true);
   assertEquals(isActionableTool("mcp__playwright__navigate"), true);
 });
 
-Deno.test("isActionableTool: non-actionable tools", () => {
+test("isActionableTool: non-actionable tools", () => {
   assertEquals(isActionableTool("AskUserQuestion"), false);
   assertEquals(isActionableTool("ExitPlanMode"), false);
   assertEquals(isActionableTool("EnterPlanMode"), false);
@@ -408,7 +410,7 @@ Deno.test("isActionableTool: non-actionable tools", () => {
 
 // --- aggregatePatterns: event-based counting ---
 
-Deno.test("aggregatePatterns: event-based counting separates requested and executed", () => {
+test("aggregatePatterns: event-based counting separates requested and executed", () => {
   const entries = [
     {
       event: "request",
@@ -449,7 +451,7 @@ Deno.test("aggregatePatterns: event-based counting separates requested and execu
   assertEquals(manPattern!.executed, 1);
 });
 
-Deno.test("aggregatePatterns: executed >= 3 becomes allowCandidate", () => {
+test("aggregatePatterns: executed >= 3 becomes allowCandidate", () => {
   const entries = Array.from({ length: 3 }, (_, i) => ({
     event: "executed",
     ts: `2025-01-0${i + 1}T00:00:00Z`,
@@ -471,7 +473,7 @@ Deno.test("aggregatePatterns: executed >= 3 becomes allowCandidate", () => {
   assertEquals(candidate!.executed, 3);
 });
 
-Deno.test("aggregatePatterns: non-actionable tools excluded from candidates and stats", () => {
+test("aggregatePatterns: non-actionable tools excluded from candidates and stats", () => {
   const entries = [
     {
       event: "request",
@@ -506,7 +508,7 @@ Deno.test("aggregatePatterns: non-actionable tools excluded from candidates and 
   assertEquals(result.stats.byTool["Bash"], 1);
 });
 
-Deno.test("aggregatePatterns: backward compat — entry without event treated as request", () => {
+test("aggregatePatterns: backward compat — entry without event treated as request", () => {
   const entries = [
     {
       // No event field (legacy entry)
@@ -531,8 +533,8 @@ Deno.test("aggregatePatterns: backward compat — entry without event treated as
 
 // --- purgeResolvedEntries: bulk non-actionable filter ---
 
-Deno.test("purgeResolvedEntries: bulk purge removes non-actionable entries", () => {
-  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+test("purgeResolvedEntries: bulk purge removes non-actionable entries", () => {
+  const tmpFile = join(tmpdir(), `${randomUUID()}.jsonl`);
   const lines = [
     JSON.stringify({
       ts: "2025-01-01T00:00:00Z",
@@ -559,22 +561,22 @@ Deno.test("purgeResolvedEntries: bulk purge removes non-actionable entries", () 
       project: "test",
     }),
   ];
-  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+  writeFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
   // Bulk purge (no allowListOverride) removes non-actionable entries
   const removed = purgeResolvedEntries(tmpFile, settings);
   assertEquals(removed, 2); // AskUserQuestion + ExitPlanMode
 
-  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  const remaining = readFileSync(tmpFile, "utf8").trim().split("\n");
   assertEquals(remaining.length, 1);
   const kept = JSON.parse(remaining[0]);
   assertEquals(kept.tool, "Bash");
-  Deno.removeSync(tmpFile);
+  rmSync(tmpFile);
 });
 
-Deno.test("purgeResolvedEntries: selective purge does NOT remove non-actionable entries", () => {
-  const tmpFile = Deno.makeTempFileSync({ suffix: ".jsonl" });
+test("purgeResolvedEntries: selective purge does NOT remove non-actionable entries", () => {
+  const tmpFile = join(tmpdir(), `${randomUUID()}.jsonl`);
   const lines = [
     JSON.stringify({
       ts: "2025-01-01T00:00:00Z",
@@ -593,7 +595,7 @@ Deno.test("purgeResolvedEntries: selective purge does NOT remove non-actionable 
       project: "test",
     }),
   ];
-  Deno.writeTextFileSync(tmpFile, lines.join("\n") + "\n");
+  writeFileSync(tmpFile, lines.join("\n") + "\n");
 
   const settings = { permissions: { allow: [] } };
   // Selective purge (with allowListOverride) only purges matched patterns
@@ -602,9 +604,9 @@ Deno.test("purgeResolvedEntries: selective purge does NOT remove non-actionable 
   ]);
   assertEquals(removed, 1); // only Bash entry
 
-  const remaining = Deno.readTextFileSync(tmpFile).trim().split("\n");
+  const remaining = readFileSync(tmpFile, "utf8").trim().split("\n");
   assertEquals(remaining.length, 1);
   const kept = JSON.parse(remaining[0]);
   assertEquals(kept.tool, "AskUserQuestion"); // still present
-  Deno.removeSync(tmpFile);
+  rmSync(tmpFile);
 });

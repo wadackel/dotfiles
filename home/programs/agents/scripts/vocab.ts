@@ -6,7 +6,7 @@
 
 import { text as readText } from "node:stream/consumers";
 import { parseArgs } from "@std/cli/parse-args";
-import { repoNameFor } from "./memo-shared.ts";
+import { repoNameFor } from "../memo/memo-shared.ts";
 import {
   apply,
   buildDigest,

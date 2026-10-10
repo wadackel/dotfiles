@@ -1,9 +1,11 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // PermissionRequest hook for Bash: auto-approve compound commands
 // where all individual commands match the allowed glob patterns.
 // Derives the allowed patterns dynamically from permissions.allow in settings.json files.
 
+import { readFile } from "node:fs/promises";
+import { text } from "node:stream/consumers";
 import { globToRegex, parseCommand } from "./shell-utils.ts";
 
 /** Extract a normalized glob pattern from a single Bash(...) permission pattern. Returns null if not applicable. */
@@ -68,7 +70,7 @@ export async function loadAllowedPatterns(
   const result: string[] = [];
   for (const path of paths) {
     try {
-      const text = await Deno.readTextFile(path);
+      const text = await readFile(path, "utf8");
       const json: Settings = JSON.parse(text);
       for (const pattern of json?.permissions?.allow ?? []) {
         const p = extractAllowedPattern(pattern);
@@ -157,14 +159,12 @@ if (import.meta.main) {
     cwd?: string;
   }
 
-  const input: HookInput = JSON.parse(
-    await new Response(Deno.stdin.readable).text(),
-  );
+  const input: HookInput = JSON.parse(await text(process.stdin));
 
-  if (input.tool_name !== "Bash") Deno.exit(0);
+  if (input.tool_name !== "Bash") process.exit(0);
 
-  const cwd = input.cwd ?? Deno.cwd();
-  const home = Deno.env.get("HOME") ?? "";
+  const cwd = input.cwd ?? process.cwd();
+  const home = process.env.HOME ?? "";
   const paths = [
     `${home}/.claude/settings.json`,
     `${cwd}/.claude/settings.json`,
@@ -172,7 +172,9 @@ if (import.meta.main) {
   ];
   const patterns = await loadAllowedPatterns(paths);
 
-  if (!(await shouldApprove(input.tool_input.command, patterns))) Deno.exit(0);
+  if (!(await shouldApprove(input.tool_input.command, patterns))) {
+    process.exit(0);
+  }
 
   console.log(
     JSON.stringify({

@@ -1,15 +1,27 @@
-#!/usr/bin/env -S deno run --allow-env=HOME,TMUX_PANE --allow-read --allow-write --allow-run=tmux,ps,/usr/bin/sqlite3
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Bridges Codex CLI lifecycle hooks to tmux pane options for Agentower.
 // Invoked as: codex-pane-status.ts <EventName>. Unknown events are no-op exit 0.
 
+import { spawn } from "node:child_process";
+import {
+  appendFile,
+  type FileHandle,
+  mkdir,
+  open,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { constants } from "node:os";
+import { text as stdinText } from "node:stream/consumers";
 import { CodexPaneResolver } from "./codex-pane-target.ts";
 import {
   labelFromWindowMinutes,
   USAGE_LABEL_RE,
   type UsageWindow,
   writeAgentUsage,
-} from "../agent-usage.ts";
+} from "../../tmux/shared/agent-usage.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CODEX,
   CLAUDE_ONLY_KEYS,
@@ -23,7 +35,7 @@ import {
   TOOL_SUBJECT_MAX_CHARS,
   toolStartOps,
   truncate,
-} from "../pane-shared.ts";
+} from "../../tmux/shared/pane-shared.ts";
 
 export type SubagentMutation =
   | { action: "add"; type: string; id: string }
@@ -107,9 +119,7 @@ const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
 const PENDING_SUBAGENT_NOTIFICATIONS_KEY =
   "@pane_pending_subagent_notifications";
 export const CHILD_SESSION_START_FRESHNESS_SECONDS = 120;
-const LOG_FILE = `${
-  Deno.env.get("HOME") ?? "."
-}/.codex/logs/codex-pane-status.log`;
+const LOG_FILE = `${process.env.HOME ?? "."}/.codex/logs/codex-pane-status.log`;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -312,7 +322,6 @@ export function extractEditFile(toolName: string, toolInput: unknown): string {
   // Adversarial inputs (embedded NUL/ESC) collapse runs to a single space
   // instead of one-space-per-byte; non-adversarial inputs are indistinguishable.
   return typeof filePath === "string"
-    // deno-lint-ignore no-control-regex
     ? filePath.replace(/[\x00-\x1f\x7f]+/g, " ")
     : "";
 }
@@ -450,17 +459,16 @@ export async function extractTokenPct(
   transcriptPath: string | null | undefined,
 ): Promise<number | null> {
   if (!transcriptPath) return null;
-  let file: Deno.FsFile | null = null;
+  let file: FileHandle | null = null;
   try {
-    const stat = await Deno.stat(transcriptPath);
-    if (!stat.isFile || stat.size <= 0) return null;
-    const start = Math.max(0, stat.size - TOKEN_TAIL_BYTES);
-    const length = stat.size - start;
-    file = await Deno.open(transcriptPath, { read: true });
-    await file.seek(start, Deno.SeekMode.Start);
+    const info = await stat(transcriptPath);
+    if (!info.isFile() || info.size <= 0) return null;
+    const start = Math.max(0, info.size - TOKEN_TAIL_BYTES);
+    const length = info.size - start;
+    file = await open(transcriptPath, "r");
     const buf = new Uint8Array(length);
-    const read = await file.read(buf);
-    if (read === null || read <= 0) return null;
+    const { bytesRead: read } = await file.read(buf, 0, length, start);
+    if (read <= 0) return null;
     const text = new TextDecoder().decode(buf.subarray(0, read));
     for (const line of text.split("\n").reverse()) {
       if (!line.trim()) continue;
@@ -488,7 +496,7 @@ export async function extractTokenPct(
     return null;
   } finally {
     try {
-      file?.close();
+      await file?.close();
     } catch {
       // ignore close failure in hook context
     }
@@ -534,17 +542,16 @@ export async function extractRateLimits(
   transcriptPath: string | null | undefined,
 ): Promise<{ windows: UsageWindow[]; recordedAt: number | null } | null> {
   if (!transcriptPath) return null;
-  let file: Deno.FsFile | null = null;
+  let file: FileHandle | null = null;
   try {
-    const stat = await Deno.stat(transcriptPath);
-    if (!stat.isFile || stat.size <= 0) return null;
-    const start = Math.max(0, stat.size - TOKEN_TAIL_BYTES);
-    const length = stat.size - start;
-    file = await Deno.open(transcriptPath, { read: true });
-    await file.seek(start, Deno.SeekMode.Start);
+    const info = await stat(transcriptPath);
+    if (!info.isFile() || info.size <= 0) return null;
+    const start = Math.max(0, info.size - TOKEN_TAIL_BYTES);
+    const length = info.size - start;
+    file = await open(transcriptPath, "r");
     const buf = new Uint8Array(length);
-    const read = await file.read(buf);
-    if (read === null || read <= 0) return null;
+    const { bytesRead: read } = await file.read(buf, 0, length, start);
+    if (read <= 0) return null;
     const text = new TextDecoder().decode(buf.subarray(0, read));
     for (const line of text.split("\n").reverse()) {
       if (!line.trim()) continue;
@@ -576,7 +583,7 @@ export async function extractRateLimits(
     return null;
   } finally {
     try {
-      file?.close();
+      await file?.close();
     } catch {
       // ignore close failure in hook context
     }
@@ -872,13 +879,28 @@ export async function commandOutput(
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const child = new Deno.Command(cmd, {
-      args,
-      stdin: "null",
-      stdout: options.stdout,
-      stderr: options.stderr,
-    }).spawn();
-    const output = child.output();
+    const child = spawn(cmd, args, {
+      stdio: [
+        "ignore",
+        options.stdout === "piped" ? "pipe" : "ignore",
+        options.stderr === "piped" ? "pipe" : "ignore",
+      ],
+    });
+    const output = new Promise<
+      { code: number; stdout: Buffer; stderr: Buffer }
+    >((resolve, reject) => {
+      const out: Buffer[] = [];
+      const err: Buffer[] = [];
+      child.stdout?.on("data", (chunk: Buffer) => out.push(chunk));
+      child.stderr?.on("data", (chunk: Buffer) => err.push(chunk));
+      child.on("error", reject);
+      child.on("close", (code, signal) =>
+        resolve({
+          code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+          stdout: Buffer.concat(out),
+          stderr: Buffer.concat(err),
+        }));
+    });
     const result = options.timeoutMs === undefined
       ? await output
       : await Promise.race([
@@ -1206,14 +1228,14 @@ export function buildRunLog(args: {
 
 async function appendRunLog(record: RunLog): Promise<void> {
   try {
-    await Deno.mkdir(`${Deno.env.get("HOME") ?? "."}/.codex/logs`, {
+    await mkdir(`${process.env.HOME ?? "."}/.codex/logs`, {
       recursive: true,
     });
     try {
-      const content = await Deno.readTextFile(LOG_FILE);
+      const content = await readFile(LOG_FILE, "utf8");
       const lines = content.split("\n");
       if (lines.length > LOG_MAX_LINES) {
-        await Deno.writeTextFile(
+        await writeFile(
           LOG_FILE,
           lines.slice(-LOG_MAX_LINES).join("\n"),
         );
@@ -1221,9 +1243,7 @@ async function appendRunLog(record: RunLog): Promise<void> {
     } catch {
       // no log yet
     }
-    await Deno.writeTextFile(LOG_FILE, JSON.stringify(record) + "\n", {
-      append: true,
-    });
+    await appendFile(LOG_FILE, JSON.stringify(record) + "\n");
   } catch {
     // Agentower state is more important than diagnostics
   }
@@ -1234,7 +1254,7 @@ async function appendRunLog(record: RunLog): Promise<void> {
 // account, and Agentower would rather show a stale number with its age than
 // drop the segment entirely.
 async function publishRateLimits(data: HookData): Promise<void> {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return;
   const transcript = typeof data.transcript_path === "string"
     ? data.transcript_path
@@ -1253,12 +1273,12 @@ async function publishRateLimits(data: HookData): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const event = Deno.args[0] ?? "";
+  const event = process.argv.slice(2)[0] ?? "";
   if (!event) {
     await appendRunLog(buildRunLog({
       event,
       data: {},
-      pane: Deno.env.get("TMUX_PANE") ?? null,
+      pane: process.env.TMUX_PANE ?? null,
       state: null,
       ops: [],
       earlyExit: "no-event",
@@ -1268,7 +1288,7 @@ async function main(): Promise<void> {
   }
 
   let data: HookData = {};
-  const raw = await new Response(Deno.stdin.readable).text();
+  const raw = await stdinText(process.stdin);
   if (raw.trim()) {
     try {
       const parsed: unknown = JSON.parse(raw);
@@ -1299,7 +1319,7 @@ async function main(): Promise<void> {
   }
 
   const resolver = new CodexPaneResolver({
-    codexHome: `${Deno.env.get("HOME")}/.codex`,
+    codexHome: `${process.env.HOME}/.codex`,
   });
   const sessionId = str(data.session_id);
   const deadline = Date.now() + (event === "SessionStart" ? 2000 : 0);

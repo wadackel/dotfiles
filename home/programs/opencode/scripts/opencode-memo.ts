@@ -1,12 +1,16 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,claude,sqlite3
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // opencode session-end memo: bridges opencode sessions → Obsidian Daily Note.
 // Invoked by home/programs/opencode/plugin.ts on session.idle /
-// session.status:idle, via Bun.spawn with stdin = JSON {session_id, cwd}.
+// session.status:idle, started by its path with stdin = JSON {session_id, cwd}.
 // Plugin already detaches the worker (unref + ignored stdio), so this script
 // runs the heuristic-write → debounce → Claude → upsert flow inline rather
 // than the two-stage mainHook/mainWorker structure used by codex-memo.
 
+import { readFileSync } from "node:fs";
+import { appendFile, readFile, stat, writeFile } from "node:fs/promises";
+import { text } from "node:stream/consumers";
+import { run } from "../../agents/lib/proc.ts";
 import {
   callClaude,
   composeLLMInput,
@@ -20,8 +24,8 @@ import {
   saveDebounceState,
   shouldRunLLM,
   upsertDailyNote,
-} from "./memo-shared.ts";
-import type { SessionInput, Turn } from "./vocab-propose.ts";
+} from "../../agents/memo/memo-shared.ts";
+import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
 
 // --- Types ---
 
@@ -50,16 +54,16 @@ export interface ParseResult {
 
 // --- Logging ---
 
-const LOG_FILE = `${Deno.env.get("TMPDIR") ?? "/tmp"}/opencode-memo.log`;
+const LOG_FILE = `${process.env.TMPDIR ?? "/tmp"}/opencode-memo.log`;
 const MAX_LOG_BYTES = 200 * 1024;
 
 async function rotateLog(): Promise<void> {
   try {
-    const stat = await Deno.stat(LOG_FILE);
-    if (stat.size > MAX_LOG_BYTES) {
-      const content = await Deno.readTextFile(LOG_FILE);
+    const info = await stat(LOG_FILE);
+    if (info.size > MAX_LOG_BYTES) {
+      const content = await readFile(LOG_FILE, "utf8");
       const lines = content.split("\n");
-      await Deno.writeTextFile(LOG_FILE, lines.slice(-500).join("\n") + "\n");
+      await writeFile(LOG_FILE, lines.slice(-500).join("\n") + "\n");
     }
   } catch {
     // no log yet
@@ -69,7 +73,7 @@ async function rotateLog(): Promise<void> {
 async function log(msg: string): Promise<void> {
   try {
     const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-    await Deno.writeTextFile(LOG_FILE, `[${ts}] ${msg}\n`, { append: true });
+    await appendFile(LOG_FILE, `[${ts}] ${msg}\n`);
   } catch {
     // memo logging must not break opencode plugin
   }
@@ -131,21 +135,20 @@ function stripControls(raw: string): string {
 // --- SQLite I/O (impure; tested only via integration) ---
 
 function dbPath(): string {
-  return `${Deno.env.get("HOME")}/.local/share/opencode/opencode-stable.db`;
+  return `${process.env.HOME}/.local/share/opencode/opencode-stable.db`;
 }
 
 async function runSqliteJson(query: string): Promise<unknown[]> {
-  const cmd = new Deno.Command("sqlite3", {
-    args: ["-json", dbPath(), query],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const { code, stdout, stderr } = await cmd.output();
+  const { code, stdout, stderr } = await run("sqlite3", [
+    "-json",
+    dbPath(),
+    query,
+  ]);
   if (code !== 0) {
-    const errMsg = new TextDecoder().decode(stderr).trim().slice(0, 200);
+    const errMsg = stderr.trim().slice(0, 200);
     throw new Error(`sqlite3 exit=${code}: ${errMsg}`);
   }
-  const out = new TextDecoder().decode(stdout).trim();
+  const out = stdout.trim();
   if (!out) return [];
   return JSON.parse(out) as unknown[];
 }
@@ -213,16 +216,16 @@ export function turnsFromRows(
 // the memo itself.
 export async function proposeVocab(
   input: Omit<SessionInput, "home" | "tmpdir">,
-  load = () => import("./vocab-propose.ts"),
+  load = () => import("../../agents/scripts/vocab-propose.ts"),
 ): Promise<void> {
   try {
-    const home = Deno.env.get("HOME");
+    const home = process.env.HOME;
     if (!home) return;
     const { proposeFromSession } = await load();
     const r = await proposeFromSession({
       ...input,
       home,
-      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+      tmpdir: process.env.TMPDIR ?? "/tmp",
     });
     await log(`VOCAB: ${r.note}`);
   } catch (e) {
@@ -279,7 +282,7 @@ export function countToolUses(parsed: ParseResult): number {
 async function main(): Promise<void> {
   await rotateLog();
 
-  const stdinData = await new Response(Deno.stdin.readable).text();
+  const stdinData = await text(process.stdin);
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdinData);
@@ -295,7 +298,7 @@ async function main(): Promise<void> {
 
   const sessionId = hookData.session_id;
   const sessionShort = sessionId.slice(0, 8);
-  const cwd = hookData.cwd ?? Deno.cwd();
+  const cwd = hookData.cwd ?? process.cwd();
   await log(`START: session=${sessionShort} cwd=${cwd}`);
 
   let rows: { messages: MessageRow[]; parts: PartRow[] };
@@ -308,7 +311,7 @@ async function main(): Promise<void> {
 
   const dailyPath = dailyNotePath();
   try {
-    await Deno.stat(dailyPath);
+    await stat(dailyPath);
   } catch {
     await log(`SKIP: daily note not found: ${dailyPath}`);
     return;
@@ -340,7 +343,7 @@ async function main(): Promise<void> {
     const timestamp = nowTimestamp();
     const statePath = debounceStatePath("opencode", sessionShort);
 
-    const dailyContent = Deno.readTextFileSync(dailyPath);
+    const dailyContent = readFileSync(dailyPath, "utf8");
     const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
     const runLLM = shouldRunLLM(statePath, userCount);
 

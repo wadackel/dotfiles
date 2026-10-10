@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // PreToolUse hook: declarative bash command guard.
 // Reads rules from YAML config files (global + project-level) and blocks
@@ -13,8 +13,10 @@
 //     - pattern: "git -C *"
 //       message: "Use cd && git instead"
 
-import { parse } from "jsr:@std/yaml";
-import { dirname, join } from "jsr:@std/path";
+import { readFile, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { text } from "node:stream/consumers";
+import { parse } from "@std/yaml";
 import { getSegments, globToRegex } from "./shell-utils.ts";
 
 export interface Rule {
@@ -36,7 +38,7 @@ interface HookInput {
 /** Load and parse YAML config. Returns empty array on missing file or parse error. */
 export async function loadRules(path: string): Promise<Rule[]> {
   try {
-    const content = await Deno.readTextFile(path);
+    const content = await readFile(path, "utf8");
     const config = parse(content) as Config;
     return config?.rules ?? [];
   } catch {
@@ -50,7 +52,7 @@ export async function findProjectConfig(cwd: string): Promise<string | null> {
   while (true) {
     const candidate = join(dir, ".claude", "bash-policy.yaml");
     try {
-      await Deno.stat(candidate);
+      await stat(candidate);
       return candidate;
     } catch {
       const parent = dirname(dir);
@@ -63,18 +65,17 @@ export async function findProjectConfig(cwd: string): Promise<string | null> {
 // --- Entry point ---
 
 if (import.meta.main) {
-  const input: HookInput = JSON.parse(
-    await new Response(Deno.stdin.readable).text(),
-  );
+  const input: HookInput = JSON.parse(await text(process.stdin));
 
-  if (input.tool_name !== "Bash") Deno.exit(0);
+  if (input.tool_name !== "Bash") process.exit(0);
 
   const command = input.tool_input.command;
-  const cwd = input.cwd ?? Deno.cwd();
+  const cwd = input.cwd ?? process.cwd();
 
   // Load global config (co-located with this script)
-  const scriptDir = new URL(".", import.meta.url).pathname;
-  const globalRules = await loadRules(join(scriptDir, "bash-policy.yaml"));
+  const globalRules = await loadRules(
+    join(import.meta.dirname, "bash-policy.yaml"),
+  );
 
   // Load project config (walk up from cwd)
   const projectConfigPath = await findProjectConfig(cwd);
@@ -84,10 +85,10 @@ if (import.meta.main) {
 
   // Project rules checked first, then global
   const rules = [...projectRules, ...globalRules];
-  if (rules.length === 0) Deno.exit(0);
+  if (rules.length === 0) process.exit(0);
 
   const segments = await getSegments(command);
-  if (segments.length === 0) Deno.exit(0);
+  if (segments.length === 0) process.exit(0);
 
   for (const rule of rules) {
     const regex = globToRegex(rule.pattern);
@@ -102,7 +103,7 @@ if (import.meta.main) {
             `Blocked: ${command}`,
           ].join("\n"),
         );
-        Deno.exit(2);
+        process.exit(2);
       }
     }
   }

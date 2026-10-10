@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildLLMInput,
   buildWorkerArgs,
@@ -10,7 +14,6 @@ import {
   type HookLogEntry,
   readHookLogEntriesForSession,
   validateHookData,
-  WORKER_COMMAND,
 } from "./codex-memo.ts";
 
 // Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
@@ -49,7 +52,7 @@ const entries: HookLogEntry[] = [
   makeEntry("Stop", { last_assistant_message: "実装が完了しました。" }),
 ];
 
-Deno.test("extractors: read Codex UserPromptSubmit / Stop / PreToolUse", () => {
+test("extractors: read Codex UserPromptSubmit / Stop / PreToolUse", () => {
   assertEquals(extractUserTexts(entries).length, 2);
   assertEquals(extractAssistantTexts(entries), [
     "関連hookを確認します。",
@@ -58,7 +61,7 @@ Deno.test("extractors: read Codex UserPromptSubmit / Stop / PreToolUse", () => {
   assertEquals(extractToolSummary(entries), "exec_command: 2, apply_patch: 1");
 });
 
-Deno.test("extractUserTexts: skips _truncated, non-string, empty prompt", () => {
+test("extractUserTexts: skips _truncated, non-string, empty prompt", () => {
   const noisy: HookLogEntry[] = [
     makeEntry("UserPromptSubmit", { _truncated: true, keys: ["prompt"] }),
     makeEntry("UserPromptSubmit", { prompt: 42 }),
@@ -68,7 +71,7 @@ Deno.test("extractUserTexts: skips _truncated, non-string, empty prompt", () => 
   assertEquals(extractUserTexts(noisy), ["keeper"]);
 });
 
-Deno.test("extractAssistantTexts: skips _truncated, non-string, empty message", () => {
+test("extractAssistantTexts: skips _truncated, non-string, empty message", () => {
   const noisy: HookLogEntry[] = [
     makeEntry("Stop", { _truncated: true, keys: ["last_assistant_message"] }),
     makeEntry("Stop", { last_assistant_message: null }),
@@ -78,7 +81,7 @@ Deno.test("extractAssistantTexts: skips _truncated, non-string, empty message", 
   assertEquals(extractAssistantTexts(noisy), ["keeper"]);
 });
 
-Deno.test("extractToolSummary: aggregates entry-level tool_name only", () => {
+test("extractToolSummary: aggregates entry-level tool_name only", () => {
   const mixed: HookLogEntry[] = [
     makeEntry("PreToolUse", { tool_name: "buried_in_payload_ignored" }, {
       tool_name: "a",
@@ -91,7 +94,7 @@ Deno.test("extractToolSummary: aggregates entry-level tool_name only", () => {
   assertEquals(extractToolSummary(mixed), "a: 2, b: 1");
 });
 
-Deno.test("countToolUses: counts PreToolUse entries with a tool_name", () => {
+test("countToolUses: counts PreToolUse entries with a tool_name", () => {
   const mixed: HookLogEntry[] = [
     makeEntry("PreToolUse", { tool_name: "buried_in_payload_ignored" }, {
       tool_name: "a",
@@ -105,26 +108,26 @@ Deno.test("countToolUses: counts PreToolUse entries with a tool_name", () => {
   assertEquals(countToolUses([]), 0);
 });
 
-Deno.test("heuristicSummary: skips injected prompt noise", () => {
+test("heuristicSummary: skips injected prompt noise", () => {
   assertEquals(
     heuristicSummary(entries),
     "codexのhooksを改善してObsidianに作業内容を残したい",
   );
 });
 
-Deno.test("heuristicSummary / buildLLMInput: safe on empty entries", () => {
+test("heuristicSummary / buildLLMInput: safe on empty entries", () => {
   assertEquals(heuristicSummary([]), "");
   assertEquals(buildLLMInput([]), "");
 });
 
-Deno.test("heuristicSummary: falls back to first assistant when only Stop present", () => {
+test("heuristicSummary: falls back to first assistant when only Stop present", () => {
   const stopOnly: HookLogEntry[] = [
     makeEntry("Stop", { last_assistant_message: "first assistant reply" }),
   ];
   assertEquals(heuristicSummary(stopOnly), "first assistant reply");
 });
 
-Deno.test("buildLLMInput: includes compact user prompts and assistant text, not tools", () => {
+test("buildLLMInput: includes compact user prompts and assistant text, not tools", () => {
   const input = buildLLMInput(entries);
   assertStringIncludes(input, "[User prompts]");
   assertStringIncludes(input, "codexのhooksを改善");
@@ -133,34 +136,32 @@ Deno.test("buildLLMInput: includes compact user prompts and assistant text, not 
   assertEquals(input.includes("exec_command"), false);
 });
 
-Deno.test("buildWorkerArgs: produces a stable detached argv", () => {
+test("buildWorkerArgs: produces a stable detached argv", () => {
   const hookData = {
     session_id: SESSION,
     cwd: "/Users/me/dotfiles",
   };
   const scriptPath = "/Users/me/.codex/scripts/codex-memo.ts";
-  assertEquals(buildWorkerArgs(scriptPath, hookData), [
-    "run",
-    "--allow-read",
-    "--allow-write",
-    "--allow-env=HOME,TMPDIR",
-    "--allow-run=git,claude",
+  const argv = buildWorkerArgs(scriptPath, hookData);
+  assertEquals(argv, [
     scriptPath,
     "--worker",
     JSON.stringify(hookData),
   ]);
+  assertEquals(argv.some((arg) => arg.includes("deno")), false);
 });
 
-Deno.test("spawnWorker: the launched command is covered by its own shebang --allow-run", async () => {
-  const src = await Deno.readTextFile(
-    new URL("./codex-memo.ts", import.meta.url),
+test("spawnWorker: the script it launches by path is executable and its shebang carries the flags", async () => {
+  const script = join(import.meta.dirname, "codex-memo.ts");
+  const src = await readFile(script, "utf8");
+  assertEquals(
+    src.split("\n")[0],
+    "#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null",
   );
-  const matched = src.split("\n")[0].match(/--allow-run=(\S+)/);
-  assertEquals(matched !== null, true);
-  assertEquals(matched![1].split(",").includes(WORKER_COMMAND), true);
+  assertEquals(((await stat(script)).mode & 0o111) !== 0, true);
 });
 
-Deno.test("validateHookData: session_id required, cwd optional, transcript_path irrelevant", () => {
+test("validateHookData: session_id required, cwd optional, transcript_path irrelevant", () => {
   assertEquals(
     validateHookData({ session_id: "abc", cwd: "/Users/me" }),
     { session_id: "abc", cwd: "/Users/me" },
@@ -183,8 +184,8 @@ Deno.test("validateHookData: session_id required, cwd optional, transcript_path 
   assertEquals(validateHookData({ session_id: "x", cwd: 42 }), null);
 });
 
-Deno.test("readHookLogEntriesForSession: filters by session and event, tolerates parse errors", async () => {
-  const dir = await Deno.makeTempDir();
+test("readHookLogEntriesForSession: filters by session and event, tolerates parse errors", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   const path = `${dir}/hooks.jsonl`;
   const otherSession = "def45678-aaaa-bbbb-cccc-000000000002";
   const lines = [
@@ -223,7 +224,7 @@ Deno.test("readHookLogEntriesForSession: filters by session and event, tolerates
     }),
     "",
   ];
-  await Deno.writeTextFile(path, lines.join("\n"));
+  await writeFile(path, lines.join("\n"));
 
   const filtered = readHookLogEntriesForSession(path, SESSION, {
     types: ["UserPromptSubmit", "Stop"],
@@ -237,7 +238,7 @@ Deno.test("readHookLogEntriesForSession: filters by session and event, tolerates
   assertEquals(allEvents.length, 3);
 });
 
-Deno.test("readHookLogEntriesForSession: missing file returns empty array", () => {
+test("readHookLogEntriesForSession: missing file returns empty array", () => {
   const missing = readHookLogEntriesForSession(
     "/tmp/does-not-exist-hooks.jsonl",
     SESSION,
@@ -245,8 +246,8 @@ Deno.test("readHookLogEntriesForSession: missing file returns empty array", () =
   assertEquals(missing, []);
 });
 
-Deno.test("readHookLogEntriesForSession: rejects malformed entries (missing required fields, wrong types)", async () => {
-  const dir = await Deno.makeTempDir();
+test("readHookLogEntriesForSession: rejects malformed entries (missing required fields, wrong types)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmp-"));
   const path = `${dir}/hooks.jsonl`;
   const lines = [
     JSON.stringify({
@@ -288,7 +289,7 @@ Deno.test("readHookLogEntriesForSession: rejects malformed entries (missing requ
     // top-level null
     "null",
   ];
-  await Deno.writeTextFile(path, lines.join("\n"));
+  await writeFile(path, lines.join("\n"));
 
   const entries = readHookLogEntriesForSession(path, SESSION);
   assertEquals(entries.length, 1);

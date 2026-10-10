@@ -1,9 +1,11 @@
-#!/usr/bin/env -S deno run --allow-read --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // comment-reviewer has no Bash, so this counts for it instead of letting it estimate.
 // The file filter and marker set mirror comment-reviewer.md Scope; docstring markers
 // are not distinguished because the reviewer applies its own scope filter to the
 // listed blocks.
+
+import { readFile } from "node:fs/promises";
 
 const EXTENSIONS = new Set([
   ".rs",
@@ -99,19 +101,19 @@ export function render(m: Metrics): string {
 }
 
 if (import.meta.main) {
-  const path = Deno.args[0];
+  const path = process.argv[2];
   if (!path) {
     console.error("usage: comment-metrics.ts <diff-file>");
-    Deno.exit(2);
+    process.exit(2);
   }
   let diff: string;
   try {
-    diff = await Deno.readTextFile(path);
+    diff = await readFile(path, "utf8");
   } catch (e) {
     console.error(
       `comment-metrics: cannot read ${path}: ${(e as Error).message}`,
     );
-    Deno.exit(2);
+    process.exit(2);
   }
   console.log(render(measure(diff)));
 }

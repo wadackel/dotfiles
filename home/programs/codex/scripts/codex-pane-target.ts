@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { constants } from "node:os";
 import {
   AGENT_NAMES as AGENTS,
   CODEX_UUID_PATTERN,
@@ -5,8 +7,8 @@ import {
   parseTitleIdentity,
   processAncestry as ancestry,
   topLevelCodexPid,
-} from "../agent-presence.ts";
-export { parseTitleIdentity } from "../agent-presence.ts";
+} from "../../tmux/shared/agent-presence.ts";
+export { parseTitleIdentity } from "../../tmux/shared/agent-presence.ts";
 
 const UUID_RE = new RegExp(`^${CODEX_UUID_PATTERN}$`);
 
@@ -30,13 +32,25 @@ export interface TargetResolution {
 
 export const runTargetCommand: TargetCommand = async (cmd, args) => {
   try {
-    const output = await new Deno.Command(cmd, {
-      args,
-      stdin: "null",
-      stdout: "piped",
-      stderr: "piped",
-      signal: AbortSignal.timeout(500),
-    }).output();
+    const output = await new Promise<
+      { code: number; stdout: Buffer; stderr: Buffer }
+    >((resolve, reject) => {
+      const child = spawn(cmd, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 500,
+      });
+      const out: Buffer[] = [];
+      const err: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+      child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+      child.on("error", reject);
+      child.on("close", (code, signal) =>
+        resolve({
+          code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+          stdout: Buffer.concat(out),
+          stderr: Buffer.concat(err),
+        }));
+    });
     return {
       code: output.code,
       stdout: new TextDecoder().decode(output.stdout).trim(),
@@ -66,7 +80,7 @@ export class CodexPaneResolver {
     // A shared daemon retains the socket of whichever terminal first launched it.
     this.tmuxArgs = options.tmuxArgs ?? ["-L", "default"];
     this.run = options.run ?? runTargetCommand;
-    this.callerPid = options.callerPid ?? Deno.pid;
+    this.callerPid = options.callerPid ?? process.pid;
   }
 
   private async query(sql: string): Promise<Array<{ id: string }>> {

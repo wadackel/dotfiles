@@ -1,1 +1,0 @@
-../tmux/shared/agent-presence.ts

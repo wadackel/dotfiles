@@ -6,6 +6,9 @@
  * `home/programs/agents/skills/writing-clarity/references/protected-terms.md`。
  */
 
+import { stat } from "node:fs/promises";
+import { resolve } from "node:path";
+
 export type Severity = "warn" | "info";
 
 export interface Finding {
@@ -21,18 +24,18 @@ export interface Dictionaries {
   workflow: string[];
 }
 
-const HOME = Deno.env.get("HOME") ?? "";
+const HOME = process.env.HOME ?? "";
 
-// vocab-inventory.ts と同じ理由: symlink 経由の起動では import.meta.url が
-// canonicalize されず相対導出が壊れるため、flake.nix の存在で検証してから使う。
+// スクリプトをリポジトリの外へ写して起動すると5階層上はルートにならないので、
+// flake.nix の存在で検証してから使う。
 export async function resolveRepoRoot(): Promise<string> {
   const candidates = [
-    new URL("../../../../..", import.meta.url).pathname.replace(/\/$/, ""),
+    resolve(import.meta.dirname, "../../../../.."),
     `${HOME}/dotfiles`,
   ];
   for (const c of candidates) {
     try {
-      await Deno.stat(`${c}/flake.nix`);
+      await stat(`${c}/flake.nix`);
       return c;
     } catch {
       // 次の候補へ

@@ -1,8 +1,8 @@
 // Vocabulary ontology in the Obsidian vault: approved notes in 06_Vocabulary/,
 // agent proposals in 98_Maintenance/proposals/Vocabulary/ approved via `status`.
 // Reads no environment variable and imports nothing from the memo scripts: the
-// memo workers and the Hermes task runner load it on Deno under a narrow
-// `--allow-env`, where any other read throws.
+// Hermes task runner loads it on Deno under a narrow `--allow-env`, where any
+// other read throws.
 
 import {
   mkdir,

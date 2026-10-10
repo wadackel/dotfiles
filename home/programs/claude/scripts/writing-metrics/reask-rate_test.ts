@@ -1,19 +1,18 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals } from "@std/assert";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run as runCommand } from "../../../agents/lib/proc.ts";
 import { classifyReask, collectPairs } from "./reask-rate.ts";
 
-const scriptPath = new URL("./reask-rate.ts", import.meta.url).pathname;
+const scriptPath = join(import.meta.dirname, "reask-rate.ts");
 
 async function run(
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  const { code, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--allow-env=HOME", scriptPath, ...args],
-  }).output();
-  return {
-    code,
-    stdout: new TextDecoder().decode(stdout),
-    stderr: new TextDecoder().decode(stderr),
-  };
+  const { code, stdout, stderr } = await runCommand(scriptPath, args);
+  return { code, stdout, stderr };
 }
 
 function user(text: string, ts: string, extra: Record<string, unknown> = {}) {
@@ -62,7 +61,7 @@ const FIXTURE = [
   user("簡潔にコミットして", "2026-09-02T00:02:00.000Z"),
 ].join("\n") + "\n";
 
-Deno.test("classifyReask: 7 分類の代表例", () => {
+test("classifyReask: 7 分類の代表例", () => {
   assertEquals(classifyReask("状況はどう？"), "short-q");
   assertEquals(classifyReask("ちょっと返答が長すぎてわからない"), "confusion");
   assertEquals(classifyReask("サービスを止めるってどういう意味？"), "meaning");
@@ -78,13 +77,13 @@ Deno.test("classifyReask: 7 分類の代表例", () => {
   assertEquals(classifyReask("検証観点を整理して"), "summarize");
 });
 
-Deno.test("classifyReask: まとめて / 簡潔に だけの発話は拾わない", () => {
+test("classifyReask: まとめて / 簡潔に だけの発話は拾わない", () => {
   assertEquals(classifyReask("PR にまとめて"), null);
   assertEquals(classifyReask("簡潔にコミットして"), null);
   assertEquals(classifyReask("進めて"), null);
 });
 
-Deno.test("collectPairs: 組の境界と除外", () => {
+test("collectPairs: 組の境界と除外", () => {
   const pairs = collectPairs(FIXTURE, "sess-1", -Infinity);
   assertEquals(pairs.length, 5);
   assertEquals(pairs.map((p) => p.category), [
@@ -104,17 +103,17 @@ Deno.test("collectPairs: 組の境界と除外", () => {
 });
 
 async function withFixture<T>(fn: (root: string) => Promise<T>): Promise<T> {
-  const root = await Deno.makeTempDir({ prefix: "reask-rate-" });
+  const root = await mkdtemp(join(tmpdir(), "reask-rate-"));
   try {
-    await Deno.mkdir(`${root}/proj-a`);
-    await Deno.writeTextFile(`${root}/proj-a/sess-1234abcd.jsonl`, FIXTURE);
+    await mkdir(`${root}/proj-a`);
+    await writeFile(`${root}/proj-a/sess-1234abcd.jsonl`, FIXTURE);
     return await fn(root);
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await rm(root, { recursive: true });
   }
 }
 
-Deno.test("CLI: --list は聞き返し 1 組 1 行で、改行は空白になる", async () => {
+test("CLI: --list は聞き返し 1 組 1 行で、改行は空白になる", async () => {
   await withFixture(async (root) => {
     const r = await run(["--root", root, "--list"]);
     assertEquals(r.code, 0, r.stderr);
@@ -126,7 +125,7 @@ Deno.test("CLI: --list は聞き返し 1 組 1 行で、改行は空白になる
   });
 });
 
-Deno.test("CLI: --from で境界前の組が落ちる", async () => {
+test("CLI: --from で境界前の組が落ちる", async () => {
   await withFixture(async (root) => {
     const r = await run(["--root", root, "--from", "2026-09-02"]);
     assertEquals(r.code, 0, r.stderr);
@@ -140,13 +139,13 @@ Deno.test("CLI: --from で境界前の組が落ちる", async () => {
   });
 });
 
-Deno.test("CLI: 存在しない --root は exit 1 で stderr にパス", async () => {
+test("CLI: 存在しない --root は exit 1 で stderr にパス", async () => {
   const r = await run(["--root", "/nonexistent/reask-root"]);
   assertEquals(r.code, 1);
   assert(r.stderr.includes("/nonexistent/reask-root"), r.stderr);
 });
 
-Deno.test("CLI: 未知の引数は exit 1", async () => {
+test("CLI: 未知の引数は exit 1", async () => {
   const r = await run(["--bogus"]);
   assertEquals(r.code, 1);
   assert(r.stderr.includes("usage"), r.stderr);

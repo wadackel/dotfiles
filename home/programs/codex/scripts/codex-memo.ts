@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR --allow-run=git,claude,deno
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 import {
   callClaude,
@@ -13,8 +13,13 @@ import {
   saveDebounceState,
   shouldRunLLM,
   upsertDailyNote,
-} from "./memo-shared.ts";
-import type { SessionInput, Turn } from "./vocab-propose.ts";
+} from "../../agents/memo/memo-shared.ts";
+import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { text } from "node:stream/consumers";
+import { fileURLToPath } from "node:url";
 
 export interface HookLogEntry {
   ts: string;
@@ -30,8 +35,8 @@ interface HookData {
   cwd?: string;
 }
 
-const LOG_FILE = `${Deno.env.get("HOME") ?? "."}/.codex/logs/codex-memo.log`;
-const HOOK_LOG_PATH = `${Deno.env.get("HOME") ?? "."}/.codex/logs/hooks.jsonl`;
+const LOG_FILE = `${process.env.HOME ?? "."}/.codex/logs/codex-memo.log`;
+const HOOK_LOG_PATH = `${process.env.HOME ?? "."}/.codex/logs/hooks.jsonl`;
 const MAX_LOG_LINES = 1000;
 
 function stripControls(raw: string): string {
@@ -42,17 +47,17 @@ function stripControls(raw: string): string {
 }
 
 async function ensureLogDir(): Promise<void> {
-  await Deno.mkdir(`${Deno.env.get("HOME") ?? "."}/.codex/logs`, {
+  await mkdir(`${process.env.HOME ?? "."}/.codex/logs`, {
     recursive: true,
   });
 }
 
 async function rotateLog(): Promise<void> {
   try {
-    const content = await Deno.readTextFile(LOG_FILE);
+    const content = await readFile(LOG_FILE, "utf8");
     const lines = content.split("\n");
     if (lines.length > MAX_LOG_LINES) {
-      await Deno.writeTextFile(
+      await writeFile(
         LOG_FILE,
         lines.slice(-MAX_LOG_LINES).join("\n"),
       );
@@ -67,7 +72,7 @@ async function log(msg: string): Promise<void> {
     await ensureLogDir();
     await rotateLog();
     const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-    await Deno.writeTextFile(LOG_FILE, `[${ts}] ${msg}\n`, { append: true });
+    await appendFile(LOG_FILE, `[${ts}] ${msg}\n`);
   } catch {
     // memo logging must not break Codex hooks
   }
@@ -91,7 +96,7 @@ export function readHookLogEntriesForSession(
 ): HookLogEntry[] {
   let raw: string;
   try {
-    raw = Deno.readTextFileSync(logPath);
+    raw = readFileSync(logPath, "utf8");
   } catch {
     return [];
   }
@@ -190,16 +195,16 @@ export function extractTurns(entries: HookLogEntry[]): Turn[] {
 // the memo itself.
 export async function proposeVocab(
   input: Omit<SessionInput, "home" | "tmpdir">,
-  load = () => import("./vocab-propose.ts"),
+  load = () => import("../../agents/scripts/vocab-propose.ts"),
 ): Promise<void> {
   try {
-    const home = Deno.env.get("HOME");
+    const home = process.env.HOME;
     if (!home) return;
     const { proposeFromSession } = await load();
     const r = await proposeFromSession({
       ...input,
       home,
-      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+      tmpdir: process.env.TMPDIR ?? "/tmp",
     });
     await log(`WORKER VOCAB: ${r.note}`);
   } catch (e) {
@@ -262,38 +267,22 @@ export function buildLLMInput(entries: HookLogEntry[]): string {
   );
 }
 
-// Deno は bare な --allow-run エントリを PATH 経由で解決するため、Deno.execPath() を
-// 渡すと PATH 上位のシムに解決された別パスと突き合わされて NotCapable になる。
-// shebang の許可リストと同じ bare 名で起動して一致させる。
-export const WORKER_COMMAND = "deno";
-
+// argv[0] is the script itself, so the worker starts through the same shebang
+// as the hook and gets the flags that keep the cwd's bunfig.toml and .env out.
 export function buildWorkerArgs(
   scriptPath: string,
   hookData: HookData,
 ): string[] {
-  return [
-    "run",
-    "--allow-read",
-    "--allow-write",
-    "--allow-env=HOME,TMPDIR",
-    // ワーカー経路が起動するのは repoNameFor の git と callClaude の claude だけで、
-    // spawnWorker を呼ぶのは mainHook に限られる。deno を残すと縮小の意図が消える。
-    "--allow-run=git,claude",
-    scriptPath,
-    "--worker",
-    JSON.stringify(hookData),
-  ];
+  return [scriptPath, "--worker", JSON.stringify(hookData)];
 }
 
 function spawnWorker(hookData: HookData): void {
-  const scriptPath = new URL(import.meta.url).pathname;
-  const child = new Deno.Command(WORKER_COMMAND, {
-    args: buildWorkerArgs(scriptPath, hookData),
-    stdin: "null",
-    stdout: "null",
-    stderr: "null",
-  }).spawn();
-  child.status.catch(() => {});
+  const [command, ...args] = buildWorkerArgs(
+    fileURLToPath(import.meta.url),
+    hookData,
+  );
+  const child = spawn(command, args, { stdio: "ignore" });
+  child.on("error", () => {});
   child.unref();
 }
 
@@ -325,7 +314,7 @@ async function prepareContext(
 ): Promise<PreparedContext | null> {
   const sessionId = input.session_id;
   const sessionShort = sessionId.slice(0, 8);
-  const cwd = input.cwd ?? Deno.cwd();
+  const cwd = input.cwd ?? process.cwd();
 
   const entries = readHookLogEntriesForSession(HOOK_LOG_PATH, sessionId, {
     types: ["UserPromptSubmit", "Stop", "PreToolUse"],
@@ -343,7 +332,7 @@ async function prepareContext(
 
   const dailyPath = dailyNotePath();
   try {
-    await Deno.stat(dailyPath);
+    await stat(dailyPath);
   } catch {
     await log(`${logPrefix}SKIP: daily note not found: ${dailyPath}`);
     return null;
@@ -363,7 +352,7 @@ async function prepareContext(
 }
 
 async function mainHook(): Promise<void> {
-  const stdinData = await new Response(Deno.stdin.readable).text();
+  const stdinData = await text(process.stdin);
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdinData);
@@ -392,7 +381,7 @@ async function mainHook(): Promise<void> {
     return;
   }
 
-  const dailyContent = Deno.readTextFileSync(ctx.dailyPath);
+  const dailyContent = readFileSync(ctx.dailyPath, "utf8");
   const hasExistingEntry = dailyContent.includes(`/${ctx.sessionShort})`);
   const statePath = debounceStatePath("codex", ctx.sessionShort);
   const runLLM = shouldRunLLM(statePath, ctx.userCount);
@@ -433,7 +422,7 @@ async function mainWorker(workerInput: HookData): Promise<void> {
   const vocab = proposeVocab({
     agent: "codex",
     sessionId: workerInput.session_id,
-    cwd: workerInput.cwd ?? Deno.cwd(),
+    cwd: workerInput.cwd ?? process.cwd(),
     repo: ctx.repoName,
     turns: extractTurns(ctx.entries),
   });
@@ -465,10 +454,10 @@ async function mainWorker(workerInput: HookData): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (Deno.args[0] === "--worker") {
+  if (process.argv.slice(2)[0] === "--worker") {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(Deno.args[1] ?? "{}");
+      parsed = JSON.parse(process.argv.slice(2)[1] ?? "{}");
     } catch (e) {
       await log(`WORKER ERROR: invalid argv JSON: ${e}`);
       return;

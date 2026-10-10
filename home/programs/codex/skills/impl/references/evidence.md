@@ -3,7 +3,7 @@
 Use the existing helper; do not assemble sidecars or hashes inline. Every command takes an absolute `.evidence.json` path under the real `~/.codex/plans` directory. Run from the bound repository. The file's `plan` is the matching `.md` basename.
 
 ```bash
-rtk proxy deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.agents/scripts/plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
+rtk proxy ~/.agents/scripts/plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
 ```
 
 Replace `normalize` with the command below, retaining the permission flags:

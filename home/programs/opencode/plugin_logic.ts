@@ -1,7 +1,8 @@
 // Pure event → tmux pane-option op converter for the opencode plugin.
 // Mirrors home/programs/claude/scripts/claude-pane-status.ts:eventToOps so
 // Agentower reads `@pane_*` from both agents through one shared format. Bun-only
-// I/O lives in plugin.ts; this file is runtime-agnostic so Deno can test it.
+// I/O lives in plugin.ts; this file uses no runtime API, so its tests run
+// outside opencode.
 
 import {
   ALL_PANE_OPTIONS_FOR_OPENCODE,

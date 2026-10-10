@@ -1,4 +1,9 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { test } from "bun:test";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import {
   buildLLMInput,
   countNonNoiseUserMessages,
@@ -9,7 +14,7 @@ import {
   heuristicSummary,
   proposeVocab,
 } from "./claude-memo.ts";
-import { resolveRepoName } from "./memo-shared.ts";
+import { resolveRepoName } from "../../agents/memo/memo-shared.ts";
 
 // Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
 // upsertDailyNote, debounceStatePath, etc.) are tested in
@@ -18,7 +23,7 @@ import { resolveRepoName } from "./memo-shared.ts";
 // Below covers the Claude transcript-shape parser (isMeta filtering,
 // NOISE_PATTERNS coverage, heuristicSummary fallback).
 
-Deno.test("claude-memo: shared helpers covered by memo-shared_test.ts", () => {
+test("claude-memo: shared helpers covered by memo-shared_test.ts", () => {
   assertEquals(resolveRepoName("/tmp/repo", "/tmp/repo/.git"), "repo");
 });
 
@@ -36,7 +41,7 @@ const assistantEntry = (text: string) => ({
   },
 });
 
-Deno.test("buildLLMInput: leads with the last response and omits tool counts", () => {
+test("buildLLMInput: leads with the last response and omits tool counts", () => {
   const toolUse = {
     type: "assistant",
     message: {
@@ -55,7 +60,7 @@ Deno.test("buildLLMInput: leads with the last response and omits tool counts", (
   assertEquals(input.includes("Bash"), false);
 });
 
-Deno.test("extractUserTexts: skips isMeta:true entries", () => {
+test("extractUserTexts: skips isMeta:true entries", () => {
   const entries = [
     userEntry("<local-command-caveat>Caveat: ...</local-command-caveat>", true),
     userEntry("real user prompt"),
@@ -63,14 +68,14 @@ Deno.test("extractUserTexts: skips isMeta:true entries", () => {
   assertEquals(extractUserTexts(entries), ["real user prompt"]);
 });
 
-Deno.test("heuristicSummary: returns empty when only isMeta caveat and no assistant text", () => {
+test("heuristicSummary: returns empty when only isMeta caveat and no assistant text", () => {
   const entries = [
     userEntry("<local-command-caveat>Caveat: ...</local-command-caveat>", true),
   ];
   assertEquals(heuristicSummary(entries), "");
 });
 
-Deno.test("heuristicSummary: excludes <command-name>-first slash command entries", () => {
+test("heuristicSummary: excludes <command-name>-first slash command entries", () => {
   const slashCommand =
     "<command-name>/add-dir</command-name>\n<command-message>add-dir</command-message>\n<command-args>~/some/path</command-args>";
   const entries = [
@@ -80,7 +85,7 @@ Deno.test("heuristicSummary: excludes <command-name>-first slash command entries
   assertEquals(heuristicSummary(entries), "assistant response");
 });
 
-Deno.test("heuristicSummary: excludes <local-command-stdout> entries", () => {
+test("heuristicSummary: excludes <local-command-stdout> entries", () => {
   const entries = [
     userEntry("<local-command-stdout>some shell output</local-command-stdout>"),
     assistantEntry("assistant response"),
@@ -88,7 +93,7 @@ Deno.test("heuristicSummary: excludes <local-command-stdout> entries", () => {
   assertEquals(heuristicSummary(entries), "assistant response");
 });
 
-Deno.test("heuristicSummary: excludes <task-notification> entries", () => {
+test("heuristicSummary: excludes <task-notification> entries", () => {
   const entries = [
     userEntry("<task-notification>agent done</task-notification>"),
     assistantEntry("assistant response"),
@@ -96,7 +101,7 @@ Deno.test("heuristicSummary: excludes <task-notification> entries", () => {
   assertEquals(heuristicSummary(entries), "assistant response");
 });
 
-Deno.test("heuristicSummary: falls through caveat to real user prompt", () => {
+test("heuristicSummary: falls through caveat to real user prompt", () => {
   const entries = [
     userEntry("<local-command-caveat>Caveat: ...</local-command-caveat>", true),
     userEntry("実際にやりたいこと: バグ調査したい"),
@@ -104,7 +109,7 @@ Deno.test("heuristicSummary: falls through caveat to real user prompt", () => {
   assertEquals(heuristicSummary(entries), "実際にやりたいこと: バグ調査したい");
 });
 
-Deno.test("heuristicSummary: keeps prompts that mention Claude Code tags mid-text (anchor false-positive guard)", () => {
+test("heuristicSummary: keeps prompts that mention Claude Code tags mid-text (anchor false-positive guard)", () => {
   const entries = [
     userEntry("バグ調査中に <command-name> について質問したい"),
   ];
@@ -114,36 +119,28 @@ Deno.test("heuristicSummary: keeps prompts that mention Claude Code tags mid-tex
   );
 });
 
-Deno.test("main: CLAUDE_MEMO_SKIP=1 short-circuits before touching state", async () => {
-  const tmp = await Deno.makeTempDir();
-  const scriptPath = new URL("./claude-memo.ts", import.meta.url).pathname;
+test("main: CLAUDE_MEMO_SKIP=1 short-circuits before touching state", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "tmp-"));
+  const scriptPath = join(import.meta.dirname, "claude-memo.ts");
 
-  const cmd = new Deno.Command("deno", {
-    args: [
-      "run",
-      "--allow-read",
-      "--allow-write",
-      "--allow-env",
-      "--allow-run=git,claude",
-      scriptPath,
-    ],
-    env: { CLAUDE_MEMO_SKIP: "1", TMPDIR: tmp, HOME: tmp },
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
+  const { code } = await run(scriptPath, [], {
+    env: {
+      CLAUDE_MEMO_SKIP: "1",
+      TMPDIR: tmp,
+      HOME: tmp,
+      // Bun would otherwise leave its transpiler cache in the throwaway HOME.
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH:
+        `${process.env.HOME}/Library/Caches/bun/@t@`,
+    },
+    stdin: "{}",
   });
-  const proc = cmd.spawn();
-  const writer = proc.stdin.getWriter();
-  await writer.write(new TextEncoder().encode("{}"));
-  await writer.close();
-  const { code } = await proc.output();
   assertEquals(code, 0);
 
-  const log = await Deno.readTextFile(`${tmp}/claude-memo.log`);
+  const log = await readFile(`${tmp}/claude-memo.log`, "utf8");
   assertStringIncludes(log, "SKIP: CLAUDE_MEMO_SKIP=1");
 });
 
-Deno.test("countUserMessages: excludes isMeta:true entries", () => {
+test("countUserMessages: excludes isMeta:true entries", () => {
   const entries = [
     userEntry("real prompt 1"),
     userEntry("<local-command-caveat>...</local-command-caveat>", true),
@@ -153,7 +150,7 @@ Deno.test("countUserMessages: excludes isMeta:true entries", () => {
   assertEquals(countUserMessages(entries), 2);
 });
 
-Deno.test("countNonNoiseUserMessages: differs from countUserMessages by noise filtering", () => {
+test("countNonNoiseUserMessages: differs from countUserMessages by noise filtering", () => {
   const entries = [
     userEntry("ok"),
     userEntry("実装の質問が複数あります"),
@@ -162,7 +159,7 @@ Deno.test("countNonNoiseUserMessages: differs from countUserMessages by noise fi
   assertEquals(countNonNoiseUserMessages(entries), 1);
 });
 
-Deno.test("countToolUses: counts assistant tool_use blocks only", () => {
+test("countToolUses: counts assistant tool_use blocks only", () => {
   const entries = [
     userEntry("prompt"),
     {
@@ -182,7 +179,7 @@ Deno.test("countToolUses: counts assistant tool_use blocks only", () => {
   assertEquals(countToolUses([userEntry("prompt")]), 0);
 });
 
-Deno.test("claude-memo: extractTurns keeps order and drops meta and noise", () => {
+test("claude-memo: extractTurns keeps order and drops meta and noise", () => {
   const turns = extractTurns(
     [
       {
@@ -218,10 +215,10 @@ Deno.test("claude-memo: extractTurns keeps order and drops meta and noise", () =
   ]);
 });
 
-Deno.test("claude-memo: a vocabulary module that fails to load does not throw", async () => {
-  const previous = Deno.env.get("TMPDIR");
-  const tmp = await Deno.makeTempDir({ prefix: "claude-memo-vocab-" });
-  Deno.env.set("TMPDIR", tmp);
+test("claude-memo: a vocabulary module that fails to load does not throw", async () => {
+  const previous = process.env.TMPDIR;
+  const tmp = await mkdtemp(join(tmpdir(), "claude-memo-vocab-"));
+  process.env.TMPDIR = tmp;
   try {
     await proposeVocab(
       {
@@ -234,12 +231,12 @@ Deno.test("claude-memo: a vocabulary module that fails to load does not throw", 
       () => Promise.reject(new Error("module not found")),
     );
     assertStringIncludes(
-      await Deno.readTextFile(`${tmp}/claude-memo.log`),
+      await readFile(`${tmp}/claude-memo.log`, "utf8"),
       "VOCAB ERROR: Error: module not found",
     );
   } finally {
-    if (previous === undefined) Deno.env.delete("TMPDIR");
-    else Deno.env.set("TMPDIR", previous);
-    await Deno.remove(tmp, { recursive: true });
+    if (previous === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previous;
+    await rm(tmp, { recursive: true });
   }
 });

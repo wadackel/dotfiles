@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * 対話履歴から「そのターンの agent テキスト全体 → 次のユーザー発話」の組を作り、
  * 次の発話が直前の出力への聞き返し（分かりやすく / どういう意味 / 何をしたら /
@@ -13,6 +13,8 @@
  * `--from` は指定日の 00:00（+09:00 固定）以降のユーザー発話を含む。
  * `--root` の既定は `$HOME/.claude/projects`。
  */
+import type { Dirent, Stats } from "node:fs";
+import { readdir, readFile, stat } from "node:fs/promises";
 
 export type Category =
   | "short-q"
@@ -176,20 +178,20 @@ function pct(part: number, whole: number): string {
 
 function fail(msg: string): never {
   console.error(`reask-rate.ts: ${msg}`);
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // transcript は 30 日でローテーションされ、走査中にディレクトリごと消えることがある
 async function* files(dir: string): AsyncGenerator<string> {
-  let entries: Deno.DirEntry[];
+  let entries: Dirent[];
   try {
-    entries = await Array.fromAsync(Deno.readDir(dir));
+    entries = await readdir(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const e of entries) {
     const p = `${dir}/${e.name}`;
-    if (e.isDirectory) {
+    if (e.isDirectory()) {
       if (e.name === "subagents") continue;
       yield* files(p);
     } else if (e.name.endsWith(".jsonl")) yield p;
@@ -208,9 +210,9 @@ if (import.meta.main) {
   const usage =
     "usage: reask-rate.ts [--from YYYY-MM-DD] [--root <dir>] [--list]";
   let fromMs = -Infinity;
-  let root = `${Deno.env.get("HOME")}/.claude/projects`;
+  let root = `${process.env.HOME}/.claude/projects`;
   let list = false;
-  const args = [...Deno.args];
+  const args = [...process.argv.slice(2)];
   while (args.length) {
     const a = args.shift()!;
     if (a === "--list") list = true;
@@ -228,23 +230,23 @@ if (import.meta.main) {
       root = v;
     } else fail(`未知の引数: ${a}（${usage}）`);
   }
-  let rootStat: Deno.FileInfo;
+  let rootStat: Stats;
   try {
-    rootStat = await Deno.stat(root);
+    rootStat = await stat(root);
   } catch (e) {
     fail(
-      e instanceof Deno.errors.NotFound
+      (e as NodeJS.ErrnoException).code === "ENOENT"
         ? `--root が存在しない: ${root}`
         : `--root を読めない: ${root} (${e instanceof Error ? e.message : e})`,
     );
   }
-  if (!rootStat.isDirectory) fail(`--root はディレクトリではない: ${root}`);
+  if (!rootStat.isDirectory()) fail(`--root はディレクトリではない: ${root}`);
 
   const pairs: Pair[] = [];
   for await (const path of files(root)) {
     let content: string;
     try {
-      content = await Deno.readTextFile(path);
+      content = await readFile(path, "utf8");
     } catch {
       continue;
     }
@@ -266,7 +268,7 @@ if (import.meta.main) {
         } ${p.session} [${p.category}] ${p.replyChars}字 | ${head}`,
       );
     }
-    Deno.exit(0);
+    process.exit(0);
   }
 
   const reask = pairs.filter((p) => p.category);

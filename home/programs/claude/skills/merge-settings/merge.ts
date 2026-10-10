@@ -1,8 +1,10 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // ================================================================
 // Settings Merger - Merge .claude/settings.local.json to global settings
 // ================================================================
+
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 
 const PROJECT_LOCAL_SETTINGS = "./.claude/settings.local.json";
 
@@ -156,14 +158,14 @@ export function removeRulesFromSettings(
 // ================================================================
 
 function readJsonFile(path: string): unknown {
-  const text = Deno.readTextFileSync(path);
+  const text = readFileSync(path, "utf8");
   return JSON.parse(text);
 }
 
 function writeJsonFile(path: string, data: unknown): void {
   // Write through symlink: resolve the real path then write
-  const realPath = Deno.realPathSync(path);
-  Deno.writeTextFileSync(realPath, JSON.stringify(data, null, 2) + "\n");
+  const realPath = realpathSync(path);
+  writeFileSync(realPath, JSON.stringify(data, null, 2) + "\n");
 }
 
 // ================================================================
@@ -191,7 +193,7 @@ function output(result: Result): void {
 
 function die(error_type: string, message: string): never {
   output({ status: "error", error_type, message });
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // ================================================================
@@ -252,7 +254,7 @@ function proposalMode(userSettingsPath: string): void {
     new_rules_count: newRules.length,
     subsumed_rules: subsumedRules,
     subsumed_count: subsumedRules.length,
-    project_path: Deno.cwd(),
+    project_path: process.cwd(),
     user_settings_path: userSettingsPath,
   });
 }
@@ -359,7 +361,7 @@ function cleanupMode(rulesJsonArg: string): void {
 
   try {
     // Write directly (local file, not symlinked)
-    Deno.writeTextFileSync(
+    writeFileSync(
       PROJECT_LOCAL_SETTINGS,
       JSON.stringify(updated, null, 2) + "\n",
     );
@@ -379,19 +381,19 @@ function cleanupMode(rulesJsonArg: string): void {
 // ================================================================
 
 if (import.meta.main) {
-  const claudeHome = `${Deno.env.get("HOME")}/.claude`;
+  const claudeHome = `${process.env.HOME}/.claude`;
   const userSettingsPath = `${claudeHome}/settings.json`;
 
-  const mode = Deno.args[0];
+  const mode = process.argv.slice(2)[0];
 
   if (mode === "--apply") {
-    const rulesJson = Deno.args[1];
+    const rulesJson = process.argv.slice(2)[1];
     if (!rulesJson) {
       die("missing_rules", "Usage: merge.ts --apply '<rules_json>'");
     }
     applyMode(rulesJson, userSettingsPath);
   } else if (mode === "--cleanup") {
-    const rulesJson = Deno.args[1];
+    const rulesJson = process.argv.slice(2)[1];
     if (!rulesJson) {
       die("missing_rules", "Usage: merge.ts --cleanup '<rules_json>'");
     }

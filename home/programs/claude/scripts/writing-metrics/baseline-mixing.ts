@@ -1,11 +1,12 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * 和英混在と分量のベースライン。
  * 和文の地の文に混ざる英単語・カタカナ語の密度と、1ユーザーターンあたりの応答総量を実測する。
  * 判定対象は地の文のみ。コードブロック・インラインコードは除外する。
  */
+import { readdir, readFile } from "node:fs/promises";
 
-const HOME = Deno.env.get("HOME")!;
+const HOME = process.env.HOME!;
 
 const proseOnly = (t: string) =>
   t.replace(/```[\s\S]*?```/g, "\n").replace(/~~~[\s\S]*?~~~/g, "\n").replace(
@@ -72,9 +73,9 @@ const lenBuckets: LenB[] = [
 const turnTotals: number[] = [];
 
 async function* files(dir: string): AsyncGenerator<string> {
-  for await (const e of Deno.readDir(dir)) {
+  for (const e of await readdir(dir, { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
-    if (e.isDirectory) yield* files(p);
+    if (e.isDirectory()) yield* files(p);
     else if (e.name.endsWith(".jsonl")) yield p;
   }
 }
@@ -82,7 +83,7 @@ async function* files(dir: string): AsyncGenerator<string> {
 for await (const path of files(`${HOME}/.claude/projects`)) {
   let content: string;
   try {
-    content = await Deno.readTextFile(path);
+    content = await readFile(path, "utf8");
   } catch {
     continue;
   }

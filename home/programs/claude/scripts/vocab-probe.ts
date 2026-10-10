@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME --allow-run=git,claude --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Measures whether the vocabulary digest changes how Claude reads short
 // instructions. Probes run with every hook disabled so neither the memo nor the
@@ -6,9 +6,14 @@
 //   vocab-probe.ts draft [--count 20]   # writes probes.md for the owner to correct
 //   vocab-probe.ts run [--reps 3] [--concurrency 4]
 
-import { parseArgs } from "jsr:@std/cli@1/parse-args";
-import { parse, stringify } from "jsr:@std/yaml@1";
-import { repoNameFor } from "./memo-shared.ts";
+import { writeSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseArgs } from "@std/cli/parse-args";
+import { parse, stringify } from "@std/yaml";
+import { run as runCommand } from "../../agents/lib/proc.ts";
+import { repoNameFor } from "../../agents/memo/memo-shared.ts";
 import {
   buildDigest,
   effectiveEntries,
@@ -17,8 +22,11 @@ import {
   loadSchema,
   symmetricRelations,
   vaultPaths,
-} from "./vocab-lib.ts";
-import { SEED_SOURCES, shortUtterances } from "./vocab-propose.ts";
+} from "../../agents/scripts/vocab-lib.ts";
+import {
+  SEED_SOURCES,
+  shortUtterances,
+} from "../../agents/scripts/vocab-propose.ts";
 
 export interface Expected {
   skill: string;
@@ -159,7 +167,7 @@ const PROMPT = (utterance: string) =>
   `指示: ${utterance}`;
 
 function home(): string {
-  const h = Deno.env.get("HOME");
+  const h = process.env.HOME;
   if (!h) throw new Error("HOME is not set");
   return h;
 }
@@ -186,20 +194,17 @@ async function ask(
     ...(digestFile ? ["--append-system-prompt-file", digestFile] : []),
     PROMPT(probe.utterance),
   ];
-  const out = await new Deno.Command("claude", {
-    args,
+  const out = await runCommand("claude", args, {
     cwd: expand(probe.cwd),
     env: { CLAUDE_MEMO_SKIP: "1" },
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  if (!out.success) {
-    const reason = new TextDecoder().decode(out.stderr).trim().split("\n")[0];
+  });
+  if (out.code !== 0) {
+    const reason = out.stderr.trim().split("\n")[0];
     console.error(`\n${probe.id}: claude -p failed: ${reason}`);
     return null;
   }
   try {
-    const json = JSON.parse(new TextDecoder().decode(out.stdout));
+    const json = JSON.parse(out.stdout);
     if (json.structured_output) return json.structured_output;
   } catch {
     // Falls through to the same report as a missing structured_output.
@@ -225,7 +230,7 @@ async function draft(count: number): Promise<void> {
   const p = vaultPaths(home());
   let used: string[] = [];
   try {
-    used = JSON.parse(await Deno.readTextFile(`${p.root}/${SEED_SOURCES}`));
+    used = JSON.parse(await readFile(`${p.root}/${SEED_SOURCES}`, "utf8"));
   } catch {
     // No seed yet: every utterance is available.
   }
@@ -255,8 +260,8 @@ async function draft(count: number): Promise<void> {
     if (picked.length >= count) break;
   }
   const path = `${p.root}/${PROBES}`;
-  await Deno.mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
-  await Deno.writeTextFile(path, renderProbes(picked), { createNew: true });
+  await mkdir(path.replace(/\/[^/]+$/, ""), { recursive: true });
+  await writeFile(path, renderProbes(picked), { flag: "wx" });
   console.log(
     `${path}: ${picked.length} 問（expected は直後の操作からの推測。直してから run する）`,
   );
@@ -264,13 +269,13 @@ async function draft(count: number): Promise<void> {
 
 async function run(reps: number, concurrency: number): Promise<void> {
   const p = vaultPaths(home());
-  const probes = parseProbes(await Deno.readTextFile(`${p.root}/${PROBES}`));
-  const tmp = await Deno.makeTempDir({ prefix: "vocab-probe-" });
+  const probes = parseProbes(await readFile(`${p.root}/${PROBES}`, "utf8"));
+  const tmp = await mkdtemp(join(tmpdir(), "vocab-probe-"));
   const digests = new Map<string, { file: string; text: string }>();
   for (const cwd of new Set(probes.map((x) => x.cwd))) {
     const text = await digestFor(cwd);
     const file = `${tmp}/${digests.size}.md`;
-    await Deno.writeTextFile(file, text);
+    await writeFile(file, text);
     digests.set(cwd, { file, text });
   }
   const jobs: (() => Promise<Row & { answer: Answer | null }>)[] = [];
@@ -303,20 +308,21 @@ async function run(reps: number, concurrency: number): Promise<void> {
       while (next < jobs.length) {
         const job = jobs[next++];
         results.push(await job());
-        Deno.stderr.writeSync(
+        writeSync(
+          2,
           new TextEncoder().encode(`\r${results.length}/${jobs.length}`),
         );
       }
     }),
   );
-  await Deno.remove(tmp, { recursive: true });
+  await rm(tmp, { recursive: true });
   const order = (r: Row) =>
     `${r.condition === "without" ? 0 : 1}-${r.rep}-${r.probe}`;
   results.sort((a, b) => order(a).localeCompare(order(b)));
 
   const date = new Date().toLocaleDateString("sv-SE");
   const dir = `${p.root}/98_Maintenance/vocab-probe`;
-  await Deno.writeTextFile(
+  await writeFile(
     `${dir}/results-${date}.json`,
     JSON.stringify(results, null, 2) + "\n",
   );
@@ -344,7 +350,7 @@ async function run(reps: number, concurrency: number): Promise<void> {
       } | ${count("without")}/${reps} | ${count("with")}/${reps} |`;
     }),
   ];
-  await Deno.writeTextFile(
+  await writeFile(
     `${dir}/results-${date}.md`,
     lines.join("\n") + "\n",
   );
@@ -353,7 +359,7 @@ async function run(reps: number, concurrency: number): Promise<void> {
 }
 
 if (import.meta.main) {
-  const [command, ...rest] = Deno.args;
+  const [command, ...rest] = process.argv.slice(2);
   const flags = parseArgs(rest, {
     string: ["count", "reps", "concurrency"],
   });
@@ -364,6 +370,6 @@ if (import.meta.main) {
     console.error(
       "Usage: vocab-probe.ts draft [--count 20] | run [--reps 3] [--concurrency 4]",
     );
-    Deno.exit(2);
+    process.exit(2);
   }
 }

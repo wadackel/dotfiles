@@ -1,29 +1,26 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals } from "@std/assert";
+import { join } from "node:path";
+import { run } from "../../../agents/lib/proc.ts";
 
-const lintPath = new URL("./lint.ts", import.meta.url).pathname;
-const badPath = new URL("./fixtures/bad.md", import.meta.url).pathname;
+const lintPath = join(import.meta.dirname, "lint.ts");
+const badPath = join(import.meta.dirname, "fixtures/bad.md");
 
 async function runLint(
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  const { code, stdout, stderr } = await new Deno.Command(Deno.execPath(), {
-    args: ["run", "--allow-read", "--allow-env=HOME", lintPath, ...args],
-  }).output();
-  return {
-    code,
-    stdout: new TextDecoder().decode(stdout),
-    stderr: new TextDecoder().decode(stderr),
-  };
+  const { code, stdout, stderr } = await run(lintPath, args);
+  return { code, stdout, stderr };
 }
 
-Deno.test("lint.ts: findings があっても exit 0 で、text 形式で出力する", async () => {
+test("lint.ts: findings があっても exit 0 で、text 形式で出力する", async () => {
   const r = await runLint([badPath]);
   assertEquals(r.code, 0);
   assert(r.stdout.includes(":[warn] workflow_vocab: task —"));
   assert(r.stdout.includes("[info] telegraphic_fragment:"));
 });
 
-Deno.test("lint.ts: --json は findings 配列と stats を返す", async () => {
+test("lint.ts: --json は findings 配列と stats を返す", async () => {
   const r = await runLint([badPath, "--json"]);
   assertEquals(r.code, 0);
   const { findings, stats } = JSON.parse(r.stdout);
@@ -37,20 +34,20 @@ Deno.test("lint.ts: --json は findings 配列と stats を返す", async () => 
   }
 });
 
-Deno.test("lint.ts: ファイル不在は exit 1", async () => {
+test("lint.ts: ファイル不在は exit 1", async () => {
   const r = await runLint(["/nonexistent/x.md"]);
   assertEquals(r.code, 1);
   assert(r.stderr.includes("cannot read"));
 });
 
-Deno.test("lint.ts: ディレクトリ指定は exit 1", async () => {
-  const dir = new URL("./fixtures", import.meta.url).pathname;
+test("lint.ts: ディレクトリ指定は exit 1", async () => {
+  const dir = join(import.meta.dirname, "fixtures");
   const r = await runLint([dir]);
   assertEquals(r.code, 1);
   assert(r.stderr.includes("directory"));
 });
 
-Deno.test("lint.ts: 引数なしは exit 1", async () => {
+test("lint.ts: 引数なしは exit 1", async () => {
   const r = await runLint([]);
   assertEquals(r.code, 1);
   assert(r.stderr.includes("usage"));

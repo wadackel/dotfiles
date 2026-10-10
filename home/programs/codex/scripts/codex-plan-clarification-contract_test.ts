@@ -1,6 +1,8 @@
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
+import { readFile } from "node:fs/promises";
 
-const CWD_ROOT = new URL(`file://${Deno.cwd().replace(/\/$/, "")}/`);
+const CWD_ROOT = new URL(`file://${process.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
@@ -181,13 +183,13 @@ function escapeRegExp(text: string): string {
 
 async function readRepoFile(relativePath: string): Promise<string> {
   try {
-    return await Deno.readTextFile(new URL(relativePath, CWD_ROOT));
+    return await readFile(new URL(relativePath, CWD_ROOT), "utf8");
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw error;
     }
   }
-  return await Deno.readTextFile(new URL(relativePath, MODULE_ROOT));
+  return await readFile(new URL(relativePath, MODULE_ROOT), "utf8");
 }
 
 function section(markdown: string, heading: string): string {
@@ -248,7 +250,7 @@ function assertInOrder(haystack: string, needles: string[]): void {
   }
 }
 
-Deno.test("Codex argument extraction prioritizes --answer continuation", async () => {
+test("Codex argument extraction prioritizes --answer continuation", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const argumentExtraction = section(skill, "## Argument extraction");
 
@@ -263,7 +265,7 @@ Deno.test("Codex argument extraction prioritizes --answer continuation", async (
   ]);
 });
 
-Deno.test("Codex Requirement Clarification enforces blocking interview contract", async () => {
+test("Codex Requirement Clarification enforces blocking interview contract", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const restate = section(skill, "### Restate");
   const clarification = section(skill, "### Requirement Clarification");
@@ -298,7 +300,7 @@ Deno.test("Codex Requirement Clarification enforces blocking interview contract"
 });
 
 for (const [agent, path] of AGENT_PLANS) {
-  Deno.test(`${agent} AGREE keeps A1/A5 blocking and A7 non-blocking`, async () => {
+  test(`${agent} AGREE keeps A1/A5 blocking and A7 non-blocking`, async () => {
     const skill = await readRepoFile(path);
 
     if (agent === "Claude") {
@@ -324,14 +326,14 @@ for (const [agent, path] of AGENT_PLANS) {
   });
 }
 
-Deno.test("interview.md carries the shared interview rules and no round caps", async () => {
+test("interview.md carries the shared interview rules and no round caps", async () => {
   const interview = await readRepoFile(INTERVIEW);
   assertIncludesAll(interview, INTERVIEW_RULE_NEEDLES);
   assertExcludesAll(interview, INTERVIEW_LEGACY_NEEDLES);
 });
 
 for (const [name, path] of INTERVIEW_SKILLS) {
-  Deno.test(`${name} points at interview.md instead of restating it`, async () => {
+  test(`${name} points at interview.md instead of restating it`, async () => {
     const skill = await readRepoFile(path);
     assertStringIncludes(skill, "references/interview.md");
     assertExcludesAll(skill, INTERVIEW_LEGACY_NEEDLES);
@@ -345,7 +347,7 @@ for (const [name, path] of INTERVIEW_SKILLS) {
   });
 }
 
-Deno.test("contract.md defines every fixed string once", async () => {
+test("contract.md defines every fixed string once", async () => {
   const contract = await readRepoFile(CONTRACT);
   assertIncludesAll(contract, [
     ...REQUIRED_SECTIONS,
@@ -364,20 +366,20 @@ Deno.test("contract.md defines every fixed string once", async () => {
 });
 
 for (const [needle, files] of CONTRACT_MIRRORS) {
-  Deno.test(`contract string is carried verbatim: ${needle.slice(0, 40)}`, async () => {
+  test(`contract string is carried verbatim: ${needle.slice(0, 40)}`, async () => {
     for (const path of files) {
       assertStringIncludes(await readRepoFile(path), needle, path);
     }
   });
 }
 
-Deno.test("skills that apply human-review.md reference it by a path that resolves", async () => {
+test("skills that apply human-review.md reference it by a path that resolves", async () => {
   for (const [path, reference] of HUMAN_REVIEW_REFERRERS) {
     assertStringIncludes(await readRepoFile(path), reference, path);
   }
 });
 
-Deno.test("skills and prompts reference contract.md rather than deleted references", async () => {
+test("skills and prompts reference contract.md rather than deleted references", async () => {
   for (const path of CONTRACT_REFERRERS) {
     const body = await readRepoFile(path);
     assertStringIncludes(body, "references/contract.md", path);
@@ -394,7 +396,7 @@ Deno.test("skills and prompts reference contract.md rather than deleted referenc
   assertExcludesAll(checkPlan, ["evidence-grades.md"]);
 });
 
-Deno.test("check-plan.ts mirrors the contract vocabulary", async () => {
+test("check-plan.ts mirrors the contract vocabulary", async () => {
   const checkPlan = await readRepoFile(CHECK_PLAN_SCRIPT);
   const contract = await readRepoFile(CONTRACT);
   for (const heading of REQUIRED_SECTIONS) {
@@ -418,7 +420,7 @@ Deno.test("check-plan.ts mirrors the contract vocabulary", async () => {
   }
 });
 
-Deno.test("Codex Approval Summary exposes approval decision details", async () => {
+test("Codex Approval Summary exposes approval decision details", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const output = spanBetween(
     skill,
@@ -444,7 +446,7 @@ Deno.test("Codex Approval Summary exposes approval decision details", async () =
   ]);
 });
 
-Deno.test("Codex plan skill preserves user-facing output language", async () => {
+test("Codex plan skill preserves user-facing output language", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const languagePolicy = section(skill, "### Language policy");
 
@@ -457,7 +459,7 @@ Deno.test("Codex plan skill preserves user-facing output language", async () => 
   ]);
 });
 
-Deno.test("Codex plan selects independent review before the trivial bypass", async () => {
+test("Codex plan selects independent review before the trivial bypass", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const parse = section(skill, "## PARSE");
   const selection = section(skill, "### Independent review selection");
@@ -487,7 +489,7 @@ Deno.test("Codex plan selects independent review before the trivial bypass", asy
   ]);
 });
 
-Deno.test("Codex delegation policy is deployed without model or size gates", async () => {
+test("Codex delegation policy is deployed without model or size gates", async () => {
   const policy = await readRepoFile("home/programs/codex/subagent-policy.md");
   const nix = await readRepoFile("home/programs/codex/default.nix");
   assertStringIncludes(nix, "builtins.readFile ./subagent-policy.md");
@@ -504,7 +506,7 @@ Deno.test("Codex delegation policy is deployed without model or size gates", asy
   assert(!/gpt-\d|Astra|20 files|500 lines/i.test(policy));
 });
 
-Deno.test("Critic prompt mandates regression findings for clarification failures", async () => {
+test("Critic prompt mandates regression findings for clarification failures", async () => {
   const prompt = await readRepoFile(CRITIC_PROMPT);
 
   assertIncludesAll(prompt, [
@@ -533,7 +535,7 @@ Deno.test("Critic prompt mandates regression findings for clarification failures
   ]);
 });
 
-Deno.test("representative plan artifact fixtures preserve contract context", () => {
+test("representative plan artifact fixtures preserve contract context", () => {
   for (const artifact of REPRESENTATIVE_ARTIFACTS) {
     assert(artifact.path.endsWith(".md"));
     assertStringIncludes(artifact.body, "### Requirement Clarification");
@@ -543,7 +545,7 @@ Deno.test("representative plan artifact fixtures preserve contract context", () 
 
 // opencode 側の配線は 2 ファイルに別れた同じリテラルで成立するため、片方だけ改名しても
 // build も lint も通り、opencode だけが黙って規則を受け取らなくなる。
-Deno.test("Vault-first policy reaches both Codex and opencode", async () => {
+test("Vault-first policy reaches both Codex and opencode", async () => {
   const policy = await readRepoFile(
     "home/programs/agents/shared/vault-policy.md",
   );

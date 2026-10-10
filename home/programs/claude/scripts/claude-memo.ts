@@ -1,5 +1,8 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-run=git,claude
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
+import { readFileSync } from "node:fs";
+import { appendFile, readFile, stat, writeFile } from "node:fs/promises";
+import { text } from "node:stream/consumers";
 import {
   callClaude,
   composeLLMInput,
@@ -13,8 +16,8 @@ import {
   saveDebounceState,
   shouldRunLLM,
   upsertDailyNote,
-} from "./memo-shared.ts";
-import type { SessionInput, Turn } from "./vocab-propose.ts";
+} from "../../agents/memo/memo-shared.ts";
+import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
 
 // --- Types ---
 
@@ -39,17 +42,17 @@ interface TranscriptEntry {
 // --- Logging ---
 
 function logFilePath(): string {
-  return `${Deno.env.get("TMPDIR") ?? "/tmp"}/claude-memo.log`;
+  return `${process.env.TMPDIR ?? "/tmp"}/claude-memo.log`;
 }
 
 async function rotateLog(): Promise<void> {
   const path = logFilePath();
   try {
-    const stat = await Deno.stat(path);
-    if (stat.size > 200 * 1024) {
-      const content = await Deno.readTextFile(path);
+    const info = await stat(path);
+    if (info.size > 200 * 1024) {
+      const content = await readFile(path, "utf8");
       const lines = content.split("\n");
-      await Deno.writeTextFile(path, lines.slice(-500).join("\n") + "\n");
+      await writeFile(path, lines.slice(-500).join("\n") + "\n");
     }
   } catch {
     // ignore
@@ -58,13 +61,13 @@ async function rotateLog(): Promise<void> {
 
 async function log(msg: string): Promise<void> {
   const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  await Deno.writeTextFile(logFilePath(), `[${ts}] ${msg}\n`, { append: true });
+  await appendFile(logFilePath(), `[${ts}] ${msg}\n`);
 }
 
 // --- Transcript Parsing ---
 
 function parseTranscript(path: string): TranscriptEntry[] {
-  const raw = Deno.readTextFileSync(path);
+  const raw = readFileSync(path, "utf8");
   return raw
     .split("\n")
     .filter((line) => line.trim())
@@ -240,16 +243,16 @@ export function extractTurns(entries: TranscriptEntry[]): Turn[] {
 // the memo itself.
 export async function proposeVocab(
   input: Omit<SessionInput, "home" | "tmpdir">,
-  load = () => import("./vocab-propose.ts"),
+  load = () => import("../../agents/scripts/vocab-propose.ts"),
 ): Promise<void> {
   try {
-    const home = Deno.env.get("HOME");
+    const home = process.env.HOME;
     if (!home) return;
     const { proposeFromSession } = await load();
     const r = await proposeFromSession({
       ...input,
       home,
-      tmpdir: Deno.env.get("TMPDIR") ?? "/tmp",
+      tmpdir: process.env.TMPDIR ?? "/tmp",
     });
     await log(`VOCAB: ${r.note}`);
   } catch (e) {
@@ -263,14 +266,14 @@ async function main(): Promise<void> {
   // callClaude は子 `claude -p` セッションに --safe-mode を渡して hooks を止めているが、
   // safe-mode を将来外した場合や他所から本 hook が発火する経路が生えた場合に備え、
   // 親から伝播した env による早期 return を二段目の保険として残す。
-  if (Deno.env.get("CLAUDE_MEMO_SKIP") === "1") {
+  if (process.env.CLAUDE_MEMO_SKIP === "1") {
     await log("SKIP: CLAUDE_MEMO_SKIP=1 (recursion guard)");
     return;
   }
 
   await rotateLog();
 
-  const stdinData = await new Response(Deno.stdin.readable).text();
+  const stdinData = await text(process.stdin);
 
   let hookData: { session_id?: string; transcript_path?: string; cwd?: string };
   try {
@@ -285,7 +288,7 @@ async function main(): Promise<void> {
 
   const sessionId = hookData.session_id ?? "";
   const transcriptPath = hookData.transcript_path ?? "";
-  const cwd = hookData.cwd ?? Deno.cwd();
+  const cwd = hookData.cwd ?? process.cwd();
 
   await log(
     `START: session=${sessionId.slice(0, 8)} transcript=${transcriptPath}`,
@@ -325,14 +328,14 @@ async function main(): Promise<void> {
     const timestamp = nowTimestamp();
     const dailyPath = dailyNotePath();
     try {
-      await Deno.stat(dailyPath);
+      await stat(dailyPath);
     } catch {
       await log(`SKIP: daily note not found: ${dailyPath}`);
       return;
     }
 
     // Check if entry already exists (from a previous Stop invocation)
-    const dailyContent = Deno.readTextFileSync(dailyPath);
+    const dailyContent = readFileSync(dailyPath, "utf8");
     const hasExistingEntry = dailyContent.includes(`/${sessionShort})`);
 
     const userCount = countUserMessages(entries);

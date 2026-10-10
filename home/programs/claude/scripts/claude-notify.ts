@@ -1,4 +1,9 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR,TMUX_PANE,TMUX --allow-run
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
+
+import { readFileSync } from "node:fs";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { text } from "node:stream/consumers";
+import { run } from "../../agents/lib/proc.ts";
 
 // --- Types ---
 
@@ -18,22 +23,22 @@ interface TmuxContext {
 
 // --- Constants ---
 
-const LOG_FILE = `${Deno.env.get("TMPDIR") ?? "/tmp"}/claude-notify.log`;
+const LOG_FILE = `${process.env.TMPDIR ?? "/tmp"}/claude-notify.log`;
 const MAX_LOG_LINES = 1000;
 
 // --- Logging ---
 
 async function log(msg: string): Promise<void> {
   const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-  await Deno.writeTextFile(LOG_FILE, `[${ts}] ${msg}\n`, { append: true });
+  await appendFile(LOG_FILE, `[${ts}] ${msg}\n`);
 }
 
 async function rotateLog(): Promise<void> {
   try {
-    const content = await Deno.readTextFile(LOG_FILE);
+    const content = await readFile(LOG_FILE, "utf8");
     const lines = content.split("\n");
     if (lines.length > MAX_LOG_LINES) {
-      await Deno.writeTextFile(
+      await writeFile(
         LOG_FILE,
         lines.slice(-MAX_LOG_LINES).join("\n") + "\n",
       );
@@ -49,17 +54,8 @@ async function runCommand(
   cmd: string,
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  const proc = new Deno.Command(cmd, {
-    args,
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const { code, stdout, stderr } = await proc.output();
-  return {
-    code,
-    stdout: new TextDecoder().decode(stdout).trim(),
-    stderr: new TextDecoder().decode(stderr).trim(),
-  };
+  const { code, stdout, stderr } = await run(cmd, args);
+  return { code, stdout: stdout.trim(), stderr: stderr.trim() };
 }
 
 async function resolveCommandPath(name: string): Promise<string> {
@@ -70,7 +66,7 @@ async function resolveCommandPath(name: string): Promise<string> {
 // --- Transcript parsing ---
 
 function getLastAssistantMessage(transcriptPath: string): string {
-  const content = Deno.readTextFileSync(transcriptPath);
+  const content = readFileSync(transcriptPath, "utf8");
   const lines = content.split("\n").slice(-50);
 
   let lastMessage = "";
@@ -135,12 +131,12 @@ async function send(sound: string): Promise<void> {
   await log("--- send start ---");
   await log(`ARGS: sound=${sound}`);
   await log(
-    `ENV: TMUX_PANE=${Deno.env.get("TMUX_PANE") ?? "<unset>"} TMUX=${
-      Deno.env.get("TMUX") ?? "<unset>"
+    `ENV: TMUX_PANE=${process.env.TMUX_PANE ?? "<unset>"} TMUX=${
+      process.env.TMUX ?? "<unset>"
     }`,
   );
 
-  const stdinData = await new Response(Deno.stdin.readable).text();
+  const stdinData = await text(process.stdin);
   await log(`STDIN: ${stdinData}`);
 
   let hookData: HookData;
@@ -154,7 +150,7 @@ async function send(sound: string): Promise<void> {
   const hookEventName = hookData.hook_event_name ?? "unknown";
   await log(`HOOK_EVENT: ${hookEventName}`);
 
-  const tmuxPane = Deno.env.get("TMUX_PANE");
+  const tmuxPane = process.env.TMUX_PANE;
 
   if (tmuxPane) {
     const ctx = await getTmuxContext(tmuxPane);
@@ -196,13 +192,12 @@ async function send(sound: string): Promise<void> {
     const tmuxPath = await resolveCommandPath("tmux");
     await log(`TMUX_PATH: ${tmuxPath}`);
 
-    // Resolve deno path for the -execute callback (launchd won't have deno in PATH)
-    const denoPath = Deno.execPath();
-    const scriptPath = `${
-      Deno.env.get("HOME")
-    }/.claude/scripts/claude-notify.ts`;
+    // launchd runs the -execute callback without bun in PATH, so the shebang
+    // cannot find the interpreter: name it by absolute path.
+    const bunPath = process.execPath;
+    const scriptPath = `${process.env.HOME}/.claude/scripts/claude-notify.ts`;
     const executeCmd =
-      `${denoPath} run --allow-run --allow-write --allow-env=TMPDIR --allow-read ${scriptPath} activate '${ctx.session}' '${ctx.window}' '${ctx.pane}' '${tmuxPath}'`;
+      `${bunPath} --no-env-file --no-install --config=/dev/null ${scriptPath} activate '${ctx.session}' '${ctx.window}' '${ctx.pane}' '${tmuxPath}'`;
     await log(`EXECUTE_CMD: ${executeCmd}`);
 
     const notifyArgs = [
@@ -304,7 +299,7 @@ async function activate(
 
 async function debug(): Promise<void> {
   try {
-    const content = await Deno.readTextFile(LOG_FILE);
+    const content = await readFile(LOG_FILE, "utf8");
     const lines = content.split("\n");
     const last50 = lines.slice(-50).join("\n");
     console.log("=== claude-notify.ts debug log ===");
@@ -318,7 +313,7 @@ async function debug(): Promise<void> {
 
 // --- Main ---
 
-const [subcommand, ...args] = Deno.args;
+const [subcommand, ...args] = process.argv.slice(2);
 
 switch (subcommand) {
   case "send":
@@ -332,5 +327,5 @@ switch (subcommand) {
     break;
   default:
     console.error("Usage: claude-notify.ts {send|activate|debug}");
-    Deno.exit(1);
+    process.exit(1);
 }

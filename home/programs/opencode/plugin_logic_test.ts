@@ -1,4 +1,5 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "@std/assert";
+import { test } from "bun:test";
 import {
   eventToOps,
   type PaneState,
@@ -31,14 +32,14 @@ function findUnset(ops: Op[], key: string): boolean {
 
 // --- maskPrompt ---
 
-Deno.test("maskPrompt: empty string stays empty", () => {
+test("maskPrompt: empty string stays empty", () => {
   assertEquals(maskPrompt(""), "");
   assertEquals(maskPrompt(undefined), "");
   assertEquals(maskPrompt(null), "");
   assertEquals(maskPrompt(42), "");
 });
 
-Deno.test("maskPrompt: control bytes stripped, whitespace collapsed", () => {
+test("maskPrompt: control bytes stripped, whitespace collapsed", () => {
   // Only the C0/C1 control bytes themselves are stripped; ASCII payload
   // bytes like the `[2J` that follow ESC remain — that is the documented
   // contract (and matches claude-pane-status.ts:maskPrompt).
@@ -47,7 +48,7 @@ Deno.test("maskPrompt: control bytes stripped, whitespace collapsed", () => {
   assertEquals(maskPrompt("a    b   c"), "a b c");
 });
 
-Deno.test("maskPrompt: 40+ chars truncated with ellipsis", () => {
+test("maskPrompt: 40+ chars truncated with ellipsis", () => {
   const long = "x".repeat(50);
   const masked = maskPrompt(long);
   assertEquals(masked.length, 41); // 40 chars + "…"
@@ -56,23 +57,23 @@ Deno.test("maskPrompt: 40+ chars truncated with ellipsis", () => {
 
 // --- selfHealOps ---
 
-Deno.test("selfHealOps: missing sessionID → empty", () => {
+test("selfHealOps: missing sessionID → empty", () => {
   assertEquals(selfHealOps({}), []);
   assertEquals(selfHealOps({ cwd: "/tmp" }), []);
 });
 
-Deno.test("selfHealOps: sessionID set → @pane_agent=opencode + session_id", () => {
+test("selfHealOps: sessionID set → @pane_agent=opencode + session_id", () => {
   const ops = selfHealOps({ sessionID: "abc-123" });
   assertEquals(findSet(ops, "@pane_agent"), "opencode");
   assertEquals(findSet(ops, "@pane_session_id"), "abc-123");
 });
 
-Deno.test("selfHealOps: snake_case session_id also accepted", () => {
+test("selfHealOps: snake_case session_id also accepted", () => {
   const ops = selfHealOps({ session_id: "snake-123" });
   assertEquals(findSet(ops, "@pane_session_id"), "snake-123");
 });
 
-Deno.test("selfHealOps: cwd from properties.info.directory", () => {
+test("selfHealOps: cwd from properties.info.directory", () => {
   const ops = selfHealOps({
     sessionID: "x",
     properties: { info: { directory: "/work/proj" } },
@@ -80,7 +81,7 @@ Deno.test("selfHealOps: cwd from properties.info.directory", () => {
   assertEquals(findSet(ops, "@pane_cwd"), "/work/proj");
 });
 
-Deno.test("selfHealOps: invalid sessionID (path traversal) drops event", () => {
+test("selfHealOps: invalid sessionID (path traversal) drops event", () => {
   // Defense-in-depth: writer-side SESSION_ID_RE assertion. Agentower re-validates.
   assertEquals(selfHealOps({ sessionID: "../bad", cwd: "/tmp" }), []);
   assertEquals(selfHealOps({ session_id: "sess:001" }), []);
@@ -89,7 +90,7 @@ Deno.test("selfHealOps: invalid sessionID (path traversal) drops event", () => {
 
 // --- eventToOps ---
 
-Deno.test("eventToOps: session.created → status=idle + started_at + activity", () => {
+test("eventToOps: session.created → status=idle + started_at + activity", () => {
   const ops = eventToOps("session.created", { sessionID: "s1" }, STATE);
   assertEquals(findSet(ops, "@pane_agent"), "opencode");
   assertEquals(findSet(ops, "@pane_status"), "idle");
@@ -98,7 +99,7 @@ Deno.test("eventToOps: session.created → status=idle + started_at + activity",
   assertEquals(typeof findSet(ops, "@pane_last_activity_at"), "string");
 });
 
-Deno.test("eventToOps: chat.message → status=running + prompt masked", () => {
+test("eventToOps: chat.message → status=running + prompt masked", () => {
   const ops = eventToOps(
     "chat.message",
     { sessionID: "s1", prompt: "hello\x1bworld" },
@@ -110,12 +111,12 @@ Deno.test("eventToOps: chat.message → status=running + prompt masked", () => {
   assertEquals(findSet(ops, "@pane_prompt"), "hello world");
 });
 
-Deno.test("eventToOps: chat.message with empty prompt → @pane_prompt unset", () => {
+test("eventToOps: chat.message with empty prompt → @pane_prompt unset", () => {
   const ops = eventToOps("chat.message", { sessionID: "s1" }, STATE);
   assertEquals(findUnset(ops, "@pane_prompt"), true);
 });
 
-Deno.test("eventToOps: chat.message reads prompt from output.parts text", () => {
+test("eventToOps: chat.message reads prompt from output.parts text", () => {
   const ops = eventToOps(
     "chat.message",
     {
@@ -133,13 +134,13 @@ Deno.test("eventToOps: chat.message reads prompt from output.parts text", () => 
   assertEquals(findSet(ops, "@pane_prompt"), "what is 2+2");
 });
 
-Deno.test("eventToOps: permission.ask → waiting + reason=permission", () => {
+test("eventToOps: permission.ask → waiting + reason=permission", () => {
   const ops = eventToOps("permission.ask", { sessionID: "s1" }, STATE);
   assertEquals(findSet(ops, "@pane_status"), "waiting");
   assertEquals(findSet(ops, "@pane_wait_reason"), "permission");
 });
 
-Deno.test("eventToOps: tool.execute.before string tool → set current_tool", () => {
+test("eventToOps: tool.execute.before string tool → set current_tool", () => {
   const ops = eventToOps(
     "tool.execute.before",
     { sessionID: "s1", tool: "bash" },
@@ -148,7 +149,7 @@ Deno.test("eventToOps: tool.execute.before string tool → set current_tool", ()
   assertEquals(findSet(ops, "@pane_current_tool"), "bash");
 });
 
-Deno.test("eventToOps: tool.execute.before structured tool → JSON-truncated fallback", () => {
+test("eventToOps: tool.execute.before structured tool → JSON-truncated fallback", () => {
   const ops = eventToOps(
     "tool.execute.before",
     { sessionID: "s1", tool: { name: "edit", id: "x" } },
@@ -159,7 +160,7 @@ Deno.test("eventToOps: tool.execute.before structured tool → JSON-truncated fa
   assertEquals(v!.startsWith("{"), true);
 });
 
-Deno.test("eventToOps: tool.execute.after → unset current + set last + activity", () => {
+test("eventToOps: tool.execute.after → unset current + set last + activity", () => {
   const stateMid: PaneState = { status: "running", currentTool: "bash" };
   const ops = eventToOps(
     "tool.execute.after",
@@ -171,7 +172,7 @@ Deno.test("eventToOps: tool.execute.after → unset current + set last + activit
   assertEquals(typeof findSet(ops, "@pane_last_activity_at"), "string");
 });
 
-Deno.test("eventToOps: tool.execute.after when tool != currentTool → keep current_tool", () => {
+test("eventToOps: tool.execute.after when tool != currentTool → keep current_tool", () => {
   const stateMid: PaneState = { status: "running", currentTool: "edit" };
   const ops = eventToOps(
     "tool.execute.after",
@@ -184,12 +185,12 @@ Deno.test("eventToOps: tool.execute.after when tool != currentTool → keep curr
   assertEquals(findSet(ops, "@pane_last_tool"), "bash");
 });
 
-Deno.test("eventToOps: session.idle → status=idle", () => {
+test("eventToOps: session.idle → status=idle", () => {
   const ops = eventToOps("session.idle", { sessionID: "s1" }, STATE);
   assertEquals(findSet(ops, "@pane_status"), "idle");
 });
 
-Deno.test("eventToOps: session.status busy → running", () => {
+test("eventToOps: session.status busy → running", () => {
   const ops = eventToOps(
     "session.status",
     { sessionID: "s1", properties: { type: "busy" } },
@@ -198,7 +199,7 @@ Deno.test("eventToOps: session.status busy → running", () => {
   assertEquals(findSet(ops, "@pane_status"), "running");
 });
 
-Deno.test("eventToOps: session.status idle → idle", () => {
+test("eventToOps: session.status idle → idle", () => {
   const ops = eventToOps(
     "session.status",
     { sessionID: "s1", properties: { type: "idle" } },
@@ -207,7 +208,7 @@ Deno.test("eventToOps: session.status idle → idle", () => {
   assertEquals(findSet(ops, "@pane_status"), "idle");
 });
 
-Deno.test("eventToOps: session.error → status=error + wait_reason", () => {
+test("eventToOps: session.error → status=error + wait_reason", () => {
   const ops = eventToOps(
     "session.error",
     { sessionID: "s1", properties: { error: "rate_limit" } },
@@ -217,7 +218,7 @@ Deno.test("eventToOps: session.error → status=error + wait_reason", () => {
   assertEquals(findSet(ops, "@pane_wait_reason"), "rate_limit");
 });
 
-Deno.test("eventToOps: session.deleted → drain all options", () => {
+test("eventToOps: session.deleted → drain all options", () => {
   const ops = eventToOps("session.deleted", { sessionID: "s1" }, STATE);
   // Drain emits unset for every ALL_PANE_OPTIONS entry.
   assertEquals(ops.every((o) => o.kind === "unset"), true);
@@ -226,7 +227,7 @@ Deno.test("eventToOps: session.deleted → drain all options", () => {
   assertEquals(findUnset(ops, "@pane_session_id"), true);
 });
 
-Deno.test("eventToOps: unknown event → empty Op[]", () => {
+test("eventToOps: unknown event → empty Op[]", () => {
   const ops = eventToOps(
     "session.totally-new-event",
     { sessionID: "s1" },
@@ -235,7 +236,7 @@ Deno.test("eventToOps: unknown event → empty Op[]", () => {
   assertEquals(ops, []);
 });
 
-Deno.test("eventToOps: missing sessionID → no selfHeal prefix on body", () => {
+test("eventToOps: missing sessionID → no selfHeal prefix on body", () => {
   // session.idle still emits its body but selfHealOps prepends nothing
   // when sessionID is absent. The single body op survives.
   const ops = eventToOps("session.idle", {}, STATE);
@@ -246,7 +247,7 @@ Deno.test("eventToOps: missing sessionID → no selfHeal prefix on body", () => 
 // Sanity: stripTimestamps usage is exercised in at least one place to keep
 // the helper from rotting silently. Same body as session.created but asserts
 // the structural Op set after stripping.
-Deno.test("eventToOps: session.created structural op set (timestamps stripped)", () => {
+test("eventToOps: session.created structural op set (timestamps stripped)", () => {
   const ops = eventToOps("session.created", { sessionID: "s1" }, STATE);
   const stripped = stripTimestamps(ops);
   assertEquals(
@@ -278,7 +279,7 @@ function b1Normalize(ops: Op[]): Op[] {
 
 const b1State: PaneState = { status: "", currentTool: "" };
 
-Deno.test("Phase B.1 fixture: session.created", () => {
+test("Phase B.1 fixture: session.created", () => {
   const ops = b1Normalize(
     eventToOps("session.created", {
       type: "session.created",
@@ -295,7 +296,7 @@ Deno.test("Phase B.1 fixture: session.created", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: session.idle", () => {
+test("Phase B.1 fixture: session.idle", () => {
   const ops = b1Normalize(
     eventToOps("session.idle", {
       type: "session.idle",
@@ -309,7 +310,7 @@ Deno.test("Phase B.1 fixture: session.idle", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: session.status busy", () => {
+test("Phase B.1 fixture: session.status busy", () => {
   const ops = b1Normalize(
     eventToOps("session.status", {
       type: "session.status",
@@ -323,7 +324,7 @@ Deno.test("Phase B.1 fixture: session.status busy", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: session.error", () => {
+test("Phase B.1 fixture: session.error", () => {
   const ops = b1Normalize(
     eventToOps("session.error", {
       type: "session.error",
@@ -338,7 +339,7 @@ Deno.test("Phase B.1 fixture: session.error", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: chat.message with prompt", () => {
+test("Phase B.1 fixture: chat.message with prompt", () => {
   const ops = b1Normalize(
     eventToOps("chat.message", {
       sessionID: "test-sid",
@@ -357,7 +358,7 @@ Deno.test("Phase B.1 fixture: chat.message with prompt", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: tool.execute.before Bash", () => {
+test("Phase B.1 fixture: tool.execute.before Bash", () => {
   const ops = b1Normalize(
     eventToOps(
       "tool.execute.before",
@@ -372,7 +373,7 @@ Deno.test("Phase B.1 fixture: tool.execute.before Bash", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: tool.execute.after Bash matching", () => {
+test("Phase B.1 fixture: tool.execute.after Bash matching", () => {
   const ops = b1Normalize(
     eventToOps("tool.execute.after", { sessionID: "test-sid", tool: "Bash" }, {
       ...b1State,
@@ -388,7 +389,7 @@ Deno.test("Phase B.1 fixture: tool.execute.after Bash matching", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: permission.ask", () => {
+test("Phase B.1 fixture: permission.ask", () => {
   const ops = b1Normalize(
     eventToOps("permission.ask", { sessionID: "test-sid" }, b1State),
   );
@@ -400,7 +401,7 @@ Deno.test("Phase B.1 fixture: permission.ask", () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: session.deleted", () => {
+test("Phase B.1 fixture: session.deleted", () => {
   const ops = b1Normalize(
     eventToOps("session.deleted", { sessionID: "test-sid" }, b1State),
   );
@@ -418,7 +419,7 @@ Deno.test("Phase B.1 fixture: session.deleted", () => {
   ]);
 });
 
-Deno.test("vocabDigestFor builds the digest once per session", () => {
+test("vocabDigestFor builds the digest once per session", () => {
   const cache = new Map<string, string>();
   let builds = 0;
   const build = () => `digest ${++builds}`;
@@ -430,7 +431,7 @@ Deno.test("vocabDigestFor builds the digest once per session", () => {
   assertEquals(builds, 3);
 });
 
-Deno.test("vocabDigestFor does nothing when VOCAB_DIGEST=off", () => {
+test("vocabDigestFor does nothing when VOCAB_DIGEST=off", () => {
   let builds = 0;
   assertEquals(
     vocabDigestFor(new Map(), "s1", "off", () => `digest ${++builds}`),

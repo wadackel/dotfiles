@@ -1,23 +1,26 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME --allow-run=fd,rg
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * 和文に混ざる語の棚卸し。
  * 頻度を全件出したうえで、機械で判定できる signal（リポジトリの識別子・パス名・
  * スキル名に由来するか）を各語に付ける。最終的な「訳すべきか」の判断は人間が行う前提で、
  * ここでは判断材料だけを揃える。
  */
+import { readdir, readFile, stat } from "node:fs/promises";
+import { resolve } from "node:path";
+import { run } from "../../../agents/lib/proc.ts";
 
-const HOME = Deno.env.get("HOME")!;
-// リポジトリルートはまずスクリプト位置から5階層上で導出するが、~/.claude/scripts/ の
-// symlink 経由で起動すると import.meta.url は canonicalize されず導出が壊れるため、
-// flake.nix の存在で検証し、ダメなら ~/dotfiles へフォールバックする。
+const HOME = process.env.HOME!;
+// リポジトリルートはスクリプト位置から5階層上。スクリプトをリポジトリの外へ写して
+// 起動するとそこはルートにならないので、flake.nix の存在で検証し、ダメなら
+// ~/dotfiles へフォールバックする。
 async function resolveRepo(): Promise<string> {
   const candidates = [
-    new URL("../../../../..", import.meta.url).pathname.replace(/\/$/, ""),
+    resolve(import.meta.dirname, "../../../../.."),
     `${HOME}/dotfiles`,
   ];
   for (const c of candidates) {
     try {
-      await Deno.stat(`${c}/flake.nix`);
+      await stat(`${c}/flake.nix`);
       return c;
     } catch {
       // 次の候補へ
@@ -26,23 +29,21 @@ async function resolveRepo(): Promise<string> {
   console.error(
     `repo root not found (flake.nix missing in: ${candidates.join(", ")})`,
   );
-  Deno.exit(1);
+  process.exit(1);
 }
 const REPO = await resolveRepo();
 
 async function runOrExit(
-  cmd: Deno.Command,
   name: string,
+  args: string[],
   okCodes: number[],
 ): Promise<string> {
-  const { code, stdout, stderr } = await cmd.output();
+  const { code, stdout, stderr } = await run(name, args);
   if (!okCodes.includes(code)) {
-    console.error(
-      `${name} failed (exit ${code}): ${new TextDecoder().decode(stderr)}`,
-    );
-    Deno.exit(1);
+    console.error(`${name} failed (exit ${code}): ${stderr}`);
+    process.exit(1);
   }
-  return new TextDecoder().decode(stdout);
+  return stdout;
 }
 
 const proseOnly = (t: string) =>
@@ -59,12 +60,11 @@ function isIdentifierLike(w: string): boolean {
 // --- signal 1: リポジトリのファイル名・ディレクトリ名 -------------------------
 const pathTokens = new Set<string>();
 {
-  const cmd = new Deno.Command("fd", {
-    args: ["--type", "f", "--type", "d", ".", REPO],
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const out = await runOrExit(cmd, "fd", [0]);
+  const out = await runOrExit(
+    "fd",
+    ["--type", "f", "--type", "d", ".", REPO],
+    [0],
+  );
   for (const line of out.split("\n")) {
     for (const seg of line.replace(REPO, "").split(/[/\\]/)) {
       for (const t of seg.split(/[.\-_]/)) {
@@ -77,27 +77,23 @@ const pathTokens = new Set<string>();
 // --- signal 2: コード内の識別子（宣言に現れる名前だけを拾って一般語の混入を抑える）---
 const declTokens = new Set<string>();
 {
-  const cmd = new Deno.Command("rg", {
-    args: [
-      "--no-filename",
-      "--no-line-number",
-      "-o",
-      "-e",
-      String
-        .raw`(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_][A-Za-z0-9_]*)`,
-      "-e",
-      String.raw`^\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*=`,
-      // 複数 -e は1本の選択に結合されるため2本目のキャプチャはグループ2になる。
-      // "$1" だけだと2本目のマッチが空文字に置換され静かに欠落する
-      "-r",
-      "$1$2",
-      REPO,
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  });
+  const args = [
+    "--no-filename",
+    "--no-line-number",
+    "-o",
+    "-e",
+    String
+      .raw`(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_][A-Za-z0-9_]*)`,
+    "-e",
+    String.raw`^\s*([a-zA-Z][a-zA-Z0-9_-]*)\s*=`,
+    // 複数 -e は1本の選択に結合されるため2本目のキャプチャはグループ2になる。
+    // "$1" だけだと2本目のマッチが空文字に置換され静かに欠落する
+    "-r",
+    "$1$2",
+    REPO,
+  ];
   // rg は「マッチなし」を exit 1 で返すため 0/1 を正常扱いにする
-  const out = await runOrExit(cmd, "rg", [0, 1]);
+  const out = await runOrExit("rg", args, [0, 1]);
   for (const t of out.split("\n")) {
     const s = t.trim().toLowerCase();
     if (s.length >= 3) declTokens.add(s);
@@ -110,7 +106,7 @@ for (
   const dir of [`${HOME}/.claude/skills`, `${REPO}/home/programs/agents/skills`]
 ) {
   try {
-    for await (const e of Deno.readDir(dir)) {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
       for (const t of e.name.split(/[-_.]/)) {
         if (t.length >= 3) skillTokens.add(t.toLowerCase());
       }
@@ -123,9 +119,9 @@ const latin = new Map<string, { n: number; capitalized: number }>();
 const kata = new Map<string, number>();
 
 async function* files(dir: string): AsyncGenerator<string> {
-  for await (const e of Deno.readDir(dir)) {
+  for (const e of await readdir(dir, { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
-    if (e.isDirectory) yield* files(p);
+    if (e.isDirectory()) yield* files(p);
     else if (e.name.endsWith(".jsonl")) yield p;
   }
 }
@@ -133,7 +129,7 @@ async function* files(dir: string): AsyncGenerator<string> {
 for await (const path of files(`${HOME}/.claude/projects`)) {
   let content: string;
   try {
-    content = await Deno.readTextFile(path);
+    content = await readFile(path, "utf8");
   } catch {
     continue;
   }

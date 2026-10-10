@@ -1,14 +1,15 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME --allow-net
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // CLI analysis tool: aggregates permission request logs and suggests
 // permissions.allow / bash-policy patterns.
 
-import { parse as parseArgs } from "https://deno.land/std@0.224.0/flags/mod.ts";
-import { parse as shellParse } from "npm:shell-quote@1";
+import { readFileSync, writeFileSync } from "node:fs";
+import { parseArgs } from "@std/cli/parse-args";
+import { parse as shellParse } from "shell-quote";
 
 // --- Constants ---
 
-const HOME = Deno.env.get("HOME") ?? "";
+const HOME = process.env.HOME ?? "";
 const LOG_FILE = `${HOME}/.claude/logs/permission-requests.jsonl`;
 const SETTINGS_PATH = `${HOME}/.claude/settings.json`;
 
@@ -105,7 +106,7 @@ interface PatternOutput {
 function readLogEntries(logFile: string, daysBack: number): LogEntry[] {
   let content: string;
   try {
-    content = Deno.readTextFileSync(logFile);
+    content = readFileSync(logFile, "utf8");
   } catch {
     return [];
   }
@@ -237,7 +238,7 @@ function generalizeNonBashTool(
 
 function loadSettings(): Settings {
   try {
-    return JSON.parse(Deno.readTextFileSync(SETTINGS_PATH));
+    return JSON.parse(readFileSync(SETTINGS_PATH, "utf8"));
   } catch {
     return {};
   }
@@ -537,7 +538,7 @@ export function purgeResolvedEntries(
 ): number {
   let content: string;
   try {
-    content = Deno.readTextFileSync(logFile);
+    content = readFileSync(logFile, "utf8");
   } catch {
     return 0;
   }
@@ -580,7 +581,7 @@ export function purgeResolvedEntries(
   }
 
   if (removed > 0) {
-    Deno.writeTextFileSync(
+    writeFileSync(
       logFile,
       kept.length > 0 ? kept.join("\n") + "\n" : "",
     );
@@ -591,7 +592,7 @@ export function purgeResolvedEntries(
 // --- Main ---
 
 if (import.meta.main) {
-  const flags = parseArgs(Deno.args, {
+  const flags = parseArgs(process.argv.slice(2), {
     string: ["project", "tool", "format"],
     boolean: ["purge"],
     collect: ["purge-pattern"],
@@ -612,21 +613,21 @@ if (import.meta.main) {
     console.log(
       `Purged ${removed} entries matching ${purgePatterns.length} patterns.`,
     );
-    Deno.exit(0);
+    process.exit(0);
   }
 
   if (flags.purge) {
     const settings = loadSettings();
     const removed = purgeResolvedEntries(LOG_FILE, settings);
     console.log(`Purged ${removed} resolved entries from log.`);
-    Deno.exit(0);
+    process.exit(0);
   }
 
   let entries = readLogEntries(LOG_FILE, days);
 
   if (entries.length === 0) {
     console.log("No permission requests logged yet.");
-    Deno.exit(0);
+    process.exit(0);
   }
 
   if (projectFilter) {
@@ -638,7 +639,7 @@ if (import.meta.main) {
 
   if (entries.length === 0) {
     console.log("No matching permission requests found.");
-    Deno.exit(0);
+    process.exit(0);
   }
 
   const settings = loadSettings();

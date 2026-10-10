@@ -1,4 +1,5 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
+import { test } from "bun:test";
 import {
   CodexPaneResolver,
   parseTitleIdentity,
@@ -9,7 +10,7 @@ const MAIN = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const CHILD = "33333333-3333-4333-8333-333333333333";
 
-Deno.test("title identity accepts configured ID segments and approval animations", () => {
+test("title identity accepts configured ID segments and approval animations", () => {
   assertEquals(parseTitleIdentity(`codex | ${MAIN} | task`), MAIN);
   assertEquals(
     parseTitleIdentity(
@@ -104,7 +105,7 @@ function fixture(options: {
   };
 }
 
-Deno.test("shared daemon ignores stale inherited pane and double codex ancestry", async () => {
+test("shared daemon ignores stale inherited pane and double codex ancestry", async () => {
   const { resolver, calls } = fixture();
   const result = await resolver.resolve(MAIN);
   assertEquals(result.targets.map((t) => [t.paneId, t.sessionId]), [[
@@ -119,7 +120,7 @@ Deno.test("shared daemon ignores stale inherited pane and double codex ancestry"
   );
 });
 
-Deno.test("same directory sessions and multiple views are isolated by identity", async () => {
+test("same directory sessions and multiple views are isolated by identity", async () => {
   const { resolver } = fixture({ secondCopy: true });
   assertEquals((await resolver.resolve(MAIN)).targets.map((t) => t.paneId), [
     "%1",
@@ -130,7 +131,7 @@ Deno.test("same directory sessions and multiple views are isolated by identity",
   ]);
 });
 
-Deno.test("subagent resolves through the recorded parent relationship", async () => {
+test("subagent resolves through the recorded parent relationship", async () => {
   const { resolver } = fixture();
   assertEquals(
     (await resolver.resolve(CHILD)).targets.map((t) => t.sessionId),
@@ -138,7 +139,7 @@ Deno.test("subagent resolves through the recorded parent relationship", async ()
   );
 });
 
-Deno.test("ambiguous IDs, database failures and nested agents never write", async () => {
+test("ambiguous IDs, database failures and nested agents never write", async () => {
   for (
     const options of [{ duplicatePrefix: true }, { databaseFailure: true }, {
       nested: true,
@@ -148,7 +149,7 @@ Deno.test("ambiguous IDs, database failures and nested agents never write", asyn
   }
 });
 
-Deno.test("a live TUI ancestry proves direct startup without a configured title", async () => {
+test("a live TUI ancestry proves direct startup without a configured title", async () => {
   const { resolver } = fixture({ noTitle: true, callerPid: 120 });
   assertEquals(
     (await resolver.resolve(MAIN)).targets.map((t) => [t.paneId, t.source]),
@@ -156,7 +157,7 @@ Deno.test("a live TUI ancestry proves direct startup without a configured title"
   );
 });
 
-Deno.test("revalidation rejects a switched or exited pane", async () => {
+test("revalidation rejects a switched or exited pane", async () => {
   const target = (await fixture().resolver.resolve(MAIN)).targets[0];
   assertEquals(
     await fixture({ title: `codex | ${OTHER} | task` }).resolver.isCurrent(
@@ -171,7 +172,7 @@ Deno.test("revalidation rejects a switched or exited pane", async () => {
   );
 });
 
-Deno.test("invalid IDs are rejected before invoking external commands", async () => {
+test("invalid IDs are rejected before invoking external commands", async () => {
   const { resolver, calls } = fixture();
   assertEquals(
     (await resolver.resolve("'; DELETE FROM threads; --")).reason,

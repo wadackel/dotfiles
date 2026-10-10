@@ -1,7 +1,7 @@
 // Shared shell command parsing utilities.
 // Used by bash-policy.ts and approve-piped-commands.ts.
 
-import { parse as parseBash } from "jsr:@ein/bash-parser@0.18";
+import { parse as parseBash } from "@ein/bash-parser";
 
 /** Convert glob pattern to anchored regex. * matches any characters including spaces and newlines. */
 export function globToRegex(pattern: string): RegExp {

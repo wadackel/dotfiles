@@ -337,10 +337,10 @@ update_plan({
 
 ### Sidecar JSON initialization
 
-Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Do not depend on execute bits; use this permissioned command shape:
+Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Start the helper by its path; it is executable, and its shebang carries the flags that keep Bun from loading a `bunfig.toml` or `.env` out of the working directory:
 
 ```bash
-deno run --allow-env=HOME --allow-read --allow-write --allow-run=git --no-prompt ~/.agents/scripts/plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
+~/.agents/scripts/plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
 ```
 
 The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.

@@ -1,6 +1,9 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMPDIR,TMUX_PANE,CODEX_THREAD_ID --allow-run
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-import { SESSION_ID_RE } from "../pane-shared.ts";
+import { spawn } from "node:child_process";
+import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:os";
+import { SESSION_ID_RE } from "../../tmux/shared/pane-shared.ts";
 import { CodexPaneResolver } from "./codex-pane-target.ts";
 
 interface NotifyPayload {
@@ -31,7 +34,7 @@ export type TmuxShowResult =
   | { ok: true; value: string }
   | { ok: false; stderr: string };
 
-const LOG_FILE = `${Deno.env.get("HOME") ?? "."}/.codex/logs/codex-notify.log`;
+const LOG_FILE = `${process.env.HOME ?? "."}/.codex/logs/codex-notify.log`;
 const MAX_LOG_LINES = 1000;
 const DEFAULT_MESSAGE = "Codex task completed";
 const SUBAGENT_LOCK_PREFIX = "codex-pane-status-subagents";
@@ -89,19 +92,19 @@ export function shellQuote(raw: string): string {
   return `'${raw.replace(/'/g, `'\\''`)}'`;
 }
 
+// terminal-notifier runs this string under launchd, where PATH has no bun for
+// the script's shebang to find: the interpreter is named by absolute path.
 export function buildActivateCommand(
-  denoPath: string,
+  runtimePath: string,
   scriptPath: string,
   ctx: TmuxContext,
   tmuxPath: string,
 ): string {
   const args = [
-    denoPath,
-    "run",
-    "--allow-run",
-    "--allow-write",
-    "--allow-env=HOME",
-    "--allow-read",
+    runtimePath,
+    "--no-env-file",
+    "--no-install",
+    "--config=/dev/null",
     scriptPath,
     "activate",
     ctx.session,
@@ -290,17 +293,17 @@ export function pendingSubagentNotificationDecision(
 }
 
 async function ensureLogDir(): Promise<void> {
-  await Deno.mkdir(`${Deno.env.get("HOME") ?? "."}/.codex/logs`, {
+  await mkdir(`${process.env.HOME ?? "."}/.codex/logs`, {
     recursive: true,
   });
 }
 
 async function rotateLog(): Promise<void> {
   try {
-    const content = await Deno.readTextFile(LOG_FILE);
+    const content = await readFile(LOG_FILE, "utf8");
     const lines = content.split("\n");
     if (lines.length > MAX_LOG_LINES) {
-      await Deno.writeTextFile(
+      await writeFile(
         LOG_FILE,
         lines.slice(-MAX_LOG_LINES).join("\n"),
       );
@@ -315,9 +318,7 @@ async function log(message: string): Promise<void> {
     await ensureLogDir();
     await rotateLog();
     const ts = new Date().toISOString();
-    await Deno.writeTextFile(LOG_FILE, `[${ts}] ${message}\n`, {
-      append: true,
-    });
+    await appendFile(LOG_FILE, `[${ts}] ${message}\n`);
   } catch {
     // notification logging is best-effort
   }
@@ -330,12 +331,22 @@ export async function runCommand(
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const child = new Deno.Command(cmd, {
-      args,
-      stdout: "piped",
-      stderr: "piped",
-    }).spawn();
-    const output = child.output();
+    const child = spawn(cmd, args, { stdio: ["inherit", "pipe", "pipe"] });
+    const output = new Promise<
+      { code: number; stdout: Buffer; stderr: Buffer }
+    >((resolve, reject) => {
+      const out: Buffer[] = [];
+      const err: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+      child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+      child.on("error", reject);
+      child.on("close", (code, signal) =>
+        resolve({
+          code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+          stdout: Buffer.concat(out),
+          stderr: Buffer.concat(err),
+        }));
+    });
     const result = options.timeoutMs === undefined
       ? await output
       : await Promise.race([
@@ -372,13 +383,12 @@ export async function runCommand(
 async function commandPath(name: string): Promise<string> {
   const result = await runCommand("/usr/bin/which", [name]);
   if (result.code === 0 && result.stdout) return result.stdout;
-  const home = Deno.env.get("HOME") ?? "";
+  const home = process.env.HOME ?? "";
   const user = home.split("/").filter(Boolean).at(-1) ?? "";
   const perUser = user ? [`/etc/profiles/per-user/${user}/bin/${name}`] : [];
   for (const candidate of [...perUser, ...(COMMON_COMMAND_PATHS[name] ?? [])]) {
     try {
-      const stat = await Deno.stat(candidate);
-      if (stat.isFile) return candidate;
+      if ((await stat(candidate)).isFile()) return candidate;
     } catch {
       // try next common location
     }
@@ -526,10 +536,10 @@ async function send(
   const tmuxPath = await commandPath("tmux");
   const threadId = notificationThreadId(
     payload,
-    Deno.env.get("CODEX_THREAD_ID"),
+    process.env.CODEX_THREAD_ID,
   );
   const resolver = new CodexPaneResolver({
-    codexHome: `${Deno.env.get("HOME")}/.codex`,
+    codexHome: `${process.env.HOME}/.codex`,
     tmuxPath,
   });
   const resolution = await resolver.resolve(threadId);
@@ -554,9 +564,9 @@ async function send(
   const ctx = mainTarget
     ? await tmuxContext(tmuxPath, mainTarget.paneId)
     : null;
-  const scriptPath = `${Deno.env.get("HOME")}/.codex/scripts/codex-notify.ts`;
+  const scriptPath = `${process.env.HOME}/.codex/scripts/codex-notify.ts`;
   const executeCmd = ctx
-    ? buildActivateCommand(Deno.execPath(), scriptPath, ctx, tmuxPath)
+    ? buildActivateCommand(process.execPath, scriptPath, ctx, tmuxPath)
     : null;
   const notifierArgs = buildTerminalNotifierArgs(
     message,
@@ -642,7 +652,7 @@ async function activate(
 
 async function debug(): Promise<void> {
   try {
-    const content = await Deno.readTextFile(LOG_FILE);
+    const content = await readFile(LOG_FILE, "utf8");
     console.log(debugOutput(LOG_FILE, content));
   } catch {
     console.log(debugOutput(LOG_FILE, null));
@@ -650,7 +660,7 @@ async function debug(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const [subcommand, ...args] = Deno.args;
+  const [subcommand, ...args] = process.argv.slice(2);
   switch (subcommand) {
     case "send":
       await send(args[0], args[1] ?? "Hero");

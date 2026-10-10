@@ -1,4 +1,5 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { test } from "bun:test";
 import {
   buildActivateCommand,
   buildTerminalNotifierArgs,
@@ -17,7 +18,7 @@ import {
   tmuxPaneId,
 } from "./codex-notify.ts";
 
-Deno.test("notification identity uses the event payload before inherited environment", () => {
+test("notification identity uses the event payload before inherited environment", () => {
   assertEquals(
     notificationThreadId({ "thread-id": "current" }, "stale"),
     "current",
@@ -29,14 +30,14 @@ Deno.test("notification identity uses the event payload before inherited environ
   );
 });
 
-Deno.test("parsePayload: accepts Codex notify payload and falls back on malformed JSON", () => {
+test("parsePayload: accepts Codex notify payload and falls back on malformed JSON", () => {
   assertEquals(parsePayload('{"last-assistant-message":"done"}'), {
     "last-assistant-message": "done",
   });
   assertEquals(parsePayload("not-json"), {});
 });
 
-Deno.test("notificationMessage: prefers assistant message and sanitizes controls", () => {
+test("notificationMessage: prefers assistant message and sanitizes controls", () => {
   assertEquals(
     notificationMessage({ "last-assistant-message": "hello\n\tworld" }),
     "hello world",
@@ -44,11 +45,11 @@ Deno.test("notificationMessage: prefers assistant message and sanitizes controls
   assertEquals(notificationMessage({}), "Codex task completed");
 });
 
-Deno.test("shellQuote: quotes single quotes safely", () => {
+test("shellQuote: quotes single quotes safely", () => {
   assertEquals(shellQuote("a'b"), "'a'\\''b'");
 });
 
-Deno.test("buildActivateCommand: uses argument quoting for callback command", () => {
+test("buildActivateCommand: uses argument quoting for callback command", () => {
   const ctx: TmuxContext = {
     session: "dev one",
     window: "1",
@@ -56,16 +57,21 @@ Deno.test("buildActivateCommand: uses argument quoting for callback command", ()
     paneTitle: "codex",
   };
   const cmd = buildActivateCommand(
-    "/bin/deno",
+    "/nix/store/x-bun/bin/bun",
     "/Users/me/.codex/scripts/codex-notify.ts",
     ctx,
     "/opt/bin/tmux",
+  );
+  assertEquals(
+    cmd,
+    "'/nix/store/x-bun/bin/bun' '--no-env-file' '--no-install' '--config=/dev/null' " +
+      "'/Users/me/.codex/scripts/codex-notify.ts' 'activate' 'dev one' '1' '2' '/opt/bin/tmux'",
   );
   assertStringIncludes(cmd, "'dev one'");
   assertStringIncludes(cmd, "'/opt/bin/tmux'");
 });
 
-Deno.test("buildTerminalNotifierArgs: includes tmux execute callback only when present", () => {
+test("buildTerminalNotifierArgs: includes tmux execute callback only when present", () => {
   const ctx: TmuxContext = {
     session: "s",
     window: "1",
@@ -82,7 +88,7 @@ Deno.test("buildTerminalNotifierArgs: includes tmux execute callback only when p
   assertEquals(fallback.includes("Codex"), true);
 });
 
-Deno.test("debugOutput: renders tail log or missing-log message", () => {
+test("debugOutput: renders tail log or missing-log message", () => {
   const content = Array.from({ length: 55 }, (_, i) => `line-${i}`).join("\n");
   const output = debugOutput("/tmp/codex-notify.log", content);
   assertStringIncludes(output, "=== codex-notify.ts debug log ===");
@@ -96,7 +102,7 @@ Deno.test("debugOutput: renders tail log or missing-log message", () => {
   );
 });
 
-Deno.test("runCommand: timeout kills long-running process", async () => {
+test("runCommand: timeout kills long-running process", async () => {
   const started = Date.now();
   const result = await runCommand("/bin/sleep", ["2"], { timeoutMs: 100 });
   assertEquals(result.code, 124);
@@ -106,18 +112,18 @@ Deno.test("runCommand: timeout kills long-running process", async () => {
   }
 });
 
-Deno.test("tmuxPaneId: accepts raw tmux pane ids only", () => {
+test("tmuxPaneId: accepts raw tmux pane ids only", () => {
   assertEquals(tmuxPaneId("%123"), "%123");
   assertEquals(tmuxPaneId("1"), null);
   assertEquals(tmuxPaneId("-L"), null);
   assertEquals(tmuxPaneId(undefined), null);
 });
 
-Deno.test("subagentLockName: uses raw pane id sanitization", () => {
+test("subagentLockName: uses raw pane id sanitization", () => {
   assertEquals(subagentLockName("%123"), "codex-pane-status-subagents--123");
 });
 
-Deno.test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
+test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
   assertEquals(
     isMissingRequestedUserOption(
       "invalid option: @pane_pending_subagent_notifications",
@@ -145,7 +151,7 @@ Deno.test("isMissingRequestedUserOption: matches only exact missing user option 
   );
 });
 
-Deno.test("normalizeMissingUserOption: missing pending counter becomes send decision", () => {
+test("normalizeMissingUserOption: missing pending counter becomes send decision", () => {
   const normalized = normalizeMissingUserOption(
     {
       ok: false,
@@ -160,7 +166,7 @@ Deno.test("normalizeMissingUserOption: missing pending counter becomes send deci
   );
 });
 
-Deno.test("normalizeMissingUserOption: unrelated tmux failures remain failures", () => {
+test("normalizeMissingUserOption: unrelated tmux failures remain failures", () => {
   assertEquals(
     normalizeMissingUserOption(
       { ok: false, stderr: "no such pane: %999" },
@@ -177,7 +183,7 @@ Deno.test("normalizeMissingUserOption: unrelated tmux failures remain failures",
   );
 });
 
-Deno.test("notificationIdentityDecision: matching thread and pane main session sends", () => {
+test("notificationIdentityDecision: matching thread and pane main session sends", () => {
   assertEquals(notificationIdentityDecision("main-session", "main-session"), {
     kind: "send",
     reason: "identity-main",
@@ -186,7 +192,7 @@ Deno.test("notificationIdentityDecision: matching thread and pane main session s
   });
 });
 
-Deno.test("notificationIdentityDecision: different valid thread skips as subagent", () => {
+test("notificationIdentityDecision: different valid thread skips as subagent", () => {
   assertEquals(notificationIdentityDecision("child-session", "main-session"), {
     kind: "skip",
     reason: "identity-subagent",
@@ -195,7 +201,7 @@ Deno.test("notificationIdentityDecision: different valid thread skips as subagen
   });
 });
 
-Deno.test("notificationIdentityDecision: missing identity is unknown so fallback can preserve main notifications", () => {
+test("notificationIdentityDecision: missing identity is unknown so fallback can preserve main notifications", () => {
   assertEquals(notificationIdentityDecision(undefined, "main-session"), {
     kind: "unknown",
     reason: "identity-missing",
@@ -210,7 +216,7 @@ Deno.test("notificationIdentityDecision: missing identity is unknown so fallback
   });
 });
 
-Deno.test("notificationIdentityDecision: invalid identities are unknown, not subagents", () => {
+test("notificationIdentityDecision: invalid identities are unknown, not subagents", () => {
   assertEquals(notificationIdentityDecision("../child", "main-session"), {
     kind: "unknown",
     reason: "identity-invalid",
@@ -225,7 +231,7 @@ Deno.test("notificationIdentityDecision: invalid identities are unknown, not sub
   });
 });
 
-Deno.test("pendingSubagentNotificationDecision: malformed and zero values send", () => {
+test("pendingSubagentNotificationDecision: malformed and zero values send", () => {
   assertEquals(pendingSubagentNotificationDecision(""), {
     kind: "send",
     count: 0,
@@ -244,7 +250,7 @@ Deno.test("pendingSubagentNotificationDecision: malformed and zero values send",
   });
 });
 
-Deno.test("pendingSubagentNotificationDecision: consumes one pending notification", () => {
+test("pendingSubagentNotificationDecision: consumes one pending notification", () => {
   assertEquals(pendingSubagentNotificationDecision("1"), {
     kind: "skip",
     count: 1,

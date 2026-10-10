@@ -1,12 +1,10 @@
 // Shared contract + pure helpers + transition builders for the agent-status
-// SSOT system. Imported by claude-pane-status.ts (Deno script), codex-pane-
-// status.ts (Deno script), and opencode/plugin_logic.ts (Bun plugin) via
-// in-worktree symlink + per-agent home-manager wiring (see plan
-// 20260504T1958-agents-picker-refactor.md "Patterns to Mirror" for the
-// 2-stage symlink chain).
+// SSOT system. Imported by claude-pane-status.ts, codex-pane-status.ts and
+// opencode/plugin_logic.ts; the last one runs inside opencode's own Bun and
+// reaches this file through the symlink published next to the plugin.
 //
-// Web-standard API ONLY. Do NOT add Deno.* / Bun.* / node:* — Bun must be
-// able to import this file in-process.
+// Web-standard API ONLY. Do NOT add Deno.* / Bun.* / node:* — the opencode
+// plugin imports this file in-process.
 
 // --- Op type ---
 

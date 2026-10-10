@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env=HOME,TMUX_PANE --allow-run=tmux,ps
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Bridges Claude Code hook events → tmux pane options (SSOT for Agentower).
 // Invoked as: claude-pane-status.ts <EventName>   (unknown events → no-op exit 0)
@@ -9,7 +9,16 @@
 // results per op). Log I/O errors are swallowed — hook must never break the
 // session when the log destination is unavailable.
 
-import { isEmbedded, parsePsLine, type PsRow } from "./agent-presence.ts";
+import { spawn } from "node:child_process";
+import { appendFile, mkdir, rename, stat } from "node:fs/promises";
+import { constants } from "node:os";
+import { text } from "node:stream/consumers";
+import { run } from "../../agents/lib/proc.ts";
+import {
+  isEmbedded,
+  parsePsLine,
+  type PsRow,
+} from "../../tmux/shared/agent-presence.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CLAUDE,
   formatToolError,
@@ -24,7 +33,7 @@ import {
   toolStartOps,
   truncate,
   unsetOps,
-} from "./pane-shared.ts";
+} from "../../tmux/shared/pane-shared.ts";
 
 // --- Types ---
 
@@ -813,7 +822,7 @@ export function buildLogRecord(
 const LOG_MAX_BYTES = 10 * 1024 * 1024;
 
 function logPath(): string | null {
-  const home = Deno.env.get("HOME");
+  const home = process.env.HOME;
   if (!home) return null;
   return `${home}/.claude/logs/claude-pane-status.log`;
 }
@@ -823,19 +832,19 @@ async function writeLogRecord(record: LogRecord): Promise<void> {
   if (!path) return;
   const dir = path.substring(0, path.lastIndexOf("/"));
   try {
-    await Deno.mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     // Rotate: when file exceeds cap, move current → .old (drops the older .old)
     // so a single prior segment is retained for debugging.
     try {
-      const stat = await Deno.stat(path);
-      if (stat.size > LOG_MAX_BYTES) {
-        await Deno.rename(path, `${path}.old`);
+      const info = await stat(path);
+      if (info.size > LOG_MAX_BYTES) {
+        await rename(path, `${path}.old`);
       }
     } catch {
       // no existing file — append will create it
     }
     const line = JSON.stringify(record) + "\n";
-    await Deno.writeTextFile(path, line, { append: true });
+    await appendFile(path, line);
   } catch {
     // Log destination unavailable — hook must not fail because of this.
   }
@@ -843,16 +852,42 @@ async function writeLogRecord(record: LogRecord): Promise<void> {
 
 // --- Process ancestry ---
 
+// Captures one of the child's output streams and discards the other, which run()
+// cannot express: it pipes both.
+function capture(
+  cmd: string,
+  args: string[],
+  stream: "stdout" | "stderr",
+): Promise<{ code: number; output: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      stdio: [
+        "ignore",
+        stream === "stdout" ? "pipe" : "ignore",
+        stream === "stderr" ? "pipe" : "ignore",
+      ],
+    });
+    const chunks: Buffer[] = [];
+    child[stream]!.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      resolve({
+        code: code ?? 128 + (signal ? constants.signals[signal] : 0),
+        output: Buffer.concat(chunks).toString("utf8"),
+      });
+    });
+  });
+}
+
 async function fetchParent(pid: number): Promise<PsRow | null> {
   try {
-    const { stdout, code } = await new Deno.Command("ps", {
-      args: ["-p", String(pid), "-o", "ppid=,comm="],
-      stdin: "null",
-      stdout: "piped",
-      stderr: "null",
-    }).output();
+    const { code, output } = await capture(
+      "ps",
+      ["-p", String(pid), "-o", "ppid=,comm="],
+      "stdout",
+    );
     if (code !== 0) return null;
-    return parsePsLine(new TextDecoder().decode(stdout));
+    return parsePsLine(output);
   } catch {
     return null;
   }
@@ -863,14 +898,8 @@ async function fetchParent(pid: number): Promise<PsRow | null> {
 async function tmuxRun(
   args: string[],
 ): Promise<{ code: number; stderr: string }> {
-  const proc = new Deno.Command("tmux", {
-    args,
-    stdin: "null",
-    stdout: "null",
-    stderr: "piped",
-  });
-  const { code, stderr } = await proc.output();
-  return { code, stderr: new TextDecoder().decode(stderr).trim() };
+  const { code, output } = await capture("tmux", args, "stderr");
+  return { code, stderr: output.trim() };
 }
 
 async function readPaneState(pane: string): Promise<PaneState> {
@@ -879,20 +908,17 @@ async function readPaneState(pane: string): Promise<PaneState> {
   // Non-zero exit WITH non-empty stderr signals a real tmux failure (pane gone,
   // server down) worth logging so the failure is not silently masked.
   const runShow = async (key: string) => {
-    const { code, stdout, stderr } = await new Deno.Command("tmux", {
-      args: ["show", "-t", pane, "-pv", key],
-      stdin: "null",
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    const decoder = new TextDecoder();
-    const errText = decoder.decode(stderr).trim();
+    const { code, stdout, stderr } = await run(
+      "tmux",
+      ["show", "-t", pane, "-pv", key],
+    );
+    const errText = stderr.trim();
     if (code !== 0 && errText.length > 0) {
       console.error(
         `claude-pane-status: tmux show -pv ${key} failed: ${errText}`,
       );
     }
-    return decoder.decode(stdout);
+    return stdout;
   };
   const [
     subagentsStdout,
@@ -940,7 +966,7 @@ async function applyOp(pane: string, op: Op): Promise<ApplyResult> {
 
 async function main(): Promise<void> {
   const ctx: RunContext = {
-    argv_event: Deno.args[0] ?? "",
+    argv_event: process.argv[2] ?? "",
     stdin_event: null,
     session_id: null,
     agent_id: null,
@@ -959,26 +985,26 @@ async function main(): Promise<void> {
       return;
     }
 
-    const tmuxPane = Deno.env.get("TMUX_PANE");
+    const tmuxPane = process.env.TMUX_PANE;
     if (!tmuxPane) {
       ctx.early_exit = "no-tmux-pane";
       return;
     }
     ctx.tmux_pane = tmuxPane;
     // Guard against a caller that sets TMUX_PANE to e.g. "-L" or ";cmd" —
-    // Deno.Command uses argv (no shell), but tmux itself would parse a
+    // spawn passes argv (no shell), but tmux itself would parse a
     // leading "-" value as an option, so restrict to the pane-id shape.
     if (!/^%\d+$/.test(tmuxPane)) {
       ctx.early_exit = "invalid-pane-id";
       return;
     }
 
-    if (await isEmbedded(Deno.pid, fetchParent)) {
+    if (await isEmbedded(process.pid, fetchParent)) {
       ctx.early_exit = "embedded";
       return;
     }
 
-    const raw = await new Response(Deno.stdin.readable).text();
+    const raw = await text(process.stdin);
     let hookData: HookData = {};
     if (raw.trim().length > 0) {
       try {
@@ -1022,7 +1048,7 @@ async function main(): Promise<void> {
       ctx.apply_results.push(await applyOp(tmuxPane, op));
     }
   } finally {
-    await writeLogRecord(buildLogRecord(ctx, new Date(), Deno.pid));
+    await writeLogRecord(buildLogRecord(ctx, new Date(), process.pid));
   }
 }
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // PreToolUse hook: guard reviewer subagent dispatches.
 // Rejects an Agent/Task dispatch to a reviewer subagent whose prompt does not
@@ -9,6 +9,8 @@
 //
 // The prose instruction in the gate skill is what failed to land, so
 // a stronger prose instruction is not the fix; this check is.
+
+import { text } from "node:stream/consumers";
 
 interface HookInput {
   tool_name: string;
@@ -119,23 +121,23 @@ export function denialMessage(subagentType: string): string {
 // --- Entry point ---
 
 if (import.meta.main) {
-  const input: HookInput = JSON.parse(
-    await new Response(Deno.stdin.readable).text(),
-  );
+  const input: HookInput = JSON.parse(await text(process.stdin));
 
-  if (input.tool_name !== "Agent" && input.tool_name !== "Task") Deno.exit(0);
+  if (input.tool_name !== "Agent" && input.tool_name !== "Task") {
+    process.exit(0);
+  }
 
   const subagentType = input.tool_input?.subagent_type;
-  if (!subagentType || !isReviewerAgent(subagentType)) Deno.exit(0);
+  if (!subagentType || !isReviewerAgent(subagentType)) process.exit(0);
   const prompt = input.tool_input?.prompt;
   if (!hasVerdictRule(prompt)) {
     console.error(denialMessage(subagentType));
-    Deno.exit(2);
+    process.exit(2);
   }
   const missing = missingRequirement(subagentType, prompt);
   if (missing !== null) {
     console.error(requirementMessage(subagentType, missing));
-    Deno.exit(2);
+    process.exit(2);
   }
-  Deno.exit(0);
+  process.exit(0);
 }

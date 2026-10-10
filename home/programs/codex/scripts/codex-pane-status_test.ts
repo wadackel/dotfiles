@@ -1,7 +1,7 @@
-import {
-  assert,
-  assertEquals,
-} from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals } from "@std/assert";
+import { test } from "bun:test";
+import { join } from "node:path";
+import { run } from "../../agents/lib/proc.ts";
 import {
   appendSubagent,
   buildRunLog,
@@ -29,7 +29,9 @@ import {
   shouldIncrementPendingSubagentNotification,
   subagentMutationOps,
 } from "./codex-pane-status.ts";
-import { maskPrompt, type Op } from "../pane-shared.ts";
+import { maskPrompt, type Op } from "../../tmux/shared/pane-shared.ts";
+
+const SCRIPT = join(import.meta.dirname, "codex-pane-status.ts");
 
 function state(overrides: Partial<PaneState> = {}): PaneState {
   return {
@@ -45,7 +47,7 @@ function state(overrides: Partial<PaneState> = {}): PaneState {
   };
 }
 
-Deno.test("resolved main identity replaces a fresh running session instead of becoming its child", async () => {
+test("resolved main identity replaces a fresh running session instead of becoming its child", async () => {
   const ops = await resolvedEventToOps(
     "UserPromptSubmit",
     { session_id: "new", prompt: "next" },
@@ -62,7 +64,7 @@ Deno.test("resolved main identity replaces a fresh running session instead of be
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "running" }));
 });
 
-Deno.test("late SessionStart cannot reset state established by a newer event", async () => {
+test("late SessionStart cannot reset state established by a newer event", async () => {
   const ops = await resolvedEventToOps(
     "SessionStart",
     { session_id: "main" },
@@ -72,7 +74,7 @@ Deno.test("late SessionStart cannot reset state established by a newer event", a
   assertEquals(ops, []);
 });
 
-Deno.test("proven child cannot replace an idle parent or an unrelated session", async () => {
+test("proven child cannot replace an idle parent or an unrelated session", async () => {
   const data = { session_id: "child" };
   const ops = await resolvedEventToOps(
     "SessionStart",
@@ -116,17 +118,17 @@ function hasSubagentAdd(ops: PaneOp[], id: string): boolean {
   );
 }
 
-Deno.test("selfHealOps: session id missing returns no ops", () => {
+test("selfHealOps: session id missing returns no ops", () => {
   assertEquals(selfHealOps({}), []);
 });
 
-Deno.test("selfHealOps: invalid session_id (path traversal) drops event", () => {
+test("selfHealOps: invalid session_id (path traversal) drops event", () => {
   assertEquals(selfHealOps({ session_id: "../bad", cwd: "/tmp" }), []);
   assertEquals(selfHealOps({ session_id: "sess:001" }), []);
   assertEquals(selfHealOps({ session_id: "a".repeat(129) }), []);
 });
 
-Deno.test("selfHealOps: sets codex session and cwd", () => {
+test("selfHealOps: sets codex session and cwd", () => {
   assertEquals(selfHealOps({ session_id: "s1", cwd: "/tmp/x" }), [
     { kind: "set", key: "@pane_agent", value: "codex" },
     { kind: "set", key: "@pane_session_id", value: "s1" },
@@ -134,7 +136,7 @@ Deno.test("selfHealOps: sets codex session and cwd", () => {
   ]);
 });
 
-Deno.test("maskPrompt: strips controls, collapses whitespace, truncates", () => {
+test("maskPrompt: strips controls, collapses whitespace, truncates", () => {
   // codex preserves 3-dot ellipsis ("...") via the explicit option; pane-shared
   // default is "…". See pane-shared.ts:131-132.
   assertEquals(
@@ -147,7 +149,7 @@ Deno.test("maskPrompt: strips controls, collapses whitespace, truncates", () => 
   );
 });
 
-Deno.test("appendSubagent: appends and preserves order", () => {
+test("appendSubagent: appends and preserves order", () => {
   assertEquals(appendSubagent("", "Codex", "c1"), "Codex:c1");
   assertEquals(
     appendSubagent("Codex:c1", "Codex", "c2"),
@@ -155,12 +157,12 @@ Deno.test("appendSubagent: appends and preserves order", () => {
   );
 });
 
-Deno.test("appendSubagent: sanitizes list delimiters and is idempotent", () => {
+test("appendSubagent: sanitizes list delimiters and is idempotent", () => {
   assertEquals(appendSubagent("", "Co|dex", "c:1"), "Co-dex:c-1");
   assertEquals(appendSubagent("Codex:c1", "Codex", "c1"), "Codex:c1");
 });
 
-Deno.test("removeSubagent: removes first matching id", () => {
+test("removeSubagent: removes first matching id", () => {
   assertEquals(
     removeSubagent("Codex:c1|Codex:c2|Codex:c1", "c1"),
     "Codex:c2|Codex:c1",
@@ -169,12 +171,12 @@ Deno.test("removeSubagent: removes first matching id", () => {
   assertEquals(removeSubagent("Codex:c1", "missing"), "Codex:c1");
 });
 
-Deno.test("countSubagents: counts non-empty list entries", () => {
+test("countSubagents: counts non-empty list entries", () => {
   assertEquals(countSubagents(""), 0);
   assertEquals(countSubagents("Codex:c1|Codex:c2|"), 2);
 });
 
-Deno.test("incrementPendingSubagentNotifications: parses positive integers only", () => {
+test("incrementPendingSubagentNotifications: parses positive integers only", () => {
   assertEquals(incrementPendingSubagentNotifications(""), "1");
   assertEquals(incrementPendingSubagentNotifications("0"), "1");
   assertEquals(incrementPendingSubagentNotifications("2"), "3");
@@ -182,7 +184,7 @@ Deno.test("incrementPendingSubagentNotifications: parses positive integers only"
   assertEquals(incrementPendingSubagentNotifications("not-a-number"), "1");
 });
 
-Deno.test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
+test("isMissingRequestedUserOption: matches only exact missing user option stderr", () => {
   assertEquals(
     isMissingRequestedUserOption(
       "invalid option: @pane_subagents",
@@ -214,7 +216,7 @@ Deno.test("isMissingRequestedUserOption: matches only exact missing user option 
   );
 });
 
-Deno.test("normalizeMissingUserOption: treats missing user option as empty value only", () => {
+test("normalizeMissingUserOption: treats missing user option as empty value only", () => {
   assertEquals(
     normalizeMissingUserOption(
       { ok: false, stderr: "invalid option: @pane_subagents" },
@@ -238,7 +240,7 @@ Deno.test("normalizeMissingUserOption: treats missing user option as empty value
   );
 });
 
-Deno.test("shouldIncrementPendingSubagentNotification: only successful removes count", () => {
+test("shouldIncrementPendingSubagentNotification: only successful removes count", () => {
   assertEquals(
     shouldIncrementPendingSubagentNotification(
       { action: "remove", id: "child" },
@@ -262,7 +264,7 @@ Deno.test("shouldIncrementPendingSubagentNotification: only successful removes c
   );
 });
 
-Deno.test("subagentMutationOps: adds from latest list snapshot", () => {
+test("subagentMutationOps: adds from latest list snapshot", () => {
   assertEquals(
     subagentMutationOps(
       "Codex:c1",
@@ -278,7 +280,7 @@ Deno.test("subagentMutationOps: adds from latest list snapshot", () => {
   );
 });
 
-Deno.test("subagentMutationOps: removes from latest list and drains idle", () => {
+test("subagentMutationOps: removes from latest list and drains idle", () => {
   assertEquals(
     subagentMutationOps(
       "Codex:c1|Codex:c2",
@@ -313,7 +315,7 @@ Deno.test("subagentMutationOps: removes from latest list and drains idle", () =>
   );
 });
 
-Deno.test("subagentMutationOps: missing pending snapshot increments first skipped notification", () => {
+test("subagentMutationOps: missing pending snapshot increments first skipped notification", () => {
   const ops = subagentMutationOps(
     "Codex:child",
     { action: "remove", id: "child" },
@@ -340,7 +342,7 @@ Deno.test("subagentMutationOps: missing pending snapshot increments first skippe
   );
 });
 
-Deno.test("parentStopOps: defers idle or drains from latest list snapshot", () => {
+test("parentStopOps: defers idle or drains from latest list snapshot", () => {
   assertEquals(parentStopOps("Codex:c1", null, "100"), [
     { kind: "set", key: "@pane_main_stopped", value: "1" },
     { kind: "set", key: "@pane_last_activity_at", value: "100" },
@@ -365,7 +367,7 @@ Deno.test("parentStopOps: defers idle or drains from latest list snapshot", () =
   ]);
 });
 
-Deno.test("parentStopOps + subagentMutationOps: final tracked child drains idle", () => {
+test("parentStopOps + subagentMutationOps: final tracked child drains idle", () => {
   const parentStop = parentStopOps("Codex:child", null, "100");
   assertEquals(parentStop, [
     { kind: "set", key: "@pane_main_stopped", value: "1" },
@@ -387,7 +389,7 @@ Deno.test("parentStopOps + subagentMutationOps: final tracked child drains idle"
   ]);
 });
 
-Deno.test("childSessionStartOps: appends only when latest parent is running", () => {
+test("childSessionStartOps: appends only when latest parent is running", () => {
   assertEquals(
     childSessionStartOps(
       {
@@ -407,7 +409,7 @@ Deno.test("childSessionStartOps: appends only when latest parent is running", ()
   );
 });
 
-Deno.test("childSessionStartOps: missing subagents snapshot registers first child", () => {
+test("childSessionStartOps: missing subagents snapshot registers first child", () => {
   assertEquals(
     childSessionStartOps(
       {
@@ -427,7 +429,7 @@ Deno.test("childSessionStartOps: missing subagents snapshot registers first chil
   );
 });
 
-Deno.test("childSessionStartOps: latest idle falls back to new main session", () => {
+test("childSessionStartOps: latest idle falls back to new main session", () => {
   const ops = childSessionStartOps(
     {
       status: "idle",
@@ -444,7 +446,7 @@ Deno.test("childSessionStartOps: latest idle falls back to new main session", ()
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("hasFreshActivity: uses named child startup freshness window", () => {
+test("hasFreshActivity: uses named child startup freshness window", () => {
   assertEquals(
     hasFreshActivity(
       "1000",
@@ -462,7 +464,7 @@ Deno.test("hasFreshActivity: uses named child startup freshness window", () => {
   assertEquals(hasFreshActivity("", "1000"), false);
 });
 
-Deno.test("isChildCodexEvent: classifies only known or fresh child candidates", () => {
+test("isChildCodexEvent: classifies only known or fresh child candidates", () => {
   const fresh = String(Math.floor(Date.now() / 1000));
   const stale = String(
     Math.floor(Date.now() / 1000) - CHILD_SESSION_START_FRESHNESS_SECONDS - 1,
@@ -550,7 +552,7 @@ Deno.test("isChildCodexEvent: classifies only known or fresh child candidates", 
   );
 });
 
-Deno.test("eventToOps: SessionStart startup drains stale state and seeds idle", async () => {
+test("eventToOps: SessionStart startup drains stale state and seeds idle", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "s1", source: "startup" },
@@ -566,7 +568,7 @@ Deno.test("eventToOps: SessionStart startup drains stale state and seeds idle", 
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: SessionStart clear drains stale state", async () => {
+test("eventToOps: SessionStart clear drains stale state", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "s1", source: "clear" },
@@ -577,7 +579,7 @@ Deno.test("eventToOps: SessionStart clear drains stale state", async () => {
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: SessionStart resume same codex preserves durable fields and drains transients", async () => {
+test("eventToOps: SessionStart resume same codex preserves durable fields and drains transients", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "s1", source: "resume" },
@@ -594,7 +596,7 @@ Deno.test("eventToOps: SessionStart resume same codex preserves durable fields a
   assert(!hasOp(ops, { kind: "unset", key: "@pane_context_used_pct" }));
 });
 
-Deno.test("eventToOps: SessionStart resume cross-agent falls back to full drain", async () => {
+test("eventToOps: SessionStart resume cross-agent falls back to full drain", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "s1", source: "resume" },
@@ -604,7 +606,7 @@ Deno.test("eventToOps: SessionStart resume cross-agent falls back to full drain"
   assert(hasOp(ops, { kind: "unset", key: "@pane_context_used_pct" }));
 });
 
-Deno.test("eventToOps: child SessionStart tracks subagent without idling or self-heal", async () => {
+test("eventToOps: child SessionStart tracks subagent without idling or self-heal", async () => {
   const fresh = String(Math.floor(Date.now() / 1000));
   const ops = await eventToOps(
     "SessionStart",
@@ -629,7 +631,7 @@ Deno.test("eventToOps: child SessionStart tracks subagent without idling or self
   }]);
 });
 
-Deno.test("eventToOps: stale valid-different SessionStart drains as new main", async () => {
+test("eventToOps: stale valid-different SessionStart drains as new main", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "new-main", source: "startup", cwd: "/repo" },
@@ -651,7 +653,7 @@ Deno.test("eventToOps: stale valid-different SessionStart drains as new main", a
   assert(hasOp(ops, { kind: "unset", key: "@pane_subagents" }));
 });
 
-Deno.test("eventToOps: stale SessionStart with main discriminator drains as new main", async () => {
+test("eventToOps: stale SessionStart with main discriminator drains as new main", async () => {
   const ops = await eventToOps(
     "SessionStart",
     {
@@ -675,7 +677,7 @@ Deno.test("eventToOps: stale SessionStart with main discriminator drains as new 
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: fresh SessionStart with main discriminator drains as new main", async () => {
+test("eventToOps: fresh SessionStart with main discriminator drains as new main", async () => {
   const ops = await eventToOps(
     "SessionStart",
     {
@@ -700,7 +702,7 @@ Deno.test("eventToOps: fresh SessionStart with main discriminator drains as new 
   assert(!ops.some((op) => "childSessionStart" in op));
 });
 
-Deno.test("eventToOps: unrelated agent_type does not force child classification", async () => {
+test("eventToOps: unrelated agent_type does not force child classification", async () => {
   const ops = await eventToOps(
     "SessionStart",
     {
@@ -724,7 +726,7 @@ Deno.test("eventToOps: unrelated agent_type does not force child classification"
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: explicit child discriminator can track stale child start", async () => {
+test("eventToOps: explicit child discriminator can track stale child start", async () => {
   const ops = await eventToOps(
     "SessionStart",
     {
@@ -753,7 +755,7 @@ Deno.test("eventToOps: explicit child discriminator can track stale child start"
   }]);
 });
 
-Deno.test("eventToOps: different SessionStart while idle is a new main session", async () => {
+test("eventToOps: different SessionStart while idle is a new main session", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "new-main", source: "startup", cwd: "/repo" },
@@ -765,7 +767,7 @@ Deno.test("eventToOps: different SessionStart while idle is a new main session",
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: invalid SessionStart id drains without unsafe self-heal", async () => {
+test("eventToOps: invalid SessionStart id drains without unsafe self-heal", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { session_id: "../bad", source: "startup", cwd: "/repo" },
@@ -787,7 +789,7 @@ Deno.test("eventToOps: invalid SessionStart id drains without unsafe self-heal",
   assert(hasOp(ops, { kind: "set", key: "@pane_status", value: "idle" }));
 });
 
-Deno.test("eventToOps: missing SessionStart id still drains stale running", async () => {
+test("eventToOps: missing SessionStart id still drains stale running", async () => {
   const ops = await eventToOps(
     "SessionStart",
     { source: "startup", cwd: "/repo" },
@@ -802,7 +804,7 @@ Deno.test("eventToOps: missing SessionStart id still drains stale running", asyn
   assert(!ops.some((op) => op.key === "@pane_session_id"));
 });
 
-Deno.test("eventToOps: UserPromptSubmit sets running prompt timestamps", async () => {
+test("eventToOps: UserPromptSubmit sets running prompt timestamps", async () => {
   const ops = await eventToOps(
     "UserPromptSubmit",
     { session_id: "s1", prompt: "build it" },
@@ -813,7 +815,7 @@ Deno.test("eventToOps: UserPromptSubmit sets running prompt timestamps", async (
   assert(ops.some((op) => op.kind === "set" && op.key === "@pane_started_at"));
 });
 
-Deno.test("eventToOps: UserPromptSubmit publishes context pct when token_count is readable", async () => {
+test("eventToOps: UserPromptSubmit publishes context pct when token_count is readable", async () => {
   const transcript =
     new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -828,7 +830,7 @@ Deno.test("eventToOps: UserPromptSubmit publishes context pct when token_count i
   }));
 });
 
-Deno.test("eventToOps: UserPromptSubmit empty prompt unsets prompt", async () => {
+test("eventToOps: UserPromptSubmit empty prompt unsets prompt", async () => {
   const ops = await eventToOps(
     "UserPromptSubmit",
     { session_id: "s1", prompt: "" },
@@ -837,7 +839,7 @@ Deno.test("eventToOps: UserPromptSubmit empty prompt unsets prompt", async () =>
   assert(hasOp(ops, { kind: "unset", key: "@pane_prompt" }));
 });
 
-Deno.test("eventToOps: PreToolUse resumes waiting and records tool_use_id", async () => {
+test("eventToOps: PreToolUse resumes waiting and records tool_use_id", async () => {
   const ops = await eventToOps(
     "PreToolUse",
     {
@@ -863,7 +865,7 @@ Deno.test("eventToOps: PreToolUse resumes waiting and records tool_use_id", asyn
   }));
 });
 
-Deno.test("eventToOps: PreToolUse publishes context pct when token_count is readable", async () => {
+test("eventToOps: PreToolUse publishes context pct when token_count is readable", async () => {
   const transcript =
     new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -884,14 +886,14 @@ Deno.test("eventToOps: PreToolUse publishes context pct when token_count is read
   }));
 });
 
-Deno.test("eventToOps: PreToolUse without tool name is no-op", async () => {
+test("eventToOps: PreToolUse without tool name is no-op", async () => {
   assertEquals(
     await eventToOps("PreToolUse", { session_id: "s1" }, state()),
     [],
   );
 });
 
-Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume", async () => {
+test("eventToOps: child PreToolUse updates tool without self-heal or resume", async () => {
   const transcript =
     new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -923,7 +925,7 @@ Deno.test("eventToOps: child PreToolUse updates tool without self-heal or resume
   assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
 });
 
-Deno.test("eventToOps: child PreToolUse does not resume error parent", async () => {
+test("eventToOps: child PreToolUse does not resume error parent", async () => {
   const ops = await eventToOps(
     "PreToolUse",
     {
@@ -946,7 +948,7 @@ Deno.test("eventToOps: child PreToolUse does not resume error parent", async () 
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: PostToolUse clears current only for matching tool_use_id", async () => {
+test("eventToOps: PostToolUse clears current only for matching tool_use_id", async () => {
   const stale = await eventToOps(
     "PostToolUse",
     { session_id: "s1", tool_name: "Bash", tool_use_id: "old" },
@@ -963,7 +965,7 @@ Deno.test("eventToOps: PostToolUse clears current only for matching tool_use_id"
   assert(hasOp(current, { kind: "unset", key: "@pane_current_tool_use_id" }));
 });
 
-Deno.test("eventToOps: PostToolUse without tool name only updates activity", async () => {
+test("eventToOps: PostToolUse without tool name only updates activity", async () => {
   const ops = await eventToOps("PostToolUse", { session_id: "s1" }, state());
   assert(
     ops.some((op) => op.kind === "set" && op.key === "@pane_last_activity_at"),
@@ -971,7 +973,7 @@ Deno.test("eventToOps: PostToolUse without tool name only updates activity", asy
   assert(!ops.some((op) => op.key === "@pane_last_tool"));
 });
 
-Deno.test("eventToOps: PostToolUse publishes context pct when token_count is readable", async () => {
+test("eventToOps: PostToolUse publishes context pct when token_count is readable", async () => {
   const transcript =
     new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -991,7 +993,7 @@ Deno.test("eventToOps: PostToolUse publishes context pct when token_count is rea
   }));
 });
 
-Deno.test("eventToOps: normal event with missing token_count leaves context pct untouched", async () => {
+test("eventToOps: normal event with missing token_count leaves context pct untouched", async () => {
   const transcript =
     new URL("../fixtures/token-missing.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -1007,7 +1009,7 @@ Deno.test("eventToOps: normal event with missing token_count leaves context pct 
   assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
 });
 
-Deno.test("eventToOps: PostToolUse records last tool and string Error response", async () => {
+test("eventToOps: PostToolUse records last tool and string Error response", async () => {
   const ops = await eventToOps(
     "PostToolUse",
     {
@@ -1026,7 +1028,7 @@ Deno.test("eventToOps: PostToolUse records last tool and string Error response",
   }));
 });
 
-Deno.test("eventToOps: PostToolUse records last edit file when payload exposes file_path", async () => {
+test("eventToOps: PostToolUse records last edit file when payload exposes file_path", async () => {
   const ops = await eventToOps(
     "PostToolUse",
     {
@@ -1044,7 +1046,7 @@ Deno.test("eventToOps: PostToolUse records last edit file when payload exposes f
   }));
 });
 
-Deno.test("eventToOps: child PostToolUse records last tool without self-heal or resume", async () => {
+test("eventToOps: child PostToolUse records last tool without self-heal or resume", async () => {
   const ops = await eventToOps(
     "PostToolUse",
     {
@@ -1070,7 +1072,7 @@ Deno.test("eventToOps: child PostToolUse records last tool without self-heal or 
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: child PostToolUse does not resume error parent", async () => {
+test("eventToOps: child PostToolUse does not resume error parent", async () => {
   const ops = await eventToOps(
     "PostToolUse",
     {
@@ -1095,7 +1097,7 @@ Deno.test("eventToOps: child PostToolUse does not resume error parent", async ()
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: Stop unsets context pct when transcript miss", async () => {
+test("eventToOps: Stop unsets context pct when transcript miss", async () => {
   const ops = await eventToOps(
     "Stop",
     { session_id: "s1", transcript_path: "/no/such/file.jsonl" },
@@ -1106,7 +1108,7 @@ Deno.test("eventToOps: Stop unsets context pct when transcript miss", async () =
   assert(!hasOp(ops, { kind: "unset", key: "@pane_main_stopped" }));
 });
 
-Deno.test("eventToOps: Stop sets context pct when token_count is readable", async () => {
+test("eventToOps: Stop sets context pct when token_count is readable", async () => {
   const transcript =
     new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -1117,7 +1119,7 @@ Deno.test("eventToOps: Stop sets context pct when token_count is readable", asyn
   assert(hasParentStop(ops, "25"));
 });
 
-Deno.test("eventToOps: parent Stop delegates latest-list idle decision", async () => {
+test("eventToOps: parent Stop delegates latest-list idle decision", async () => {
   const ops = await eventToOps(
     "Stop",
     { session_id: "parent", cwd: "/repo" },
@@ -1133,7 +1135,7 @@ Deno.test("eventToOps: parent Stop delegates latest-list idle decision", async (
   assert(!hasOp(ops, { kind: "set", key: "@pane_main_stopped", value: "1" }));
 });
 
-Deno.test("eventToOps: unknown different Stop is treated as main stop", async () => {
+test("eventToOps: unknown different Stop is treated as main stop", async () => {
   const ops = await eventToOps(
     "Stop",
     { session_id: "child-missing", cwd: "/repo" },
@@ -1153,7 +1155,7 @@ Deno.test("eventToOps: unknown different Stop is treated as main stop", async ()
   assert(hasParentStop(ops, null));
 });
 
-Deno.test("eventToOps: child Stop does not self-heal parent identity", async () => {
+test("eventToOps: child Stop does not self-heal parent identity", async () => {
   const ops = await eventToOps(
     "Stop",
     { session_id: "child", cwd: "/repo" },
@@ -1174,7 +1176,7 @@ Deno.test("eventToOps: child Stop does not self-heal parent identity", async () 
   assert(!hasOp(ops, { kind: "set", key: "@pane_session_id", value: "child" }));
 });
 
-Deno.test("eventToOps: PermissionRequest sets waiting permission", async () => {
+test("eventToOps: PermissionRequest sets waiting permission", async () => {
   const ops = await eventToOps(
     "PermissionRequest",
     { session_id: "s1" },
@@ -1186,7 +1188,7 @@ Deno.test("eventToOps: PermissionRequest sets waiting permission", async () => {
   );
 });
 
-Deno.test("eventToOps: unknown different PermissionRequest wait-marks main", async () => {
+test("eventToOps: unknown different PermissionRequest wait-marks main", async () => {
   const ops = await eventToOps(
     "PermissionRequest",
     { session_id: "unknown-child", cwd: "/repo" },
@@ -1208,7 +1210,7 @@ Deno.test("eventToOps: unknown different PermissionRequest wait-marks main", asy
   );
 });
 
-Deno.test("eventToOps: child PermissionRequest does not wait-mark parent", async () => {
+test("eventToOps: child PermissionRequest does not wait-mark parent", async () => {
   assertEquals(
     await eventToOps(
       "PermissionRequest",
@@ -1224,7 +1226,7 @@ Deno.test("eventToOps: child PermissionRequest does not wait-mark parent", async
   );
 });
 
-Deno.test("eventToOps: PermissionRequest does not publish context pct", async () => {
+test("eventToOps: PermissionRequest does not publish context pct", async () => {
   const transcript =
     new URL("../fixtures/token-nested-ok.jsonl", import.meta.url).pathname;
   const ops = await eventToOps(
@@ -1236,7 +1238,7 @@ Deno.test("eventToOps: PermissionRequest does not publish context pct", async ()
   assert(!ops.some((op) => op.key === "@pane_context_used_pct"));
 });
 
-Deno.test("eventToOps: child UserPromptSubmit does not self-heal parent identity", async () => {
+test("eventToOps: child UserPromptSubmit does not self-heal parent identity", async () => {
   assertEquals(
     await eventToOps(
       "UserPromptSubmit",
@@ -1252,7 +1254,7 @@ Deno.test("eventToOps: child UserPromptSubmit does not self-heal parent identity
   );
 });
 
-Deno.test("eventToOps: fresh different UserPromptSubmit does not self-heal parent identity", async () => {
+test("eventToOps: fresh different UserPromptSubmit does not self-heal parent identity", async () => {
   const ops = await eventToOps(
     "UserPromptSubmit",
     { session_id: "child", cwd: "/repo", prompt: "child prompt" },
@@ -1268,7 +1270,7 @@ Deno.test("eventToOps: fresh different UserPromptSubmit does not self-heal paren
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: fresh different PreToolUse does not self-heal parent identity", async () => {
+test("eventToOps: fresh different PreToolUse does not self-heal parent identity", async () => {
   const ops = await eventToOps(
     "PreToolUse",
     {
@@ -1291,7 +1293,7 @@ Deno.test("eventToOps: fresh different PreToolUse does not self-heal parent iden
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: fresh different PostToolUse does not self-heal parent identity", async () => {
+test("eventToOps: fresh different PostToolUse does not self-heal parent identity", async () => {
   const ops = await eventToOps(
     "PostToolUse",
     {
@@ -1316,17 +1318,17 @@ Deno.test("eventToOps: fresh different PostToolUse does not self-heal parent ide
   assert(!hasOp(ops, { kind: "set", key: "@pane_cwd", value: "/repo" }));
 });
 
-Deno.test("eventToOps: unknown event is no-op", async () => {
+test("eventToOps: unknown event is no-op", async () => {
   assertEquals(await eventToOps("Nope", { session_id: "s1" }, state()), []);
 });
 
-Deno.test("extractToolError: accepts string Error prefix only", () => {
+test("extractToolError: accepts string Error prefix only", () => {
   assertEquals(extractToolError("Error: failure"), "failure");
   assertEquals(extractToolError("ok"), null);
   assertEquals(extractToolError({ is_error: true }), null);
 });
 
-Deno.test("extractToolSubject: extracts safe compact subjects from known tools and MCP tools", () => {
+test("extractToolSubject: extracts safe compact subjects from known tools and MCP tools", () => {
   assertEquals(extractToolSubject("Bash", { command: "echo hi" }), "echo hi");
   assertEquals(
     extractToolSubject("Read", { file_path: "/tmp/app.ts" }),
@@ -1340,7 +1342,7 @@ Deno.test("extractToolSubject: extracts safe compact subjects from known tools a
   assertEquals(extractToolSubject("Edit", { file_path: "/tmp/app.ts" }), "");
 });
 
-Deno.test("extractEditFile: extracts edit-family file paths and strips controls", () => {
+test("extractEditFile: extracts edit-family file paths and strips controls", () => {
   assertEquals(
     extractEditFile("Write", { file_path: "/tmp/a\nb.ts" }),
     "/tmp/a b.ts",
@@ -1348,7 +1350,7 @@ Deno.test("extractEditFile: extracts edit-family file paths and strips controls"
   assertEquals(extractEditFile("Bash", { file_path: "/tmp/a.ts" }), "");
 });
 
-Deno.test("buildRunLog: records metadata without raw option values", () => {
+test("buildRunLog: records metadata without raw option values", () => {
   const log = buildRunLog({
     event: "PostToolUse",
     data: {
@@ -1368,7 +1370,7 @@ Deno.test("buildRunLog: records metadata without raw option values", () => {
   assertEquals(log.session_id, "s1");
 });
 
-Deno.test("commandOutput: handles null streams without masking exit code", async () => {
+test("commandOutput: handles null streams without masking exit code", async () => {
   const result = await commandOutput("/bin/echo", ["hi"], {
     stdout: "null",
     stderr: "piped",
@@ -1376,18 +1378,18 @@ Deno.test("commandOutput: handles null streams without masking exit code", async
   assertEquals(result, { code: 0, stdout: "", stderr: "" });
 });
 
-Deno.test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
+test("extractTokenPct: reads latest token_count from 64KB tail", async () => {
   const path = new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   assertEquals(await extractTokenPct(path), 25);
 });
 
-Deno.test("extractTokenPct: reads current nested event_msg token_count shape", async () => {
+test("extractTokenPct: reads current nested event_msg token_count shape", async () => {
   const path = new URL("../fixtures/token-nested-ok.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractTokenPct(path), 25);
 });
 
-Deno.test("extractTokenPct: uses last usage instead of cumulative session total", async () => {
+test("extractTokenPct: uses last usage instead of cumulative session total", async () => {
   const path = new URL(
     "../fixtures/token-cumulative-over-window.jsonl",
     import.meta.url,
@@ -1399,7 +1401,7 @@ const FIXTURE_RECORDED_AT = Math.floor(
   Date.parse("2026-07-11T06:31:38.675Z") / 1000,
 );
 
-Deno.test("extractRateLimits: reads the latest rate_limits and rounds percentages", async () => {
+test("extractRateLimits: reads the latest rate_limits and rounds percentages", async () => {
   const path = new URL("../fixtures/rate-limits-ok.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractRateLimits(path), {
@@ -1413,7 +1415,7 @@ Deno.test("extractRateLimits: reads the latest rate_limits and rounds percentage
   });
 });
 
-Deno.test("extractRateLimits: survives a payload without model_context_window", async () => {
+test("extractRateLimits: survives a payload without model_context_window", async () => {
   const path = new URL(
     "../fixtures/rate-limits-no-context-window.jsonl",
     import.meta.url,
@@ -1429,19 +1431,19 @@ Deno.test("extractRateLimits: survives a payload without model_context_window", 
   });
 });
 
-Deno.test("extractRateLimits: token_count without rate_limits → null", async () => {
+test("extractRateLimits: token_count without rate_limits → null", async () => {
   const path = new URL("../fixtures/token-ok.jsonl", import.meta.url).pathname;
   assertEquals(await extractRateLimits(path), null);
 });
 
-Deno.test("extractRateLimits: missing transcript → null", async () => {
+test("extractRateLimits: missing transcript → null", async () => {
   assertEquals(await extractRateLimits(null), null);
   const path = new URL("../fixtures/does-not-exist.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractRateLimits(path), null);
 });
 
-Deno.test("extractTokenPct: token_count missing / zero window / file missing return null", async () => {
+test("extractTokenPct: token_count missing / zero window / file missing return null", async () => {
   const missing = new URL("../fixtures/token-missing.jsonl", import.meta.url)
     .pathname;
   const zero = new URL("../fixtures/token-zero-window.jsonl", import.meta.url)
@@ -1451,62 +1453,26 @@ Deno.test("extractTokenPct: token_count missing / zero window / file missing ret
   assertEquals(await extractTokenPct("/definitely/not/found.jsonl"), null);
 });
 
-Deno.test("extractTokenPct: clamps percentages above 100", async () => {
+test("extractTokenPct: clamps percentages above 100", async () => {
   const path = new URL("../fixtures/token-over-window.jsonl", import.meta.url)
     .pathname;
   assertEquals(await extractTokenPct(path), 100);
 });
 
-Deno.test("main: no TMUX_PANE exits gracefully and writes no stdout", async () => {
-  const cmd = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "--allow-env=HOME,TMUX_PANE",
-      "--allow-read",
-      "--allow-write",
-      "--allow-run=tmux,ps",
-      "home/programs/codex/scripts/codex-pane-status.ts",
-      "SessionStart",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
+test("main: no TMUX_PANE exits gracefully and writes no stdout", async () => {
+  const { code, stdout } = await run(SCRIPT, ["SessionStart"], {
     env: { TMUX_PANE: "" },
+    stdin: JSON.stringify({ session_id: "s1" }),
   });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(
-    new TextEncoder().encode(JSON.stringify({ session_id: "s1" })),
-  );
-  await writer.close();
-  const { code, stdout } = await child.output();
   assertEquals(code, 0);
   assertEquals(stdout.length, 0);
 });
 
-Deno.test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async () => {
-  const cmd = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "--allow-env=HOME,TMUX_PANE",
-      "--allow-read",
-      "--allow-write",
-      "--allow-run=tmux,ps",
-      "home/programs/codex/scripts/codex-pane-status.ts",
-      "SessionStart",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
+test("main: invalid TMUX_PANE exits gracefully and writes no stdout", async () => {
+  const { code, stdout } = await run(SCRIPT, ["SessionStart"], {
     env: { TMUX_PANE: "-L" },
+    stdin: JSON.stringify({ session_id: "s1" }),
   });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(
-    new TextEncoder().encode(JSON.stringify({ session_id: "s1" })),
-  );
-  await writer.close();
-  const { code, stdout } = await child.output();
   assertEquals(code, 0);
   assertEquals(stdout.length, 0);
 });
@@ -1537,7 +1503,7 @@ const b1State: PaneState = {
   lastActivityAt: "",
 };
 
-Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {
+test("Phase B.1 fixture: SessionStart fresh", async () => {
   const ops = b1Normalize(
     await eventToOps(
       "SessionStart",
@@ -1573,7 +1539,7 @@ Deno.test("Phase B.1 fixture: SessionStart fresh", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: SessionStart resume", async () => {
+test("Phase B.1 fixture: SessionStart resume", async () => {
   const ops = b1Normalize(
     await eventToOps("SessionStart", {
       session_id: "test-sid",
@@ -1599,7 +1565,7 @@ Deno.test("Phase B.1 fixture: SessionStart resume", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: UserPromptSubmit with prompt", async () => {
+test("Phase B.1 fixture: UserPromptSubmit with prompt", async () => {
   const ops = b1Normalize(
     await eventToOps("UserPromptSubmit", {
       session_id: "test-sid",
@@ -1619,7 +1585,7 @@ Deno.test("Phase B.1 fixture: UserPromptSubmit with prompt", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: PreToolUse Bash with tool_use_id", async () => {
+test("Phase B.1 fixture: PreToolUse Bash with tool_use_id", async () => {
   const ops = b1Normalize(
     await eventToOps("PreToolUse", {
       session_id: "test-sid",
@@ -1639,7 +1605,7 @@ Deno.test("Phase B.1 fixture: PreToolUse Bash with tool_use_id", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: PostToolUse Bash success", async () => {
+test("Phase B.1 fixture: PostToolUse Bash success", async () => {
   const ops = b1Normalize(
     await eventToOps("PostToolUse", {
       session_id: "test-sid",
@@ -1665,7 +1631,7 @@ Deno.test("Phase B.1 fixture: PostToolUse Bash success", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: PostToolUse Bash error", async () => {
+test("Phase B.1 fixture: PostToolUse Bash error", async () => {
   const ops = b1Normalize(
     await eventToOps("PostToolUse", {
       session_id: "test-sid",
@@ -1691,7 +1657,7 @@ Deno.test("Phase B.1 fixture: PostToolUse Bash error", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: Stop", async () => {
+test("Phase B.1 fixture: Stop", async () => {
   const ops = b1Normalize(
     await eventToOps("Stop", { session_id: "test-sid", cwd: "/repo" }, b1State),
   );
@@ -1708,7 +1674,7 @@ Deno.test("Phase B.1 fixture: Stop", async () => {
   ]);
 });
 
-Deno.test("Phase B.1 fixture: PermissionRequest", async () => {
+test("Phase B.1 fixture: PermissionRequest", async () => {
   const ops = b1Normalize(
     await eventToOps("PermissionRequest", {
       session_id: "test-sid",

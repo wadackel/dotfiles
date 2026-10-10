@@ -1,4 +1,5 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { test } from "bun:test";
+import { assert, assertEquals } from "@std/assert";
 import {
   digestTerms,
   injected,
@@ -20,7 +21,7 @@ const probe: Probe = {
   },
 };
 
-Deno.test("probes round-trip through the markdown file", () => {
+test("probes round-trip through the markdown file", () => {
   const md = renderProbes([probe, {
     ...probe,
     id: "p02",
@@ -33,7 +34,7 @@ Deno.test("probes round-trip through the markdown file", () => {
   }]);
 });
 
-Deno.test("score requires the skill, every expected path, and the clarification call", () => {
+test("score requires the skill, every expected path, and the clarification call", () => {
   const ok = {
     skill: "/gate",
     paths: ["/Users/x/dotfiles/home/programs/claude/skills/gate/SKILL.md"],
@@ -57,7 +58,7 @@ Deno.test("score requires the skill, every expected path, and the clarification 
   assert(!score(noSkill, { skill: "", paths: [], needs_clarification: false }));
 });
 
-Deno.test("injected is true only when a term used in the utterance is in the digest", () => {
+test("injected is true only when a term used in the utterance is in the digest", () => {
   const digest =
     "## ユーザーの語彙（承認済み）\n\n説明\n\n- gate（ゲート / 最終レビュー）: 監査。 ≠ impl。\n- wip: 一時コミット。\n（ほか 3 語は上限のため省略）";
   assertEquals(digestTerms(digest), ["gate", "ゲート", "最終レビュー", "wip"]);
@@ -67,7 +68,7 @@ Deno.test("injected is true only when a term used in the utterance is in the dig
   assert(!injected(probe, ""));
 });
 
-Deno.test("summarize counts correct and clarified answers per condition and run", () => {
+test("summarize counts correct and clarified answers per condition and run", () => {
   const rows = [
     {
       probe: "p01",
@@ -134,7 +135,7 @@ Deno.test("summarize counts correct and clarified answers per condition and run"
   ]);
 });
 
-Deno.test("mentions require one of the words in the interpretation", () => {
+test("mentions require one of the words in the interpretation", () => {
   const withMentions = {
     ...probe,
     expected: { ...probe.expected, mentions: ["main", "直接"] },

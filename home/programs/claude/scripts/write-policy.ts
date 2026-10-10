@@ -1,9 +1,13 @@
-#!/usr/bin/env -S deno run --allow-read --no-prompt
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // A fixture that already carries the identifier stays editable because several tests
 // pin the real project path as an expected value; "write-policy: allow" in the new
-// content is the explicit escape. No import: the hook runs on every edit, and the
-// shared yaml / glob helpers would add startup cost for two constant lists.
+// content is the explicit escape. Only node: built-ins are imported: the hook runs
+// on every edit, and the shared yaml / glob helpers would add startup cost for two
+// constant lists.
+
+import { readFile, stat } from "node:fs/promises";
+import { text } from "node:stream/consumers";
 
 const IDENTIFIERS = [
   "wadackels-MacBook",
@@ -53,30 +57,30 @@ export function newContent(input: HookInput): string {
 if (import.meta.main) {
   let input: HookInput;
   try {
-    input = JSON.parse(await new Response(Deno.stdin.readable).text());
+    input = JSON.parse(await text(process.stdin));
   } catch {
-    Deno.exit(0);
+    process.exit(0);
   }
-  if (!input.tool_name || !TOOLS.has(input.tool_name)) Deno.exit(0);
+  if (!input.tool_name || !TOOLS.has(input.tool_name)) process.exit(0);
   const filePath = input.tool_input?.file_path ?? "";
-  if (!isFixturePath(filePath)) Deno.exit(0);
+  if (!isFixturePath(filePath)) process.exit(0);
   const content = newContent(input);
-  if (content.includes(ALLOW_MARKER)) Deno.exit(0);
+  if (content.includes(ALLOW_MARKER)) process.exit(0);
   const found = findIdentifiers(content);
-  if (found.length === 0) Deno.exit(0);
+  if (found.length === 0) process.exit(0);
   // The path comes straight from the tool call; only a regular file of sane size is
   // read, so a FIFO or a device cannot stall the hook.
   let existing = "";
   try {
-    const info = await Deno.stat(filePath);
-    if (info.isFile && info.size <= 1_000_000) {
-      existing = await Deno.readTextFile(filePath);
+    const info = await stat(filePath);
+    if (info.isFile() && info.size <= 1_000_000) {
+      existing = await readFile(filePath, "utf8");
     }
   } catch {
     existing = "";
   }
   const missing = found.filter((id) => !existing.includes(id));
-  if (missing.length === 0) Deno.exit(0);
+  if (missing.length === 0) process.exit(0);
   console.error(
     [
       `[write-policy] Personal identifier "${missing[0]}" in a test fixture`,
@@ -84,5 +88,5 @@ if (import.meta.main) {
       `Blocked: ${filePath}`,
     ].join("\n"),
   );
-  Deno.exit(2);
+  process.exit(2);
 }

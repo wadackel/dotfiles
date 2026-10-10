@@ -1,22 +1,24 @@
-#!/usr/bin/env -S deno run --allow-read --allow-env=HOME
+#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
  * task-src.ts の分類から漏れた「Task」出現の残余を分類する。
  * 定型パターン (見出し・表・箇条書き・ツール名) を除いた後に何が残るかを見る補助スクリプト。
  */
-const HOME = Deno.env.get("HOME")!;
+import { readdir, readFile } from "node:fs/promises";
+
+const HOME = process.env.HOME!;
 const samples: string[] = [];
 const kinds = new Map<string, number>();
 async function* f(d: string): AsyncGenerator<string> {
-  for await (const e of Deno.readDir(d)) {
+  for (const e of await readdir(d, { withFileTypes: true })) {
     const p = `${d}/${e.name}`;
-    if (e.isDirectory) yield* f(p);
+    if (e.isDirectory()) yield* f(p);
     else if (e.name.endsWith(".jsonl")) yield p;
   }
 }
 for await (const path of f(`${HOME}/.claude/projects`)) {
   let c: string;
   try {
-    c = await Deno.readTextFile(path);
+    c = await readFile(path, "utf8");
   } catch {
     continue;
   }
