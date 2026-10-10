@@ -103,19 +103,25 @@ test("fetchText refuses a URL that is not http or https before fetching", async 
   }
 });
 
+// fetchText itself checks only the first URL; this pins that Bun's fetch does
+// not follow a redirect to another scheme.
 test("fetchText refuses a redirect from http to file", async () => {
+  let hits = 0;
   const server = createServer((_req, res) => {
+    hits++;
     res.writeHead(302, { location: "file:///etc/hosts" });
     res.end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
   try {
-    const outcome = await fetchText(`http://127.0.0.1:${port}/feed`).then(
-      (text) => ({ text }),
-      (error: unknown) => ({ error }),
-    );
+    const outcome = await fetchText(`http://127.0.0.1:${port}/feed`, 2_000)
+      .then(
+        (text) => ({ text }),
+        (error: unknown) => ({ error }),
+      );
     assert("error" in outcome, `fetchText returned ${JSON.stringify(outcome)}`);
+    assertEquals(hits, 1);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

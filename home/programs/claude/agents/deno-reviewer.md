@@ -27,7 +27,7 @@ Runtime-specialist reviewer for Deno scripts. Catches Deno-specific pitfalls tha
 
 ### 2. Runtime API Quirks
 - `Deno.realPath()` / `Deno.stat()` throw on non-existent paths — fallback (try/catch returning input path) when called on paths that may not yet exist
-- `Deno.Command` with `stderr: "null"` makes diagnosis impossible on failure → require `stderr: "piped"` and log on non-zero exit (per CLAUDE.md)
+- `Deno.Command` with `stderr: "null"` makes diagnosis impossible on failure → require `stderr: "piped"` and log on non-zero exit
 - `Deno.env.get(...)` returning `undefined` when var unset — no implicit empty-string coercion
 - Subprocess spawn (`new Deno.Command(...)`) needs both `stdout` and `stderr` configured
 
