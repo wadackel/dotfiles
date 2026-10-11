@@ -11,9 +11,14 @@ let
 
   # Codex CLI config keys/sections that we want to fix declaratively.
   # `apply-managed.ts` overwrites only these keys in ~/.codex/config.toml; others
-  # (e.g. [projects.*], [notice], the desktop app's [desktop]) are kept, since
-  # Codex and the desktop app mutate them at runtime.
+  # (e.g. [projects.*], [notice], the rest of the desktop app's [desktop]) are
+  # kept, since Codex and the desktop app mutate them at runtime.
   managed = {
+    # The desktop app's import of ~/.claude/settings.json turns its `env` into
+    # [shell_environment_policy] with inherit = "core", which strips TMUX and
+    # the session variables from every command Codex runs.
+    desktop."external-agent-import-sync-enabled" = false;
+
     model = "gpt-6-astra";
     model_context_window = 872000;
     model_reasoning_effort = "xhigh";
@@ -31,9 +36,6 @@ let
     web_search = "live";
 
     features = {
-      streamable_shell = true;
-      view_image_tool = true;
-      external_migration = true;
       hooks = true;
     };
 
