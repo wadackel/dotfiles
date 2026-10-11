@@ -45,6 +45,7 @@ import {
 import {
   clampUsageTokens,
   DOGRUN,
+  emptyMessage,
   hintTokens,
   ROW1_FIXED_OVERHEAD,
   type Row2Seg,
@@ -231,6 +232,37 @@ test("selectFreeWindows: the window's active pane represents it", () => {
   assertEquals(
     selectFreeWindows(snapshots, [], null).map((w) => [label(w), w.row.paneId]),
     [["s:1", "%2"], ["s:2", "%4"]],
+  );
+});
+
+test("selectFreeWindows: the other panes' commands follow in pane order, without the blank ones", () => {
+  const snapshots = [
+    freeSnapshot({
+      paneId: "%1",
+      window: "1",
+      active: false,
+      row: { currentCommand: "node" },
+    }),
+    freeSnapshot({ paneId: "%2", window: "1", active: true }),
+    freeSnapshot({
+      paneId: "%3",
+      window: "1",
+      active: false,
+      row: { currentCommand: "" },
+    }),
+    freeSnapshot({
+      paneId: "%4",
+      window: "1",
+      active: false,
+      row: { currentCommand: "tail" },
+    }),
+    freeSnapshot({ paneId: "%5", window: "2" }),
+  ];
+  assertEquals(
+    selectFreeWindows(snapshots, [], null).map((
+      w,
+    ) => [label(w), w.row.currentCommand, w.otherCommands]),
+    [["s:1", "zsh", ["node", "tail"]], ["s:2", "zsh", []]],
   );
 });
 
@@ -1334,14 +1366,22 @@ test("nextWaitingIndex: no waiting row → no move", () => {
 
 // --- hintTokens ---
 
-const hintText = (filter: boolean) =>
-  hintTokens(filter, "agents").map((t) => t.text).join("");
+const hintText = (
+  filterEnabled: boolean,
+  screen: "agents" | "free" = "agents",
+  empty = false,
+) => hintTokens({ filterEnabled, screen, empty }).map((t) => t.text).join("");
+const agentHints = {
+  filterEnabled: false,
+  screen: "agents",
+  empty: false,
+} as const;
 
 test("hintTokens: jump leads so a right-side clip never removes it", () => {
   const text = hintText(false);
   assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
   assertEquals(
-    clampUsageTokens(hintTokens(false, "agents"), 20).map((t) => t.text).join(
+    clampUsageTokens(hintTokens(agentHints), 20).map((t) => t.text).join(
       "",
     )
       .includes("jump"),
@@ -1363,7 +1403,7 @@ test("hintTokens: the agent list names f as the way to the free windows", () => 
 });
 
 test("hintTokens: the free view keeps only the keys that act there", () => {
-  const text = hintTokens(true, "free").map((t) => t.text).join("");
+  const text = hintText(true, "free");
   assertStringIncludes(text, " free windows ");
   assertStringIncludes(text, " agents   ");
   assertEquals(text.indexOf("jump") < text.indexOf("move"), true);
@@ -1373,8 +1413,56 @@ test("hintTokens: the free view keeps only the keys that act there", () => {
 });
 
 test("hintTokens: key chips carry the chip fill", () => {
-  const chip = hintTokens(false, "agents").find((t) => t.text === "n")!;
+  const chip = hintTokens(agentHints).find((t) => t.text === "n")!;
   assertEquals(chip.backgroundColor, DOGRUN.bgChip);
+});
+
+test("hintTokens: an empty list keeps only the keys that still act", () => {
+  const labels = (text: string) =>
+    // Two trailing spaces: the key's label is followed by the gap, the
+    // " free windows " pill is not.
+    ["jump", "move", "next wait", "clear", " free  ", "agents", "label", "quit"]
+      .filter((label) => text.includes(label));
+  assertEquals(labels(hintText(false, "agents", true)), [" free  ", "quit"]);
+  assertEquals(labels(hintText(true, "agents", true)), [
+    "clear",
+    " free  ",
+    "quit",
+  ]);
+  assertEquals(labels(hintText(false, "free", true)), ["agents", "quit"]);
+  assertStringIncludes(hintText(false, "free", true), " free windows ");
+});
+
+// --- emptyMessage ---
+
+test("emptyMessage: a screen with rows has none", () => {
+  assertEquals(emptyMessage({ screen: "agents", agents: 2, shown: 2 }), null);
+  assertEquals(emptyMessage({ screen: "free", agents: 0, shown: 1 }), null);
+});
+
+test("emptyMessage: no agent pane at all", () => {
+  assertEquals(
+    emptyMessage({ screen: "agents", agents: 0, shown: 0 })?.title,
+    "No agents",
+  );
+});
+
+test("emptyMessage: the filter hid every agent, and says how many", () => {
+  assertEquals(emptyMessage({ screen: "agents", agents: 3, shown: 0 }), {
+    title: "No agents waiting or idle",
+    detail: "3 agents are hidden by the filter",
+  });
+  assertEquals(
+    emptyMessage({ screen: "agents", agents: 1, shown: 0 })?.detail,
+    "1 agent is hidden by the filter",
+  );
+});
+
+test("emptyMessage: the free screen ignores the agent count", () => {
+  assertEquals(
+    emptyMessage({ screen: "free", agents: 3, shown: 0 })?.title,
+    "No free windows",
+  );
 });
 
 // --- visibleWindow ---

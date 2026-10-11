@@ -22,6 +22,7 @@ import {
   elapsedSource,
   formatElapsed,
   formatRemaining,
+  freeCommandLabel,
   locationParts,
   parseSubagents,
   renderSubagentTree,
@@ -448,21 +449,8 @@ const DIRTY_MARK: Record<DirtyState, string> = {
   unknown: "?",
 };
 
-// Widest `session:window` column: a long name gives way to the location beside it.
-const FREE_NAME_MAX = 20;
-
-export function freeNameColumn(windows: FreeWindow[]): number {
-  return Math.min(
-    FREE_NAME_MAX,
-    Math.max(
-      0,
-      ...windows.map((w) => stringCells(`${w.sessionName}:${w.windowIndex}`)),
-    ),
-  );
-}
-
-// marker(2) + gap after the name(2) + gap before the mark(1) + mark(1).
-const FREE_ROW1_OVERHEAD = 6;
+// marker(2) + gap before the mark(1) + mark(1).
+const FREE_ROW1_OVERHEAD = 4;
 
 const FREE_ROW2_RIGHT_CELLS = 2 + ELAPSED_CELLS + 2;
 
@@ -472,27 +460,17 @@ interface FreeWindowLineProps {
   now: number;
   selected: boolean;
   listWidth: number;
-  nameMax: number;
   padded: boolean;
 }
 
 // Same height as PaneRowLine, so listGeometry and the mouse hit-test serve
 // both lists.
 export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
-  { entry, dirty, now, selected, listWidth, nameMax, padded }:
-    FreeWindowLineProps,
+  { entry, dirty, now, selected, listWidth, padded }: FreeWindowLineProps,
 ) => {
   const marker = selected ? "▌ " : "  ";
-  // The window index is what tells two rows of one session apart, so a long
-  // session name gives way before it.
-  const index = ":" + entry.windowIndex;
-  const name = truncateToCells(
-    entry.sessionName,
-    Math.max(0, nameMax - stringCells(index)),
-  ) + index;
-  const namePad = " ".repeat(Math.max(0, nameMax - stringCells(name)));
   const { repo, worktree, branch } = locationParts(entry.row);
-  const budget = Math.max(0, listWidth - FREE_ROW1_OVERHEAD - nameMax);
+  const budget = Math.max(0, listWidth - FREE_ROW1_OVERHEAD);
   const repoText = repoLabel(repo, worktree, budget);
   const repoCells = stringCells(repoText.head + repoText.suffix);
   const separator = " · ";
@@ -503,7 +481,7 @@ export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
   const locationCells = repoCells +
     (branchText ? separator.length + stringCells(branchText) : 0);
   const command = truncateToCells(
-    entry.row.currentCommand,
+    freeCommandLabel(entry.row.currentCommand, entry.otherCommands),
     Math.max(0, listWidth - 2 - FREE_ROW2_RIGHT_CELLS),
   );
   return (
@@ -514,9 +492,7 @@ export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
       {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
       <Box>
         <Text color={DOGRUN.accent}>{marker}</Text>
-        <Text color={DOGRUN.fg} bold={selected}>{name}</Text>
-        <Text>{namePad + "  "}</Text>
-        <Text color={DOGRUN.fg}>{repoText.head}</Text>
+        <Text color={DOGRUN.fg} bold={selected}>{repoText.head}</Text>
         {repoText.suffix
           ? <Text color={DOGRUN.fgDim}>{repoText.suffix}</Text>
           : null}
@@ -854,6 +830,59 @@ export const UsageCard: React.FC<UsageCardProps> = (
   );
 };
 
+// --- Empty state ---
+
+export interface EmptyMessage {
+  title: string;
+  detail: string;
+}
+
+// `shown` counts the rows of the current screen after the filter; `agents`
+// counts the agent panes before it.
+export function emptyMessage(opts: {
+  screen: ListScreen;
+  agents: number;
+  shown: number;
+}): EmptyMessage | null {
+  if (opts.shown > 0) return null;
+  if (opts.screen === "free") {
+    return { title: "No free windows", detail: "Every window has an agent" };
+  }
+  if (opts.agents === 0) {
+    return {
+      title: "No agents",
+      detail: "Start claude, codex or opencode in a tmux pane",
+    };
+  }
+  return {
+    title: "No agents waiting or idle",
+    detail: opts.agents === 1
+      ? "1 agent is hidden by the filter"
+      : `${opts.agents} agents are hidden by the filter`,
+  };
+}
+
+interface EmptyStateProps {
+  message: EmptyMessage;
+  width: number;
+  height: number;
+}
+
+export const EmptyState: React.FC<EmptyStateProps> = (
+  { message, width, height }: EmptyStateProps,
+) => (
+  <Box
+    flexDirection="column"
+    width={width}
+    height={height}
+    justifyContent="center"
+    alignItems="center"
+  >
+    <Text color={DOGRUN.fgDim}>{truncateToCells(message.title, width)}</Text>
+    <Text color={DOGRUN.muted}>{truncateToCells(message.detail, width)}</Text>
+  </Box>
+);
+
 // --- Key-hint bar ---
 
 // U+21B5 ↵ is absent from CaskaydiaCove Nerd Font Mono and would fall back to
@@ -874,22 +903,29 @@ function chipTokens(
   ];
 }
 
+export interface HintState {
+  filterEnabled: boolean;
+  screen: ListScreen;
+  empty: boolean;
+}
+
 // The bottom row: a pill naming the view when it is not the plain agent list
 // (the wait/idle filter, or the free windows), then each key as a chip
 // followed by what it does. Built as tokens so clampUsageTokens can cut it
 // from the right on a narrow popup — "jump" sits first so the harness' spawn
-// marker survives the narrowest e2e width.
+// marker survives the narrowest e2e width. An empty list keeps only the keys
+// that still act.
 export function hintTokens(
-  filterEnabled: boolean,
-  screen: ListScreen,
+  { filterEnabled, screen, empty }: HintState,
 ): UsageToken[] {
+  const move: [string, string][] = empty
+    ? []
+    : [[ENTER_ICON, "jump"], ["j k", "move"]];
+  const clear: [string, string][] = filterEnabled ? [["w", "clear"]] : [];
   const keys: [string, string][] = screen === "free"
-    ? [
-      [ENTER_ICON, "jump"],
-      ["j k", "move"],
-      ["f", "agents"],
-      ["q", "quit"],
-    ]
+    ? [...move, ["f", "agents"], ["q", "quit"]]
+    : empty
+    ? [...clear, ["f", "free"], ["q", "quit"]]
     : [
       [ENTER_ICON, "jump"],
       ["j k", "move"],
@@ -916,17 +952,15 @@ export function hintTokens(
   return out;
 }
 
-interface HintBarProps {
-  filterEnabled: boolean;
-  screen: ListScreen;
+interface HintBarProps extends HintState {
   width: number;
 }
 
 export const HintBar: React.FC<HintBarProps> = (
-  { filterEnabled, screen, width }: HintBarProps,
+  { width, ...state }: HintBarProps,
 ) => (
   <Box marginTop={1}>
-    {clampUsageTokens(hintTokens(filterEnabled, screen), width).map((t, i) => (
+    {clampUsageTokens(hintTokens(state), width).map((t, i) => (
       <React.Fragment key={i}>
         <Text color={t.color} backgroundColor={t.backgroundColor}>
           {t.text}

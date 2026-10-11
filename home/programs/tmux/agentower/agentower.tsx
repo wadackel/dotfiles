@@ -76,7 +76,8 @@ import {
   CARD_CHROME_COLS,
   type DirtyState,
   DOGRUN,
-  freeNameColumn,
+  emptyMessage,
+  EmptyState,
   FreeWindowLine,
   HintBar,
   type ListScreen,
@@ -1289,31 +1290,11 @@ function App({
     dispatch(input, key);
   });
 
-  if (screen === "free") {
-    if (free.length === 0) {
-      return (
-        <Box flexDirection="column">
-          <Text color={DOGRUN.warn}>No free windows</Text>
-          <Text color={DOGRUN.muted}>Press f to go back</Text>
-        </Box>
-      );
-    }
-  } else if (rows.length === 0) {
-    return (
-      <Box flexDirection="column">
-        <Text color={DOGRUN.warn}>No panes available.</Text>
-        <Text color={DOGRUN.muted}>Press f for free windows</Text>
-      </Box>
-    );
-  } else if (filterEnabled && derivedRows.length === 0) {
-    return (
-      <Box flexDirection="column">
-        <Text color={DOGRUN.warn}>No waiting/idle panes</Text>
-        <Text color={DOGRUN.muted}>Press w to clear filter</Text>
-      </Box>
-    );
-  }
-
+  const empty = emptyMessage({
+    screen,
+    agents: rows.length,
+    shown: derivedRows.length,
+  });
   const current = derivedRows[index];
   const totalCols = size.columns;
   // A frame exactly as tall as the terminal is fine, but one TALLER is not:
@@ -1355,12 +1336,18 @@ function App({
     ),
     Math.max(0, ...rowsParts.map((p) => stringCells(p.branch))),
   );
-  const freeNameMax = freeNameColumn(free);
 
   return (
     <Box flexDirection="row" width={totalCols} height={totalRows}>
       <Box flexDirection="column" width={listWidth}>
         <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
+          {empty && (
+            <EmptyState
+              message={empty}
+              width={listWidth}
+              height={bodyHeight}
+            />
+          )}
           {view.scrolling && (
             <Text color={DOGRUN.muted}>
               {view.above > 0 ? `  ↑ ${view.above} more` : " "}
@@ -1378,7 +1365,6 @@ function App({
                     now={now}
                     selected={view.offset + i === index}
                     listWidth={listWidth}
-                    nameMax={freeNameMax}
                     padded={card === FULL_CARD}
                   />
                 ))
@@ -1407,17 +1393,25 @@ function App({
         <HintBar
           filterEnabled={filterEnabled}
           screen={screen}
+          empty={empty !== null}
           width={listWidth}
         />
       </Box>
-      {current && previewWidth > 0 && (
+      {previewWidth > 0 && (current || usageVisible) && (
         <Box
           marginLeft={PREVIEW_GUTTER}
           marginTop={topRows}
           flexDirection="column"
+          justifyContent="flex-end"
           height={columnHeight}
         >
-          <Preview row={current} width={previewWidth} height={previewHeight} />
+          {current && (
+            <Preview
+              row={current}
+              width={previewWidth}
+              height={previewHeight}
+            />
+          )}
           {usageVisible && (
             <UsageCard usages={usages} now={now} width={previewWidth} />
           )}

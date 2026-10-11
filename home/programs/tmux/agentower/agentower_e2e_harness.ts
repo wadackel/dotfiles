@@ -449,7 +449,7 @@ export async function spawnAgentower(
     target,
     // "jump" leads the bottom key-hint bar, which is clipped from the right,
     // so it survives the narrowest scenario width.
-    (out) => out.includes("jump") || out.includes("No panes available."),
+    (out) => out.includes("jump") || out.includes("No agents"),
   );
   return target;
 }

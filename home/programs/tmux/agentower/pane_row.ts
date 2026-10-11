@@ -347,10 +347,10 @@ export function selectPaneRows(
 // on. inRepo is filled by agentower.tsx's fetchPanes from the same git lookup
 // that fills repoName.
 export interface FreeWindow {
-  // Shown as `session:window`, for reading only: a session name may itself
-  // hold ':', so a jump goes by row.paneId.
+  // Order the list only; a jump goes by row.paneId.
   sessionName: string;
   windowIndex: string;
+  otherCommands: string[];
   activitySec: number | null;
   inRepo: boolean;
   row: PaneRow;
@@ -379,6 +379,10 @@ export function selectFreeWindows(
     free.push({
       sessionName: shown.sessionName,
       windowIndex: shown.windowIndex,
+      otherCommands: panes
+        .filter((pane) => pane !== shown)
+        .map((pane) => pane.row.currentCommand)
+        .filter((command) => command !== ""),
       activitySec: shown.windowActivitySec,
       inRepo: false,
       row: blankRow(shown.row),

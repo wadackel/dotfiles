@@ -135,6 +135,10 @@ export function repoLabel(
   return { head: truncateToCells(repo + suffix, maxCells), suffix: "" };
 }
 
+export function freeCommandLabel(command: string, others: string[]): string {
+  return others.length > 0 ? `${command}  + ${others.join(", ")}` : command;
+}
+
 // summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。
 // どちらも空なら "·"。Mirrors bash tmux-window-picker.sh:118-125.
 // Width-based truncation is the caller's responsibility (PaneRowLine applies

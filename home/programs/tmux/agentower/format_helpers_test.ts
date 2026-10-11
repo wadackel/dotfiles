@@ -6,6 +6,7 @@ import {
   elapsedSource,
   formatElapsed,
   formatRemaining,
+  freeCommandLabel,
   locationParts,
   parseGitLocation,
   parseSubagents,
@@ -528,6 +529,15 @@ test("elapsedSource: waiting / idle / error / unknown count from last activity",
       status,
     );
   }
+});
+
+test("freeCommandLabel: a window of one pane is its command alone", () => {
+  assertEquals(freeCommandLabel("zsh", []), "zsh");
+});
+
+test("freeCommandLabel: the other panes' commands follow after a plus", () => {
+  assertEquals(freeCommandLabel("zsh", ["node"]), "zsh  + node");
+  assertEquals(freeCommandLabel("zsh", ["node", "zsh"]), "zsh  + node, zsh");
 });
 
 test("elapsedSource: missing timestamp → null", () => {
