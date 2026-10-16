@@ -125,7 +125,7 @@ export function runGit(
 async function git(args: string[], cwd = process.cwd()): Promise<string> {
   const result = await runGit(args, cwd);
   if (!result.success) {
-    throw new Error(`git ${args[0]} failed: ${result.stderr.trim()}`);
+    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim()}`);
   }
   return result.stdout;
 }
@@ -169,11 +169,38 @@ export async function artifactSnapshot(
   if (!planInfo.isFile() || planInfo.isSymbolicLink()) {
     throw new Error("plan must be a regular file");
   }
-  const names = (await git(
-    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-    root,
-  ))
-    .split("\0").filter(Boolean);
+  const stage = await git(["ls-files", "--stage", "-z"], root);
+  const dirs = new Set<string>();
+  for (const line of stage.split("\0").filter(Boolean)) {
+    const name = line.slice(line.indexOf("\t") + 1);
+    if (line.startsWith("160000 ")) {
+      throw new Error(`cannot fingerprint non-file or submodule: ${name}`);
+    }
+    if (name.includes("/")) dirs.add(name.slice(0, name.lastIndexOf("/")));
+  }
+  for (const dir of dirs) {
+    try {
+      const parent = await realpath(`${root}/${dir}`);
+      if (parent !== root && !parent.startsWith(`${root}/`)) {
+        throw new Error(`snapshot path escapes repository: ${dir}`);
+      }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw err;
+    }
+  }
+  // Tracked files whose stat matches the index are represented by their blob
+  // in `stage`; reading all of them took minutes on a 70k-file repository.
+  // fsmonitor is off so the stat comparison does not depend on a daemon.
+  const scan = ["-c", "core.fsmonitor=false", "--no-optional-locks"];
+  const names = [
+    ...(await git([...scan, "diff", "--name-only", "-z", "--no-renames"], root))
+      .split("\0"),
+    ...(await git(
+      [...scan, "ls-files", "-z", "--others", "--exclude-standard"],
+      root,
+    )).split("\0"),
+  ].filter(Boolean);
   const entries: unknown[] = [];
   for (const name of [...new Set(names)].sort()) {
     const file = `${root}/${name}`;
@@ -202,7 +229,7 @@ export async function artifactSnapshot(
   return await digest(JSON.stringify([
     root,
     (await git(["rev-parse", "HEAD"], root)).trim(),
-    await git(["ls-files", "--stage", "-z"], root),
+    stage,
     await realpath(planPath),
     await digest(await readFile(planPath)),
     entries,

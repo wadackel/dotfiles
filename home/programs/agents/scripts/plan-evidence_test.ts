@@ -172,6 +172,13 @@ test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS",
         async () => {
           await runCommand("git", ["add", "main.txt"]);
         },
+        () => chmod("main.txt", 0o755),
+        async () => {
+          await writeFile("ita.txt", "intended\n");
+          await runCommand("git", ["add", "-N", "ita.txt"]);
+        },
+        () => writeFile("ita.txt", "intended later\n"),
+        () => rm("main.txt"),
       ]
     ) {
       const before = await target(path);
@@ -185,6 +192,44 @@ test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS",
       await record(path);
       await run(["complete", path, "task-1"]);
     }
+    assertEquals(
+      (await runCommand("git", ["checkout", "--", "main.txt"])).code,
+      0,
+    );
+    const before = await target(path);
+    await writeFile("main.txt", await readFile("main.txt"));
+    assertEquals(await target(path), before);
+  });
+});
+
+test("snapshot rejects submodules and nested repositories", async () => {
+  await fixture(async (path) => {
+    await mkdir("sub");
+    process.chdir("sub");
+    try {
+      for (
+        const args of [
+          ["init", "-q"],
+          ["commit", "-q", "--allow-empty", "-m", "nested"],
+        ]
+      ) {
+        const result = await runCommand("git", [
+          "-c",
+          "user.email=test@example.invalid",
+          "-c",
+          "user.name=Test",
+          ...args,
+        ]);
+        assertEquals(result.code, 0);
+      }
+    } finally {
+      process.chdir("..");
+    }
+    await assertRejects(() => target(path), Error, "cannot fingerprint");
+    assertEquals((await runCommand("git", ["add", "sub"])).code, 0);
+    const staged = await runCommand("git", ["ls-files", "--stage", "sub"]);
+    assertEquals(staged.stdout.startsWith("160000 "), true);
+    await assertRejects(() => target(path), Error, "cannot fingerprint");
   });
 });
 
