@@ -326,10 +326,21 @@ fi
 
 # --safe-mode also drops --plugin-dir plugins, and a separate CLAUDE_CONFIG_DIR
 # or HOME loses the login, so subtract the user layer flag by flag instead.
+# The fullscreen TUI and the Agentower hooks are read back from the user
+# settings rather than copied here, so they cannot drift from the real setup.
 vclaude() {
-  claude --setting-sources project,local --strict-mcp-config \
-    --settings '{"claudeMdExcludes":["**/.claude/CLAUDE.md","**/RTK.md"],"autoMemoryEnabled":false}' \
-    "$@"
+  local settings
+  settings=$(jq -c '{
+    claudeMdExcludes: ["**/.claude/CLAUDE.md", "**/RTK.md"],
+    autoMemoryEnabled: false,
+    tui,
+    env: {CLAUDE_CODE_SCROLL_SPEED: .env.CLAUDE_CODE_SCROLL_SPEED},
+    hooks: (.hooks
+      | map_values(map(.hooks |= map(select(.command | test("claude-pane-status")))
+                       | select(.hooks | length > 0)))
+      | with_entries(select(.value | length > 0)))
+  }' ~/.claude/settings.json) || return 1
+  claude --setting-sources project,local --strict-mcp-config --settings "$settings" "$@"
 }
 
 
