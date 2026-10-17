@@ -721,7 +721,8 @@
     "hookify@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": true,
+    "clangd-lsp@claude-plugins-official": true
   },
   "outputStyle": "concise",
   "language": "japanese",
