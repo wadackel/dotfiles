@@ -320,6 +320,20 @@ fi
 
 
 # ====================================================
+# vclaude: vanilla Claude Code without the personal setup
+# (for trying plugins via --plugin-dir)
+# ====================================================
+
+# --safe-mode also drops --plugin-dir plugins, and a separate CLAUDE_CONFIG_DIR
+# or HOME loses the login, so subtract the user layer flag by flag instead.
+vclaude() {
+  claude --setting-sources project,local --strict-mcp-config \
+    --settings '{"claudeMdExcludes":["**/.claude/CLAUDE.md","**/RTK.md"],"autoMemoryEnabled":false}' \
+    "$@"
+}
+
+
+# ====================================================
 # agent-browser state import (state-import + headless default)
 # ====================================================
 
