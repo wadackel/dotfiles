@@ -28,12 +28,6 @@ const READ_ONLY =
 const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
-const SANTA_LOOP_CONTRACT = `Return JSON:
-{
-  "verdict": "PASS" | "FAIL",
-  "issues": []
-}`;
-
 test("isReviewerAgent matches the reviewers /gate dispatches", () => {
   assertEquals(isReviewerAgent("rust-reviewer"), true);
   assertEquals(isReviewerAgent("typescript-reviewer"), true);
@@ -59,10 +53,6 @@ test("hasVerdictRule detects the rule regardless of case", () => {
     false,
   );
   assertEquals(hasVerdictRule(undefined), false);
-});
-
-test("hasVerdictRule accepts the santa-loop JSON contract", () => {
-  assertEquals(hasVerdictRule(SANTA_LOOP_CONTRACT), true);
 });
 
 test("denialMessage names the agent and points at the template", () => {
@@ -110,17 +100,6 @@ test("ignores tools other than Agent/Task", async () => {
   const { code } = await runHook({
     tool_name: "Bash",
     tool_input: { subagent_type: "rust-reviewer", prompt: "no verdict rule" },
-  });
-  assertEquals(code, 0);
-});
-
-test("lets a santa-loop code-reviewer dispatch through", async () => {
-  const { code } = await runHook({
-    tool_name: "Agent",
-    tool_input: {
-      subagent_type: "code-reviewer",
-      prompt: `Review the diff.\n\n${SANTA_LOOP_CONTRACT}`,
-    },
   });
   assertEquals(code, 0);
 });
@@ -213,15 +192,16 @@ test("allows a diagnostic-shaped dispatch (read-only sentence plus inline fix di
   assertEquals(code, 0);
 });
 
-test("leaves the santa-loop JSON contract without a diff alone", async () => {
-  const { code } = await runHook({
+test("a JSON verdict field is not the verdict rule", async () => {
+  const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
       subagent_type: "code-reviewer",
       prompt: 'Return JSON: {"verdict": "PASS" | "FAIL"}',
     },
   });
-  assertEquals(code, 0);
+  assertEquals(code, 2);
+  assertStringIncludes(stderr, "without the verdict rule");
 });
 
 // The hook names files it never opens: the template path lands in a rejection

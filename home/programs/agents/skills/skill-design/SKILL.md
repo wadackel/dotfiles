@@ -110,7 +110,7 @@ After creating a new skill, execute `/skill-improver <name>` for quality evaluat
 
 ### Chicken-and-egg rule placement
 
-Rules that remind Claude to **invoke** a skill (e.g., "always run codex-review after implementation") must stay in CLAUDE.md, not inside the skill itself. If the rule lives inside the skill, Claude never sees it until the skill is already loaded — defeating its purpose as a reminder.
+Rules that remind Claude to **invoke** a skill (e.g., "always run gate after implementation") must stay in CLAUDE.md, not inside the skill itself. If the rule lives inside the skill, Claude never sees it until the skill is already loaded — defeating its purpose as a reminder.
 
 ### Plan-mode body/description mismatch
 

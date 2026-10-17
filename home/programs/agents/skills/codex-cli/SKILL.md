@@ -116,7 +116,7 @@ Analyze this code...
 
 ## Session Management
 
-By default, use `--ephemeral` for general tasks to avoid polluting the session list (which the **codex-review** skill relies on for `codex exec resume --last`).
+By default, use `--ephemeral` for general tasks to avoid polluting the session list.
 
 For multi-turn tasks where session continuity is needed:
 
@@ -155,7 +155,7 @@ Non-obvious behavior to be aware of:
 
 2. **Pass `-s` on every call**: `~/.codex/config.toml` sets `sandbox_mode = "danger-full-access"`. For `exec review` and `exec resume`, put `-s` before the subcommand (`codex exec -s read-only review …`); the subcommands reject it.
 
-3. **`--ephemeral`**: Prevents session files from being saved to disk. Use for one-off tasks to keep the session list clean for codex-review's `resume --last`.
+3. **`--ephemeral`**: Prevents session files from being saved to disk. Use for one-off tasks so `resume --last` keeps pointing at a session worth resuming.
 
 4. **`--add-dir <DIR>`**: Makes additional directories writable alongside the primary workspace. Useful for multi-repo analysis.
 
@@ -163,11 +163,6 @@ Non-obvious behavior to be aware of:
 
 6. **`--output-schema <FILE>`**: Pass a JSON Schema file to get structured output from Codex.
 
-## NOT for These Use Cases
+## Code review
 
-### Code review
-
-For code review workflows (plan review, code quality review, security audit with fix loops), use the **codex-review** skill (`/codex-review`). It provides:
-- Iterative review with automatic fix loops
-- `codex exec review` with scope selectors (`--uncommitted`, `--base`, `--commit`)
-- Session-based follow-up reviews
+A review that must end in a PASS / FAIL verdict with fixes applied belongs to `/gate`. A one-off Codex opinion on a diff is an ordinary task here: `codex exec -s read-only review --uncommitted` (or `--base <ref>` / `--commit <sha>`), run with the same flags as above.

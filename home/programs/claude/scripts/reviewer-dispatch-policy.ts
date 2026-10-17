@@ -60,24 +60,15 @@ export function isReviewerAgent(subagentType: string | undefined): boolean {
   return GUARDED.has(subagentType);
 }
 
-/**
- * Two output contracts are in use. The /gate templates end their
- * VERDICT line with "FAIL otherwise"; /santa-loop dispatches `code-reviewer`
- * with a JSON contract carrying a `"verdict"` field and its own verdict rules.
- * Accepting either keeps the guard on both without forcing one workflow's
- * output format onto the other.
- */
+/** The /gate templates end their VERDICT line with "FAIL otherwise". */
 export function hasVerdictRule(prompt: string | undefined): boolean {
   if (!prompt) return false;
-  return /FAIL otherwise/i.test(prompt) ||
-    /"verdict"\s*:\s*"PASS"/.test(prompt);
+  return /FAIL otherwise/i.test(prompt);
 }
 
 /**
- * Second requirement, applied only to the /gate contract ("FAIL
- * otherwise"): a reviewer without Bash needs the diff in the prompt, a reviewer
- * with Bash needs the template's read-only sentence. The santa-loop JSON
- * contract is left to its own reviewer-prompt.
+ * Second requirement: a reviewer without Bash needs the diff in the prompt, a
+ * reviewer with Bash needs the template's read-only sentence.
  */
 export function missingRequirement(
   subagentType: string,

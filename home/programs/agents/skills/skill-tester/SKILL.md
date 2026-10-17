@@ -83,7 +83,7 @@ First, determine if the skill requires conversation context:
 
 **Context-dependent skills** (need story tests):
 - Skills that analyze conversation history
-- Skills that require prior code changes (e.g., `codex-review`)
+- Skills that require prior code changes (e.g., `gate`)
 - Skills that depend on prior tool usage or established state
 
 **Context-independent skills** (simple tests sufficient):

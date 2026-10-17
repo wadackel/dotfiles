@@ -46,8 +46,6 @@
       "Bash(*writing-metrics/task-other.ts*)",
       "Bash(*writing-metrics/task-src.ts*)",
       "Bash(*writing-metrics/vocab-inventory.ts*)",
-      "Bash(*merge-settings/merge.ts*)",
-      "Bash(*permission-review/permission-review.ts*)",
       "Bash(//dev/null)",
       "Bash(7z *)",
       "Bash(actionlint *)",
@@ -236,7 +234,6 @@
       "Bash(nodenv *)",
       "Bash(notebook *)",
       "Bash(npm *)",
-      "Bash(npx skills *)",
       "Bash(npx turbo *)",
       "Bash(nslookup *)",
       "Bash(nuxt *)",
@@ -554,14 +551,6 @@
     ],
     "PermissionRequest": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/permission-logger.ts"
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -578,15 +567,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts PostToolUse"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Edit|Write|WebFetch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/permission-logger.ts"
           }
         ]
       }

@@ -91,5 +91,5 @@ VERDICT: PASS | FAIL
 
 - Demanding flake migration on projects intentionally using channels
 - Reporting every `let ... in` style preference as MUST_FIX
-- Re-flagging `nix flake check` output (that's verification-loop's job)
+- Re-flagging `nix flake check` output (the caller runs that check itself)
 - Flagging Homebrew usage as wrong without considering the documented nixpkgs-gap exceptions
