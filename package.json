@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "@ein/bash-parser": "npm:@jsr/ein__bash-parser@0.18.0",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@std/assert": "npm:@jsr/std__assert@1.0.19",
     "@std/cli": "npm:@jsr/std__cli@1.0.32",
     "@std/streams": "npm:@jsr/std__streams@1.2.0",
