@@ -4,11 +4,13 @@ Run these checks against every generated `compose.yaml` before considering it co
 
 ## 1. Syntax and schema validation
 
-Run the bundled script from the project root:
+Run the bundled script from the project root (the directory that contains `compose.yaml`), with the script path resolved under the skill directory:
 
 ```bash
-bash scripts/verify-compose.sh [--help]
+bash "<skill-dir>/scripts/verify-compose.sh" [--help]
 ```
+
+Replace `<skill-dir>` with the absolute path of this skill's directory, the folder that contains `SKILL.md` and this `checks/` folder. Do not change into the skill directory to run it; the script validates the Compose project in the current directory.
 
 Exit status is `0` when the Compose configuration is valid or help is requested, the non-zero status from `docker compose config --quiet` when validation fails, and `2` for invalid arguments.
 

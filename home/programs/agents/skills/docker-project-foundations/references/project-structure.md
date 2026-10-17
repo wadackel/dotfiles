@@ -111,7 +111,7 @@ services:
   prometheus:
     profiles:
       - monitoring
-    image: prom/prometheus:v3.3
+    image: prom/prometheus:v3
 ```
 
 Start with `docker compose --profile monitoring up` when needed.

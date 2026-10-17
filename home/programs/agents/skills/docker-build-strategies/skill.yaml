@@ -1,6 +1,6 @@
 schema: v1
 id: docker-build-strategies
-version: 0.1.0
+version: 0.1.3
 title: Docker Build Strategies
 description: Strategies for efficient, secure, and optimized Docker image builds.
 owns:

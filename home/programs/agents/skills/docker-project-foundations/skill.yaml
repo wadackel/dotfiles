@@ -1,6 +1,6 @@
 schema: v1
 id: docker-project-foundations
-version: 0.2.0
+version: 0.2.2
 title: Docker Project Foundations
 description: Guidance for initializing and structuring a Dockerized project.
 owns:

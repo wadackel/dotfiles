@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Verify Docker project setup. Run from the project root.
-# Usage: bash scripts/verify-setup.sh [--help]
+# Usage: bash "<skill-dir>/scripts/verify-setup.sh" [--help]
+# <skill-dir> is the directory that contains this skill's SKILL.md.
 set -euo pipefail
 
 usage() {
-    echo "Usage: bash scripts/verify-setup.sh [--help]"
+    echo "Usage: bash \"<skill-dir>/scripts/verify-setup.sh\" [--help]"
+    echo "Run from the project root; <skill-dir> is the directory that contains this skill's SKILL.md."
     echo "Checks: .dockerignore, Dockerfile, and compose.yaml exist; compose config passes."
 }
 

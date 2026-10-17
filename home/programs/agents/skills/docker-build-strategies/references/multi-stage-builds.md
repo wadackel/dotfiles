@@ -10,8 +10,8 @@ Multi-stage builds separate build-time toolchains from the runtime image. Every 
 # Stage 1: build
 FROM <sdk-image> AS build
 WORKDIR /src
-COPY <dependency-manifest> .
-RUN <install-dependencies>
+RUN --mount=type=bind,source=<dependency-manifest>,target=<dependency-manifest> \
+    <install-dependencies>
 COPY . .
 RUN <compile-or-bundle>
 
@@ -32,8 +32,10 @@ Go produces static binaries, so the runtime stage can use `scratch` or distroles
 
 FROM golang:1.23-alpine AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN --mount=type=bind,source=go.mod,target=go.mod \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -52,6 +54,7 @@ Key points:
 - Use `CGO_ENABLED=0` for a fully static binary when cgo is not needed.
 - Use `-ldflags="-s -w"` to strip debug symbols and reduce binary size.
 - Cache both `/go/pkg/mod` (downloaded modules) and `/root/.cache/go-build` (compilation cache).
+- Bind-mount `go.mod`/`go.sum` into the `go mod download` step instead of `COPY`-ing them; `go mod download` alone doesn't rewrite them. The full source `COPY . .` that follows still brings them into the image for the build step.
 - Distroless static images include a built-in `nonroot` user.
 - For `GOPRIVATE` modules fetched via Git SSH, use `--mount=type=ssh` instead of baking keys or tokens. Populate `known_hosts` inside the same `RUN`, pair the git-config rewrite with the download so the config does not persist into later stages, and set `GOPRIVATE` inline so `go mod download` skips the public proxy and checksum database (`GOPRIVATE` implies `GONOSUMDB` and `GONOPROXY`):
   ```dockerfile
@@ -62,7 +65,7 @@ Key points:
       git config --global url."git@github.com:".insteadOf "https://github.com/" && \
       GOPRIVATE="github.com/your-org/*" go mod download
   ```
-  Invoke with `docker buildx build --ssh default .` (uses the host's SSH agent — ensure it is running and the key is loaded: `eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519`). To pass a key file directly without an agent, use `--ssh default=$HOME/.ssh/id_ed25519`.
+  Invoke with `docker buildx build --ssh default .`, which forwards the SSH agent of the shell that runs the build. The `RUN --mount=type=ssh` step can use every key that `ssh-add -l` lists. To expose only this build's key, run `ssh-agent bash` in an interactive terminal, then `ssh-add <key-file>`, and run the build in that shell. To pass an unencrypted key file directly without an agent, use `--ssh default=<key-file>`; BuildKit rejects passphrase-protected keys in this form.
 
 ## Node.js
 
@@ -73,15 +76,17 @@ Node.js applications require the Node runtime, so use a slim base for the runtim
 
 FROM node:22-alpine AS deps
 WORKDIR /src
-COPY package.json package-lock.json ./
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+RUN --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=package-lock.json,target=package-lock.json \
+    --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev
 
 FROM node:22-alpine AS build
 WORKDIR /src
-COPY package.json package-lock.json ./
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+RUN --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=package-lock.json,target=package-lock.json \
+    --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     --mount=type=cache,target=/root/.npm \
     npm ci
 COPY . .
@@ -110,6 +115,7 @@ Key points:
 - Use a separate `deps` stage that installs only production dependencies (`--omit=dev`).
 - Use a `build` stage with all dependencies for compilation/bundling.
 - Copy production `node_modules` from the `deps` stage, not the `build` stage.
+- Bind-mount `package.json`/`package-lock.json` into `npm ci` instead of `COPY`-ing them — `npm ci` never writes the lockfile back. Use `COPY` instead if the install command can mutate it (e.g. `npm install` without a matching lockfile).
 - **Never `COPY .npmrc`** — registry credentials must be mounted with `--mount=type=secret`, not copied into a layer.
 - If the project uses a bundler that produces a standalone output (e.g., Next.js standalone mode), copy only the standalone output and skip `node_modules` entirely.
 
@@ -124,8 +130,8 @@ FROM python:3.13-slim AS build
 WORKDIR /src
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-COPY requirements.txt .
-RUN --mount=type=secret,id=pip-conf,target=/etc/pip.conf,required=false \
+RUN --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    --mount=type=secret,id=pip-conf,target=/etc/pip.conf,required=false \
     --mount=type=cache,target=/root/.cache/pip \
     pip install --no-compile -r requirements.txt
 COPY . .
@@ -147,6 +153,7 @@ Key points:
 - Build the virtual environment in the build stage and copy it whole into the runtime stage.
 - Set `PATH` to use the venv in both stages.
 - Use `--no-compile` during pip install to skip `.pyc` generation (Python will compile at first import).
+- Bind-mount `requirements.txt` into the `pip install` step instead of `COPY`-ing it — `pip install -r` doesn't write the file back.
 - For Poetry or PDM projects, export to `requirements.txt` first or use the tool's built-in export.
 - For private package indexes, pass `pip.conf` via `--mount=type=secret,id=pip-conf,target=/etc/pip.conf` instead of `COPY pip.conf` (which would leak into a layer). Invoke with `docker buildx build --secret id=pip-conf,src=$HOME/.config/pip/pip.conf .` (XDG path, pip ≥ 19.1) or the legacy `$HOME/.pip/pip.conf`.
 

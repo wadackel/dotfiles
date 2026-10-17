@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Verify Compose configuration. Run from the project root.
-# Usage: bash scripts/verify-compose.sh [--help]
+# Usage: bash "<skill-dir>/scripts/verify-compose.sh" [--help]
+# <skill-dir> is the directory that contains this skill's SKILL.md.
 set -euo pipefail
 
 usage() {
-    echo "Usage: bash scripts/verify-compose.sh [--help]"
+    echo "Usage: bash \"<skill-dir>/scripts/verify-compose.sh\" [--help]"
+    echo "Run from the project root; <skill-dir> is the directory that contains this skill's SKILL.md."
     echo "Validates compose.yaml with docker compose config --quiet (no rendered configuration)."
 }
 

@@ -4,9 +4,11 @@
 FROM golang:1.23-alpine AS build
 WORKDIR /src
 
-# Cache dependency downloads
-COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+# Cache dependency downloads; bind-mount the manifest since go mod download doesn't rewrite it
+RUN --mount=type=bind,source=go.mod,target=go.mod \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Build the binary
 COPY . .
@@ -23,6 +25,6 @@ COPY --from=build --link /app/server .
 USER nonroot:nonroot
 EXPOSE 8080
 
-LABEL org.opencontainers.image.source="https://github.com/example/app"
+LABEL org.opencontainers.image.source="<source-repository-url>"
 
 ENTRYPOINT ["./server"]

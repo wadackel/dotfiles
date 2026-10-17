@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Verify Dockerfile build. Run from the project root.
-# Usage: bash scripts/verify-build.sh [--help] [IMAGE_NAME]
+# Usage: bash "<skill-dir>/scripts/verify-build.sh" [--help] [IMAGE_NAME]
+# <skill-dir> is the directory that contains this skill's SKILL.md.
 set -euo pipefail
 
 usage() {
-    echo "Usage: bash scripts/verify-build.sh [--help] [IMAGE_NAME]"
+    echo "Usage: bash \"<skill-dir>/scripts/verify-build.sh\" [--help] [IMAGE_NAME]"
+    echo "Run from the project root; <skill-dir> is the directory that contains this skill's SKILL.md."
     echo "Builds the Dockerfile, then reports image size and configured user."
 }
 

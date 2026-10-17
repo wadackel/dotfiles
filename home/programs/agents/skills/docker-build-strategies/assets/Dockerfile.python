@@ -8,9 +8,10 @@ WORKDIR /src
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install dependencies (cached separately from source)
-COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
+# Install dependencies (cached separately from source); bind-mount the
+# manifest since pip install -r never rewrites it
+RUN --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    --mount=type=cache,target=/root/.cache/pip \
     pip install --no-compile -r requirements.txt
 
 # Copy application source
@@ -32,6 +33,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 USER appuser
 EXPOSE 8000
 
-LABEL org.opencontainers.image.source="https://github.com/example/app"
+LABEL org.opencontainers.image.source="<source-repository-url>"
 
 ENTRYPOINT ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0"]

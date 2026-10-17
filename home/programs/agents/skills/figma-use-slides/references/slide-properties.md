@@ -90,9 +90,6 @@ The following markdown is **not supported** and will be stored as raw text (the 
 Interactive elements embedded in slides (polls, embeds, etc.). These are read-only — you cannot create them via the Plugin API, but you can detect and inspect them.
 
 ```js
-// Read-only inspection — skip invisible instance interiors for speed.
-figma.skipInvisibleInstanceChildren = true;
-
 const slide = figma.getNodeById("SLIDE_ID");
 const interactive = slide.findAllWithCriteria({ types: ["INTERACTIVE_SLIDE_ELEMENT"] });
 return interactive.map(n => ({
@@ -109,8 +106,3 @@ Possible `interactiveSlideElementType` values: `'POLL'`, `'EMBED'`, `'FACEPILE'`
 - **`SlideGridNode.clone()`**: Throws at runtime — you cannot copy the slide grid.
 - **Slide themes**: `slideThemeId` is available as a read-only property on slide nodes for identifying which theme is applied, but theme manipulation APIs are limited.
 - **`figma.createTable()` and `figma.createGif()`**: These FigJam node types (TABLE, MEDIA) are currently blocked in Slides mode by the Plugin API, even though the Slides editor supports tables and media. To work with tables and media in Slides, use the editor UI directly. This is a pre-existing Plugin API limitation, not specific to `use_figma`.
-
-<!-- TODO(dschwartz): Before production launch, fix NODE_TYPES_BLOCKED_IN_SLIDES in
-     share/plugin-api/src/api/constants.ts to unblock TABLE and MEDIA for Slides
-     (same pattern as the SYMBOL unblock for MCP/assistant). Remove this limitation
-     note once fixed. -->

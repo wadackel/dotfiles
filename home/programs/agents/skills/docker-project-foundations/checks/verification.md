@@ -52,11 +52,13 @@ Use this checklist to verify that generated Docker project setup follows the ski
 
 ## Validation script
 
-Run the bundled script from the project root before the broader smoke tests:
+Run the bundled script from the project root before the broader smoke tests, with the script path resolved under the skill directory:
 
 ```bash
-bash scripts/verify-setup.sh [--help]
+bash "<skill-dir>/scripts/verify-setup.sh" [--help]
 ```
+
+Replace `<skill-dir>` with the absolute path of this skill's directory, the folder that contains `SKILL.md` and this `checks/` folder. Do not change into the skill directory to run it; the script checks the current directory.
 
 It checks `.dockerignore`, `Dockerfile`, and `compose.yaml`, then validates the Compose configuration. Exit status is `0` on success or help, `1` for missing files or invalid Compose configuration, and `2` for invalid arguments.
 

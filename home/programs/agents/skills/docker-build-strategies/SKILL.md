@@ -45,11 +45,13 @@ See `references/multi-stage-builds.md` for language-specific patterns (Go, Node,
 
 Order Dockerfile instructions from least-frequently-changed to most-frequently-changed.
 
-1. Place dependency manifests (`package.json`, `go.mod`, `requirements.txt`) and install steps before copying application source code.
+1. Place dependency manifests (`package.json`, `go.mod`, `requirements.txt`) and install steps before copying application source code. Bind-mount the manifest into the install step instead of `COPY`-ing it, so it never enters a layer: `RUN --mount=type=bind,source=package.json,target=package.json --mount=type=bind,source=package-lock.json,target=package-lock.json npm ci`. This is safe for install commands that only read the manifest (`npm ci`, `pip install -r`, `go mod download`); if a step also needs to write the manifest back into the image, `COPY` it instead.
 2. Use BuildKit cache mounts for package manager caches:
    - Go: `RUN --mount=type=cache,target=/go/pkg/mod go build ...`
    - Node: `RUN --mount=type=cache,target=/root/.npm npm ci`
    - Python: `RUN --mount=type=cache,target=/root/.cache/pip pip install ...`
+   - apt: `RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked apt-get update && apt-get install -y ...` — no `rm -rf /var/lib/apt/lists/*` needed, since the cache lives outside the image layer. `sharing=locked` is required because apt needs exclusive access to its cache directories.
+   - apk (Alpine — per the Alpine wiki, not a Docker-verified doc; `references/layer-caching.md` links the source): `RUN --mount=type=cache,target=/etc/apk/cache,sharing=locked apk add ...` — drop `--no-cache` so downloaded packages land in the mounted cache directory instead of being discarded.
 3. Pin base image tags to a specific version or digest — never use `latest` in production.
 4. Combine related `RUN` commands with `&&` to reduce layer count, but keep logically distinct steps separate for cache granularity.
 
@@ -76,18 +78,18 @@ Never bake credentials into the image. Use BuildKit secrets and SSH mounts so cr
        ssh-keyscan github.com >> /root/.ssh/known_hosts && \
        git clone git@github.com:org/private-repo.git
    ```
-   Do NOT use `StrictHostKeyChecking=no` as a shortcut — it disables host-key verification entirely. `ssh-keyscan` pins the known fingerprint at build time.
+   Do NOT use `StrictHostKeyChecking=no` as a shortcut — it disables host-key verification entirely. `ssh-keyscan` accepts whatever host key the server presents each time the step runs; nothing is pinned between builds. For stronger assurance, compare it against the provider's published host key fingerprints, or write the published key into `known_hosts` instead of scanning.
 6. **Invoke buildx with the secret and SSH sources:**
    ```bash
-   # Ensure an SSH agent is running with the key loaded (or use --ssh default=<key-file>):
-   eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+   # --ssh default forwards this shell's SSH agent (SSH_AUTH_SOCK); list every key the build can use:
+   ssh-add -l
 
    docker buildx build \
        --secret id=npmrc,src=$HOME/.npmrc \
        --ssh default \
        .
    ```
-   Alternatively, pass the key file directly without an agent: `--ssh default=$HOME/.ssh/id_ed25519`.
+   The `RUN --mount=type=ssh` step can use every key that `ssh-add -l` lists, so expose only the key this build needs. In an interactive terminal, run `ssh-agent bash` to start a shell with a dedicated agent, then run `ssh-add <key-file>`, confirm that `ssh-add -l` lists only that key, and run the build in that shell. A tool that starts a new shell for each command loses that agent between commands, so ask the user to run these steps. Alternatively, pass an unencrypted key file, such as a dedicated deploy key, directly with `--ssh default=<key-file>`; BuildKit rejects passphrase-protected keys in this form, so load those into an agent instead.
 7. `.dockerignore` exclusions of `.env` and credential files are **defense in depth**, not the primary mechanism — keep them, but do not rely on them as your only protection.
 
 See `references/multi-stage-builds.md` for per-language patterns (npm, pip, Maven, Go `GOPRIVATE`).
@@ -121,7 +123,7 @@ Always configure the final image to run as a non-root user.
 ### Image size optimization
 
 1. Prefer `FROM scratch` (Go static binaries), distroless, or Alpine-based images for the runtime stage.
-2. Remove package manager caches in the same `RUN` layer that installs packages: `apt-get install -y ... && rm -rf /var/lib/apt/lists/*`
+2. Install OS packages with a BuildKit cache mount rather than `rm -rf`-ing the cache in the same layer — see "Layer caching" above. The cache mount keeps the package cache out of the image layer entirely, so no cleanup step is needed.
 3. Do not install documentation, man pages, or debug tools in the runtime image.
 4. Use `.dockerignore` aggressively to minimize the build context.
 
@@ -153,11 +155,11 @@ Always configure the final image to run as a non-root user.
 
 ## Scripts
 
-- **`scripts/verify-build.sh`** — Builds the image, reports size and configured user.
+- **`scripts/verify-build.sh`** — Builds the Dockerfile in the current directory, then reports image size and configured user. Run it from the project root (the directory that contains the `Dockerfile`), with the script path resolved under this skill's directory:
   ```bash
-  bash scripts/verify-build.sh [--help] [IMAGE_NAME]
+  bash "<skill-dir>/scripts/verify-build.sh" [--help] [IMAGE_NAME]
   ```
-  Exit status is `0` when all Docker commands succeed or help is requested, the failing Docker command's non-zero status when verification fails, and `2` for invalid arguments.
+  Replace `<skill-dir>` with the absolute path of the folder that contains this `SKILL.md`; the `scripts/` path is relative to that folder, not to the project. Do not change into the skill directory first: the script builds whatever is in the current directory. If the skill directory cannot be resolved, run `docker build -t verify-build-test .`, then `docker images verify-build-test` and `docker inspect verify-build-test --format '{{.Config.User}}'`. Exit status is `0` when all Docker commands succeed or help is requested, the failing Docker command's non-zero status when verification fails, and `2` for invalid arguments.
 
 ## Checks
 

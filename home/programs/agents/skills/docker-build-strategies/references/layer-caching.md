@@ -16,7 +16,7 @@ Order instructions from least-frequently-changed to most-frequently-changed:
 ```
 1. Base image (FROM)
 2. System package installation
-3. Dependency manifest copy (package.json, go.mod, requirements.txt)
+3. Dependency manifest (package.json, go.mod, requirements.txt), bind-mounted into the install step
 4. Dependency installation (npm ci, go mod download, pip install)
 5. Application source code copy
 6. Application build
@@ -37,12 +37,17 @@ RUN npm run build
 ### Good ordering
 
 ```dockerfile
-# Dependencies cached until package.json or lock file changes
-COPY package.json package-lock.json ./
-RUN npm ci
+# Dependencies cached until package.json or lock file changes; the manifest
+# is bind-mounted rather than COPY-ed, so it never enters a layer
+RUN --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=package-lock.json,target=package-lock.json \
+    --mount=type=cache,target=/root/.npm \
+    npm ci
 COPY . .
 RUN npm run build
 ```
+
+The bind mount only works for install commands that read the manifest without writing it back (`npm ci`, `pip install -r`, `go mod download`). If the step mutates the lockfile in place (e.g. `npm install` without a lockfile, or `go mod tidy`), `COPY` the manifest instead so the write lands in the image.
 
 ## BuildKit cache mounts
 
@@ -66,7 +71,10 @@ RUN --mount=type=cache,target=<path> <command>
 | pip | `/root/.cache/pip` |
 | Maven | `/root/.m2` |
 | Gradle | `/root/.gradle` |
-| apt | `/var/cache/apt` |
+| apt | `/var/cache/apt` and `/var/lib/apt` (both `sharing=locked`) |
+| apk (Alpine) | `/etc/apk/cache` (`sharing=locked`, drop `--no-cache`) |
+
+The apk row follows the Alpine wiki's [Local APK cache](https://wiki.alpinelinux.org/wiki/Local_APK_cache) page, not a Docker-verified doc.
 
 ### Cache mount with a non-root build user
 
@@ -76,6 +84,19 @@ When the build stage runs as a non-root user, specify `uid` and `gid`:
 RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1001,gid=1001 \
     pip install -r requirements.txt
 ```
+
+### Bind mounts for dependency manifests
+
+Bind-mount `package.json`, `go.mod`/`go.sum`, or `requirements.txt` into the install `RUN` instead of `COPY`-ing them, so the manifest is visible to the command but never written to a layer:
+
+```dockerfile
+RUN --mount=type=bind,source=go.mod,target=go.mod \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+```
+
+Only do this for install commands that don't write the manifest back (`npm ci`, `pip install -r`, `go mod download`). A command that mutates the lockfile in place needs `COPY` so the change is captured in the image.
 
 ### Bind mounts for source
 
@@ -112,14 +133,15 @@ Do not use `COPY --link` when:
 Combine related commands in a single `RUN` to avoid intermediate layers:
 
 ```dockerfile
-# Good: single layer for system packages
-RUN apt-get update && \
+# Good: single layer, cache mounts keep the apt cache and lists out of the image entirely
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates \
-      curl && \
-    rm -rf /var/lib/apt/lists/*
+      curl
 
-# Bad: three layers, apt cache persists in first layer
+# Bad: three layers, apt cache persists in the first layer
 RUN apt-get update
 RUN apt-get install -y curl
 RUN rm -rf /var/lib/apt/lists/*

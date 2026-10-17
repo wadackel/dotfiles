@@ -110,11 +110,11 @@ When a project needs a database (Postgres, MySQL, MongoDB), cache (Redis, Memcac
 
 ## Scripts
 
-- **`scripts/verify-setup.sh`** — Checks required files exist and validates `compose.yaml`.
+- **`scripts/verify-setup.sh`** — Checks that required files exist in the current directory and validates its `compose.yaml`. Run it from the project root, with the script path resolved under this skill's directory:
   ```bash
-  bash scripts/verify-setup.sh [--help]
+  bash "<skill-dir>/scripts/verify-setup.sh" [--help]
   ```
-  Exit status is `0` when verification succeeds or help is requested, `1` when required files are missing or the Compose configuration is invalid, and `2` for invalid arguments.
+  Replace `<skill-dir>` with the absolute path of the folder that contains this `SKILL.md`; the `scripts/` path is relative to that folder, not to the project. Do not change into the skill directory first: the script checks the current directory. If the skill directory cannot be resolved, check that `.dockerignore`, `Dockerfile`, and `compose.yaml` exist in the project root, then run `docker compose config --quiet`. Exit status is `0` when verification succeeds or help is requested, `1` when required files are missing or the Compose configuration is invalid, and `2` for invalid arguments.
 
 ## Checks
 

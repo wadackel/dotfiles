@@ -13,7 +13,6 @@
 - Sequential awaits — batch independent async calls with `Promise.all` (including `import*ByKeyAsync` families)
 - Prefer indexed lookups (`getNodeByIdAsync`, `findAllWithCriteria`, `node.query`) over `findAll`/`findOne` full-tree scans
 - Scope traversal to the smallest known ancestor (never `figma.root.findAll`; prefer `someFrame.findAllWithCriteria` over `figma.currentPage.findAllWithCriteria`)
-- Set `figma.skipInvisibleInstanceChildren = true` for read-only traversal that doesn't need the interior of component instances
 - Variable scopes and mode pitfalls
 - Node cleanup and empty-fill pitfalls
 - "no such property" errors — reading or calling members not defined on the node type
@@ -253,20 +252,11 @@ figma.notify("Done!")
 return "Done!"
 ```
 
-## `getPluginData()` / `setPluginData()` are not supported
+## Prefer returned IDs for workflow state
 
-These APIs are not available in `use_figma`. Use `getSharedPluginData()` / `setSharedPluginData()` instead (these ARE supported), or track nodes by returning IDs.
+Return node IDs and keep workflow state outside the Figma file. Put human-readable component purpose and usage in `node.description` only on a `COMPONENT` or `COMPONENT_SET`.
 
 ```js
-// WRONG — not supported in use_figma
-node.setPluginData('my_key', 'my_value')
-const val = node.getPluginData('my_key')
-
-// CORRECT — use shared plugin data (requires a namespace)
-node.setSharedPluginData('my_namespace', 'my_key', 'my_value')
-const val = node.getSharedPluginData('my_namespace', 'my_key')
-
-// ALSO CORRECT — return node IDs and track them across calls
 const rect = figma.createRectangle()
 return { nodeId: rect.id }
 // Then pass nodeId as a string literal in the next use_figma call
@@ -424,33 +414,24 @@ await Promise.all(uniqueFonts.map(f => figma.loadFontAsync(f)))
 
 **Rule: use `findAllWithCriteria({ types: [...] })` for type-based searches. Reserve `findOne` / `findAll(predicate)` for cases the criteria API can't express** — name patterns, regex, capability checks (`'fills' in n`), or any predicate that touches properties the engine doesn't index.
 
-`findAll` and `findOne` walk the entire subtree node-by-node and run a JS predicate on each one. For anything the Figma engine already indexes (type, pluginData, sharedPluginData), there is a much faster API. Use this table:
+`findAll` and `findOne` walk the entire subtree node-by-node and run a JS predicate on each one. For supported criteria such as type, use the faster API in this table:
 
 | You want… | DON'T | DO |
 |---|---|---|
 | One specific node, you have its ID | `page.findOne(n => n.id === id)` | `await figma.getNodeByIdAsync(id)` |
 | All nodes of a given type | `page.findAll(n => n.type === 'TEXT')` | `page.findAllWithCriteria({ types: ['TEXT'] })` |
 | Type + a few cheap attributes (`name`, `visible`, etc.) | `page.findAll(n => n.type === 'TEXT' && n.name === 'Title')` | `page.query('TEXT[name=Title]')` (see [SKILL.md → node.query](../SKILL.md#nodequeryselector--css-like-node-search)) |
-| Nodes with plugin data | `page.findAll(n => n.getPluginData('key'))` | `page.findAllWithCriteria({ pluginData: { keys: ['key'] } })` |
-| Nodes with shared plugin data | `page.findAll(n => n.getSharedPluginData('ns', 'key'))` | `page.findAllWithCriteria({ sharedPluginData: { namespace: 'ns', keys: ['key'] } })` |
 
-**`types` and `pluginData.keys` are arrays — pass multiple values in a single call instead of issuing N separate ones.** A union over `types` is OR'd; multiple `pluginData.keys` match nodes that carry *any* of the given keys.
+**`types` is an array — pass multiple values in a single call instead of issuing N separate ones.** A union over `types` is OR'd.
 
 ```js
 // Multiple types in one call — returns COMPONENT ∪ COMPONENT_SET in one indexed pass
 page.findAllWithCriteria({ types: ['COMPONENT', 'COMPONENT_SET'] })
-
-// Multiple pluginData keys in one call — matches nodes that have any of them
-page.findAllWithCriteria({ pluginData: { keys: ['dsb_key', 'dsb_run_id'] } })
-
-// Multiple sharedPluginData keys (under the same namespace)
-page.findAllWithCriteria({ sharedPluginData: { namespace: 'dsb', keys: ['key', 'run_id'] } })
 ```
 
-Two more rules that apply to any traversal — see also the dedicated [Scope traversal to the smallest known ancestor](#scope-traversal-to-the-smallest-known-ancestor) gotcha below:
+One more rule applies to any traversal — see also the dedicated [Scope traversal to the smallest known ancestor](#scope-traversal-to-the-smallest-known-ancestor) gotcha below:
 
 1. **Narrow the scope.** `frame.findAll(...)` is much cheaper than `figma.currentPage.findAll(...)`. Hold onto the smallest known subtree.
-2. **Skip invisible instance children when relevant** — see the dedicated [Set `figma.skipInvisibleInstanceChildren = true` for read-only traversal](#set-figmaskipinvisibleinstancechildren--true-for-read-only-traversal) gotcha. One line at the top of the script, up to hundreds of times faster on large files.
 
 ```js
 // WRONG — full-tree scan for a single node you already have an ID for
@@ -491,7 +472,7 @@ Name-only lookups (`findOne(n => n.name === 'X')`) cannot use criteria — they 
 
 ## Scope traversal to the smallest known ancestor
 
-Every `findAll` / `findOne` / `findAllWithCriteria` walks the entire subtree of the receiver. Picking the right receiver is the single biggest performance lever you have — bigger than the type index, bigger than `skipInvisibleInstanceChildren`. Cheapest to most expensive:
+Every `findAll` / `findOne` / `findAllWithCriteria` walks the entire subtree of the receiver. Picking the right receiver is the single biggest performance lever you have — bigger than the type index. Cheapest to most expensive:
 
 | Receiver | Walks… |
 |---|---|
@@ -518,27 +499,6 @@ const inFrame = frame.findAllWithCriteria({ types: ['INSTANCE'] })
 **Never loop `figma.root.children` calling `setCurrentPageAsync(page)` and then `page.findAll(...)`** — that's the same antipattern in slow motion: one whole-page scan per page, plus the cost of switching pages. If work spans multiple pages, **fan out** instead: emit one `use_figma` per page in parallel (see [Set current page once per `use_figma` call](#set-current-page-once-per-use_figma-call--split-multi-page-work-into-parallel-calls)).
 
 When you don't have a frame ID handy, capture one from a parent call and pass it to subsequent calls — `getNodeByIdAsync(id).findAllWithCriteria(...)` beats `figma.currentPage.findAllWithCriteria(...)` every time the target subtree is smaller than the page.
-
-## Set `figma.skipInvisibleInstanceChildren = true` for read-only traversal
-
-**Rule: set `figma.skipInvisibleInstanceChildren = true` at the top of any read-only script that doesn't need the interior of component instances.** It prunes every invisible node inside instances (and that node's descendants, even visible ones) from traversal and from `getNodeByIdAsync`. Per the [Figma docs](https://developers.figma.com/docs/plugins/api/properties/figma-skipinvisibleinstancechildren/), this can make `findAllWithCriteria` up to **hundreds of times faster** on large documents.
-
-```js
-// Top of script — set once, before any traversal.
-figma.skipInvisibleInstanceChildren = true
-
-// Now findAll / findOne / findAllWithCriteria / getNodeByIdAsync all skip
-// invisible content inside instances (and their descendants).
-const components = figma.currentPage.findAllWithCriteria({ types: ['COMPONENT'] })
-return components.map(c => c.id)
-```
-
-**Key points:**
-- **Default is not consistent across surfaces.** `true` in Dev Mode; `false` in Figma and FigJam. Set it explicitly — don't rely on the default.
-- **Only prunes inside `INSTANCE` subtrees.** Invisible nodes outside instances are still traversed normally. COMPONENT (master) subtrees are not affected.
-- **Stale references throw.** Once the flag is `true`, any node handle you previously captured for a pruned (invisible-in-instance) node throws when you read a property on it. Don't toggle the flag mid-script if you've already cached such handles.
-- **Don't set it when you need invisible variants.** Scripts that read or mutate hidden states of a component instance (e.g. inspecting the `disabled` variant's text, restyling all variants of a component set) must leave the flag at `false`.
-- **Safe for almost all read-only discovery and most mutations:** find/replace, style auditing, plugin-data inventory, variable usage scans, idempotency lookups, batch property changes via `setProperties()` on top-level instances. Hidden variants aren't displayed anyway, so skipping them rarely matters.
 
 ## Font style names are file-dependent — use `listAvailableFontsAsync` to discover them
 
@@ -599,7 +559,7 @@ colorVar.setValueForMode(modeId, { r: 0, g: 0, b: 0, a: 0 })  // fully transpare
 
 ## `layoutSizingHorizontal`/`layoutSizingVertical` value rules: `FIXED`, `HUG`, `FILL`
 
-The property exists on every `SceneNode`, but the **value** you can assign depends on the node's relationship to auto-layout. The scenegraph validates the assignment (`fullscreen/lib/scenegraph/FGStackLayoutSizeHelper.cpp::checkStackLayoutSize`) and rejects non-`FIXED` values that don't satisfy a structural rule:
+The property exists on every `SceneNode`, but the **value** you can assign depends on the node's relationship to auto-layout. The tool validates the assignment and rejects non-`FIXED` values that don't satisfy a structural rule:
 
 | Value | Allowed when | Rejected with |
 | --- | --- | --- |
@@ -607,6 +567,13 @@ The property exists on every `SceneNode`, but the **value** you can assign depen
 | `'HUG'` | the node IS an auto-layout frame, OR is a **TEXT** child of an auto-layout frame | `"HUG can only be set on auto-layout frames or text children of auto-layout frames"` |
 | `'FILL'` | the node is a child of an auto-layout frame, AND not absolute-positioned, AND not inside an immutable frame, AND not a canvas-grid child | `"FILL can only be set on children of auto-layout frames"`, `"FILL cannot be set on absolute positioned auto-layout children"`, `"FILL cannot be set on this node"`, `"FILL cannot be set on canvas grid children"` |
 | any non-`FIXED` value on a node that is neither auto-layout nor inside auto-layout | (none — always rejected) | `"node must be an auto-layout frame or a child of an auto-layout frame"` |
+
+**Common errors thrown** (the runtime prefixes the message with the property setter that rejected the value):
+
+- `Error: in set_layoutSizingHorizontal: node must be an auto-layout frame or a child of an auto-layout frame`
+- `Error: in set_layoutSizingHorizontal: FILL can only be set on children of auto-layout frames`
+
+The same messages surface under `set_layoutSizingVertical` when the vertical axis is the one being set.
 
 Practical consequences:
 
@@ -647,6 +614,37 @@ t.layoutSizingHorizontal = 'HUG'     // ok — TEXT child of auto-layout
 `figma.createAutoLayout()` returns a frame with `layoutMode` already set and both axes hugging content, so its children can immediately use `'FILL'`/`'HUG'` after being appended — preferred over `figma.createFrame()` whenever the container holds related children. See Rule 12a in [SKILL.md](../SKILL.md).
 
 The next gotcha (`## HUG parents collapse FILL children`) layers on top of the rules above: even when assignment succeeds, a `HUG` parent gives `FILL` children no room to expand. The validation rule above is about whether the assignment is _allowed_; the next gotcha is about whether it produces useful layout.
+
+## layoutSizing vs AxisSizingMode: two different sizing enums
+
+`layoutSizingHorizontal`/`layoutSizingVertical` and `primaryAxisSizingMode`/`counterAxisSizingMode` look interchangeable but accept **different enums** and are set on **different nodes**. Crossing them throws a value-rejection error.
+
+| Property family | Valid values | Set on |
+| --- | --- | --- |
+| `layoutSizingHorizontal` / `layoutSizingVertical` | `'FIXED'` \| `'HUG'` \| `'FILL'` | a **child** node (or the auto-layout frame itself) |
+| `primaryAxisSizingMode` / `counterAxisSizingMode` | `'FIXED'` \| `'AUTO'` | the **frame** itself |
+
+`'AUTO'` is not a valid `layoutSizing*` value — the equivalent is `'HUG'`:
+
+```js
+// WRONG
+node.layoutSizingVertical = 'AUTO'   // 'AUTO' is not a layoutSizing value
+
+// CORRECT
+node.layoutSizingVertical = 'HUG'
+```
+
+`'FILL'` is not a valid `*AxisSizingMode` value — use `'FIXED'` or `'AUTO'`:
+
+```js
+// WRONG
+frame.counterAxisSizingMode = 'FILL'  // throws: Expected 'FIXED' | 'AUTO', received 'FILL'
+
+// CORRECT
+frame.counterAxisSizingMode = 'FIXED'
+```
+
+`layoutSizingHorizontal/Vertical` is a shorthand that also drives `primaryAxisSizingMode`/`counterAxisSizingMode` under the hood — but the two surfaces accept different value sets, so keep their enums straight. For the structural rules on _when_ `HUG`/`FILL` are legal at all, see the section above.
 
 ## HUG parents collapse FILL children
 
@@ -932,24 +930,24 @@ When constructing a `var(--name)` string from a Figma variable name, replace BOT
 
 ## "no such property" errors — reading or calling members not defined on the node type
 
-Every Figma node implements a specific set of mixins. Reading or calling a property/method that isn't on the target throws `TypeError: node.X: no such property 'X' on Y node` (where `Y` is the runtime type — `TEXT`, `RECTANGLE`, `GROUP`, `PAGE`, `VECTOR`, …). The same error fires for hallucinated API names that don't exist anywhere (e.g. `getRangeAllFontNames` — the real APIs are `getStyledTextSegments(['fontName'])` and `getRangeFontName(start, end)`). This is the read-side counterpart to the write-side "object is not extensible" error below; both stem from the same cause.
+Every Figma node implements a specific set of mixins. In `use_figma`, reading or calling a non-softened property/method that isn't on the target throws `TypeError: node.X: no such property 'X' on Y node` (where `Y` is the runtime type — `TEXT`, `RECTANGLE`, `GROUP`, `PAGE`, `VECTOR`, …). Some commonly probed missing properties return `undefined`, but unsupported writes still throw. The same error fires for hallucinated API names that don't exist anywhere (e.g. `getRangeAllFontNames` — the real APIs are `getStyledTextSegments(['fontName'])` and `getRangeFontName(start, end)`).
 
 Common shapes the bug takes — what you tried vs. where the member actually lives:
-
 | Member | Defined on | Notably absent from |
 | --- | --- | --- |
 | `children`, `appendChild`, `insertChild`, `findAll`, `findOne`, `findChildren`, `findChild`, `findAllWithCriteria` | `ChildrenMixin` — container nodes (`Document`, `Page`, `Frame`, `Group`, `Component`, `ComponentSet`, `Instance`, `Section`, `BooleanOperation`) | `TEXT`, `RECTANGLE`, `VECTOR`, `ELLIPSE`, `LINE`, `STAR`, `POLYGON`, `SLICE` |
 | `layoutMode`, `itemSpacing`, padding/axis-alignment (`primaryAxisAlignItems`, `counterAxisAlignItems`, `counterAxisSpacing`, `counterAxisAlignContent`, `layoutWrap`, `primaryAxisSizingMode`) | `BaseFrameMixin` / `AutoLayoutMixin` — `FRAME`, `COMPONENT`, `COMPONENT_SET`, `INSTANCE` only | `TEXT`, shapes, vectors, `GROUP`, `SECTION` |
 | `fills`, `strokes`, `strokeWeight` | `GeometryMixin`/`MinimalFillsMixin` — shapes, frames, components, text, sections | `GROUP` (groups are pass-through), `PAGE`, `DOCUMENT` |
 | `x`, `y`, `width`, `height`, `rotation`, `resize()` | `LayoutMixin` — every `SceneNode` | `PAGE`, `DOCUMENT` |
-| `characters`, `fontName`, `fontSize`, `getStyledTextSegments`, `getRangeFontName`, `setRangeFontName`, `setRangeFontSize` | `TextNode` only | every non-text node |
+| `characters`, `fontName`, `fontSize`, `getStyledTextSegments`, `getRangeFontName`, `setRangeFontName`, `setRangeFontSize` | text-capable nodes (`TEXT`, `TEXT_PATH`, and text sublayers reached through `.text`) | frames, instances, and other non-text nodes |
+| `description` | `COMPONENT` and `COMPONENT_SET` scene nodes | every other scene-node type; missing reads return `undefined` in `use_figma`, but writes throw |
 | `createInstance` | `COMPONENT` only | every other type |
 | `addComponentProperty`, `componentPropertyDefinitions` | `COMPONENT_SET`, or a non-variant `COMPONENT` (one whose parent is NOT a `COMPONENT_SET`) | every other type, **including variant `COMPONENT`s** — invoking on a variant throws `"Can only get/set component property definitions of a component set or non-variant component"`. Add properties on the variant before `combineAsVariants`, or on the parent `COMPONENT_SET` after. |
 | `defaultVariant`, `variantGroupProperties` | `COMPONENT_SET` only | every other type |
 | `figma.createPage` | Design files only (`figma.com/design/...`) | FigJam (`/board/`) and Slides (`/slides/`) — see Page Rules |
 
 Verify any member you're unsure about against [plugin-api-standalone.d.ts](plugin-api-standalone.d.ts) before using it. Names that "sound plausible" but aren't in the typings will always throw — the typings are the source of truth.
-
+For `componentPropertyDefinitions`, checking only `node.type === 'COMPONENT'` is insufficient because variants have that type too. Resolve the owner first: keep a `COMPONENT_SET`, promote a variant `COMPONENT` to its parent set, keep a non-variant `COMPONENT`, and reject every other node type. See [component-patterns.md → Component-property owner narrowing](component-patterns.md#component-property-owner-narrowing) for the owner-narrowing rule.
 **Optional chaining (`?.`) does NOT defend against this.** The property access happens before `?.` is evaluated, so `node.children?.length` still throws on a `TEXT` node. The same applies to `try { node.fills }` — the access throws inside the try, which works for catching, but you should narrow up front instead.
 
 **How to avoid:**
