@@ -39,6 +39,7 @@
       "Bash(*skill-improver/scripts/measure-trigger.ts*)",
       "Bash(*comment-metrics*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
+      "Bash(*plan-metrics/plan-metrics.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",
       "Bash(*writing-metrics/fire-rate.ts*)",
       "Bash(*writing-metrics/lint.ts*)",
