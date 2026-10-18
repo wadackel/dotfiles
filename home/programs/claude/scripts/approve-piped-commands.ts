@@ -63,12 +63,13 @@ export function matchesAllowedPattern(
 }
 
 interface Settings {
-  permissions?: { allow?: string[] };
+  permissions?: { allow?: string[]; deny?: string[]; ask?: string[] };
 }
 
-/** Load permissions.allow from multiple settings files, extract allowed glob patterns. */
+/** Load one `permissions` list (allow by default) from multiple settings files, extract glob patterns. */
 export async function loadAllowedPatterns(
   paths: string[],
+  key: "allow" | "deny" | "ask" = "allow",
 ): Promise<string[]> {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -76,7 +77,7 @@ export async function loadAllowedPatterns(
     try {
       const text = await readFile(path, "utf8");
       const json: Settings = JSON.parse(text);
-      for (const pattern of json?.permissions?.allow ?? []) {
+      for (const pattern of json?.permissions?.[key] ?? []) {
         const p = extractAllowedPattern(pattern);
         if (p && !seen.has(p)) {
           seen.add(p);

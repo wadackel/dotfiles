@@ -406,3 +406,20 @@ test("refuses to run when neither plans dir exists", () =>
       "neither",
     );
   }));
+
+test("usage names run and rerun and prints the check schema", async () => {
+  const message = await assertRejects(() => run([]), Error, "Usage");
+  for (
+    const text of [
+      "plan-state.ts run <path> <task-id> <check-id>",
+      "plan-state.ts rerun <path>",
+      '"status":"pass|fail|blocked|waived"',
+      '"target"',
+      '"command"',
+      '"output"',
+      "statuses: pass fail blocked waived",
+    ]
+  ) {
+    assertEquals((message as Error).message.includes(text), true, text);
+  }
+});

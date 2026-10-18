@@ -15,20 +15,24 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   artifactSnapshot,
+  assertArgvPermitted,
   assertLive,
   assertRepository,
   assertVerdict,
   assertVerified,
+  changedPaths,
   type Check,
   check,
+  executeArgv,
   repository,
   type Requirement,
   requirements,
   runGit,
-  snapshot,
-  verificationSnapshot,
+  splitRunArgs,
+  truncateOutput,
 } from "./plan-evidence.ts";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
@@ -48,7 +52,6 @@ export interface PlanEvidence {
   tasks: PlanTask[];
   version?: 2;
   repository?: string;
-  gate?: string;
 }
 
 const FINAL_TASK_SUBJECT = "Final Audit + Review";
@@ -88,6 +91,13 @@ function usage(): never {
       "  plan-state.ts snapshot <path>",
       "  plan-state.ts reconcile <path>",
       "  plan-state.ts coverage <path>",
+      "  plan-state.ts run <path> <task-id> <check-id> [--expect-exit N] [--tail N] [--grep RE] [--env K=V]... [--cwd DIR] [--expect-unchanged] -- <command> [args...]",
+      "      snapshot, execute the command without a shell, snapshot again, record (file-state / orchestrator-only checks only)",
+      "  plan-state.ts rerun <path>       # re-execute every recorded argv whose target is stale or whose status is fail",
+      "",
+      'require stdin: [{"id":"cc-1","kind":"file-state|orchestrator-only|live|audit|review","expected":{"file":"path"}|{"git_head":true}|{"identity":"name"}}]',
+      'record stdin:  {"id":"cc-1","status":"pass|fail|blocked|waived","target":"<snapshot output>","command":"<what ran>","output":"<raw output>","expected":"<digest or identity>","observed":"<digest or identity>","authorization":"<quoted user waiver>"}',
+      "  statuses: pass fail blocked waived (waived needs authorization; audit / review cannot be waived)",
     ].join("\n"),
   );
 }
@@ -210,7 +220,7 @@ function normalizeTask(value: unknown, index: number): PlanTask {
   if (obj.required !== undefined) task.required = requirements(obj.required);
   if (obj.checks !== undefined) {
     if (!Array.isArray(obj.checks)) throw new Error("checks must be an array");
-    task.checks = obj.checks.map(check);
+    task.checks = obj.checks.map((item) => check(item, "file"));
   }
   return task;
 }
@@ -251,12 +261,6 @@ export function normalizePlanEvidence(raw: unknown): PlanEvidence {
   ensureFinalTask(tasks);
   const data: PlanEvidence = { plan: obj.plan, tasks };
   if (obj.version === 2) data.version = 2;
-  if (obj.gate !== undefined) {
-    if (typeof obj.gate !== "string" || !obj.gate) {
-      throw new Error("invalid gate generation");
-    }
-    data.gate = obj.gate;
-  }
   if (obj.repository !== undefined) {
     if (typeof obj.repository !== "string" || !obj.repository.startsWith("/")) {
       throw new Error("repository must be absolute");
@@ -396,13 +400,265 @@ async function currentGitHead(): Promise<string> {
   return head.stdout.trim();
 }
 
+// Overridable so a test that plants a foreign lock does not wait the full 10 s.
+const LOCK_RETRY_MS = (() => {
+  const n = Number(process.env.PLAN_STATE_LOCK_WAIT_MS);
+  return Number.isFinite(n) && n >= 0 ? n : 10_000;
+})();
+
+/** Exclusive sibling lock around a read-modify-write; waits with backoff up to LOCK_RETRY_MS. */
+async function withLock<T>(path: string, body: () => Promise<T>): Promise<T> {
+  const lockPath = `${path}.lock`;
+  let lock: FileHandle | null = null;
+  const deadline = Date.now() + LOCK_RETRY_MS;
+  for (let wait = 50; lock === null;) {
+    try {
+      lock = await open(lockPath, "wx", 0o600);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException | null)?.code !== "EEXIST") throw err;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `evidence is locked; check the writer before recovering ${lockPath}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, wait));
+      wait = Math.min(wait * 2, 1_000);
+    }
+  }
+  try {
+    await lock.write(
+      new TextEncoder().encode(
+        JSON.stringify({ pid: process.pid, started: new Date().toISOString() }),
+      ),
+    );
+    return await body();
+  } finally {
+    try {
+      await lock.close();
+    } finally {
+      await rm(lockPath);
+    }
+  }
+}
+
+function excerpt(output: string, grep: string | null, tail: number): string[] {
+  const lines = output.replace(/\n$/, "").split("\n");
+  if (grep !== null) {
+    const re = new RegExp(grep);
+    return lines.filter((line) => re.test(line));
+  }
+  return tail === 0 ? [] : lines.slice(-tail);
+}
+
+/** snapshot → execute → snapshot → append, the lock held only for the append. */
+async function runCheck(args: string[]): Promise<number> {
+  const parsed = splitRunArgs(args);
+  const { path } = parsed;
+  await assertEvidencePath(path);
+  const data = await readEvidence(path);
+  const task = findTask(data, parsed.task);
+  const required = task.required?.find((r) => r.id === parsed.id);
+  if (!required) throw new Error(`check is not declared: ${parsed.id}`);
+  if (required.kind !== "file-state" && required.kind !== "orchestrator-only") {
+    throw new Error(
+      `${parsed.id} is a ${required.kind} check; observe it and use record`,
+    );
+  }
+  const root = await assertRepository(data);
+  const cwd = parsed.cwd ? await realpath(resolve(root, parsed.cwd)) : root;
+  await assertArgvPermitted({ argv: parsed.argv, env: parsed.env, cwd, root });
+  const before = await artifactSnapshot(path, data);
+  const result = await executeArgv({ argv: parsed.argv, cwd, env: parsed.env });
+  const after = await artifactSnapshot(path, data);
+  const mutated = await changedPaths(path, before.tree, after.tree);
+  const passed = result.exit === parsed.expectExit &&
+    !(parsed.expectUnchanged && mutated.length > 0);
+  const { text, truncated } = truncateOutput(result.output);
+  const record: Check = {
+    id: parsed.id,
+    status: passed ? "pass" : "fail",
+    target: after.target,
+    tree: after.tree,
+    command: parsed.argv.join(" "),
+    output: text,
+    argv: parsed.argv,
+    cwd,
+    exit: result.exit,
+    expectExit: parsed.expectExit,
+    durationMs: result.durationMs,
+  };
+  if (Object.keys(parsed.env).length) record.env = parsed.env;
+  if (parsed.expectUnchanged) record.expectUnchanged = true;
+  if (mutated.length) record.mutated = mutated;
+  if (truncated) record.truncated = true;
+  const notice = await withLock(path, async () => {
+    const fresh = await readEvidence(path);
+    const freshTask = findTask(fresh, parsed.task);
+    if (!freshTask.required?.some((r) => r.id === parsed.id)) {
+      throw new Error(`check is not declared: ${parsed.id}`);
+    }
+    const previous = freshTask.checks?.findLast((c) => c.id === parsed.id);
+    freshTask.checks ??= [];
+    freshTask.checks.push(record);
+    await atomicWrite(path, fresh);
+    return previous?.argv &&
+        JSON.stringify(previous.argv) !== JSON.stringify(parsed.argv)
+      ? `supersedes previous argv: ${previous.argv.join(" ")}`
+      : null;
+  });
+  console.log(
+    `${record.status} ${parsed.id} exit=${result.exit}${
+      parsed.expectExit !== 0 ? ` (expected ${parsed.expectExit})` : ""
+    } ${result.durationMs}ms mutated=${mutated.length}${
+      mutated.length ? ` ${mutated.join(" ")}` : ""
+    }`,
+  );
+  if (notice) console.log(notice);
+  for (const line of excerpt(result.output, parsed.grep, parsed.tail)) {
+    console.log(line);
+  }
+  return passed ? 0 : 1;
+}
+
+interface RerunRow {
+  task: string;
+  check: string;
+  status: string;
+  exit: number | "-";
+  mutated: number;
+}
+
+/**
+ * Re-executes every recorded argv whose latest record is stale or failed; a
+ * check that passes at the current target is already fresh and is skipped. The
+ * argv set is fixed at the first read, so a record appended while a long suite
+ * runs is not picked up by this invocation.
+ */
+async function rerunChecks(path: string): Promise<number> {
+  await assertEvidencePath(path);
+  const data = await readEvidence(path);
+  await assertRepository(data);
+  const current = await artifactSnapshot(path, data);
+  const rows: RerunRow[] = [];
+  const groups = new Map<
+    string,
+    { record: Check; members: { task: string; check: string }[] }
+  >();
+  for (const task of data.tasks) {
+    for (const required of task.required ?? []) {
+      const latest = task.checks?.findLast((c) => c.id === required.id);
+      if (!latest) {
+        rows.push({
+          task: task.id,
+          check: required.id,
+          status: "skipped (missing)",
+          exit: "-",
+          mutated: 0,
+        });
+      } else if (!latest.argv) {
+        rows.push({
+          task: task.id,
+          check: required.id,
+          status: "skipped (record)",
+          exit: "-",
+          mutated: 0,
+        });
+      } else if (latest.target === current.target && latest.status === "pass") {
+        rows.push({
+          task: task.id,
+          check: required.id,
+          status: "fresh",
+          exit: latest.exit ?? "-",
+          mutated: 0,
+        });
+      } else {
+        const key = JSON.stringify([
+          latest.argv,
+          latest.cwd,
+          latest.env ?? {},
+          latest.expectExit ?? 0,
+          latest.expectUnchanged ?? false,
+        ]);
+        const group = groups.get(key) ?? { record: latest, members: [] };
+        group.members.push({ task: task.id, check: required.id });
+        groups.set(key, group);
+      }
+    }
+  }
+  let failed = false;
+  for (const { record: previous, members } of groups.values()) {
+    const argv = previous.argv!;
+    const root = await assertRepository(data);
+    const cwd = previous.cwd ? await realpath(previous.cwd) : root;
+    const env = previous.env ?? {};
+    const expectExit = previous.expectExit ?? 0;
+    const expectUnchanged = previous.expectUnchanged ?? false;
+    await assertArgvPermitted({ argv, env, cwd, root });
+    const before = await artifactSnapshot(path, data);
+    const result = await executeArgv({ argv, cwd, env });
+    const after = await artifactSnapshot(path, data);
+    const mutated = await changedPaths(path, before.tree, after.tree);
+    const passed = result.exit === expectExit &&
+      !(expectUnchanged && mutated.length > 0);
+    if (!passed) failed = true;
+    const { text, truncated } = truncateOutput(result.output);
+    await withLock(path, async () => {
+      const fresh = await readEvidence(path);
+      for (const member of members) {
+        const task = findTask(fresh, member.task);
+        const record: Check = {
+          id: member.check,
+          status: passed ? "pass" : "fail",
+          target: after.target,
+          tree: after.tree,
+          command: argv.join(" "),
+          output: text,
+          argv,
+          cwd,
+          exit: result.exit,
+          expectExit,
+          durationMs: result.durationMs,
+        };
+        if (Object.keys(env).length) record.env = env;
+        if (expectUnchanged) record.expectUnchanged = true;
+        if (mutated.length) record.mutated = mutated;
+        if (truncated) record.truncated = true;
+        task.checks ??= [];
+        task.checks.push(record);
+        rows.push({
+          task: member.task,
+          check: member.check,
+          status: passed ? "pass" : "fail",
+          exit: result.exit,
+          mutated: mutated.length,
+        });
+      }
+      await atomicWrite(path, fresh);
+    });
+  }
+  console.log("| task | check | status | exit | mutated |");
+  console.log("|---|---|---|---|---|");
+  for (const row of rows) {
+    console.log(
+      `| ${row.task} | ${row.check} | ${row.status} | ${row.exit} | ${row.mutated} |`,
+    );
+  }
+  return failed ? 1 : 0;
+}
+
 async function execute(
   args: string[],
   stdin: ReadableStream<Uint8Array> = processStdin(),
-): Promise<void> {
+): Promise<number | void> {
   const [command, path, taskOrPlan, subjectsJson] = args;
   if (!command) {
     usage();
+  }
+
+  if (command === "run") return await runCheck(args.slice(1));
+  if (command === "rerun") {
+    if (!path) usage();
+    return await rerunChecks(path);
   }
 
   if (path) {
@@ -453,7 +709,6 @@ async function execute(
       task.baseline_sha = sha;
     }
     task.status = "in_progress";
-    if (task === data.tasks.at(-1)) data.gate = crypto.randomUUID();
     await atomicWrite(path, data);
     console.log(`baseline=${task.baseline_sha}`);
     return;
@@ -483,24 +738,19 @@ async function execute(
     if (!task.required?.length) {
       throw new Error(`${task.id}: no required checks declared`);
     }
-    const target = await artifactSnapshot(path, data);
+    const current = await artifactSnapshot(path, data);
     if (task === data.tasks.at(-1)) {
-      if (!data.gate) throw new Error("start the final gate before completion");
       if (!task.required.some((r) => r.kind === "review")) {
         throw new Error("final gate requires a review check");
       }
       for (const implementation of data.tasks.slice(0, -1)) {
-        await assertVerified(implementation, target, data.gate);
+        await assertVerified(implementation, current, path);
         if (implementation.status !== "completed") {
           throw new Error("implementation tasks are incomplete");
         }
       }
     }
-    await assertVerified(
-      task,
-      target,
-      task === data.tasks.at(-1) ? data.gate : undefined,
-    );
+    await assertVerified(task, current, path);
     task.status = "completed";
     await atomicWrite(path, data);
     console.log(`completed ${taskOrPlan}`);
@@ -565,16 +815,17 @@ async function execute(
   if (command === "snapshot" || command === "reconcile") {
     if (!path) usage();
     const data = await readEvidence(path);
+    const current = await artifactSnapshot(path, data);
     if (command === "snapshot") {
-      console.log(await snapshot(path, data));
+      console.log(current.target);
       return;
     }
-    const target = await artifactSnapshot(path, data);
+    const target = current.target;
     const reopened = [];
     for (const task of data.tasks) {
       if (task.status !== "completed") continue;
       try {
-        await assertVerified(task, target);
+        await assertVerified(task, current, path);
       } catch (err) {
         task.status = "in_progress";
         reopened.push({ id: task.id, reason: (err as Error).message });
@@ -614,19 +865,16 @@ async function execute(
       const record = check(value);
       const required = task.required?.find((r) => r.id === record.id);
       if (!required) throw new Error("check is not declared");
-      const current = await verificationSnapshot(path, data);
-      if (record.target !== current.token) {
-        throw new Error(
-          "target changed during verification (artifact or gate generation)",
-        );
+      const current = await artifactSnapshot(path, data);
+      if (record.target !== current.target) {
+        throw new Error("target changed during verification");
       }
       record.target = current.target;
+      record.tree = current.tree;
       if (required.kind === "live" && record.status === "pass") {
         await assertLive(record, required);
       }
       if (record.status === "pass") assertVerdict(record, required);
-      delete record.gate;
-      if (data.gate) record.gate = data.gate;
       task.checks ??= [];
       task.checks.push(record);
     }
@@ -641,7 +889,8 @@ async function execute(
 export async function run(
   args: string[],
   stdin: ReadableStream<Uint8Array> = processStdin(),
-): Promise<void> {
+): Promise<number | void> {
+  // run / rerun take the lock themselves, only around the append.
   const mutations = new Set([
     "init",
     "start",
@@ -654,37 +903,13 @@ export async function run(
   if (!mutations.has(args[0]) || !args[1]) return await execute(args, stdin);
   const path = args[1];
   await assertEvidencePath(path);
-  const lockPath = `${path}.lock`;
-  let lock: FileHandle;
-  try {
-    lock = await open(lockPath, "wx", 0o600);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException | null)?.code === "EEXIST") {
-      throw new Error(
-        `evidence is locked; check the writer before recovering ${lockPath}`,
-      );
-    }
-    throw err;
-  }
-  try {
-    await lock.write(
-      new TextEncoder().encode(
-        JSON.stringify({ pid: process.pid, started: new Date().toISOString() }),
-      ),
-    );
-    await execute(args, stdin);
-  } finally {
-    try {
-      await lock.close();
-    } finally {
-      await rm(lockPath);
-    }
-  }
+  return await withLock(path, () => execute(args, stdin));
 }
 
 if (import.meta.main) {
   try {
-    await run(process.argv.slice(2));
+    const code = await run(process.argv.slice(2));
+    if (code) process.exit(code);
   } catch (err) {
     console.error((err as Error).message);
     process.exit(1);

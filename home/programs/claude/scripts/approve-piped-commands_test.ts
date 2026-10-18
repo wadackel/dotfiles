@@ -715,3 +715,25 @@ test("shouldApprove: git without flags still works", async () => {
   const patterns = ["git commit *"];
   assertEquals(await shouldApprove("git commit -m 'test'", patterns), true);
 });
+
+test("loadAllowedPatterns: reads permissions.deny when asked", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "approve-piped-deny-"));
+  try {
+    const path = join(dir, "settings.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        permissions: {
+          allow: ["Bash(git push *)"],
+          deny: ["Bash(git push -f origin main)"],
+        },
+      }),
+    );
+    assertEquals(await loadAllowedPatterns([path], "deny"), [
+      "git push -f origin main",
+    ]);
+    assertEquals(await loadAllowedPatterns([path]), ["git push *"]);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});

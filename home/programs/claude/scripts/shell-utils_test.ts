@@ -544,20 +544,28 @@ test("flattenCommand: &> redirect (prefix position) is captured", async () => {
 test("flattenCommand: suffix redirect target + fd-dup are captured", async () => {
   const out = await flattenCommand(`echo x > /h/.claude/plans/.active-pwn`);
   assertEquals(out?.commands[0].redirects, [
-    { target: "/h/.claude/plans/.active-pwn", isFdDup: false },
+    {
+      target: "/h/.claude/plans/.active-pwn",
+      isFdDup: false,
+      isHeredoc: false,
+    },
   ]);
 
   const devnull = await flattenCommand(`ls /h/.claude/plans/ 2>/dev/null`);
   assertEquals(devnull?.commands[0].redirects, [
-    { target: "/dev/null", isFdDup: false },
+    { target: "/dev/null", isFdDup: false, isHeredoc: false },
   ]);
 
   const fddup = await flattenCommand(`ls /h/.claude/plans 2>&1`);
-  assertEquals(fddup?.commands[0].redirects, [{ target: "1", isFdDup: true }]);
+  assertEquals(fddup?.commands[0].redirects, [{
+    target: "1",
+    isFdDup: true,
+    isHeredoc: false,
+  }]);
 
   const clobber = await flattenCommand(`ls x >| /h/.claude/plans/y`);
   assertEquals(clobber?.commands[0].redirects, [
-    { target: "/h/.claude/plans/y", isFdDup: false },
+    { target: "/h/.claude/plans/y", isFdDup: false, isHeredoc: false },
   ]);
 
   const none = await flattenCommand(`ls /h/.claude/plans/`);
@@ -592,4 +600,17 @@ test("flattenCommand: if/for/while/case are exotic", async () => {
 test("flattenCommand: parse error (here-string) returns null", async () => {
   const flat = await flattenCommand(`cat <<< /h/.claude/plans/x`);
   assertEquals(flat, null);
+});
+
+test("flattenCommand: a prefix assignment sets hasAssignment and a heredoc is a marked redirect", async () => {
+  const flat = await flattenCommand("X=1 ./tool record e <<'EOF'\n{}\nEOF");
+  assertEquals(flat?.commands[0].name, "./tool");
+  assertEquals(flat?.commands[0].hasAssignment, true);
+  assertEquals(flat?.commands[0].redirects.map((r) => r.isHeredoc), [true]);
+  const plain = await flattenCommand("./tool snapshot e > out 2>/dev/null");
+  assertEquals(plain?.commands[0].hasAssignment, false);
+  assertEquals(
+    plain?.commands[0].redirects.map((r) => [r.target, r.isHeredoc]),
+    [["out", false], ["/dev/null", false]],
+  );
 });

@@ -195,6 +195,8 @@ export interface ParsedCommand {
 export interface CommandRedirect {
   target: string | null;
   isFdDup: boolean;
+  /** `<<` / `<<-`: stdin from a heredoc body, which `stripHeredocs` has removed. */
+  isHeredoc: boolean;
 }
 
 /**
@@ -213,6 +215,8 @@ export interface FlatCommand {
   args: string[];
   redirects: CommandRedirect[];
   hasExpansion: boolean;
+  /** A `VAR=value` before the name; `name` itself never carries it. */
+  hasAssignment: boolean;
 }
 
 /**
@@ -254,12 +258,14 @@ function viewCommandNode(node: any): FlatCommand {
   const redirects: CommandRedirect[] = [];
   for (const item of [...prefix, ...suffix]) {
     if (!isRedirectNode(item)) continue;
-    const opType = item.op?.type;
+    const opType = item.op?.type ?? item.type;
     redirects.push({
       target: typeof item.file?.text === "string" ? item.file.text : null,
       isFdDup: opType === "Greatand" || opType === "Lessand",
+      isHeredoc: opType === "Dless" || opType === "Dlessdash",
     });
   }
+  const hasAssignment = prefix.some((p) => p?.type === "AssignmentWord");
 
   const words = [node.name, ...prefix, ...suffix].filter(
     (w: any) => w?.type === "Word",
@@ -267,7 +273,7 @@ function viewCommandNode(node: any): FlatCommand {
   const hasExpansion = words.some(wordHasCommandExpansion);
 
   const name = typeof node.name?.text === "string" ? node.name.text : null;
-  return { name, args, redirects, hasExpansion };
+  return { name, args, redirects, hasExpansion, hasAssignment };
 }
 
 function walkFlatten(

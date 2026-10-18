@@ -311,7 +311,7 @@ Append main-session observations, verbatim independent reviewer output when used
 
 ## DECOMPOSE
 
-The main session initializes the evidence sidecar JSON and, when available, mirrors tasks with Codex `update_plan`. If that tool is unavailable, the sidecar remains authoritative; report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE.
+The main session initializes the evidence sidecar JSON and, when available, mirrors tasks with Codex `update_plan`. If that tool is unavailable, the sidecar remains authoritative; report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE. An Autonomous Verification bullet is one argv (`$impl` records it with `plan-state.ts run`), so a criterion that needs two commands is two bullets, and a pipe is written as `--grep` or `--tail`. A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task's `rerun` skips checks already passing at the current target.
 
 ### update_plan constraints
 

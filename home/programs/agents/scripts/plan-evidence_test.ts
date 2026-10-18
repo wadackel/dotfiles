@@ -26,6 +26,18 @@ async function fixture(test: (path: string) => Promise<void>) {
   try {
     process.env.HOME = temp;
     await mkdir(`${temp}/.codex/plans`, { recursive: true });
+    await mkdir(`${temp}/.claude`, { recursive: true });
+    // The helper's own argv guard reads HOME's settings whenever they exist;
+    // the test argv is Bun itself, plus the path the ENOENT test starts.
+    await writeFile(
+      `${temp}/.claude/settings.json`,
+      JSON.stringify({
+        permissions: {
+          allow: [`Bash(${process.execPath} *)`, "Bash(/nonexistent/*)"],
+          deny: ["Bash(git push -f origin main)"],
+        },
+      }),
+    );
     await mkdir(`${temp}/repo`);
     process.chdir(`${temp}/repo`);
     for (
@@ -153,7 +165,7 @@ test("non-empty low-risk work completes with explicit main-session review eviden
   });
 });
 
-test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS", async () => {
+test("content, untracked, mode, symlink and plan changes invalidate a PASS; commit and stage do not", async () => {
   await fixture(async (path) => {
     await declare(path);
     await record(path);
@@ -169,15 +181,13 @@ test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS",
             path.replace(".evidence.json", ".md"),
             "new acceptance\n",
           ),
-        async () => {
-          await runCommand("git", ["add", "main.txt"]);
-        },
         () => chmod("main.txt", 0o755),
         async () => {
           await writeFile("ita.txt", "intended\n");
           await runCommand("git", ["add", "-N", "ita.txt"]);
         },
         () => writeFile("ita.txt", "intended later\n"),
+        () => symlink("ita.txt", "link.txt"),
         () => rm("main.txt"),
       ]
     ) {
@@ -192,13 +202,17 @@ test("uncommitted, staged, untracked, modes and plan changes invalidate a PASS",
       await record(path);
       await run(["complete", path, "task-1"]);
     }
+    const before = await target(path);
+    await writeFile("ita.txt", await readFile("ita.txt"));
+    assertEquals(await target(path), before);
+    await runCommand("git", ["add", "-A"]);
+    assertEquals(await target(path), before);
     assertEquals(
-      (await runCommand("git", ["checkout", "--", "main.txt"])).code,
+      (await runCommand("git", ["commit", "-qm", "same tree"])).code,
       0,
     );
-    const before = await target(path);
-    await writeFile("main.txt", await readFile("main.txt"));
     assertEquals(await target(path), before);
+    await run(["complete", path, "task-1"]);
   });
 });
 
@@ -357,11 +371,21 @@ test("plan identity, initialization and writer locks preserve existing evidence"
       "already exists",
     );
     await writeFile(`${path}.lock`, "another writer");
-    await assertRejects(
-      () => run(["complete", path, "task-1"]),
-      Error,
-      "locked",
+    // The wait is read once per process at module load, so the override goes
+    // to the CLI child; in-process `run` would wait the default 10 s here.
+    const result = await runCommand(
+      join(import.meta.dirname, "plan-state.ts"),
+      ["complete", path, "task-1"],
+      {
+        env: {
+          PLAN_STATE_LOCK_WAIT_MS: "200",
+          BUN_RUNTIME_TRANSPILER_CACHE_PATH:
+            `${REAL_HOME}/Library/Caches/bun/@t@`,
+        },
+      },
     );
+    assertEquals(result.code, 1);
+    assertEquals(result.stderr.includes("locked"), true, result.stderr);
     assertEquals(await readFile(path, "utf8"), original);
     await rm(`${path}.lock`);
     const data = JSON.parse(original);
@@ -405,18 +429,37 @@ test("live expected artifact is independently hashed and checked again at comple
   });
 });
 
-test("snapshot rejects tracked paths redirected outside the repository", async () => {
+test("a tracked directory replaced by a symlink changes the target and nothing outside is read", async () => {
   await fixture(async (path) => {
     await mkdir("nested");
     await writeFile("nested/value.txt", "local");
     await runCommand("git", ["add", "nested/value.txt"]);
+    const before = await target(path);
     await rename("nested", "../external");
     await symlink("../external", "nested");
-    await assertRejects(() => target(path), Error, "escapes repository");
+    const after = await target(path);
+    assertEquals(after === before, false);
+    await writeFile("../external/value.txt", "changed outside");
+    assertEquals(await target(path), after);
   });
 });
 
-test("final gate rejects missing verdicts and observations from a prior generation", async () => {
+test("snapshot works when .git/objects is read-only and keeps its objects next to the sidecar", async () => {
+  await fixture(async (path) => {
+    await chmod(".git/objects", 0o555);
+    try {
+      const before = await target(path);
+      await writeFile("main.txt", "read-only objects\n");
+      assertEquals(await target(path) === before, false);
+    } finally {
+      await chmod(".git/objects", 0o755);
+    }
+    const objects = path.replace(/\.evidence\.json$/, ".objects");
+    assertEquals((await stat(objects)).isDirectory(), true);
+  });
+});
+
+test("final completion needs every record at the current target and names what changed; a legacy gate field is dropped", async () => {
   await fixture(async (path) => {
     await run(
       ["require", path, "task-1"],
@@ -458,41 +501,28 @@ test("final gate rejects missing verdicts and observations from a prior generati
     }
     await record(path, { id: "audit" }, "task-2");
     await record(path, { id: "generic" }, "task-2");
-    await assertRejects(
-      () => run(["complete", path, "task-2"]),
-      Error,
-      "fresh final-gate",
-    );
-    await record(path, { expected: "runtime-v1", observed: "runtime-v1" });
     await run(["complete", path, "task-2"]);
     await run(["start", path, "task-2"]);
+    await run(["complete", path, "task-2"]);
+    await writeFile("main.txt", "after the review\n");
     await assertRejects(
       () => run(["complete", path, "task-2"]),
       Error,
-      "fresh final-gate",
+      "changed since the record: main.txt; observe it again and record",
     );
-  });
-});
-
-test("a verification begun before a new gate cannot be recorded into it", async () => {
-  await fixture(async (path) => {
-    await declare(path);
-    await record(path);
-    await run(["complete", path, "task-1"]);
-    await run(["start", path, "task-2"]);
-    await run(
-      ["require", path, "task-2"],
-      input([{ id: "audit", kind: "audit" }]),
-    );
-    const previous = await target(path);
-    await run(["start", path, "task-2"]);
-    await assertRejects(
-      () => record(path, { id: "audit", target: previous }, "task-2"),
-      Error,
-      "target changed",
-    );
+    await record(path, { expected: "runtime-v1", observed: "runtime-v1" });
     await record(path, { id: "audit" }, "task-2");
-    await run(["complete", path, "task-1"]);
+    await record(path, { id: "generic" }, "task-2");
+    await run(["complete", path, "task-2"]);
+    const raw = JSON.parse(await readFile(path, "utf8"));
+    raw.gate = "legacy-generation";
+    raw.tasks[0].checks[0].gate = "legacy-generation";
+    await writeFile(path, JSON.stringify(raw));
+    await run(["start", path, "task-2"]);
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.gate, undefined);
+    assertEquals(data.tasks[0].checks[0].gate, undefined);
+    await run(["complete", path, "task-2"]);
   });
 });
 
@@ -614,5 +644,536 @@ test("coverage rejects a bullet declared with another check kind", async () => {
       Error,
       "cc-1: file-state for [live]",
     );
+  });
+});
+
+// --- run ---
+//
+// The argv is executed without a shell, so these tests drive the Bun binary
+// itself (`process.execPath -e …`) instead of relying on `node` or `true`.
+
+const BUN = process.execPath;
+const CLI = join(import.meta.dirname, "plan-state.ts");
+const CLI_ENV = {
+  BUN_RUNTIME_TRANSPILER_CACHE_PATH: `${REAL_HOME}/Library/Caches/bun/@t@`,
+};
+
+async function lastCheck(path: string, id = "behavior") {
+  const data = JSON.parse(await readFile(path, "utf8"));
+  const checks = data.tasks[0].checks as Record<string, unknown>[];
+  return checks.filter((c) => c.id === id).at(-1)!;
+}
+
+test("run records pass, fail and --expect-exit with argv, exit and tree", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--",
+        BUN,
+        "-e",
+        "console.log('ok')",
+      ]),
+      0,
+    );
+    let check = await lastCheck(path);
+    assertEquals(check.status, "pass");
+    assertEquals(check.argv, [BUN, "-e", "console.log('ok')"]);
+    assertEquals(check.exit, 0);
+    assertEquals(check.expectExit, 0);
+    assertEquals(check.output, "ok\n");
+    assertEquals(typeof check.tree, "string");
+    assertEquals(typeof check.durationMs, "number");
+    assertEquals(check.cwd, process.cwd());
+    assertEquals(check.target, await target(path));
+    await run(["complete", path, "task-1"]);
+
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--",
+        BUN,
+        "-e",
+        "process.exit(3)",
+      ]),
+      1,
+    );
+    check = await lastCheck(path);
+    assertEquals(check.status, "fail");
+    assertEquals(check.exit, 3);
+    await assertRejects(() => run(["complete", path, "task-1"]), Error, "fail");
+
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--expect-exit",
+        "3",
+        "--",
+        BUN,
+        "-e",
+        "process.exit(3)",
+      ]),
+      0,
+    );
+    check = await lastCheck(path);
+    assertEquals(check.status, "pass");
+    assertEquals(check.expectExit, 3);
+    await run(["complete", path, "task-1"]);
+  });
+});
+
+test("run stores (no output) for a silent command and truncates a long output", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await run(["run", path, "task-1", "behavior", "--", BUN, "-e", "void 0"]);
+    assertEquals((await lastCheck(path)).output, "(no output)");
+    await run([
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      BUN,
+      "-e",
+      "process.stdout.write('x'.repeat(21000))",
+    ]);
+    const check = await lastCheck(path);
+    assertEquals(check.truncated, true);
+    const output = check.output as string;
+    assertEquals(output.length < 21000, true);
+    assertEquals(output.includes("chars omitted"), true);
+    assertEquals(output.startsWith("x".repeat(4096)), true);
+    assertEquals(output.endsWith("x".repeat(16384)), true);
+  });
+});
+
+test("run prints one status line and then the tail or the grep matches", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    const program = "for (let i = 0; i < 30; i++) console.log('line' + i)";
+    const tail = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--tail",
+      "3",
+      "--",
+      BUN,
+      "-e",
+      program,
+    ], { env: CLI_ENV });
+    assertEquals(tail.code, 0, tail.stderr);
+    const lines = tail.stdout.trimEnd().split("\n");
+    assertEquals(
+      /^pass behavior exit=0 \d+ms mutated=0$/.test(lines[0]),
+      true,
+      lines[0],
+    );
+    assertEquals(lines.slice(1), ["line27", "line28", "line29"]);
+    const grep = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--grep",
+      "line2[0-9]",
+      "--",
+      BUN,
+      "-e",
+      program,
+    ], { env: CLI_ENV });
+    assertEquals(grep.stdout.trimEnd().split("\n").slice(1).length, 10);
+  });
+});
+
+test("run refuses live checks, a nested helper, an unsafe env key and a cwd outside the repository before spawning", async () => {
+  await fixture(async (path) => {
+    await declare(path, "task-1", "live");
+    await assertRejects(
+      () => run(["run", path, "task-1", "behavior", "--", BUN, "-e", "void 0"]),
+      Error,
+      "use record",
+    );
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "local", kind: "file-state" }]),
+    );
+    await assertRejects(
+      () =>
+        run([
+          "run",
+          path,
+          "task-1",
+          "local",
+          "--",
+          CLI,
+          "run",
+          path,
+          "task-1",
+          "local",
+          "--",
+          BUN,
+          "-e",
+          "",
+        ]),
+      Error,
+      "may not invoke plan-state.ts",
+    );
+    await assertRejects(
+      () =>
+        run([
+          "run",
+          path,
+          "task-1",
+          "local",
+          "--env",
+          "GIT_SSH_COMMAND=x",
+          "--",
+          BUN,
+          "-e",
+          "",
+        ]),
+      Error,
+      "not allowed",
+    );
+    await assertRejects(
+      () =>
+        run([
+          "run",
+          path,
+          "task-1",
+          "local",
+          "--cwd",
+          "..",
+          "--",
+          BUN,
+          "-e",
+          "",
+        ]),
+      Error,
+      "inside the repository",
+    );
+    await assertRejects(
+      () => run(["run", path, "task-1", "local", BUN, "-e", "void 0"]),
+      Error,
+      "-- <command>",
+    );
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].checks, undefined);
+  });
+});
+
+test("run records mutated paths, --expect-unchanged fails on a mutation, and a changed argv is noted", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--",
+        BUN,
+        "-e",
+        "require('node:fs').writeFileSync('gen.txt', 'g')",
+      ]),
+      0,
+    );
+    let check = await lastCheck(path);
+    assertEquals(check.mutated, ["gen.txt"]);
+    assertEquals(check.target, await target(path));
+    await run(["complete", path, "task-1"]);
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--expect-unchanged",
+        "--",
+        BUN,
+        "-e",
+        "require('node:fs').writeFileSync('gen2.txt', 'g')",
+      ]),
+      1,
+    );
+    check = await lastCheck(path);
+    assertEquals(check.status, "fail");
+    assertEquals(check.expectUnchanged, true);
+    assertEquals(check.mutated, ["gen2.txt"]);
+    const changed = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      BUN,
+      "-e",
+      "console.log(1)",
+    ], { env: CLI_ENV });
+    assertEquals(
+      changed.stdout.includes("supersedes previous argv"),
+      true,
+      changed.stdout,
+    );
+  });
+});
+
+test("record rejects the fields only run writes", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    for (
+      const field of [{ argv: ["x"] }, { tree: "abc" }, { exit: 0 }, {
+        mutated: [],
+      }]
+    ) {
+      await assertRejects(() => record(path, field), Error, "written by run");
+    }
+  });
+});
+
+test("two runs appending at the same time are both recorded", async () => {
+  await fixture(async (path) => {
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "a", kind: "file-state" }, { id: "b", kind: "file-state" }]),
+    );
+    const program = "await new Promise((r) => setTimeout(r, 300))";
+    const results = await Promise.all(
+      ["a", "b"].map((id) =>
+        runCommand(CLI, ["run", path, "task-1", id, "--", BUN, "-e", program], {
+          env: CLI_ENV,
+        })
+      ),
+    );
+    for (const r of results) assertEquals(r.code, 0, r.stderr);
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].checks.map((c: { id: string }) => c.id).sort(), [
+      "a",
+      "b",
+    ]);
+  });
+});
+
+// --- rerun ---
+
+test("rerun skips fresh checks, re-executes stale and failed ones once per argv, lists record-made checks, keeps --expect-unchanged, and fails when a rerun fails", async () => {
+  await fixture(async (path) => {
+    await run(
+      ["require", path, "task-1"],
+      // u comes first: it rewrites a file, and a mutating check re-executed
+      // after the others would leave their fresh records at an older tree.
+      input([
+        { id: "u", kind: "file-state" },
+        { id: "a", kind: "file-state" },
+        { id: "b", kind: "file-state" },
+      ]),
+    );
+    await run(["start", path, "task-2"]);
+    await run(
+      ["require", path, "task-2"],
+      input([{ id: "c", kind: "file-state" }, {
+        id: "generic",
+        kind: "review",
+      }]),
+    );
+    const count = "require('node:fs').appendFileSync('count.txt', 'x')";
+    await run(["run", path, "task-1", "a", "--", BUN, "-e", count]);
+    await run(["run", path, "task-1", "b", "--", BUN, "-e", count]);
+    await run([
+      "run",
+      path,
+      "task-1",
+      "u",
+      "--expect-unchanged",
+      "--",
+      BUN,
+      "-e",
+      "require('node:fs').writeFileSync('u.txt', Date.now().toString())",
+    ]);
+    await run(["run", path, "task-2", "c", "--", BUN, "-e", "process.exit(2)"]);
+    await record(path, { id: "generic" }, "task-2");
+    assertEquals(await readFile("count.txt", "utf8"), "xx");
+
+    await writeFile("main.txt", "stale now\n");
+    const first = await runCommand(CLI, ["rerun", path], { env: CLI_ENV });
+    assertEquals(first.code, 1, first.stderr);
+    const rows = first.stdout.trimEnd().split("\n");
+    assertEquals(rows[0], "| task | check | status | exit | mutated |");
+    const cell = (check: string) =>
+      rows.find((r) => r.includes(`| ${check} |`))!;
+    assertEquals(/\| a \| pass \| 0 \| 1 \|/.test(cell("a")), true, cell("a"));
+    assertEquals(/\| b \| pass \| 0 \| 1 \|/.test(cell("b")), true, cell("b"));
+    assertEquals(/\| u \| fail \| 0 \| 1 \|/.test(cell("u")), true, cell("u"));
+    assertEquals(/\| c \| fail \| 2 \| 0 \|/.test(cell("c")), true, cell("c"));
+    assertEquals(
+      /\| generic \| skipped \(record\) \| - \| 0 \|/.test(cell("generic")),
+      true,
+      cell("generic"),
+    );
+    assertEquals(await readFile("count.txt", "utf8"), "xxx");
+    const data = JSON.parse(await readFile(path, "utf8"));
+    const u = data.tasks[0].checks.filter((c: { id: string }) => c.id === "u")
+      .at(-1);
+    assertEquals(u.expectUnchanged, true);
+    assertEquals(u.mutated, ["u.txt"]);
+
+    await run([
+      "run",
+      path,
+      "task-2",
+      "c",
+      "--expect-exit",
+      "2",
+      "--",
+      BUN,
+      "-e",
+      "process.exit(2)",
+    ]);
+    await run(["run", path, "task-1", "u", "--", BUN, "-e", "void 0"]);
+    const second = await runCommand(CLI, ["rerun", path], { env: CLI_ENV });
+    assertEquals(second.code, 0, second.stderr);
+    for (const check of ["a", "b", "u", "c"]) {
+      const row = second.stdout.split("\n").find((r) =>
+        r.includes(`| ${check} |`)
+      )!;
+      assertEquals(row.includes("| fresh |"), true, row);
+    }
+    assertEquals(await readFile("count.txt", "utf8"), "xxx");
+  });
+});
+
+test("the helper itself refuses an argv a direct Bash call could not run, before spawning, with CLAUDECODE cleared", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    const guarded = { ...CLI_ENV, CLAUDECODE: "" };
+    const denied = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      "git",
+      "push",
+      "-f",
+      "origin",
+      "main",
+    ], { env: guarded });
+    assertEquals(denied.code, 1);
+    assertEquals(
+      denied.stderr.includes("permissions.deny"),
+      true,
+      denied.stderr,
+    );
+    const wrapped = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      "timeout",
+      "9",
+      "git",
+      "push",
+      "-f",
+      "origin",
+      "main",
+    ], { env: guarded });
+    assertEquals(wrapped.code, 1);
+    assertEquals(wrapped.stderr.includes("wrapper"), true, wrapped.stderr);
+    const unlisted = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      "rm",
+      "-rf",
+      "/tmp/nope",
+    ], { env: guarded });
+    assertEquals(unlisted.code, 1);
+    assertEquals(
+      unlisted.stderr.includes("not in permissions.allow"),
+      true,
+      unlisted.stderr,
+    );
+    const allowed = await runCommand(CLI, [
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--",
+      BUN,
+      "-e",
+      "void 0",
+    ], { env: guarded });
+    assertEquals(allowed.code, 0, allowed.stderr);
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].checks.length, 1);
+    await run(
+      ["require", path, "task-1"],
+      input([{ id: "r", kind: "file-state" }]),
+    );
+    await run(["run", path, "task-1", "r", "--", BUN, "-e", "void 0"]);
+    const raw = JSON.parse(await readFile(path, "utf8"));
+    raw.tasks[0].checks.at(-1).argv = ["git", "push", "-f", "origin", "main"];
+    raw.tasks[0].checks.at(-1).target = "stale";
+    await writeFile(path, JSON.stringify(raw));
+    const rerun = await runCommand(CLI, ["rerun", path], { env: guarded });
+    assertEquals(rerun.code, 1);
+    assertEquals(rerun.stderr.includes("permissions.deny"), true, rerun.stderr);
+  });
+});
+
+test("run validates --grep before spawning and records a missing command as a failure", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await assertRejects(
+      () =>
+        run([
+          "run",
+          path,
+          "task-1",
+          "behavior",
+          "--grep",
+          "(",
+          "--",
+          BUN,
+          "-e",
+          "void 0",
+        ]),
+      Error,
+      "invalid regular expression",
+    );
+    assertEquals(
+      JSON.parse(await readFile(path, "utf8")).tasks[0].checks,
+      undefined,
+    );
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--",
+        "/nonexistent/command-xyz",
+      ]),
+      1,
+    );
+    const check = await lastCheck(path);
+    assertEquals(check.status, "fail");
+    assertEquals(check.exit, 127);
+    assertEquals(String(check.output).startsWith("cannot start"), true);
   });
 });

@@ -373,22 +373,31 @@ export type EvidenceStats = {
   statusChangedIds: number;
   distinctTargets: number;
   outputChars: number;
+  /** Records written by `plan-state.ts run` (they carry `argv`). */
+  runRecords: number;
 };
 
 export function evidenceStats(ev: unknown): EvidenceStats {
   const tasks = ((ev as { tasks?: unknown }).tasks ?? []) as Array<
     {
       checks?: Array<
-        { id?: string; status?: string; target?: string; output?: string }
+        {
+          id?: string;
+          status?: string;
+          target?: string;
+          output?: string;
+          argv?: unknown;
+        }
       >;
     }
   >;
   const perId = new Map<string, { n: number; statuses: Set<string> }>();
   const targets = new Set<string>();
-  let records = 0, outputChars = 0;
+  let records = 0, outputChars = 0, runRecords = 0;
   for (const t of Array.isArray(tasks) ? tasks : []) {
     for (const c of t.checks ?? []) {
       records++;
+      if (Array.isArray(c.argv)) runRecords++;
       outputChars += (c.output ?? "").length;
       if (c.target) targets.add(c.target);
       const e = perId.get(c.id ?? "") ?? { n: 0, statuses: new Set<string>() };
@@ -405,6 +414,7 @@ export function evidenceStats(ev: unknown): EvidenceStats {
       [...perId.values()].filter((e) => e.statuses.size > 1).length,
     distinctTargets: targets.size,
     outputChars,
+    runRecords,
   };
 }
 
@@ -632,6 +642,7 @@ export function buildReport(input: Inputs) {
         0,
       ),
       outputCharsMedian: median(input.evidence.map((e) => e.outputChars)),
+      runRecords: input.evidence.reduce((a, e) => a + e.runRecords, 0),
     },
     questions: {
       segments: handed.length,

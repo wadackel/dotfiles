@@ -11,7 +11,7 @@ Two modes. **Plan mode** (default under `/impl`): the plan path from `## Plan re
 
 - Baseline: the first task's `baseline_sha` from the evidence file, or the given sha.
 - Write `git diff <baseline>..HEAD` once to `~/.claude/plans/<slug>.gate.diff` (`<scratchpad>/<timestamp>.gate.diff` when no plan; the hook matches the `.gate.diff` suffix) and list changed files with `--name-only`. Reviewers read the file concurrently.
-- Plan mode: `~/.agents/scripts/plan-state.ts coverage <evidence>` (the plan sits next to the sidecar). Exit 1 lists Autonomous Verification bullets with no `cc-<n>` check; declare the missing checks or run the missing verification before dispatching anyone. Then `reconcile` reopens tasks whose evidence went stale.
+- Plan mode: `~/.agents/scripts/plan-state.ts coverage <evidence>` (the plan sits next to the sidecar). Exit 1 lists Autonomous Verification bullets with no `cc-<n>` check; declare the missing checks or run the missing verification before dispatching anyone. Then `~/.agents/scripts/plan-state.ts rerun <evidence>` (background, long timeout) re-executes the stale and failed `run` checks, and rows marked `skipped (record)` are re-taken by hand; only then `reconcile`, which reopens the tasks whose evidence is still stale, and each reopened task is `complete`d again once its records are current, because the final `complete` refuses while an implementation task is open.
 
 ## 2. Select reviewers
 
@@ -40,7 +40,7 @@ Each reviewer has three rounds counting both forms; a re-dispatch caused only by
 
 ## 5. Close the evidence (plan mode)
 
-On the final task (`Final Audit + Review`): `start` it if not started, `require` one `review` check per wave (`{"id":"review-<n>","kind":"review"}`), `snapshot`, then `record` with `command` naming the reviewers and the sidecar round and `output` of exactly `### MUST_FIX\n- None\nVERDICT: PASS`. Then `plan-state.ts complete <evidence> <final task id>`. A rejection (`stale verification`, `fresh final-gate evidence required`, `missing verification`) names the task and check to redo; redo it and record again rather than editing the sidecar.
+On the final task (`Final Audit + Review`): `start` it if not started, `require` one `review` check per wave (`{"id":"review-<n>","kind":"review"}`), `snapshot` for the current target, then `record` with that `target`, `command` naming the reviewers and the sidecar round, and `output` of exactly `### MUST_FIX\n- None\nVERDICT: PASS`. Then `plan-state.ts complete <evidence> <final task id>`: it requires every task's latest record at the current target. A rejection (`stale verification` with the paths that changed since the record, `missing verification`) names the task and check to redo; `run` it again or re-observe and `record`, rather than editing the sidecar.
 
 ## 6. Record and reply
 

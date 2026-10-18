@@ -57,7 +57,7 @@ Triage every finding, including those attached to `CONVERGED`: apply it inline w
 
 ## DECOMPOSE
 
-One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task with `addBlockedBy`); the evidence sidecar is the record either way. Then initialize the evidence sidecar, subjects in task order and the last one literally `Final Audit + Review`:
+One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one argv (`/impl` records it with `plan-state.ts run`), so a criterion that needs two commands is two bullets, and a pipe is written as `--grep` or `--tail`. A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task's `rerun` skips checks already passing at the current target. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task with `addBlockedBy`); the evidence sidecar is the record either way. Then initialize the evidence sidecar, subjects in task order and the last one literally `Final Audit + Review`:
 
 ```
 ~/.agents/scripts/plan-state.ts init ~/.claude/plans/<basename>.evidence.json <basename>.md '["<task 1>", …, "Final Audit + Review"]'

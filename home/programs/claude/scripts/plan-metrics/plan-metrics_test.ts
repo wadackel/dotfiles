@@ -923,6 +923,7 @@ test("evidenceStats counts records per id, distinct targets, status changes and 
             target: "bbb",
             command: "c",
             output: "x",
+            argv: ["bun", "test", "x"],
           },
         ],
       },
@@ -936,6 +937,7 @@ test("evidenceStats counts records per id, distinct targets, status changes and 
   assertEquals(s.statusChangedIds, 1);
   assertEquals(s.distinctTargets, 2);
   assertEquals(s.outputChars, 10);
+  assertEquals(s.runRecords, 1);
 });
 
 test("median returns the middle value and NaN for an empty list", () => {
