@@ -60,16 +60,16 @@ const INTERVIEW_RULE_NEEDLES = [
   "A question that depends on an open answer or an in-flight investigation waits.",
   "The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.",
   "The question is the last content in the turn; end the turn and do not advance until the answer arrives.",
-  "Do not pack multiple questions into one message just because the format allows it.",
+  "independent questions whose prerequisites are all settled go in one message",
   "**Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.",
   "Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back.",
   "When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready.",
   "<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>",
   "When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.",
   // Pinned on its own so the carve-out cannot be dropped while the rule survives.
-  "Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.",
+  "Desired behavior, design decisions, priority, success criteria, and risk tolerance never fall under this rule — they are asked.",
   "Facts can be inferred from observation; user intent cannot.",
-  "A reasonable default does not turn it into an assumption",
+  "a scope boundary takes the recommendation as a `user-overridden: default` assumption",
   "choose an assumption / proceed as-is / continue clarifying / scope out",
 ];
 const INTERVIEW_LEGACY_NEEDLES = [
@@ -145,6 +145,16 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
   ["秘密情報・認証", [HUMAN_REVIEW]],
   ["外部への書き込み・送信", [HUMAN_REVIEW]],
   ["取り消せない操作", [HUMAN_REVIEW]],
+  ["user-overridden: default", [
+    CONTRACT,
+    INTERVIEW,
+    CRITIC_PROMPT,
+    CLAUDE_PLAN,
+    CODEX_PLAN,
+  ]],
+  ["Round N: critic", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
+  ["| # | Finding | Kind | Action |", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
+  ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
 ];
 // Only the plan skills have a `references/` that links to the shared
 // directory; gate and the impl skills must name the public path, or a bare

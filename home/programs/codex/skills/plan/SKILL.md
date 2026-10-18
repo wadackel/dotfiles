@@ -130,10 +130,10 @@ If any `User decision` remains, create no plan file, evidence sidecar, or pendin
 Each clarification pass:
 
 1. **Step A Walk**: Walk the 8 observations: Why, What, Who, When, Where, How, Success, Failure. Apply prior answers, then identify NotClear items. Restate is not a substitute for Ask.
-2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice.
-3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice, except a scope boundary, which `references/interview.md` lets `$plan` adopt as `user-overridden: default`.
+3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` (a `[Direct]` one followed by `→ <output excerpt>`) per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
 4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
-5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask the highest-impact decision; batch only independent questions if the available tool supports it. A question that depends on another open answer waits. Every question must include a recommended answer and short rationale. For text-only continuation, immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
+5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask the highest-impact decision; batch only independent questions if the available tool supports it, and in text-only continuation bundle them per `references/interview.md`. A question that depends on another open answer waits. Every question must include a recommended answer and short rationale. For text-only continuation, immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
 6. **Step F Wait**: Wait for required answers; continue independent work if the question tool allows it. For text-only continuation, say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn without executing dependent work.
 7. **Step G Answer handling**: Best-effort attach a natural-language next-turn answer to the latest `.clarifying-<cwd-hash>.json`. For guaranteed continuation, use `$plan --answer <answer>`. If the user chooses the recommended answer, record it. If the user explicitly says to proceed with a stated assumption, record user-judgment-bound observation in `### Assumptions` with `user-overridden: true`. Empty or ambiguous answers become re-Ask triggers.
 8. **Step H Cleanup**: When the clarity gate is satisfied, delete the marker and continue to EXPLORE. After successful plan creation, delete `.clarifying-<cwd-hash>.json`. If a new non-clarifying `$plan <request>` succeeds, also delete any old clarifying marker.
@@ -146,7 +146,7 @@ Convergence conditions, any one:
 
 ### AGREE output
 
-Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>` per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`, per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
 
 ## EXPLORE
 
@@ -223,7 +223,7 @@ For PoC work, state the successful primary path and stopping condition so Goal d
 
 After writing the body, state the plan path, the section headings, and the key design decisions in at most 3 lines in the user's configured language, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job. For trivial plans (DEEPEN skipped), the ACTIVATE Approval Summary and the `$impl` approval gate are the review surface.
 
-Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN as rows of the Round 1 triage table; for a trivial plan (no DEEPEN) carry them into the Approval Summary as one `Lint:` line.
+Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN as the `Lint:` line under the round line, not as rows of the `| # | Finding | Kind | Action |` table; for a trivial plan (no DEEPEN) carry them into the Approval Summary as one `Lint:` line.
 
 Keep the plan body lightweight (target ~120-180 lines, excluding the Deepening Log).
 
@@ -295,7 +295,7 @@ The Critic returns `CONVERGED` or `ITERATE` immediately after `### Verdict`, and
 - Resolve FALSIFIED claims before activation. For UNVERIFIED claims the approach depends on, obtain evidence or revise the approach to remove that dependency; a favorable verdict does not clear them.
 - Return consequential user-intent decisions to AGREE. Do not invent agreement from a reviewer's recommendation.
 
-Use one review round by default. A finding requiring structural revision or a test-coverage veto earns one more round; honor an explicit `--max-rounds` within a cap of five. Reuse the same reviewer for fixes and rechecks, supplying the updated artifact and relevant changes. Obtain a current review after substantive plan changes. At the limit, leave actual blockers unresolved and report them; do not convert exhaustion into approval.
+Use one review round by default. A Test Coverage veto earns one more round; an explicit `--max-rounds` allows more, within a cap of five, regardless of the verdict. Reuse the same reviewer for fixes and rechecks, supplying the updated artifact and relevant changes. Obtain a current review after substantive plan changes. At the limit, leave actual blockers unresolved and report them; do not convert exhaustion into approval.
 
 ### Review lifecycle
 
@@ -307,7 +307,7 @@ Collect only consequential user decisions from the review and follow AGREE's que
 
 ### Deepening Log artifact
 
-Append main-session observations, verbatim independent reviewer output when used, and finding resolutions to `<plan-basename>.log.md`. Redact credentials. Start entries with `### Round N`; distinguish main and independent review. Record the agent and current target for any follow-up. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
+Append main-session observations, verbatim independent reviewer output when used, and finding resolutions to `<plan-basename>.log.md`. Redact credentials. Start entries with `### Round N`, followed by the `Round N: critic` or `Round N: main review` line, the `Lint:` line, and the `| # | Finding | Kind | Action |` table that `references/contract.md` fixes; distinguish main and independent review. Record the agent and current target for any follow-up. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
 
 ## DECOMPOSE
 
@@ -380,7 +380,7 @@ Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` ca
 The user must be able to decide whether to approve `$impl` from a compact Approval Summary. Include:
 
 - **Overview**: intended outcome and non-goals.
-- **Approach**: key decisions, constraints, and implementation discretion.
+- **Approach**: key decisions, constraints, and implementation discretion; assumptions marked `user-overridden: default` are listed as 仮置き.
 - **Files to Change**: affected components and representative paths.
 - **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation, each stated as the fact to be established rather than a command, closed by one sentence that once they pass the change can be accepted without reading the diff, apart from the Human Review items.
 - **Human Review**: the Files to Change entries that meet `references/human-review.md`, one line each with the label and what changes, or none.

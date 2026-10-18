@@ -183,7 +183,36 @@ test("graded Self-resolved entries pass in every accepted shape", async () => {
   ]);
   const r = await runOn(plan({ extra }));
   assertEquals(r.code, 0, r.stdout + r.stderr);
-  assertStringIncludes(r.stdout, "0 errors, 0 warnings");
+  // Nine [Direct] entries carry no → excerpt; the last one does.
+  assertStringIncludes(r.stdout, "0 errors, 9 warnings");
+});
+
+test("a [Direct] without an output excerpt is a warning, with one it is clean, and an unbacked one is an error only", async () => {
+  const bare = await runOn(plan({
+    extra: selfResolved([
+      "- observation: a / value: b / source: [Direct] rg -n foo bar.md",
+    ]),
+  }));
+  assertEquals(bare.code, 0, bare.stdout + bare.stderr);
+  assertStringIncludes(
+    bare.stdout,
+    "[warn] direct-excerpt: [Direct] has no → <output excerpt>; the critic re-runs the probe",
+  );
+  assertStringIncludes(bare.stdout, "0 errors, 1 warnings");
+  const quoted = await runOn(plan({
+    extra: selfResolved([
+      "- observation: a / value: b / source: [Direct] rg -n foo bar.md → 12:foo",
+    ]),
+  }));
+  assertEquals(quoted.code, 0, quoted.stdout + quoted.stderr);
+  assertStringIncludes(quoted.stdout, "0 errors, 0 warnings");
+  const unbacked = await runOn(plan({
+    extra: selfResolved([
+      "- observation: a / value: b / source: [Direct] I read it",
+    ]),
+  }));
+  assertEquals(unbacked.code, 1);
+  assertStringIncludes(unbacked.stdout, "1 errors, 0 warnings");
 });
 
 test("missing source, missing grade, [Unknown], unbacked [Direct], bare [Supported], and an unknown grade are errors", async () => {
@@ -211,7 +240,7 @@ test("missing source, missing grade, [Unknown], unbacked [Direct], bare [Support
   );
   assertStringIncludes(
     r.stdout,
-    "[error] self-resolved-grade: [Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts`",
+    "[error] self-resolved-grade: [Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts → 12:const limit = 5`",
   );
   assertStringIncludes(
     r.stdout,
@@ -272,7 +301,7 @@ test("an ungraded nested sub-bullet is checked on its own", async () => {
   ]);
   const r = await runOn(plan({ extra }));
   assertEquals(r.code, 1);
-  assertStringIncludes(r.stdout, "1 errors, 0 warnings");
+  assertStringIncludes(r.stdout, "1 errors, 1 warnings");
 });
 
 test("bullets inside an indented fence are ignored", async () => {

@@ -133,6 +133,8 @@ plan / impl / gate の 7 件の改善（gate レビュアーの再編、critic /
 
 ## 読み方
 
+- 2026-10-18 の P2（critic 4 次元化、問いの方針）以後の log は `### Round N` の直下に `Round N: critic …` の行と `| # | Finding | Kind | Action |` の表を持つ（contract.md）。plan-metrics はこの行があれば round をそれで区切り（逐語で貼った critic 返答の `### Round 1 evidence check` を round に数えない）、無い古い log は従来の見出しで区切る。baseline の `round2Rate` 47 は見出しの定義で取った値なので、変更後は round 行のある log だけで比べる。`rounds.kind` は Kind セルの合計（`evidence` は `form` に数える）で、baseline 時点で Kind 列を持つ log は P0 の 1 本（behavior 12 / form 6 / user 3。行の範囲が新しい定義と違うので比の基準にはせず、変更後の log が 5 本以上たまってから見る）。`critics.behaviorPerRun` は behavior 分類の件数 / critic 回数で、baseline は 183 / 143 = 1.28。veto の呼び名は「Dimension 7」から「Test Coverage veto」に変わり、分類はどちらも dim7 に数える。変更後は `--from <merge 日>` で変更後だけの窓を取って baseline の率と比べる。`round1Veto` は Round 1 の本文に veto の語があるかで、新しいプロンプトの返答は毎回「Test Coverage veto」を含むので変更後は比較に使わず、veto の有無は round 行の verdicts で読む
+
 - 比べる数字は各メモの撤回条件に対応する: critics の `withCriticalRate` と `behaviorShare`（critic の次元を 7 → 4 にして挙動の比が落ちたら戻す）、adversarial の `withFalsifiedRate` と `designQuestionsPerRun`、rounds の `round2Rate`、gates の `failRate` と `blockerByReviewer`（specialist の card 化後に comment-reviewer の FAIL が 0 なら廃止）、evidence の `targetChanged` と `statusChangedIds`（0 のままなら最終再検証は儀式だった証拠）、questions の `after.turns` と `recommendationRate`、friction の各セッション数（直しが届けば 0）
 - 窓内の critic が 10 未満なら `warnings` に 1 行出る。そのときは率の判定を保留する
 - blocker の判定は `MUST_FIX` / `CRITICAL` / `HIGH` のラベル、空でない `### Must Fix` / `### Issues` 節、`Type: MISSING|EXTRA|MISUNDERSTOOD|INCOMPLETE`、`Issue (` / `Issues:` の行形を読む。節が空かどうかは最初の行が `None` / `(none)` / `Empty if none` / `Not applicable` だけで終わるか、次の見出しかで決めるので、`None — 全要件を満たす` のような書き方は populated と読まれる。`unparsed` と同じく、形が増えたら足してから比べる

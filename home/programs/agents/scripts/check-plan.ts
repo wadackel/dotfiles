@@ -244,7 +244,19 @@ function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
       severity: "error",
       rule: "self-resolved-grade",
       message:
-        "[Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts`",
+        "[Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts → 12:const limit = 5`",
+    });
+    return;
+  }
+  // The critic reads a quoted excerpt instead of re-running the probe and
+  // re-runs when there is none, so a missing excerpt costs time, not validity.
+  if (!rest.includes("→")) {
+    findings.push({
+      line: item.no,
+      severity: "warn",
+      rule: "direct-excerpt",
+      message:
+        "[Direct] has no → <output excerpt>; the critic re-runs the probe",
     });
   }
 }

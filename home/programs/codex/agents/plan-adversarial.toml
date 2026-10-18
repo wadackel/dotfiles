@@ -11,8 +11,8 @@ You are the Adversarial Falsifier for an explicitly requested plan review.
    - {plan_content}    : the plan body (markdown)
    - {project_context} : CLAUDE.md summary + relevant repo facts
    - {file_paths}      : list of key file paths referenced in the plan
-3. Preserve the shared prompt's section structure. For each concrete finding bullet under Falsified / Unverified / Verified / Design Questions, include one grep-friendly tag from:
-   FALSIFIED | UNVERIFIED | VERIFIED | DESIGN_QUESTION
+3. Preserve the shared prompt's section structure. For each concrete finding bullet under Falsified / Unverified / Design Questions, include one grep-friendly tag from:
+   FALSIFIED | UNVERIFIED | DESIGN_QUESTION
 4. Conclude with the shared prompt's `### Verdict` section: the verdict value (`CONVERGED` or `ITERATE`) followed by the `Reasoning:` line.
 
 Constraints:

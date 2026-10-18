@@ -603,18 +603,20 @@ test("criticalItems and classifyCritical apply the ordered regex to the first 24
     "2. [TECH] Self-resolved #4 cites `x.ts:10-12` but the lines hold nothing",
     "3. [TECH] Dimension 7 MUST-check 3: no `[live]` item",
     "4. [TECH] The denylist leaks secrets into PR bodies",
+    "5. [TECH] Test Coverage veto: no test observes the hook",
     "### Improvement Suggestions (should consider)",
     "1. [TECH] rename",
     "### Verdict",
     "ITERATE",
   ].join("\n");
   const items = criticalItems(report);
-  assertEquals(items.length, 4);
+  assertEquals(items.length, 5);
   assertEquals(items.map(classifyCritical), [
     "user",
     "evidence",
     "dim7",
     "behavior",
+    "dim7",
   ]);
   assertEquals(
     criticalItems("### Critical Issues\nNone\n### Verdict\nCONVERGED").length,
@@ -670,7 +672,60 @@ test("parseDeepeningLog sees round 2, its veto origin and whether round 2 applie
     "# Deepening log\n## Round 1 (critic only; small)\nVerdict: CONVERGED.",
   );
   assertEquals(one.rounds, 1);
+  assertEquals(one.kind, { form: 0, behavior: 0, user: 0 });
   assertEquals(one.round1Veto, false);
+});
+
+test("parseDeepeningLog splits on round lines when a log has them, so a verbatim reply heading is not a round, and counts Kind cells", () => {
+  const log = [
+    "# Deepening log",
+    "### Round 1",
+    "Round 1: critic 9.0 min, Critical 2 (form 1 / behavior 1 / user 0); adversarial 4.3 min, Falsified 1, DQ 0; verdicts ITERATE / ITERATE",
+    "",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | wrong anchor | form | Applied |",
+    "| 2 | missing path | behavior | Applied |",
+    "| 3 | old vocabulary | evidence | Applied |",
+    "",
+    "#### Critic reply (verbatim)",
+    "### Round 1 evidence check record",
+    "Round 2: see the prior round",
+    "| Plan line | Probe | Result |",
+    "|---|---|---|",
+    "| 23 | user | matches |",
+    "- re-run: ok",
+    "```",
+    "Round 2: critic 1 min, Critical 1 (form 0 / behavior 1 / user 0); verdicts CONVERGED",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | quoted sample | behavior | Applied |",
+    "```",
+  ].join("\n");
+  const r = parseDeepeningLog(log);
+  // The fenced block quotes another log: neither its round line nor its Kind row counts.
+  assertEquals(r.rounds, 1);
+  assertEquals(r.kind, { form: 2, behavior: 1, user: 0 });
+  // Without a round line the heading split is the old ruler and over-counts the pasted heading.
+  const legacy = parseDeepeningLog(
+    "# log\n## Round 1\n#### reply\n### Round 1 evidence check record\nx",
+  );
+  assertEquals(legacy.rounds, 2);
+  assertEquals(legacy.kind, { form: 0, behavior: 0, user: 0 });
+  const two = parseDeepeningLog([
+    "### Round 1",
+    "Round 1: critic 5 min, Critical 1 (form 0 / behavior 1 / user 0); verdicts ITERATE",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | no [live] item: Test Coverage veto | behavior | Applied |",
+    "### Round 2",
+    "Round 2: critic 3 min, Critical 0 (form 0 / behavior 0 / user 0); verdicts CONVERGED",
+    "- Applied: y",
+  ].join("\n"));
+  assertEquals(two.rounds, 2);
+  assertEquals(two.round1Veto, true);
+  assertEquals(two.round2Applied, true);
+  assertEquals(two.kind, { form: 0, behavior: 1, user: 0 });
 });
 
 test("parseGateLog reads seven real variants, separates skipped waves, and marks unreadable logs", () => {
@@ -984,7 +1039,19 @@ test("CLI --json emits the eight groups plus window, population and unparsed; --
     ]);
     await writeFile(
       join(plans, "20261001T1900-fix-it.log.md"),
-      "# Deepening log\n## Round 1\nCritic: CONVERGED.\n",
+      [
+        "# Deepening log",
+        "### Round 1",
+        "Round 1: critic 3.0 min, Critical 1 (form 0 / behavior 1 / user 0); verdicts CONVERGED",
+        "",
+        "| # | Finding | Kind | Action |",
+        "|---|---|---|---|",
+        "| 1 | hook leaks secrets | behavior | Applied |",
+        "",
+        "#### Critic reply (verbatim)",
+        "### Round 1 evidence check record",
+        "",
+      ].join("\n"),
     );
     await writeFile(
       join(plans, "20261001T1900-fix-it.gate.log.md"),
@@ -1037,6 +1104,9 @@ test("CLI --json emits the eight groups plus window, population and unparsed; --
     assert(out.evidence.planStateShare > 0);
     assertEquals(out.gates.logs, 1);
     assertEquals(out.rounds.logs, 1);
+    assertEquals(out.rounds.round2, 0);
+    assertEquals(out.rounds.kind, { form: 0, behavior: 1, user: 0 });
+    assertEquals(out.critics.behaviorPerRun, 1);
     const q = await runCommand(scriptPath, [...base, "--list", "questions"]);
     assertEquals(q.code, 0, q.stderr);
     assertEquals(q.stdout.trim().split("\n").length, 2);

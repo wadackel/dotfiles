@@ -46,7 +46,7 @@ const USER = /\[USER\]/;
 const EVIDENCE =
   /Self-resolved|cite|citation|\[Direct\]|\[Inferred\]|\[Supported\]|probe|lines? \d+|:\d+(-\d+)?\b/i;
 const DIM7 =
-  /Dim(ension)?\s*7|MUST-check|\[live\]|Test Strategy|Requires User Confirmation|next real run/i;
+  /Dim(ension)?\s*7|Test Coverage veto|MUST-check|\[live\]|Test Strategy|Requires User Confirmation|next real run/i;
 
 /** Ordered: user → evidence → dim7 → behavior, on the item's first 240 chars. The order and the input unit are the ruler plan-metrics-baseline.md was taken with; changing either changes every later comparison. */
 export function classifyCritical(item: string): CriticalClass {
@@ -83,20 +83,76 @@ export function designQuestionCount(report: string): number {
 
 // ---- deepening log ----
 
+export type KindCount = { form: number; behavior: number; user: number };
 export type DeepeningLog = {
   rounds: number;
   round1Veto: boolean;
   round2Applied: boolean;
+  kind: KindCount;
 };
 
+// `evidence` is the vocabulary of the one log written before contract.md fixed
+// the three values, and it means form.
+const KIND_WORDS: Record<string, keyof KindCount> = {
+  form: "form",
+  behavior: "behavior",
+  user: "user",
+  evidence: "form",
+};
+
+/** Lines outside ``` fences: a log that quotes another log (a sample, a pasted
+ * reply) must not contribute its round lines or Kind rows. */
+function unfenced(text: string): string[] {
+  const out: string[] = [];
+  let inFence = false;
+  for (const line of text.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) out.push(line);
+  }
+  return out;
+}
+
+/** Cells of a Kind table only: a pasted reviewer reply carries tables of its own, and a
+ * cell that merely reads `user` in one of them must not count. */
+function countKind(lines: string[]): KindCount {
+  const kind: KindCount = { form: 0, behavior: 0, user: 0 };
+  let col = -1;
+  for (const line of lines) {
+    if (!line.startsWith("|")) {
+      col = -1;
+      continue;
+    }
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (col < 0) {
+      col = cells.indexOf("Kind");
+      continue;
+    }
+    const cell = cells[col] ?? "";
+    if (Object.hasOwn(KIND_WORDS, cell)) kind[KIND_WORDS[cell]]++;
+  }
+  return kind;
+}
+
 export function parseDeepeningLog(text: string): DeepeningLog {
-  const parts = text.split(/^#{2,3}\s*Round\s+/m).slice(1);
+  // A critic reply pasted verbatim carries "### Round 1 evidence check", so the
+  // heading split over-counts; the round line contract.md fixes is the delimiter
+  // whenever a log has one, and only logs older than it fall back to headings.
+  const lines = unfenced(text);
+  const body = lines.join("\n");
+  const byLine = body.split(/^Round \d+: (?:critic|main review)\b/m);
+  const parts = byLine.length > 1
+    ? byLine.slice(1)
+    : body.split(/^#{2,3}\s*Round\s+/m).slice(1);
   const r1 = parts[0] ?? "";
   const r2 = parts[1] ?? "";
   return {
     rounds: parts.length,
     round1Veto: /Dim(ension)?\s*7|MUST-\d|veto/i.test(r1),
     round2Applied: /Applied|^\s*\d+\.\s/m.test(r2),
+    kind: countKind(lines),
   };
 }
 
@@ -511,6 +567,9 @@ export function buildReport(input: Inputs) {
       items: items.length,
       classification,
       behaviorShare: pct(classification.behavior, items.length),
+      behaviorPerRun: critics.length
+        ? Number((classification.behavior / critics.length).toFixed(2))
+        : null,
     },
     adversarial: {
       runs: adversarial.length,
@@ -534,6 +593,14 @@ export function buildReport(input: Inputs) {
       round2Rate: pct(round2.length, input.deepening.length),
       round1Veto: round2.filter((d) => d.round1Veto).length,
       round2Applied: round2.filter((d) => d.round2Applied).length,
+      kind: input.deepening.reduce(
+        (acc, d) => ({
+          form: acc.form + d.kind.form,
+          behavior: acc.behavior + d.kind.behavior,
+          user: acc.user + d.kind.user,
+        }),
+        { form: 0, behavior: 0, user: 0 },
+      ),
     },
     gates: {
       logs: input.gates.length,

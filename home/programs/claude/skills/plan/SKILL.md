@@ -16,26 +16,26 @@ Strip a `--max-rounds=N` token (DEEPEN cap). Restate the request in one sentence
 | Level | Signals | Process |
 |---|---|---|
 | trivial | typo, comment, one config value, one-line edit | no plan file: A1, then implement inline, verify, `/gate --diff-only` |
-| small | one addition along an existing pattern, 1–3 files | plan file, one question, one critic round |
+| small | one addition along an existing pattern, 1–3 files | plan file, one question turn, one critic round |
 | medium | multi-file feature on existing conventions | plan file, interview as needed, critic + adversarial |
-| large | cross-cutting change, new architectural piece | as medium, up to five critic rounds |
+| large | cross-cutting change, new architectural piece | as medium, up to five critic rounds with `--max-rounds` |
 | xl | several subsystems | ask first whether to split into independent projects |
 
 If the request cannot be restated in one sentence, ask a clarifying question in the interview format before anything else.
 
 ## AGREE
 
-Agree on purpose and approach before drafting. One question per turn, in the format from `interview.md`; decide for yourself what a CLAUDE.md rule, a decision already made in this conversation, or the code's dominant convention already settles, and record it under `### Assumptions`.
+Agree on purpose and approach before drafting. One turn per dependency level, in the format from `interview.md`; decide for yourself what a CLAUDE.md rule, a decision already made in this conversation, or the code's dominant convention already settles, and record it under `### Assumptions`.
 
-- **A1 Direction check** (one question): the restate plus a scope or boundary question with concrete options and a marked recommendation. Never ask a bare "is this right?" yes/no. For trivial, this is the only question: it carries the restate, the one-line design, and proceed/adjust. For small and above, skip A1 when the user has stated or chosen the direction (an agent proposal the user has not answered is not settled); an adjacent candidate the probes found then goes into Files to Change when that direction covers it, otherwise under `## NOT Building` in one line. When A1 is asked, a found candidate is the scope option.
-- **A2 Re-ask** on an empty or ambiguous answer, still one question per message.
+- **A1 Direction check** (one question): the restate plus a direction or behavior question with concrete options and a marked recommendation; a scope candidate the probes found becomes a `user-overridden: default` assumption shown in the handoff marked 仮置き, not the question. Never ask a bare "is this right?" yes/no. For trivial, this is the only question: it carries the restate, the one-line design, and proceed/adjust. For small and above, skip A1 when the user has stated or chosen the direction (an agent proposal the user has not answered is not settled); an adjacent candidate the probes found then goes into Files to Change when that direction covers it, otherwise under `## NOT Building` in one line, recorded as a `user-overridden: default` assumption under `### Assumptions` and shown in the handoff marked 仮置き.
+- **A2 Re-ask** on an empty or ambiguous answer, still one turn per dependency level.
 - **A3 List approaches** only when their difference changes the user's outcome or constraints, each with its tradeoff axis in one sentence; routine reversible mechanics are chosen autonomously and listed in one line under `### Alternatives Considered`.
 - **A4 Recommend** one, with one or two sentences of reasoning.
 - **A5 Approve approach** (one question): go with recommended / pick another / modify. Skip only when A1's answer already chose the approach or A3 made no comparison.
 - **A6** Offer `/agent-browser` in a standalone message when upcoming questions are visual.
 - **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` and continue; the plan's `## Overview` opens with the same sentence, so it survives compaction.
 
-AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` for the plan body (fields in `contract.md`). Each Self-resolved entry ends with `source: [Direct|Supported|Inferred] <probe command + file:lines>`; a claim the Approach relies on is Direct, or Supported only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets replaced by `<redacted: what it is>`. User-only questions never go to Unresolved Items.
+AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` for the plan body (fields in `contract.md`). Each Self-resolved entry ends with `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`; a claim the Approach relies on is Direct, or Supported only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets replaced by `<redacted: what it is>`. User-only questions never go to Unresolved Items.
 
 **Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report in the impl skill's final-report shape. No plan file, no sidecar, no `/impl`.
 
@@ -51,9 +51,9 @@ Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` li
 
 ## DEEPEN
 
-Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, for medium and above unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed. Rounds: one by default, `--max-rounds=N` up to five; a Round 1 `ITERATE` caused by a Dimension 7 veto or a restructuring fix earns one more round. Log each round to `<plan>.log.md`.
+Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, for medium and above unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed; when no adversarial agent is dispatched, tell the critic it is the only falsifier of the run. Rounds: one by default; a Round 1 `ITERATE` from the Test Coverage veto earns one more round; `--max-rounds=N` allows up to N rounds (at most five) when the planner judges a revision needs re-review, regardless of the verdict. Log each round to `<plan>.log.md` in the fixed form of `contract.md` (the `Round N: critic` line, a `Lint:` line, and the `| # | Finding | Kind | Action |` table).
 
-Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Edit the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items one per turn per `interview.md`.
+Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Edit the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items, one turn per dependency level per `interview.md`.
 
 ## DECOMPOSE
 
@@ -69,7 +69,7 @@ Re-run `check-plan.ts`; a plan with any `error` cannot be activated. Read `refer
 
 The reader decides whether to type `/impl`. After one read they can say in their own words what will change and where, which choices were made for them, and what has to hold for the work to count as done.
 
-Open with the direction from `## Overview` in one or two sentences, then show the change in the shape its material has (output style, Shape). Of the design decisions and `### Assumptions`, show the ones the reader could have chosen differently, each next to what it was chosen over, and say in one line how many others the plan file holds. The Task Outline stays in the plan file.
+Open with the direction from `## Overview` in one or two sentences, then show the change in the shape its material has (output style, Shape). Of the design decisions and `### Assumptions`, show the ones the reader could have chosen differently, each next to what it was chosen over, and say in one line how many others the plan file holds. A `user-overridden: default` assumption is shown in that table marked 仮置き. The Task Outline stays in the plan file.
 
 The handoff then closes in this order whatever the plan, because approval rests on it:
 
@@ -78,7 +78,7 @@ The handoff then closes in this order whatever the plan, because approval rests 
 3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `人が読む変更を確かめたうえで、` when that section is not `なし`.
 4. The plan path, then the block below.
 
-When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again.
+When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again. When the user overrides a 仮置き, update the Assumption, re-run `check-plan.ts`, and emit this output again.
 
 ```
 ## Plan ready

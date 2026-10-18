@@ -5,15 +5,17 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user. Read it b
 ## Cadence
 
 - **Text questions by default**, in the format below. A structured question tool is for a self-contained confirmation whose options need no background. No emoji.
-- **One question at a time.** Do not pack multiple questions into one message just because the format allows it. The question is the last content in the turn; end the turn and do not advance until the answer arrives.
+- **One turn per dependency level.** In `/plan` and `$plan`, independent questions whose prerequisites are all settled go in one message, numbered `### 1. <質問文>`, each with its own recommendation; the answer is `1a 2b`. `requirements-interview` keeps one question per turn. A question that depends on an open answer waits. The question is the last content in the turn; end the turn and do not advance until the answer arrives. An unanswered item, or an answer that changes another question's premise, is asked again next turn; nothing that depends on it advances.
 - **Frontier ordering.** Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled. A question that depends on an open answer or an in-flight investigation waits. Ask the highest-impact one first: outcome, then boundary, then context, then definition.
 - **Non-blocking fact-finding.** Dispatch a needed lookup in the background and ask the next independent question meanwhile. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.
 - **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
 - **Recommended answer on every question**, with one or two sentences of reasoning. No recommendation means investigate more or narrow the question.
-- **Decide when settled.** When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`. Desired behavior, priority, scope, success criteria, and risk tolerance never fall under this rule — they are asked.
+- **Decide when settled.** When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`. Desired behavior, design decisions, priority, success criteria, and risk tolerance never fall under this rule — they are asked. A design decision shown in the handoff's decisions table next to its rejected alternative counts as the user's explicit choice once `/impl` has accepted it (`user-overridden: true` with that reason; before that it is asked); `user-overridden: default` is never used for it. Outside `/plan` and `$plan`, a scope boundary is asked as well. In `/plan` and `$plan`, a scope boundary takes the recommendation as a `user-overridden: default` assumption shown in the handoff marked 仮置き, and is asked only when including it makes a different deliverable; process, procedure and environment (whether to commit, where to verify, who ships) are never asked there: take the conservative default and name a missing rule under the handoff's decisions.
 - **Name the tradeoff axis in one sentence** when comparing approaches.
 
 ## Question format
+
+When questions are bundled (`/plan` and `$plan`), each heading is numbered: `### 1. <質問文>`.
 
 ```markdown
 ### <質問文をそのまま見出しにする>
@@ -50,7 +52,9 @@ Classify every unresolved point before asking:
 | Bucket | Meaning | Action |
 |---|---|---|
 | Observed fact | Answerable from code, logs, docs, issues, or this conversation | Probe it; keep secrets out of artifacts |
-| User decision | Desired behavior, priority, scope boundary, audience, risk tolerance, success criteria, trade-off acceptance | Ask. A reasonable default does not turn it into an assumption |
+| User decision | Desired behavior, design decision, priority, audience, risk tolerance, success criteria, trade-off acceptance; scope boundary in `requirements-interview` | Ask |
+| Scope boundary (plan skills) | A boundary of what the change covers, in `/plan` and `$plan` | `user-overridden: default` under `### Assumptions`, marked 仮置き in the handoff; ask only when including it makes a different deliverable |
+| Process / procedure / environment (plan skills) | Whether to commit, where to verify, who ships | Never asked; CLAUDE.md and the skill decide, and a missing rule is named under the handoff's decisions |
 | Technical deferral | Codebase-recoverable but too heavy for a quick probe | `### Unresolved Items` with a concrete `next:` |
 | Draft assumption | User-permitted assumption, or a non-blocking technical default | `### Assumptions` (`user-overridden: true` when the user chose it) |
 
