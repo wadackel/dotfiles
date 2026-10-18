@@ -112,7 +112,7 @@ const HANDOFF =
 
 /** One session: /plan → question (answered after 1 min) → critic dispatch → question (2 min) → handoff → /impl → report. */
 function sessionLines(
-  opts: { oldEnd?: boolean; noEnd?: boolean } = {},
+  opts: { oldEnd?: boolean; headedEnd?: boolean; noEnd?: boolean } = {},
 ): string[] {
   const lines = [
     user(PLAN_CMD, T(0)),
@@ -173,7 +173,9 @@ function sessionLines(
       assistant(
         opts.oldEnd
           ? "done\n\nFull record: ~/.claude/plans/x.evidence.json"
-          : "完了\n\n## 変わったこと\n\n## 確かめたこと\n\n## 決めてほしいこと\n\nSidecar: ~/.claude/plans/x.gate.log.md",
+          : opts.headedEnd
+          ? "完了\n\n## 変わったこと\n\n## 確かめたこと\n\n## 決めてほしいこと\n\nSidecar: ~/.claude/plans/x.gate.log.md"
+          : "完了。レビュー通過、未 commit\n\n**何が起きたか**\n- 本文\n\nSidecar: ~/.claude/plans/x.gate.log.md",
         T(20),
       ),
     );
@@ -231,7 +233,7 @@ test("findPlanSegments takes complexity, slug, active minutes, waits and replies
   });
 });
 
-test("findPlanSegments accepts the old `Full record:` end marker and flags a missing end as noEnd", async () => {
+test("findPlanSegments accepts the old `Full record:` and headed end markers and flags a missing end as noEnd", async () => {
   await withTmp(async (root) => {
     const a = await readSession(
       await writeSession(
@@ -244,6 +246,19 @@ test("findPlanSegments accepts the old `Full record:` end marker and flags a mis
     );
     assertEquals(
       findPlanSegments(a, { fromMs: -Infinity })[0].state,
+      "complete",
+    );
+    const headed = await readSession(
+      await writeSession(
+        root,
+        "-Users-x-proj",
+        "headed",
+        sessionLines({ headedEnd: true }),
+      ),
+      "-Users-x-proj",
+    );
+    assertEquals(
+      findPlanSegments(headed, { fromMs: -Infinity })[0].state,
       "complete",
     );
     const b = await readSession(
@@ -960,9 +975,7 @@ test("the markers the script keys on exist in the repo skill files", async () =>
     join(repoRoot, "home/programs/claude/skills/impl/SKILL.md"),
     "utf8",
   );
-  for (const m of ["## 確かめたこと", "## 決めてほしいこと", "Sidecar:"]) {
-    assertStringIncludes(impl, m);
-  }
+  assertStringIncludes(impl, "Last line `Sidecar: <path>`");
   const critic = await readFile(
     join(
       repoRoot,

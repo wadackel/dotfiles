@@ -1,8 +1,8 @@
 # Output examples
 
-Read before writing the `/plan` handoff or the `/impl` final report. The examples show how a shape follows from the material; none of them is a template. They differ from each other because their material differs: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram, a change spread over many files gets a tree. Copy neither the subjects nor the wording, and build the shape again from the plan in front of you.
+Read before writing the `/plan` handoff or the `/impl` final report. The handoff examples show how a shape follows from the material: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram. The report examples share one fixed skeleton (the result line and the four bold groups of `impl/SKILL.md`) and differ in what the material puts inside it: a diagram or none, a tree of files or one folded by directory, zero to three groups under `**あなたがすること**`. Copy neither the subjects nor the wording, and build the content again from the plan in front of you.
 
-What stays the same across them is what approval and the gate read: the closing order of the handoff, the heading names, the `## Plan ready` block, and the `Sidecar:` line. The block is written with its placeholders here so that it is never taken for a real plan.
+What stays the same across them is what approval and the gate read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's group names, its sub-group `レビューしてほしい N か所`, `仮置き` for a provisional assumption, and its last line `Sidecar:`. The block is written with its placeholders here so that it is never taken for a real plan.
 
 ## Handoff: a small change
 
@@ -17,7 +17,7 @@ Two files and one behavior, so sentences carry it. No diagram, no tree, no table
 - `--version` をほかの引数と一緒に渡しても、バージョンだけを出して終わる(`cli_test.ts` の新しいテスト)
 - 既存のテストがすべて通る(`bun test`)
 
-## 人が読む変更
+## レビューしてほしい変更
 
 なし
 
@@ -75,11 +75,11 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 - [live] 実際のチャンネルに通知が 1 件届き、文面が読める
     - 本物の Webhook の URL を `NOTIFY_SLACK_URL` に入れ、`build --fail-fixture` を 1 回実行して、届いた文面を知らせる。gate の前に必要
 
-## 人が読む変更
+## レビューしてほしい変更
 
 - 外部への書き込み・送信 — ビルド失敗時に Slack の Webhook へ POST する処理を足す(`src/slack_sender.ts`)
 
-人が読む変更を確かめたうえで、上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。
+レビューしてほしい変更を確かめたうえで、上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。
 
 `<plan path>`
 
@@ -92,76 +92,114 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 
 ## Final report: a small change
 
-One behavior and two checks, so two sentences and two lines carry it. No table, no tree.
+One behavior, two files, nothing for the reader to do. The groups are short lines, the tree has two files, and `**あなたがすること**` is `なし` on the same line. No diagram.
 
 ````
-`greet --version` が動くようになりました。gate は PASS で、変更は未 commit です。`dist/greet --version` で確かめられます。
+`greet --version` が動くようになった。レビュー通過、未 commit
 
-## 変わったこと
+**何が起きたか**
+- `src/cli.ts` の引数処理が、ほかの引数より先に `--version` を判定する
+- 前は `--version` を未知の引数として拒んだ。今は `greet 1.4.0` を出して exit 0
+- コマンドの利用者は、入っているバージョンを確かめられる
 
-`--version` を渡すと `greet 1.4.0` を出して終了します。ほかの引数と一緒に渡した場合も、バージョンだけを出します。
+**どこまで確かめたか**
+- 実機: ビルドした `dist/greet` に `--version` を渡し、`greet 1.4.0` と exit 0
+- 定型: 全テスト（新しいテストを含む）
+- 未確認: なし
 
-## 確かめたこと
+**触ったファイル**
+```
+src/
+├── cli.ts        --version の判定
+└── cli_test.ts   2 件追加
+```
 
-- `dist/greet --version` が `greet 1.4.0` を出して exit 0 で終わる(ビルドして実行した)
-- 新しいテスト 2 件を含む全テストが通る(`bun test`)
-
-## 決めてほしいこと
-
-なし
+**あなたがすること** なし
 
 Sidecar: ~/.claude/plans/<basename>.gate.log.md
 ````
 
-## Final report: a change across many files
+## Final report: a refactor
 
-The behavior changed in three respects, so before and after sit side by side. Eight files moved, one of them outside the plan, so a tree shows where. The checks that ran the real binary each keep their line; the routine ones share one.
+A behavior-preserving split and rename. The structure after the change is one line, the shape before and after is two lines, the kept old name is one line, and the equivalence check is the first line of `**どこまで確かめたか**`. One decision for the reader, written as what was chosen and the words that reverse it.
 
 ````
-設定の読み込みを `src/config/` に集めるところまで到達し、gate は PASS で、変更は未 commit です。`build --print-config` で、読み込まれた設定と出どころを確かめられます。
+書き出しを `writer.ts` に分け、`dump` を `export` に改名。挙動は不変。レビュー通過、未 push（`refactor/writer-module`）
 
-## 変わったこと
+**何が起きたか**
+- `scan.ts` はスキャンと `Entry` 型、`writer.ts` は書き出し、`api.ts` が両方を呼ぶ
+- `scan.ts` は 181 行から約 50 行。`exportOne` / `exportAll` と補助関数は `writer.ts` へ
+- JSON のキー `counts.dumped` だけ旧名のまま（外から読む側がいる形）
+- 利用者に見える動きは不変。次に `scan.ts` を読む人はスキャンだけ読めばよい
 
-| 観点 | 前 | 後 |
-|---|---|---|
-| 設定を読む場所 | 各コマンドが環境変数と設定ファイルを自分で読む | `loadConfig()` が 1 回読み、各コマンドは結果を受け取る |
-| 優先順位 | コマンドごとに違った | 引数、環境変数、設定ファイル、既定値の順で共通 |
-| 不正な値 | 使う時点で落ちる | 起動時に、キーと出どころを示して止まる |
+**どこまで確かめたか**
+- 本計画: 移動前に同じ改名を当てて比べ、差分は `export` 2 つ、空行 1 つ、フィクスチャの複製 1 つ
+- 定型: 型検査、lint、テスト 281 件（件数は作業前と同じ）
+- 未確認: 書き出しの速さ。関数の中身が同じなので測っていない
 
+**触ったファイル**
 ```
 src/
-├── config/
-│   ├── load.ts            + 読み込みと優先順位
-│   ├── schema.ts          + キーと型、既定値
-│   └── load_test.ts       + 優先順位と不正値のテスト
-├── commands/
-│   ├── build.ts           ~ 自前の読み込みを削り、設定を受け取る
-│   ├── watch.ts           ~ 同上
-│   └── clean.ts           ~ 同上
-├── cli.ts                 ~ 起動時に loadConfig() を呼ぶ。--print-config を追加
-└── notifier.ts            ~ 計画外。環境変数を直接読んでいたので同じ形に直した
+├── scan.ts          書き出しを抜いてスキャンだけに
+├── writer.ts        新規。exportOne / exportAll と補助関数
+├── writer.test.ts   新規。書き出しのテストを移動
+└── api.ts           counts.dumped への詰め替え
 ```
 
-## 確かめたこと
+**あなたがすること**
 
-- `build --print-config` が、引数・環境変数・設定ファイルの 3 か所に同じキーを置いたとき、引数の値と出どころを表示する(ビルドした `dist/build` で実行した)
-- 設定ファイルに不正な値を入れると、起動時にキー名とファイルの行を示して exit 2 で止まる(同じバイナリ)
-- `watch` と `clean` が、変更前と同じ設定で同じ出力を返す(変更前に採った出力と `diff` で比べた)
-- 型検査と全テスト 214 件が通る(`tsc --noEmit`、`bun test`)
+決める 1 つ
+- `counts.dumped` は旧名のまま詰め替えで残した → 読む側がいないなら「API のキーも変える」
 
-確かめていないこと: Windows のパス区切りでの設定ファイルの探索。
+Sidecar: ~/.claude/plans/<basename>.gate.log.md
+````
 
-## 決めてほしいこと
+## Final report: parts that act on each other
 
-1. 計画になかった `src/notifier.ts` を同じ形に直した(`src/notifier.ts:18`)
-    - 戻すなら、この 1 ファイルの変更だけを revert する。戻すと、通知だけが古い優先順位で環境変数を読む
-2. レビューが、設定ファイルが 2 つ見つかったときに警告を出さない点を SHOULD_FIX にした(`src/config/load.ts:52`)
-    - 残す限り、近いほうのファイルが黙って使われる。計画の範囲外なので触っていない
-3. CI での確認は次の main への push で
-    - Observe: CI の build ジョブが、設定エラーなしで通る
-    - Your steps: push の後に CI の結果を見て、落ちていたらログの最初のエラーを知らせる
-4. 仮置きのまま実装: 設定ファイルの探索は cwd から上へ 3 階層まで（計画の Assumptions）
-    - 覆すなら階層数を変える 1 行の修正。残す限り、4 階層上の設定は読まれない
+A new path between parts, so `**何が起きたか**` opens with a diagram. The tree folds the three test files into one line. All three groups appear under `**あなたがすること**`: one human-review line that also carries the security finding on the same hunk, three decisions (the finding, a 仮置き default, a file the plan did not name), and the real-channel check the reader runs.
+
+````
+ビルド失敗を Slack にも知らせる `notify.slack` が動くようになった。既定はオフ。レビュー通過、未 commit
+
+**何が起きたか**
+
+```
+build 失敗 ──▶ notifier ──┬──▶ 端末の通知（今までどおり）
+                           └──▶ slack sender ──▶ Webhook へ POST（on のときだけ）
+```
+
+- 前は失敗の通知は端末だけ。今は on にすると Slack にも 1 件届く
+- 送信に失敗しても端末の通知は出る
+- ビルドを回す人は離席中でも失敗に気づける。`notifier.ts` の次の読者は分岐が 1 つ増える
+
+**どこまで確かめたか**
+- 実機: 手元の受信先で、on なら失敗したターゲット名を含む本文が 1 件届き、off なら届かない
+- 本計画: 受信先が 500 を返しても端末の通知が出て、終了コードはビルドの結果のまま
+- 定型: 型検査と全テスト
+- 未確認: 本物のチャンネルへの送信（手元に本物の URL がない）
+
+**触ったファイル**
+```
+src/
+├── notifier.ts        送り先の分岐
+├── slack_sender.ts    新規。Webhook へ POST
+├── config.ts          notify.slack と NOTIFY_SLACK_URL
+├── cli.ts             --fail-fixture の終了コード（計画外）
+└── *_test.ts (3)
+```
+
+**あなたがすること**
+
+レビューしてほしい 1 か所
+- `slack_sender.ts:12-40` — 外部送信。Webhook へ POST。残すと失敗ごとに送信。戻すなら分岐ごと消す。URL ログ（31 行目）は「直すべき」
+
+決める 3 つ
+- URL のログは直していない →「URL のログを消す」
+- 宛先は Slack の既定チャンネル（仮置き）→「宛先を設定で選べるようにする」
+- 計画外の `src/cli.ts:88` に了承を得て 1 行追加 →「この 1 行を戻す」
+
+確かめてほしい 1 つ
+- 本物の URL を `NOTIFY_SLACK_URL` に入れて `build --fail-fixture` を走らせ、届いた文面か status code を知らせる
 
 Sidecar: ~/.claude/plans/<basename>.gate.log.md
 ````

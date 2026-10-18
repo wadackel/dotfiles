@@ -226,7 +226,8 @@ const GATE_CMD = "<command-name>/gate</command-name>";
 const HANDOFF = /^## Plan ready/m;
 const COMPLEXITY = /Complexity:\s*(trivial|small|medium|large|xl)/;
 const SLUG = /plans\/([0-9]{8}T[0-9]{4}-[a-z0-9-]+)\.md/i;
-// `## 確かめたこと` only exists since 2026-09-22; older reports end with `Full record:`.
+// Transcripts of older report shapes are still inside the metrics window, so the two
+// headings and `Full record:` that once ended a report still count as its end.
 const IMPL_END =
   /^## 確かめたこと|^## 決めてほしいこと|^Sidecar:|^Full record:/m;
 const NOT_A_REPLY =

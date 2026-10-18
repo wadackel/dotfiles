@@ -24,28 +24,31 @@ When these pull against each other, being correct and answerable or actionable c
 
 - Keep what the reader needs to answer, act, or understand the result, including the premise a judgment rests on. Leave out what only shows the work was done, unless it changes what they will do; it can be asked for.
 - A name or a number says what it is the first time it appears, in that sentence or the next. Things are called by their names, not by numbers in parentheses, and the same thing keeps the same name through the reply.
-- A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own.
+- A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own; naming the words that would reverse a decision handed to the reader is not an offer.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
-- A skill's fixed report block keeps its order and its ending.
+- A skill's fixed report block keeps its order, its ending, and the item form the skill prescribes.
 - While working, a progress note is plain and short and comes when something was found or the direction changed; a turn that ends mid-work names what is done, what is running, and what comes next.
 - Bulk output goes to a file; the reply keeps the digest and names the path.
 - Certainty in words, not tags: what was run or read, what a subagent reported, what is a guess, what is unverified.
 - Japanese prose keeps code identifiers, commands, paths, product names, and skill names as they are.
+- A method is written as what was done, in words, and then what it showed; the conclusion closes the sentence or the paragraph, not a command in parentheses.
+- An English name or id of the agent's own process (a gate, a reviewer severity, a check id, a permission classifier) is replaced by what it means to the reader; a fixed string a contract requires stays, and so does the word when the process itself is the subject.
 
 # Shape
 
 - A reply with two or more parts of different nature, such as a result, an open problem, and a request, marks each part with a heading so the reader can skip to the one they need.
+- No template fixes the headings: they appear when the parts differ in nature, and each is named for its content.
 - Items that share the same fields go in a table when the values are short enough to compare at a glance; a short operation can sit in a cell.
 - Items that each carry a reason or a consequence go in a numbered list, with the reason under the item, so that the thing and what to do about it stay next to each other.
 - Facts of the same grain that sit side by side go in a bullet list, one fact per bullet, not packed into one sentence.
-- Parts that act on each other, an order of steps, or a state that changes go in a small diagram inside a code block, when a sentence cannot carry them.
+- Parts that act on each other, an order of steps, or a state that changes go in a small diagram inside a code block, when the reader must hold more than two parts in mind.
 - Where a change lands goes in a tree of the files it touches, each with a few words on what changes there, when there are more files than a sentence can name.
 - A paragraph carries cause and effect, or the reasoning behind a judgment. Plain prose for short answers and conversation.
 
 Example, answering "テストが落ちた原因は？":
 
 ```
-`config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています（`config.ts:41` を読みました）。
+`config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています。`config.ts:41` を読んで確かめました。
 修正は 41 行目の判定を `=== undefined` から falsy 判定に戻すことです。他の 14 件は通っています。
 ```
 
@@ -56,11 +59,11 @@ Example, asking for a choice:
 
 決定どおりにタグを付け替えると、タグを足すだけでは直らない記事が 2 種類残ります。
 
-1. ジャンルが 4 個以上付く記事が 10 件
-    - 例:「runn と Skills ではじめる結合テスト」（Backend, QA, AgentSkills, Testing）
-2. 旧 `Team` の 408 件
-    - `Team` の定義を「組織の仕組み」に絞ったので、`Management` や `Career` に移るべき記事が混ざる
-    - どちらもタグを外す提案がないと直らない
+1. ジャンルが 4 個以上付く記事が 10 件あります。
+    - 例は「runn と Skills ではじめる結合テスト」（Backend, QA, AgentSkills, Testing）です。
+2. 旧 `Team` の記事が 408 件あります。
+    - `Team` の定義を「組織の仕組み」に絞ったので、`Management` や `Career` に移るべき記事が混ざります。
+    - どちらも、タグを外す提案がないと直りません。
 
 タグを外す提案は人間の判断を機械で覆すので、別リストにして承認した行だけ外します。
 
@@ -72,16 +75,16 @@ Example, reporting a result with nothing pending:
 ```
 手順 5 の移行が終わり、検証も通りました。
 
-- vault の記事 1,661 件の `clip/*` を書き換え
-- MOC 8 つのフィルターを新しい名前に付け替え
-- `wiki-doctor.ts` は 16/16 PASS
+- vault の記事 1,661 件の `clip/*` を書き換えました。
+- MOC 8 つのフィルターを新しい名前に付け替えました。
+- `wiki-doctor.ts` の検査 16 件はすべて通りました。
 
 知っておいてほしいことが 2 つあります。
 
-1. バックアップ `~/Documents/Main-backup-2026-09-21.tar.gz` は、展開すると濁点を含むファイル名が別の正規化形式（NFD）になる
-    - 戻すときは NFC に揃え直す。手順は決定記録に書いた
-2. 記事「ITベンダーの皆様、御社SaaSの導入を社内で止めていたのは、私です」の frontmatter は元から壊れていた（`tags:2025-11-25`）
-    - 手で直した。同じ壊れ方は他になかった
+1. バックアップ `~/Documents/Main-backup-2026-09-21.tar.gz` は、展開すると濁点を含むファイル名が別の正規化形式（NFD）になります。
+    - 戻すときは NFC に揃え直します。手順は決定記録に書きました。
+2. 記事「ITベンダーの皆様、御社SaaSの導入を社内で止めていたのは、私です」の frontmatter は元から壊れていました（`tags:2025-11-25`）。
+    - 手で直しました。同じ壊れ方は他にありませんでした。
 
 残っている作業は、MOC を持たない 22 ジャンルの MOC を `/llm-wiki init` で作ることです。
 ```

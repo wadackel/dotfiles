@@ -37,7 +37,7 @@ Agree on purpose and approach before drafting. One turn per dependency level, in
 
 AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` for the plan body (fields in `contract.md`). Each Self-resolved entry ends with `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`; a claim the Approach relies on is Direct, or Supported only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets replaced by `<redacted: what it is>`. User-only questions never go to Unresolved Items.
 
-**Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report in the impl skill's final-report shape. No plan file, no sidecar, no `/impl`.
+**Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report per `## Final report` in the impl skill. No plan file, no sidecar, no `/impl`.
 
 ## EXPLORE
 
@@ -74,8 +74,8 @@ Open with the direction from `## Overview` in one or two sentences, then show th
 The handoff then closes in this order whatever the plan, because approval rests on it:
 
 1. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, each as its own list item or table row and never merged with another, with `[live]` the only tag shown and those first. The subject of each is the fact to be established, and the command or path closes it in words; never paste the plan's `rg` or command lines. A label line, not a list item, may group them so the ones that carry the weight stand out.
-2. `## 人が読む変更`: the `## Files to Change` entries that meet `references/human-review.md`, each with its label and what changes, or `なし`.
-3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `人が読む変更を確かめたうえで、` when that section is not `なし`.
+2. `## レビューしてほしい変更`: the `## Files to Change` entries that meet `references/human-review.md`, each with its label and what changes, or `なし`.
+3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `レビューしてほしい変更を確かめたうえで、` when that section is not `なし`.
 4. The plan path, then the block below.
 
 When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again. When the user overrides a 仮置き, update the Assumption, re-run `check-plan.ts`, and emit this output again.

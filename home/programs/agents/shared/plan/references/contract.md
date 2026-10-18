@@ -63,7 +63,7 @@ A plan that changes user-observable behavior carries at least one `[live]` item.
 
 ## Activation
 
-Approval rests on two things shown before the approval line: what counts as done, and which changes a person still reads in the diff. Claude shows them as `## 完了の条件` and `## 人が読む変更`, Codex's Approval Summary as `**Completion Criteria**` and `**Human Review**`. The criteria, their four labels, and the report-time item that starts with `人が読む:` are in `human-review.md` next to this file.
+Approval rests on two things shown before the approval line: what counts as done, and which changes a person still reads in the diff. Claude shows them as `## 完了の条件` and `## レビューしてほしい変更`, Codex's Approval Summary as `**Completion Criteria**` and `**Human Review**`. The criteria, their four labels, and the report lines under `レビューしてほしい N か所` are in `human-review.md` next to this file.
 
 Claude ends `/plan` with:
 
@@ -76,6 +76,10 @@ Claude ends `/plan` with:
 ```
 
 Codex ends `$plan` with an Approval Summary and `PENDING APPROVAL — $impl [plan-path]`. `/impl` resolves the plan from the `File:` line.
+
+## Final report
+
+Claude's `/impl` final report and the standalone `/gate` reply are a short card defined in `impl/SKILL.md`: a result line, then the bold groups `**何が起きたか**`, `**どこまで確かめたか**`, `**触ったファイル**` (a tree) and `**あなたがすること**` with the sub-groups `レビューしてほしい N か所`, `決める N つ` and `確かめてほしい N つ`, one fact per line. Fixed strings: the last line `Sidecar: <path>` (plan-metrics reads it as the end of the report); `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` in the result line when the gate escalated. Codex `$impl` writes the same card, with `レビューしてほしい N か所` used the same way.
 
 ## Reviewer output
 
