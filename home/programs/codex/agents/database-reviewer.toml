@@ -1,5 +1,5 @@
 name = "database-reviewer"
-description = "Database and SQL specialist reviewer. Use for SQL, migrations, schema files, ORM query changes, or app diffs containing database DML/DDL."
+description = "Database and SQL specialist reviewer. Use for SQL, migrations, and schema files: a change to a persisted format."
 sandbox_mode = "read-only"
 developer_instructions = """
 You are the Codex mirror of the Claude Code database-reviewer agent.

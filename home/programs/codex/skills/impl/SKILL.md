@@ -35,7 +35,7 @@ At the first task, `start` binds the canonical repository. On resumption, use th
 1. Read the original purpose, constraints, non-goals, acceptance criteria, and implementation discretion alongside the plan. Preserve pre-existing user edits. Capture the initial dirty file list so an aggregate diff does not imply ownership of unrelated changes. When changing review or approval instructions, preserve the governing review rules before editing; the edited rules cannot reduce this run's required verification.
 2. Identify every required check, including `[live]` and items under Requires User Confirmation. Tell the user early about observations requiring their participation; continue independent work. A required observation stays blocked until evidence or explicit waiver arrives.
 3. For each implementation task, call `start` from the repository root and declare its acceptance checks with `require`. Each task needs target files, expected behavior, and a verification method. If the approved plan assigns deployment or integration checks to the final task, declare them there from the outset; completing local implementation does not complete the overall outcome. Recover missing technical detail from the repository; ask only if the missing information changes the agreed outcome.
-4. Implement the behavior. For test-first work, keep `red (expected FAIL)` and `green (expected PASS)` outputs in the evidence; only the green result establishes acceptance. Do not introduce redundant tests for a low-impact edit.
+4. Implement the behavior. Before writing, read every review card in `~/.agents/skills/plan/references/review-cards/` whose `Trigger:` line matches a path or the content of the task's target files; they are the checks the combined reviewer applies. For test-first work, keep `red (expected FAIL)` and `green (expected PASS)` outputs in the evidence; only the green result establishes acceptance. Do not introduce redundant tests for a low-impact edit.
 5. Before each acceptance check, obtain a `snapshot` token. Run the verification and `record` its raw output, command or observation method, status, and that token. Redact credentials from stored or displayed output. If verification changes the artifact or gate generation, rerun against the stable artifact; do not attach old output to a new token.
 6. Call `complete` only after all required checks succeed or the user explicitly waives an eligible check. A `blocked` result is not success. Repeat for the remaining implementation tasks, then run the final gate.
 
@@ -75,7 +75,7 @@ Select review from the actual change and the original acceptance criteria. File 
 - Empty scope: record an empty-scope review; no agent is needed.
 - Low-risk scope: the main session reviews mechanical prose, comments, formatting, and other changes with no behavioral or safety effect. Use a `main-review` check and `Review executor: main session`; inspect the original acceptance criteria and diff, and record the canonical MUST_FIX/verdict format below. Do not describe this as independent review.
 - Behavior changes or non-local correctness questions: select one `code-reviewer` for combined Spec Compliance, Code Quality, and relevant domain concerns. Agent instructions, permissions, and review/approval rules change behavior even when written as one-line Markdown; they require independent review.
-- Additional specialists: select only for a concrete concern the combined review cannot adequately cover, or an explicit user request. Record each extra role's distinct question. Apply the security criteria below separately.
+- Additional specialists (`database-reviewer`, `cloud-architecture-reviewer`): select only for a concrete concern the combined review cannot adequately cover, or an explicit user request. Record each extra role's distinct question. Language concerns never select a specialist; they go to the combined reviewer through its review cards. Apply the security criteria below separately.
 
 Run selected independent reviewers against the same frozen target, at most three concurrently; collect every result before editing. Start initial independent reviews with a fresh context (`fork_turns: "none"` when supported). Give them the original purpose, constraints, acceptance criteria, plan or its path, aggregate diff, changed file paths, necessary source references, and applicable AGENTS paths. Omit the implementer's conclusions and other reviewers' findings before the initial pass. If fresh context is unavailable, disclose the limitation and leave required independent review incomplete rather than substituting main-session Review.
 
@@ -87,20 +87,14 @@ Selectively full-read changed files when the diff cannot establish correctness; 
 
 #### Domain-Specific Reviewer Dispatch
 
-Use this table as a checklist for the main session and combined reviewer. An extension or framework match identifies review concerns, not an instruction to spawn. Add the named specialist only when a distinct, concrete risk needs separate investigation; record that risk before dispatch.
+Language and surface concerns are review cards in `~/.agents/skills/plan/references/review-cards/<name>.md` (`typescript`, `react`, `a11y`, `nix`, `rust`, `go`, `dart`, `deno`), 20–30 lines each. Paste every card whose `Trigger:` line (line 2 of the card) matches the aggregate diff into the combined `code-reviewer` prompt verbatim; the card is the only place its trigger is written. An extension match selects a card, never an agent.
 
-| Agent | Review concerns |
-|---|---|
-| `rust-reviewer` | Ownership, unsafe code, Send/Sync, error flow, async behavior |
-| `go-reviewer` | Goroutines, context propagation, locking, interfaces, nil values |
-| `dart-reviewer` | Null safety, widget state, async cleanup, streams, platform channels |
-| `nix-reviewer` | Evaluation, package/module integration, activation and deployed configuration |
-| `typescript-reviewer` | Type safety, async correctness, module and runtime boundaries |
-| `react-reviewer` | Hooks, effects, rendering and state behavior |
-| `a11y-reviewer` | Semantics, keyboard flow, ARIA, contrast, screen reader behavior |
-| `database-reviewer` | Queries, schema changes, migrations, transactions and data integrity |
-| `deno-reviewer` | Runtime permissions, Deno APIs, module specifiers and configuration |
-| `cloud-architecture-reviewer` | Infrastructure changes, workflow permissions, deployment and service boundaries |
+Two separate agents remain for a blast radius the combined review cannot cover; add one only when a distinct, concrete risk needs separate investigation, and record that risk before dispatch.
+
+| Agent | Trigger | Review concerns |
+|---|---|---|
+| `database-reviewer` | `.sql`, `migrations/`, schema files: a change to a persisted format | Schema changes, migrations, transactions and data integrity |
+| `cloud-architecture-reviewer` | `.tf` `.tfvars`, k8s / Helm, `Dockerfile`, `docker-compose`, `.github/workflows` | Infrastructure changes, workflow permissions, deployment and service boundaries |
 
 #### Security Dispatch Heuristic
 

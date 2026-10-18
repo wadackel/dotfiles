@@ -29,8 +29,10 @@ const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
 test("isReviewerAgent matches the reviewers /gate dispatches", () => {
-  assertEquals(isReviewerAgent("rust-reviewer"), true);
-  assertEquals(isReviewerAgent("typescript-reviewer"), true);
+  assertEquals(GUARDED.size, 5);
+  assertEquals(isReviewerAgent("database-reviewer"), true);
+  assertEquals(isReviewerAgent("cloud-architecture-reviewer"), true);
+  assertEquals(isReviewerAgent("comment-reviewer"), true);
   assertEquals(isReviewerAgent("security-auditor"), true);
   assertEquals(isReviewerAgent("code-reviewer"), true);
   assertEquals(isReviewerAgent("Explore"), false);
@@ -43,6 +45,9 @@ test("isReviewerAgent leaves other workflows' reviewers alone", () => {
   // These end in -reviewer but belong to other workflows and have no template.
   assertEquals(isReviewerAgent("architect-reviewer"), false);
   assertEquals(isReviewerAgent("skill-guide-reviewer"), false);
+  // Language names are review cards, not guarded agents.
+  assertEquals(isReviewerAgent("rust-reviewer"), false);
+  assertEquals(isReviewerAgent("typescript-reviewer"), false);
 });
 
 test("hasVerdictRule detects the rule regardless of case", () => {
@@ -56,8 +61,8 @@ test("hasVerdictRule detects the rule regardless of case", () => {
 });
 
 test("denialMessage names the agent and points at the template", () => {
-  const msg = denialMessage("rust-reviewer");
-  assertStringIncludes(msg, "rust-reviewer");
+  const msg = denialMessage("database-reviewer");
+  assertStringIncludes(msg, "database-reviewer");
   assertStringIncludes(msg, "domain-reviewer-prompt.md");
   assertStringIncludes(msg, "how PASS and FAIL are decided");
 });
@@ -66,9 +71,9 @@ test("blocks a reviewer dispatch missing the verdict rule", async () => {
   const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
-      subagent_type: "rust-reviewer",
+      subagent_type: "database-reviewer",
       prompt:
-        "Rust 観点でレビューしてください。最終行に VERDICT: PASS または VERDICT: FAIL",
+        "DB 観点でレビューしてください。最終行に VERDICT: PASS または VERDICT: FAIL",
     },
   });
   assertEquals(code, 2);
@@ -79,8 +84,8 @@ test("allows a reviewer dispatch carrying the verdict rule", async () => {
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
-      subagent_type: "rust-reviewer",
-      prompt: `Rust 観点でレビューしてください。\n\n${RULE}\n${READ_ONLY}`,
+      subagent_type: "database-reviewer",
+      prompt: `DB 観点でレビューしてください。\n\n${RULE}\n${READ_ONLY}`,
     },
   });
   assertEquals(code, 0);
@@ -99,13 +104,22 @@ test("allows non-reviewer subagent types", async () => {
 test("ignores tools other than Agent/Task", async () => {
   const { code } = await runHook({
     tool_name: "Bash",
-    tool_input: { subagent_type: "rust-reviewer", prompt: "no verdict rule" },
+    tool_input: {
+      subagent_type: "database-reviewer",
+      prompt: "no verdict rule",
+    },
   });
   assertEquals(code, 0);
 });
 
-test("lets other workflows' reviewers through", async () => {
-  for (const subagent_type of ["architect-reviewer", "skill-guide-reviewer"]) {
+test("lets other workflows' reviewers and former specialists through", async () => {
+  for (
+    const subagent_type of [
+      "architect-reviewer",
+      "skill-guide-reviewer",
+      "typescript-reviewer",
+    ]
+  ) {
     const { code } = await runHook({
       tool_name: "Agent",
       tool_input: { subagent_type, prompt: "no verdict rule here" },
@@ -172,7 +186,7 @@ test("blocks a Bash reviewer dispatched without the read-only sentence", async (
   const { code, stderr } = await runHook({
     tool_name: "Agent",
     tool_input: {
-      subagent_type: "typescript-reviewer",
+      subagent_type: "database-reviewer",
       prompt: `Diff file: ~/.claude/plans/x.gate.diff\n\n${RULE}`,
     },
   });
@@ -184,7 +198,7 @@ test("allows a diagnostic-shaped dispatch (read-only sentence plus inline fix di
   const { code } = await runHook({
     tool_name: "Agent",
     tool_input: {
-      subagent_type: "typescript-reviewer",
+      subagent_type: "database-reviewer",
       prompt:
         `Fix diff: \`git diff abc..HEAD\`\n${READ_ONLY}\n\ndiff --git a/x.ts b/x.ts\n+const a = 1;\n\nVERDICT: [PASS if every previous finding is CLOSED, FAIL otherwise]`,
     },

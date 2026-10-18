@@ -36,6 +36,12 @@ Diff file: {diff_path} (the same content, for re-reading)
 
 Read the project guidelines at: {claude_md_path}
 
+## Focus cards
+
+Review cards for the languages and surfaces this diff touches, pasted verbatim (`(none)` when no card matches). Each card is the checklist a former specialist reviewer applied: judge its `Check` items under B with the severity rules below, and treat its `Do not flag` list as suppression.
+
+{focus_cards}
+
 ## Your Task
 
 Judge the change against every requirement in the specification. Read beyond the diff wherever correctness depends on the surrounding code.

@@ -1,6 +1,6 @@
 ---
 name: gate
-description: Final gate for /impl and standalone code review. Runs the evidence audit (`plan-state.ts coverage` / `complete`) and one parallel wave of reviewers (code-reviewer, domain specialists, security-auditor) with bounded re-review, then reports only what the reader must decide. Use at the end of /impl, or on request ("レビューして", "gate", "subagent review", "タスクレビュー"); `--diff-only` reviews a diff that has no plan.
+description: Final gate for /impl and standalone code review. Runs the evidence audit (`plan-state.ts coverage` / `complete`) and one parallel wave of reviewers (code-reviewer carrying the matching review cards, plus security-auditor and the blast-radius reviewers) with bounded re-review, then reports only what the reader must decide. Use at the end of /impl, or on request ("レビューして", "gate", "subagent review", "タスクレビュー"); `--diff-only` reviews a diff that has no plan.
 ---
 
 # /gate
@@ -15,16 +15,11 @@ Two modes. **Plan mode** (default under `/impl`): the plan path from `## Plan re
 
 ## 2. Select reviewers
 
-`code-reviewer` always. Add every row whose trigger matches; matches are orthogonal, so all fire together.
+`code-reviewer` always, carrying every review card in `~/.claude/skills/plan/references/review-cards/` (`typescript`, `react`, `a11y`, `nix`, `rust`, `go`, `dart`, `deno`) whose `Trigger:` line, line 2 of the card, matches the changed files or added lines. The cards are the distilled checklists of the former language specialists and the same cards `/impl` reads before writing; the `Trigger:` line is the only place a card's trigger is written, so the two skills cannot drift. Then add every separate reviewer whose trigger matches; matches are orthogonal, so all fire together.
 
-| Reviewer | Trigger (changed files or added lines) |
+| Separate reviewer | Trigger (changed files or added lines) |
 |---|---|
-| `rust-reviewer` / `go-reviewer` / `dart-reviewer` / `nix-reviewer` | `.rs` / `.go` / `.dart` / `.nix` |
-| `typescript-reviewer` | `.ts` `.tsx` `.mts` `.cts` |
-| `react-reviewer` | `.jsx` `.tsx`, or `from "react"` / `"react-dom"` |
-| `a11y-reviewer` | `.css` `.scss` `.html` `.jsx` `.tsx` |
-| `database-reviewer` | `.sql`, `migrations/`, `schema.(sql\|prisma\|ts)`, or SQL DML / `CREATE TABLE` in app code |
-| `deno-reviewer` | `Deno.` API, `jsr:` / `npm:` specifier, or `deno.json(c)` |
+| `database-reviewer` | `.sql`, `migrations/`, `schema.(sql\|prisma\|ts)`: a change to a persisted format |
 | `cloud-architecture-reviewer` | `.tf` `.tfvars`, k8s / Helm yaml, `Dockerfile`, `docker-compose`, `serverless`, `.github/workflows/*.yml` |
 | `comment-reviewer` | any `.rs .go .ts .tsx .jsx .mts .cts .py .rb .lua .nix .sh .dart` (self-no-ops without added comments) |
 | `security-auditor` | a data-flow trigger in `references/security-triggers.md` |
@@ -33,13 +28,13 @@ Skip the wave only for a diff that touches `.md` / `.txt` alone; record that dec
 
 ## 3. Dispatch one wave
 
-All selected reviewers go out in one message, unnamed (a named agent idles until TaskStop). `code-reviewer` gets `references/spec-quality-reviewer-prompt.md` (task spec, plan section, diff, diff path, file list, `~/.claude/CLAUDE.md`); every specialist and `security-auditor` gets `references/domain-reviewer-prompt.md` with `{review_focus}` naming its domain and what a sibling owns. `comment-reviewer`'s focus ends with the output of `~/.claude/scripts/comment-metrics.ts <diff path>` in a fenced block. Reviewers without Bash (`code-reviewer`, `security-auditor`, `comment-reviewer`) also get the diff body inline.
+All selected reviewers go out in one message, unnamed (a named agent idles until TaskStop). `code-reviewer` gets `references/spec-quality-reviewer-prompt.md` (task spec, plan section, diff, diff path, file list, `~/.claude/CLAUDE.md`, and the matched review cards pasted verbatim as `{focus_cards}`, or `(none)`); `database-reviewer`, `cloud-architecture-reviewer`, `comment-reviewer` and `security-auditor` get `references/domain-reviewer-prompt.md` with `{review_focus}` naming its domain and what a sibling owns. `comment-reviewer`'s focus ends with the output of `~/.claude/scripts/comment-metrics.ts <diff path>` in a fenced block. Reviewers without Bash (`code-reviewer`, `security-auditor`, `comment-reviewer`) also get the diff body inline.
 
 Paste each template's `## Template` block verbatim. The read-only sentence, the `Diff file:` line, and the `VERDICT` rule are machine contract: `reviewer-dispatch-policy.ts` rejects a dispatch without them, because reviewers not told the rule returned PASS over blocker findings in 45% of 774 measured dispatches. Pass no opinion from the main session.
 
 ## 4. Judge and re-review
 
-A reviewer FAILs on any `MUST_FIX` / `SHOULD_FIX` (or `CRITICAL` / `HIGH`), or for `code-reviewer` any spec Issue. On FAIL, fix every blocker from every reviewer, write the fix diff to `~/.claude/plans/<slug>.rereview-<n>.gate.diff`, re-run the selection table on that fix diff, and re-dispatch in full every reviewer whose trigger fires on it. The FAILed reviewer itself gets a full re-review when its FAIL held a `MUST_FIX`, `CRITICAL`, or spec Issue, or when it is `security-auditor`; a `SHOULD_FIX` / `HIGH`-only FAIL gets `references/rereview-diagnostic-prompt.md` with the previous findings and the fix diff. A diagnostic reply carrying `ESCALATE: fix introduced a new blocker` counts as FAIL and its next round is full.
+A reviewer FAILs on any `MUST_FIX` / `SHOULD_FIX` (or `CRITICAL` / `HIGH`), or for `code-reviewer` any spec Issue. On FAIL, fix every blocker from every reviewer, write the fix diff to `~/.claude/plans/<slug>.rereview-<n>.gate.diff`, re-run the card selection and the reviewer table on that fix diff, and re-dispatch in full every reviewer whose trigger fires on it (`code-reviewer` with the cards the fix diff selects). The FAILed reviewer itself gets a full re-review when its FAIL held a `MUST_FIX`, `CRITICAL`, or spec Issue, or when it is `security-auditor`; a `SHOULD_FIX` / `HIGH`-only FAIL gets `references/rereview-diagnostic-prompt.md` with the previous findings and the fix diff. A diagnostic reply carrying `ESCALATE: fix introduced a new blocker` counts as FAIL and its next round is full.
 
 Each reviewer has three rounds counting both forms; a re-dispatch caused only by another reviewer's fix does not consume its budget. Exhausting a budget stops the gate: append `[BLOCKED: gate escalated]` to the final task and hand the open blockers to the user. The wave is PASS when every dispatched reviewer returns PASS or only `NIT` / `MEDIUM` / `LOW`.
 

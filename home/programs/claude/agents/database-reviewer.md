@@ -1,6 +1,6 @@
 ---
 name: database-reviewer
-description: Database / SQL specialist. Use for code changes touching .sql, migrations/*, schema files (schema.sql, schema.prisma, Drizzle schema.ts), or containing SQL statements in application code. Focuses on SQL injection prevention, index coverage, N+1 patterns, lock ordering, transaction isolation, migration safety, and row-level security. Auto-dispatched by /gate when database-related files are detected.
+description: Database / SQL specialist. Use for code changes touching .sql, migrations/*, or schema files (schema.sql, schema.prisma, Drizzle schema.ts): a change to a persisted format. Focuses on SQL injection prevention, index coverage, N+1 patterns, lock ordering, transaction isolation, migration safety, and row-level security. Auto-dispatched by /gate when database-related files are detected.
 tools: Read, Grep, Glob, Bash
 model: opus
 color: yellow
@@ -13,7 +13,7 @@ Specialist for SQL, schema design, and DB access patterns. Catches issues that g
 ## Out of Scope (delegated)
 
 - App-layer code quality → `code-reviewer`
-- Language-specific bugs in ORM calling code → `typescript-reviewer` / `go-reviewer` / etc.
+- Language-specific bugs in ORM calling code → `code-reviewer` (with the matching review card)
 - Hardcoded connection strings with secrets → `security-auditor` (heuristic)
 
 ## Focus Areas

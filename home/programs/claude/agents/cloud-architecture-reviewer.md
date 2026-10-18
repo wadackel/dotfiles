@@ -12,7 +12,7 @@ Specialist for infrastructure-as-code and cloud deployment patterns. Catches iss
 
 ## Out of Scope (delegated)
 
-- Application code (languages) → `typescript-reviewer` / `go-reviewer` / etc.
+- Application code (languages) → `code-reviewer` (with the matching review card)
 - Secrets heuristics on code literals → `security-auditor`
 - DB schema inside Terraform `aws_rds_*` → `database-reviewer` (for schema), here for infra wiring
 

@@ -24,19 +24,13 @@ export const TEMPLATE =
  * The reviewers /gate dispatches, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer` and `skill-guide-reviewer`,
  * which belong to other workflows and have no template to satisfy the check.
+ * Language checklists ride inside `code-reviewer`'s prompt as review cards,
+ * so no language agent needs guarding.
  */
 export const GUARDED: ReadonlySet<string> = new Set([
   "code-reviewer",
   "security-auditor",
-  "rust-reviewer",
-  "go-reviewer",
-  "dart-reviewer",
-  "nix-reviewer",
-  "typescript-reviewer",
-  "react-reviewer",
-  "a11y-reviewer",
   "database-reviewer",
-  "deno-reviewer",
   "cloud-architecture-reviewer",
   "comment-reviewer",
 ]);

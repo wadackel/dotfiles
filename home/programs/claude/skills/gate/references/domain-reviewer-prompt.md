@@ -1,6 +1,6 @@
 # Domain Reviewer Prompt Template
 
-Use this template when dispatching a domain specialist (`rust-reviewer`, `typescript-reviewer`, `react-reviewer`, `a11y-reviewer`, `go-reviewer`, `nix-reviewer`, `deno-reviewer`, `dart-reviewer`, `database-reviewer`, `cloud-architecture-reviewer`, `comment-reviewer`) or `security-auditor` from `/gate`. Replace `{placeholders}` with actual values.
+Use this template when dispatching a domain specialist (`database-reviewer`, `cloud-architecture-reviewer`, `comment-reviewer`) or `security-auditor` from `/gate`; language concerns go to `code-reviewer` through its review cards, not to a specialist. Replace `{placeholders}` with actual values.
 
 One template covers the domain specialists and `security-auditor`. The verdict line is schema-neutral, so the 3-tier (MUST_FIX / SHOULD_FIX / NIT) and 4-tier (CRITICAL / HIGH / MEDIUM / LOW) reviewers both read a rule that applies to them — `security-auditor` carries its own severity table in its agent definition.
 

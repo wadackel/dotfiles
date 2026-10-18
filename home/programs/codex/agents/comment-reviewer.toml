@@ -73,7 +73,7 @@ A long block is flagged even when its content is a legitimate Why-not: the findi
 - One or more MUST_FIX or SHOULD_FIX findings (LONG_BLOCK included) → `VERDICT: FAIL`
 - Only NIT findings, or zero findings → `VERDICT: PASS`
 
-This matches the specialist FAIL convention in `~/.Codex/skills/gate/SKILL.md` (MUST_FIX / SHOULD_FIX block; NIT does not block).
+This matches the FAIL convention in §4 of `~/.claude/skills/gate/SKILL.md` (MUST_FIX / SHOULD_FIX block; NIT does not block).
 
 ## Output Format
 

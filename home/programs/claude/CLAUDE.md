@@ -30,7 +30,7 @@
 ## Code
 
 - Group three or more related arguments into an object; compose functions rather than inherit; abstract early only what is genuinely shared, Rule of Three for the rest; descriptive names for exports, concise ones for locals. Arrange files in dependency order without circular references.
-- Comments explain only why an obvious alternative was rejected or why the natural approach is a trap. No `Why:` / `Note:` labels, no conversational residue ("as requested", PR numbers, revision history); those belong in commits and PR bodies. Mirrored for Codex in `home/programs/agents/shared/comment-conventions.md`; update both together.
+- Comments explain only why an obvious alternative was rejected or why the natural approach is a trap. No `Why:` / `Note:` labels, no conversational residue ("as requested", PR numbers, revision history); those belong in commits and PR bodies. A comment block is at most six lines (docstrings excepted); a longer one is split or cut to the alternative and the reason. When the code a comment explains changes, change the reason with it: a reason that is no longer true is misinformation. Mirrored for Codex in `home/programs/agents/shared/comment-conventions.md`; update both together.
 
 ## Generated artifacts
 
