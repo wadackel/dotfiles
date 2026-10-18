@@ -1,6 +1,6 @@
 import { test } from "bun:test";
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
@@ -44,14 +44,14 @@ async function invokeHook(hookInput: {
   return { code, stderr };
 }
 
-test("entry point: `git -C` rule blocks the command (exit 2)", async () => {
+test("entry point: `git -C` passes (exit 0)", async () => {
   const { code, stderr } = await invokeHook({
     tool_name: "Bash",
     tool_input: { command: "git -C /tmp status" },
     cwd: "/tmp",
   });
-  assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
-  assertStringIncludes(stderr, "git -C");
+  assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
+  assertEquals(stderr, "");
 });
 
 test("entry point: unrelated command passes (exit 0)", async () => {
@@ -67,7 +67,7 @@ test("entry point: unrelated command passes (exit 0)", async () => {
 test("entry point: non-Bash tool is ignored (exit 0)", async () => {
   const { code } = await invokeHook({
     tool_name: "Edit",
-    tool_input: { command: "git -C /tmp status" },
+    tool_input: { command: "git push origin renovate/foo" },
     cwd: "/tmp",
   });
   assertEquals(code, 0);
@@ -78,6 +78,8 @@ for (
     "git push origin renovate/foo",
     "git push -f origin HEAD:renovate/foo",
     "git push renovate/foo",
+    "git -C /tmp push origin renovate/foo",
+    "git -c a=b push origin renovate/foo",
   ]
 ) {
   test(`entry point: renovate rule blocks \`${command}\` (exit 2)`, async () => {
@@ -90,6 +92,26 @@ for (
     assertStringIncludes(stderr, "stop-updating");
   });
 }
+
+test("entry point: a project rule matches through git -C (exit 2)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "bash-policy-project-"));
+  try {
+    await mkdir(join(dir, ".claude"));
+    await writeFile(
+      join(dir, ".claude", "bash-policy.yaml"),
+      'rules:\n  - pattern: "git switch -c *"\n    message: "no branches"\n',
+    );
+    const { code, stderr } = await invokeHook({
+      tool_name: "Bash",
+      tool_input: { command: "git -C . switch -c foo" },
+      cwd: dir,
+    });
+    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+    assertStringIncludes(stderr, "no branches");
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
 
 test("entry point: reading a renovate branch is not a push (exit 0)", async () => {
   const { code, stderr } = await invokeHook({

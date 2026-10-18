@@ -10,14 +10,18 @@
 //
 // YAML format:
 //   rules:
-//     - pattern: "git -C *"
-//       message: "Use cd && git instead"
+//     - pattern: "git push *renovate/*"
+//       message: "This push closes the Renovate PR; add the stop-updating label and push from a terminal"
 
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { text } from "node:stream/consumers";
 import { parse } from "@std/yaml";
-import { getSegments, globToRegex } from "./shell-utils.ts";
+import {
+  getSegments,
+  globToRegex,
+  stripGitGlobalFlags,
+} from "./shell-utils.ts";
 
 export interface Rule {
   pattern: string;
@@ -93,9 +97,15 @@ if (import.meta.main) {
   for (const rule of rules) {
     const regex = globToRegex(rule.pattern);
     const excludeRegexes = (rule.exclude ?? []).map(globToRegex);
+    // A rule is an anchored glob, so `git -C <dir> push …` would slip past
+    // `git push *` while the PermissionRequest hook strips the same flags and
+    // auto-approves it; match the stripped form as well.
     for (const segment of segments) {
-      if (regex.test(segment)) {
-        if (excludeRegexes.some((er) => er.test(segment))) continue;
+      const forms = [segment, stripGitGlobalFlags(segment)];
+      if (forms.some((f) => regex.test(f))) {
+        if (forms.some((f) => excludeRegexes.some((er) => er.test(f)))) {
+          continue;
+        }
         console.error(
           [
             `[bash-policy] Pattern matched: "${rule.pattern}"`,

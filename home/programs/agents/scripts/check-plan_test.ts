@@ -173,24 +173,34 @@ test("graded Self-resolved entries pass in every accepted shape", async () => {
     "- observation: parent / value: b / source: [Direct] x.md:12",
     "  - observation: child / value: d / source: [Supported] y.md:4",
     "- observation: path token / value: b / source: [Direct] ~/.claude/plans/x.md",
+    "- observation: bare rg / value: b / source: [Direct] rg -n foo bar.md",
+    "- observation: bare sed / value: b / source: [Direct] sed -n '1,3p' x.md",
+    "- observation: script / value: b / source: [Direct] scratchpad/probe.ts を実行した",
+    "- observation: no space / value: b / source: [Direct] AGENTS.mdの節を読んだ",
+    "- observation: report / value: b / source: [Supported] adversarial agent の報告「x」",
+    "- observation: named / value: b / source: [Supported] someone said so",
+    "- observation: shell / value: b / source: [Direct] $ nix flake check → all checks passed",
   ]);
   const r = await runOn(plan({ extra }));
   assertEquals(r.code, 0, r.stdout + r.stderr);
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
-test("missing source, missing grade, [Unknown], unbacked [Direct] and [Supported], and an unknown grade are errors", async () => {
+test("missing source, missing grade, [Unknown], unbacked [Direct], bare [Supported], and an unknown grade are errors", async () => {
   const extra = selfResolved([
     "- observation: a / value: b",
     "- observation: a / value: b / source: confirmed by grep",
     "- observation: a / value: b / source: [Unknown] tried rg",
     "- observation: a / value: b / source: [Direct] I read it",
+    "- observation: a / value: b / source: [Direct] 同上",
+    "- observation: a / value: b / source: [Direct] 同上 / x",
+    "- observation: a / value: b / source: [Direct]",
     "- observation: a / value: b / source: [Verified] `rg foo`",
-    "- observation: a / value: b / source: [Supported] someone said so",
+    "- observation: a / value: b / source: [Supported]",
   ]);
   const r = await runOn(plan({ extra }));
   assertEquals(r.code, 1);
-  assertStringIncludes(r.stdout, "6 errors, 0 warnings");
+  assertStringIncludes(r.stdout, "9 errors, 0 warnings");
   assertStringIncludes(
     r.stdout,
     "[error] self-resolved-grade: [Unknown] belongs under ### Unresolved Items",
@@ -201,12 +211,28 @@ test("missing source, missing grade, [Unknown], unbacked [Direct] and [Supported
   );
   assertStringIncludes(
     r.stdout,
-    "[error] self-resolved-grade: [Direct] needs a probe command or file:lines after the grade",
+    "[error] self-resolved-grade: [Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts`",
   );
   assertStringIncludes(
     r.stdout,
-    "[error] self-resolved-grade: [Supported] needs a probe command or file:lines after the grade",
+    "[error] self-resolved-grade: [Supported] needs what was read or who reported it after the grade",
   );
+});
+
+test("a heading repeated outside fences is an error naming the first line", async () => {
+  const r = await runOn(plan({ extra: "## Context\n\ntwice\n" }));
+  assertEquals(r.code, 1);
+  assertStringIncludes(
+    r.stdout,
+    "15:[error] section-duplicate: ## Context also at line 3",
+  );
+  assertStringIncludes(r.stdout, "1 errors, 0 warnings");
+});
+
+test("a heading repeated inside a fence is ignored", async () => {
+  const r = await runOn(plan({ extra: "```\n## Context\n```\n" }));
+  assertEquals(r.code, 0, r.stdout + r.stderr);
+  assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
 
 test("a source after a blank line is not part of the bullet", async () => {

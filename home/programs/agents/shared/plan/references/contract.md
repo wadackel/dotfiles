@@ -28,7 +28,7 @@ Path: `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (Claude) or `~/.codex/plans/…`
 Written immediately before `## Overview`. The critic parses them by structure.
 
 - `### Assumptions` — `observation` / `value` / `reason`, plus `user-overridden: true` when the user chose the value.
-- `### Self-resolved` — entries with `observation` / `value` and a closing line `source: [Direct|Supported|Inferred] <probe command + file:lines>`. `[Unknown]` never appears here. A claim the Approach relies on is `[Direct]`, or `[Supported]` only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets, tokens, credentialed URLs, and personal data replaced by `<redacted: what it is>`.
+- `### Self-resolved` — entries with `observation` / `value` and a closing line `source: [Direct|Supported|Inferred] <probe command + file:lines>`, e.g. `source: [Direct] sed -n '12,14p' src/app.ts` or `source: [Supported] adversarial agent report, round 1`. `[Unknown]` never appears here. A claim the Approach relies on is `[Direct]`, or `[Supported]` only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets, tokens, credentialed URLs, and personal data replaced by `<redacted: what it is>`.
 - `### Unresolved Items` — `item` / `reason` / `next`; `(none)` when empty. User-only questions never go here.
 
 Grades: `[Direct]` you ran the command or read the lines this session (name it); `[Supported]` one inference step from something you read, or a report not re-read (name it); `[Inferred]` a guess, say "likely"; `[Unknown]` you looked and could not tell (say what you tried; it goes under Unresolved Items).

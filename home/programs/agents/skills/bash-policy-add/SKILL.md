@@ -116,9 +116,9 @@ Edit the target file to append the approved rule under `rules:`.
 - pattern: "npm install *"
   message: "This project uses pnpm: npm install ignores pnpm-lock.yaml and writes a package-lock.json. Use pnpm install instead."
 
-# Block git -C
-- pattern: "git -C *"
-  message: "Do not use 'git -C <path>': the Bash(git <subcmd> *) rules in permissions.allow do not match it, so every call asks for permission. Use 'cd <path> && git <subcmd>' instead."
+# Block pushes to Renovate branches
+- pattern: "git push *renovate/*"
+  message: "This push closes the Renovate PR (Renovate rebases its own branch). Either add the stop-updating label (gh pr edit <n> --add-label stop-updating) and run the push yourself from a terminal, or push the fix to your own branch and open a PR that targets the Renovate branch."
 
 # Block npx with scaffdog exception
 - pattern: "npx *"

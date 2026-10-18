@@ -129,7 +129,7 @@ plan / impl / gate の 7 件の改善（gate レビュアーの再編、critic /
 
 ## friction の定義変更
 
-メモ `process-friction-fixes.md` の値（128 / 75 / 44 / 43 / 1 セッション）は、transcript 全文に文字列が現れるセッションを数えたもので、skill 本文やソースを読んだ tool_result も含む。本スクリプトは `is_error: true` の tool_result に限り、subagent の分を親セッションに寄せ、テスト用セッションを除く。その定義での baseline は上の `friction` 群（`git -C` 58、`sed -i ''` 27、`repository mismatch` 5、`self-resolved-grade` 23、`target changed` 22、`/gate --diff-only` 7）。`section-duplicate` は check-plan に規則が入ってから足す。
+メモ `process-friction-fixes.md` の値（128 / 75 / 44 / 43 / 1 セッション）は、transcript 全文に文字列が現れるセッションを数えたもので、skill 本文やソースを読んだ tool_result も含む。本スクリプトは `is_error: true` の tool_result に限り、subagent の分を親セッションに寄せ、テスト用セッションを除く。その定義での baseline は上の `friction` 群（`git -C` 58、`sed -i ''` 27、`repository mismatch` 5、`self-resolved-grade` 23、`target changed` 22、`/gate --diff-only` 7）。`section-duplicate` は 2026-10-18 に check-plan の規則と同時に鍵を足したので、baseline は 0。
 
 ## 読み方
 

@@ -271,7 +271,7 @@ Questions for the user do not belong here — ask them in AGREE or list them und
 
 ## DEEPEN
 
-Review the plan against the original request and observed evidence. Logs go to `<plan-basename>.log.md`. Record the review selection and its concrete reason: `Review executor: main session` or `Review executor: independent plan-critic`.
+Review the plan against the original request and observed evidence. Edit the plan with `apply_patch` or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Logs go to `<plan-basename>.log.md`. Record the review selection and its concrete reason: `Review executor: main session` or `Review executor: independent plan-critic`.
 
 ### Main-session review
 

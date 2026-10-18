@@ -387,6 +387,7 @@ export const FRICTION = {
   repositoryMismatch: "repository mismatch",
   selfResolvedGrade: "[error] self-resolved-grade",
   targetChanged: "target changed during verification",
+  sectionDuplicate: "[error] section-duplicate",
 } as const;
 
 export function buildReport(input: Inputs) {
@@ -588,6 +589,7 @@ export function buildReport(input: Inputs) {
       repositoryMismatchSessions: friction.repositoryMismatch,
       selfResolvedGradeSessions: friction.selfResolvedGrade,
       targetChangedSessions: friction.targetChanged,
+      sectionDuplicateSessions: friction.sectionDuplicate,
       diffOnlyCalls: input.diffOnlyCalls,
     },
     lists: {

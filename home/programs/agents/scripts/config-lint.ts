@@ -5,7 +5,7 @@
 // from shell-utils.ts and the yaml reader only understands `- pattern: "<glob>"`.
 // Unlike bash-policy.ts, a fence line is matched whole: no bash-AST segment split, no
 // heredoc skipping, no `exclude:` support — a lint that is narrower than the hook by
-// design, so `cd x && git -C y` passes here and is still blocked at run time.
+// design, so `cd x && git push origin renovate/y` passes here and is still blocked at run time.
 
 import type { Stats } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";

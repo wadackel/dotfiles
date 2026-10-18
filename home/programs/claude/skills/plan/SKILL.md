@@ -53,7 +53,7 @@ Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` li
 
 Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, for medium and above unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed. Rounds: one by default, `--max-rounds=N` up to five; a Round 1 `ITERATE` caused by a Dimension 7 veto or a restructuring fix earns one more round. Log each round to `<plan>.log.md`.
 
-Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items one per turn per `interview.md`.
+Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Edit the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items one per turn per `interview.md`.
 
 ## DECOMPOSE
 

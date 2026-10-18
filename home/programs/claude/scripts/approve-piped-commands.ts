@@ -6,7 +6,11 @@
 
 import { readFile } from "node:fs/promises";
 import { text } from "node:stream/consumers";
-import { globToRegex, parseCommand } from "./shell-utils.ts";
+import {
+  globToRegex,
+  parseCommand,
+  stripGitGlobalFlags,
+} from "./shell-utils.ts";
 
 /** Extract a normalized glob pattern from a single Bash(...) permission pattern. Returns null if not applicable. */
 export function extractAllowedPattern(pattern: string): string | null {
@@ -92,39 +96,6 @@ export async function extractCommands(command: string): Promise<string[]> {
   return segments
     .map((seg) => seg.split(/\s+/)[0])
     .filter((cmd) => cmd.length > 0);
-}
-
-/** Git global flags that consume the next token as an argument. */
-const GIT_FLAGS_WITH_ARG = new Set(["-c", "-C", "--git-dir", "--work-tree"]);
-
-/** Git global flags that are standalone (no argument). */
-const GIT_FLAGS_STANDALONE = new Set([
-  "--no-pager",
-  "--bare",
-  "--no-replace-objects",
-]);
-
-/** Strip git global flags that appear before the subcommand. */
-export function stripGitGlobalFlags(segment: string): string {
-  const tokens = segment.split(/\s+/);
-  if (tokens[0] !== "git") return segment;
-
-  const result: string[] = ["git"];
-  let i = 1;
-  while (i < tokens.length) {
-    const t = tokens[i];
-    if (GIT_FLAGS_WITH_ARG.has(t)) {
-      i += 2;
-    } else if (GIT_FLAGS_STANDALONE.has(t)) {
-      i += 1;
-    } else if (t.startsWith("--git-dir=") || t.startsWith("--work-tree=")) {
-      i += 1;
-    } else {
-      result.push(...tokens.slice(i));
-      break;
-    }
-  }
-  return result.join(" ");
 }
 
 /** Determine if all commands in a compound command match the allowed patterns. */

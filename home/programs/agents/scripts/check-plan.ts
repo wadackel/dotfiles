@@ -220,12 +220,31 @@ function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
     return;
   }
   if (grade === "[Inferred]") return;
-  if (!/`|:\d|(^|\s)(\$|\.\/|~\/)/.test(item.text.slice(after))) {
+  const rest = item.text.slice(after);
+  if (grade === "[Supported]") {
+    if (rest.trim() === "") {
+      findings.push({
+        line: item.no,
+        severity: "error",
+        rule: "self-resolved-grade",
+        message:
+          "[Supported] needs what was read or who reported it after the grade",
+      });
+    }
+    return;
+  }
+  // A probe is anything path-like: contract.md's own re-runnable forms
+  // (`sed -n '7,8p' path`, `rg -n 'x' path`) carry no backtick, `:N` or `./`,
+  // and a bare `\S/\S` keeps the ` / ` field separator from counting.
+  if (
+    !/`|:\d|\S\/\S|(^|\s)\$|\.[A-Za-z0-9]{1,5}(?![A-Za-z0-9])/.test(rest)
+  ) {
     findings.push({
       line: item.no,
       severity: "error",
       rule: "self-resolved-grade",
-      message: `${grade} needs a probe command or file:lines after the grade`,
+      message:
+        "[Direct] needs a probe command or file:lines after the grade, e.g. `source: [Direct] sed -n '12,14p' src/app.ts`",
     });
   }
 }
@@ -233,6 +252,21 @@ function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
 export function checkPlan(source: string): Finding[] {
   const findings: Finding[] = [];
   const lines = outsideFences(source.split("\n"));
+  const headings = new Map<string, number>();
+  for (const l of lines) {
+    if (!/^#+ /.test(l.text)) continue;
+    const first = headings.get(l.text);
+    if (first === undefined) {
+      headings.set(l.text, l.no);
+      continue;
+    }
+    findings.push({
+      line: l.no,
+      severity: "error",
+      rule: "section-duplicate",
+      message: `${l.text} also at line ${first}`,
+    });
+  }
   for (const heading of REQUIRED_SECTIONS) {
     if (!lines.some((l) => l.text === heading)) {
       findings.push({
