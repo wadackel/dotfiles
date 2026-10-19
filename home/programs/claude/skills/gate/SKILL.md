@@ -5,7 +5,7 @@ description: Final gate for /impl and standalone code review. Runs the evidence 
 
 # /gate
 
-Two modes. **Plan mode** (default under `/impl`): the plan path from `## Plan ready` and its `<plan>.evidence.json`. **`--diff-only`**: a baseline sha (default `HEAD~1`) and no plan, for trivial work and ad-hoc review. Fixed strings are in `~/.claude/skills/plan/references/contract.md`.
+Two modes. **Plan mode** (default under `/impl`): the plan path given as the argument, or else the one from `## Plan ready`, and its `<plan>.evidence.json`. The argument wins because a caller that overlaps several plans in one conversation, such as `/autopilot`, knows which plan this gate is for while the latest `## Plan ready` may belong to another. **`--diff-only`**: a baseline sha (default `HEAD~1`) and no plan, for trivial work and ad-hoc review. Fixed strings are in `~/.claude/skills/plan/references/contract.md`.
 
 ## 1. Collect
 
