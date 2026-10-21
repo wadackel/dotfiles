@@ -17,6 +17,10 @@
     reattach = true; # tmux/screen内でTouch IDを有効化
   };
 
+  # eMudhra の中間 CA 鍵漏洩（Mozilla Bug 2083449）。OpenSSL 系は失効を見ないので、
+  # NSS 3.131.1 でルートが消えるまでは nixpkgs の cacert から自分で除外する
+  security.pki.caCertificateBlacklist = [ "emSign ECC Root CA - G3" ];
+
   # プライマリユーザー設定（Dock など per-user 設定に必要）
   system.primaryUser = username;
 
