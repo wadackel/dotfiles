@@ -134,11 +134,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792178993,
-        "narHash": "sha256-wpvbe4u42q1yO/xeOv18AMPBQb5M1oY5RY1MzHfk+ew=",
+        "lastModified": 1792599476,
+        "narHash": "sha256-nOxZQb8jNinVsWBtIRG4xJv6jyqiBPvu29v4hGftRB8=",
         "owner": "wadackel",
         "repo": "mise-nix",
-        "rev": "af14e630fa3e8ffb4d6b0dc19a13adc49bd62837",
+        "rev": "f784859f35af524558041b1f1244f4004ba670ff",
         "type": "github"
       },
       "original": {
