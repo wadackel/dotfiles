@@ -321,6 +321,9 @@
       StandardHideWidgets = true; # デスクトップにウィジェットを表示しない
       StageManagerHideWidgets = true; # ステージマネージャ使用時もウィジェットを表示しない
       AppWindowGroupingBehavior = false; # ウィンドウを個別に扱う
+      EnableTilingByEdgeDrag = false; # 画面の端へのドラッグでタイルしない
+      EnableTopTilingByEdgeDrag = false; # メニューバーへのドラッグで全画面にしない
+      EnableTilingOptionAccelerator = false; # Option + ドラッグでタイルしない
     };
 
     # カスタム設定
