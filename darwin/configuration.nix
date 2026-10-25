@@ -108,7 +108,8 @@
       "imageoptim"
       "google-japanese-ime"
       "tailscale-app"
-    ];
+    ]
+    ++ lib.optional (profile == "private") "robbietilton-compositor";
 
     # Cask installation arguments
     caskArgs = {
