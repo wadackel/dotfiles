@@ -81,6 +81,24 @@ test("parseLLMOutput: trims markdown heading and bold markers", () => {
   assertEquals(out?.details, ["太字 body"]);
 });
 
+test("parseLLMOutput: ignores a code fence wrapped around the whole output", () => {
+  const out = parseLLMOutput(
+    "```\n要約\n- one\n学び: CLAUDE_CODE_SUBAGENT_MODEL は env で効く\n```",
+  );
+  assertEquals(out, {
+    summary: "要約",
+    details: ["one"],
+    learning: "CLAUDE_CODE_SUBAGENT_MODEL は env で効く",
+  });
+  assertEquals(parseLLMOutput("```markdown\n```"), null);
+});
+
+test("parseLLMOutput: drops a format label echoed before the summary", () => {
+  for (const first of ["1行目: 要約", "- 1行目: 要約", "1行目：要約"]) {
+    assertEquals(parseLLMOutput(`${first}\n- one`)?.summary, "要約", first);
+  }
+});
+
 test("parseLLMOutput: returns the learning line apart from details", () => {
   const out = parseLLMOutput(
     "要約\n- one\n- two\n- three\n学び: bot のラベル付与で本命 run がキャンセルされる",

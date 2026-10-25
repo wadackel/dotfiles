@@ -121,7 +121,7 @@ Full guidance: `references/scenario-and-contract.md` "Scenario Design".
 
 ### Step 4: Dispatch fresh subagent (per scenario)
 
-For each frozen scenario, dispatch a fresh subagent via the `Agent` tool (`subagent_type: "general-purpose"` by default). Multiple scenarios run in parallel — issue all Agent tool calls in a single message.
+For each frozen scenario, dispatch a fresh subagent via the `Agent` tool (`subagent_type: "general-purpose"` by default). On Claude Code, pass `model` set to the model the target skill runs on in real use (`opus` unless the skill says otherwise): an unspecified general-purpose dispatch runs on `CLAUDE_CODE_SUBAGENT_MODEL`, and a scenario run on a different model mixes model differences into the skill's drift. Multiple scenarios run in parallel — issue all Agent tool calls in a single message.
 
 Each subagent receives the launch contract from `references/scenario-and-contract.md` "Subagent Launch Contract":
 - The target skill (body text or absolute path to Read)

@@ -102,14 +102,20 @@ export function escapeObsidianSyntax(text: string): string {
 const LEARNING_PATTERN = /^\s*(?:[-・]\s*)?学び\s*[:：]\s*(.*)$/;
 // haiku は「出さない」と指示しても空欄の学び行を書くことがあり、そのまま残すとデイリーに中身のない行が並ぶ。
 const EMPTY_LEARNINGS = new Set(["", "なし", "無し", "特になし", "-", "n/a"]);
+// haiku 5.5 は出力全体をコードフェンスで囲んだり、指示の「1行目:」を書き写したりする。1 行目をそのまま要約にすると ``` が載る。
+const FENCE_LINE = /^\s*```/;
+const FORMAT_LABEL = /^\s*(?:[-・]\s*)?\d+行目\s*[:：]\s*/;
 
 export function parseLLMOutput(raw: string): LLMResult | null {
-  const lines = raw.trim().split("\n").filter((line) => line.trim());
-  if (lines.length === 0) return null;
-  const summary = lines[0].replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(
-    0,
-    200,
+  const lines = raw.trim().split("\n").filter((line) =>
+    line.trim() && !FENCE_LINE.test(line)
   );
+  if (lines.length === 0) return null;
+  const summary = lines[0].replace(FORMAT_LABEL, "").replace(/^#+\s*/, "")
+    .replace(/\*\*/g, "").slice(
+      0,
+      200,
+    );
   if (!summary) return null;
   let learning: string | undefined;
   const rest: string[] = [];
@@ -277,7 +283,7 @@ export function saveDebounceState(
 // --- Claude call ---
 
 const DEFAULT_CLAUDE_TIMEOUT_MS = 45000;
-const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+const CLAUDE_MODEL = "claude-haiku-5-5";
 
 export interface CallClaudeOptions {
   onStderr?: (msg: string) => Promise<void> | void;
@@ -336,7 +342,14 @@ export async function callClaude(
   let proc: ChildProcess | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    proc = spawn("claude", ["-p", "--safe-mode", "--model", CLAUDE_MODEL], {
+    proc = spawn("claude", [
+      "-p",
+      "--safe-mode",
+      "--model",
+      CLAUDE_MODEL,
+      "--effort",
+      "low",
+    ], {
       cwd,
       // ANTHROPIC_API_KEY を空文字で上書きすることで、親環境にキーが設定されていても
       // API 従量課金ではなくサブスク OAuth 経由の実行を強制する。

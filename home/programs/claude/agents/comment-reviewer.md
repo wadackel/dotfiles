@@ -2,7 +2,7 @@
 name: comment-reviewer
 description: Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Auto-dispatched by /gate when matching source files are detected. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).
 tools: Read, Grep, Glob
-model: opus
+model: sonnet
 color: cyan
 ---
 

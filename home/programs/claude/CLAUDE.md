@@ -6,6 +6,7 @@
 - Say what was verified and what was not. Name the command, file, or report a claim rests on in words; mark a guess as a guess.
 - Stop only for destructive actions, external side effects, or scope changes the user must decide. Otherwise continue without asking and report plainly.
 - Dispatch subagents without asking first when the work is wide and independent enough to repay the context each one rebuilds: a multi-file investigation, a broad search, an independent review. Do not pass `name` unless you will message the agent again, and call TaskStop on a named one when done. Ignore messages that carry only an idle notification.
+- When dispatching general-purpose or a teammate, pass `model` by the kind of work: `opus` for review, audit, falsification and design judgment, `sonnet` for search, research, scripted runs and well-scoped edits; never lower a model the user or a skill named. Leave `model` unset for Explore, Plan and agents whose definition sets one, unless a skill names a model for that dispatch, because a per-call `model` overrides the definition. An unset general-purpose dispatch runs on `CLAUDE_CODE_SUBAGENT_MODEL` (Sonnet).
 
 ## Entrypoints
 
