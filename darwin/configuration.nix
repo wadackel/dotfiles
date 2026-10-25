@@ -437,6 +437,17 @@
       echo >&2 "warning: com.apple.universalaccess を書き込めませんでした。ターミナルに Full Disk Access を付けて再起動してください (tmux 内なら tmux kill-server も必要)"
     fi
 
+    # Finder: アイコン表示の既定の並び順を名前順に
+    # CustomUserPreferences は StandardViewSettings の辞書をまるごと置き換えて列幅などを消し、
+    # PlistBuddy の直接書き込みは cfprefsd のキャッシュに上書きされうるため、defaults 経由で 1 キーだけ書き換える
+    if ! launchctl asuser "$(id -u -- ${username})" sudo --user=${username} -- /bin/sh -c '
+      defaults export com.apple.finder - |
+        plutil -replace StandardViewSettings.IconViewSettings.arrangeBy -string name -o - - |
+        defaults import com.apple.finder -
+    ' 2>/dev/null; then
+      echo >&2 "warning: Finder のアイコン表示の並び順を書き換えられませんでした"
+    fi
+
     # Dock設定を即座に反映
     killall Dock 2>/dev/null || true
 
