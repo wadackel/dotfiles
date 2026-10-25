@@ -136,7 +136,11 @@
             {
               nixpkgs.overlays = overlays;
               nixpkgs.config.allowUnfreePredicate =
-                pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
+                pkg:
+                builtins.elem (nixpkgs.lib.getName pkg) [
+                  "claude-code"
+                  "rtk"
+                ];
             }
           ];
         };
@@ -165,7 +169,11 @@
             {
               nixpkgs.overlays = overlays;
               nixpkgs.config.allowUnfreePredicate =
-                pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
+                pkg:
+                builtins.elem (nixpkgs.lib.getName pkg) [
+                  "claude-code"
+                  "rtk"
+                ];
               networking.hostName = hostname;
               system.primaryUser = username;
               users.users.${username} = {
