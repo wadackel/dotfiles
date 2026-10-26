@@ -31,6 +31,8 @@
 
     # Security & Certificates
     mkcert # Simple tool for making locally-trusted development certificates
+    betterleaks # Secrets scanner for git repositories and files
+    trufflehog # Find, verify, and analyze leaked credentials
 
     # Container & Cloud Tools
     colima # Container runtime (Docker alternative)

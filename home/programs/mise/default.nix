@@ -17,6 +17,7 @@
         actionlint = "latest";
         go = "latest";
         node = "lts";
+        python = "3.13";
         rust = {
           version = "nightly";
           components = [

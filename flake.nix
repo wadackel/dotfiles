@@ -99,6 +99,19 @@
           direnv = prev.direnv.overrideAttrs (_old: {
             doCheck = false;
           });
+          # eMudhra 中間 CA の鍵漏洩 (Mozilla Bug 2083449) の修正版に上げる。
+          # nixpkgs の bun が 1.4.4 以上になったら外す。
+          # src は passthru.sources から決まるので、警告の言う src の上書きは要らない。
+          bun = prev.bun.overrideAttrs (old: {
+            __intentionallyOverridingVersion = true;
+            version = "1.4.4";
+            passthru = old.passthru // {
+              sources.aarch64-darwin = prev.fetchurl {
+                url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-darwin-aarch64.zip";
+                hash = "sha256-wkDX8My5DCY6hJ/NsJt+5iYw2SE0jtaq/ahrnVd7xRA=";
+              };
+            };
+          });
         })
       ];
 
