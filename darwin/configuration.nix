@@ -109,7 +109,10 @@
       "google-japanese-ime"
       "tailscale-app"
     ]
-    ++ lib.optional (profile == "private") "robbietilton-compositor";
+    ++ lib.optionals (profile == "private") [
+      "brave-browser"
+      "robbietilton-compositor"
+    ];
 
     # Cask installation arguments
     caskArgs = {
