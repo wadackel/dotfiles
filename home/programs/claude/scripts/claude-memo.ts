@@ -271,6 +271,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  // ヘッドレスの検証用セッションはツールを使うので、使い捨て判定では落ちない。
+  // Claude Code は継いだ値が cli のときだけ sdk-cli に書き換えるので、
+  // VS Code や Agent SDK から起動した claude -p はここでは除外されない。
+  if (process.env.CLAUDE_CODE_ENTRYPOINT === "sdk-cli") {
+    await log("SKIP: headless session (CLAUDE_CODE_ENTRYPOINT=sdk-cli)");
+    return;
+  }
+
   await rotateLog();
 
   const stdinData = await text(process.stdin);

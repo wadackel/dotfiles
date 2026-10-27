@@ -140,6 +140,31 @@ test("main: CLAUDE_MEMO_SKIP=1 short-circuits before touching state", async () =
   assertStringIncludes(log, "SKIP: CLAUDE_MEMO_SKIP=1");
 });
 
+test("main: a headless claude -p session (sdk-cli) is skipped", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "tmp-"));
+  const scriptPath = join(import.meta.dirname, "claude-memo.ts");
+
+  try {
+    const { code } = await run(scriptPath, [], {
+      env: {
+        CLAUDE_MEMO_SKIP: "",
+        CLAUDE_CODE_ENTRYPOINT: "sdk-cli",
+        TMPDIR: tmp,
+        HOME: tmp,
+        BUN_RUNTIME_TRANSPILER_CACHE_PATH:
+          `${process.env.HOME}/Library/Caches/bun/@t@`,
+      },
+      stdin: "{}",
+    });
+    assertEquals(code, 0);
+
+    const log = await readFile(`${tmp}/claude-memo.log`, "utf8");
+    assertStringIncludes(log, "SKIP: headless session");
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("countUserMessages: excludes isMeta:true entries", () => {
   const entries = [
     userEntry("real prompt 1"),
