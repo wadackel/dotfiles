@@ -18,6 +18,7 @@ import {
   clampStep,
   codexCwdHash,
   COMPACT_CARD,
+  inListArea,
   isCompact,
   isKeyBurst,
   isLivePaneCommand,
@@ -1108,9 +1109,13 @@ test("bodyHeightFor: floor stays at 5", () => {
 });
 
 test("splitLayout: columns plus gutter never exceed the terminal", () => {
-  for (const cols of [20, 30, 41, 60, 61, 67, 80, 113, 150, 200]) {
-    const { listWidth, previewWidth } = splitLayout(cols);
-    const used = listWidth + (previewWidth > 0 ? 2 + previewWidth : 0);
+  for (
+    const cols of [13, 20, 30, 41, 60, 61, 67, 80, 113, 129, 130, 150, 200]
+  ) {
+    const { stacked, listWidth, previewWidth } = splitLayout(cols);
+    const used = stacked
+      ? Math.max(listWidth, previewWidth)
+      : listWidth + 2 + previewWidth;
     assertEquals(
       used <= cols,
       true,
@@ -1119,12 +1124,229 @@ test("splitLayout: columns plus gutter never exceed the terminal", () => {
   }
 });
 
-test("splitLayout: cols 60 keeps the 40-cell list the e2e fixtures assume", () => {
-  assertEquals(splitLayout(60), { listWidth: 40, previewWidth: 18 });
+test("splitLayout: below 130 columns the list and the preview stack at full width", () => {
+  assertEquals(splitLayout(129), {
+    stacked: true,
+    listWidth: 129,
+    previewWidth: 129,
+  });
+  assertEquals(splitLayout(130), {
+    stacked: false,
+    listWidth: 78,
+    previewWidth: 50,
+  });
 });
 
 test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () => {
-  assertEquals(splitLayout(150), { listWidth: 90, previewWidth: 58 });
+  assertEquals(splitLayout(150), {
+    stacked: false,
+    listWidth: 90,
+    previewWidth: 58,
+  });
+});
+
+test("listGeometry: a stacked list shrinks to its cards", () => {
+  const g = listGeometry({
+    columns: 121,
+    rows: 40,
+    total: 2,
+    selected: 0,
+    prevOffset: 0,
+  });
+  assertEquals(
+    { stacked: g.stacked, body: g.bodyHeight, preview: g.previewRows },
+    { stacked: true, body: 8, preview: 28 },
+  );
+  assertEquals(g.view.scrolling, false);
+});
+
+test("listGeometry: a long stacked list scrolls within 40 % of the rows", () => {
+  const g = listGeometry({
+    columns: 121,
+    rows: 40,
+    total: 10,
+    selected: 0,
+    prevOffset: 0,
+  });
+  assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
+    body: 14,
+    preview: 22,
+  });
+  assertEquals({ count: g.view.count, below: g.view.below }, {
+    count: 3,
+    below: 7,
+  });
+});
+
+test("listGeometry: a short stacked popup shown with p uses compact cards", () => {
+  const at = (total: number) => {
+    const g = listGeometry({
+      columns: 120,
+      rows: 20,
+      total,
+      selected: 0,
+      prevOffset: 0,
+      previewOverride: true,
+    });
+    return { body: g.bodyHeight, preview: g.previewRows };
+  };
+  assertEquals(at(1), { body: 2, preview: 15 });
+  assertEquals(at(10), { body: 7, preview: 10 });
+});
+
+test("listGeometry: the preview keeps 8 rows before the list gets its 40 %", () => {
+  const g = listGeometry({
+    columns: 120,
+    rows: 15,
+    total: 10,
+    selected: 0,
+    prevOffset: 0,
+    previewOverride: true,
+  });
+  assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
+    body: 4,
+    preview: 8,
+  });
+});
+
+test("listGeometry: a scrolling stacked list gives its spare rows to the preview", () => {
+  // avail 42 caps the list at 16 rows; three full cards and the indicators use 14.
+  const g = listGeometry({
+    columns: 121,
+    rows: 45,
+    total: 10,
+    selected: 0,
+    prevOffset: 0,
+  });
+  assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
+    body: 14,
+    preview: 27,
+  });
+});
+
+test("listGeometry: too few rows for the preview leave the stacked list alone", () => {
+  const g = listGeometry({
+    columns: 120,
+    rows: 12,
+    total: 10,
+    selected: 0,
+    prevOffset: 0,
+    previewOverride: true,
+  });
+  assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
+    body: bodyHeightFor(12),
+    preview: 0,
+  });
+  assertEquals(g.previewShown, false);
+});
+
+test("listGeometry: a stacked list too narrow for a preview takes every row", () => {
+  const g = listGeometry({
+    columns: 13,
+    rows: 40,
+    total: 2,
+    selected: 0,
+    prevOffset: 0,
+  });
+  assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
+    body: bodyHeightFor(40),
+    preview: 0,
+  });
+});
+
+test("listGeometry: an empty stacked list leaves rows for the usage card only", () => {
+  const at = (usageRows: number) => {
+    const g = listGeometry({
+      columns: 121,
+      rows: 40,
+      total: 0,
+      selected: 0,
+      prevOffset: 0,
+      usageRows,
+    });
+    return { body: g.bodyHeight, preview: g.previewRows };
+  };
+  assertEquals(at(0), { body: bodyHeightFor(40), preview: 0 });
+  assertEquals(at(3), { body: 33, preview: 3 });
+});
+
+test("listGeometry: a stacked popup under 32 rows hides the preview", () => {
+  const at = (rows: number, usageRows = 0) => {
+    const g = listGeometry({
+      columns: 121,
+      rows,
+      total: 10,
+      selected: 0,
+      prevOffset: 0,
+      usageRows,
+    });
+    return {
+      shown: g.previewShown,
+      body: g.bodyHeight,
+      preview: g.previewRows,
+      count: g.view.count,
+    };
+  };
+  assertEquals(at(31), {
+    shown: false,
+    body: bodyHeightFor(31),
+    preview: 0,
+    count: 6,
+  });
+  assertEquals(at(20), { shown: false, body: 18, preview: 0, count: 5 });
+  // The Usage card stays under the list.
+  assertEquals(at(20, 3), { shown: false, body: 14, preview: 3, count: 4 });
+  assertEquals(at(32), { shown: true, body: 10, preview: 18, count: 2 });
+});
+
+test("listGeometry: a short side-by-side popup keeps its preview", () => {
+  const g = listGeometry({
+    columns: 200,
+    rows: 20,
+    total: 10,
+    selected: 0,
+    prevOffset: 0,
+  });
+  assertEquals({ shown: g.previewShown, list: g.listWidth }, {
+    shown: true,
+    list: 120,
+  });
+});
+
+test("listGeometry: p hides a side-by-side preview and the list takes the width", () => {
+  const g = listGeometry({
+    columns: 200,
+    rows: 50,
+    total: 2,
+    selected: 0,
+    prevOffset: 0,
+    usageRows: 3,
+    previewOverride: false,
+  });
+  assertEquals(
+    { shown: g.previewShown, list: g.listWidth, preview: g.previewWidth },
+    { shown: false, list: 200, preview: 0 },
+  );
+  assertEquals(cardIndexAt(g, { x: 150, y: 1 }), 0);
+});
+
+test("listGeometry: an empty list ignores the auto rule and p", () => {
+  for (const previewOverride of [null, false]) {
+    const g = listGeometry({
+      columns: 121,
+      rows: 20,
+      total: 0,
+      selected: 0,
+      prevOffset: 0,
+      usageRows: 3,
+      previewOverride,
+    });
+    assertEquals(
+      { body: g.bodyHeight, preview: g.previewRows },
+      { body: 14, preview: 3 },
+      String(previewOverride),
+    );
+  }
 });
 
 test("row1Columns: repo plus branch never overflow the list column", () => {
@@ -1156,10 +1378,17 @@ test("row1Columns: the 4-cell floors give way rather than overflow", () => {
   assertEquals(row1Columns(31, 8, 4), { repoMax: 0, branchMax: 0 });
 });
 
-test("splitLayout: preview drops once the remainder is too thin", () => {
-  assertEquals(splitLayout(30), { listWidth: 30, previewWidth: 0 });
-  assertEquals(splitLayout(55), { listWidth: 40, previewWidth: 0 });
-  assertEquals(splitLayout(56), { listWidth: 40, previewWidth: 14 });
+test("splitLayout: preview drops once the width is too thin", () => {
+  assertEquals(splitLayout(13), {
+    stacked: true,
+    listWidth: 13,
+    previewWidth: 0,
+  });
+  assertEquals(splitLayout(14), {
+    stacked: true,
+    listWidth: 14,
+    previewWidth: 14,
+  });
 });
 
 test("usageRowWidth: the sub-slot sum is 60 with bars and 42 without", () => {
@@ -1433,6 +1662,19 @@ test("hintTokens: an empty list keeps only the keys that still act", () => {
   assertStringIncludes(hintText(false, "free", true), " free windows ");
 });
 
+test("hintTokens: p trails quit wherever there is a preview to toggle", () => {
+  for (const screen of ["agents", "free"] as const) {
+    const text = hintText(false, screen);
+    assertEquals(
+      text.indexOf(" quit") < text.indexOf(" preview"),
+      true,
+      screen,
+    );
+    assertEquals(text.endsWith(" preview"), true, screen);
+  }
+  assertEquals(hintText(false, "agents", true).includes("preview"), false);
+});
+
 // --- emptyMessage ---
 
 test("emptyMessage: a screen with rows has none", () => {
@@ -1642,6 +1884,37 @@ test("cardIndexAt: compact gap rows belong to no card", () => {
   assertEquals(cardIndexAt(g, { x: 0, y: 2 }), null);
   assertEquals(cardIndexAt(g, { x: 0, y: 3 }), 1);
   assertEquals(cardIndexAt(g, { x: 0, y: 5 }), null);
+});
+
+test("cardIndexAt: the stacked preview below the list is not a card", () => {
+  // List rows 1-8, gutter 9, preview from 10.
+  const g = geometryAt(121, 40, 2);
+  assertEquals(cardIndexAt(g, { x: 120, y: 8 }), 1);
+  assertEquals(cardIndexAt(g, { x: 0, y: 9 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 20 }), null);
+});
+
+test("cardIndexAt: a scrolled stacked list ends at its bottom indicator", () => {
+  // Indicators on rows 1 and 14, cards on 2-13, preview from 16.
+  const g = geometryAt(121, 40, 10);
+  assertEquals(cardIndexAt(g, { x: 0, y: 13 }), 2);
+  assertEquals(cardIndexAt(g, { x: 0, y: 14 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 17 }), null);
+});
+
+test("inListArea: the stacked preview and the hint bar are outside the list", () => {
+  const g = geometryAt(121, 40, 2);
+  assertEquals(inListArea(g, { x: 60, y: 8 }), true);
+  assertEquals(inListArea(g, { x: 60, y: 9 }), false);
+  assertEquals(inListArea(g, { x: 60, y: 20 }), false);
+  assertEquals(inListArea(g, { x: 60, y: 39 }), false);
+});
+
+test("inListArea: the side-by-side preview column and the hint bar are outside the list", () => {
+  const g = geometryAt(200, 50, 2);
+  assertEquals(inListArea(g, { x: 0, y: 1 }), true);
+  assertEquals(inListArea(g, { x: g.listWidth, y: 1 }), false);
+  assertEquals(inListArea(g, { x: 0, y: 49 }), false);
 });
 
 // --- isKeyBurst ---

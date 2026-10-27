@@ -105,17 +105,27 @@ trace("ink-module-eval-done");
 const MIN_PREVIEW_CARD_ROWS = 8;
 
 // The Usage card sits under the preview, so it needs a preview column wide
-// enough for a bar-less row (42 cells for the 5h / 7d labels) and tall enough
-// to leave the preview its minimum. Anything narrower would clip the columns
-// the rows are laid out on.
+// enough for a bar-less row (42 cells for the 5h / 7d labels). Anything
+// narrower would clip the columns the rows are laid out on.
+function usageFits(usages: AgentUsage[], previewWidth: number): boolean {
+  const inner = previewWidth - CARD_CHROME_COLS;
+  const layout = usageLayout(usages, inner);
+  return layout !== null && usageRowWidth(layout) <= inner;
+}
+
+// Rows the Usage card takes at `width`, or 0 when it does not fit there.
+function usageRowsFor(usages: AgentUsage[], width: number): number {
+  return usageFits(usages, width) ? usageCardRows(usages.length) : 0;
+}
+
+// Whether the preview sits beside or under the list, the Usage card must also
+// leave it its minimum.
 export function showUsageCard(
   usages: AgentUsage[],
   previewWidth: number,
   columnHeight: number,
 ): boolean {
-  const inner = previewWidth - CARD_CHROME_COLS;
-  const layout = usageLayout(usages, inner);
-  return layout !== null && usageRowWidth(layout) <= inner &&
+  return usageFits(usages, previewWidth) &&
     columnHeight >= usageCardRows(usages.length) + MIN_PREVIEW_CARD_ROWS;
 }
 
@@ -125,33 +135,53 @@ export function topRowsFor(totalRows: number): number {
   return isCompact(totalRows) ? 0 : 1;
 }
 
+const MIN_BODY_ROWS = 5;
+
 // The list also gives up 2 rows to the key-hint bar and its marginTop.
 export function bodyHeightFor(totalRows: number): number {
-  return Math.max(5, totalRows - topRowsFor(totalRows) - 2);
+  return Math.max(MIN_BODY_ROWS, totalRows - topRowsFor(totalRows) - 2);
 }
 
 // Gutter between the list and the preview, spent as the preview's marginLeft.
 const PREVIEW_GUTTER = 2;
-const MIN_LIST = 40;
 // clampPreview floors its inner width at Math.max(10, width - 4), so a preview
 // box narrower than this renders content wider than the box it sits in.
 const MIN_PREVIEW = 14;
 
-// Clamping listWidth and previewWidth against independent floors lets their sum
-// exceed totalCols on a narrow terminal (40 + 1 + 20 = 61 at cols 60), and Ink
-// wraps the overflow instead of clipping it. Cutting both out of one budget is
-// what keeps the row inside the frame; the preview is dropped outright once the
-// remainder is too thin to render honestly.
+// Side by side, a 121-column popup leaves the preview 47 columns and cuts every
+// line of a wider pane, so below this the preview goes under the list at full
+// width instead.
+const STACK_BELOW_COLS = 130;
+// A stacked list stops growing at this share of the rows and scrolls instead,
+// so a long list never squeezes the preview.
+const STACK_LIST_SHARE = 0.4;
+// Blank row between a stacked list and the card under it.
+const STACK_GUTTER = 1;
+// A stacked popup this short starts with the preview hidden. Not the compact
+// card threshold, so the two can be tuned apart.
+const STACK_HIDE_PREVIEW_BELOW_ROWS = 32;
+
+// From STACK_BELOW_COLS up, 60 % gives the list at least 78 columns and the
+// preview at least 50, so neither needs a floor.
 export function splitLayout(totalCols: number): {
+  stacked: boolean;
   listWidth: number;
   previewWidth: number;
 } {
-  const listWidth = Math.min(
-    Math.max(0, totalCols),
-    Math.max(MIN_LIST, Math.floor(totalCols * 0.6)),
-  );
-  const rest = totalCols - listWidth - PREVIEW_GUTTER;
-  return { listWidth, previewWidth: rest >= MIN_PREVIEW ? rest : 0 };
+  if (totalCols < STACK_BELOW_COLS) {
+    const width = Math.max(0, totalCols);
+    return {
+      stacked: true,
+      listWidth: width,
+      previewWidth: width >= MIN_PREVIEW ? width : 0,
+    };
+  }
+  const listWidth = Math.floor(totalCols * 0.6);
+  return {
+    stacked: false,
+    listWidth,
+    previewWidth: totalCols - listWidth - PREVIEW_GUTTER,
+  };
 }
 
 // Row-1 repo / branch column widths for a given list width. Both columns are
@@ -258,11 +288,54 @@ export function visibleWindow(
   };
 }
 
+// Rows of a stacked list and of the preview area under it, out of `avail`.
+// A scrolling list takes only the rows its cards and indicators use, because
+// the remainder of the cap would sit blank above the preview.
+function stackedRows(opts: {
+  avail: number;
+  total: number;
+  card: CardShape;
+  previewWidth: number;
+  preview: boolean;
+  usageRows: number;
+}): { bodyHeight: number; previewRows: number } {
+  const { avail, total, card } = opts;
+  const listOnly = { bodyHeight: avail, previewRows: 0 };
+  if (opts.previewWidth === 0) return listOnly;
+  if (total === 0 || !opts.preview) {
+    const bodyHeight = avail - STACK_GUTTER - opts.usageRows;
+    return opts.usageRows > 0 && bodyHeight >= MIN_BODY_ROWS
+      ? { bodyHeight, previewRows: opts.usageRows }
+      : listOnly;
+  }
+  const content = total * card.rows + (total - 1) * card.gap;
+  const cap = Math.min(
+    Math.floor(avail * STACK_LIST_SHARE),
+    avail - STACK_GUTTER - MIN_PREVIEW_CARD_ROWS,
+  );
+  let bodyHeight: number;
+  if (content <= cap) {
+    bodyHeight = content;
+  } else if (cap >= card.rows + 2) {
+    const { count } = visibleWindow(total, 0, cap, 0, card);
+    bodyHeight = count * (card.rows + card.gap) - card.gap + 2;
+  } else {
+    return listOnly;
+  }
+  return { bodyHeight, previewRows: avail - bodyHeight - STACK_GUTTER };
+}
+
 export interface ListGeometry {
+  stacked: boolean;
   listWidth: number;
   previewWidth: number;
   topRows: number;
   bodyHeight: number;
+  // Rows for the preview and the Usage card: the column beside the list, or
+  // the area under a stacked one.
+  previewRows: number;
+  // Whether the preview card is drawn; `p` asks for the opposite.
+  previewShown: boolean;
   card: CardShape;
   view: ListWindow;
 }
@@ -275,11 +348,37 @@ export function listGeometry(opts: {
   total: number;
   selected: number;
   prevOffset: number;
+  // Rows the Usage card takes when it fits the width; only a stacked list
+  // with no preview under it reads it.
+  usageRows?: number;
+  // What `p` chose; null leaves it to the height.
+  previewOverride?: boolean | null;
 }): ListGeometry {
-  const { listWidth, previewWidth } = splitLayout(opts.columns);
+  const split = splitLayout(opts.columns);
+  const { stacked } = split;
+  // An empty list has no preview to hide, and hiding would take its Usage
+  // card with it where `p` cannot bring it back.
+  const wanted = opts.total === 0 ||
+    (opts.previewOverride ??
+      !(stacked && opts.rows < STACK_HIDE_PREVIEW_BELOW_ROWS));
+  const listWidth = stacked || wanted ? split.listWidth : opts.columns;
+  const previewWidth = stacked || wanted ? split.previewWidth : 0;
   const topRows = topRowsFor(opts.rows);
-  const bodyHeight = bodyHeightFor(opts.rows);
+  const avail = bodyHeightFor(opts.rows);
   const card = isCompact(opts.rows) ? COMPACT_CARD : FULL_CARD;
+  const { bodyHeight, previewRows } = stacked
+    ? stackedRows({
+      avail,
+      total: opts.total,
+      card,
+      previewWidth,
+      preview: wanted,
+      usageRows: opts.usageRows ?? 0,
+    })
+    : { bodyHeight: avail, previewRows: opts.rows - topRows };
+  const previewShown = stacked
+    ? wanted && opts.total > 0 && previewRows > 0
+    : previewWidth > 0;
   const view = visibleWindow(
     opts.total,
     opts.selected,
@@ -287,7 +386,17 @@ export function listGeometry(opts: {
     opts.prevOffset,
     card,
   );
-  return { listWidth, previewWidth, topRows, bodyHeight, card, view };
+  return {
+    stacked,
+    listWidth,
+    previewWidth,
+    topRows,
+    bodyHeight,
+    previewRows,
+    previewShown,
+    card,
+    view,
+  };
 }
 
 export const MOUSE_LEFT = 0;
@@ -317,14 +426,24 @@ export function parseMouse(input: string): MouseReport | null {
   };
 }
 
+// Whether (x, y) is over the list rather than the preview, the Usage card or
+// the hint bar. A stacked list spans the full width, so x alone cannot tell.
+export function inListArea(
+  geometry: ListGeometry,
+  point: { x: number; y: number },
+): boolean {
+  return point.x >= 0 && point.x < geometry.listWidth &&
+    point.y < geometry.topRows + geometry.bodyHeight;
+}
+
 // Index into derivedRows of the card under (x, y), or null for the preview,
 // the scroll indicators, compact gaps, and the hint bar.
 export function cardIndexAt(
   geometry: ListGeometry,
   point: { x: number; y: number },
 ): number | null {
-  const { listWidth, topRows, card, view } = geometry;
-  if (point.x < 0 || point.x >= listWidth) return null;
+  const { topRows, card, view } = geometry;
+  if (!inListArea(geometry, point)) return null;
   const r = point.y - topRows - (view.scrolling ? 1 : 0);
   if (r < 0) return null;
   const stride = card.rows + card.gap;
@@ -935,6 +1054,11 @@ function App({
   const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   const [filterEnabled, setFilterEnabled] = useState(false);
+  // What `p` chose for the preview, kept for this process only; null until
+  // then, leaving it to the height.
+  const [previewOverride, setPreviewOverride] = useState<boolean | null>(
+    null,
+  );
   const [screen, setScreen] = useState<ListScreen>("agents");
   // The tick effect below never re-subscribes, so it reads the screen here.
   const screenRef = useRef<ListScreen>("agents");
@@ -1158,19 +1282,26 @@ function App({
     });
   };
 
-  const handleMouse = (mouse: MouseReport) => {
-    if (derivedRows.length === 0) return;
-    const geometry = listGeometry({
+  // The render, the mouse handler and `p` all read the frame from here, so a
+  // click and a toggle act on the layout that is on screen.
+  const geometryNow = () =>
+    listGeometry({
       columns: size.columns,
       rows: size.rows,
       total: derivedRows.length,
       selected: index,
       prevOffset: listOffset.current,
+      usageRows: usageRowsFor(usages, size.columns),
+      previewOverride,
     });
+
+  const handleMouse = (mouse: MouseReport) => {
+    if (derivedRows.length === 0) return;
+    const geometry = geometryNow();
     if (
       mouse.button === MOUSE_WHEEL_UP || mouse.button === MOUSE_WHEEL_DOWN
     ) {
-      if (mouse.x >= geometry.listWidth) return;
+      if (!inListArea(geometry, mouse)) return;
       updateSelection(clampStep(mouse.button === MOUSE_WHEEL_UP ? -1 : 1));
       return;
     }
@@ -1221,6 +1352,12 @@ function App({
     }
     if (input === "f") {
       toggleScreen();
+      return;
+    }
+    if (input === "p") {
+      if (derivedRows.length > 0) {
+        setPreviewOverride(!geometryNow().previewShown);
+      }
       return;
     }
     // The keys below act on an agent's state, which a free window lacks.
@@ -1303,21 +1440,24 @@ function App({
   // repaints every cell on each tick. Ink clips output to the root box height,
   // so pinning the root to totalRows is what keeps overflow impossible.
   const totalRows = size.rows;
-  const { listWidth, previewWidth, topRows, bodyHeight, card, view } =
-    listGeometry({
-      columns: totalCols,
-      rows: totalRows,
-      total: derivedRows.length,
-      selected: index,
-      prevOffset: listOffset.current,
-    });
-  // The preview column starts on the same row as the list and runs to the
-  // bottom row so the Usage card sits beside the hints.
-  const columnHeight = totalRows - topRows;
-  const usageVisible = previewWidth > 0 &&
-    showUsageCard(usages, previewWidth, columnHeight);
+  const {
+    stacked,
+    listWidth,
+    previewWidth,
+    topRows,
+    bodyHeight,
+    previewRows,
+    previewShown,
+    card,
+    view,
+  } = geometryNow();
+  // A stacked list with no preview under it only leaves rows for the Usage
+  // card, which is too few for showUsageCard's preview minimum.
+  const usageVisible = previewWidth > 0 && previewRows > 0 &&
+    ((stacked && !previewShown) ||
+      showUsageCard(usages, previewWidth, previewRows));
   listOffset.current = view.offset;
-  const previewHeight = columnHeight -
+  const previewHeight = previewRows -
     (usageVisible ? usageCardRows(usages.length) : 0);
   // Dynamic repo/branch column widths: scan every row, clamp to caps, and
   // shrink branch first if the combined width would starve the summary slot.
@@ -1337,86 +1477,107 @@ function App({
     Math.max(0, ...rowsParts.map((p) => stringCells(p.branch))),
   );
 
+  const listBody = (
+    <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
+      {empty && (
+        <EmptyState
+          message={empty}
+          width={listWidth}
+          height={bodyHeight}
+        />
+      )}
+      {view.scrolling && (
+        <Text color={DOGRUN.muted}>
+          {view.above > 0 ? `  ↑ ${view.above} more` : " "}
+        </Text>
+      )}
+      <Box flexDirection="column" gap={card.gap}>
+        {screen === "free"
+          ? free
+            .slice(view.offset, view.offset + view.count)
+            .map((entry: FreeWindow, i: number) => (
+              <FreeWindowLine
+                key={entry.row.paneId}
+                entry={entry}
+                dirty={dirty.get(entry.row.currentPath)}
+                now={now}
+                selected={view.offset + i === index}
+                listWidth={listWidth}
+                padded={card === FULL_CARD}
+              />
+            ))
+          : derivedRows
+            .slice(view.offset, view.offset + view.count)
+            .map((row: PaneRow, i: number) => (
+              <PaneRowLine
+                key={row.paneId}
+                row={row}
+                now={now}
+                selected={view.offset + i === index}
+                taskProgress={taskProgressMap.get(row.paneId) ?? null}
+                listWidth={listWidth}
+                repoMax={repoMax}
+                branchMax={branchMax}
+                padded={card === FULL_CARD}
+              />
+            ))}
+      </Box>
+      {view.scrolling && (
+        <Text color={DOGRUN.muted}>
+          {view.below > 0 ? `  ↓ ${view.below} more` : " "}
+        </Text>
+      )}
+    </Box>
+  );
+  const hintBar = (
+    <HintBar
+      filterEnabled={filterEnabled}
+      screen={screen}
+      empty={empty !== null}
+      width={listWidth}
+    />
+  );
+  const previewCard = previewShown ? current : undefined;
+  // Preview's inner height floors at 3 rows, so a zero-row area must not draw
+  // it at all or the card would push the frame past totalRows.
+  const previewArea = previewWidth > 0 && previewRows > 0 &&
+    (previewCard || usageVisible) && (
+    <Box
+      marginLeft={stacked ? 0 : PREVIEW_GUTTER}
+      marginTop={stacked ? STACK_GUTTER : topRows}
+      flexDirection="column"
+      justifyContent="flex-end"
+      height={previewRows}
+    >
+      {previewCard && (
+        <Preview
+          row={previewCard}
+          width={previewWidth}
+          height={previewHeight}
+        />
+      )}
+      {usageVisible && (
+        <UsageCard usages={usages} now={now} width={previewWidth} />
+      )}
+    </Box>
+  );
+
+  if (stacked) {
+    return (
+      <Box flexDirection="column" width={totalCols} height={totalRows}>
+        {listBody}
+        {previewArea}
+        {hintBar}
+      </Box>
+    );
+  }
   return (
     <Box flexDirection="row" width={totalCols} height={totalRows}>
       <Box flexDirection="column" width={listWidth}>
-        <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
-          {empty && (
-            <EmptyState
-              message={empty}
-              width={listWidth}
-              height={bodyHeight}
-            />
-          )}
-          {view.scrolling && (
-            <Text color={DOGRUN.muted}>
-              {view.above > 0 ? `  ↑ ${view.above} more` : " "}
-            </Text>
-          )}
-          <Box flexDirection="column" gap={card.gap}>
-            {screen === "free"
-              ? free
-                .slice(view.offset, view.offset + view.count)
-                .map((entry: FreeWindow, i: number) => (
-                  <FreeWindowLine
-                    key={entry.row.paneId}
-                    entry={entry}
-                    dirty={dirty.get(entry.row.currentPath)}
-                    now={now}
-                    selected={view.offset + i === index}
-                    listWidth={listWidth}
-                    padded={card === FULL_CARD}
-                  />
-                ))
-              : derivedRows
-                .slice(view.offset, view.offset + view.count)
-                .map((row: PaneRow, i: number) => (
-                  <PaneRowLine
-                    key={row.paneId}
-                    row={row}
-                    now={now}
-                    selected={view.offset + i === index}
-                    taskProgress={taskProgressMap.get(row.paneId) ?? null}
-                    listWidth={listWidth}
-                    repoMax={repoMax}
-                    branchMax={branchMax}
-                    padded={card === FULL_CARD}
-                  />
-                ))}
-          </Box>
-          {view.scrolling && (
-            <Text color={DOGRUN.muted}>
-              {view.below > 0 ? `  ↓ ${view.below} more` : " "}
-            </Text>
-          )}
-        </Box>
-        <HintBar
-          filterEnabled={filterEnabled}
-          screen={screen}
-          empty={empty !== null}
-          width={listWidth}
-        />
+        {listBody}
+        {hintBar}
       </Box>
-      {previewWidth > 0 && (current || usageVisible) && (
-        <Box
-          marginLeft={PREVIEW_GUTTER}
-          marginTop={topRows}
-          flexDirection="column"
-          justifyContent="flex-end"
-          height={columnHeight}
-        >
-          {current && (
-            <Preview
-              row={current}
-              width={previewWidth}
-              height={previewHeight}
-            />
-          )}
-          {usageVisible && (
-            <UsageCard usages={usages} now={now} width={previewWidth} />
-          )}
-        </Box>
-      )}
+      {previewArea}
     </Box>
   );
 }

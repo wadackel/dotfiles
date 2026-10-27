@@ -152,6 +152,8 @@ test("S69: startup discovery drops old session data and removes exited Codex", a
       agentower,
       (o) => selectedLine(o).includes(" idle "),
     );
+    // The hint bar's " preview" would match the "review" label.
+    const rows = out.split("\n").filter((l) => !l.includes(" quit")).join("\n");
     for (
       const marker of [
         "old-prompt-S69",
@@ -159,7 +161,7 @@ test("S69: startup discovery drops old session data and removes exited Codex", a
         "old-child-S69",
         "review",
       ]
-    ) assertFalse(out.includes(marker));
+    ) assertFalse(rows.includes(marker), marker);
     assertEquals(
       out.split("\n").filter((l) => l.includes(" codex ")).length,
       1,
@@ -539,11 +541,11 @@ test("S9: idle pane shows time since last activity in the elapsed column", async
 });
 
 // S10: Under a narrow list width, low-priority row-2 segments drop first.
-// cols 60 gives listWidth 40 and a row-2 segment budget of 18 once the fixed
+// cols 40 gives listWidth 40 and a row-2 segment budget of 18 once the fixed
 // right block is reserved: the tool segment (14 cells) fits, the file segment
 // behind it does not.
 test("S10: narrow width drops low-priority segments first", async () => {
-  await setupServer({ cols: 60, rows: 20 });
+  await setupServer({ cols: 40, rows: 20 });
   try {
     const nowSec = Math.floor(Date.now() / 1000);
     await createClaudePane({
@@ -631,15 +633,14 @@ test("S12: navigation wraps at boundaries", async () => {
 });
 
 // S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under a
-// 100-col width (listWidth=60) the new budget `listWidth - 2 - row.target.length`
+// 60-col width (listWidth=60) the budget `listWidth - 2 - 20 (right block)` = 38
 // still leaves room for tool / tree / file segments to all fit. The actual
 // Unicode code points come from agentower.tsx:ROW2_ICONS — we assert by literal
 // glyph so a regression that changes the constants (or drops the prefix) fails
-// here. The default 80-col path had just enough budget under the old
-// `listWidth - 4` formula but now lies on the drop threshold, which is why
-// the scenario pins cols=100 explicitly.
+// here. cols=60 stacks the list at 60 columns, the same budget the scenario
+// had side by side at cols=100.
 test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
-  await setupServer({ cols: 100, rows: 20 });
+  await setupServer({ cols: 60, rows: 20 });
   try {
     await createClaudePane({
       status: "running",
@@ -668,7 +669,7 @@ test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => 
 // must remain visible while the file icon must NOT leak into the render. Guards
 // against regressions where icons are emitted outside the budget-drop path.
 test("S14: narrow width drops low-priority icon along with its segment", async () => {
-  await setupServer({ cols: 60, rows: 20 });
+  await setupServer({ cols: 40, rows: 20 });
   try {
     const nowSec = Math.floor(Date.now() / 1000);
     await createClaudePane({
@@ -705,10 +706,10 @@ test("S14: narrow width drops low-priority icon along with its segment", async (
 // point boundary, so the rendered output never contains a half-surrogate or a
 // mid-word Ink clip artifact.
 test("S15: long tool name is code-point-safe truncated without Ink hard-clip", async () => {
-  // cols=60 → listWidth=40. target "test:W.P" ≈ 8. New budget ≈ 30.
+  // cols=40 → listWidth=40, budget = 40 - 2 - 20 (right block) = 18.
   // Tool name chosen to exceed the new budget so the truncate guard fires,
   // which is exactly the condition that used to leak through to Ink.
-  await setupServer({ cols: 60, rows: 20 });
+  await setupServer({ cols: 40, rows: 20 });
   try {
     await createClaudePane({
       status: "running",
@@ -739,8 +740,8 @@ test("S15: long tool name is code-point-safe truncated without Ink hard-clip", a
 // the full "TaskOutput" literal survives even when both tool and file
 // segments coexist with plenty of listWidth slack.
 test("S16: tool segment with icon + sibling file segment renders full tool name", async () => {
-  // cols=120 → listWidth=72. tool seg (12 cells) + " · " (3) + file seg
-  // (24 cells) = 39 cells; budget = 72 - 2 - 20 (right block) = 50. No
+  // cols=120 → stacked, listWidth=120. tool seg (12 cells) + " · " (3) + file
+  // seg (24 cells) = 39 cells; budget = 120 - 2 - 20 (right block) = 98. No
   // truncation path is expected to fire — pure layout regression check.
   await setupServer({ cols: 120, rows: 20 });
   try {
@@ -841,7 +842,7 @@ test("S18: empty row-2 renders (no activity) placeholder", async () => {
 // yellow (warn), ≥75 red (err). The percentages share one column down the
 // list, and a pane without the option set draws neither gauge nor percent.
 test("S19: context gauge sits in a fixed right column (gauge + percent + color)", async () => {
-  await setupServer({ cols: 120, rows: 20 });
+  await setupServer({ cols: 130, rows: 20 });
   try {
     const paneGreen = await createClaudePane({
       status: "running",
@@ -1350,7 +1351,7 @@ test("S29: stale codex pane (currentCommand=zsh) is filtered out", async () => {
 // (listWidth / previewWidth / bodyHeight / hint bar width) updates live.
 //
 // Signal: the key-hint bar is 84 cells, spans the list column, and is clipped
-// from the right, so its last hint " quit" is cut at cols 60 (list 40) and
+// from the right, so its last hint " quit" is cut at cols 60 (stacked) and
 // shown at cols 150 (list 90).
 test("S30: Agentower re-layouts after tmux resize-window", async () => {
   await setupServer({ cols: 60, rows: 20 });
@@ -1427,7 +1428,7 @@ test("S-N2: m keypress cycles userLabel none → review", async () => {
 
     await sendKey(agentower, "m");
     // The label text appears after the next 1s tick + repaint.
-    await waitFor(agentower, (out) => out.includes("review"), 4000);
+    await waitFor(agentower, selectedIncludes("review"), 4000);
 
     await sendKey(agentower, "Escape");
     await waitForExit();
@@ -1681,7 +1682,7 @@ test("S33: no usage files → no usage card, body keeps its rows", async () => {
 });
 
 test("S34: narrow width suppresses the usage card and draws no title row", async () => {
-  await setupServer({ cols: 60, rows: 20 });
+  await setupServer({ cols: 40, rows: 30 });
   try {
     await createClaudePane({ status: "running", prompt: "narrow-xxx" });
     await writeUsageFixture("claude", [
@@ -2179,7 +2180,7 @@ test("S50: right-clicking a card selects it and cycles its label", async () => {
 
     await sendClick(agentower, 2, CARD_1);
     await waitFor(agentower, selectedIncludes("row-b"));
-    await waitFor(agentower, (out) => out.includes("review"), 4000);
+    await waitFor(agentower, selectedIncludes("review"), 4000);
     // The screen shows the label optimistically, ahead of the tmux write.
     let label = "";
     for (let i = 0; i < 40 && label !== "review"; i++) {
@@ -2417,7 +2418,7 @@ function listColumn(out: string): string[] {
 // name passed the budget at half its real width and Ink wrapped the row, which
 // pushed every pane below it down one line.
 test("S58: CJK row-2 segments stay on their row", async () => {
-  await setupServer({ cols: 120, rows: 40 });
+  await setupServer({ cols: 130, rows: 40 });
   try {
     await createClaudePane({
       status: "running",
@@ -2433,10 +2434,10 @@ test("S58: CJK row-2 segments stay on their row", async () => {
     const first = list.findIndex((l) => l.includes("cjk-seg-row"));
     // Four-row cards: the next pane's row 1 is four lines further down.
     assertStringIncludes(list[first + 4] ?? "", "below-row", out);
-    // splitLayout gives the list 72 of the 120 columns.
+    // splitLayout gives the list 78 of the 130 columns.
     for (const l of list) {
       const used = stringCells(l.trimEnd());
-      assertEquals(used <= 72, true, `list line overflows: ${l}`);
+      assertEquals(used <= 78, true, `list line overflows: ${l}`);
     }
 
     await sendKey(agentower, "Escape");
@@ -2449,7 +2450,7 @@ test("S58: CJK row-2 segments stay on their row", async () => {
 // cell_width counted an emoji as one cell while tmux draws two, so an emoji
 // prompt overflowed row 1 and wrapped the card.
 test("S59: an emoji prompt is truncated to the row instead of wrapping", async () => {
-  await setupServer({ cols: 120, rows: 40 });
+  await setupServer({ cols: 130, rows: 40 });
   try {
     await createClaudePane({ status: "idle", prompt: "🎉".repeat(40) });
     await createClaudePane({ status: "idle", prompt: "below-row" });
@@ -3109,7 +3110,7 @@ test("S75: a window whose agent has exited is free and shows none of its old val
 });
 
 test("S76: free rows stay on their own two lines at the narrowest width", async () => {
-  await setupServer({ cols: 60 });
+  await setupServer({ cols: 40 });
   const root = await mkdtemp("/tmp/agentower-free-");
   try {
     const long = "-a-directory-name-longer-than-the-list-column-is-wide";
@@ -3259,7 +3260,7 @@ test("S79: a split free window names what its other panes run", async () => {
 });
 
 test("S80: an empty list centres its message and keeps the hint bar", async () => {
-  await setupServer({ cols: 120, rows: 40 });
+  await setupServer({ cols: 130, rows: 40 });
   try {
     const agentower = await spawnAgentower();
     const lines = (await captureOutput(agentower)).split("\n");
@@ -3274,11 +3275,182 @@ test("S80: an empty list centres its message and keeps the hint bar", async () =
       "Start claude, codex or opencode in a tmux pane",
       out,
     );
-    // 36 is the middle of the 72-cell list column at 120 columns.
-    assertEquals(Math.abs(centre(lines[title]) - 36) <= 1, true, out);
-    assertEquals(Math.abs(centre(lines[title + 1]) - 36) <= 1, true, out);
+    // 39 is the middle of the 78-cell list column at 130 columns.
+    assertEquals(Math.abs(centre(lines[title]) - 39) <= 1, true, out);
+    assertEquals(Math.abs(centre(lines[title + 1]) - 39) <= 1, true, out);
     assertStringIncludes(out, " quit");
     assertFalse(out.includes("jump"), out);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- Stacked layout (below 130 columns) ----
+//
+// 121×40 is the inner size of the popup on a 123×53 client. The preview card
+// and the Usage card are the only lines that open with a border corner.
+
+function cardEdges(lines: string[]): { top: number; bottom: number }[] {
+  const edges: { top: number; bottom: number }[] = [];
+  lines.forEach((l, i) => {
+    if (l.startsWith("╭")) edges.push({ top: i, bottom: -1 });
+    if (l.startsWith("╰") && edges.length > 0) edges.at(-1)!.bottom = i;
+  });
+  return edges;
+}
+
+test("S81: a narrow popup puts the preview and the usage card under the list", async () => {
+  await setupServer({ cols: 121, rows: 40 });
+  try {
+    await printingClaudePane(
+      String.raw`yes "" | head -50; printf "STACK-MARK"`,
+    );
+    await printingClaudePane(
+      String.raw`yes "" | head -50; printf "STACK-MARK"`,
+    );
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6420 },
+    ]);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(
+      agentower,
+      (o) => o.includes("STACK-MARK") && footerLines(o).length === 1,
+    );
+    const lines = out.split("\n");
+    const [preview, usage] = cardEdges(lines);
+    const hint = lines.findIndex((l) => l.includes(" quit"));
+    const listRows = lines.flatMap((l, i) => l.includes(" idle ") ? [i] : []);
+
+    assertEquals(listRows.length, 2, out);
+    assertEquals(listRows.every((i) => i < preview.top), true, out);
+    assertEquals(stringCells(lines[preview.top].trimEnd()), 121, out);
+    assertEquals(usage.top > preview.bottom, true, out);
+    assertEquals(stringCells(lines[usage.top].trimEnd()), 121, out);
+    assertEquals(hint > usage.bottom, true, out);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+test("S82: a long stacked list scrolls and leaves the preview its rows", async () => {
+  await setupServer({ cols: 121, rows: 40 });
+  try {
+    for (let i = 0; i < 10; i++) {
+      await createClaudePane({ status: "idle", prompt: `stack-row-${i}` });
+    }
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("↓ 7 more"));
+    const lines = out.split("\n");
+    const [preview] = cardEdges(lines);
+    assertEquals(preview.bottom - preview.top + 1 >= 8, true, out);
+
+    // Wheel over the preview leaves the selection; over the list it moves it.
+    const before = selectedLine(out);
+    await sendBurst(agentower, wheelDown({ x: 60, y: preview.top + 3 }));
+    await new Promise((r) => setTimeout(r, 300));
+    const still = await captureOutput(agentower);
+    assertEquals(selectedLine(still), before, still);
+    await sendBurst(agentower, wheelDown({ x: 2, y: 3 }));
+    await waitFor(agentower, (o) => selectedLine(o) !== before);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+test("S83: an empty stacked list centres its message above the usage card", async () => {
+  await setupServer({ cols: 121, rows: 40 });
+  try {
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6420 },
+    ]);
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => footerLines(o).length === 1);
+    const lines = out.split("\n");
+    const centre = (line: string) =>
+      (line.length - line.trimStart().length) + line.trim().length / 2;
+    const title = lines.findIndex((l) => l.trim() === "No agents");
+    const [usage] = cardEdges(lines);
+
+    assertEquals(title >= 0 && title < usage.top, true, out);
+    assertEquals(Math.abs(centre(lines[title]) - 60) <= 1, true, out);
+    assertStringIncludes(out, " quit");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- Preview toggle (p) ----
+
+function cardTitles(out: string): string[] {
+  const lines = out.split("\n");
+  return cardEdges(lines).map((e) => lines[e.top]);
+}
+
+test("S84: a short stacked popup hides the preview until p", async () => {
+  await setupServer({ cols: 121, rows: 23 });
+  try {
+    for (let i = 0; i < 10; i++) {
+      await createClaudePane({ status: "idle", prompt: `short-row-${i}` });
+    }
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6420 },
+    ]);
+    const agentower = await spawnAgentower();
+    const hidden = await waitFor(agentower, (o) => footerLines(o).length === 1);
+    const titles = cardTitles(hidden);
+    assertEquals(titles.length, 1, hidden);
+    assertStringIncludes(titles[0], "Usage", hidden);
+    const listed = hidden.split("\n").filter((l) => /short-row-\d/.test(l));
+    assertEquals(listed.length >= 5, true, hidden);
+
+    await sendKey(agentower, "p");
+    const shown = await waitFor(agentower, (o) => cardTitles(o).length === 2);
+    assertEquals(cardTitles(shown)[1].includes("Usage"), true, shown);
+
+    await sendKey(agentower, "p");
+    await waitFor(agentower, (o) => cardTitles(o).length === 1);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+test("S85: p hides the side-by-side preview and widens the list", async () => {
+  await setupServer({ cols: 200, rows: 50 });
+  try {
+    // A prompt longer than any list, so row 1 runs to the list's right edge.
+    const long = "x".repeat(200);
+    await createClaudePane({ status: "idle", prompt: `wide-row-a-${long}` });
+    await createClaudePane({ status: "idle", prompt: `wide-row-b-${long}` });
+    const agentower = await spawnAgentower();
+    // splitLayout gives the list 120 of the 200 columns.
+    const narrow = (o: string) =>
+      o.includes("╭") &&
+      listColumn(o).every((l) => stringCells(l.trimEnd()) <= 120);
+    const wide = (o: string) =>
+      !o.includes("╭") &&
+      o.split("\n").some((l) => stringCells(l.trimEnd()) > 120);
+    await waitFor(agentower, narrow);
+
+    await sendKey(agentower, "p");
+    await waitFor(agentower, wide);
+
+    await sendKey(agentower, "p");
+    await waitFor(agentower, narrow);
 
     await sendKey(agentower, "Escape");
     await waitForExit();

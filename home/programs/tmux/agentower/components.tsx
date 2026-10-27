@@ -922,8 +922,11 @@ export function hintTokens(
     ? []
     : [[ENTER_ICON, "jump"], ["j k", "move"]];
   const clear: [string, string][] = filterEnabled ? [["w", "clear"]] : [];
+  // `p` trails `q quit`: ahead of it, the 98-cell row would push quit out of
+  // the 90-column list of a 152-column popup.
+  const preview: [string, string][] = empty ? [] : [["p", "preview"]];
   const keys: [string, string][] = screen === "free"
-    ? [...move, ["f", "agents"], ["q", "quit"]]
+    ? [...move, ["f", "agents"], ["q", "quit"], ...preview]
     : empty
     ? [...clear, ["f", "free"], ["q", "quit"]]
     : [
@@ -934,6 +937,7 @@ export function hintTokens(
       ["f", "free"],
       ["m", "label"],
       ["q", "quit"],
+      ...preview,
     ];
   const pill = screen === "free"
     ? " free windows "
