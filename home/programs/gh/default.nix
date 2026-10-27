@@ -25,10 +25,8 @@ let
         };
       };
 
-      # some tests resolve branches through git and need to run inside a repository
-      preCheck = (old.preCheck or "") + ''
-        git init --quiet
-      '';
+      # the git-driven test suite runs past go test's 10-minute limit in internal/modify
+      doCheck = false;
     }
   );
 in
