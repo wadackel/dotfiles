@@ -327,6 +327,27 @@ export function checkPlan(source: string): Finding[] {
       checkRucItem(item, findings);
     }
   }
+  // A provisional default is for a scope boundary only; naming the boundary in
+  // a field is what keeps a behavior or design value from being parked there,
+  // which the same rule in prose did not prevent.
+  const assumptions = section(lines, "### Assumptions");
+  if (assumptions) {
+    for (const item of bullets(assumptions.body)) {
+      const visible = item.text.replace(/`[^`]*`/g, "");
+      if (
+        /user-overridden:\s*default/.test(visible) &&
+        !/(^|[\s/])scope:\s*\S/.test(visible)
+      ) {
+        findings.push({
+          line: item.no,
+          severity: "error",
+          rule: "assumption-scope",
+          message:
+            "a `user-overridden: default` assumption needs `scope: <the boundary: what is in or out>`; a behavior or design value is asked, not provisional",
+        });
+      }
+    }
+  }
   const sr = section(lines, "### Self-resolved");
   if (sr) {
     for (const item of bullets(sr.body)) {

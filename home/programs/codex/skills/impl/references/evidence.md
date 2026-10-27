@@ -1,6 +1,6 @@
 # Evidence commands
 
-Use the existing helper; do not assemble sidecars or hashes inline. Every command takes an absolute `.evidence.json` path under the real `~/.codex/plans` directory. Run from the bound repository. The file's `plan` is the matching `.md` basename.
+Use the existing helper; do not assemble sidecars or hashes inline. Every command takes an absolute `.evidence.json` path under the real `~/.codex/plans` directory, or the plan's name (its basename without `.md`), which is looked up there and in `~/.claude/plans`. After the first `start`, commands work in the bound repository whatever the current directory. The file's `plan` is the matching `.md` basename.
 
 ```bash
 rtk proxy ~/.agents/scripts/plan-state.ts normalize "$HOME/.codex/plans/<basename>.evidence.json"
@@ -10,14 +10,15 @@ Replace `normalize` with the command below, still starting the helper by its pat
 
 | Command | Arguments / input | Effect |
 |---|---|---|
-| `start` | `<path> task-N` | Bind repository; record HEAD once; mark in progress |
+| `start` | `<path> task-N` | Bind repository on the first start; record HEAD once; mark in progress; complete earlier in-progress tasks whose checks are current |
 | `require` | `<path> task-N`; JSON array on stdin | Add acceptance checks; preserve earlier requirements |
 | `snapshot` | `<path>` | Print the current target (tree OID of the working tree plus the plan file) |
-| `run` | `<path> task-N <id> [--expect-exit N] [--env K=V]... [--cwd DIR] [--grep RE] [--tail N] [--expect-unchanged] -- <command> [args...]` | Snapshot, execute the argv without a shell, snapshot again, append the record (file-state / orchestrator-only only); prints one status line plus the tail or grep lines; exit 1 on fail. The argv names the command itself, never a wrapper such as `timeout` or `nice` (refused before spawning). On a machine with `~/.claude/settings.json`, the argv must also be in Claude Code's `permissions.allow` and clear its bash-policy rules, whichever agent runs it (the helper mirrors that check before spawning). |
+| `run` | `<path> task-N <id> [--expect-exit N] [--env K=V]... [--cwd DIR] [--grep RE] [--tail N] [--expect-unchanged] -- <command> [args...]` | Start a pending task and declare an undeclared `cc-<n>` from the plan's bullet tag; snapshot, execute the argv without a shell, snapshot again, append the record (file-state / orchestrator-only only); prints one status line plus the tail or grep lines; exit 1 on fail. The argv names the command itself, never a wrapper such as `timeout` or `nice` (refused before spawning). On a machine with `~/.claude/settings.json`, the argv must also be in Claude Code's `permissions.allow` and clear its bash-policy rules, whichever agent runs it (the helper mirrors that check before spawning). |
 | `rerun` | `<path>` | Re-execute every `run`-recorded check whose target is stale or status is fail, once per distinct argv; `fresh` and `skipped (record)` rows are not executed; exit 1 when any rerun fails |
 | `record` | `<path> task-N`; JSON object on stdin | Append result only if target still matches; the fields `run` writes (`argv`, `tree`, …) are rejected |
 | `append-evidence` | `<path> task-N`; text on stdin | Append narrative or expected-red evidence, without establishing PASS |
 | `coverage` | `<path>` | Exit 1 listing every `### Autonomous Verification` bullet whose `cc-<n>` id no task requires |
+| `review` | `<path> <wave> -- <reviewer>...`; verdict on stdin | Start the final task, complete earlier tasks whose checks are current, declare `review-<wave>`, record the passing verdict |
 | `complete` | `<path> task-N` | Reject absent, stale, failed, or blocked required checks |
 | `reconcile` | `<path>` | Reopen stale completed tasks while retaining evidence |
 

@@ -879,18 +879,24 @@ function capture(
   });
 }
 
+// One `ps` for the whole table: a `ps -p` per ancestor cost a spawn per level
+// on every tool call.
+let psTable: Promise<Map<number, PsRow>> | undefined;
+
 async function fetchParent(pid: number): Promise<PsRow | null> {
-  try {
-    const { code, output } = await capture(
-      "ps",
-      ["-p", String(pid), "-o", "ppid=,comm="],
-      "stdout",
-    );
-    if (code !== 0) return null;
-    return parsePsLine(output);
-  } catch {
-    return null;
-  }
+  psTable ??= capture("ps", ["-A", "-o", "pid=,ppid=,comm="], "stdout")
+    .then(({ code, output }) => {
+      const rows = new Map<number, PsRow>();
+      if (code !== 0) return rows;
+      for (const line of output.split("\n")) {
+        const m = line.trim().match(/^(\d+)\s+(.+)$/);
+        const row = m ? parsePsLine(m[2]) : null;
+        if (m && row) rows.set(Number(m[1]), row);
+      }
+      return rows;
+    })
+    .catch(() => new Map<number, PsRow>());
+  return (await psTable).get(pid) ?? null;
 }
 
 // --- tmux I/O ---
@@ -902,64 +908,112 @@ async function tmuxRun(
   return { code, stderr: output.trim() };
 }
 
-async function readPaneState(pane: string): Promise<PaneState> {
-  // `tmux show -pv <option>` exits non-zero with empty stderr when the option
-  // is unset — that's the normal "default" path and must stay silent.
-  // Non-zero exit WITH non-empty stderr signals a real tmux failure (pane gone,
-  // server down) worth logging so the failure is not silently masked.
-  const runShow = async (key: string) => {
-    const { code, stdout, stderr } = await run(
-      "tmux",
-      ["show", "-t", pane, "-pv", key],
-    );
-    const errText = stderr.trim();
-    if (code !== 0 && errText.length > 0) {
-      console.error(
-        `claude-pane-status: tmux show -pv ${key} failed: ${errText}`,
-      );
+const ESCAPES: Record<string, string> = {
+  n: "\n",
+  t: "\t",
+  r: "\r",
+  e: "\x1b",
+};
+
+/**
+ * `tmux show-options -p` prints `@key value`, with the value bare, in double
+ * quotes (\" \$ \\ escaped), in single quotes, or with control characters
+ * as \n / \t / \ooo. Read in one call instead of one `show -pv` per key; a
+ * `display -p '#{@key}'` would also be one call but falls back to window,
+ * session and server options of the same name.
+ */
+export function parseShowOptions(output: string): Map<string, string> {
+  const options = new Map<string, string>();
+  for (const line of output.split("\n")) {
+    const space = line.indexOf(" ");
+    if (space <= 0) continue;
+    const raw = line.slice(space + 1);
+    let value = "";
+    let quote: "'" | '"' | null = null;
+    for (let i = 0; i < raw.length; i++) {
+      const c = raw[i];
+      if (quote === "'") {
+        if (c === "'") quote = null;
+        else value += c;
+      } else if (c === "\\" && i + 1 < raw.length) {
+        const octal = raw.slice(i + 1, i + 4);
+        if (/^[0-7]{3}$/.test(octal)) {
+          value += String.fromCharCode(parseInt(octal, 8));
+          i += 3;
+        } else {
+          value += ESCAPES[raw[i + 1]] ?? raw[i + 1];
+          i += 1;
+        }
+      } else if (c === '"' || (c === "'" && quote === null)) {
+        quote = quote === c ? null : c;
+      } else {
+        value += c;
+      }
     }
-    return stdout;
-  };
-  const [
-    subagentsStdout,
-    teardownStdout,
-    currentToolStdout,
-    statusStdout,
-    mainStoppedStdout,
-    waitReasonStdout,
-    lastActivityAtStdout,
-  ] = await Promise.all([
-    runShow("@pane_subagents"),
-    runShow("@pane_pending_teardown"),
-    runShow("@pane_current_tool"),
-    runShow("@pane_status"),
-    runShow("@pane_main_stopped"),
-    runShow("@pane_wait_reason"),
-    runShow("@pane_last_activity_at"),
-  ]);
+    options.set(line.slice(0, space), value);
+  }
+  return options;
+}
+
+async function readPaneState(pane: string): Promise<PaneState> {
+  // A pane that has none of the options set prints nothing and exits 0;
+  // a non-zero exit with stderr is a real failure (pane gone, server down).
+  const { code, stdout, stderr } = await run(
+    "tmux",
+    ["show-options", "-p", "-t", pane],
+  );
+  if (code !== 0 && stderr.trim().length > 0) {
+    console.error(
+      `claude-pane-status: tmux show-options failed: ${stderr.trim()}`,
+    );
+  }
+  const options = parseShowOptions(stdout);
+  const get = (key: string) => (options.get(key) ?? "").trim();
   return {
-    subagents: subagentsStdout.trim(),
-    pendingTeardown: teardownStdout.trim() === "1",
-    currentTool: currentToolStdout.trim(),
-    status: statusStdout.trim(),
-    mainStopped: mainStoppedStdout.trim() === "1",
-    waitReason: waitReasonStdout.trim(),
-    lastActivityAt: lastActivityAtStdout.trim(),
+    subagents: get("@pane_subagents"),
+    pendingTeardown: get("@pane_pending_teardown") === "1",
+    currentTool: get("@pane_current_tool"),
+    status: get("@pane_status"),
+    mainStopped: get("@pane_main_stopped") === "1",
+    waitReason: get("@pane_wait_reason"),
+    lastActivityAt: get("@pane_last_activity_at"),
   };
 }
 
-async function applyOp(pane: string, op: Op): Promise<ApplyResult> {
-  const args = op.kind === "set"
-    ? ["set", "-t", pane, "-p", op.key, op.value]
-    : ["set", "-t", pane, "-p", "-u", op.key];
-  const { code, stderr } = await tmuxRun(args);
+/**
+ * All ops as one tmux invocation. tmux ends a command at an argv element that
+ * ends in `;`, so the separator is its own element and a value ending in `;`
+ * (a prompt, a tool subject) has it escaped; unescaped, the old per-op `set`
+ * silently dropped that character.
+ */
+export function chainSetArgs(pane: string, ops: Op[]): string[] {
+  return ops.flatMap((op, i) => [
+    ...(i === 0 ? [] : [";"]),
+    ...(op.kind === "set"
+      ? [
+        "set",
+        "-t",
+        pane,
+        "-p",
+        op.key,
+        op.value.endsWith(";") ? `${op.value.slice(0, -1)}\\;` : op.value,
+      ]
+      : ["set", "-t", pane, "-p", "-u", op.key]),
+  ]);
+}
+
+async function applyOps(pane: string, ops: Op[]): Promise<ApplyResult[]> {
+  const { code, stderr } = await tmuxRun(chainSetArgs(pane, ops));
   if (code !== 0) {
     console.error(
-      `claude-pane-status: tmux set failed (${op.kind} ${op.key}): ${stderr}`,
+      `claude-pane-status: tmux set failed (${
+        ops.map((op) => `${op.kind} ${op.key}`).join(", ")
+      }): ${stderr}`,
     );
-    return { key: op.key, code, stderr };
   }
-  return { key: op.key, code };
+  return ops.map((op) =>
+    code === 0 ? { key: op.key, code } : { key: op.key, code, stderr }
+  );
 }
 
 // --- Main ---
@@ -1044,9 +1098,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    for (const op of ops) {
-      ctx.apply_results.push(await applyOp(tmuxPane, op));
-    }
+    ctx.apply_results.push(...await applyOps(tmuxPane, ops));
   } finally {
     await writeLogRecord(buildLogRecord(ctx, new Date(), process.pid));
   }

@@ -316,3 +316,22 @@ test("bullets inside an indented fence are ignored", async () => {
   assertEquals(r.code, 0, r.stdout + r.stderr);
   assertStringIncludes(r.stdout, "0 errors, 0 warnings");
 });
+
+test("a provisional assumption without a scope: field is an error", async () => {
+  const assumptions = (items: string[]) =>
+    ["### Assumptions", "", ...items, ""].join("\n");
+  const missing = await runOn(plan({
+    extra: assumptions([
+      "- observation: a / value: the timeout is 30 s / reason: c / user-overridden: default",
+    ]),
+  }));
+  assertEquals(missing.code, 1, missing.stdout);
+  assertStringIncludes(missing.stdout, "[error] assumption-scope:");
+  const scoped = await runOn(plan({
+    extra: assumptions([
+      "- observation: a / value: b / reason: c / user-overridden: default / scope: the CLI only, not the API",
+      "- observation: the `user-overridden: default` rule / value: b / reason: c / user-overridden: true",
+    ]),
+  }));
+  assertEquals(scoped.code, 0, scoped.stdout);
+});

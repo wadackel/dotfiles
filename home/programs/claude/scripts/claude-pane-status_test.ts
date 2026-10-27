@@ -1,8 +1,10 @@
 import { test } from "bun:test";
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { run } from "../../agents/lib/proc.ts";
 import {
   appendSubagent,
   buildLogRecord,
+  chainSetArgs,
   count,
   eventToOps,
   extractToolError,
@@ -10,6 +12,7 @@ import {
   formatElapsed,
   hasSubagent,
   type PaneState,
+  parseShowOptions,
   removeSubagent,
   type RunContext,
   selfHealOps,
@@ -2781,3 +2784,82 @@ test(
     assertEquals(status?.kind === "set" ? status.value : "", "running");
   },
 );
+
+test("parseShowOptions undoes tmux's quoting of pane option values", () => {
+  const out = [
+    "@pane_status running",
+    '@pane_wait_reason "idle prompt"',
+    '@pane_b "say \\"hi\\" \\$HOME \\\\x;"',
+    "@pane_d tab\\tand\\nnewline",
+    '@pane_e "it\'s"',
+    "@pane_f ''",
+    "",
+  ].join("\n");
+  const map = parseShowOptions(out);
+  assertEquals(map.get("@pane_status"), "running");
+  assertEquals(map.get("@pane_wait_reason"), "idle prompt");
+  assertEquals(map.get("@pane_b"), 'say "hi" $HOME \\x;');
+  assertEquals(map.get("@pane_d"), "tab\tand\nnewline");
+  assertEquals(map.get("@pane_e"), "it's");
+  assertEquals(map.get("@pane_f"), "");
+  assertEquals(map.has("@pane_absent"), false);
+});
+
+test("chainSetArgs output stores a value ending in ; intact in a real tmux", async () => {
+  const server = `chain-set-test-${process.pid}`;
+  const tmux = (...argv: string[]) => run("tmux", ["-L", server, ...argv]);
+  assertEquals(
+    (await tmux("-f", "/dev/null", "new-session", "-d", "-s", "t")).code,
+    0,
+  );
+  try {
+    const pane = (await tmux("display", "-p", "-t", "t", "#{pane_id}")).stdout
+      .trim();
+    const set = await tmux(...chainSetArgs(pane, [
+      { kind: "set", key: "@pane_a", value: "ls;" },
+      { kind: "set", key: "@pane_b", value: ";" },
+      { kind: "set", key: "@pane_c", value: "plain" },
+    ]));
+    assertEquals(set.code, 0, set.stderr);
+    const options = parseShowOptions(
+      (await tmux("show-options", "-p", "-t", pane)).stdout,
+    );
+    assertEquals(options.get("@pane_a"), "ls;");
+    assertEquals(options.get("@pane_b"), ";");
+    assertEquals(options.get("@pane_c"), "plain");
+  } finally {
+    await tmux("kill-server");
+  }
+});
+
+test("chainSetArgs joins ops with a lone ; and escapes a value ending in ;", () => {
+  assertEquals(
+    chainSetArgs("%3", [
+      { kind: "set", key: "@pane_status", value: "running" },
+      { kind: "unset", key: "@pane_wait_reason" },
+      { kind: "set", key: "@pane_prompt", value: "ls;" },
+    ]),
+    [
+      "set",
+      "-t",
+      "%3",
+      "-p",
+      "@pane_status",
+      "running",
+      ";",
+      "set",
+      "-t",
+      "%3",
+      "-p",
+      "-u",
+      "@pane_wait_reason",
+      ";",
+      "set",
+      "-t",
+      "%3",
+      "-p",
+      "@pane_prompt",
+      "ls\\;",
+    ],
+  );
+});

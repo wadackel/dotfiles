@@ -1,6 +1,6 @@
 import { test } from "bun:test";
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
@@ -159,6 +159,7 @@ async function helperFixture(
             "Bash(*/.agents/scripts/plan-state.ts coverage *)",
             "Bash(*/.agents/scripts/plan-state.ts complete *)",
             "Bash(*/.agents/scripts/plan-state.ts reconcile *)",
+            "Bash(*/.agents/scripts/plan-state.ts review *)",
           ],
           deny: ["Bash(git push -f origin main)"],
         },
@@ -442,6 +443,32 @@ test("rerun: blocks an unreadable or non-literal evidence path (exit 2)", async 
     const expanded = await hook(`${HELPER} rerun $E`);
     assertEquals(expanded.code, 2, expanded.stderr);
     assertStringIncludes(expanded.stderr, "literal evidence path");
+  });
+});
+
+test("rerun: a plan name is looked up in the plans directory and its stored argv checked", async () => {
+  await helperFixture(async (dir, hook) => {
+    const path = await writeSidecar(dir, [
+      "git",
+      "push",
+      "-f",
+      "origin",
+      "main",
+    ]);
+    await mkdir(join(dir, ".claude", "plans"));
+    await rename(path, join(dir, ".claude", "plans", "p.evidence.json"));
+    const { code, stderr } = await hook(`${HELPER} rerun p`);
+    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+    assertStringIncludes(stderr, "stored check cc-2");
+  });
+});
+
+test("review: passes as a passive subcommand with the verdict in a heredoc (exit 0)", async () => {
+  await helperFixture(async (_dir, hook) => {
+    const { code, stderr } = await hook(
+      `${HELPER} review p 1 -- code-reviewer <<'EOF'\n### MUST_FIX\n- None\nVERDICT: PASS\nEOF`,
+    );
+    assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
   });
 });
 

@@ -345,14 +345,6 @@ test("reconcile reopens missing artifacts without discarding evidence", async ()
     const data = JSON.parse(await readFile(path, "utf8"));
     assertEquals(data.tasks[0].status, "in_progress");
     assertEquals(data.tasks[0].checks.length, 1);
-    await mkdir("other");
-    process.chdir("other");
-    await runCommand("git", ["init", "-q"]);
-    await assertRejects(
-      () => run(["reconcile", path]),
-      Error,
-      "repository mismatch",
-    );
   });
 });
 
@@ -1177,3 +1169,180 @@ test("run validates --grep before spawning and records a missing command as a fa
     assertEquals(String(check.output).startsWith("cannot start"), true);
   });
 });
+
+/** A second three-task sidecar next to the fixture's, whose plan lists four tagged bullets; nothing is started. */
+async function taggedPlan(path: string): Promise<string> {
+  const dir = path.slice(0, path.lastIndexOf("/"));
+  await writeFile(
+    `${dir}/tagged.md`,
+    [
+      "## Completion Criteria",
+      "",
+      "### Autonomous Verification",
+      "",
+      "- [file-state] first",
+      "- [live] second",
+      "- [orchestrator-only] third",
+      "- [outcome] fourth",
+      "",
+    ].join("\n"),
+  );
+  const tagged = `${dir}/tagged.evidence.json`;
+  await run([
+    "init",
+    tagged,
+    "tagged.md",
+    JSON.stringify(["One", "Two", "Final Audit + Review"]),
+  ]);
+  return tagged;
+}
+
+test("run starts a pending task and declares a cc-<n> from the plan's tag", async () => {
+  await fixture(async (path) => {
+    const tagged = await taggedPlan(path);
+    assertEquals(
+      await run(["run", tagged, "task-1", "cc-1", "--", BUN, "-e", "void 0"]),
+      0,
+    );
+    const data = JSON.parse(await readFile(tagged, "utf8"));
+    assertEquals(data.repository, await realpathOf(process.cwd()));
+    assertEquals(data.tasks[0].status, "in_progress");
+    assertEquals(typeof data.tasks[0].baseline_sha, "string");
+    assertEquals(data.tasks[0].required, [{ id: "cc-1", kind: "file-state" }]);
+    assertEquals(data.tasks[0].checks.at(-1).status, "pass");
+    assertEquals(
+      await run(["run", tagged, "task-1", "cc-3", "--", BUN, "-e", "void 0"]),
+      0,
+    );
+    assertEquals(
+      JSON.parse(await readFile(tagged, "utf8")).tasks[0].required.at(-1),
+      { id: "cc-3", kind: "orchestrator-only" },
+    );
+  });
+});
+
+test("run refuses an implicit check that is live, outcome, out of range or not cc-<n>, writing nothing", async () => {
+  await fixture(async (path) => {
+    const tagged = await taggedPlan(path);
+    const before = await readFile(tagged, "utf8");
+    for (
+      const [id, message] of [
+        ["cc-2", "observe it and use record"],
+        ["cc-4", "never required"],
+        ["cc-9", "check is not declared"],
+        ["behavior", "check is not declared"],
+      ]
+    ) {
+      await assertRejects(
+        () => run(["run", tagged, "task-1", id, "--", BUN, "-e", "void 0"]),
+        Error,
+        message,
+      );
+    }
+    assertEquals(await readFile(tagged, "utf8"), before);
+  });
+});
+
+test("start completes an earlier verified task and leaves an unverified one in progress", async () => {
+  await fixture(async (path) => {
+    const tagged = await taggedPlan(path);
+    await run(["run", tagged, "task-1", "cc-1", "--", BUN, "-e", "void 0"]);
+    await run(["start", tagged, "task-2"]);
+    let data = JSON.parse(await readFile(tagged, "utf8"));
+    assertEquals(data.tasks[0].status, "completed");
+    assertEquals(
+      await run([
+        "run",
+        tagged,
+        "task-2",
+        "cc-3",
+        "--",
+        BUN,
+        "-e",
+        "process.exit(3)",
+      ]),
+      1,
+    );
+    await run(["start", tagged, "task-3"]);
+    data = JSON.parse(await readFile(tagged, "utf8"));
+    assertEquals(data.tasks[1].status, "in_progress");
+    assertEquals(data.tasks[2].status, "in_progress");
+  });
+});
+
+test("review records the final review in one call and refuses a non-passing verdict", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await record(path);
+    await assertRejects(
+      () =>
+        run(
+          ["review", path, "1", "--", "code-reviewer"],
+          new Blob(["### MUST_FIX\n- a bug\nVERDICT: FAIL"]).stream(),
+        ),
+      Error,
+      "VERDICT: PASS",
+    );
+    await run(
+      ["review", path, "1", "--", "code-reviewer", "security-auditor"],
+      new Blob(["### MUST_FIX\n- None\nVERDICT: PASS"]).stream(),
+    );
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].status, "completed");
+    assertEquals(data.tasks[1].status, "in_progress");
+    assertEquals(data.tasks[1].required, [{ id: "review-1", kind: "review" }]);
+    assertEquals(
+      data.tasks[1].checks.at(-1).command,
+      "review wave 1: code-reviewer security-auditor",
+    );
+    await run(["complete", path, "task-2"]);
+  });
+});
+
+test("a plan name resolves to its sidecar under the plans directories, and one in both is refused", async () => {
+  await fixture(async (path) => {
+    const home = process.env.HOME!;
+    const { resolveEvidencePath } = await import("./plan-evidence.ts");
+    assertEquals(await resolveEvidencePath("plan"), await realpathOf(path));
+    assertEquals(await resolveEvidencePath(path), path);
+    await assertRejects(
+      () => resolveEvidencePath("absent"),
+      Error,
+      "no sidecar",
+    );
+    await run(
+      ["require", "plan", "task-1"],
+      input([{ id: "named", kind: "file-state" }]),
+    );
+    assertEquals(
+      JSON.parse(await readFile(path, "utf8")).tasks[0].required.at(-1).id,
+      "named",
+    );
+    await mkdir(`${home}/.claude/plans`, { recursive: true });
+    await writeFile(`${home}/.claude/plans/plan.evidence.json`, "{}");
+    await assertRejects(() => resolveEvidencePath("plan"), Error, "both");
+  });
+});
+
+test("the recorded repository is used from another working directory", async () => {
+  await fixture(async (path) => {
+    const repo = process.cwd();
+    await declare(path);
+    await mkdir(`${repo}/../elsewhere`);
+    process.chdir(`${repo}/../elsewhere`);
+    await runCommand("git", ["init", "-q"]);
+    assertEquals(
+      await run(["run", path, "task-1", "behavior", "--", BUN, "-e", "void 0"]),
+      0,
+    );
+    const check = await lastCheck(path);
+    assertEquals(check.cwd, await realpathOf(repo));
+    await run(["reconcile", path]);
+    await run(["start", path, "task-2"]);
+  });
+});
+
+async function realpathOf(path: string): Promise<string> {
+  const { realpath } = await import("node:fs/promises");
+  return await realpath(path);
+}

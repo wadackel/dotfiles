@@ -63,7 +63,7 @@ If the fix diff itself introduces a **new** `MUST_FIX` (or `CRITICAL`) defect, o
 
 The main session reads that line and re-dispatches a full review instead of another diagnostic round.
 
-New findings below blocker severity that you notice inside the fix diff go under `### Nits`. Do not escalate for those.
+New findings below blocker severity that you notice inside the fix diff go under `### Nits`. Do not escalate for those. A problem you notice in code the fix did not touch, which was there before this change, goes under `### Notes` marked `pre-existing`: it never fails this round.
 
 ## Output Format
 

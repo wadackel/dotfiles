@@ -1,10 +1,16 @@
 import { test } from "bun:test";
 import { assertEquals, assertMatch, assertNotMatch } from "@std/assert";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  extractAllowedPattern,
   flattenCommand,
   getSegments,
   getSegmentsFallback,
   globToRegex,
+  loadAllowedPatterns,
+  matchesAllowedPattern,
   parseCommand,
   stripHeredocs,
 } from "./shell-utils.ts";
@@ -613,4 +619,261 @@ test("flattenCommand: a prefix assignment sets hasAssignment and a heredoc is a 
     plain?.commands[0].redirects.map((r) => [r.target, r.isHeredoc]),
     [["out", false], ["/dev/null", false]],
   );
+});
+
+// --- extractAllowedPattern ---
+
+test("extractAllowedPattern: simple command pattern", () => {
+  assertEquals(extractAllowedPattern("Bash(echo *)"), "echo *");
+});
+
+test("extractAllowedPattern: subcommand pattern preserves subcommand", () => {
+  assertEquals(extractAllowedPattern("Bash(git add *)"), "git add *");
+});
+
+test("extractAllowedPattern: wrapped wildcard pattern", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(*extract-session-history.ts*)"),
+    "*extract-session-history.ts*",
+  );
+});
+
+test("extractAllowedPattern: generic wildcard with flags returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* --help *)"), null);
+});
+
+test("extractAllowedPattern: version flag only returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* --version)"), null);
+});
+
+test("extractAllowedPattern: short help flag returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* -h *)"), null);
+});
+
+test("extractAllowedPattern: short version flag returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(* -v)"), null);
+});
+
+test("extractAllowedPattern: system path returns null", () => {
+  assertEquals(extractAllowedPattern("Bash(//dev/null)"), null);
+});
+
+test("extractAllowedPattern: bare command no wildcard", () => {
+  assertEquals(extractAllowedPattern("Bash(env)"), "env");
+});
+
+test("extractAllowedPattern: whoami bare command", () => {
+  assertEquals(extractAllowedPattern("Bash(whoami)"), "whoami");
+});
+
+test("extractAllowedPattern: pwd bare command", () => {
+  assertEquals(extractAllowedPattern("Bash(pwd)"), "pwd");
+});
+
+test("extractAllowedPattern: env var prefix is stripped", () => {
+  assertEquals(extractAllowedPattern("Bash(TMUX= tmux:*)"), "tmux *");
+});
+
+test("extractAllowedPattern: colon separator format", () => {
+  assertEquals(extractAllowedPattern("Bash(rg:*)"), "rg *");
+});
+
+test("extractAllowedPattern: colon separator with subcommand", () => {
+  assertEquals(extractAllowedPattern("Bash(nix fmt:*)"), "nix fmt *");
+});
+
+test("extractAllowedPattern: non-Bash pattern returns null", () => {
+  assertEquals(extractAllowedPattern("Read(**)"), null);
+});
+
+test("extractAllowedPattern: Edit pattern returns null", () => {
+  assertEquals(extractAllowedPattern("Edit(~/.claude/**)"), null);
+});
+
+test("extractAllowedPattern: path-based command preserves glob", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(~/.claude/scripts/foo.ts:*)"),
+    "~/.claude/scripts/foo.ts *",
+  );
+});
+
+test("extractAllowedPattern: sudo -k preserves flag", () => {
+  assertEquals(extractAllowedPattern("Bash(sudo -k *)"), "sudo -k *");
+});
+
+test("extractAllowedPattern: bracket test command", () => {
+  assertEquals(extractAllowedPattern("Bash([ *)"), "[ *");
+});
+
+test("extractAllowedPattern: double bracket test command", () => {
+  assertEquals(extractAllowedPattern("Bash([[ *)"), "[[ *");
+});
+
+test("extractAllowedPattern: multiple env vars then command", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(FOO=bar BAZ=qux git diff *)"),
+    "git diff *",
+  );
+});
+
+test("extractAllowedPattern: deep subcommand preserved", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(nix-store --query --references *)"),
+    "nix-store --query --references *",
+  );
+});
+
+test("extractAllowedPattern: defaults with flags preserved", () => {
+  assertEquals(
+    extractAllowedPattern("Bash(defaults -currentHost read -g *)"),
+    "defaults -currentHost read -g *",
+  );
+});
+
+// --- matchesAllowedPattern ---
+
+test("matchesAllowedPattern: exact glob match", () => {
+  assertEquals(matchesAllowedPattern("git diff HEAD", "git diff *"), true);
+});
+
+test("matchesAllowedPattern: bare command matches 'cmd *' pattern", () => {
+  assertEquals(matchesAllowedPattern("echo", "echo *"), true);
+});
+
+test("matchesAllowedPattern: wrong subcommand does not match", () => {
+  assertEquals(matchesAllowedPattern("git push --force", "git diff *"), false);
+});
+
+test("matchesAllowedPattern: wrapped wildcard matches path", () => {
+  assertEquals(
+    matchesAllowedPattern(
+      "~/.claude/scripts/extract-session-history.ts",
+      "*extract-session-history.ts*",
+    ),
+    true,
+  );
+});
+
+test("matchesAllowedPattern: exact bare command", () => {
+  assertEquals(matchesAllowedPattern("whoami", "whoami"), true);
+});
+
+test("matchesAllowedPattern: bare command with args does not match exact pattern", () => {
+  assertEquals(matchesAllowedPattern("whoami extra", "whoami"), false);
+});
+
+test("matchesAllowedPattern: sudo -k matches", () => {
+  assertEquals(matchesAllowedPattern("sudo -k", "sudo -k *"), true);
+});
+
+test("matchesAllowedPattern: sudo rm does not match sudo -k", () => {
+  assertEquals(matchesAllowedPattern("sudo rm -rf /", "sudo -k *"), false);
+});
+
+// --- loadAllowedPatterns ---
+
+test("loadAllowedPatterns: extracts patterns from Bash patterns", async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), "tmp-"));
+  const path = `${tmpDir}/settings.json`;
+  await writeFile(
+    path,
+    JSON.stringify({
+      permissions: {
+        allow: [
+          "Bash(echo *)",
+          "Bash(git add *)",
+          "Bash(*extract-session-history.ts*)",
+          "Read(**)",
+        ],
+      },
+    }),
+  );
+
+  const patterns = await loadAllowedPatterns([path]);
+  assertEquals(patterns.includes("echo *"), true);
+  assertEquals(patterns.includes("git add *"), true);
+  assertEquals(patterns.includes("*extract-session-history.ts*"), true);
+  // Non-Bash patterns are skipped
+  assertEquals(patterns.length, 3);
+
+  await rm(tmpDir, { recursive: true });
+});
+
+test("loadAllowedPatterns: merges multiple files", async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), "tmp-"));
+  const file1 = `${tmpDir}/a.json`;
+  const file2 = `${tmpDir}/b.json`;
+  await writeFile(
+    file1,
+    JSON.stringify({ permissions: { allow: ["Bash(echo *)"] } }),
+  );
+  await writeFile(
+    file2,
+    JSON.stringify({ permissions: { allow: ["Bash(rg:*)"] } }),
+  );
+
+  const patterns = await loadAllowedPatterns([file1, file2]);
+  assertEquals(patterns.includes("echo *"), true);
+  assertEquals(patterns.includes("rg *"), true);
+
+  await rm(tmpDir, { recursive: true });
+});
+
+test("loadAllowedPatterns: missing file is silently skipped", async () => {
+  const patterns = await loadAllowedPatterns(["/nonexistent/path.json"]);
+  assertEquals(patterns.length, 0);
+});
+
+test("loadAllowedPatterns: wildcard-only and system path patterns excluded", async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), "tmp-"));
+  const path = `${tmpDir}/settings.json`;
+  await writeFile(
+    path,
+    JSON.stringify({
+      permissions: {
+        allow: [
+          "Bash(* --help *)",
+          "Bash(* --version)",
+          "Bash(//dev/null)",
+          "Bash(echo *)",
+        ],
+      },
+    }),
+  );
+
+  const patterns = await loadAllowedPatterns([path]);
+  assertEquals(patterns.length, 1);
+  assertEquals(patterns[0], "echo *");
+
+  await rm(tmpDir, { recursive: true });
+});
+
+test("loadAllowedPatterns: no permissions key returns empty array", async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), "tmp-"));
+  const path = `${tmpDir}/settings.json`;
+  await writeFile(path, JSON.stringify({ model: "sonnet" }));
+
+  const patterns = await loadAllowedPatterns([path]);
+  assertEquals(patterns.length, 0);
+
+  await rm(tmpDir, { recursive: true });
+});
+
+test("loadAllowedPatterns: deduplicates across files", async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), "tmp-"));
+  const file1 = `${tmpDir}/a.json`;
+  const file2 = `${tmpDir}/b.json`;
+  await writeFile(
+    file1,
+    JSON.stringify({ permissions: { allow: ["Bash(echo *)"] } }),
+  );
+  await writeFile(
+    file2,
+    JSON.stringify({ permissions: { allow: ["Bash(echo *)"] } }),
+  );
+
+  const patterns = await loadAllowedPatterns([file1, file2]);
+  assertEquals(patterns.length, 1);
+
+  await rm(tmpDir, { recursive: true });
 });

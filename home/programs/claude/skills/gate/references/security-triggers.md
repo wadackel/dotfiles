@@ -4,4 +4,4 @@
 
 Not a trigger: the Markdown part of a diff, a sink call that only moved or was renamed, tests and fixtures. When you can name the input and the sink but not whether the sink is reachable, dispatch; when you can name neither, do not.
 
-Security re-reviews are always full: a fix reshapes the attack surface. `CRITICAL` / `HIGH` block; `MEDIUM` / `LOW` go to the reader as decisions.
+A security re-review is full when the fix diff itself trips one of these triggers or the FAIL held a `CRITICAL`; a `HIGH`-only FAIL whose fix stays clear of them gets the diagnostic re-review like any other reviewer. `CRITICAL` / `HIGH` block; `MEDIUM` / `LOW` go to the reader as decisions.

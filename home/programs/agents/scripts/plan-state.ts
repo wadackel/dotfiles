@@ -27,10 +27,13 @@ import {
   type Check,
   check,
   executeArgv,
+  plansDirs,
   repository,
   type Requirement,
   requirements,
+  resolveEvidencePath,
   runGit,
+  type Snapshot,
   splitRunArgs,
   truncateOutput,
 } from "./plan-evidence.ts";
@@ -81,9 +84,10 @@ function usage(): never {
   throw new Error(
     [
       "Usage:",
+      "  <path> is the absolute .evidence.json path, or the plan's name (its basename without extension)",
       "  plan-state.ts init <path> <plan-basename> <subjects-json>",
       "  plan-state.ts normalize <path>",
-      "  plan-state.ts start <path> <task-id>",
+      "  plan-state.ts start <path> <task-id>   # also completes earlier in-progress tasks whose checks are current",
       "  plan-state.ts append-evidence <path> <task-id>",
       "  plan-state.ts complete <path> <task-id>",
       "  plan-state.ts require <path> <task-id>  # requirements JSON on stdin",
@@ -93,6 +97,8 @@ function usage(): never {
       "  plan-state.ts coverage <path>",
       "  plan-state.ts run <path> <task-id> <check-id> [--expect-exit N] [--tail N] [--grep RE] [--env K=V]... [--cwd DIR] [--expect-unchanged] -- <command> [args...]",
       "      snapshot, execute the command without a shell, snapshot again, record (file-state / orchestrator-only checks only)",
+      "      starts a pending task, and declares an undeclared cc-<n> with the kind of the plan's n-th Autonomous Verification bullet",
+      "  plan-state.ts review <path> <wave> -- <reviewer>...   # verdict on stdin: starts the final task, declares review-<wave>, records it",
       "  plan-state.ts rerun <path>       # re-execute every recorded argv whose target is stale or whose status is fail",
       "",
       'require stdin: [{"id":"cc-1","kind":"file-state|orchestrator-only|live|audit|review","expected":{"file":"path"}|{"git_head":true}|{"identity":"name"}}]',
@@ -134,26 +140,6 @@ async function canonicalExistingDir(path: string): Promise<string> {
       `failed to resolve directory ${path}: ${(err as Error).message}`,
     );
   }
-}
-
-// Each agent keeps its own plans directory and a machine may have only one of
-// them (Codex not installed, or a fresh Claude setup), so a missing directory is
-// skipped rather than treated as an error.
-async function plansDirs(home: string): Promise<string[]> {
-  const dirs: string[] = [];
-  for (const agent of [".codex", ".claude"]) {
-    try {
-      dirs.push(await realpath(`${home}/${agent}/plans`));
-    } catch (err) {
-      if (!isNotFound(err)) throw err;
-    }
-  }
-  if (dirs.length === 0) {
-    throw new Error(
-      `neither ${home}/.codex/plans nor ${home}/.claude/plans exists`,
-    );
-  }
-  return dirs;
 }
 
 async function assertEvidencePath(path: string): Promise<void> {
@@ -348,6 +334,84 @@ function assertPlanIdentity(path: string, data: PlanEvidence): void {
   }
 }
 
+async function readPlan(path: string, data: PlanEvidence): Promise<string> {
+  const planPath = `${path.slice(0, path.lastIndexOf("/"))}/${data.plan}`;
+  try {
+    const file = await open(planPath);
+    try {
+      if (!(await file.stat()).isFile()) {
+        throw new Error("plan must be a regular file");
+      }
+      return new TextDecoder().decode(await file.readFile());
+    } finally {
+      await file.close();
+    }
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`failed to read plan ${planPath}: ${reason}`);
+  }
+}
+
+/** Binds the repository on the first start (from the cwd), records the baseline once, and marks the task in progress. */
+async function startTask(data: PlanEvidence, task: PlanTask): Promise<void> {
+  const root = data.repository ?? await repository();
+  data.repository = root;
+  data.version = 2;
+  task.baseline_sha ??= await currentGitHead(root);
+  task.status = "in_progress";
+}
+
+/**
+ * Completes every task before `index` that is still in progress and whose
+ * checks are current; one that is not stays in progress with a notice, so a
+ * failing check never keeps the next task from starting.
+ */
+async function closeEarlier(
+  path: string,
+  data: PlanEvidence,
+  index: number,
+): Promise<string[]> {
+  const open = data.tasks.slice(0, index).filter((t) =>
+    t.status === "in_progress"
+  );
+  if (open.length === 0 || !data.repository) return [];
+  const current: Snapshot = await artifactSnapshot(path, data);
+  const notices: string[] = [];
+  for (const task of open) {
+    try {
+      await assertVerified(task, current, path);
+      task.status = "completed";
+      notices.push(`completed ${task.id}`);
+    } catch (err) {
+      notices.push(`left ${task.id} in progress: ${(err as Error).message}`);
+    }
+  }
+  return notices;
+}
+
+/** The requirement an undeclared `cc-<n>` takes from the plan's n-th bullet, or the reason there is none. */
+async function implicitRequirement(
+  path: string,
+  data: PlanEvidence,
+  id: string,
+): Promise<Requirement> {
+  const n = id.match(/^cc-([1-9][0-9]*)$/)?.[1];
+  const bullet = n
+    ? autonomousBullets(await readPlan(path, data))[Number(n) - 1]
+    : undefined;
+  if (!bullet) throw new Error(`check is not declared: ${id}`);
+  const kind = bullet.tag.slice(1, -1);
+  if (kind === "outcome") {
+    throw new Error(
+      `${id} is an outcome bullet: the review verdict, never required`,
+    );
+  }
+  if (kind !== "file-state" && kind !== "orchestrator-only") {
+    throw new Error(`${id} is a ${kind} check; observe it and use record`);
+  }
+  return { id, kind };
+}
+
 async function atomicWrite(path: string, data: PlanEvidence): Promise<void> {
   const slash = path.lastIndexOf("/");
   const dir = path.slice(0, slash);
@@ -381,16 +445,8 @@ function findTask(data: PlanEvidence, taskId: string): PlanTask {
   return task;
 }
 
-async function currentGitHead(): Promise<string> {
-  const topLevel = await runGit(["rev-parse", "--show-toplevel"]);
-  if (!topLevel.success) {
-    const stderr = topLevel.stderr.trim();
-    throw new Error(
-      `git rev-parse --show-toplevel failed${stderr ? `: ${stderr}` : ""}`,
-    );
-  }
-
-  const head = await runGit(["rev-parse", "HEAD"]);
+async function currentGitHead(root: string): Promise<string> {
+  const head = await runGit(["rev-parse", "HEAD"], root);
   if (!head.success) {
     const stderr = head.stderr.trim();
     throw new Error(
@@ -455,14 +511,27 @@ async function runCheck(args: string[]): Promise<number> {
   const parsed = splitRunArgs(args);
   const { path } = parsed;
   await assertEvidencePath(path);
-  const data = await readEvidence(path);
+  let data = await readEvidence(path);
   const task = findTask(data, parsed.task);
-  const required = task.required?.find((r) => r.id === parsed.id);
-  if (!required) throw new Error(`check is not declared: ${parsed.id}`);
+  const declared = task.required?.find((r) => r.id === parsed.id);
+  const required = declared ??
+    await implicitRequirement(path, data, parsed.id);
   if (required.kind !== "file-state" && required.kind !== "orchestrator-only") {
     throw new Error(
       `${parsed.id} is a ${required.kind} check; observe it and use record`,
     );
+  }
+  if (!declared || task.status === "pending") {
+    await withLock(path, async () => {
+      const fresh = await readEvidence(path);
+      const freshTask = findTask(fresh, parsed.task);
+      if (freshTask.status === "pending") await startTask(fresh, freshTask);
+      if (!freshTask.required?.some((r) => r.id === required.id)) {
+        (freshTask.required ??= []).push(required);
+      }
+      await atomicWrite(path, fresh);
+    });
+    data = await readEvidence(path);
   }
   const root = await assertRepository(data);
   const cwd = parsed.cwd ? await realpath(resolve(root, parsed.cwd)) : root;
@@ -470,7 +539,7 @@ async function runCheck(args: string[]): Promise<number> {
   const before = await artifactSnapshot(path, data);
   const result = await executeArgv({ argv: parsed.argv, cwd, env: parsed.env });
   const after = await artifactSnapshot(path, data);
-  const mutated = await changedPaths(path, before.tree, after.tree);
+  const mutated = await changedPaths(path, before.tree, after.tree, root);
   const passed = result.exit === parsed.expectExit &&
     !(parsed.expectUnchanged && mutated.length > 0);
   const { text, truncated } = truncateOutput(result.output);
@@ -597,7 +666,7 @@ async function rerunChecks(path: string): Promise<number> {
     const before = await artifactSnapshot(path, data);
     const result = await executeArgv({ argv, cwd, env });
     const after = await artifactSnapshot(path, data);
-    const mutated = await changedPaths(path, before.tree, after.tree);
+    const mutated = await changedPaths(path, before.tree, after.tree, root);
     const passed = result.exit === expectExit &&
       !(expectUnchanged && mutated.length > 0);
     if (!passed) failed = true;
@@ -698,19 +767,59 @@ async function execute(
     }
     const data = await readEvidence(path);
     const task = findTask(data, taskOrPlan);
-    const root = await repository();
-    if (data.repository && data.repository !== root) {
-      throw new Error("repository mismatch");
-    }
-    data.repository = root;
-    data.version = 2;
-    const sha = await currentGitHead();
-    if (!task.baseline_sha) {
-      task.baseline_sha = sha;
-    }
-    task.status = "in_progress";
+    const notices = await closeEarlier(path, data, data.tasks.indexOf(task));
+    await startTask(data, task);
     await atomicWrite(path, data);
+    for (const notice of notices) console.log(notice);
     console.log(`baseline=${task.baseline_sha}`);
+    return;
+  }
+
+  if (command === "review") {
+    const wave = taskOrPlan;
+    const reviewers = args.slice(args.indexOf("--") + 1);
+    if (
+      !path || !wave || !/^[1-9][0-9]*$/.test(wave) || args[3] !== "--" ||
+      reviewers.length === 0
+    ) {
+      usage();
+    }
+    const output = await new Response(stdin).text();
+    if (output.trim().split("\n").at(-1) !== "VERDICT: PASS") {
+      throw new Error(
+        "review records a passing wave only; its last line must be VERDICT: PASS",
+      );
+    }
+    const data = await readEvidence(path);
+    const final = data.tasks.at(-1)!;
+    const required: Requirement = { id: `review-${wave}`, kind: "review" };
+    assertVerdict({
+      id: required.id,
+      status: "pass",
+      target: "-",
+      command: "-",
+      output,
+    }, required);
+    const notices = await closeEarlier(path, data, data.tasks.length - 1);
+    if (final.status !== "in_progress") await startTask(data, final);
+    const existing = final.required?.find((r) => r.id === required.id);
+    if (existing && existing.kind !== "review") {
+      throw new Error("cannot change required check kind");
+    }
+    if (!existing) (final.required ??= []).push(required);
+    const current = await artifactSnapshot(path, data);
+    const record = check({
+      id: required.id,
+      status: "pass",
+      target: current.target,
+      command: `review wave ${wave}: ${reviewers.join(" ")}`,
+      output,
+    });
+    record.tree = current.tree;
+    (final.checks ??= []).push(record);
+    await atomicWrite(path, data);
+    for (const notice of notices) console.log(notice);
+    console.log(`review ${final.id} ${required.id}`);
     return;
   }
 
@@ -760,23 +869,7 @@ async function execute(
   if (command === "coverage") {
     if (!path) usage();
     const data = await readEvidence(path);
-    const planPath = `${path.slice(0, path.lastIndexOf("/"))}/${data.plan}`;
-    let plan: string;
-    try {
-      const file = await open(planPath);
-      try {
-        if (!(await file.stat()).isFile()) {
-          throw new Error("plan must be a regular file");
-        }
-        plan = new TextDecoder().decode(await file.readFile());
-      } finally {
-        await file.close();
-      }
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      throw new Error(`failed to read plan ${planPath}: ${reason}`);
-    }
-    const bullets = autonomousBullets(plan);
+    const bullets = autonomousBullets(await readPlan(path, data));
     const declared = new Map<string, string>();
     for (const task of data.tasks) {
       for (const r of task.required ?? []) declared.set(r.id, r.kind);
@@ -872,7 +965,7 @@ async function execute(
       record.target = current.target;
       record.tree = current.tree;
       if (required.kind === "live" && record.status === "pass") {
-        await assertLive(record, required);
+        await assertLive(record, required, current.root);
       }
       if (record.status === "pass") assertVerdict(record, required);
       task.checks ??= [];
@@ -890,6 +983,10 @@ export async function run(
   args: string[],
   stdin: ReadableStream<Uint8Array> = processStdin(),
 ): Promise<number | void> {
+  // init names a sidecar that does not exist yet, so only it skips the lookup.
+  if (args[0] !== "init" && args[1] && !args[1].startsWith("--")) {
+    args = [args[0], await resolveEvidencePath(args[1]), ...args.slice(2)];
+  }
   // run / rerun take the lock themselves, only around the append.
   const mutations = new Set([
     "init",
@@ -898,6 +995,7 @@ export async function run(
     "complete",
     "require",
     "record",
+    "review",
     "reconcile",
   ]);
   if (!mutations.has(args[0]) || !args[1]) return await execute(args, stdin);

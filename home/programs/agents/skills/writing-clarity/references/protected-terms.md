@@ -8,7 +8,7 @@ where no judgment is needed.
 
 - Code identifiers: function, variable, type, and module names as written in code
 - Commands and their arguments: `git rebase`, `darwin-rebuild switch`, `deno fmt --check`
-- File paths and extensions: `home/programs/claude/CLAUDE.md`, `.jsonl`
+- File paths and extensions: `home/programs/claude/global-instructions.md`, `.jsonl`
 - Product, tool, and service names: Claude Code, nix-darwin, home-manager, GitHub Actions, tmux
 - Skill and agent names: `/gate`, `plan-state`, `code-simplifier`
 - Machine-contract labels: severity (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values (PASS / FAIL / VERIFIED / ITERATE / CONVERGED), status values (pending / in_progress / completed)

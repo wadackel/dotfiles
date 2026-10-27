@@ -1,6 +1,7 @@
 // Shared shell command parsing utilities.
-// Used by bash-policy.ts and approve-piped-commands.ts.
+// Used by bash-policy.ts.
 
+import { readFile } from "node:fs/promises";
 import { parse as parseBash } from "@ein/bash-parser";
 
 /** Convert glob pattern to anchored regex. * matches any characters including spaces and newlines. */
@@ -395,4 +396,85 @@ export function stripGitGlobalFlags(segment: string): string {
     }
   }
   return result.join(" ");
+}
+
+// --- permissions.allow patterns ---
+
+/** Extract a normalized glob pattern from a single Bash(...) permission pattern. Returns null if not applicable. */
+export function extractAllowedPattern(pattern: string): string | null {
+  const m = pattern.match(/^Bash\((.+)\)$/);
+  if (!m) return null;
+
+  let content = m[1];
+
+  // Handle colon separator format from settings.local.json (e.g. "rg:*" -> "rg *", "nix fmt:*" -> "nix fmt *")
+  const colonIdx = content.indexOf(":");
+  if (colonIdx !== -1) {
+    content = content.slice(0, colonIdx) + " " + content.slice(colonIdx + 1);
+  }
+
+  // Strip leading env var assignments (FOO=bar, TMUX=, etc.)
+  const tokens = content.split(/\s+/);
+  let cmdStart = 0;
+  while (
+    cmdStart < tokens.length &&
+    /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[cmdStart])
+  ) {
+    cmdStart++;
+  }
+  if (cmdStart >= tokens.length) return null;
+
+  const cmdTokens = tokens.slice(cmdStart);
+  const firstToken = cmdTokens[0];
+  const cleaned = firstToken.replace(/^\*+/, "").replace(/\*+$/, "");
+
+  // Skip if first meaningful token is empty (pure wildcards like "* --help *")
+  // or a flag (generic patterns like "* -v")
+  if (cleaned === "" || cleaned.startsWith("-")) return null;
+  // Skip system paths (//...)
+  if (cleaned.startsWith("//")) return null;
+  // Skip redirect operators
+  if (/^[><#!]/.test(cleaned)) return null;
+
+  return cmdTokens.join(" ");
+}
+
+/** Check if a command segment matches an allowed glob pattern. */
+export function matchesAllowedPattern(
+  segment: string,
+  pattern: string,
+): boolean {
+  if (globToRegex(pattern).test(segment)) return true;
+  // "cmd *" should also match bare "cmd" (no args)
+  if (pattern.endsWith(" *") && segment === pattern.slice(0, -2)) return true;
+  return false;
+}
+
+interface Settings {
+  permissions?: { allow?: string[]; deny?: string[]; ask?: string[] };
+}
+
+/** Load one `permissions` list (allow by default) from multiple settings files, extract glob patterns. */
+export async function loadAllowedPatterns(
+  paths: string[],
+  key: "allow" | "deny" | "ask" = "allow",
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const path of paths) {
+    try {
+      const text = await readFile(path, "utf8");
+      const json: Settings = JSON.parse(text);
+      for (const pattern of json?.permissions?.[key] ?? []) {
+        const p = extractAllowedPattern(pattern);
+        if (p && !seen.has(p)) {
+          seen.add(p);
+          result.push(p);
+        }
+      }
+    } catch {
+      // File not found or parse error -- skip
+    }
+  }
+  return result;
 }

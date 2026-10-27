@@ -23,7 +23,7 @@
   home.file.".claude/hooks".source = dotfiles.linkHere ./. "hooks";
 
   # ファイルのシンボリックリンク
-  home.file.".claude/CLAUDE.md".source = dotfiles.linkHere ./. "CLAUDE.md";
+  home.file.".claude/CLAUDE.md".source = dotfiles.linkHere ./. "global-instructions.md";
   home.file.".claude/RTK.md".source = dotfiles.linkHere ./. "RTK.md";
   home.file.".claude/settings.json".source = dotfiles.linkHere ./. "settings.json";
 }

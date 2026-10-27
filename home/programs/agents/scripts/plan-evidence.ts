@@ -259,7 +259,7 @@ function matchesGlob(segment: string, pattern: string): boolean {
   return pattern.endsWith(" *") && segment === pattern.slice(0, -2);
 }
 
-/** `Bash(<glob>)` → `<glob>`, the way approve-piped-commands.ts reads it. */
+/** `Bash(<glob>)` → `<glob>`, the way `extractAllowedPattern` in claude/scripts/shell-utils.ts reads it. */
 function permissionGlob(entry: string): string | null {
   const m = entry.match(/^Bash\((.+)\)$/);
   if (!m) return null;
@@ -601,19 +601,86 @@ async function git(
   return result.stdout;
 }
 
-export async function repository(): Promise<string> {
+export async function repository(cwd = process.cwd()): Promise<string> {
   return await realpath(
-    (await git(["rev-parse", "--show-toplevel"])).trim(),
+    (await git(["rev-parse", "--show-toplevel"], cwd)).trim(),
   );
 }
 
+/** The repository the first `start` bound, whatever the current directory:
+ * a session's cwd drifts (a `cd` into a scratch dir, a multi-repo plan), and
+ * comparing it with the record only turned that drift into a failed command. */
 export async function assertRepository(data: PlanEvidence): Promise<string> {
-  const root = await repository();
   if (!data.repository) {
     throw new Error("repository is not bound; start a task first");
   }
-  if (data.repository !== root) throw new Error("repository mismatch");
+  let root: string;
+  try {
+    root = await repository(data.repository);
+  } catch (err) {
+    throw new Error(
+      `recorded repository ${data.repository} is not a git work tree: ${
+        (err as Error).message
+      }`,
+    );
+  }
+  if (root !== data.repository) {
+    throw new Error(
+      `recorded repository ${data.repository} is not a work tree root`,
+    );
+  }
   return root;
+}
+
+// Each agent keeps its own plans directory and a machine may have only one of
+// them (Codex not installed, or a fresh Claude setup), so a missing directory is
+// skipped rather than treated as an error.
+export async function plansDirs(home: string): Promise<string[]> {
+  const dirs: string[] = [];
+  for (const agent of [".codex", ".claude"]) {
+    try {
+      dirs.push(await realpath(`${home}/${agent}/plans`));
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+  if (dirs.length === 0) {
+    throw new Error(
+      `neither ${home}/.codex/plans nor ${home}/.claude/plans exists`,
+    );
+  }
+  return dirs;
+}
+
+/**
+ * A word with no `/` that does not end in `.evidence.json` names a plan: its
+ * sidecar is looked up in the plans directories, and a name present in both is
+ * refused rather than picked. Anything else is returned as given. The hook and
+ * the helper both resolve through this, so the sidecar the hook inspects is the
+ * one the helper runs.
+ */
+export async function resolveEvidencePath(
+  word: string,
+  home = process.env.HOME,
+): Promise<string> {
+  if (word.includes("/") || word.endsWith(".evidence.json")) return word;
+  if (!home) throw new Error("HOME is not set");
+  const found: string[] = [];
+  for (const dir of await plansDirs(home)) {
+    try {
+      await lstat(`${dir}/${word}.evidence.json`);
+      found.push(`${dir}/${word}.evidence.json`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+  if (found.length === 0) throw new Error(`no sidecar named ${word}`);
+  if (found.length > 1) {
+    throw new Error(
+      `${word} names a sidecar in both ${found.join(" and ")}; pass the path`,
+    );
+  }
+  return found[0];
 }
 
 async function digest(data: Uint8Array | string): Promise<string> {
@@ -633,6 +700,7 @@ async function digest(data: Uint8Array | string): Promise<string> {
 export interface Snapshot {
   target: string;
   tree: string;
+  root: string;
 }
 
 /** Objects written while fingerprinting live next to the sidecar, never in
@@ -732,7 +800,7 @@ export async function artifactSnapshot(
       await realpath(planPath),
       await digest(await readFile(planPath)),
     ]));
-    return { target, tree };
+    return { target, tree, root };
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -835,9 +903,9 @@ export async function changedPaths(
   path: string,
   before: string,
   after: string,
+  root: string,
 ): Promise<string[]> {
   if (before === after) return [];
-  const root = await repository();
   const result = await runGit(
     ["diff-tree", "--name-only", "-r", before, after],
     root,
@@ -862,7 +930,7 @@ export async function assertVerified(
     }
     if (record.target !== current.target) {
       const changed = record.tree
-        ? await changedPaths(path, record.tree, current.tree)
+        ? await changedPaths(path, record.tree, current.tree, current.root)
         : [];
       const remedy =
         required.kind === "file-state" || required.kind === "orchestrator-only"
@@ -883,7 +951,7 @@ export async function assertVerified(
       throw new Error("waiver missing authorization");
     }
     if (record.status === "pass" && required.kind === "live") {
-      await assertLive(record, required);
+      await assertLive(record, required, current.root);
     }
     if (record.status === "pass") assertVerdict(record, required);
     if (
@@ -924,6 +992,7 @@ export function assertVerdict(record: Check, required: Requirement): void {
 export async function assertLive(
   record: Check,
   required: Requirement,
+  root: string,
 ): Promise<void> {
   if (!record.observed || !record.expected) {
     throw new Error(
@@ -939,10 +1008,9 @@ export async function assertLive(
   }
   let expected: string;
   if ("git_head" in source) {
-    expected = (await git(["rev-parse", "HEAD"])).trim();
+    expected = (await git(["rev-parse", "HEAD"], root)).trim();
   } else if ("identity" in source) expected = source.identity;
   else {
-    const root = await repository();
     const file = await realpath(`${root}/${source.file}`);
     if (!file.startsWith(`${root}/`)) {
       throw new Error("expected artifact must be inside repository");

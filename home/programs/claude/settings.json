@@ -9,7 +9,6 @@
     "CLAUDE_CODE_AUTO_CONNECT_IDE": "false",
     "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": "true",
     "CLAUDE_CODE_IDE_SKIP_VALID_CHECK": "true",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "true",
     "FORCE_AUTOUPDATE_PLUGINS": "true",
     "DISABLE_AUTOUPDATER": "1",
     "DISABLE_ERROR_REPORTING": "true",
@@ -37,6 +36,7 @@
       "Bash(*/.agents/scripts/plan-state.ts coverage *)",
       "Bash(*/.agents/scripts/plan-state.ts complete *)",
       "Bash(*/.agents/scripts/plan-state.ts reconcile *)",
+      "Bash(*/.agents/scripts/plan-state.ts review *)",
       "Bash(*home/programs/agents/scripts/plan-state_test.ts*)",
       "Bash(*/.agents/scripts/vocab.ts*)",
       "Bash(*home/programs/agents/scripts/vocab-lib_test.ts*)",
@@ -561,17 +561,6 @@
         ]
       }
     ],
-    "PermissionRequest": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/approve-piped-commands.ts"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*|AskUserQuestion|ExitPlanMode",
@@ -730,10 +719,9 @@
     "typescript-lsp@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true,
+    "hookify@claude-plugins-official": false,
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true,
     "clangd-lsp@claude-plugins-official": true
   },
   "outputStyle": "concise",

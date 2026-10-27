@@ -53,7 +53,7 @@ Classify every unresolved point before asking:
 |---|---|---|
 | Observed fact | Answerable from code, logs, docs, issues, or this conversation | Probe it; keep secrets out of artifacts |
 | User decision | Desired behavior, design decision, priority, audience, risk tolerance, success criteria, trade-off acceptance; scope boundary in `requirements-interview` | Ask |
-| Scope boundary (plan skills) | A boundary of what the change covers, in `/plan` and `$plan` | `user-overridden: default` under `### Assumptions`, marked 仮置き in the handoff; ask only when including it makes a different deliverable |
+| Scope boundary (plan skills) | A boundary of what the change covers, in `/plan` and `$plan` | `user-overridden: default` with `scope: <the boundary: what is in or out>` under `### Assumptions`, marked 仮置き in the handoff; ask only when including it makes a different deliverable. A value that is not a boundary has no scope to name and is asked |
 | Process / procedure / environment (plan skills) | Whether to commit, where to verify, who ships | Never asked; CLAUDE.md and the skill decide, and a missing rule is named under the handoff's decisions |
 | Technical deferral | Codebase-recoverable but too heavy for a quick probe | `### Unresolved Items` with a concrete `next:` |
 | Draft assumption | User-permitted assumption, or a non-blocking technical default | `### Assumptions` (`user-overridden: true` when the user chose it) |

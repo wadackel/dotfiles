@@ -28,6 +28,8 @@ import {
   flattenCommand,
   getSegments,
   globToRegex,
+  loadAllowedPatterns,
+  matchesAllowedPattern,
   stripGitGlobalFlags,
 } from "./shell-utils.ts";
 
@@ -101,6 +103,7 @@ const PASSIVE = new Set([
   "complete",
   "require",
   "record",
+  "review",
   "snapshot",
   "reconcile",
   "coverage",
@@ -139,7 +142,6 @@ function shellRewrites(word: string): boolean {
     (word.includes("{") && /\{[^}]*(,|\.\.)[^}]*\}/.test(word));
 }
 
-type Approve = typeof import("./approve-piped-commands.ts");
 type Evidence = typeof import("../../agents/scripts/plan-evidence.ts");
 
 /**
@@ -151,7 +153,7 @@ async function denyInnerArgv(
   env: Record<string, string>,
   rules: Rule[],
   ctx: HelperContext,
-  lib: { approve: Approve; evidence: Evidence },
+  lib: { evidence: Evidence },
 ): Promise<string | null> {
   for (const key of Object.keys(env)) {
     if (!lib.evidence.RUN_ENV_KEYS.has(key)) {
@@ -179,20 +181,16 @@ async function denyInnerArgv(
   const forms = [inner, stripGitGlobalFlags(inner)];
   const paths = settingsPaths(ctx);
   for (const key of ["deny", "ask"] as const) {
-    const patterns = await lib.approve.loadAllowedPatterns(paths, key);
+    const patterns = await loadAllowedPatterns(paths, key);
     if (
-      forms.some((f) =>
-        patterns.some((p) => lib.approve.matchesAllowedPattern(f, p))
-      )
+      forms.some((f) => patterns.some((p) => matchesAllowedPattern(f, p)))
     ) {
       return `inner command "${inner}" matches permissions.${key}`;
     }
   }
-  const allow = await lib.approve.loadAllowedPatterns(paths, "allow");
+  const allow = await loadAllowedPatterns(paths, "allow");
   if (
-    !forms.some((f) =>
-      allow.some((p) => lib.approve.matchesAllowedPattern(f, p))
-    )
+    !forms.some((f) => allow.some((p) => matchesAllowedPattern(f, p)))
   ) {
     return `inner command "${inner}" is not in permissions.allow of ~/.claude/settings.json; add an allow rule, or in Claude Code run it directly once to get permission`;
   }
@@ -210,7 +208,7 @@ async function denyRerun(
   pathArg: string | undefined,
   rules: Rule[],
   ctx: HelperContext,
-  lib: { approve: Approve; evidence: Evidence },
+  lib: { evidence: Evidence },
 ): Promise<string | null> {
   if (!pathArg || shellRewrites(pathArg)) {
     return "plan-state.ts rerun needs a literal evidence path";
@@ -218,7 +216,11 @@ async function denyRerun(
   // Every stored argv is about to be executed, so each one is checked as if it
   // were typed now; a sidecar the hook cannot read or understand is refused.
   try {
-    const data = JSON.parse(await readFile(expandPath(pathArg, ctx), "utf8"));
+    const file = expandPath(
+      await lib.evidence.resolveEvidencePath(pathArg, ctx.home),
+      ctx,
+    );
+    const data = JSON.parse(await readFile(file, "utf8"));
     if (!data || typeof data !== "object" || !Array.isArray(data.tasks)) {
       return `plan-state.ts rerun: ${pathArg} is not an evidence sidecar`;
     }
@@ -363,10 +365,9 @@ export async function checkHelperInvocation(
   }
   // Loaded here so a broken module fails this check closed instead of taking
   // every rule above down with an import error.
-  let lib: { approve: Approve; evidence: Evidence };
+  let lib: { evidence: Evidence };
   try {
     lib = {
-      approve: await import("./approve-piped-commands.ts"),
       evidence: await import("../../agents/scripts/plan-evidence.ts"),
     };
   } catch (err) {

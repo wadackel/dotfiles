@@ -66,8 +66,7 @@ Declare completion only after confirming all tests pass and expected behavior is
 
 Follow existing test patterns:
 - `bash-policy_test.ts` -- glob pattern matching tests
-- `approve-piped-commands_test.ts` -- pipe command splitting tests
-- `shell-utils_test.ts` -- utility function tests
+- `shell-utils_test.ts` -- shell command parsing and permission pattern tests
 
 Test execution: `bun test <path>`
 

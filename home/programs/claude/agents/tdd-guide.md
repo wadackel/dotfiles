@@ -24,7 +24,7 @@ Improve the code while confirming that tests continue to pass.
 ### Bun Scripts (True TDD)
 ```bash
 # 1. Write the test file first
-#    Existing patterns: bash-policy_test.ts, approve-piped-commands_test.ts
+#    Existing patterns: bash-policy_test.ts, shell-utils_test.ts
 # 2. Run tests → confirm failure
 bun test path/to/script_test.ts
 # 3. Implement → re-run tests → confirm passing

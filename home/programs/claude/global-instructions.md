@@ -37,5 +37,3 @@
 ## Generated artifacts
 
 - A language default set by a skill or a project (for example English-only commit messages and PR bodies) covers the entire artifact; the conversation language never overrides it. Check the whole artifact in one pass before submitting.
-
-@RTK.md
