@@ -30,7 +30,7 @@ When working on tasks in this repository, Claude Code should:
 
 ### Branch Policy
 
-Work and commit directly on `main`. Do not create or switch to another branch unless the user asks for one, even when asked to commit while on `main`; in this repository that overrides both the harness default of branching first on the default branch and the global rule to branch for an unrelated fix. A worktree under `.claude/worktrees/` (for example for longer Hermes work) is the one exception. `.claude/bash-policy.yaml` blocks `git switch -c` / `git checkout -b` here; when the user does want a branch, ask them to run it with `! git switch -c <name>`.
+Work and commit directly on `main`. Do not create or switch to another branch unless the user asks for one, even when asked to commit while on `main`; in this repository that overrides both the harness default of branching first on the default branch and the global rule to branch for an unrelated fix. A worktree under `.claude/worktrees/` (for example for longer Hermes work) is the one exception.
 
 ### Workflow Example
 

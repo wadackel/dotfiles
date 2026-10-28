@@ -3,6 +3,4 @@
 # grepping this repository included — and still misses the obsidian CLI, which resolves by note name
 # rather than by path. The Read deny in settings.json covers Read, Edit, Glob, and Grep without that.
 
-rules:
-  - pattern: "git push *renovate/*"
-    message: "This push closes the Renovate PR (Renovate rebases its own branch). Either add the stop-updating label (gh pr edit <n> --add-label stop-updating) and run the push yourself from a terminal, or push the fix to your own branch and open a PR that targets the Renovate branch."
+rules: []

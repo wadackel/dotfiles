@@ -28,8 +28,9 @@ test("loadRules: returns [] on missing file", async () => {
 // --- Entry-point integration ---
 //
 // Spawn bash-policy.ts as a subprocess and feed PreToolUse JSON via stdin. The
-// hook loads the co-located global bash-policy.yaml and blocks (exit 2) any
-// command whose segment matches a rule pattern; unrelated commands exit 0.
+// hook loads the global and the project bash-policy.yaml and blocks (exit 2)
+// any command whose segment matches a rule pattern; unrelated commands exit 0.
+// The global file ships empty, so a rule under test lives in a temp project.
 
 const HOOK_SCRIPT = join(import.meta.dirname, "bash-policy.ts");
 
@@ -43,6 +44,23 @@ async function invokeHook(hookInput: {
   });
   return { code, stderr };
 }
+
+async function withProjectRules(
+  yaml: string,
+  body: (dir: string) => Promise<void>,
+): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), "bash-policy-project-"));
+  try {
+    await mkdir(join(dir, ".claude"));
+    await writeFile(join(dir, ".claude", "bash-policy.yaml"), yaml);
+    await body(dir);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+}
+
+const RENOVATE_RULES =
+  'rules:\n  - pattern: "git push *renovate/*"\n    message: "use stop-updating"\n';
 
 test("entry point: `git -C` passes (exit 0)", async () => {
   const { code, stderr } = await invokeHook({
@@ -82,44 +100,43 @@ for (
     "git -c a=b push origin renovate/foo",
   ]
 ) {
-  test(`entry point: renovate rule blocks \`${command}\` (exit 2)`, async () => {
-    const { code, stderr } = await invokeHook({
-      tool_name: "Bash",
-      tool_input: { command },
-      cwd: "/tmp",
+  test(`entry point: a push rule blocks \`${command}\` (exit 2)`, async () => {
+    await withProjectRules(RENOVATE_RULES, async (dir) => {
+      const { code, stderr } = await invokeHook({
+        tool_name: "Bash",
+        tool_input: { command },
+        cwd: dir,
+      });
+      assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+      assertStringIncludes(stderr, "stop-updating");
     });
-    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
-    assertStringIncludes(stderr, "stop-updating");
   });
 }
 
 test("entry point: a project rule matches through git -C (exit 2)", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "bash-policy-project-"));
-  try {
-    await mkdir(join(dir, ".claude"));
-    await writeFile(
-      join(dir, ".claude", "bash-policy.yaml"),
-      'rules:\n  - pattern: "git switch -c *"\n    message: "no branches"\n',
-    );
-    const { code, stderr } = await invokeHook({
-      tool_name: "Bash",
-      tool_input: { command: "git -C . switch -c foo" },
-      cwd: dir,
-    });
-    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
-    assertStringIncludes(stderr, "no branches");
-  } finally {
-    await rm(dir, { recursive: true });
-  }
+  await withProjectRules(
+    'rules:\n  - pattern: "git switch -c *"\n    message: "no branches"\n',
+    async (dir) => {
+      const { code, stderr } = await invokeHook({
+        tool_name: "Bash",
+        tool_input: { command: "git -C . switch -c foo" },
+        cwd: dir,
+      });
+      assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+      assertStringIncludes(stderr, "no branches");
+    },
+  );
 });
 
 test("entry point: reading a renovate branch is not a push (exit 0)", async () => {
-  const { code, stderr } = await invokeHook({
-    tool_name: "Bash",
-    tool_input: { command: "git log --oneline renovate/foo" },
-    cwd: "/tmp",
+  await withProjectRules(RENOVATE_RULES, async (dir) => {
+    const { code, stderr } = await invokeHook({
+      tool_name: "Bash",
+      tool_input: { command: "git log --oneline renovate/foo" },
+      cwd: dir,
+    });
+    assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
   });
-  assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
 });
 
 // --- plan-state.ts run / rerun ---
@@ -139,6 +156,7 @@ async function helperFixture(
   const dir = await mkdtemp(join(tmpdir(), "bash-policy-helper-"));
   try {
     await mkdir(join(dir, ".claude"));
+    await writeFile(join(dir, ".claude", "bash-policy.yaml"), RENOVATE_RULES);
     await writeFile(
       join(dir, ".claude", "settings.json"),
       JSON.stringify({
