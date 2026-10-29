@@ -317,7 +317,6 @@
       "Bash(tar *)",
       "Bash(task *)",
       "Bash(tee *)",
-      "Bash(terminal-notifier *)",
       "Bash(terraform plan *)",
       "Bash(test *)",
       "Bash(tig *)",
@@ -591,10 +590,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts Notification"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-notify.ts send Glass"
           }
         ]
       }
@@ -606,10 +601,6 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts Stop"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/scripts/claude-notify.ts send Hero"
           },
           {
             "type": "command",
