@@ -40,6 +40,11 @@
       "ryoppippi.cachix.org-1:b2LbtWNvJeL/qb1B6TYOMK+apaCps4SCbzlPRfSQIms="
     ];
   };
+  nix.gc = {
+    automatic = true;
+    options = "--delete-older-than 14d";
+  };
+  nix.optimise.automatic = true;
 
   # システムパッケージ（必要最小限）
   environment.systemPackages = [ pkgs.vim ];
