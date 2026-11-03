@@ -27,7 +27,7 @@
 - Bash quoting: wrap uncertain `$'...'` pipelines in `bash -c`; put `set +H &&` before a command with a literal `!` in double quotes; `sed` is GNU sed from nix, so `-i` takes no suffix (`sed -i ''` makes it read `''` as the script); for a replacement containing `!`, `$`, or backticks use a Bun script whose replacement is a function (`s.replace(re, () => text)`) or `split` / `join`, because a replacement string expands `$`; in `just` recipes shell variables are `$var`.
 - Start long-running processes with the tool's background mode, not `&`. Emit Private Use Area glyphs at runtime with `printf` rather than embedding them.
 - Bun: start a script by its path so its shebang (`bun --no-env-file --no-install --config=/dev/null`) applies, since a bare `bun x.ts` runs the `preload` of a `bunfig.toml` in the cwd and loads its `.env`; read stdin with `text(process.stdin)` from `node:stream/consumers` and only on a path that needs it (touching `process.stdin` keeps a piped process alive); `bun test` runs every file in one process, in UTC; run children with `spawn`, not `exec` / `execFile` (1 MiB output limit).
-- Pin GitHub Actions to full commit SHAs.
+- Lock GitHub Actions with `gh actions-lock` and keep `uses:` on version tags. In a repository without `.github/workflows/actions.lock`, keep full commit SHAs until it adopts the lockfile. Pin reusable workflow calls (`jobs.<id>.uses`) and the actions inside an `action.yml` published to other repositories to full commit SHAs, because the lockfile covers neither.
 
 ## Code
 
