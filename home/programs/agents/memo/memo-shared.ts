@@ -342,9 +342,15 @@ export async function callClaude(
   let proc: ChildProcess | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // --safe-mode drops hooks and customizations but keeps the built-in tools,
+    // and summaries have run Bash after taking transcript text for instructions.
+    // A transcript can carry web content, so the summarizer gets no tools.
     proc = spawn("claude", [
       "-p",
       "--safe-mode",
+      "--tools",
+      "",
+      "--strict-mcp-config",
       "--model",
       CLAUDE_MODEL,
       "--effort",
