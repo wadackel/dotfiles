@@ -617,6 +617,7 @@ test("findPlanSegments reads the recommended options and whether the answer took
       [two, "1a 2b", true],
       [two, "1b, 2b", false],
       [two, "1a, 3b", null],
+      [two, "1a", null],
       [two, "推奨案で", true],
       [two, "全部推奨案でOK", true],
       [two, "B", null],
@@ -637,7 +638,7 @@ test("findPlanSegments reads the recommended options and whether the answer took
       pairs.map(([, , accepted]) => accepted),
     );
     assertEquals(seg.questions[8].recommended, ["a", "b", "a"]);
-    assertEquals(seg.questions[17].recommended, []);
+    assertEquals(seg.questions[18].recommended, []);
   });
 });
 
@@ -955,7 +956,12 @@ test("parseGateLog reads the shapes of the 2026-10-27 to 11-03 logs", () => {
     "- Round 1: code-reviewer FAIL (1 MUST_FIX); comment-reviewer PASS.",
   );
   assertEquals(sameLine["code-reviewer"].blocker, true);
-  assertEquals(sameLine["comment-reviewer"].blocker, false);
+  // The other direction: a neighbour's MUST_FIX on the same line is not this reviewer's.
+  const neighbour = byName(
+    "- Round 1: code-reviewer FAIL (1 MUST_FIX), security-auditor FAIL (1 SHOULD_FIX).",
+  );
+  assertEquals(neighbour["code-reviewer"].blocker, true);
+  assertEquals(neighbour["security-auditor"].blocker, false);
   const real = byName(
     "### Round 2\n\nFix diff: `x.rereview-1.gate.diff`.\n\nVerdicts: `code-reviewer` FAIL (one spec Issue, one SHOULD_FIX), `comment-reviewer` PASS.",
   );

@@ -149,7 +149,8 @@ export function parseDeepeningLog(text: string): DeepeningLog {
   const r1 = parts[0] ?? "";
   const r2 = parts[1] ?? "";
   // critic-prompt.md emits ITERATE only for the Test Coverage veto, while its replies
-  // name the veto every time, so the verdict decides and the words only in old logs.
+  // name the veto every time: the verdict decides, and the veto words are read only
+  // in logs without round lines.
   const r1Line = /^Round 1: critic\b[^\n]*verdicts\s+(ITERATE|CONVERGED)/m
     .exec(body);
   return {
@@ -683,7 +684,7 @@ export function buildReport(input: Inputs) {
         questions.filter((q) => q.hasRecommendation).length,
         questions.length,
       ),
-      // Over the turns whose recommendation and answer were both readable, named next to it.
+      // The denominator is the turns whose recommendation and answer were both readable.
       recommendationParsed: parsedAnswers.length,
       recommendationAcceptedRate: pct(
         parsedAnswers.filter((q) => q.accepted).length,

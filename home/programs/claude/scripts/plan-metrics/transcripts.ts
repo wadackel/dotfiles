@@ -341,7 +341,10 @@ export function readAnswer(
   if (/^\d+[a-z](?![a-z])/.test(text)) {
     const byNumber = new Map(recs.map((r) => [r.n, r.letter]));
     const picks = [...text.matchAll(/(\d+)([a-z])(?![a-z])/g)];
-    if (picks.some((p) => !byNumber.has(Number(p[1])))) return result(null);
+    if (
+      picks.length !== recs.length ||
+      picks.some((p) => !byNumber.has(Number(p[1])))
+    ) return result(null);
     return result(picks.every((p) => byNumber.get(Number(p[1])) === p[2]));
   }
   const list = /^[a-z](?:\s*[,、]\s*[a-z]|\s+[a-z])+(?![a-z])/.exec(text);
