@@ -300,6 +300,33 @@ test("append-evidence reads multiline stdin and appends with separator", () =>
     assertEquals(data.tasks[0].evidence, "first\nline\n---\nsecond\nline");
   }));
 
+test("append-evidence records trailing arguments joined by spaces", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(home);
+
+    await run(
+      ["append-evidence", path, "task-1", "swapped", "the e2e", "command"],
+      stream("ignored"),
+    );
+
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].evidence, "swapped the e2e command");
+  }));
+
+test("append-evidence with neither arguments nor stdin text writes nothing", () =>
+  withHome(async (home) => {
+    const path = await tempEvidence(home);
+    const before = await readFile(path, "utf8");
+
+    await assertRejects(
+      () => run(["append-evidence", path, "task-1"], stream(" \n\t")),
+      Error,
+      "evidence is empty",
+    );
+
+    assertEquals(await readFile(path, "utf8"), before);
+  }));
+
 test("legacy completion is not accepted without current verification", () =>
   withHome(async (home) => {
     const path = await tempEvidence(

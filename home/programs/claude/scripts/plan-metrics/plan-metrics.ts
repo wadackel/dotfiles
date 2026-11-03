@@ -86,7 +86,6 @@ const agents: Array<Subagent & { project: string }> = [];
 const frictionTexts: Array<{ session: string; texts: string[] }> = [];
 let diffOnlyCalls = 0,
   badLines = 0,
-  unparsedKind = 0,
   unparsedSidecars = 0,
   unparsedSubagentFiles = 0,
   badMeta = 0,
@@ -106,7 +105,6 @@ for (const f of listing.files) {
   segments.push(...findPlanSegments(session, { fromMs, untimed }));
   diffOnlyCalls += countDiffOnlyCalls(session);
   const sub = await joinSubagents(session);
-  unparsedKind += sub.unparsedKind;
   badLines += sub.badLines;
   unparsedSubagentFiles += sub.missing;
   badMeta += sub.badMeta;
@@ -169,7 +167,6 @@ const report = buildReport({
   },
   unparsed: {
     badLines,
-    unparsedKind,
     sidecars: unparsedSidecars,
     subagentFiles: unparsedSubagentFiles,
     metaFiles: badMeta,

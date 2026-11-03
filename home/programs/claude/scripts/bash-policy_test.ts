@@ -238,6 +238,16 @@ for (
       "whole command",
     ],
     [
+      "a cd in front, with the hint that the recorded repository is used",
+      `cd /tmp && ${RUN} -- rg -n foo .`,
+      "no `cd` is needed",
+    ],
+    [
+      "an input redirect on a passive subcommand, with the pipe to use instead",
+      `${HELPER} record /tmp/e.evidence.json task-1 < /tmp/check.json`,
+      "cat FILE |",
+    ],
+    [
       "a nested helper",
       `${RUN} -- home/programs/agents/scripts/plan-state.ts run /tmp/f.evidence.json task-1 cc-1 -- rg -n foo .`,
       "may not invoke plan-state.ts",

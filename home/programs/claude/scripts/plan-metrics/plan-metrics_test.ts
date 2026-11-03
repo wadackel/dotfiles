@@ -340,7 +340,7 @@ test("findPlanSegments drops segments that start before --from and stops countin
   });
 });
 
-test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critique / Adversarial / Falsify / unparsed", async () => {
+test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critique / Adversarial / Falsify / template-only agents", async () => {
   await withTmp(async (root) => {
     const path = await writeSession(
       root,
@@ -430,6 +430,16 @@ test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critiqu
       "r",
     );
     await agent(
+      "g1",
+      {
+        agentType: "general-purpose",
+        description: "Falsify the sandbox hook claims",
+        toolUseId: "agent-call-5",
+      },
+      "check the hook",
+      "r",
+    );
+    await agent(
       "r1",
       {
         agentType: "code-reviewer",
@@ -444,7 +454,7 @@ test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critiqu
       "not json\n" + user("x", T(3, 2)) + "\n",
     );
     const session = await readSession(path, "-Users-x-proj");
-    const { agents, unparsedKind, badLines } = await joinSubagents(session);
+    const { agents, badLines } = await joinSubagents(session);
     assertEquals(badLines, 1);
     const kinds = Object.fromEntries(agents.map((a) => [a.id, a.kind]));
     assertEquals(kinds.c1, "critic");
@@ -453,9 +463,9 @@ test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critiqu
     assertEquals(kinds.a2, "adversarial");
     assertEquals(kinds.n1, "adversarial");
     assertEquals(kinds.n2, "critic");
-    assertEquals(kinds.n3, "unparsed");
+    assertEquals(kinds.n3, "critic");
+    assertEquals(kinds.g1, "other");
     assertEquals(kinds.r1, "other");
-    assertEquals(unparsedKind, 1);
     const c1 = agents.find((a) => a.id === "c1")!;
     assertEquals(c1.toolUseId, "agent-call-1");
     assertEquals(Math.round(c1.durMin), 3);
@@ -464,33 +474,171 @@ test("joinSubagents binds by meta.json toolUseId and classifies Critic / Critiqu
   });
 });
 
-test("classifyKind prefers the description, then template lines, critic before adversarial", () => {
-  assertEquals(classifyKind("Critic round 2", ""), "critic");
-  assertEquals(classifyKind("Round 2 plan critique", ""), "critic");
-  assertEquals(classifyKind("Adversarial check", ""), "adversarial");
+test("classifyKind decides by agent type and description, then the template named first, then the template's opening line", () => {
+  const k = (agentType: string | undefined, description: string, prompt = "") =>
+    classifyKind({ agentType, description, prompt });
+  assertEquals(k("Plan", "Critic round 2"), "critic");
+  assertEquals(k("Plan", "Round 2 plan critique"), "critic");
+  assertEquals(k("Explore", "Adversarial check"), "adversarial");
+  assertEquals(k("Explore", "Falsify reply-shape plan claims"), "adversarial");
+  // A sandbox falsifier outside /plan names no template.
+  assertEquals(k("general-purpose", "Falsify the hook claims"), "other");
+  // A plan that edits the plan skill names both templates; the one named first is the agent's own.
   assertEquals(
-    classifyKind("Falsify reply-shape plan claims", ""),
+    k(
+      "Explore",
+      "Check the plan",
+      "Read adversarial-prompt.md. The plan also edits critic-prompt.md.",
+    ),
     "adversarial",
   );
   assertEquals(
-    classifyKind(
-      "Spec and quality review",
-      "You are an adversarial plan critic.",
-    ),
+    k("general-purpose", "Second look", "Read critic-prompt.md"),
     "critic",
   );
   assertEquals(
-    classifyKind("", "You are an adversarial falsification agent."),
+    k(undefined, "", "You are an adversarial falsification agent."),
     "adversarial",
   );
+  assertEquals(k(undefined, "", "You are an adversarial plan critic."), "critic");
   assertEquals(
-    classifyKind("", "please read adversarial-prompt.md"),
-    "unparsed",
-  );
-  assertEquals(
-    classifyKind("Rust specialist review", "focus on ownership"),
+    k("code-reviewer", "Spec review", "Compare against critic-prompt.md"),
     "other",
   );
+  assertEquals(k("Plan", "Rust specialist review", "focus on ownership"), "other");
+});
+
+test("joinSubagents counts each message.id once at its largest usage, and a line without an id by itself", async () => {
+  await withTmp(async (root) => {
+    const path = await writeSession(
+      root,
+      "-Users-x-proj",
+      "s1",
+      sessionLines(),
+    );
+    const sub = join(root, "-Users-x-proj", "s1", "subagents");
+    await mkdir(sub, { recursive: true });
+    const line = (id: string | null, out: number, cache: number, ts: string) =>
+      JSON.stringify({
+        type: "assistant",
+        uuid: uuid(),
+        timestamp: ts,
+        message: {
+          role: "assistant",
+          ...(id ? { id } : {}),
+          content: [{ type: "text", text: "x" }],
+          usage: { output_tokens: out, cache_read_input_tokens: cache },
+        },
+      });
+    await writeFile(
+      join(sub, "agent-d1.jsonl"),
+      [
+        user("x", T(3, 2)),
+        line("msg_1", 3, 100, T(3, 3)),
+        line("msg_1", 3, 100, T(3, 4)),
+        line("msg_1", 40, 100, T(3, 5)),
+        line("msg_2", 7, 200, T(3, 6)),
+        line(null, 5, 50, T(3, 7)),
+      ].join("\n") + "\n",
+    );
+    await writeFile(
+      join(sub, "agent-d1.meta.json"),
+      JSON.stringify({
+        agentType: "Plan",
+        description: "Critic round 1",
+        toolUseId: "agent-call-1",
+      }),
+    );
+    const { agents } = await joinSubagents(
+      await readSession(path, "-Users-x-proj"),
+    );
+    const d1 = agents.find((a) => a.id === "d1")!;
+    assertEquals(d1.out, 52); // 40 + 7 + 5
+    assertEquals(d1.cacheRead, 350); // 100 + 200 + 50
+  });
+});
+
+test("findPlanSegments starts the critic clock only at a Plan or Explore dispatch", async () => {
+  await withTmp(async (root) => {
+    const lines = [
+      user(PLAN_CMD, T(0)),
+      toolUse(
+        "Agent",
+        {
+          subagent_type: "general-purpose",
+          description: "Falsify the hook claims",
+          prompt: "check",
+        },
+        T(1),
+        "gp-1",
+      ),
+      assistant("### どちら？\n\n> 推奨: A。理由", T(2)),
+      user("a", T(3)),
+      toolUse(
+        "Agent",
+        {
+          subagent_type: "Explore",
+          description: "Adversarial falsification",
+          prompt: "Read adversarial-prompt.md",
+        },
+        T(4),
+        "ex-1",
+      ),
+      assistant(HANDOFF, T(5)),
+    ];
+    const s = await readSession(
+      await writeSession(root, "-Users-x-proj", "c", lines),
+      "-Users-x-proj",
+    );
+    const seg = findPlanSegments(s, { fromMs: -Infinity })[0];
+    assertEquals(seg.criticTs, Date.parse(T(4)));
+    assertEquals(seg.questions[0].afterCritic, false);
+  });
+});
+
+test("findPlanSegments reads the recommended options and whether the answer took them", async () => {
+  await withTmp(async (root) => {
+    const one = "### どちら？\n\n- **A. x**\n- **B. y**\n\n> 推奨: A。理由";
+    const three =
+      "### 1. 範囲\n> 推奨: A。x\n### 2. 名前\n> 推奨: B。y\n### 3. 順序\n> 推奨: A。z";
+    const two = "### 1. 範囲\n> 推奨: A。x\n### 2. 名前\n> 推奨: B。y";
+    const pairs: Array<[string, string, boolean | null]> = [
+      [one, "a", true],
+      [one, "A", true],
+      [one, "aで", true],
+      [one, "bかな", false],
+      [one, "a。理由はあとで", true],
+      [one, "bのほうが安全では", false],
+      [one, "I think so", null],
+      ["### Which?\n\n> Recommendation: B. reason", "b", true],
+      [three, "a, b, a", true],
+      [three, "a, a, a", false],
+      [three, "a, b", null],
+      [two, "1a 2b", true],
+      [two, "1b, 2b", false],
+      [two, "1a, 3b", null],
+      [two, "推奨案で", true],
+      [two, "全部推奨案でOK", true],
+      [two, "B", null],
+      ["### どちら？\n\n- **A. x**\n- **B. y**", "a", null],
+    ];
+    const lines = [user(PLAN_CMD, T(0))];
+    pairs.forEach(([ask, answer], n) => {
+      lines.push(assistant(ask, T(1 + 2 * n)), user(answer, T(2 + 2 * n)));
+    });
+    lines.push(assistant(HANDOFF, T(50)));
+    const s = await readSession(
+      await writeSession(root, "-Users-x-proj", "q", lines),
+      "-Users-x-proj",
+    );
+    const seg = findPlanSegments(s, { fromMs: -Infinity })[0];
+    assertEquals(
+      seg.questions.map((q) => q.accepted),
+      pairs.map(([, , accepted]) => accepted),
+    );
+    assertEquals(seg.questions[8].recommended, ["a", "b", "a"]);
+    assertEquals(seg.questions[17].recommended, []);
+  });
 });
 
 test("countDiffOnlyCalls reads both the command form and the Skill tool form and dedupes", async () => {
@@ -741,6 +889,91 @@ test("parseDeepeningLog splits on round lines when a log has them, so a verbatim
   assertEquals(two.round1Veto, true);
   assertEquals(two.round2Applied, true);
   assertEquals(two.kind, { form: 0, behavior: 1, user: 0 });
+});
+
+test("parseDeepeningLog reads round1Veto from the Round 1 critic verdict when the log has round lines", () => {
+  const iterate = parseDeepeningLog([
+    "### Round 1",
+    "Round 1: critic 4 min, Critical 3 (form 0 / behavior 3 / user 0); verdicts ITERATE",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | no live check for the hook | behavior | Applied |",
+    "### Round 2",
+    "Round 2: critic 2 min, Critical 0 (form 0 / behavior 0 / user 0); verdicts CONVERGED",
+  ].join("\n"));
+  assertEquals(iterate.round1Veto, true);
+  const converged = parseDeepeningLog([
+    "### Round 1",
+    "Round 1: critic 4 min, Critical 1 (form 0 / behavior 1 / user 0); adversarial 3 min, Falsified 1, DQ 0; verdicts CONVERGED / ITERATE",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | Test Coverage veto wording | form | Applied |",
+  ].join("\n"));
+  assertEquals(converged.round1Veto, false);
+});
+
+test("parseGateLog reads the shapes of the 2026-10-27 to 11-03 logs", () => {
+  const byName = (text: string) =>
+    Object.fromEntries(
+      parseGateLog(text).reviewers.map((r) => [r.name, r]),
+    );
+  // A bare `Issues: None.` above a Should Fix is not a spec Issue.
+  const issuesNone = byName(
+    "#### code-reviewer (full, round 1) — VERDICT: FAIL\n\nIssues: None.\n\nShould Fix 1 (ROBUSTNESS, HeldKeys.swift release guard): x\n\nNits:\n1. y",
+  );
+  assertEquals(issuesNone["code-reviewer"].everFailed, true);
+  assertEquals(issuesNone["code-reviewer"].blocker, false);
+  // A reviewer heading that names round 2 is a re-review even without a Round heading.
+  assertEquals(
+    parseGateLog(
+      "### Round 1\n#### code-reviewer — VERDICT: FAIL\nSHOULD_FIX only\n#### code-reviewer (diagnostic, round 2) — VERDICT: PASS\nMust Fix: None.",
+    ).rereview,
+    true,
+  );
+  // Names in backticks.
+  const ticks = parseGateLog(
+    "Round 1 replies:\n\n- `code-reviewer`: FAIL. Eleven nits.\n- `security-auditor`: FAIL. SHOULD_FIX: `SESSION_ID_RE` allows a leading `-`.\n- `comment-reviewer`: PASS. Two nits.\n\nRound 2:\n\n- `code-reviewer`, full: FAIL. New SHOULD_FIX.\n- `security-auditor`, diagnostic: PASS, finding closed.",
+  );
+  assertEquals(ticks.unparsed, false);
+  assertEquals(
+    Object.fromEntries(ticks.reviewers.map((r) => [r.name, r.verdict])),
+    {
+      "code-reviewer": "FAIL",
+      "security-auditor": "PASS",
+      "comment-reviewer": "PASS",
+    },
+  );
+  // A spec Issue written as prose.
+  for (
+    const text of [
+      "#### code-reviewer (round 1) — VERDICT: FAIL\n\nSpec issue 1 (INCOMPLETE, ArrowDrop.kt:80-85 `close`):\n- The mock's `end()` clears the key.",
+      "- `code-reviewer`: FAIL. One spec Issue: S100 and S101 ended their retry with `n`.",
+    ]
+  ) assertEquals(byName(text)["code-reviewer"].blocker, true, text);
+  // Two verdicts on one line: each reviewer owns its part of the line.
+  const sameLine = byName(
+    "- Round 1: code-reviewer FAIL (1 MUST_FIX); comment-reviewer PASS.",
+  );
+  assertEquals(sameLine["code-reviewer"].blocker, true);
+  assertEquals(sameLine["comment-reviewer"].blocker, false);
+  const real = byName(
+    "### Round 2\n\nFix diff: `x.rereview-1.gate.diff`.\n\nVerdicts: `code-reviewer` FAIL (one spec Issue, one SHOULD_FIX), `comment-reviewer` PASS.",
+  );
+  assertEquals(real["code-reviewer"].blocker, true);
+  assertEquals(real["comment-reviewer"].verdict, "PASS");
+  // Zero counts and a `no spec issue` line are not blockers.
+  const zero = byName(
+    "Verdicts: code-reviewer FAIL (0 spec Issues, 1 SHOULD_FIX, 4 NIT), comment-reviewer PASS (0), security-auditor FAIL (0 MUST_FIX, 3 SHOULD_FIX of which 2 pre-existing, 4 NIT).",
+  );
+  assertEquals(zero["code-reviewer"].blocker, false);
+  assertEquals(zero["security-auditor"].blocker, false);
+  assertEquals(zero["security-auditor"].everFailed, true);
+  assertEquals(
+    byName(
+      "#### code-reviewer — VERDICT: FAIL\nSHOULD_FIX: rename x\nno spec issues",
+    )["code-reviewer"].blocker,
+    false,
+  );
 });
 
 test("parseGateLog reads seven real variants, separates skipped waves, and marks unreadable logs", () => {
@@ -1122,6 +1355,9 @@ test("CLI --json emits the eight groups plus window, population and unparsed; --
     assertEquals(out.rounds.round2, 0);
     assertEquals(out.rounds.kind, { form: 0, behavior: 1, user: 0 });
     assertEquals(out.critics.behaviorPerRun, 1);
+    // The first question recommends A and is answered `a`; the second has no recommendation.
+    assertEquals(out.questions.recommendationParsed, 1);
+    assertEquals(out.questions.recommendationAcceptedRate, 100);
     const q = await runCommand(scriptPath, [...base, "--list", "questions"]);
     assertEquals(q.code, 0, q.stderr);
     assertEquals(q.stdout.trim().split("\n").length, 2);

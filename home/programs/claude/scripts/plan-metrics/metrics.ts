@@ -148,9 +148,15 @@ export function parseDeepeningLog(text: string): DeepeningLog {
     : body.split(/^#{2,3}\s*Round\s+/m).slice(1);
   const r1 = parts[0] ?? "";
   const r2 = parts[1] ?? "";
+  // critic-prompt.md emits ITERATE only for the Test Coverage veto, while its replies
+  // name the veto every time, so the verdict decides and the words only in old logs.
+  const r1Line = /^Round 1: critic\b[^\n]*verdicts\s+(ITERATE|CONVERGED)/m
+    .exec(body);
   return {
     rounds: parts.length,
-    round1Veto: /Dim(ension)?\s*7|MUST-\d|veto/i.test(r1),
+    round1Veto: byLine.length > 1
+      ? r1Line?.[1] === "ITERATE"
+      : /Dim(ension)?\s*7|MUST-\d|veto/i.test(r1),
     round2Applied: /Applied|^\s*\d+\.\s/m.test(r2),
     kind: countKind(lines),
   };
@@ -178,9 +184,10 @@ const HEADING = /^(#{2,5}\s+|\*\*)/;
 const REPLY_HEADING =
   /^(#{2,5}\s*|\*\*)(Issues|Must Fix|Should Fix|Nits|Notes|Findings|Verdict|Reasoning|Dimension|Extracted|Investigation|Summary|Round 1 evidence|AGREE|CRITICAL|HIGH|MEDIUM|LOW)/i;
 const VERDICT_LINE = /VERDICT:\s*(PASS|FAIL)/;
-// `- name: PASS`, `- name — FAIL`, `- name: Issues None. VERDICT: PASS`, several per line.
+// `- name: PASS`, `- name — FAIL`, `- name: Issues None. VERDICT: PASS`, `` `name`, full: FAIL ``, several per line.
+// The qualifier after a comma is a closed list: an open word would read `a, b PASS` as a verdict for `a`.
 const INLINE =
-  /\b([a-z0-9]+(?:-[a-z0-9]+)*-(?:reviewer|auditor))(?:\s*\([^)]*\))?\s*(?:[:—-]\s*)?(?:Issues None\.\s*)?(?:VERDICT:\s*)?(PASS|FAIL)\b/g;
+  /`?\b([a-z0-9]+(?:-[a-z0-9]+)*-(?:reviewer|auditor))`?(?:\s*\([^)]*\))?(?:,\s*(?:full|diagnostic)(?:\s+re-review)?)?\s*(?:[:—-]\s*)?(?:Issues None\.\s*)?(?:VERDICT:\s*)?(PASS|FAIL)\b/g;
 // `comment-reviewer:` on its own line, followed by the pasted reply (often fenced).
 const NAME_LINE =
   /^\s*(?:\*\*|`)?([a-z0-9]+(?:-[a-z0-9]+)*-(?:reviewer|auditor))(?:\*\*|`)?[^\n]{0,60}[:：]\s*$/;
@@ -201,9 +208,13 @@ const EMPTY_SECTION = String
   .raw`(?!\s*(?:\(?[Nn]one\)?|-\s*[Nn]one|\*\*[Nn]one\*\*|[Nn]ot applicable|Empty if none)\.?\s*$)(?!\s*#)`;
 const BLOCKER = new RegExp(
   String
-    .raw`MUST_FIX|CRITICAL\b|\bHIGH\b|^###\s*Must Fix\s*\n${EMPTY_SECTION}|^###\s*Issues\s*\n${EMPTY_SECTION}|\bType(?:\*{0,2}:|:\*{0,2}|\*{0,2})[ \t]*(?:MISSING|EXTRA|MISUNDERSTOOD|INCOMPLETE)|Issues?\s*\((?![Nn]one)|^Issues:\s*(?![Nn]one)`,
+    .raw`(?<!\b0 )MUST_FIX|CRITICAL\b|\bHIGH\b|^###\s*Must Fix\s*\n${EMPTY_SECTION}|^###\s*Issues\s*\n${EMPTY_SECTION}|\bType(?:\*{0,2}:|:\*{0,2}|\*{0,2})[ \t]*(?:MISSING|EXTRA|MISUNDERSTOOD|INCOMPLETE)|Issues?\s*\((?![Nn]one)|^Issues:(?!\s*[Nn]one)`,
   "m",
 );
+// A spec Issue written as prose (`One spec Issue`, `Spec issue 1`); a zero count is none.
+const SPEC_ISSUE = /(?<!\b0 )\bspec issues?\b/i;
+const NOT_A_FINDING =
+  /\bno\s+(new\s+)?(MUST_FIX|blocker|spec issues?)|Blockers? fixed: none/i;
 const SHOULD_ONLY = /SHOULD_FIX[- ]only/i;
 
 function namesIn(line: string): string[] {
@@ -218,7 +229,7 @@ export function parseGateLog(text: string): GateLog {
     (text.match(/^#{3,4}\s*(Round|Wave)\s*\d/gm) ?? []).length,
   );
   const anchors: Array<
-    { line: number; name: string; verdict: "PASS" | "FAIL" }
+    { line: number; col?: number; name: string; verdict: "PASS" | "FAIL" }
   > = [];
   let currentHeading = "";
   let pendingReviewers: string[] = [];
@@ -285,6 +296,7 @@ export function parseGateLog(text: string): GateLog {
         for (const m of inline) {
           anchors.push({
             line: i,
+            col: m.index,
             name: m[1],
             verdict: m[2] as "PASS" | "FAIL",
           });
@@ -294,7 +306,12 @@ export function parseGateLog(text: string): GateLog {
     }
     if (inline.length) {
       for (const m of inline) {
-        anchors.push({ line: i, name: m[1], verdict: m[2] as "PASS" | "FAIL" });
+        anchors.push({
+          line: i,
+          col: m.index,
+          name: m[1],
+          verdict: m[2] as "PASS" | "FAIL",
+        });
       }
       continue;
     }
@@ -332,18 +349,24 @@ export function parseGateLog(text: string): GateLog {
   const byName = new Map<string, ReviewerVerdict>();
   anchors.forEach((a, idx) => {
     // A pasted reply ends with its VERDICT line, a heading form starts with it: span the whole region between neighbouring headings or verdicts.
+    // On a line with several verdicts the region stops short of that line, and each
+    // reviewer gets only its own part of it, from its name to the next name.
     const prevAnchor = idx > 0 ? anchors[idx - 1].line + 1 : 0;
     const prevHeading = [...logHeadings].reverse().find((h) => h <= a.line) ??
       0;
     const nextAnchor = anchors[idx + 1]?.line ?? lines.length;
     const nextHeading = logHeadings.find((h) => h > a.line) ?? lines.length;
-    const block = lines.slice(
-      Math.max(prevAnchor, prevHeading),
-      Math.min(nextAnchor, nextHeading),
-    ).filter((l) =>
-      !/\bno\s+(new\s+)?(MUST_FIX|blocker)|Blockers? fixed: none/i.test(l)
-    ).join("\n");
-    const blocker = a.verdict === "FAIL" && BLOCKER.test(block) &&
+    const from = Math.max(prevAnchor, prevHeading);
+    const col = a.col ?? 0;
+    const end = anchors.find((b) => b.line === a.line && (b.col ?? 0) > col)
+      ?.col;
+    const block = [
+      ...lines.slice(from, Math.min(nextAnchor, nextHeading))
+        .filter((_, k) => from + k !== a.line),
+      lines[a.line].slice(col, end),
+    ].filter((l) => !NOT_A_FINDING.test(l)).join("\n");
+    const blocker = a.verdict === "FAIL" &&
+      (BLOCKER.test(block) || SPEC_ISSUE.test(block)) &&
       !SHOULD_ONLY.test(block);
     const prev = byName.get(a.name);
     // The last verdict is the final state; a FAIL in any round still counts as a finding.
@@ -360,7 +383,8 @@ export function parseGateLog(text: string): GateLog {
     reviewers: [...byName.values()],
     skipped,
     unparsed: byName.size === 0 && !skipped,
-    rereview: /rereview-\d+/.test(text) || rounds > 1,
+    rereview: /rereview-\d+/.test(text) || rounds > 1 ||
+      /^#{2,5}\s[^\n]*\bround\s+(?:[2-9]|[1-9]\d+)\b/im.test(text),
   };
 }
 
@@ -438,7 +462,6 @@ export type Inputs = {
   };
   unparsed: {
     badLines: number;
-    unparsedKind: number;
     sidecars: number;
     subagentFiles: number;
     metaFiles: number;
@@ -523,6 +546,7 @@ export function buildReport(input: Inputs) {
   const questions = handed.flatMap((s) => s.questions);
   const before = questions.filter((q) => !q.afterCritic);
   const after = questions.filter((q) => q.afterCritic);
+  const parsedAnswers = questions.filter((q) => q.accepted !== null);
 
   const friction: Record<string, number> = {};
   for (const [key, needle] of Object.entries(FRICTION)) {
@@ -558,7 +582,6 @@ export function buildReport(input: Inputs) {
       metaFiles: input.unparsed.metaFiles,
       untimedSegments: input.unparsed.untimedSegments,
       noEndSegments: input.segments.filter((s) => s.state === "noEnd").length,
-      unparsedKind: input.unparsed.unparsedKind,
       gateLogs: input.gates.filter((g) => g.unparsed).length,
       skippedWaves: input.gates.filter((g) => g.skipped).length,
     },
@@ -659,6 +682,12 @@ export function buildReport(input: Inputs) {
       recommendationRate: pct(
         questions.filter((q) => q.hasRecommendation).length,
         questions.length,
+      ),
+      // Over the turns whose recommendation and answer were both readable, named next to it.
+      recommendationParsed: parsedAnswers.length,
+      recommendationAcceptedRate: pct(
+        parsedAnswers.filter((q) => q.accepted).length,
+        parsedAnswers.length,
       ),
     },
     friction: {

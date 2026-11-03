@@ -22,6 +22,8 @@ export type Ev = {
   assistantText: string | null;
   toolUses: ToolUse[];
   toolResults: ToolResult[];
+  /** `message.id`: one API response is written as several lines that repeat its usage. */
+  messageId: string;
   outputTokens: number;
   cacheRead: number;
 };
@@ -49,6 +51,7 @@ function blockText(content: unknown): string {
 
 function parseEvent(raw: Record<string, unknown>, i: number): Ev {
   const msg = (raw.message ?? {}) as {
+    id?: unknown;
     content?: unknown;
     usage?: Record<string, number>;
   };
@@ -123,6 +126,7 @@ function parseEvent(raw: Record<string, unknown>, i: number): Ev {
     assistantText,
     toolUses,
     toolResults,
+    messageId: typeof msg.id === "string" ? msg.id : "",
     outputTokens: msg.usage?.output_tokens ?? 0,
     cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
   };
@@ -233,12 +237,20 @@ const IMPL_END =
 const NOT_A_REPLY =
   /<task-notification>|Subagent hand-back|<agent-message|<command-name>/;
 const RECOMMENDATION = /推奨|Recommend/i;
+// The option letter of a `> 推奨: A。…` line; a bundled turn has one per `### N.` section.
+const RECOMMENDED =
+  /^>\s*(?:\*\*)?(?:推奨|Recommendation)(?:\*\*)?\s*[:：]\s*(?:\*\*)?([A-Za-z])(?![A-Za-z])/m;
+const NUMBERED_SECTION = /^###\s+(\d+)\./m;
 // Whole word, so an Explore agent described as "critical path" is not a critic.
 const CRITIC_DESC = /\bcritics?\b|critique/i;
 const ADVERSARIAL_DESC = /adversar|falsif/i;
 const CRITIC_PROMPT = /You are an adversarial plan critic/i;
 const ADVERSARIAL_PROMPT = /adversarial falsification agent/i;
-const TEMPLATE_REF = /critic-prompt\.md|adversarial-prompt\.md/;
+const CRITIC_TEMPLATE = "critic-prompt.md";
+const ADVERSARIAL_TEMPLATE = "adversarial-prompt.md";
+// A falsifier outside /plan runs as general-purpose; reviewers name the templates when they review them.
+const PLAN_AGENT_TYPES = new Set(["Plan", "Explore"]);
+const TEMPLATE_AGENT_TYPES = new Set(["Plan", "Explore", "general-purpose"]);
 
 export type Question = {
   askTs: number;
@@ -246,6 +258,10 @@ export type Question = {
   waitMin: number;
   afterCritic: boolean;
   hasRecommendation: boolean;
+  /** Recommended option letters, lower case, in question order; empty when none is readable. */
+  recommended: string[];
+  /** Whether the answer took every recommendation; null when the answer is not readable. */
+  accepted: boolean | null;
   heading: string;
   answer: string;
 };
@@ -289,10 +305,56 @@ function startsImpl(e: Ev): boolean {
 
 function isCriticDispatch(t: ToolUse): boolean {
   if (t.name !== "Agent") return false;
+  if (!PLAN_AGENT_TYPES.has(String(t.input.subagent_type ?? ""))) return false;
   const desc = String(t.input.description ?? "");
   const prompt = String(t.input.prompt ?? "").slice(0, 400);
   return CRITIC_DESC.test(desc) || ADVERSARIAL_DESC.test(desc) ||
     CRITIC_PROMPT.test(prompt) || ADVERSARIAL_PROMPT.test(prompt);
+}
+
+/**
+ * The recommended letters of a question turn and whether the reply took them. Read
+ * only: `a` / `aで` / `bかな` (a letter not followed by a Latin letter), `a, b, a` in
+ * question order, `1b 2b` by number, and `推奨で` / `全部推奨` for all; a free-text reply,
+ * or a single letter for a bundled turn, stays null.
+ */
+export function readAnswer(
+  ask: string,
+  reply: string,
+): { recommended: string[]; accepted: boolean | null } {
+  const heads = [...ask.matchAll(new RegExp(NUMBERED_SECTION.source, "gm"))];
+  const sections = heads.length
+    ? heads.map((h, k) => ({
+      n: Number(h[1]),
+      text: ask.slice(h.index, heads[k + 1]?.index ?? ask.length),
+    }))
+    : [{ n: null, text: ask }];
+  const recs = sections.flatMap((s) => {
+    const m = RECOMMENDED.exec(s.text);
+    return m ? [{ n: s.n, letter: m[1].toLowerCase() }] : [];
+  });
+  const recommended = recs.map((r) => r.letter);
+  const result = (accepted: boolean | null) => ({ recommended, accepted });
+  if (recs.length === 0) return result(null);
+  const text = reply.trim().split("\n")[0].trim().toLowerCase();
+  if (/^(推奨(案)?で|全部推奨)/.test(text)) return result(true);
+  if (/^\d+[a-z](?![a-z])/.test(text)) {
+    const byNumber = new Map(recs.map((r) => [r.n, r.letter]));
+    const picks = [...text.matchAll(/(\d+)([a-z])(?![a-z])/g)];
+    if (picks.some((p) => !byNumber.has(Number(p[1])))) return result(null);
+    return result(picks.every((p) => byNumber.get(Number(p[1])) === p[2]));
+  }
+  const list = /^[a-z](?:\s*[,、]\s*[a-z]|\s+[a-z])+(?![a-z])/.exec(text);
+  if (list) {
+    const letters = list[0].match(/[a-z]/g) ?? [];
+    if (letters.length !== recs.length) return result(null);
+    return result(letters.every((l, k) => l === recommended[k]));
+  }
+  if (/^[a-z](?![a-z])/.test(text) && !/^[a-z]\s+[a-z]/.test(text)) {
+    if (recs.length > 1) return result(null);
+    return result(text[0] === recommended[0]);
+  }
+  return result(null);
 }
 
 /** One segment per `/plan` start; a later `/plan` in the same session closes the previous one. */
@@ -362,6 +424,7 @@ export function findPlanSegments(
               hasRecommendation: RECOMMENDATION.test(
                 lastAsk.assistantText ?? "",
               ),
+              ...readAnswer(lastAsk.assistantText ?? "", e.userText ?? ""),
               heading: (lastAsk.assistantText?.match(/^###\s+(.*)$/m)?.[1] ??
                 lastAsk.assistantText?.split("\n")[0] ?? "").trim(),
               answer: (e.userText ?? "").trim().split("\n")[0].slice(0, 60),
@@ -408,15 +471,31 @@ export function findPlanSegments(
   return segs;
 }
 
-export type AgentKind = "critic" | "adversarial" | "other" | "unparsed";
+export type AgentKind = "critic" | "adversarial" | "other";
 
-/** Description first (it is what the parent typed), then the template's own opening line; critic before adversarial because the critic template also says "adversarial". */
-export function classifyKind(description: string, prompt: string): AgentKind {
-  if (CRITIC_DESC.test(description)) return "critic";
-  if (ADVERSARIAL_DESC.test(description)) return "adversarial";
+/**
+ * The agent type with its description first (`/plan` dispatches the critic as Plan and
+ * the falsifier as Explore), then the template the prompt names first (a plan about the
+ * plan skill names both), then the pasted template's opening line, critic first because
+ * the critic template also says "adversarial". Any other agent type is never either.
+ */
+export function classifyKind(
+  agent: { agentType?: string; description: string; prompt: string },
+): AgentKind {
+  const { agentType, description, prompt } = agent;
+  if (agentType === "Plan" && CRITIC_DESC.test(description)) return "critic";
+  if (agentType === "Explore" && ADVERSARIAL_DESC.test(description)) {
+    return "adversarial";
+  }
+  if (agentType !== undefined && !TEMPLATE_AGENT_TYPES.has(agentType)) {
+    return "other";
+  }
+  const critic = prompt.indexOf(CRITIC_TEMPLATE);
+  const adversarial = prompt.indexOf(ADVERSARIAL_TEMPLATE);
+  if (critic >= 0 && (adversarial < 0 || critic < adversarial)) return "critic";
+  if (adversarial >= 0) return "adversarial";
   if (CRITIC_PROMPT.test(prompt)) return "critic";
   if (ADVERSARIAL_PROMPT.test(prompt)) return "adversarial";
-  if (TEMPLATE_REF.test(prompt)) return "unparsed";
   return "other";
 }
 
@@ -436,7 +515,6 @@ export type Subagent = {
 
 export type SubagentJoin = {
   agents: Subagent[];
-  unparsedKind: number;
   badLines: number;
   missing: number;
   badMeta: number;
@@ -448,10 +526,10 @@ export async function joinSubagents(session: Session): Promise<SubagentJoin> {
   try {
     names = (await readdir(dir)).filter((n) => /^agent-.*\.jsonl$/.test(n));
   } catch {
-    return { agents: [], unparsedKind: 0, badLines: 0, missing: 0, badMeta: 0 };
+    return { agents: [], badLines: 0, missing: 0, badMeta: 0 };
   }
   const agents: Subagent[] = [];
-  let unparsedKind = 0, badLines = 0, missing = 0, badMeta = 0;
+  let badLines = 0, missing = 0, badMeta = 0;
   for (const name of names) {
     const id = basename(name, ".jsonl").replace(/^agent-/, "");
     let meta:
@@ -476,11 +554,19 @@ export async function joinSubagents(session: Session): Promise<SubagentJoin> {
     const first = sub.events.find((e) => !Number.isNaN(e.ts));
     const last = [...sub.events].reverse().find((e) => !Number.isNaN(e.ts));
     let out = 0, cacheRead = 0, tools = 0, report = "", prompt = "";
+    const usage = new Map<string, { out: number; cacheRead: number }>();
     for (const e of sub.events) {
       if (e.type === "user" && !prompt && e.userText) prompt = e.userText;
       if (e.type !== "assistant") continue;
-      out += e.outputTokens;
-      cacheRead += e.cacheRead;
+      if (e.messageId) {
+        const u = usage.get(e.messageId) ?? { out: 0, cacheRead: 0 };
+        u.out = Math.max(u.out, e.outputTokens);
+        u.cacheRead = Math.max(u.cacheRead, e.cacheRead);
+        usage.set(e.messageId, u);
+      } else {
+        out += e.outputTokens;
+        cacheRead += e.cacheRead;
+      }
       tools += e.toolUses.length;
       for (const t of e.toolUses) {
         if (t.name === "SubagentHandback") {
@@ -491,6 +577,10 @@ export async function joinSubagents(session: Session): Promise<SubagentJoin> {
         report = e.assistantText;
       }
     }
+    for (const u of usage.values()) {
+      out += u.out;
+      cacheRead += u.cacheRead;
+    }
     if (!report) {
       report = [...sub.events].reverse().find((e) =>
         e.assistantText
@@ -499,8 +589,13 @@ export async function joinSubagents(session: Session): Promise<SubagentJoin> {
     const description = typeof meta?.description === "string"
       ? meta.description
       : "";
-    const kind = classifyKind(description, prompt);
-    if (kind === "unparsed") unparsedKind++;
+    const kind = classifyKind({
+      agentType: typeof meta?.agentType === "string"
+        ? meta.agentType
+        : undefined,
+      description,
+      prompt,
+    });
     agents.push({
       id,
       kind,
@@ -517,7 +612,7 @@ export async function joinSubagents(session: Session): Promise<SubagentJoin> {
       ),
     });
   }
-  return { agents, unparsedKind, badLines, missing, badMeta };
+  return { agents, badLines, missing, badMeta };
 }
 
 /** `/gate --diff-only` appears as a slash command (user text) or a Skill tool_use; both are counted once by their own id. */

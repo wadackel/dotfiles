@@ -88,7 +88,7 @@ function usage(): never {
       "  plan-state.ts init <path> <plan-basename> <subjects-json>",
       "  plan-state.ts normalize <path>",
       "  plan-state.ts start <path> <task-id>   # also completes earlier in-progress tasks whose checks are current",
-      "  plan-state.ts append-evidence <path> <task-id>",
+      "  plan-state.ts append-evidence <path> <task-id> [text...]   # the text, or stdin when there is none",
       "  plan-state.ts complete <path> <task-id>",
       "  plan-state.ts require <path> <task-id>  # requirements JSON on stdin",
       "  plan-state.ts record <path> <task-id>   # check JSON on stdin",
@@ -829,7 +829,13 @@ async function execute(
     }
     const data = await readEvidence(path);
     const task = findTask(data, taskOrPlan);
-    const evidence = await new Response(stdin).text();
+    // Reading stdin alone would store an empty note for words passed as
+    // arguments and still report success.
+    const words = args.slice(3);
+    const evidence = words.length > 0
+      ? words.join(" ")
+      : await new Response(stdin).text();
+    if (evidence.trim() === "") throw new Error("evidence is empty");
     task.evidence = task.evidence
       ? `${task.evidence}\n---\n${evidence}`
       : evidence;

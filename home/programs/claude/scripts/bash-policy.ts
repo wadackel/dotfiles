@@ -111,11 +111,11 @@ const PASSIVE = new Set([
 /** The path the passive subcommands' `permissions.allow` entries match; their leading `*` auto-approves a command carrying it anywhere. */
 const INSTALLED_HELPER = "/.agents/scripts/plan-state.ts";
 const WHOLE_COMMAND =
-  "plan-state.ts run / rerun must be the whole command: no prefix assignment, wrapper, shell string, pipeline, `&&` or `;` around it";
+  "plan-state.ts run / rerun must be the whole command: no prefix assignment, wrapper, shell string, pipeline, `&&` or `;` around it (it runs in the repository recorded at `start`, so no `cd` is needed)";
 const SINGLE_LINE =
   "plan-state.ts run / rerun must be a single line (a later line is executed but not inspected)";
 const PASSIVE_SHAPE =
-  "no prefix assignment, $(…), backtick (inside an argument included) or redirect around a passive plan-state.ts subcommand (a heredoc, an fd-dup or /dev/null is fine); the allow entry approves the command as a whole";
+  "no prefix assignment, $(…), backtick (inside an argument included) or redirect around a passive plan-state.ts subcommand (a heredoc, an fd-dup or /dev/null is fine; pass a file as `cat FILE | …` rather than `< FILE`); the allow entry approves the command as a whole";
 const INSTALLED_ELSEWHERE =
   "plan-state.ts: its installed path may appear only as the head of a command; inside a heredoc body, a shell string, a wrapper's argument or a search pattern it would be auto-approved whole by permissions.allow (name the worktree path home/programs/agents/scripts/plan-state.ts when it is data)";
 
