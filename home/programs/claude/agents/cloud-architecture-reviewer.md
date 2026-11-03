@@ -60,7 +60,7 @@ Specialist for infrastructure-as-code and cloud deployment patterns. Catches iss
 - `.dockerignore` excludes `.git`, `node_modules`, tests
 
 ### 7. GitHub Actions
-- Step-level actions covered by `.github/workflows/actions.lock`; reusable workflow calls and actions inside a published `action.yml` pinned to full commit SHA (per CLAUDE.md)
+- Step-level actions covered by `.github/workflows/actions.lock`, or pinned to full commit SHA in a repository without one; reusable workflow calls and actions inside a published `action.yml` pinned to full commit SHA (per CLAUDE.md)
 - `permissions:` block minimized (explicit per-job permissions)
 - OIDC via `id-token: write` over long-lived cloud keys
 - `pull_request_target` avoided unless strictly needed (code execution from untrusted PR)
