@@ -88,6 +88,9 @@ export interface PaneOpts {
   sessionId?: string;
   subagents?: string;
   cwd?: string;
+  // The pane's start directory, so pane_current_path. Defaults to `cwd`: pass
+  // it to reproduce an agent whose @pane_cwd moved away from where it started.
+  startDir?: string;
   // User-defined session label set via agentower.tsx's `m` keypress, stored
   // in the @pane_user_label tmux pane option. When set (non-empty),
   // Agentower's row-1 display swaps icon/text/color from PaneStatus to the
@@ -229,6 +232,8 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
     "-F",
     "#{pane_id}",
   ];
+  const startDir = opts.startDir ?? opts.cwd;
+  if (startDir !== undefined) newWindowArgs.push("-c", startDir);
   if (live) {
     // Execute the compiled stub directly so the kernel sets p_comm (and
     // tmux's #{pane_current_command}) to the basename matching the agent.

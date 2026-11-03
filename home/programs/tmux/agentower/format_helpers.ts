@@ -103,14 +103,22 @@ export function branchFromHead(headText: string): string {
   return ref ? ref[1] : "";
 }
 
+// The directory a row stands for. Claude's @pane_cwd follows every `cd` of its
+// Bash tool, which leaves the agent process where it started, so @pane_cwd only
+// covers an empty pane_current_path. `EnterWorktree` and `claude -w` move the
+// process, and pane_current_path with it.
+export function paneDir(row: PaneRow): string {
+  return row.currentPath || row.cwd;
+}
+
 // Location columns for the row renderer. `repoName` is absent until
-// fetchPanes' git lookup lands (and in unit fixtures), so the cwd basename
-// stands in. When everything is empty, repo carries the "·" placeholder so the
-// row is never blank.
+// fetchPanes' git lookup lands (and in unit fixtures), so the directory's
+// basename stands in. When everything is empty, repo carries the "·" placeholder
+// so the row is never blank.
 export function locationParts(
   row: PaneRow,
 ): { repo: string; worktree: string; branch: string } {
-  const repo = row.repoName || basename(row.cwd || row.currentPath);
+  const repo = row.repoName || basename(paneDir(row));
   const worktree = row.worktreeName ?? "";
   const branch = row.worktreeBranch;
   if (!repo && !branch) return { repo: "·", worktree: "", branch: "" };

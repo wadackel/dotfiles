@@ -68,6 +68,7 @@ import {
   branchFromHead,
   type GitLocation,
   locationParts,
+  paneDir,
   parseGitLocation,
 } from "./format_helpers.ts";
 
@@ -769,6 +770,8 @@ export async function readTaskProgressForRow(
 ): Promise<TaskProgress | null> {
   if (row.startup) return null;
   if (row.agent === "codex") {
+    // Not paneDir: the marker is hashed from the directory Codex's commands run
+    // in, which @pane_cwd tracks and the pane's own process may not.
     return await readCodexTaskProgress(row.cwd || row.currentPath);
   }
   if (row.agent === "claude") {
@@ -816,11 +819,9 @@ async function fetchPanes(
     ? selectFreeWindows(snapshots, rows, process.env.TMUX_PANE ?? null)
     : null;
   // Resolve the repository location and fill in a missing worktreeBranch from
-  // the pane's cwd (falling back to pane_current_path when @pane_cwd is unset,
-  // e.g. when the latest hook event for a Claude pane carried no cwd payload)
-  // in parallel.
+  // each row's directory, in parallel.
   const locate = async (row: PaneRow): Promise<boolean> => {
-    const source = row.cwd || row.currentPath;
+    const source = paneDir(row);
     if (!source) return false;
     const location = await gitLocation(source);
     row.repoName = location.repo;
@@ -963,7 +964,7 @@ function Preview(
       ]
       : []),
   ];
-  const path = displayPath(row.cwd || row.currentPath);
+  const path = displayPath(paneDir(row));
   return (
     <Card title={title} width={width} height={height}>
       <Text color={DOGRUN.fgDim}>

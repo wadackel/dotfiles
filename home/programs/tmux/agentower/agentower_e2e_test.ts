@@ -491,8 +491,8 @@ test("S8: task progress 2/3 from tasks dir", async () => {
 });
 
 // S8b: Codex progress reads ~/.codex/plans/.active-<cwd-hash> and its
-// sibling evidence JSON. The pane carries @pane_cwd so the hash is
-// deterministic and independent of tmux's default current_path.
+// sibling evidence JSON. The pane starts elsewhere, so the 2/3 appears only
+// when the hash comes from @pane_cwd and not from pane_current_path.
 test("S8b: codex task progress 2/3 from evidence json", async () => {
   const originalHome = process.env.HOME;
   const tempHome = await mkdtemp("/tmp/agentower-codex-e2e-");
@@ -510,6 +510,7 @@ test("S8b: codex task progress 2/3 from evidence json", async () => {
       prompt: "codex-row-progress",
       lastTool: "Read",
       cwd,
+      startDir: tempHome,
     });
     const agentower = await spawnAgentower({ env });
     const out = await waitFor(agentower, (o) => o.includes("2/3"));
@@ -1456,17 +1457,20 @@ test("S-N2: m keypress cycles userLabel none → review", async () => {
 // AND both rows reach the repo column.
 test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
   await setupServer();
+  const root = await mkdtemp("/tmp/agentower-repos-");
   try {
+    await mkdir(`${root}/alpha`);
+    await mkdir(`${root}/beta`);
     await createClaudePane({
       status: "running",
       userLabel: "feedback", // 8-char max-width label
       prompt: "labeled-row",
-      cwd: "/repo/alpha",
+      cwd: `${root}/alpha`,
     });
     await createClaudePane({
       status: "idle", // no label, shows "idle"
       prompt: "plain-row",
-      cwd: "/repo/beta",
+      cwd: `${root}/beta`,
     });
     const agentower = await spawnAgentower();
     const out = await captureOutput(agentower);
@@ -1482,6 +1486,7 @@ test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () =>
     await waitForExit();
   } finally {
     await teardown();
+    await rm(root, { recursive: true }).catch(() => {});
   }
 });
 
@@ -2412,6 +2417,50 @@ test("S57: a CJK branch name gets the width it actually occupies", async () => {
       .find((l) => l.includes("cjk-row")) ?? "";
 
     assertStringIncludes(row, "機能追加");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await rm(root, { recursive: true }).catch(() => {});
+  }
+});
+
+// S103: Claude's Bash `cd` moves @pane_cwd and leaves the agent process where it
+// started, so the row and the preview keep naming the launch directory.
+test("S103: row and preview show the launch directory, not @pane_cwd", async () => {
+  await setupServer();
+  const root = await mkdtemp("/tmp/agentower-git-");
+  try {
+    for (
+      const [name, branch] of [["launched", "topic"], ["elsewhere", "other"]]
+    ) {
+      await mkdir(`${root}/${name}`, { recursive: true });
+      await git(`${root}/${name}`, "init", "-q", "-b", branch);
+      await git(
+        `${root}/${name}`,
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "init",
+      );
+    }
+
+    await createClaudePane({
+      status: "idle",
+      prompt: "launch-row",
+      startDir: `${root}/launched`,
+      cwd: `${root}/elsewhere`,
+    });
+    const agentower = await spawnAgentower();
+    const out = await waitFor(agentower, (o) => o.includes("launch-row"));
+
+    const row = listColumn(out).find((l) => l.includes("launch-row")) ?? "";
+    assertStringIncludes(row, "launched");
+    assertStringIncludes(row, "topic");
+    assertStringIncludes(out, "/launched");
+    assertFalse(out.includes("elsewhere"), `@pane_cwd leaked: ${out}`);
 
     await sendKey(agentower, "Escape");
     await waitForExit();

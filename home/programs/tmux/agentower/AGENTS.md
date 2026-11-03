@@ -24,6 +24,8 @@ Hash-skip keys on a sha256, taken at activation from the worktree, over the `.ts
 
 Agentower covers three AI agents: `claude` / `opencode` / `codex`. Each agent has its own pane-status writer that emits `@pane_*` tmux options (claude: `claude-pane-status.ts` invoked by Claude Code hooks; opencode: in-process Bun plugin at `home/programs/opencode/plugin.ts`; codex: `home/programs/codex/scripts/codex-pane-status.ts` invoked by Codex CLI lifecycle hooks registered in `home/programs/codex/hooks.json`). All three follow the same single-shot script + stdin JSON pattern.
 
+A row's directory, repository, branch and preview path come from `paneDir` (`format_helpers.ts`): `pane_current_path`, then `@pane_cwd` when that is empty. All three writers record the hook's `cwd` in `@pane_cwd`. Claude's value follows every Bash `cd` without moving the agent process, so `@pane_cwd` first would make the row follow every scratch directory; `EnterWorktree` and `claude -w` do move the process, and the row follows them. Whether a Codex or opencode session's directory can differ from its process's has not been observed. Codex task progress keeps `@pane_cwd` first because the plan marker is hashed from the directory Codex's commands run in. `pane_current_path` is the resolved path, so a pane started under `/tmp` reads `/private/tmp`. In the e2e, `createClaudePane` passes `startDir ?? cwd` to `new-window -c`, so a scenario that needs the two apart sets `startDir`.
+
 Implications when editing Agentower source:
 
 - `/agentower-verify` runs the suite against the source entry. Set `AGENTOWER_E2E_BIN=<path>` to run the same scenarios against a compiled binary instead — that is the only way to check the shipped artifact.

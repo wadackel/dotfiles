@@ -8,6 +8,7 @@ import {
   formatRemaining,
   freeCommandLabel,
   locationParts,
+  paneDir,
   parseGitLocation,
   parseSubagents,
   renderSubagentTree,
@@ -236,6 +237,19 @@ test("branchFromHead: a ref outside refs/heads is not a branch", () => {
   assertEquals(branchFromHead("ref: refs/remotes/origin/main\n"), "");
 });
 
+// --- paneDir ---
+
+test("paneDir: pane_current_path wins over a moved @pane_cwd", () => {
+  assertEquals(
+    paneDir(mkRow({ currentPath: "/src/app", cwd: "/tmp/scratchpad" })),
+    "/src/app",
+  );
+});
+
+test("paneDir: @pane_cwd covers an empty pane_current_path", () => {
+  assertEquals(paneDir(mkRow({ cwd: "/src/app" })), "/src/app");
+});
+
 // --- locationParts ---
 
 test("locationParts: git lookup result wins over the cwd basename", () => {
@@ -257,9 +271,9 @@ test("locationParts: without a lookup the cwd basename stands in", () => {
   );
 });
 
-test("locationParts: pane_current_path covers an unset @pane_cwd", () => {
+test("locationParts: the basename comes from pane_current_path first", () => {
   assertEquals(
-    locationParts(mkRow({ currentPath: "/src/notes" })).repo,
+    locationParts(mkRow({ currentPath: "/src/notes", cwd: "/tmp/work" })).repo,
     "notes",
   );
 });
