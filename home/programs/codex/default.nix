@@ -40,6 +40,7 @@ let
     };
 
     tui = {
+      mouse_scroll_speed = 2.5;
       terminal_title = [
         "app-name"
         "thread-id"
