@@ -788,6 +788,64 @@ export async function spawnRestore(
   return pane.trim();
 }
 
+// A client of the inner server, attached from a window of the -L server, so the
+// inner server has somewhere to open a popup.
+export async function attachInnerClient(): Promise<void> {
+  const { realTmux, socket } = requireInner();
+  await tmuxRun([
+    "new-window",
+    "-d",
+    "-t",
+    SESSION,
+    "/usr/bin/env",
+    "-i",
+    ...Object.entries(await innerEnv()).map(([key, value]) => `${key}=${value}`),
+    realTmux,
+    "-S",
+    socket,
+    "attach",
+  ]);
+}
+
+const POPUP_GUARD = '[ "$(command -v tmux)" = "$1" ] || exit 99; shift; ' +
+  '"$@" >"$AW_POPUP_OUT" 2>&1; echo $? >"$AW_POPUP_CODE"';
+
+// The binary in a display-popup of the inner server. The popup's screen is gone
+// once it closes, so the output and the exit code go to files. Not awaited: a
+// guard that let the prompt through would hold the popup open until teardown.
+export async function spawnInnerPopup(
+  args: string[],
+  files: { out: string; code: string },
+): Promise<void> {
+  const { realTmux, socket, shim } = requireInner();
+  const env = {
+    ...await innerEnv(),
+    AW_POPUP_OUT: files.out,
+    AW_POPUP_CODE: files.code,
+  };
+  run(realTmux, [
+    "-S",
+    socket,
+    "-u",
+    "display-popup",
+    "-E",
+    "-w",
+    "120",
+    "-h",
+    "30",
+    "/usr/bin/env",
+    "-i",
+    ...Object.entries(env).map(([key, value]) => `${key}=${value}`),
+    "/bin/sh",
+    "-c",
+    POPUP_GUARD,
+    "sh",
+    shim,
+    agentowerBin(),
+    ...args,
+  ], { clearEnv: true, env: await innerEnv() }).catch(() => {});
+}
+
 export async function paneExitCode(
   pane: string,
   runner: (args: string[]) => Promise<string> = tmuxRun,

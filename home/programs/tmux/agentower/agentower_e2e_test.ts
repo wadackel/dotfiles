@@ -17,6 +17,7 @@ import { run } from "../../agents/lib/proc.ts";
 import {
   agentCalls,
   attachClient,
+  attachInnerClient,
   captureOutput,
   createClaudePane,
   createInnerAgentPane,
@@ -33,6 +34,7 @@ import {
   setupServer,
   shimCalls,
   spawnAgentower,
+  spawnInnerPopup,
   spawnRestore,
   teardown,
   tmux,
@@ -41,6 +43,7 @@ import {
 } from "./agentower_e2e_harness.ts";
 import { codexCwdHash, MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
+import { parseEtime } from "./restore.ts";
 
 test("S68: startup Codex is idle, filterable and selectable before hook registration", async () => {
   await setupServer();
@@ -3623,7 +3626,12 @@ test("S89: --snapshot writes nothing while a restore is under way", async () => 
   try {
     await setupInner();
     await innerTmux(["new-session", "-d", "-s", "work"]);
-    await innerTmux(["set-option", "-g", "@agentower_restoring", "1"]);
+    // This test process stands in for a restore that is still running.
+    const { stdout } = await run("ps", ["-o", "etime=", "-p", `${process.pid}`]);
+    const start = Math.floor(Date.now() / 1000) - (parseEtime(stdout) ?? 0);
+    await innerTmux(
+      ["set-option", "-g", "@agentower_restoring", `${process.pid}:${start}`],
+    );
     const { code, stderr } = await runInnerCli(["--snapshot"]);
     assertEquals(code, 0);
     assertStringIncludes(stderr, "復元中のため保存を飛ばしました");
@@ -4180,35 +4188,46 @@ async function breakSavedLayout(): Promise<string> {
   return name;
 }
 
-test("S100: a failed restore keeps the flag, stays out of the generations, and names the retry", async () => {
+// The number --restore gives a saved file: newest first, without the running
+// server's own file.
+async function generationOf(file: string): Promise<number> {
+  const current = (await innerTmux(["display", "-p", "#{start_time}"])).trim();
+  const names = (await readSnapshots())
+    .filter((name) => name !== `${current}.json`)
+    .toSorted((a, b) => Number.parseInt(b, 10) - Number.parseInt(a, 10));
+  return names.indexOf(file) + 1;
+}
+
+test("S100: a failed restore's server is saved again, and the retry follows the file", async () => {
   await setupServer({ cols: 200, rows: 50 });
   try {
     await setupInner();
     await innerTmux(["new-session", "-d", "-s", "main", "-n", "two-panes"]);
     await innerTmux(["split-window", "-t", "main:"]);
     await saveAndKillInner();
-    await breakSavedLayout();
+    const target = await breakSavedLayout();
     const pane = await spawnRestore(["--restore"]);
     await confirmRestore(pane);
     assertEquals(await paneExitCode(pane), 1);
     const failed = await waitFor(pane, (o) => o.includes("invalid layout"));
     assertStringIncludes(failed, "agentower --restore 1");
+    assertEquals(await generationOf(target), 1);
     assertEquals(
       (await shimCalls()).some((c) => c.includes("attach-session")),
       false,
     );
-    assertEquals(
-      (await innerTmux(["show-options", "-gqv", "@agentower_restoring"]))
-        .trim(),
-      "1",
-    );
+    const flag = await innerTmux(["show-options", "-gqv", "@agentower_restoring"]);
+    assertEquals(/^\d+:\d+$/.test(flag.trim()), true);
 
-    const before = await readSnapshots();
+    // Ten older files make one too many: pruning now would delete one of them.
+    const dir = await snapshotsDir();
+    for (let i = 0; i < 10; i++) {
+      await writeFile(join(dir, `${1000000000 + i}.json`), "{}");
+    }
     assertEquals((await runInnerCli(["--snapshot"])).code, 0);
-    assertEquals(await readSnapshots(), before);
+    assertEquals((await readSnapshots()).length, 12);
+    await new Promise((r) => setTimeout(r, 1100));
 
-    // The retry replaces the half-built server without saving it, so the same
-    // number still points at the same generation.
     const retry = await spawnRestore(["--restore", "1"]);
     const prompt = await waitFor(retry, (o) => o.includes("[y/N]"));
     assertStringIncludes(prompt, "two-panes");
@@ -4216,26 +4235,21 @@ test("S100: a failed restore keeps the flag, stays out of the generations, and n
     await sendKey(retry, "Enter");
     assertEquals(await paneExitCode(retry), 1);
     const again = await waitFor(retry, (o) => o.includes("invalid layout"));
-    assertStringIncludes(again, "agentower --restore 1");
-    assertEquals(await readSnapshots(), before);
-    assertEquals(
-      (await innerTmux(["show-options", "-gqv", "@agentower_restoring"]))
-        .trim(),
-      "1",
-    );
+    assertEquals(await generationOf(target), 2);
+    assertStringIncludes(again, "agentower --restore 2");
   } finally {
     await teardown();
   }
 });
 
-test("S101: a failure after replacing a server names the shifted generation", async () => {
+test("S101: every replaced server is saved and each retry names the shifted generation", async () => {
   await setupServer({ cols: 200, rows: 50 });
   try {
     await setupInner();
     await innerTmux(["new-session", "-d", "-s", "main", "-n", "broken"]);
     await innerTmux(["split-window", "-t", "main:"]);
     await saveAndKillInner();
-    await breakSavedLayout();
+    const target = await breakSavedLayout();
     await innerTmux(["new-session", "-d", "-s", "work", "-n", "replaced"]);
     await new Promise((r) => setTimeout(r, 1100));
 
@@ -4243,8 +4257,10 @@ test("S101: a failure after replacing a server names the shifted generation", as
     await confirmRestore(pane);
     assertEquals(await paneExitCode(pane), 1);
     const failed = await waitFor(pane, (o) => o.includes("invalid layout"));
+    assertEquals(await generationOf(target), 2);
     assertStringIncludes(failed, "agentower --restore 2");
     assertEquals((await readSnapshots()).length, 2);
+    await new Promise((r) => setTimeout(r, 1100));
 
     const retry = await spawnRestore(["--restore", "2"]);
     const prompt = await waitFor(retry, (o) => o.includes("[y/N]"));
@@ -4253,15 +4269,105 @@ test("S101: a failure after replacing a server names the shifted generation", as
     await sendKey(retry, "Enter");
     assertEquals(await paneExitCode(retry), 1);
     const again = await waitFor(retry, (o) => o.includes("invalid layout"));
-    assertStringIncludes(again, "agentower --restore 2");
-    assertEquals((await readSnapshots()).length, 2);
+    assertEquals(await generationOf(target), 3);
+    assertStringIncludes(again, "agentower --restore 3");
+    assertEquals((await readSnapshots()).length, 3);
 
-    const newest = await spawnRestore(["--restore", "1"]);
-    const replaced = await waitFor(newest, (o) => o.includes("[y/N]"));
-    assertStringIncludes(replaced, "replaced");
-    await sendKey(newest, "n");
-    await sendKey(newest, "Enter");
-    assertEquals(await paneExitCode(newest), 0);
+    const replaced = await spawnRestore(["--restore", "2"]);
+    const work = await waitFor(replaced, (o) => o.includes("[y/N]"));
+    assertStringIncludes(work, "replaced");
+    await sendKey(replaced, "n");
+    await sendKey(replaced, "Enter");
+    assertEquals(await paneExitCode(replaced), 0);
+  } finally {
+    await teardown();
+  }
+});
+
+const SPLIT_GEOMETRY = "#{pane_floating_flag}|" + GEOMETRY;
+
+test("S104: floating panes are left out and the splits come back in their layout", async () => {
+  await setupServer({ cols: 200, rows: 50 });
+  try {
+    await setupInner();
+    const height = String(await innerWindowHeight());
+    await innerTmux(
+      ["new-session", "-d", "-s", "main", "-n", "plain", "-x", "200", "-y", height],
+    );
+    await innerTmux(["split-window", "-t", "main:1"]);
+    await innerTmux(["new-pane", "-d", "-t", "main:1"]);
+    await innerTmux(["new-window", "-t", "main:", "-n", "zoomed"]);
+    await innerTmux(["split-window", "-h", "-t", "main:2"]);
+    await innerTmux(["new-pane", "-d", "-t", "main:2"]);
+    const all = await paneList(SPLIT_GEOMETRY);
+    const splits = all.filter((row) => row.startsWith("0|"));
+    assertEquals([all.length, splits.length], [6, 4]);
+    // While zoomed, tmux reports every pane of the window as not floating.
+    await innerTmux(["resize-pane", "-Z", "-t", "main:2.0"]);
+    await saveAndKillInner();
+
+    await restoreFromOuter();
+
+    await selectEveryWindow();
+    await innerTmux(["resize-pane", "-Z", "-t", "main:2.0"]);
+    assertEquals(await paneList(SPLIT_GEOMETRY), splits);
+  } finally {
+    await teardown();
+  }
+});
+
+test("S105: a name with a backslash comes back as it was", async () => {
+  await setupServer({ cols: 200, rows: 50 });
+  try {
+    await setupInner();
+    const window = (await innerTmux(
+      ["new-session", "-d", "-s", "se\\ss", "-n", "a\\b", "-P", "-F", "#{window_id}"],
+    )).trim();
+    await innerTmux(["set-option", "-w", "-t", window, "automatic-rename", "off"]);
+    const names = "#{session_name}|#{window_name}";
+    const before = await innerTmux(["list-windows", "-a", "-F", names]);
+    await saveAndKillInner();
+
+    await restoreFromOuter();
+
+    assertEquals(await innerTmux(["list-windows", "-a", "-F", names]), before);
+  } finally {
+    await teardown();
+  }
+});
+
+// The file a popup writes when its command ends, or null once the deadline
+// passes: a prompt left open would otherwise hang the test past its teardown.
+async function readWhenWritten(path: string): Promise<string | null> {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const text = await readFile(path, "utf8").catch(() => "");
+    if (text !== "") return text.trim();
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return null;
+}
+
+test("S106: --restore refuses to run from a popup of the server it would kill", async () => {
+  await setupServer({ cols: 200, rows: 50 });
+  try {
+    await setupInner();
+    await innerTmux(["new-session", "-d", "-s", "saved", "-n", "old"]);
+    await saveAndKillInner();
+    await innerTmux(["new-session", "-d", "-s", "work", "-n", "keep"]);
+    await attachInnerClient();
+    await waitForInnerClient();
+    const out = join(innerPaths().dir, "popup.out");
+    const code = join(innerPaths().dir, "popup.code");
+
+    await spawnInnerPopup(["--restore"], { out, code });
+
+    assertEquals(await readWhenWritten(code), "1");
+    assertStringIncludes(await readFile(out, "utf8"), "tmux の外で実行してください");
+    assertEquals(
+      (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
+      "work",
+    );
   } finally {
     await teardown();
   }

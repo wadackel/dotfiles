@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseProcesses } from "../shared/agent-presence.ts";
 import { stringCells } from "./cell_width.ts";
 import {
   buildSnapshot,
@@ -17,14 +18,20 @@ import {
   filesToPrune,
   generationFiles,
   generationLine,
+  insideByAncestry,
   isConfirmed,
   isNoServerError,
+  isSameStart,
+  layoutChecksum,
   listLines,
   parseCliArgs,
+  parseEtime,
+  parseRestoringFlag,
   parseSnapshot,
   resumeCommand,
   type Snapshot,
   SnapshotSchema,
+  tiledLayout,
   tmuxArgs,
   WINDOW_FORMAT,
   writeSnapshotFile,
@@ -107,12 +114,14 @@ function windowLine(f: WindowFields = {}): string {
 }
 
 function build(paneLines: string[], windowLines: string[]): Snapshot {
-  return buildSnapshot({
+  const snapshot = buildSnapshot({
     paneLines,
     windowLines,
     startTime: 1792629045,
     nowSec: 1793631893,
   });
+  if (snapshot === null) throw new Error("buildSnapshot saved nothing");
+  return snapshot;
 }
 
 const TWO_PANE_LAYOUT = "8aca,200x50,0,0{100x50,0,0,1,99x50,101,0,2}";
@@ -330,6 +339,113 @@ test("buildSnapshot: a layout whose leaves disagree with the panes fails", () =>
 test("buildSnapshot: the blank line after the last pane is not a parse failure", () => {
   const snapshot = build([paneLine(), ""], [windowLine(), ""]);
   assertEquals(snapshot.sessions[0].windows.length, 1);
+});
+
+// Layouts as tmux next-3.8 printed them: two splits and a floating pane, and the
+// same window zoomed, where every pane reports itself as not floating.
+const FLOATING_LAYOUT =
+  "f334,120x40,0,0[120x20,0,0,0,120x19,0,21,1,60x10,4,2,2]<60x10,4,2,2>";
+const ZOOMED_FLOATING_LAYOUT =
+  "189f,120x40,0,0{60x40,0,0,0,59x40,61,0[59x20,61,0,1,59x19,61,21,2," +
+  "60x10,4,2,3,60x10,8,4,4]}";
+
+// Each pair is a layout with floating panes and the one tmux printed after those
+// panes were killed.
+const TMUX_PAIRS: [string, string][] = [
+  [FLOATING_LAYOUT, "baaa,120x40,0,0[120x20,0,0,0,120x19,0,21,1]"],
+  ["3515,120x40,0,0[120x40,0,0,0,60x10,4,2,1]<60x10,4,2,1>", "aafd,120x40,0,0,0"],
+  [
+    "64c4,120x40,0,0{60x40,0,0,1,60x10,4,2,4,59x40,61,0[59x20,61,0,2," +
+    "59x19,61,21,3]}<60x10,4,2,4>",
+    "d6e5,120x40,0,0{60x40,0,0,1,59x40,61,0[59x20,61,0,2,59x19,61,21,3]}",
+  ],
+];
+
+test("tiledLayout: drops floating panes the way tmux does, checksum included", () => {
+  for (const [layout, expected] of TMUX_PAIRS) {
+    assertEquals(tiledLayout(layout, false)?.layout, expected);
+  }
+});
+
+test("tiledLayout: a zoomed window's floating panes are found by position", () => {
+  const tiled = tiledLayout(ZOOMED_FLOATING_LAYOUT, true);
+  assertEquals([...tiled?.floating ?? []], ["3", "4"]);
+  const body = "120x40,0,0{60x40,0,0,0,59x40,61,0[59x20,61,0,1,59x19,61,21,2]}";
+  assertEquals(tiled?.layout, `${layoutChecksum(body)},${body}`);
+});
+
+test("tiledLayout: several floating panes in the trailer", () => {
+  const tiled = tiledLayout(
+    "0000,120x40,0,0[120x20,0,0,0,120x19,0,21,1,60x10,4,2,2,60x10,8,4,3]" +
+      "<60x10,8,4,3,60x10,4,2,2>",
+    false,
+  );
+  assertEquals([...tiled?.floating ?? []].toSorted(), ["2", "3"]);
+  assertEquals(tiled?.layout, "baaa,120x40,0,0[120x20,0,0,0,120x19,0,21,1]");
+});
+
+test("tiledLayout: a layout without floating panes is returned as it was", () => {
+  assertEquals(tiledLayout(TWO_PANE_LAYOUT, false)?.layout, TWO_PANE_LAYOUT);
+});
+
+test("tiledLayout: nothing but floating panes leaves no layout", () => {
+  assertEquals(tiledLayout("32f1,60x10,4,2,2<60x10,4,2,2>", false), null);
+});
+
+test("buildSnapshot: a floating pane is left out and the splits keep their layout", () => {
+  const snapshot = build(
+    [0, 1, 2].map((i) => paneLine({ paneId: `%${i}`, paneIndex: i })),
+    [windowLine({ layout: FLOATING_LAYOUT })],
+  );
+  const [window] = snapshot.sessions[0].windows;
+  assertEquals(window.layout, "baaa,120x40,0,0[120x20,0,0,0,120x19,0,21,1]");
+  assertEquals(window.panes.map((p) => p.index), [0, 1]);
+});
+
+test("buildSnapshot: a zoomed window drops its floating panes by their geometry", () => {
+  const snapshot = build(
+    [0, 1, 2, 3, 4].map((i) => paneLine({ paneId: `%${i}`, paneIndex: i })),
+    [windowLine({ layout: ZOOMED_FLOATING_LAYOUT, zoomed: true })],
+  );
+  const [window] = snapshot.sessions[0].windows;
+  assertEquals(
+    window.layout.slice(5),
+    "120x40,0,0{60x40,0,0,0,59x40,61,0[59x20,61,0,1,59x19,61,21,2]}",
+  );
+  assertEquals(window.panes.map((p) => p.index), [0, 1, 2]);
+});
+
+test("buildSnapshot: a window of floating panes only is not saved", () => {
+  const snapshot = build(
+    [
+      paneLine({ paneId: "%1", windowIndex: 1 }),
+      paneLine({ paneId: "%2", windowIndex: 2 }),
+    ],
+    [
+      windowLine({ index: 1 }),
+      windowLine({ index: 2, layout: "32f1,60x10,4,2,2<60x10,4,2,2>" }),
+    ],
+  );
+  assertEquals(snapshot.sessions[0].windows.map((w) => w.index), [1]);
+});
+
+test("buildSnapshot: nothing but floating panes saves nothing", () => {
+  const snapshot = buildSnapshot({
+    paneLines: [paneLine({ paneId: "%1" })],
+    windowLines: [windowLine({ layout: "3f2f,58x8,5,3,1<58x8,5,3,1>" })],
+    startTime: 1792629045,
+    nowSec: 1793631893,
+  });
+  assertEquals(snapshot, null);
+});
+
+test("buildSnapshot: a backslash tmux stored doubled is saved as typed", () => {
+  const snapshot = build(
+    [paneLine({ session: "se\\\\ss" })],
+    [windowLine({ session: "se\\\\ss", name: "a\\\\b" })],
+  );
+  const [session] = snapshot.sessions;
+  assertEquals([session.name, session.windows[0].name], ["se\\ss", "a\\b"]);
 });
 
 test("parseSnapshot: round-trips what buildSnapshot produced", () => {
@@ -647,4 +763,54 @@ test("generationLine: counts windows and agents, and flags an unreadable file", 
   assertEquals(line.startsWith(" 2 "), true);
   assertEquals(line.endsWith("3 ウィンドウ、エージェント 1"), true);
   assertEquals(generationLine(3, null), " 3 読めません");
+});
+
+test("restoringFlag: etime in all three shapes, and nothing else", () => {
+  assertEquals(parseEtime("05:07"), 307);
+  assertEquals(parseEtime("01:02:03"), 3723);
+  assertEquals(parseEtime(" 2-01:02:03\n"), 2 * 86400 + 3723);
+  assertEquals(parseEtime(""), null);
+  assertEquals(parseEtime("木 10/22"), null);
+});
+
+test("restoringFlag: a pid and a start, never pid 1 or the old value 1", () => {
+  assertEquals(parseRestoringFlag("4242:1793630000"), {
+    pid: 4242,
+    startSec: 1793630000,
+  });
+  assertEquals(parseRestoringFlag("1"), null);
+  assertEquals(parseRestoringFlag("1:1793630000"), null);
+  assertEquals(parseRestoringFlag("abc"), null);
+  assertEquals(parseRestoringFlag(""), null);
+});
+
+test("restoringFlag: one process within two seconds, a reused pid outside", () => {
+  assertEquals(isSameStart(1793630000, 1793630001), true);
+  assertEquals(isSameStart(1793630000, 1793629998), true);
+  assertEquals(isSameStart(1793630000, 1793630003), false);
+});
+
+// pid ppid comm, as `ps -A -o pid=,ppid=,comm=` prints them.
+const PROCS = parseProcesses([
+  "    1     0 /sbin/launchd",
+  "  500     1 tmux",
+  "  510   500 -zsh",
+  "  520   510 bun",
+  "  530   500 sh",
+  "  600     1 Ghostty",
+  "  610   600 -zsh",
+  "  620   610 bun",
+].join("\n"));
+
+test("insideByAncestry: a pane's or a popup's child of the server is inside", () => {
+  assertEquals(insideByAncestry(PROCS, 520, 500), true);
+  assertEquals(insideByAncestry(PROCS, 530, 500), true);
+});
+
+test("insideByAncestry: a terminal outside tmux is not", () => {
+  assertEquals(insideByAncestry(PROCS, 620, 500), false);
+});
+
+test("insideByAncestry: a process missing from the table counts as inside", () => {
+  assertEquals(insideByAncestry(PROCS, 999, 500), true);
 });

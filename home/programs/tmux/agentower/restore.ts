@@ -16,6 +16,11 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { z } from "zod";
 import { run } from "../../agents/lib/proc.ts";
+import {
+  type AgentProcess,
+  parseProcesses,
+  processAncestry,
+} from "../shared/agent-presence.ts";
 import { truncate } from "../shared/pane-shared.ts";
 import { stringCells, truncateToCells } from "./cell_width.ts";
 import {
@@ -200,16 +205,147 @@ function layoutLeaves(layout: string): number {
   return layout.match(/\d+x\d+,\d+,\d+,\d+/g)?.length ?? 0;
 }
 
+interface LayoutCell {
+  w: number;
+  h: number;
+  x: number;
+  y: number;
+  // A pane id for a leaf; for a container, `{` splits left to right and `[` top
+  // to bottom.
+  id: string | null;
+  split: "{" | "[" | null;
+  children: LayoutCell[];
+}
+
+function parseLayoutCell(text: string, at: { i: number }): LayoutCell {
+  const head = /^(\d+)x(\d+),(\d+),(\d+)/.exec(text.slice(at.i));
+  if (head === null) throw new Error(`unreadable layout at ${at.i}`);
+  at.i += head[0].length;
+  const [w, h, x, y] = head.slice(1).map(Number);
+  const open = text[at.i];
+  if (open === "{" || open === "[") {
+    const close = open === "{" ? "}" : "]";
+    at.i++;
+    const children = [parseLayoutCell(text, at)];
+    while (text[at.i] === ",") {
+      at.i++;
+      children.push(parseLayoutCell(text, at));
+    }
+    if (text[at.i] !== close) throw new Error(`unreadable layout at ${at.i}`);
+    at.i++;
+    return { w, h, x, y, id: null, split: open, children };
+  }
+  const id = /^,(\d+)/.exec(text.slice(at.i));
+  if (id === null) throw new Error(`unreadable layout at ${at.i}`);
+  at.i += id[0].length;
+  return { w, h, x, y, id: id[1], split: null, children: [] };
+}
+
+function leafIds(cell: LayoutCell): string[] {
+  return cell.id !== null ? [cell.id] : cell.children.flatMap(leafIds);
+}
+
+// A zoomed window prints no `<...>` and reports every pane as not floating, but a
+// floating pane still sits among the splits with a position no split can have.
+function misplacedLeaves(cell: LayoutCell): string[] {
+  if (cell.split === null) return [];
+  const across = cell.split === "{";
+  let next = across ? cell.x : cell.y;
+  const out: string[] = [];
+  for (const child of cell.children) {
+    const fits = across
+      ? child.y === cell.y && child.h === cell.h && child.x === next
+      : child.x === cell.x && child.w === cell.w && child.y === next;
+    if (fits) {
+      next += (across ? child.w : child.h) + 1;
+      out.push(...misplacedLeaves(child));
+    } else if (child.id !== null) {
+      out.push(child.id);
+    } else {
+      out.push(...misplacedLeaves(child));
+    }
+  }
+  return out;
+}
+
+function withoutLeaves(
+  cell: LayoutCell,
+  drop: Set<string>,
+): LayoutCell | null {
+  if (cell.id !== null) return drop.has(cell.id) ? null : cell;
+  const children = cell.children
+    .map((child) => withoutLeaves(child, drop))
+    .filter((child) => child !== null);
+  if (children.length === 0) return null;
+  if (children.length === 1) return children[0];
+  return { ...cell, children };
+}
+
+function layoutText(cell: LayoutCell): string {
+  const head = `${cell.w}x${cell.h},${cell.x},${cell.y}`;
+  if (cell.id !== null) return `${head},${cell.id}`;
+  const close = cell.split === "{" ? "}" : "]";
+  return `${head}${cell.split}${cell.children.map(layoutText).join(",")}${close}`;
+}
+
+// tmux's layout_checksum: select-layout refuses a body whose sum disagrees.
+export function layoutChecksum(body: string): string {
+  let sum = 0;
+  for (const char of body) {
+    sum = ((sum >> 1) + ((sum & 1) << 15)) & 0xffff;
+    sum = (sum + char.charCodeAt(0)) & 0xffff;
+  }
+  return sum.toString(16).padStart(4, "0");
+}
+
+// The layout of a window's splits alone, since select-layout refuses one that
+// still holds floating panes. null when nothing but floating panes is left.
+export function tiledLayout(
+  layout: string,
+  zoomed: boolean,
+): { layout: string; floating: Set<string> } | null {
+  const at = { i: layout.indexOf(",") + 1 };
+  const root = parseLayoutCell(layout, at);
+  let floatingIds: string[];
+  if (layout[at.i] === "<") {
+    at.i++;
+    const cells = [parseLayoutCell(layout, at)];
+    while (layout[at.i] === ",") {
+      at.i++;
+      cells.push(parseLayoutCell(layout, at));
+    }
+    floatingIds = cells.flatMap(leafIds);
+  } else {
+    floatingIds = zoomed ? misplacedLeaves(root) : [];
+  }
+  const floating = new Set(floatingIds);
+  if (floating.size === 0) return { layout, floating };
+  const kept = withoutLeaves(root, floating);
+  if (kept === null) return null;
+  const body = layoutText(kept);
+  return { layout: `${layoutChecksum(body)},${body}`, floating };
+}
+
+// tmux stores a backslash in a session or window name doubled and prints it that
+// way; passing the printed name back would double it again on every restore.
+function typedName(name: string): string {
+  return name.replaceAll("\\\\", "\\");
+}
+
 // Thrown on any disagreement between the two tmux reads, which is what a window
 // opened between them looks like: the previous file stays and the next minute
 // succeeds. A snapshot short of a pane would not restore its layout at all.
+// null when only floating panes are open, which leaves nothing to restore.
 export function buildSnapshot(input: {
   paneLines: string[];
   windowLines: string[];
   startTime: number;
   nowSec: number;
-}): Snapshot {
-  const panesByWindow = new Map<string, SnapshotPane[]>();
+}): Snapshot | null {
+  const panesByWindow = new Map<
+    string,
+    { paneId: string; pane: SnapshotPane }[]
+  >();
   for (const line of nonEmpty(input.paneLines)) {
     const parsed = parsePaneSnapshot(line);
     // Only the pane id goes in the message: the line carries @pane_prompt, and
@@ -222,7 +358,7 @@ export function buildSnapshot(input: {
     const key = windowKey(parsed.sessionName, parsed.windowIndex);
     panesByWindow.set(key, [
       ...(panesByWindow.get(key) ?? []),
-      snapshotPane(parsed),
+      { paneId: parsed.row.paneId, pane: snapshotPane(parsed) },
     ]);
   }
 
@@ -230,20 +366,27 @@ export function buildSnapshot(input: {
   for (const line of nonEmpty(input.windowLines)) {
     const { session, lastAttachedSec, ...window } = parseWindowLine(line);
     const key = windowKey(session, window.index);
-    const panes = panesByWindow.get(key);
-    if (panes === undefined) {
+    const placed = panesByWindow.get(key);
+    if (placed === undefined) {
       throw new Error(`window without panes: ${session}:${window.index}`);
     }
     panesByWindow.delete(key);
-    if (layoutLeaves(window.layout) !== panes.length) {
+    const tiled = tiledLayout(window.layout, window.zoomed);
+    if (tiled === null) continue;
+    const panes = placed
+      .filter(({ paneId }) => !tiled.floating.has(paneId.slice(1)))
+      .map(({ pane }) => pane);
+    if (layoutLeaves(tiled.layout) !== panes.length) {
       throw new Error(
         `layout disagrees with panes: ${session}:${window.index}`,
       );
     }
     const entry = sessions.get(session) ??
-      { name: session, lastAttachedSec, windows: [] };
+      { name: typedName(session), lastAttachedSec, windows: [] };
     entry.windows.push({
       ...window,
+      name: typedName(window.name),
+      layout: tiled.layout,
       panes: panes.toSorted((a, b) => a.index - b.index),
     });
     sessions.set(session, entry);
@@ -251,6 +394,7 @@ export function buildSnapshot(input: {
   if (panesByWindow.size > 0) {
     throw new Error(`panes without a window: ${[...panesByWindow.keys()]}`);
   }
+  if (sessions.size === 0) return null;
 
   return SnapshotSchema.parse({
     savedAtSec: input.nowSec,
@@ -288,6 +432,43 @@ export function filesToPrune(
   currentStartTime: string | null,
 ): string[] {
   return generationFiles(names, currentStartTime).slice(KEPT_GENERATIONS);
+}
+
+// `[[dd-]hh:]mm:ss` from `ps -o etime=`. lstart would be simpler to compare but
+// follows the locale, and launchd runs the snapshot with none.
+export function parseEtime(text: string): number | null {
+  const m = /^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/.exec(text.trim());
+  if (m === null) return null;
+  const [, days, hours, minutes, seconds] = m;
+  return Number(days ?? 0) * 86400 + Number(hours ?? 0) * 3600 +
+    Number(minutes) * 60 + Number(seconds);
+}
+
+// The value of @agentower_restoring: the restore's pid and start. A pid alone is
+// not enough: pids wrap within the hour here, and a reused one would hold
+// snapshots off for as long as its new owner lives.
+export function parseRestoringFlag(
+  value: string,
+): { pid: number; startSec: number } | null {
+  const m = /^(\d+):(\d+)$/.exec(value.trim());
+  if (m === null || Number(m[1]) <= 1) return null;
+  return { pid: Number(m[1]), startSec: Number(m[2]) };
+}
+
+// etime counts whole seconds, so two reads of one process can be a second apart.
+export function isSameStart(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 2;
+}
+
+// Inside when the server is an ancestor: a pane's shell and a popup's command are
+// both its children. A process missing from the table cannot be cleared.
+export function insideByAncestry(
+  procs: Map<number, AgentProcess>,
+  self: number,
+  serverPid: number,
+): boolean {
+  if (!procs.has(self)) return true;
+  return processAncestry(self, procs).some((proc) => proc.pid === serverPid);
 }
 
 // tmux expands formats in -s, -n and -c, and takes an argument ending in `;` for
@@ -490,12 +671,27 @@ async function currentServer(): Promise<string | null> {
   throw new Error(`tmux display: ${stderr.trim()}`);
 }
 
-async function isRestoring(): Promise<boolean> {
-  const value = await tmux(["show-options", "-gqv", RESTORING_OPTION]);
-  return value.trim() === "1";
+async function restoringValue(): Promise<string> {
+  return (await tmux(["show-options", "-gqv", RESTORING_OPTION])).trim();
 }
 
-async function captureSnapshot(startTime: string): Promise<Snapshot> {
+async function processStartSec(pid: number): Promise<number | null> {
+  const { code, stdout } = await run("ps", ["-o", "etime=", "-p", String(pid)]);
+  if (code !== 0) return null;
+  const elapsed = parseEtime(stdout);
+  return elapsed === null ? null : Math.floor(Date.now() / 1000) - elapsed;
+}
+
+// A restore that failed or was killed leaves the flag behind; the server it left
+// is worth saving once that process is gone, or nothing would be saved again.
+async function isRestoreRunning(value: string): Promise<boolean> {
+  const flag = parseRestoringFlag(value);
+  if (flag === null) return false;
+  const start = await processStartSec(flag.pid);
+  return start !== null && isSameStart(start, flag.startSec);
+}
+
+async function captureSnapshot(startTime: string): Promise<Snapshot | null> {
   const panes = await tmux(["list-panes", "-a", "-F", PANE_SNAPSHOT_FORMAT]);
   const windows = await tmux(["list-windows", "-a", "-F", WINDOW_FORMAT]);
   return buildSnapshot({
@@ -519,12 +715,27 @@ function snapshotDir(): string {
 async function runSnapshot(): Promise<number> {
   const startTime = await currentServer();
   if (startTime === null) return 0;
-  if (await isRestoring()) {
+  const restoring = await restoringValue();
+  if (await isRestoreRunning(restoring)) {
     console.error("復元中のため保存を飛ばしました");
     return 0;
   }
+  const snapshot = await captureSnapshot(startTime);
+  if (snapshot === null) {
+    console.error("floating 以外のペインがないため保存を飛ばしました");
+    return 0;
+  }
+  // A restore can replace the server between the reads; its panes would then be
+  // written under the file of the server it replaced.
+  if (await currentServer() !== startTime) {
+    console.error("読む間にサーバーが入れ替わったため保存を飛ばしました");
+    return 0;
+  }
   const dir = snapshotDir();
-  await writeSnapshotFile(dir, await captureSnapshot(startTime));
+  await writeSnapshotFile(dir, snapshot);
+  // A failed restore's message names a generation to retry; pruning before the
+  // retry could delete that very file.
+  if (restoring !== "") return 0;
   const stale = filesToPrune(await readdir(dir), startTime);
   await Promise.all(stale.map((name) => rm(join(dir, name), { force: true })));
   return 0;
@@ -587,21 +798,13 @@ function isDirectory(path: string): boolean {
   }
 }
 
-// run() closes the child's stdin, and `tty` then answers `not a tty`: the check
-// would pass and kill-server would take this process with it.
-function ownTty(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("tty", [], { stdio: ["inherit", "pipe", "ignore"] });
-    let out = "";
-    child.stdout!.on("data", (chunk: Buffer) => out += chunk);
-    child.on("error", reject);
-    child.on("close", () => resolve(out.trim()));
-  });
-}
-
+// The pane ttys miss a popup, whose terminal is no pane, and kill-server would
+// end the popup and this process with it.
 async function isInsideServer(): Promise<boolean> {
-  const panes = await tmux(["list-panes", "-a", "-F", "#{pane_tty}"]);
-  return panes.split("\n").includes(await ownTty());
+  const serverPid = Number((await tmux(["display", "-p", "#{pid}"])).trim());
+  const { code, stdout } = await run("ps", ["-A", "-o", "pid=,ppid=,comm="]);
+  if (code !== 0) return true;
+  return insideByAncestry(parseProcesses(stdout), process.pid, serverPid);
 }
 
 function readAnswer(prompt: string): Promise<string> {
@@ -637,7 +840,9 @@ async function runRestore(generation: number): Promise<number> {
       throw new Error("tmux の外で実行してください");
     }
     const live = await captureSnapshot(current);
-    running = { windows: countWindows(live), agents: countAgents(live) };
+    running = live === null
+      ? { windows: 0, agents: 0 }
+      : { windows: countWindows(live), agents: countAgents(live) };
   }
   const lines = listLines(snapshot, {
     home,
@@ -651,20 +856,24 @@ async function runRestore(generation: number): Promise<number> {
     return 0;
   }
 
-  // A server left by a failed restore is not worth a generation of its own.
-  const replaced = current !== null && !(await isRestoring());
-  if (replaced) await writeSnapshotFile(dir, await captureSnapshot(current));
+  const start = await processStartSec(process.pid);
+  if (start === null) throw new Error("このプロセスの開始時刻を読めません");
+  // Saved even when a failed restore left it: the snapshot job saves such a server
+  // too, and the retry number below holds only if every replaced server has a file.
+  const live = current === null ? null : await captureSnapshot(current);
+  if (live !== null) await writeSnapshotFile(dir, live);
   if (current !== null) await stopServer();
   let target: string;
   try {
-    target = await buildServer(snapshot, home);
+    target = await buildServer(snapshot, home, `${process.pid}:${start}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const retry = replaced ? generation + 1 : generation;
+    const retry = live === null ? generation : generation + 1;
     throw new Error(
       `${message}\n` +
-        `\`agentower --restore ${retry}\` で再実行するか、` +
-        "`tmux kill-server` で途中のサーバーを閉じてください",
+        `\`agentower --restore ${retry}\` で再実行してください。` +
+        "`tmux kill-server` で途中のサーバーを閉じたあとは、" +
+        "番号を `agentower --restore --list` で確かめてください",
     );
   }
   return await attach(target);
@@ -736,7 +945,7 @@ async function buildPanes(
 // be large enough for the splits.
 async function buildSession(
   session: Snapshot["sessions"][number],
-  opts: { home: string; markRestoring: boolean },
+  opts: { home: string; restoring: string | null },
 ): Promise<{ id: string; windows: PlacedWindow[] }> {
   const [first, ...rest] = session.windows;
   const created = await tmux([
@@ -757,9 +966,9 @@ async function buildSession(
     String(Math.max(...session.windows.map((w) => w.height))),
     // In one invocation so a --snapshot cannot run between the two and save a
     // half-built server.
-    ...(opts.markRestoring
-      ? [";", "set-option", "-g", RESTORING_OPTION, "1"]
-      : []),
+    ...(opts.restoring === null
+      ? []
+      : [";", "set-option", "-g", RESTORING_OPTION, opts.restoring]),
   ]);
   const [id, firstWindow, firstPane, firstIndex] = created.trim().split(" ");
   // Before the other windows exist, or saved indexes 0,1 would meet the window
@@ -835,10 +1044,17 @@ async function restoreFocus(windows: PlacedWindow[]): Promise<void> {
   await tmux(["select-window", "-t", activeWindow.id]);
 }
 
-async function buildServer(snapshot: Snapshot, home: string): Promise<string> {
+async function buildServer(
+  snapshot: Snapshot,
+  home: string,
+  restoring: string,
+): Promise<string> {
   const sessions = [];
   for (const [i, session] of snapshot.sessions.entries()) {
-    const built = await buildSession(session, { home, markRestoring: i === 0 });
+    const built = await buildSession(session, {
+      home,
+      restoring: i === 0 ? restoring : null,
+    });
     sessions.push({ ...built, lastAttachedSec: session.lastAttachedSec });
   }
   for (const { windows } of sessions) {
