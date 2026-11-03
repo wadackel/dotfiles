@@ -1,6 +1,8 @@
 // E2E test harness for agentower.tsx. Spins up an isolated tmux server on a
 // PID-suffixed socket so concurrent runs never race. All exported helpers
 // target that isolated server only — callers never touch the host tmux.
+// `agentower --restore` runs a bare `tmux kill-server`, so its scenarios use a
+// second server behind setupInner, whose helpers pin it to one socket.
 //
 // Scenario skeleton:
 //   await setupServer();
@@ -16,8 +18,16 @@
 //   }
 
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
 import { sanitizeAnsi } from "./ansi.ts";
 import type { UserLabel } from "./pane_row.ts";
@@ -318,7 +328,7 @@ export async function sandboxHomePath(): Promise<string> {
   return sandboxHome;
 }
 
-async function sandboxEnv(): Promise<Record<string, string>> {
+export async function sandboxEnv(): Promise<Record<string, string>> {
   const env: Record<string, string> = {
     HOME: await sandboxHomePath(),
     // A value left in the developer's shell collides with sandbox pane ids —
@@ -339,8 +349,8 @@ async function sandboxEnv(): Promise<Record<string, string>> {
 }
 
 // Spawn Agentower as the direct command of a new tmux window. tmux passes the
-// command to /bin/sh -c; agentower-main.ts is executable and carries its own
-// shebang (`#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null`),
+// command to `default-shell -c`; agentower-main.ts is executable and carries its
+// own shebang (`#!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null`),
 // so passing the bare path lets the shebang declare the flags — no drift risk
 // between this string and agentower-main.ts:1.
 //
@@ -371,7 +381,7 @@ export async function spawnAgentower(
 ): Promise<string> {
   const agentowerPath = process.env.AGENTOWER_E2E_BIN ??
     join(import.meta.dirname, "agentower-main.ts");
-  // The path is interpolated into an sh -c string that tmux hands to /bin/sh,
+  // The path is interpolated into a string that tmux hands to `default-shell -c`,
   // so anything sh would re-read there is refused rather than escaped.
   if (/['"$`\\]/.test(agentowerPath)) {
     throw new Error(
@@ -572,10 +582,296 @@ export async function waitForExit(
 // `/tmp/agentower-e2e-bin-$PID` path is claimed by PID so concurrent test runs
 // do not collide; the OS reclaims /tmp on reboot.
 export async function teardown(): Promise<void> {
+  await teardownInner();
   await tmuxRunAllowFail(["kill-server"]);
   if (sandboxHome !== null) {
     const dir = sandboxHome;
     sandboxHome = null;
     await rm(dir, { recursive: true }).catch(() => {});
   }
+}
+
+// ---- Inner server (agentower --snapshot / --restore) ----
+
+// The binary calls a bare `tmux`, and its restore path ends in kill-server, so a
+// mistake here would take down the developer's own server and this very session.
+// TMUX_TMPDIR alone does not hold: TMUX beats it, run() cannot unset a variable,
+// and a directory that is gone is silently ignored. `-S` beats -L and TMUX and
+// stops with an error when its path is missing, and the shim first on PATH gives
+// the binary the same `-S`.
+interface InnerServer {
+  dir: string;
+  bin: string;
+  socket: string;
+  shim: string;
+  shimLog: string;
+  agentLog: string;
+  realTmux: string;
+}
+
+let inner: InnerServer | null = null;
+
+function requireInner(): InnerServer {
+  if (inner === null) throw new Error("setupInner was not called");
+  return inner;
+}
+
+export function innerPaths(): InnerServer {
+  return requireInner();
+}
+
+const FAKE_AGENT = (log: string) =>
+  `#!/bin/sh
+printf '%s|%s|%s\\n' "$(basename "$0")" "$PWD" "$*" >> "${log}"
+exec sleep 99999
+`;
+
+// A short path under /tmp: a socket path over 103 bytes fails with `File name too
+// long`, and the session scratchpad is longer than that.
+export async function setupInner(opts: { fakeAgents?: boolean } = {}): Promise<
+  void
+> {
+  const dir = await realpath(await mkdtemp("/tmp/aw-"));
+  const bin = join(dir, "bin");
+  await mkdir(bin);
+  const shim = join(bin, "tmux");
+  const socket = join(dir, "inner.sock");
+  const shimLog = join(dir, "tmux.log");
+  const agentLog = join(dir, "agents.log");
+  const { stdout } = await run("/bin/sh", ["-c", "command -v tmux"]);
+  const realTmux = stdout.trim();
+  await writeFile(
+    shim,
+    `#!/bin/sh
+printf '%s\\n' "$*" >> "${shimLog}"
+exec "${realTmux}" -S "${socket}" "$@"
+`,
+  );
+  await chmod(shim, 0o755);
+  if (opts.fakeAgents !== false) {
+    for (const name of ["claude", "codex", "opencode"]) {
+      await writeFile(join(bin, name), FAKE_AGENT(agentLog));
+      await chmod(join(bin, name), 0o755);
+    }
+  }
+  inner = { dir, bin, socket, shim, shimLog, agentLog, realTmux };
+  const conf = join(await sandboxHomePath(), ".config/tmux/tmux.conf");
+  await mkdir(dirname(conf), { recursive: true });
+  await writeFile(conf, "set -g base-index 1\nset -g renumber-windows on\n");
+}
+
+// Everything the inner server and the binary see. Nothing is inherited, so TMUX,
+// TMUX_PANE and the parent session's CLAUDE_* never reach them. The guard stops
+// /etc/zshenv in a pane from replacing PATH and losing the shim and the fakes.
+export async function innerEnv(): Promise<Record<string, string>> {
+  const { bin, dir } = requireInner();
+  return {
+    ...await sandboxEnv(),
+    PATH: `${bin}:${process.env.PATH}`,
+    TMUX_TMPDIR: dir,
+    __NIX_DARWIN_SET_ENVIRONMENT_DONE: "1",
+    TERM: "xterm-256color",
+    USER: process.env.USER ?? "",
+  };
+}
+
+export async function innerTmux(args: string[]): Promise<string> {
+  const { realTmux, socket } = requireInner();
+  const { code, stdout, stderr } = await run(
+    realTmux,
+    ["-S", socket, "-u", ...args],
+    { clearEnv: true, env: await innerEnv() },
+  );
+  if (code !== 0) {
+    throw new Error(
+      `inner tmux ${args.join(" ")} failed (code ${code}): ${stderr.trim()}`,
+    );
+  }
+  return stdout;
+}
+
+async function teardownInner(): Promise<void> {
+  if (inner === null) return;
+  const { dir } = inner;
+  await innerTmux(["kill-server"]).catch(() => {});
+  inner = null;
+  await rm(dir, { recursive: true }).catch(() => {});
+}
+
+function agentowerBin(): string {
+  return process.env.AGENTOWER_E2E_BIN ??
+    join(import.meta.dirname, "agentower-main.ts");
+}
+
+export async function runInnerCli(
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const merged = { ...await innerEnv(), ...env };
+  await assertShimFirst(merged);
+  return await run(agentowerBin(), args, { clearEnv: true, env: merged });
+}
+
+async function assertShimFirst(env: Record<string, string>): Promise<void> {
+  const { shim } = requireInner();
+  const { stdout } = await run("/bin/sh", ["-c", "command -v tmux"], {
+    clearEnv: true,
+    env,
+  });
+  if (stdout.trim() !== shim) {
+    throw new Error(`tmux resolves to ${stdout.trim()}, not ${shim}`);
+  }
+}
+
+// Exits 99 unless the tmux this very process would run is the shim. The check
+// has to live here: a one-string window command goes through `default-shell -c`
+// and /etc/zshenv, so a check made from the test process proves nothing about
+// the pane. Several arguments reach execvp with no shell in between.
+const SHIM_GUARD =
+  '[ "$(command -v tmux)" = "$1" ] || exit 99; shift; exec "$@"';
+
+function guardedCommand(
+  env: Record<string, string>,
+  args: string[],
+): string[] {
+  return [
+    "/usr/bin/env",
+    "-i",
+    ...Object.entries(env).map(([key, value]) => `${key}=${value}`),
+    "/bin/sh",
+    "-c",
+    SHIM_GUARD,
+    "sh",
+    requireInner().shim,
+    agentowerBin(),
+    ...args,
+  ];
+}
+
+// The binary in a pane with a real tty, so its prompt and attach work. Outer: a
+// window of the -L server, which is the terminal the user would be at. Inner: a
+// pane of the server the binary manages, the case it has to refuse. remain-on-exit
+// keeps the pane so paneExitCode can read how the process ended.
+export async function spawnRestore(
+  args: string[],
+  opts: { server?: "outer" | "inner" } = {},
+): Promise<string> {
+  const command = guardedCommand(await innerEnv(), args);
+  if (opts.server === "inner") {
+    await innerTmux(["set-option", "-g", "remain-on-exit", "on"]);
+    const pane = await innerTmux([
+      "new-window",
+      "-d",
+      "-P",
+      "-F",
+      "#{pane_id}",
+      ...command,
+    ]);
+    return pane.trim();
+  }
+  await tmuxRun(["set-option", "-g", "remain-on-exit", "on"]);
+  const pane = await tmuxRun([
+    "new-window",
+    "-d",
+    "-t",
+    SESSION,
+    "-P",
+    "-F",
+    "#{pane_id}",
+    ...command,
+  ]);
+  return pane.trim();
+}
+
+export async function paneExitCode(
+  pane: string,
+  runner: (args: string[]) => Promise<string> = tmuxRun,
+): Promise<number> {
+  const deadline = Date.now() + DEFAULT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const out = (await runner([
+      "display",
+      "-p",
+      "-t",
+      pane,
+      "#{pane_dead} #{pane_dead_status}",
+    ])).trim();
+    const [dead, status] = out.split(" ");
+    if (dead === "1") return Number(status);
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+  throw new Error(`paneExitCode timeout on ${pane}`);
+}
+
+// With the history: the line tmux adds to a dead pane scrolls its first lines off
+// the visible screen.
+export async function innerCapture(pane: string): Promise<string> {
+  return sanitizeAnsi(
+    await innerTmux(["capture-pane", "-p", "-S", "-", "-t", pane]),
+  );
+}
+
+// A pane of the inner server running a stub whose process name passes
+// isLivePaneCommand, carrying what an agent's hooks would have written.
+export async function createInnerAgentPane(opts: {
+  target: string;
+  agent: "claude" | "codex" | "opencode";
+  sessionId: string;
+  cwd: string;
+  prompt?: string;
+  userLabel?: string;
+}): Promise<string> {
+  await ensureLiveBin();
+  const paneId = (await innerTmux([
+    "split-window",
+    "-d",
+    "-P",
+    "-F",
+    "#{pane_id}",
+    "-t",
+    opts.target,
+    "-c",
+    opts.cwd,
+    LIVE_BIN_PATHS[opts.agent],
+    "99999",
+  ])).trim();
+  const expected = LIVE_BIN_BASENAMES[opts.agent];
+  const deadline = Date.now() + 1000;
+  let observed = "";
+  while (Date.now() < deadline && observed !== expected) {
+    observed = (await innerTmux([
+      "display",
+      "-p",
+      "-t",
+      paneId,
+      "#{pane_current_command}",
+    ])).trim();
+    if (observed !== expected) await new Promise((r) => setTimeout(r, 25));
+  }
+  if (observed !== expected) {
+    throw new Error(`inner agent pane runs ${observed}, not ${expected}`);
+  }
+  const options: Array<[string, string]> = [
+    ["@pane_agent", opts.agent],
+    ["@pane_session_id", opts.sessionId],
+    ["@pane_prompt", opts.prompt ?? ""],
+  ];
+  if (opts.userLabel !== undefined) {
+    options.push(["@pane_user_label", opts.userLabel]);
+    options.push(["@pane_user_label_session", opts.sessionId]);
+  }
+  for (const [key, value] of options) {
+    await innerTmux(["set-option", "-p", "-t", paneId, key, value]);
+  }
+  return paneId;
+}
+
+export async function shimCalls(): Promise<string[]> {
+  const text = await readFile(requireInner().shimLog, "utf8");
+  return text.split("\n").filter(Boolean);
+}
+
+export async function agentCalls(): Promise<string[]> {
+  const text = await readFile(requireInner().agentLog, "utf8").catch(() => "");
+  return text.split("\n").filter(Boolean);
 }

@@ -81,8 +81,14 @@ async function loadPatterns(
       });
     }
   });
+  // `rules: []` is an owner's decision; what must not pass is rules written in a
+  // form this line reader misses, which would silently lint nothing.
+  const declaredEmpty = lines.some((line) =>
+    /^rules:\s*\[\s*\]\s*$/.test(line)
+  );
   if (
-    patterns.length === 0 && findings.every((f) => f.rule !== "policy-parse")
+    !declaredEmpty && patterns.length === 0 &&
+    findings.every((f) => f.rule !== "policy-parse")
   ) {
     findings.push({
       path: POLICY_YAML,

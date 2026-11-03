@@ -3,7 +3,7 @@ name: agentower-verify
 description: >-
   Runs e2e tests for Agentower, the tmux prefix+w AI agent popup
   (home/programs/tmux/agentower/agentower-main.ts) in an isolated tmux server sandbox.
-  Use proactively after any change to agentower-main.ts, agentower.tsx, agentower_e2e_harness.ts,
+  Use proactively after any change to agentower-main.ts, agentower.tsx, restore.ts, agentower_e2e_harness.ts,
   or agentower_e2e_test.ts — even if the user doesn't explicitly ask for
   verification, run at least once to catch regressions before the user
   tries Agentower. Also use when asked to "verify Agentower",
@@ -93,6 +93,7 @@ claim Agentower changes are complete while `ok: false`.
 This skill only exercises:
 
 - agentower.tsx's live rendering + key handling inside a spawned tmux pane
+- restore.ts's `--snapshot` and `--restore` against a second isolated server
 - select-window / select-pane side-effects (switch-client is out of scope)
 - Escape-driven clean exit
 

@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   pkgs,
   dotfiles,
@@ -82,8 +83,8 @@ in
   home.file.".local/bin/tmux-popup-session.sh".source =
     dotfiles.linkHere ./. "scripts/popup-session.sh";
 
-  # Agentower (prefix+w: ink + React on Bun). The source entry, for a manual
-  # run without the compiled binary.
+  # Agentower (prefix+w: ink + React on Bun; --snapshot and --restore without
+  # ink). The source entry, for a manual run without the compiled binary.
   home.file.".local/bin/agentower-main.ts".source =
     dotfiles.linkHere ./. "agentower/agentower-main.ts";
 
@@ -155,4 +156,26 @@ in
       /bin/rm -f "$OUT/.warm.log"
     fi
   '';
+
+  # What `agentower --restore` brings back after a reboot. Saved on a timer
+  # because a crash or a forced restart never reaches a shutdown hook. The job
+  # gets no locale: restore.ts passes `-u` to tmux itself.
+  launchd.agents.agentower-snapshot = {
+    enable = true;
+    config = {
+      ProgramArguments = [
+        "${config.home.homeDirectory}/.local/share/agentower/agentower"
+        "--snapshot"
+      ];
+      EnvironmentVariables = {
+        HOME = config.home.homeDirectory;
+        PATH = "${config.home.profileDirectory}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+      };
+      RunAtLoad = true;
+      StartInterval = 60;
+      ProcessType = "Background";
+      StandardOutPath = "${config.home.homeDirectory}/Library/Logs/agentower-snapshot.log";
+      StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/agentower-snapshot.log";
+    };
+  };
 }

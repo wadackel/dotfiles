@@ -360,22 +360,30 @@ abr() {
 
 
 # ====================================================
-# Agentower dashboard (always-on Agentower for a second display)
+# Agentower: the dashboard (always-on Agentower for a second display), and
+# `--restore`, which brings tmux and the agents back after a reboot
 # ====================================================
 
 agentower() {
+  local bin="$HOME/.local/share/agentower/agentower"
+  if [[ ! -x "$bin" ]]; then
+    print -u2 "agentower: $bin not found or not executable."
+    print -u2 "  Run: cd ~/dotfiles && sudo darwin-rebuild switch --flake .#private"
+    return 1
+  fi
+  # Every argument, not just $1: `--dashboard --restore` has to reach the
+  # binary's usage error instead of opening a dashboard. The binary refuses a
+  # restore from inside tmux on its own; --restore --list works there.
+  if (( ${argv[(I)--snapshot]} || ${argv[(I)--restore]} )); then
+    env -u TMUX -u TMUX_PANE "$bin" "$@"
+    return $?
+  fi
   # Inside tmux, switch-client would resolve to the client showing the
   # dashboard itself, so every jump would land on its own window. $TMUX cannot
   # tell: a terminal app launched from a tmux pane hands TMUX and TMUX_PANE to
   # every window it opens later, so ask tmux whether this tty is a pane.
   if env -u TMUX tmux list-panes -a -F '#{pane_tty}' 2>/dev/null | grep -qxF "$(tty)"; then
     print -u2 "agentower: the dashboard runs in a terminal window outside tmux; inside tmux, use prefix+w."
-    return 1
-  fi
-  local bin="$HOME/.local/share/agentower/agentower"
-  if [[ ! -x "$bin" ]]; then
-    print -u2 "agentower: $bin not found or not executable."
-    print -u2 "  Run: cd ~/dotfiles && sudo darwin-rebuild switch --flake .#private"
     return 1
   fi
   # Ink draws every tmux error above its frame, and a dashboard left open

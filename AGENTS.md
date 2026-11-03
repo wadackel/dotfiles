@@ -227,7 +227,7 @@ Each subsystem keeps its notes in an `AGENTS.md` next to its code. Claude Code l
 - `home/programs/claude/AGENTS.md`: Claude Code settings, hooks (bash-policy, rtk, pane status), scripts, agents, gate, the global instructions, permission rules
 - `home/programs/agents/scripts/AGENTS.md`: plan-state / plan-evidence, check-plan, config-lint, vocab, abr, rebase-guard, vendored skills sync
 - `home/programs/hermes/AGENTS.md`: applying Hermes changes, the gateway, `!claude` tasks
-- `home/programs/tmux/agentower/AGENTS.md`: the Agentower binary, its e2e and bench
+- `home/programs/tmux/agentower/AGENTS.md`: the Agentower binary, snapshot and restore (`restore.ts`), its e2e and bench
 
 ## Skills layout
 

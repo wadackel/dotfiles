@@ -131,9 +131,20 @@ test("a single-quoted pattern is a policy-parse error", async () => {
   });
 });
 
-test("a policy with no rule is a policy-parse error", async () => {
+test("a policy that declares an empty rule list is fine", async () => {
   await withRepo({
-    "home/programs/claude/scripts/bash-policy.yaml": "rules: []\n",
+    "home/programs/claude/scripts/bash-policy.yaml":
+      "# deliberately empty\n\nrules: []\n",
+  }, async (root) => {
+    const r = await run(root);
+    assertEquals(r.code, 0, r.stdout + r.stderr);
+  });
+});
+
+test("rules this lint cannot read are a policy-parse error", async () => {
+  await withRepo({
+    "home/programs/claude/scripts/bash-policy.yaml":
+      'rules:\n  - {pattern: "git -C *", message: no}\n',
   }, async (root) => {
     const r = await run(root);
     assertEquals(r.code, 1, r.stdout + r.stderr);
