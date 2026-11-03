@@ -1,6 +1,6 @@
 ---
 name: cloud-architecture-reviewer
-description: Cloud / IaC specialist. Use for code changes touching Terraform (.tf, *.tfvars), Kubernetes manifests, Helm charts, Dockerfile, docker-compose.yml, serverless.yml, or GitHub Actions workflows. Focuses on least-privilege IAM, secrets management, resource limits, availability, cost optimization, and CI/CD security (SHA-pinned actions, OIDC). Auto-dispatched by /gate when infrastructure files are detected.
+description: Cloud / IaC specialist. Use for code changes touching Terraform (.tf, *.tfvars), Kubernetes manifests, Helm charts, Dockerfile, docker-compose.yml, serverless.yml, or GitHub Actions workflows. Focuses on least-privilege IAM, secrets management, resource limits, availability, cost optimization, and CI/CD security (locked actions, OIDC). Auto-dispatched by /gate when infrastructure files are detected.
 tools: Read, Grep, Glob, Bash
 model: opus
 color: purple
@@ -60,7 +60,7 @@ Specialist for infrastructure-as-code and cloud deployment patterns. Catches iss
 - `.dockerignore` excludes `.git`, `node_modules`, tests
 
 ### 7. GitHub Actions
-- Actions pinned to full commit SHA (`actions/checkout@de0fac2e...`) not tag (per CLAUDE.md)
+- Step-level actions covered by `.github/workflows/actions.lock`; reusable workflow calls and actions inside a published `action.yml` pinned to full commit SHA (per CLAUDE.md)
 - `permissions:` block minimized (explicit per-job permissions)
 - OIDC via `id-token: write` over long-lived cloud keys
 - `pull_request_target` avoided unless strictly needed (code execution from untrusted PR)
