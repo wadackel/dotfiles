@@ -29,6 +29,22 @@ let
       doCheck = false;
     }
   );
+
+  # nixpkgs still ships 0.2.0, whose --verify disagrees with the v0.4.0 that CI pins; bump them together.
+  gh-actions-lock = pkgs.gh-actions-lock.overrideAttrs (
+    finalAttrs: _: {
+      version = "0.4.0";
+
+      src = pkgs.fetchFromGitHub {
+        owner = "github";
+        repo = "gh-actions-lock";
+        tag = "v${finalAttrs.version}";
+        hash = "sha256-+J5nA1kzwmjY98u0HoJ2rsYD5hLNBhNnwmIT34Gxha4=";
+      };
+
+      vendorHash = "sha256-MS0GDAo/COikI5LwfgNPR83MhY6fAFg+Lpmzkv86X3M=";
+    }
+  );
 in
 {
   programs.gh = {
@@ -37,6 +53,7 @@ in
     extensions = [
       pkgs.gh-poi
       gh-stack
+      gh-actions-lock
     ];
 
     settings = {
