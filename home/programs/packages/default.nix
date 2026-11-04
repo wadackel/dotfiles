@@ -42,10 +42,10 @@
     dive # Docker image layer analyzer
     cloudflared # Cloudflare Tunnel client
 
-    # KnowledgeWork kaioken (local dev environment)
+    # Local Dev Environment
     process-compose # Process supervisor
-    caddy # Shared router in front of the local services
-    postgresql # psql, used by popo and for inspecting the local DB
+    caddy # Reverse proxy in front of local services
+    postgresql # psql client for inspecting local databases
 
     # Media Processing
     ffmpeg # Complete solution to record, convert and stream audio and video
