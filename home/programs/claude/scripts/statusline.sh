@@ -107,6 +107,31 @@ if [ -n "$usage_json" ] && [ -n "${HOME:-}" ]; then
   } 2>/dev/null || rm -f "$usage_tmp" 2>/dev/null || true
 fi
 
+# --- Rate-limit history ---
+# Raw percentages, not the footer's rounded ones: the log exists to weigh how
+# much each kind of token moves the limits, and rounding hides that. A line is
+# appended only when a value moves so the file stays small enough to keep.
+hist_json=$(printf '%s' "$input" | jq -c '
+  (.rate_limits.five_hour // null) as $five
+  | (.rate_limits.seven_day // null) as $seven
+  | select($five != null or $seven != null)
+  | { key: [ $five, $seven ],
+      line: { ts: (now | floor), session: .session_id, fiveHour: $five,
+              sevenDay: $seven, costUsd: .cost.total_cost_usd } }
+' 2>/dev/null || true)
+if [ -n "$hist_json" ] && [ -n "${HOME:-}" ]; then
+  hist_dir="${HOME}/.local/state/agent-usage-history"
+  hist_key=$(printf '%s' "$hist_json" | jq -c '.key' 2>/dev/null || true)
+  last_key=$(cat "$hist_dir/claude.last" 2>/dev/null || true)
+  if [ -n "$hist_key" ] && [ "$hist_key" != "$last_key" ]; then
+    {
+      mkdir -p "$hist_dir" &&
+        printf '%s' "$hist_json" | jq -c '.line' >>"$hist_dir/claude.jsonl" &&
+        printf '%s\n' "$hist_key" >"$hist_dir/claude.last"
+    } 2>/dev/null || true
+  fi
+fi
+
 # --- Context usage ---
 if [ -n "$used_pct" ] && [ -n "$ctx_size" ]; then
   used_int=${used_pct%.*}

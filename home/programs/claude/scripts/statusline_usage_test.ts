@@ -9,7 +9,7 @@
 
 import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
@@ -191,5 +191,63 @@ test("statusline.sh renders the model alone when effort is absent", async () => 
       !stdout.includes("·"),
       `no separator should be emitted without effort, got: ${stdout}`,
     );
+  });
+});
+
+async function readHistory(home: string): Promise<Record<string, unknown>[]> {
+  const path = `${home}/.local/state/agent-usage-history/claude.jsonl`;
+  const text = await readFile(path, "utf8").catch(() => "");
+  return text.split("\n").filter((l) => l !== "").map((l) => JSON.parse(l));
+}
+
+test("statusline.sh appends raw rate-limit values to the history", async () => {
+  await withHome(async (home) => {
+    const fractional = {
+      five_hour: { used_percentage: 41.37, resets_at: 1786254600 },
+      seven_day: RATE_LIMITS.seven_day,
+    };
+    await runStatusline(
+      home,
+      input({
+        session_id: "s1",
+        cost: { total_cost_usd: 1.25 },
+        rate_limits: fractional,
+      }),
+    );
+    const lines = await readHistory(home);
+    assertEquals(lines.length, 1);
+    assertEquals(lines[0].session, "s1");
+    assertEquals(lines[0].costUsd, 1.25);
+    assertEquals(lines[0].fiveHour, fractional.five_hour);
+    assertEquals(lines[0].sevenDay, fractional.seven_day);
+    assert(typeof lines[0].ts === "number");
+  });
+});
+
+test("statusline.sh appends to the history only when a value moves", async () => {
+  await withHome(async (home) => {
+    const at = (pct: number) =>
+      input({
+        rate_limits: {
+          five_hour: { used_percentage: pct, resets_at: 1786254600 },
+          seven_day: RATE_LIMITS.seven_day,
+        },
+      });
+    await runStatusline(home, at(10));
+    await runStatusline(home, at(10));
+    await runStatusline(home, at(11));
+    const lines = await readHistory(home);
+    assertEquals(
+      lines.map((l) => (l.fiveHour as { used_percentage: number }).used_percentage),
+      [10, 11],
+    );
+  });
+});
+
+test("statusline.sh writes no history without rate_limits", async () => {
+  await withHome(async (home) => {
+    await runStatusline(home, input({}));
+    await runStatusline(home, input({ rate_limits: "not-an-object" }));
+    assertEquals(await readHistory(home), []);
   });
 });
