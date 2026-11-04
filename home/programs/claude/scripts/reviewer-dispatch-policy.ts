@@ -33,6 +33,7 @@ export const GUARDED: ReadonlySet<string> = new Set([
   "database-reviewer",
   "cloud-architecture-reviewer",
   "comment-reviewer",
+  "breaker-reviewer",
 ]);
 
 // Guarded reviewers whose agent definition has no Bash: they cannot run the
@@ -44,8 +45,16 @@ const NO_BASH = new Set([
   "security-auditor",
   "comment-reviewer",
 ]);
-type Missing = "a diff file path" | "the read-only sentence";
+type Missing =
+  | "a diff file path"
+  | "the read-only sentence"
+  | "the workspace sentence";
 const READ_ONLY_SENTENCE = /do not create, modify, or delete files/i;
+// The breaker runs commands, so it cannot promise to write nothing; what it
+// promises instead is where it writes.
+const BREAKER = "breaker-reviewer";
+const WORKSPACE_SENTENCE =
+  /write only inside the breaker worktree and your temp directory/i;
 const DIFF_REFERENCE = /\.gate\.diff\b|^diff --git /m;
 
 /** Subagent types whose dispatch must carry a verdict rule. */
@@ -61,8 +70,9 @@ export function hasVerdictRule(prompt: string | undefined): boolean {
 }
 
 /**
- * Second requirement: a reviewer without Bash needs the diff in the prompt, a
- * reviewer with Bash needs the template's read-only sentence.
+ * Second requirement: a reviewer without Bash needs the diff in the prompt, the
+ * breaker needs the workspace sentence, and any other reviewer with Bash needs
+ * the template's read-only sentence.
  */
 export function missingRequirement(
   subagentType: string,
@@ -71,6 +81,9 @@ export function missingRequirement(
   if (!prompt || !/FAIL otherwise/i.test(prompt)) return null;
   if (NO_BASH.has(subagentType)) {
     return DIFF_REFERENCE.test(prompt) ? null : "a diff file path";
+  }
+  if (subagentType === BREAKER) {
+    return WORKSPACE_SENTENCE.test(prompt) ? null : "the workspace sentence";
   }
   return READ_ONLY_SENTENCE.test(prompt) ? null : "the read-only sentence";
 }
@@ -81,6 +94,8 @@ export function requirementMessage(
 ): string {
   const line = missing === "a diff file path"
     ? "  Diff file: ~/.claude/plans/<plan-slug>.gate.diff   (or paste the diff so a `diff --git` hunk is in the prompt)"
+    : missing === "the workspace sentence"
+    ? "  Workspace: write only inside the breaker worktree and your temp directory."
     : "  Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.";
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
@@ -98,8 +113,7 @@ export function denialMessage(subagentType: string): string {
     "load the template and paste its `## Template` block verbatim — do not",
     "summarise it and do not rewrite the VERDICT line:",
     `  ${TEMPLATE}`,
-    "For a SHOULD_FIX-only re-review, use rereview-diagnostic-prompt.md instead.",
-    'A JSON output contract carrying a `"verdict"` field also satisfies this.',
+    "For a re-review after a blocker fix, use rereview-diagnostic-prompt.md; for breaker-reviewer, breaker-prompt.md.",
   ].join("\n");
 }
 

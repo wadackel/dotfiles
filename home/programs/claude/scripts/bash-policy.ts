@@ -47,6 +47,128 @@ interface HookInput {
   tool_name: string;
   tool_input: { command: string };
   cwd?: string;
+  /** Set on a tool call made inside a subagent; absent for the main session. */
+  agent_type?: string;
+}
+
+// Commands that run their arguments as another command; their own options (and
+// timeout's duration, sudo's -u user) are skipped to reach the command they start.
+const WRAPPERS = new Set([
+  "env",
+  "command",
+  "exec",
+  "nohup",
+  "timeout",
+  "sudo",
+  "doas",
+  "xargs",
+  "nice",
+  "time",
+  "stdbuf",
+]);
+const WRAPPER_ARG_OPTIONS: Record<string, ReadonlySet<string>> = {
+  env: new Set(["-u", "-C", "-P"]),
+  exec: new Set(["-a"]),
+  sudo: new Set(["-u", "-g", "-p"]),
+  doas: new Set(["-u"]),
+  nice: new Set(["-n"]),
+  timeout: new Set(["-s", "-k", "--signal", "--kill-after"]),
+  xargs: new Set(["-I", "-L", "-P", "-n", "-s", "-a", "-d", "-E"]),
+  stdbuf: new Set(["-i", "-o", "-e"]),
+};
+// A shell option word that carries -c (`-c`, `-lc`, `-ec`): the next word is a script.
+const SHELL_C = /^-[a-zA-Z]*c[a-zA-Z]*$/;
+const SHELLS = new Set(["bash", "sh", "zsh", "dash"]);
+// tmux options that take a value; -L and -S are the socket ones.
+const TMUX_ARG_OPTIONS = new Set(["-c", "-f", "-L", "-S", "-T"]);
+
+function basenameOf(word: string): string {
+  return word.split("/").at(-1) ?? word;
+}
+
+function unquote(text: string): string {
+  return text.replace(/^(['"])(.*)\1$/, "$2");
+}
+
+function unwrap(words: string[]): string[] {
+  let i = 0;
+  while (i < words.length && /^\w+=/.test(words[i])) i++;
+  while (i < words.length && WRAPPERS.has(basenameOf(words[i]))) {
+    const wrapper = basenameOf(words[i]);
+    i++;
+    while (i < words.length) {
+      const w = words[i];
+      if (/^\w+=/.test(w)) i++;
+      else if (w.startsWith("-")) {
+        i += WRAPPER_ARG_OPTIONS[wrapper]?.has(w) ? 2 : 1;
+      }
+      else if (wrapper === "timeout" && /^\d/.test(w)) i++;
+      else break;
+    }
+  }
+  return words.slice(i);
+}
+
+/** True when tmux reaches its subcommand before a global -L or -S picks a socket. */
+function tmuxReachesDefault(args: string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i];
+    if (!w.startsWith("-") || w === "--") return true;
+    // A socket given by name is private unless it names the user's own server.
+    if (w === "-L" || w === "-S") {
+      const socket = args[i + 1] ?? "";
+      return w === "-L" ? socket === "default" : /\/tmux-\d+\/default$/.test(socket);
+    }
+    if (/^-L/.test(w)) return w === "-Ldefault";
+    if (/^-S/.test(w)) return /\/tmux-\d+\/default$/.test(w);
+    if (TMUX_ARG_OPTIONS.has(w)) i++;
+  }
+  return true;
+}
+
+/**
+ * The /gate breaker runs commands in a throwaway worktree. These are the ones
+ * that reach past it: the user's tmux server (a tmux whose subcommand comes
+ * before a global -L / -S talks to the default socket), launchd, the network,
+ * and the installed plan-state. They are refused for that agent alone, through
+ * the common wrappers and a shell's -c string; the main session and the other
+ * reviewers are unaffected.
+ */
+export async function breakerRefusal(segments: string[]): Promise<string | null> {
+  for (const segment of segments) {
+    if (segment.includes("/.agents/scripts/plan-state.ts")) {
+      return "the installed plan-state acts on the real plans; run the worktree's copy with HOME=<your temp directory>";
+    }
+    const all = segment.trim().split(/\s+/).filter(Boolean);
+    // `env -S <string>` runs the split string as a command, like a shell's -c.
+    const envSplit = basenameOf(all[0] ?? "") === "env" ? all.indexOf("-S") : -1;
+    if (envSplit >= 0) {
+      const inner = await breakerRefusal(
+        await getSegments(unquote(all.slice(envSplit + 1).join(" "))),
+      );
+      if (inner) return inner;
+    }
+    const words = unwrap(all);
+    const head = basenameOf(words[0] ?? "");
+    if (head === "plan-state.ts") {
+      return "call plan-state from a script in your temp directory (bash <temp>/<name>.sh) with HOME=<temp>; a direct call acts on the real plans";
+    }
+    const flag = words.findIndex((w, i) => i > 0 && SHELL_C.test(w));
+    if (SHELLS.has(head) && flag > 0) {
+      const inner = await breakerRefusal(
+        await getSegments(unquote(words.slice(flag + 1).join(" "))),
+      );
+      if (inner) return inner;
+    }
+    if (head === "tmux" && tmuxReachesDefault(words.slice(1))) {
+      return "tmux without a global -L or -S would reach the user's tmux server; use a private socket (tmux -L <name> <command>)";
+    }
+    if (head === "launchctl") return "launchctl reaches the user's launchd";
+    if (head === "curl" || head === "wget") {
+      return `${head} reaches the network`;
+    }
+  }
+  return null;
 }
 
 /** Load and parse YAML config. Returns empty array on missing file or parse error. */
@@ -107,6 +229,8 @@ const PASSIVE = new Set([
   "snapshot",
   "reconcile",
   "coverage",
+  "diff",
+  "materialize",
 ]);
 /** The path the passive subcommands' `permissions.allow` entries match; their leading `*` auto-approves a command carrying it anywhere. */
 const INSTALLED_HELPER = "/.agents/scripts/plan-state.ts";
@@ -431,6 +555,19 @@ if (import.meta.main) {
       [`[bash-policy] ${helperReason}`, `Blocked: ${command}`].join("\n"),
     );
     process.exit(2);
+  }
+
+  if (input.agent_type === "breaker-reviewer") {
+    const refusal = await breakerRefusal(await getSegments(command));
+    if (refusal) {
+      console.error(
+        [
+          `[bash-policy] breaker-reviewer: ${refusal}`,
+          `Blocked: ${command}`,
+        ].join("\n"),
+      );
+      process.exit(2);
+    }
   }
 
   if (rules.length === 0) process.exit(0);

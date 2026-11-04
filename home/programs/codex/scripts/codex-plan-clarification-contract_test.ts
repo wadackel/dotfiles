@@ -159,7 +159,8 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
     CODEX_PLAN,
   ]],
   ["scope: <the boundary: what is in or out>", [CONTRACT, INTERVIEW]],
-  ["Round N: critic", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
+  ["Round N: critic", [CONTRACT, CODEX_PLAN]],
+  ["Round N: main review", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
   ["| # | Finding | Kind | Action |", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
   ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
 ];

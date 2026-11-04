@@ -20,7 +20,10 @@ const REAL_HOME = process.env.HOME!;
 
 const input = (value: unknown) => new Blob([JSON.stringify(value)]).stream();
 
-async function fixture(test: (path: string) => Promise<void>) {
+async function fixture(
+  test: (path: string) => Promise<void>,
+  beforeStart?: () => Promise<void>,
+) {
   const previous = { cwd: process.cwd(), home: process.env.HOME! };
   const temp = await mkdtemp(join(tmpdir(), "plan-evidence-"));
   try {
@@ -53,6 +56,7 @@ async function fixture(test: (path: string) => Promise<void>) {
     await writeFile("main.txt", "initial\n");
     await runCommand("git", ["add", "."]);
     await runCommand("git", ["commit", "-qm", "initial"]);
+    await beforeStart?.();
     const path = `${temp}/.codex/plans/plan.evidence.json`;
     await writeFile(
       `${temp}/.codex/plans/plan.md`,
@@ -1346,3 +1350,455 @@ async function realpathOf(path: string): Promise<string> {
   const { realpath } = await import("node:fs/promises");
   return await realpath(path);
 }
+
+// --- red records, require starting a task, the start tree, diff, materialize ---
+
+const FAIL_UNTIL_FIXED =
+  "process.exit(require('fs').readFileSync('main.txt','utf8').includes('fixed')?0:1)";
+
+test("run --red passes on a failing exit, records red, and cannot be combined with --expect-exit", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--red",
+        "--",
+        BUN,
+        "-e",
+        "process.exit(1)",
+      ]),
+      0,
+    );
+    let check = await lastCheck(path);
+    assertEquals(check.status, "pass");
+    assertEquals(check.red, true);
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--red",
+        "--",
+        BUN,
+        "-e",
+        "void 0",
+      ]),
+      1,
+    );
+    check = await lastCheck(path);
+    assertEquals(check.status, "fail");
+    assertEquals(
+      await run([
+        "run",
+        path,
+        "task-1",
+        "behavior",
+        "--red",
+        "--",
+        "/nonexistent/missing",
+      ]),
+      1,
+    );
+    await assertRejects(
+      () =>
+        run([
+          "run",
+          path,
+          "task-1",
+          "behavior",
+          "--red",
+          "--expect-exit",
+          "1",
+          "--",
+          BUN,
+          "-e",
+          "process.exit(1)",
+        ]),
+      Error,
+      "--red and --expect-exit",
+    );
+  });
+});
+
+test("a red record does not verify a task; rerun re-executes it green and keeps the red record", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await run([
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--red",
+      "--",
+      BUN,
+      "-e",
+      FAIL_UNTIL_FIXED,
+    ]);
+    await assertRejects(
+      () => run(["complete", path, "task-1"]),
+      Error,
+      "red only",
+    );
+    assertEquals(await run(["rerun", path]), 1);
+    let check = await lastCheck(path);
+    assertEquals(check.status, "fail");
+    assertEquals(check.red, undefined);
+    await writeFile("main.txt", "fixed\n");
+    assertEquals(await run(["rerun", path]), 0);
+    check = await lastCheck(path);
+    assertEquals(check.status, "pass");
+    assertEquals(check.expectExit, 0);
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(
+      data.tasks[0].checks.some((c: { red?: boolean }) => c.red === true),
+      true,
+    );
+    await run(["complete", path, "task-1"]);
+  });
+});
+
+test("record from stdin cannot carry red", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await assertRejects(
+      () => record(path, { red: true }),
+      Error,
+      "written by run",
+    );
+  });
+});
+
+test("require starts and binds a pending task, which review then closes", async () => {
+  await fixture(async (path) => {
+    const tagged = await taggedPlan(path);
+    await run(
+      ["require", tagged, "task-2"],
+      input([{ id: "behavior", kind: "file-state" }]),
+    );
+    let data = JSON.parse(await readFile(tagged, "utf8"));
+    assertEquals(data.tasks[1].status, "in_progress");
+    assertEquals(data.repository, await realpathOf(process.cwd()));
+    assertEquals(typeof data.tasks[1].baseline_sha, "string");
+    await record(tagged, {}, "task-2");
+    await run(
+      ["review", tagged, "1", "--", "code-reviewer"],
+      new Blob(["### MUST_FIX\n- None\nVERDICT: PASS\n"]).stream(),
+    );
+    data = JSON.parse(await readFile(tagged, "utf8"));
+    assertEquals(data.tasks[1].status, "completed");
+  });
+});
+
+test("the start tree is written once, when the repository is bound, and survives later writes", async () => {
+  await fixture(async (path) => {
+    const tagged = await taggedPlan(path);
+    await run(["start", tagged, "task-1"]);
+    const first = JSON.parse(await readFile(tagged, "utf8")).baseline_tree;
+    assertEquals(typeof first, "string");
+    await run(["run", tagged, "task-1", "cc-1", "--", BUN, "-e", "void 0"]);
+    await writeFile("later.txt", "later\n");
+    await run(["start", tagged, "task-2"]);
+    assertEquals(
+      JSON.parse(await readFile(tagged, "utf8")).baseline_tree,
+      first,
+    );
+  });
+});
+
+async function preStart(): Promise<void> {
+  await writeFile(".gitignore", "node_modules/\n");
+  await writeFile("gone.txt", "gone\n");
+  await runCommand("git", ["add", "."]);
+  await runCommand("git", ["commit", "-qm", "more"]);
+  await writeFile("main.txt", "initial\npre-edit\n");
+  await writeFile("pre.txt", "pre\n");
+}
+
+async function cli(args: string[]) {
+  return await runCommand(BUN, [
+    "--no-env-file",
+    "--no-install",
+    "--config=/dev/null",
+    CLI,
+    ...args,
+  ], { env: CLI_ENV });
+}
+
+test("diff writes the gate diff from the start tree with new files, leaves the index alone, and fixes the prefixes", async () => {
+  await fixture(async (path) => {
+    await runCommand("git", ["config", "diff.noprefix", "true"]);
+    await writeFile("main.txt", "initial\npre-edit\nafter\n");
+    await writeFile("new.txt", "new\n");
+    const cachedBefore = (await runCommand("git", [
+      "diff",
+      "--cached",
+      "--quiet",
+    ])).code;
+    const out = await cli(["diff", path]);
+    assertEquals(out.code, 0, out.stderr);
+    const diffPath = path.replace(/\.evidence\.json$/, ".gate.diff");
+    const body = await readFile(diffPath, "utf8");
+    assertEquals(body.includes("diff --git a/main.txt b/main.txt"), true);
+    assertEquals(body.includes("+after"), true);
+    assertEquals(body.includes("new.txt"), true);
+    assertEquals(body.includes("pre.txt"), false);
+    assertEquals(body.includes("+pre-edit"), false);
+    assertEquals(out.stdout.includes(diffPath), true);
+    assertEquals(out.stdout.includes("new.txt"), true);
+    const tree = out.stdout.match(/^tree ([0-9a-f]{40})$/m)?.[1];
+    assertEquals(typeof tree, "string");
+    assertEquals(
+      (await runCommand("git", ["diff", "--cached", "--quiet"])).code,
+      cachedBefore,
+    );
+    await writeFile("main.txt", "initial\npre-edit\nafter\nfix\n");
+    const re = await cli(["diff", path, "--from", tree!, "--rereview", "1"]);
+    assertEquals(re.code, 0, re.stderr);
+    const fix = await readFile(
+      path.replace(/\.evidence\.json$/, ".rereview-1.gate.diff"),
+      "utf8",
+    );
+    assertEquals(fix.includes("+fix"), true);
+    assertEquals(fix.includes("new.txt"), false);
+  }, preStart);
+});
+
+test("diff falls back to the baseline sha with a warning when the sidecar has no start tree", async () => {
+  await fixture(async (path) => {
+    const data = JSON.parse(await readFile(path, "utf8"));
+    delete data.baseline_tree;
+    await writeFile(path, JSON.stringify(data));
+    const out = await cli(["diff", path]);
+    assertEquals(out.code, 0, out.stderr);
+    assertEquals(out.stderr.includes("baseline_sha"), true);
+  });
+});
+
+async function files(dir: string, base = dir): Promise<Map<string, string>> {
+  const { readdir, lstat } = await import("node:fs/promises");
+  const result = new Map<string, string>();
+  for (const name of await readdir(dir)) {
+    if (name === ".git" || name === "node_modules") continue;
+    const full = join(dir, name);
+    const info = await lstat(full);
+    if (info.isDirectory()) {
+      for (const [k, v] of await files(full, base)) result.set(k, v);
+    } else result.set(full.slice(base.length + 1), await readFile(full, "utf8"));
+  }
+  return result;
+}
+
+test("materialize fills the breaker worktree from the recorded trees, keeps git usable, runs no hook, and touches only its own worktree", async () => {
+  await fixture(async (path) => {
+    await mkdir("node_modules/pkg", { recursive: true });
+    await writeFile("main.txt", "initial\npre-edit\nafter\n");
+    await writeFile("new.txt", "new\n");
+    await rm("gone.txt");
+    for (const hook of ["post-checkout", "post-index-change"]) {
+      await writeFile(
+        `.git/hooks/${hook}`,
+        `#!/bin/sh\ntouch "${process.cwd()}/HOOK_RAN"\n`,
+      );
+      await chmod(`.git/hooks/${hook}`, 0o755);
+    }
+    const dir = path.replace(/\.evidence\.json$/, ".breaker");
+    const made = await cli(["materialize", path]);
+    assertEquals(made.code, 0, made.stderr);
+    assertEquals(await files(dir), await files(process.cwd()));
+    assertEquals((await stat(join(dir, "node_modules"))).isDirectory(), true);
+    const status = await runCommand("git", ["-c", "core.hooksPath=/dev/null", "--no-optional-locks", "-C", dir, "status", "--porcelain"]);
+    assertEquals(status.code, 0, status.stderr);
+    assertEquals(status.stdout.includes("new.txt"), true);
+    assertEquals(
+      (await runCommand("git", ["-c", "core.hooksPath=/dev/null", "--no-optional-locks", "-C", dir, "diff", "--stat"])).code,
+      0,
+    );
+    const before = await cli(["materialize", path, "--before"]);
+    assertEquals(before.code, 0, before.stderr);
+    const old = await files(dir);
+    assertEquals(old.get("main.txt"), "initial\npre-edit\n");
+    assertEquals(old.get("gone.txt"), "gone\n");
+    assertEquals(old.get("pre.txt"), "pre\n");
+    assertEquals(old.has("new.txt"), false);
+    await writeFile(join(dir, "stray.txt"), "written by the breaker\n");
+    assertEquals((await cli(["materialize", path])).code, 0);
+    const back = await files(dir);
+    assertEquals(back.has("new.txt"), true);
+    assertEquals(back.has("gone.txt"), false);
+    assertEquals(back.has("stray.txt"), false);
+    assertEquals(back.get("main.txt"), "initial\npre-edit\nafter\n");
+    assertEquals((await stat(join(dir, "node_modules"))).isDirectory(), true);
+    assertEquals(await stat("HOOK_RAN").then(() => true, () => false), false);
+    const removed = await cli(["materialize", path, "--remove"]);
+    assertEquals(removed.code, 0, removed.stderr);
+    assertEquals(await stat(dir).then(() => true, () => false), false);
+    const list = await runCommand("git", ["worktree", "list", "--porcelain"]);
+    assertEquals(list.stdout.includes(".breaker"), false);
+    await mkdir(dir);
+    const foreign = await cli(["materialize", path]);
+    assertEquals(foreign.code, 1);
+    assertEquals(foreign.stderr.includes("not the breaker worktree"), true);
+    const foreignRemove = await cli(["materialize", path, "--remove"]);
+    assertEquals(foreignRemove.code, 1);
+  }, preStart);
+});
+
+test("materialize and --remove refuse a breaker path that is a symlink to another worktree", async () => {
+  await fixture(async (path) => {
+    const other = join(path, "..", "..", "..", "other-wt");
+    assertEquals(
+      (await runCommand("git", ["worktree", "add", "--detach", other])).code,
+      0,
+    );
+    const dir = path.replace(/\.evidence\.json$/, ".breaker");
+    await symlink(other, dir);
+    const made = await cli(["materialize", path]);
+    assertEquals(made.code, 1, made.stdout);
+    assertEquals(made.stderr.includes("not the breaker worktree"), true);
+    assertEquals((await cli(["materialize", path, "--remove"])).code, 1);
+    assertEquals((await stat(join(other, "main.txt"))).isFile(), true);
+  });
+});
+
+test("materialize refuses a marker that is not a tree id", async () => {
+  await fixture(async (path) => {
+    assertEquals((await cli(["materialize", path])).code, 0);
+    await writeFile(
+      path.replace(/\.evidence\.json$/, ".breaker.tree"),
+      "--output=/tmp/x\n",
+    );
+    const again = await cli(["materialize", path]);
+    assertEquals(again.code, 1);
+    assertEquals(again.stderr.includes("not a tree id"), true);
+    assertEquals((await cli(["materialize", path, "--remove"])).code, 0);
+  });
+});
+
+test("switching the breaker worktree does not delete through a directory replaced by a symlink", async () => {
+  await fixture(async (path) => {
+    await mkdir("sub");
+    await writeFile("sub/a.txt", "added after the start\n");
+    const dir = path.replace(/\.evidence\.json$/, ".breaker");
+    assertEquals((await cli(["materialize", path])).code, 0);
+    const outside = join(path, "..", "..", "..", "outside");
+    await mkdir(outside);
+    await writeFile(join(outside, "a.txt"), "not the worktree's\n");
+    await rm(join(dir, "sub"), { recursive: true });
+    await symlink(outside, join(dir, "sub"));
+    const switched = await cli(["materialize", path, "--before"]);
+    assertEquals(switched.code, 0, switched.stderr);
+    assertEquals(
+      await readFile(join(outside, "a.txt"), "utf8"),
+      "not the worktree's\n",
+    );
+    await cli(["materialize", path, "--remove"]);
+  });
+});
+
+test("a baseline_sha that is not a commit id is refused, and diff does not write through a symlink", async () => {
+  await fixture(async (path) => {
+    const data = JSON.parse(await readFile(path, "utf8"));
+    const target = join(path, "..", "..", "..", "victim.txt");
+    await writeFile(target, "keep\n");
+    await symlink(target, path.replace(/\.evidence\.json$/, ".gate.diff"));
+    await writeFile("main.txt", "changed\n");
+    const out = await cli(["diff", path]);
+    assertEquals(out.code, 0, out.stderr);
+    assertEquals(await readFile(target, "utf8"), "keep\n");
+    data.tasks[0].baseline_sha = "--output=/tmp/x";
+    await writeFile(path, JSON.stringify(data));
+    await assertRejects(
+      () => run(["materialize", path]),
+      Error,
+      "baseline_sha",
+    );
+  });
+});
+
+test("review leaves a task whose only record is red in progress and says why", async () => {
+  await fixture(async (path) => {
+    await declare(path);
+    await run([
+      "run",
+      path,
+      "task-1",
+      "behavior",
+      "--red",
+      "--",
+      BUN,
+      "-e",
+      "process.exit(1)",
+    ]);
+    const logs: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => void logs.push(args.join(" "));
+    try {
+      await run(
+        ["review", path, "1", "--", "code-reviewer"],
+        new Blob(["### MUST_FIX\n- None\nVERDICT: PASS\n"]).stream(),
+      );
+    } finally {
+      console.log = original;
+    }
+    const data = JSON.parse(await readFile(path, "utf8"));
+    assertEquals(data.tasks[0].status, "in_progress");
+    assertEquals(logs.some((l) => l.includes("red only")), true);
+  });
+});
+
+test("diff keeps three lines of context and prints unquoted names whatever the repository sets", async () => {
+  await fixture(async (path) => {
+    await runCommand("git", ["config", "diff.context", "0"]);
+    await writeFile(
+      "main.txt",
+      ["1", "2", "3", "4", "5", "6", "7"].join("\n") + "\n",
+    );
+    await runCommand("git", ["add", "."]);
+    await runCommand("git", ["commit", "-qm", "seven"]);
+    const data = JSON.parse(await readFile(path, "utf8"));
+    delete data.baseline_tree;
+    data.tasks[0].baseline_sha = (await runCommand("git", ["rev-parse", "HEAD"]))
+      .stdout.trim();
+    await writeFile(path, JSON.stringify(data));
+    await writeFile("main.txt", ["1", "2", "3", "four", "5", "6", "7"].join("\n") + "\n");
+    await writeFile("新規.txt", "new\n");
+    const out = await cli(["diff", path]);
+    assertEquals(out.code, 0, out.stderr);
+    const body = await readFile(path.replace(/\.evidence\.json$/, ".gate.diff"), "utf8");
+    assertEquals(body.includes("@@ -1,7 +1,7 @@"), true);
+    assertEquals(out.stdout.split("\n").includes("新規.txt"), true);
+  });
+});
+
+test("diff and materialize replace a hard-linked output instead of writing into the other file", async () => {
+  await fixture(async (path) => {
+    const victim = join(path, "..", "..", "..", "victim-hard.txt");
+    await writeFile(victim, "keep\n");
+    const { link } = await import("node:fs/promises");
+    await link(victim, path.replace(/\.evidence\.json$/, ".gate.diff"));
+    await writeFile("main.txt", "changed\n");
+    assertEquals((await cli(["diff", path])).code, 0);
+    assertEquals(await readFile(victim, "utf8"), "keep\n");
+  });
+});
+
+test("materialize also removes ignored files the breaker wrote, and --remove clears a registration whose directory is gone", async () => {
+  await fixture(async (path) => {
+    await writeFile(".gitignore", "out/\nnode_modules/\n");
+    const dir = path.replace(/\.evidence\.json$/, ".breaker");
+    assertEquals((await cli(["materialize", path])).code, 0);
+    await mkdir(join(dir, "out"), { recursive: true });
+    await writeFile(join(dir, "out", "build.js"), "stale build\n");
+    assertEquals((await cli(["materialize", path])).code, 0);
+    assertEquals(await stat(join(dir, "out")).then(() => true, () => false), false);
+    await rm(dir, { recursive: true, force: true });
+    assertEquals((await cli(["materialize", path, "--remove"])).code, 0);
+    const list = await runCommand("git", ["worktree", "list", "--porcelain"]);
+    assertEquals(list.stdout.includes(".breaker"), false);
+  });
+});

@@ -523,3 +523,154 @@ test("rerun: blocks a sidecar the hook cannot understand (exit 2)", async () => 
     assertStringIncludes(malformed.stderr, "malformed argv");
   });
 });
+
+test("run --red: passes like run and still refuses a denied argv", async () => {
+  await helperFixture(async (_dir, hook) => {
+    const allowed = await hook(`${RUN} --red -- rg -n foo .`);
+    assertEquals(allowed.code, 0, allowed.stderr);
+    const denied = await hook(`${RUN} --red -- git push -f origin main`);
+    assertEquals(denied.code, 2, denied.stderr);
+    assertStringIncludes(denied.stderr, "permissions.deny");
+  });
+});
+
+test("diff and materialize: pass as passive subcommands", async () => {
+  await helperFixture(async (_dir, hook) => {
+    for (
+      const command of [
+        `${HELPER} diff p`,
+        `${HELPER} diff p --from 0123abc --rereview 1`,
+        `${HELPER} materialize p`,
+        `${HELPER} materialize p --remove`,
+      ]
+    ) {
+      const { code, stderr } = await hook(command);
+      assertEquals(code, 0, `${command}: ${stderr}`);
+    }
+  });
+});
+
+// --- breaker-reviewer: a few commands that leave its worktree are refused for it alone ---
+
+async function asAgent(
+  command: string,
+  agent: { agent_id?: string; agent_type?: string },
+): Promise<{ code: number; stderr: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "bash-policy-breaker-"));
+  try {
+    const { code, stderr } = await run(HOOK_SCRIPT, [], {
+      stdin: JSON.stringify({
+        tool_name: "Bash",
+        tool_input: { command },
+        cwd: dir,
+        ...agent,
+      }),
+    });
+    return { code, stderr };
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+}
+
+const BREAKER = { agent_id: "a1", agent_type: "breaker-reviewer" };
+
+for (
+  const command of [
+    "tmux kill-server",
+    "cd /tmp && tmux new-session -d",
+    "launchctl list",
+    "curl https://example.com",
+    "wget https://example.com",
+    `${HELPER} materialize p --remove`,
+  ]
+) {
+  test(`breaker-reviewer: \`${command}\` is refused (exit 2)`, async () => {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+    assertStringIncludes(stderr, "breaker-reviewer");
+  });
+}
+
+for (
+  const command of [
+    "tmux -L replay ls",
+    "tmux -S /tmp/sock new-session -d",
+    "rg -n tmux .",
+  ]
+) {
+  test(`breaker-reviewer: \`${command}\` passes (exit 0)`, async () => {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 0, `expected exit 0, got ${code}. stderr=${stderr}`);
+  });
+}
+
+test("the breaker-only refusal does not apply to the main session or another agent", async () => {
+  for (
+    const agent of [{}, { agent_id: "a2" }, {
+      agent_id: "a3",
+      agent_type: "code-reviewer",
+    }]
+  ) {
+    const { code, stderr } = await asAgent("tmux kill-server", agent);
+    assertEquals(code, 0, `${JSON.stringify(agent)}: ${stderr}`);
+  }
+});
+
+for (
+  const command of [
+    "tmux capture-pane -p -S -",
+    "tmux send-keys -t 0 -- -S Enter",
+    "timeout 5 tmux kill-server",
+    "env FOO=1 tmux kill-server",
+    "command tmux kill-server",
+    "nohup curl https://example.com",
+    "sudo -n launchctl list",
+    "xargs -0 curl",
+    'bash -c "curl https://example.com"',
+  ]
+) {
+  test(`breaker-reviewer: \`${command}\` is refused through its wrapper or subcommand option (exit 2)`, async () => {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 2, `expected exit 2, got ${code}. stderr=${stderr}`);
+  });
+}
+
+test("breaker-reviewer: a private socket given before the tmux subcommand passes", async () => {
+  for (
+    const command of [
+      "tmux -L replay capture-pane -p -S -",
+      "timeout 5 tmux -S /tmp/sock kill-server",
+    ]
+  ) {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 0, `${command}: ${stderr}`);
+  }
+});
+
+test("breaker-reviewer: tmux naming the user's own default socket is refused", async () => {
+  for (
+    const command of [
+      "tmux -L default kill-server",
+      "tmux -S /private/tmp/tmux-501/default kill-server",
+    ]
+  ) {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 2, `${command}: ${stderr}`);
+  }
+});
+
+test("breaker-reviewer: more wrapper options, combined shell flags and a direct plan-state call are refused", async () => {
+  for (
+    const command of [
+      "env -u X tmux kill-server",
+      "env -S 'curl https://example.com'",
+      "xargs -a list.txt curl",
+      "timeout --signal KILL 5 tmux kill-server",
+      "bash -lc 'curl https://example.com'",
+      "/tmp/wt/home/programs/agents/scripts/plan-state.ts review p 1 -- x",
+    ]
+  ) {
+    const { code, stderr } = await asAgent(command, BREAKER);
+    assertEquals(code, 2, `${command}: ${stderr}`);
+  }
+});

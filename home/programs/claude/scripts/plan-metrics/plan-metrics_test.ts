@@ -1379,3 +1379,21 @@ test("CLI --json emits the eight groups plus window, population and unparsed; --
     assertStringIncludes(t.stdout, "window");
   });
 });
+
+test("parseDeepeningLog counts a self-review log of one main review round and its Kind cells", () => {
+  const log = [
+    "### Round 1",
+    "",
+    "Round 1: main review, Critical 2 (form 0 / behavior 1 / user 1); verdicts CONVERGED",
+    "Lint: (none)",
+    "",
+    "| # | Finding | Kind | Action |",
+    "|---|---|---|---|",
+    "| 1 | a caller was missing | behavior | applied |",
+    "| 2 | a scope choice was the user's | user | asked |",
+  ].join("\n");
+  const r = parseDeepeningLog(log);
+  assertEquals(r.rounds, 1);
+  assertEquals(r.kind, { form: 0, behavior: 1, user: 1 });
+  assertEquals(r.round1Veto, false);
+});

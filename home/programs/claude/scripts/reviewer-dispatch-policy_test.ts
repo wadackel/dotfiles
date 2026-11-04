@@ -29,7 +29,8 @@ const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
 test("isReviewerAgent matches the reviewers /gate dispatches", () => {
-  assertEquals(GUARDED.size, 5);
+  assertEquals(GUARDED.size, 6);
+  assertEquals(isReviewerAgent("breaker-reviewer"), true);
   assertEquals(isReviewerAgent("database-reviewer"), true);
   assertEquals(isReviewerAgent("cloud-architecture-reviewer"), true);
   assertEquals(isReviewerAgent("comment-reviewer"), true);
@@ -228,4 +229,20 @@ test("template path and every guarded reviewer exist in the repository", async (
   for (const name of GUARDED) {
     await stat(join(repoRoot, `home/programs/claude/agents/${name}.md`));
   }
+});
+
+const WORKSPACE =
+  "Workspace: write only inside the breaker worktree and your temp directory.";
+
+test("breaker-reviewer needs the verdict rule and the workspace sentence, not the read-only one", async () => {
+  const dispatch = (prompt: string) =>
+    runHook({
+      tool_name: "Agent",
+      tool_input: { subagent_type: "breaker-reviewer", prompt },
+    });
+  assertEquals((await dispatch("break it")).code, 2);
+  const noWorkspace = await dispatch(`${RULE}\n${READ_ONLY}`);
+  assertEquals(noWorkspace.code, 2);
+  assertStringIncludes(noWorkspace.stderr, "workspace sentence");
+  assertEquals((await dispatch(`${RULE}\n${WORKSPACE}`)).code, 0);
 });

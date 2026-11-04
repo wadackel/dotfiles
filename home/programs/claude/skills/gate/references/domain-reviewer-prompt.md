@@ -1,6 +1,6 @@
 # Domain Reviewer Prompt Template
 
-Use this template when dispatching a domain specialist (`database-reviewer`, `cloud-architecture-reviewer`, `comment-reviewer`) or `security-auditor` from `/gate`; language concerns go to `code-reviewer` through its review cards, not to a specialist. Replace `{placeholders}` with actual values.
+Use this template when dispatching a domain specialist (`database-reviewer`, `cloud-architecture-reviewer`) or `security-auditor` from `/gate`; language concerns go to `code-reviewer` through its review cards, not to a specialist. Replace `{placeholders}` with actual values.
 
 One template covers the domain specialists and `security-auditor`. The verdict line is schema-neutral, so the 3-tier (MUST_FIX / SHOULD_FIX / NIT) and 4-tier (CRITICAL / HIGH / MEDIUM / LOW) reviewers both read a rule that applies to them — `security-auditor` carries its own severity table in its agent definition.
 
@@ -30,8 +30,7 @@ Do NOT translate the section headers, severity tags, empty-section sentinels, or
 ## Review target
 
 Repo: {repo_path} (branch {branch})
-Diff: `git diff {baseline_sha}..HEAD`
-Diff file: {diff_path} (the same content as the command above; if Read truncates, continue from the last offset until the end)
+Diff file: {diff_path} (the change under review; if Read truncates, continue from the last offset until the end)
 Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
 
 {review_focus}
@@ -79,10 +78,9 @@ VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and
 |---|---|
 | `{repo_path}` | Absolute path to the repository or worktree under review |
 | `{branch}` | Branch name, or `detached at <sha>` |
-| `{baseline_sha}` | The first task's `baseline_sha` from the evidence sidecar, or the sha given to `--diff-only` |
-| `{diff_path}` | The diff file the gate wrote (`~/.claude/plans/<plan-slug>.gate.diff`) |
-| `{diff_body}` | The diff text for `code-reviewer`, `security-auditor`, and `comment-reviewer`, which have no Bash; `(see Diff file)` for every other specialist |
-| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns. For `comment-reviewer` only, it may end with a fenced `comment-metrics:` block |
+| `{diff_path}` | The diff file the gate wrote (`~/.claude/plans/<plan-slug>.gate.diff` from `plan-state.ts diff`, or the scratchpad file under `--diff-only`) |
+| `{diff_body}` | The diff text for `code-reviewer` and `security-auditor`, which have no Bash; `(see Diff file)` for every other specialist |
+| `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns |
 
 ## Usage
 
@@ -92,4 +90,4 @@ Agent tool:
   prompt: [Template above with placeholders filled]
 ```
 
-Pass only factual data (repo path, diff range, focus). Never pass the main session's summary of what was implemented — the reviewer must judge independently.
+Pass only factual data (repo path, diff file, focus). Never pass the main session's summary of what was implemented — the reviewer must judge independently.

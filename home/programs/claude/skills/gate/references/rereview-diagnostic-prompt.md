@@ -1,12 +1,12 @@
 # Re-review Diagnostic Prompt Template
 
-Use this template for the re-review wave when a reviewer's `FAIL` carried **no** `MUST_FIX` (and no `CRITICAL`, and for Spec & Quality no spec Issue) — only `SHOULD_FIX` / `HIGH` items. Replace `{placeholders}` with actual values.
+Use this template for the one re-review the Claude gate runs: after the main session fixed a reviewer's blocker (`MUST_FIX`, `CRITICAL`, a spec Issue, or a security `HIGH`), the reviewer that reported it gets the fix diff and its previous findings. Replace `{placeholders}` with actual values.
 
 What a fix can break lives mostly inside the fix diff, so this round looks at the fix diff and asks one question: did the fix close the reported findings?
 
-Across 15 recorded SHOULD_FIX-only failures, the full re-review that followed introduced **no new MUST_FIX at all**, and surfaced a new SHOULD_FIX twice. Neither of those two was a defect the fix had caused — both were observations about the original feature diff that the earlier rounds had simply not made. That is what this round trades away: a further draw against code already reviewed, not a check the fix needs.
+When this template covered only SHOULD_FIX-only failures, the full re-reviews it replaced (15 recorded) introduced no new MUST_FIX and surfaced a new SHOULD_FIX twice, both about the original diff rather than the fix. That is what this round trades away: a further draw against code already reviewed, not a check the fix needs.
 
-`MUST_FIX`-bearing failures do not use this template. They re-dispatch a fresh full review, because a fix to a defect of that severity is the case most likely to disturb code the fix diff does not show.
+A fix to a `MUST_FIX` can still disturb code the fix diff does not show, so this round asks the reviewer to read the surrounding code wherever the fix's correctness depends on it.
 
 **Paste the `## Template` block verbatim.** Do not summarise it and do not rewrite the verdict line.
 
@@ -40,8 +40,7 @@ You are verifying a fix, not re-reviewing the feature. A previous review round r
 ## The fix
 
 Repo: {repo_path}
-Fix diff: `git diff {fix_baseline_sha}..HEAD`
-Diff file: {diff_path}
+Diff file: {diff_path} (the fix alone: from the working tree at the previous dispatch to the current one)
 Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.
 
 {fix_diff}
@@ -59,9 +58,9 @@ Read the fix diff in full and, where the fix's correctness depends on surroundin
 
 If the fix diff itself introduces a **new** `MUST_FIX` (or `CRITICAL`) defect, or a new spec Issue (MISSING / EXTRA / MISUNDERSTOOD / INCOMPLETE, reported under `### Must Fix` prefixed with its type), report it under `### Must Fix`, return `VERDICT: FAIL`, and add this line verbatim to `### Notes`:
 
-  ESCALATE: fix introduced a new blocker — switch to a full re-review
+  ESCALATE: fix introduced a new blocker
 
-The main session reads that line and re-dispatches a full review instead of another diagnostic round.
+The main session counts that line as a FAIL; the gate's round budget is then spent, so the main session takes the blocker through the gate's closing pass and it is not re-reviewed.
 
 New findings below blocker severity that you notice inside the fix diff go under `### Nits`. Do not escalate for those. A problem you notice in code the fix did not touch, which was there before this change, goes under `### Notes` marked `pre-existing`: it never fails this round.
 
@@ -88,9 +87,8 @@ VERDICT: [PASS if every previous finding is CLOSED and the fix introduced no MUS
 |---|---|
 | `{original_findings}` | The blocker-severity findings from the previous round, verbatim |
 | `{repo_path}` | Absolute path to the repository or worktree |
-| `{fix_baseline_sha}` | HEAD as of immediately before the fix was applied |
-| `{fix_diff}` | Output of `git diff {fix_baseline_sha}..HEAD` |
-| `{diff_path}` | `~/.claude/plans/<plan-slug>.rereview-<n>.gate.diff` — the fix diff written by the main session before the re-review wave; it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
+| `{fix_diff}` | The content of `{diff_path}` |
+| `{diff_path}` | `~/.claude/plans/<plan-slug>.rereview-<n>.gate.diff`, written by `plan-state.ts diff <plan> --from <tree printed at the previous dispatch> --rereview <n>`; it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
 
 ## Usage
 

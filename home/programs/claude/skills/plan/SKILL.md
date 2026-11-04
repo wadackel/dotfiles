@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Design-first entrypoint for implementation work. Agrees on direction with the user, writes a plan file that /impl executes, and sizes the process to the request (trivial work is done inline without a plan file). Use for "/plan <request>", "計画して", "設計してから実装して", or any implementation request that is not a pure question.
-argument-hint: "[feature description] [--max-rounds=N]"
+argument-hint: "[feature description]"
 disable-model-invocation: true
 ---
 
@@ -11,14 +11,14 @@ Read `references/interview.md` before the first question and `references/contrac
 
 ## PARSE
 
-Strip a `--max-rounds=N` token (DEEPEN cap). Restate the request in one sentence for yourself; it is carried into A1's question, never emitted alone. Estimate complexity with a few Grep/Glob probes and remember what you probed:
+Restate the request in one sentence for yourself; it is carried into A1's question, never emitted alone. Estimate complexity with a few Grep/Glob probes and remember what you probed:
 
 | Level | Signals | Process |
 |---|---|---|
 | trivial | typo, comment, one config value, one-line edit | no plan file: A1, then implement inline, verify, `/gate --diff-only` |
-| small | one addition along an existing pattern, 1–3 files | plan file, one question turn, one critic round |
-| medium | multi-file feature on existing conventions | plan file, interview as needed, critic + adversarial |
-| large | cross-cutting change, new architectural piece | as medium, up to five critic rounds with `--max-rounds` |
+| small | one addition along an existing pattern, 1–3 files | plan file, one question turn, one self-review |
+| medium | multi-file feature on existing conventions | plan file, interview as needed, one self-review |
+| large | cross-cutting change, new architectural piece | as medium |
 | xl | several subsystems | ask first whether to split into independent projects |
 
 If the request cannot be restated in one sentence, ask a clarifying question in the interview format before anything else.
@@ -51,9 +51,15 @@ Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` li
 
 ## DEEPEN
 
-Skipped for trivial. Dispatch the critic (`Agent({subagent_type: "Plan", model: "opus"})` with `references/critic-prompt.md`) and, for medium and above unless the plan is doc-only, the adversarial agent (`subagent_type: "Explore"`, `references/adversarial-prompt.md`) in one message, both unnamed. Name the prompt file in the dispatch and let the subagent read it: the subagent reads its own prompt file, so the main session neither reads nor pastes it (its 23 KB went unused in 40 of 50 measured runs); triage needs only the output form in `contract.md`. When no adversarial agent is dispatched, tell the critic it is the only falsifier of the run. Rounds: one by default; a Round 1 `ITERATE` from the Test Coverage veto earns one more round; `--max-rounds=N` allows up to N rounds (at most five) when the planner judges a revision needs re-review, regardless of the verdict. Log each round to `<plan>.log.md` in the fixed form of `contract.md` (the `Round N: critic` line, a `Lint:` line, and the `| # | Finding | Kind | Action |` table).
+Skipped for trivial. Read the plan once as its own reviewer; no subagent is dispatched. Independent plan reviewers cost a wait of several minutes per plan, and a blind replay of the hardest defects they had caught found the same defects in plans written with no reviewer at all; what they still miss surfaces in `/impl`'s checks and in `/gate`. Check, in this order:
 
-Triage every finding, including those attached to `CONVERGED`: apply it inline with a `-- Why:` note, queue a User decision (`interview.md`) for the user, or reject it against a prior user decision. Edit the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Read the plan once for over-engineering and mark suspects `<!-- over-eng? -->` without deleting. Then ask the queued items, one turn per dependency level per `interview.md`.
+- Every claim the Approach relies on carries its `source:`, and its excerpt says what the plan claims.
+- Every behavior the change alters has an Autonomous Verification bullet that fails without the change, and a `[live]` one when the user can see it.
+- Every entry point or caller of a changed behavior is named, and special inputs and states are covered: special names and values, repeats, concurrency, failure and partial failure, waits without an end, a different run environment (launchd, cron, a non-interactive shell, CI).
+- No decision only the user can make was settled here: `user-overridden: default` is for scope boundaries only.
+- Over-engineering: mark suspects `<!-- over-eng? -->` without deleting.
+
+Fix what you find in the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`, and queue a User decision (`interview.md`) for what only the user can settle. Log the round to `<plan>.log.md` in the fixed form of `contract.md`: `### Round 1`, the contract's `Round N: main review` line as `Round 1: main review, Critical <n> (form <f> / behavior <b> / user <u>); verdicts CONVERGED`, a `Lint:` line, and the `| # | Finding | Kind | Action |` table with one row per fix. Then ask the queued items, one turn per dependency level per `interview.md`.
 
 ## DECOMPOSE
 

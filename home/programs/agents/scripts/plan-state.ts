@@ -27,15 +27,20 @@ import {
   type Check,
   check,
   executeArgv,
+  materializeWorktree,
   plansDirs,
   repository,
+  removeWorktree,
   type Requirement,
   requirements,
   resolveEvidencePath,
   runGit,
   type Snapshot,
   splitRunArgs,
+  treeDiff,
   truncateOutput,
+  workingTree,
+  replaceFile,
 } from "./plan-evidence.ts";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
@@ -55,6 +60,8 @@ export interface PlanEvidence {
   tasks: PlanTask[];
   version?: 2;
   repository?: string;
+  /** The working tree when the repository was bound: `diff` starts here, so changes left uncommitted before the plan stay out of its gate. */
+  baseline_tree?: string;
 }
 
 const FINAL_TASK_SUBJECT = "Final Audit + Review";
@@ -95,11 +102,14 @@ function usage(): never {
       "  plan-state.ts snapshot <path>",
       "  plan-state.ts reconcile <path>",
       "  plan-state.ts coverage <path>",
-      "  plan-state.ts run <path> <task-id> <check-id> [--expect-exit N] [--tail N] [--grep RE] [--env K=V]... [--cwd DIR] [--expect-unchanged] -- <command> [args...]",
+      "  plan-state.ts run <path> <task-id> <check-id> [--expect-exit N | --red] [--tail N] [--grep RE] [--env K=V]... [--cwd DIR] [--expect-unchanged] -- <command> [args...]",
       "      snapshot, execute the command without a shell, snapshot again, record (file-state / orchestrator-only checks only)",
       "      starts a pending task, and declares an undeclared cc-<n> with the kind of the plan's n-th Autonomous Verification bullet",
+      "      --red: passes on a failing exit before the source change; a red record never verifies, and rerun replays it green",
+      "  plan-state.ts diff <path> [--from <tree-or-commit>] [--rereview <n>]   # writes <plan>.gate.diff (or .rereview-<n>.gate.diff) from the start tree to the working tree",
+      "  plan-state.ts materialize <path> [--before | --remove]   # fills <plan>.breaker, a worktree with the working tree (or the start tree), or removes it",
       "  plan-state.ts review <path> <wave> -- <reviewer>...   # verdict on stdin: starts the final task, declares review-<wave>, records it",
-      "  plan-state.ts rerun <path>       # re-execute every recorded argv whose target is stale or whose status is fail",
+      "  plan-state.ts rerun <path>       # re-execute every recorded argv whose target is stale, whose status is fail, or whose latest record is red",
       "",
       'require stdin: [{"id":"cc-1","kind":"file-state|orchestrator-only|live|audit|review","expected":{"file":"path"}|{"git_head":true}|{"identity":"name"}}]',
       'record stdin:  {"id":"cc-1","status":"pass|fail|blocked|waived","target":"<snapshot output>","command":"<what ran>","output":"<raw output>","expected":"<digest or identity>","observed":"<digest or identity>","authorization":"<quoted user waiver>"}',
@@ -194,6 +204,13 @@ function normalizeTask(value: unknown, index: number): PlanTask {
     ? obj.id
     : taskId(index);
   const baseline = obj.baseline_sha;
+  // It reaches git as a revision, from a file anything can rewrite unprompted.
+  if (
+    typeof baseline === "string" && baseline.length > 0 &&
+    !/^[0-9a-f]{40,64}$/.test(baseline)
+  ) {
+    throw new Error(`task ${index + 1}: baseline_sha must be a commit id`);
+  }
   const task: PlanTask = {
     id,
     subject,
@@ -252,6 +269,15 @@ export function normalizePlanEvidence(raw: unknown): PlanEvidence {
       throw new Error("repository must be absolute");
     }
     data.repository = obj.repository;
+  }
+  if (obj.baseline_tree !== undefined) {
+    if (
+      typeof obj.baseline_tree !== "string" ||
+      !/^[0-9a-f]{40,64}$/.test(obj.baseline_tree)
+    ) {
+      throw new Error("baseline_tree must be a tree id");
+    }
+    data.baseline_tree = obj.baseline_tree;
   }
   return data;
 }
@@ -353,11 +379,17 @@ async function readPlan(path: string, data: PlanEvidence): Promise<string> {
 }
 
 /** Binds the repository on the first start (from the cwd), records the baseline once, and marks the task in progress. */
-async function startTask(data: PlanEvidence, task: PlanTask): Promise<void> {
-  const root = data.repository ?? await repository();
-  data.repository = root;
+async function startTask(
+  path: string,
+  data: PlanEvidence,
+  task: PlanTask,
+): Promise<void> {
+  if (!data.repository) {
+    data.repository = await repository();
+    data.baseline_tree = await workingTree(path, data.repository);
+  }
   data.version = 2;
-  task.baseline_sha ??= await currentGitHead(root);
+  task.baseline_sha ??= await currentGitHead(data.repository);
   task.status = "in_progress";
 }
 
@@ -525,7 +557,9 @@ async function runCheck(args: string[]): Promise<number> {
     await withLock(path, async () => {
       const fresh = await readEvidence(path);
       const freshTask = findTask(fresh, parsed.task);
-      if (freshTask.status === "pending") await startTask(fresh, freshTask);
+      if (freshTask.status === "pending") {
+        await startTask(path, fresh, freshTask);
+      }
       if (!freshTask.required?.some((r) => r.id === required.id)) {
         (freshTask.required ??= []).push(required);
       }
@@ -540,8 +574,11 @@ async function runCheck(args: string[]): Promise<number> {
   const result = await executeArgv({ argv: parsed.argv, cwd, env: parsed.env });
   const after = await artifactSnapshot(path, data);
   const mutated = await changedPaths(path, before.tree, after.tree, root);
-  const passed = result.exit === parsed.expectExit &&
-    !(parsed.expectUnchanged && mutated.length > 0);
+  // 127 is a command that never started, which proves nothing about the change.
+  const passed = parsed.red
+    ? result.exit !== 0 && result.exit !== 127
+    : result.exit === parsed.expectExit &&
+      !(parsed.expectUnchanged && mutated.length > 0);
   const { text, truncated } = truncateOutput(result.output);
   const record: Check = {
     id: parsed.id,
@@ -553,9 +590,10 @@ async function runCheck(args: string[]): Promise<number> {
     argv: parsed.argv,
     cwd,
     exit: result.exit,
-    expectExit: parsed.expectExit,
     durationMs: result.durationMs,
   };
+  if (parsed.red) record.red = true;
+  else record.expectExit = parsed.expectExit;
   if (Object.keys(parsed.env).length) record.env = parsed.env;
   if (parsed.expectUnchanged) record.expectUnchanged = true;
   if (mutated.length) record.mutated = mutated;
@@ -577,7 +615,11 @@ async function runCheck(args: string[]): Promise<number> {
   });
   console.log(
     `${record.status} ${parsed.id} exit=${result.exit}${
-      parsed.expectExit !== 0 ? ` (expected ${parsed.expectExit})` : ""
+      parsed.red
+        ? " (red)"
+        : parsed.expectExit !== 0
+        ? ` (expected ${parsed.expectExit})`
+        : ""
     } ${result.durationMs}ms mutated=${mutated.length}${
       mutated.length ? ` ${mutated.join(" ")}` : ""
     }`,
@@ -632,7 +674,10 @@ async function rerunChecks(path: string): Promise<number> {
           exit: "-",
           mutated: 0,
         });
-      } else if (latest.target === current.target && latest.status === "pass") {
+      } else if (
+        latest.target === current.target && latest.status === "pass" &&
+        !latest.red
+      ) {
         rows.push({
           task: task.id,
           check: required.id,
@@ -645,7 +690,7 @@ async function rerunChecks(path: string): Promise<number> {
           latest.argv,
           latest.cwd,
           latest.env ?? {},
-          latest.expectExit ?? 0,
+          latest.red ? 0 : latest.expectExit ?? 0,
           latest.expectUnchanged ?? false,
         ]);
         const group = groups.get(key) ?? { record: latest, members: [] };
@@ -660,7 +705,8 @@ async function rerunChecks(path: string): Promise<number> {
     const root = await assertRepository(data);
     const cwd = previous.cwd ? await realpath(previous.cwd) : root;
     const env = previous.env ?? {};
-    const expectExit = previous.expectExit ?? 0;
+    // A red record is replayed green: the fix is what the rerun checks.
+    const expectExit = previous.red ? 0 : previous.expectExit ?? 0;
     const expectUnchanged = previous.expectUnchanged ?? false;
     await assertArgvPermitted({ argv, env, cwd, root });
     const before = await artifactSnapshot(path, data);
@@ -768,7 +814,7 @@ async function execute(
     const data = await readEvidence(path);
     const task = findTask(data, taskOrPlan);
     const notices = await closeEarlier(path, data, data.tasks.indexOf(task));
-    await startTask(data, task);
+    await startTask(path, data, task);
     await atomicWrite(path, data);
     for (const notice of notices) console.log(notice);
     console.log(`baseline=${task.baseline_sha}`);
@@ -801,7 +847,7 @@ async function execute(
       output,
     }, required);
     const notices = await closeEarlier(path, data, data.tasks.length - 1);
-    if (final.status !== "in_progress") await startTask(data, final);
+    if (final.status !== "in_progress") await startTask(path, data, final);
     const existing = final.required?.find((r) => r.id === required.id);
     if (existing && existing.kind !== "review") {
       throw new Error("cannot change required check kind");
@@ -939,6 +985,9 @@ async function execute(
     if (!path || !taskOrPlan) usage();
     const data = await readEvidence(path);
     const task = findTask(data, taskOrPlan);
+    if (command === "require" && task.status === "pending") {
+      await startTask(path, data, task);
+    }
     await assertRepository(data);
     const value = JSON.parse(await new Response(stdin).text());
     if (command === "require") {
@@ -979,6 +1028,72 @@ async function execute(
     }
     await atomicWrite(path, data);
     console.log(`${command} ${taskOrPlan}`);
+    return;
+  }
+
+  if (command === "diff") {
+    if (!path) usage();
+    const options = args.slice(2);
+    let from: string | undefined;
+    let rereview: string | undefined;
+    for (let i = 0; i < options.length; i += 2) {
+      const [name, value] = [options[i], options[i + 1]];
+      if (name === "--from" && value && /^[0-9a-f]{7,64}$/.test(value)) {
+        from = value;
+      } else if (
+        name === "--rereview" && value && /^[1-9][0-9]*$/.test(value)
+      ) {
+        rereview = value;
+      } else usage();
+    }
+    const data = await readEvidence(path);
+    const root = await assertRepository(data);
+    if (!from && data.baseline_tree) from = data.baseline_tree;
+    if (!from) {
+      from = data.tasks.find((t) => t.baseline_sha)?.baseline_sha ?? undefined;
+      if (!from) throw new Error("no baseline recorded; start a task first");
+      console.error(
+        `warning: the sidecar has no baseline_tree; diffing from baseline_sha ${from}, which also shows changes left uncommitted before the start`,
+      );
+    }
+    const current = await artifactSnapshot(path, data);
+    const out = path.replace(
+      /\.evidence\.json$/,
+      rereview ? `.rereview-${rereview}.gate.diff` : ".gate.diff",
+    );
+    const range = { path, root, from, to: current.tree };
+    await replaceFile(out, await treeDiff(range));
+    const names = await treeDiff({ ...range, nameOnly: true });
+    console.log(`wrote ${out}`);
+    console.log(`tree ${current.tree}`);
+    for (const name of names.split("\0").filter(Boolean)) console.log(name);
+    return;
+  }
+
+  if (command === "materialize") {
+    if (!path) usage();
+    const flag = args[2];
+    if (
+      args.length > 3 ||
+      (flag !== undefined && flag !== "--before" && flag !== "--remove")
+    ) {
+      usage();
+    }
+    const data = await readEvidence(path);
+    const root = await assertRepository(data);
+    if (flag === "--remove") {
+      console.log(`removed ${await removeWorktree(path, root)}`);
+      return;
+    }
+    const base = data.tasks.find((t) => t.baseline_sha)?.baseline_sha;
+    if (!base) throw new Error("no baseline recorded; start a task first");
+    const tree = flag === "--before"
+      ? data.baseline_tree ?? base
+      : (await artifactSnapshot(path, data)).tree;
+    console.log(
+      `worktree ${await materializeWorktree({ path, root, baseSha: base, tree })}`,
+    );
+    console.log(`tree ${tree}`);
     return;
   }
 

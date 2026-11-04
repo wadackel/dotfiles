@@ -6,12 +6,15 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
+  symlink,
   utimes,
+  writeFile,
 } from "node:fs/promises";
 import { constants as osConstants, homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { PlanEvidence, PlanTask } from "./plan-state.ts";
 
 export interface Requirement {
@@ -40,6 +43,8 @@ export interface Check {
   durationMs?: number;
   mutated?: string[];
   truncated?: boolean;
+  /** `run --red`: the check failed before the source change, as the plan asked; it never verifies a task. */
+  red?: boolean;
 }
 
 const KINDS = new Set([
@@ -74,6 +79,7 @@ export interface RunArgs {
   env: Record<string, string>;
   cwd: string | null;
   expectUnchanged: boolean;
+  red: boolean;
   argv: string[];
 }
 
@@ -98,8 +104,10 @@ export function splitRunArgs(tokens: string[]): RunArgs {
     env: {},
     cwd: null,
     expectUnchanged: false,
+    red: false,
     argv: [],
   };
+  let expectExitGiven = false;
   let i = 0;
   const value = (name: string): string => {
     const v = rest[i + 1];
@@ -122,6 +130,7 @@ export function splitRunArgs(tokens: string[]): RunArgs {
           throw new Error("--expect-exit needs an integer 0-255");
         }
         args.expectExit = n;
+        expectExitGiven = true;
         break;
       }
       case "--tail": {
@@ -164,6 +173,10 @@ export function splitRunArgs(tokens: string[]): RunArgs {
         args.expectUnchanged = true;
         i += 1;
         break;
+      case "--red":
+        args.red = true;
+        i += 1;
+        break;
       default:
         throw new Error(
           `unknown run option ${token}; options end at -- <command>`,
@@ -172,6 +185,12 @@ export function splitRunArgs(tokens: string[]): RunArgs {
   }
   if (args.argv.length === 0) {
     throw new Error("run needs `-- <command> [args…]` after the options");
+  }
+  if (args.red && expectExitGiven) {
+    throw new Error("--red and --expect-exit cannot be combined");
+  }
+  if (args.red && args.expectUnchanged) {
+    throw new Error("--red and --expect-unchanged cannot be combined");
   }
   for (const word of args.argv) {
     if (word.slice(word.lastIndexOf("/") + 1) === "plan-state.ts") {
@@ -490,6 +509,7 @@ export const HELPER_FIELDS = [
   "durationMs",
   "mutated",
   "truncated",
+  "red",
 ] as const;
 
 function helperField(
@@ -523,6 +543,7 @@ function helperField(
       return value as never;
     case "expectUnchanged":
     case "truncated":
+    case "red":
       if (typeof value !== "boolean") {
         throw new Error(`${key} must be a boolean`);
       }
@@ -747,6 +768,29 @@ export async function artifactSnapshot(
   if (!planInfo.isFile() || planInfo.isSymbolicLink()) {
     throw new Error("plan must be a regular file");
   }
+  const tree = await workingTree(path, root);
+  const target = await digest(JSON.stringify([
+    root,
+    tree,
+    await realpath(planPath),
+    await digest(await readFile(planPath)),
+  ]));
+  return { target, tree, root };
+}
+
+// The repository's hooks, fsmonitor and LFS smudge never run from here: a
+// review copy must not execute code the change under review could define,
+// and a snapshot of a temp index must not fire post-index-change.
+const QUIET_GIT = [
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "core.hooksPath=/dev/null",
+  "--no-optional-locks",
+];
+
+/** The tree OID of the working tree alone, without the plan: `start` records it before a plan file may exist. */
+export async function workingTree(path: string, root: string): Promise<string> {
   const tmp = await mkdtemp(join(tmpdir(), "plan-evidence-index-"));
   try {
     const index = join(tmp, "index");
@@ -765,16 +809,7 @@ export async function artifactSnapshot(
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
     }
     const env = await gitEnv(path, root, index);
-    // hooksPath is pointed at nothing so a repository's post-index-change
-    // hook does not run on every snapshot of its temp index.
-    const scan = [
-      "-c",
-      "core.fsmonitor=false",
-      "-c",
-      "core.hooksPath=/dev/null",
-      "--no-optional-locks",
-    ];
-    const add = await runGit([...scan, "add", "-A", "."], root, env);
+    const add = await runGit([...QUIET_GIT, "add", "-A", "."], root, env);
     if (!add.success) {
       const stderr = add.stderr.trim();
       if (
@@ -786,21 +821,14 @@ export async function artifactSnapshot(
       }
       throw new Error(`git add -A failed: ${stderr}`);
     }
-    const stage = await git(["ls-files", "--stage", "-z"], root, env);
+    const stage = await git([...QUIET_GIT, "ls-files", "--stage", "-z"], root, env);
     for (const line of stage.split("\0").filter(Boolean)) {
       if (line.startsWith("160000 ")) {
         const name = line.slice(line.indexOf("\t") + 1);
         throw new Error(`cannot fingerprint non-file or submodule: ${name}`);
       }
     }
-    const tree = (await git(["write-tree"], root, env)).trim();
-    const target = await digest(JSON.stringify([
-      root,
-      tree,
-      await realpath(planPath),
-      await digest(await readFile(planPath)),
-    ]));
-    return { target, tree, root };
+    return (await git([...QUIET_GIT, "write-tree"], root, env)).trim();
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -907,12 +935,205 @@ export async function changedPaths(
 ): Promise<string[]> {
   if (before === after) return [];
   const result = await runGit(
-    ["diff-tree", "--name-only", "-r", before, after],
+    ["diff-tree", "--name-only", "-r", "--end-of-options", before, after],
     root,
     await gitEnv(path, root),
   );
   if (!result.success) return [];
   return result.stdout.split("\n").filter(Boolean);
+}
+
+const NO_SMUDGE = { GIT_LFS_SKIP_SMUDGE: "1" };
+
+/** A unified diff between two recorded trees (or commits), whatever the repository's diff settings say. */
+export async function treeDiff(
+  opts: {
+    path: string;
+    root: string;
+    from: string;
+    to: string;
+    nameOnly?: boolean;
+  },
+): Promise<string> {
+  const { path, root, from, to, nameOnly = false } = opts;
+  return await git([
+    ...QUIET_GIT,
+    "diff",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--no-relative",
+    "--no-renames",
+    "--unified=3",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+    ...(nameOnly ? ["--name-only", "-z"] : []),
+    "--end-of-options",
+    from,
+    to,
+  ], root, await gitEnv(path, root));
+}
+
+async function exists(path: string): Promise<boolean> {
+  return await lstat(path).then(() => true, () => false);
+}
+
+export function breakerDir(path: string): string {
+  return path.replace(/\.evidence\.json$/, ".breaker");
+}
+
+const OBJECT_ID = /^[0-9a-f]{40,64}$/;
+
+/**
+ * Replaces `path` with a new file and a rename: everything under the plans
+ * directory can be rewritten without a prompt, and opening the old name would
+ * write through a symlink or a hard link planted there into another file.
+ */
+export async function replaceFile(path: string, data: string): Promise<void> {
+  const slash = path.lastIndexOf("/");
+  const tmp = `${path.slice(0, slash)}/.${path.slice(slash + 1)}.${crypto.randomUUID()}.tmp`;
+  await writeFile(tmp, data, { flag: "wx", mode: 0o644 });
+  try {
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+
+/**
+ * The registered path of the breaker worktree, or null when `dir` is anything
+ * else. `dir` itself must be a real directory: resolving it as a whole would
+ * let a symlink there pass for whichever worktree it points at.
+ */
+async function breakerWorktree(root: string, dir: string): Promise<string | null> {
+  const info = await lstat(dir).catch(() => null);
+  if (info && (info.isSymbolicLink() || !info.isDirectory())) return null;
+  const canonical = join(await realpath(dirname(dir)), basename(dir));
+  const linked = (await git(["worktree", "list", "--porcelain"], root))
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length))
+    .slice(1);
+  return [dir, canonical].find((p) => linked.includes(p)) ?? null;
+}
+
+async function readMarker(marker: string): Promise<string | null> {
+  const text = (await readFile(marker, "utf8").catch(() => "")).trim();
+  if (!text) return null;
+  if (!OBJECT_ID.test(text)) {
+    throw new Error(
+      `${marker} is not a tree id; run materialize --remove and fill it again`,
+    );
+  }
+  return text;
+}
+
+/**
+ * Fills the plan's breaker worktree with `tree`. The worktree's own index stays
+ * at `baseSha`, so `git status` inside shows the change and never needs a blob
+ * that lives only in `<plan>.objects`; the files are switched through a
+ * temporary index holding the previous fill, and git itself removes what the
+ * new tree lacks, refusing to follow a directory replaced by a symlink.
+ */
+export async function materializeWorktree(
+  opts: { path: string; root: string; baseSha: string; tree: string },
+): Promise<string> {
+  const { path, root, baseSha, tree } = opts;
+  const dir = breakerDir(path);
+  if (await exists(dir)) {
+    if (!(await breakerWorktree(root, dir))) {
+      throw new Error(`${dir} exists and is not the breaker worktree`);
+    }
+  } else {
+    // -f: a worktree registered here whose directory is gone is ours to reuse.
+    await git([
+      ...QUIET_GIT,
+      "worktree",
+      "add",
+      "-f",
+      "--detach",
+      "--no-checkout",
+      "--end-of-options",
+      dir,
+      baseSha,
+    ], root, NO_SMUDGE);
+    await git(
+      [...QUIET_GIT, "read-tree", "--end-of-options", baseSha],
+      dir,
+      NO_SMUDGE,
+    );
+  }
+  const marker = `${dir}.tree`;
+  const previous = await readMarker(marker);
+  const tmp = await mkdtemp(join(tmpdir(), "plan-evidence-fill-"));
+  try {
+    const env = {
+      ...(await gitEnv(path, root, join(tmp, "index"))),
+      ...NO_SMUDGE,
+    };
+    if (previous) {
+      await git(
+        [...QUIET_GIT, "read-tree", "--end-of-options", previous],
+        root,
+        env,
+      );
+    }
+    await git([
+      ...QUIET_GIT,
+      `--work-tree=${dir}`,
+      "read-tree",
+      "--reset",
+      "-u",
+      "--end-of-options",
+      tree,
+    ], root, env);
+    // What the breaker wrote inside goes too, ignored build output and nested
+    // repositories included, so a re-run sees the tree alone; the node_modules
+    // link is the one entry that stays.
+    await git([
+      ...QUIET_GIT,
+      `--work-tree=${dir}`,
+      "clean",
+      "-f",
+      "-f",
+      "-d",
+      "-x",
+      "-q",
+      "-e",
+      "/node_modules",
+    ], root, env);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  await replaceFile(marker, `${tree}\n`);
+  const modules = join(root, "node_modules");
+  const link = join(dir, "node_modules");
+  if (
+    await lstat(modules).then((info) => info.isDirectory(), () => false) &&
+    !(await exists(link))
+  ) {
+    await symlink(modules, link);
+  }
+  return dir;
+}
+
+export async function removeWorktree(path: string, root: string): Promise<string> {
+  const dir = breakerDir(path);
+  // A registration whose directory is gone is removed too, by its own path,
+  // instead of a repository-wide prune that would drop other worktrees.
+  const registered = await breakerWorktree(root, dir);
+  if (await exists(dir) && !registered) {
+    throw new Error(`${dir} exists and is not the breaker worktree`);
+  }
+  if (registered) {
+    await git(
+      [...QUIET_GIT, "worktree", "remove", "--force", registered],
+      root,
+    );
+  }
+  await rm(`${dir}.tree`, { force: true });
+  return dir;
 }
 
 export async function assertVerified(
@@ -946,6 +1167,9 @@ export async function assertVerified(
     }
     if (record.status !== "pass" && record.status !== "waived") {
       throw new Error(`${task.id}/${required.id}: ${record.status}`);
+    }
+    if (record.red) {
+      throw new Error(`${task.id}/${required.id}: red only; run it green`);
     }
     if (record.status === "waived" && !record.authorization) {
       throw new Error("waiver missing authorization");

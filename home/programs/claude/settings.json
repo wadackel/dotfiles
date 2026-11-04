@@ -38,6 +38,8 @@
       "Bash(*/.agents/scripts/plan-state.ts complete *)",
       "Bash(*/.agents/scripts/plan-state.ts reconcile *)",
       "Bash(*/.agents/scripts/plan-state.ts review *)",
+      "Bash(*/.agents/scripts/plan-state.ts diff *)",
+      "Bash(*/.agents/scripts/plan-state.ts materialize *)",
       "Bash(*home/programs/agents/scripts/plan-state_test.ts*)",
       "Bash(*/.agents/scripts/vocab.ts*)",
       "Bash(*home/programs/agents/scripts/vocab-lib_test.ts*)",
