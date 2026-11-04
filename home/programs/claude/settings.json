@@ -85,6 +85,7 @@
       "Bash(brew tap-info *)",
       "Bash(brotli *)",
       "Bash(buck2 *)",
+      "Bash(buf breaking *)",
       "Bash(buf generate *)",
       "Bash(bun *)",
       "Bash(cargo *)",

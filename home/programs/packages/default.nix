@@ -42,6 +42,11 @@
     dive # Docker image layer analyzer
     cloudflared # Cloudflare Tunnel client
 
+    # KnowledgeWork kaioken (local dev environment)
+    process-compose # Process supervisor
+    caddy # Shared router in front of the local services
+    postgresql # psql, used by popo and for inspecting the local DB
+
     # Media Processing
     ffmpeg # Complete solution to record, convert and stream audio and video
     imagemagick # Image manipulation tool
