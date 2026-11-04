@@ -1,4 +1,4 @@
 interface:
   display_name: "Kindle Notes"
-  short_description: "Kindleの選択色ハイライトを引用し、周辺の要約を読書ノートへ追記"
-  default_prompt: "$kindle-notes 指定した本の赤いハイライトを引用し、周辺内容の要約をObsidianの読書ノートへ追記して。"
+  short_description: "Kindleのハイライトと直下の補足、対象章全文に基づく要約calloutを読書ノートへ追記"
+  default_prompt: "$kindle-notes 指定した本の赤いハイライトを引用し、各引用の直下に前後の本文の補足を箇条書きで添えて、対象章の全文を読んだ章要約calloutを章見出し直下に追加して。ページ数表記は省いて。"
