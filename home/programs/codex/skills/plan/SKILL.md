@@ -111,6 +111,10 @@ Agree on purpose, constraints, acceptance criteria, and any consequential approa
 - **A6 Visual support**: use available visual tools when useful within the user's authorized scope; ask only for an actual missing decision or permission.
 - **A7 Direction statement** (not a gate): emit `Proceeding with: <one-sentence direction>` and advance to EXPLORE. Do not ask for another OK.
 
+**Delivery** (decided, not asked). Infer how far `$impl` ships into `## Delivery` (`references/contract.md`), from these signals, strongest first: a PR or stack already shipped in this conversation; shipping words in the user's answers ("gh-stackを使って", "PRを分割しよう"); shipping words in the request ("PR まで", "mergeまで", "draft で"); a rule in the repository's `AGENTS.md` / `CLAUDE.md`. An issue URL or "対応を進めたい" alone is not a signal. With no signal, `Level: none` and `Basis: no signal`. Two or more PRs make `Level: stack`. `Merge: yes` only on a merge word or a Verification Grant, never from habit, and it raises `Level` to at least `pr`. `Draft: yes` unless the words say otherwise or `Merge: yes`. `Via` is a repository PR skill when one is listed, else `$create-pr` for `pr` and `$gh-stack` for `stack`; `none` below `pr`.
+
+**Verification Grants** (one question). Verification runs on its own on the local machine and in dev environments: start a server or watcher in the background, drive a TUI in a tmux pane, open pages with `$agent-browser` (signed in through `abr`), write test data in dev, and watch the CI and preview of a PR the Delivery opens. When the change can only be observed outside that (no dev environment and a merge deploys to production, a production-only integration), ask once, before DRAFT, listing each operation in the line form the plan records (`- <operation> / Env: <environment> / Undo: <how to undo>`), and write the granted ones under `## Verification Grants`; `- None` otherwise. Deleting shared resources and anything that notifies people stay outside every grant unless listed by name.
+
 AGREE produces three subsections that get written into the plan body (preserving the downstream Critic parse contract): `### Assumptions`, `### Self-resolved`, `### Unresolved Items`. See `### AGREE output` below.
 
 If the user changes direction mid-AGREE, go back to A3 and restart the approach list. No penalty for revisiting.
@@ -183,14 +187,14 @@ Write the plan body to `~/.codex/plans/YYYYMMDDTHHmm-<slug>.md`. The slug comes 
 
 - Skill instruction prose in this file is English.
 - User-facing generated output remains in the user's configured language. In this repository, that means Japanese unless the user asks otherwise.
-- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, and `## Completion Criteria`.
+- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Delivery`, `## Verification Grants`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, and `## Completion Criteria`.
 - Machine-consumed contents, including `## Completion Criteria` subsections and Acceptance Criteria lines, are English.
 - AGREE-output subsection headings are fixed English: `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`.
 - File paths, commands, and `EXPECT:` values stay as-is.
 
 ### Required sections (complexity-gated)
 
-Plan body section contract (14 headers; Claude 12-row base plus Codex-specific `Verification Commands` and `Definition of Done`):
+Plan body section contract (16 headers; the shared 14-row base plus Codex-specific `Verification Commands` and `Definition of Done`):
 
 | Section | trivial | small | medium+ |
 |---|---|---|---|
@@ -198,6 +202,8 @@ Plan body section contract (14 headers; Claude 12-row base plus Codex-specific `
 | Overview |   | ✓ | ✓ |
 | Approach (incl. Alternatives Considered) |   | ✓ | ✓ |
 | NOT Building |   | ✓ | ✓ |
+| Delivery (Level / Draft / Merge / Via / Basis) | ✓ | ✓ | ✓ |
+| Verification Grants |   | ✓ | ✓ |
 | Mandatory Reading (P0/P1/P2 × file:lines × why) |   |   | ✓ |
 | Patterns to Mirror (SOURCE: file:lines + snippet) |   |   | ✓ |
 | Intentional Conventions (when applicable) |   |   | ✓ |
@@ -238,7 +244,7 @@ Tag every Autonomous Verification item at every complexity, trivial included (`$
 
 When unsure, default to `[orchestrator-only]`.
 
-A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification. Codex `$impl` gates on `[live]`, including required user observations, unless explicitly waived. Evidence must identify the actual runtime or deployed artifact; local source tests do not establish deployment or CI freshness. Items only the user can observe go under `### Requires User Confirmation` in the item format below.
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification that runs the changed thing where it actually runs (the CLI, the fired hook, a headless `codex exec` or `claude -p` for a skill or instruction, the page), because a run outranks tests, types and reading. A change to what a screen renders carries a `[live]` item that captures it before and after (`$agent-browser` screenshots at the page's breakpoints, 375px and 1280px when none are defined; `tmux capture-pane` for a TUI) and views the images. Codex `$impl` gates on `[live]`, including required user observations, unless explicitly waived. Evidence must identify the actual runtime or deployed artifact; local source tests do not establish deployment or CI freshness. Items only the user can observe go under `### Requires User Confirmation` in the item format below, limited to what `references/contract.md` says only the user holds; never hand a check to another person, issue, or later plan.
 
 `## Completion Criteria` is machine-consumed and must keep these subsection names:
 
@@ -264,7 +270,7 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/gate`, and the final report read them as written:
 
 ```
-- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
+- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | real PR | device> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
 ```
 
 Questions for the user do not belong here — ask them in AGREE or list them under `### Unresolved Items`. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source (1Password item, env var) instead, because the line is copied into chat. Write `- None` when there is nothing to confirm. An item missing any field is not a valid item.
@@ -277,7 +283,7 @@ Review the plan against the original request and observed evidence. Edit the pla
 
 Check requirement alignment, technical evidence, failure behavior, verification coverage, and unnecessary complexity. Apply behavior-preserving simplifications directly; do not expand scope to satisfy optional suggestions. Use the shared checklist and specialist guidance as reading lenses without automatically dispatching their agents.
 
-Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item.
+Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item. Check that no Requires User Confirmation item is something the agent can bring up itself, that every operation outside local and dev a `[live]` item needs is under `## Verification Grants`, that a rendered change has its before-and-after screenshot item, and that `## Delivery` rests on the signal its `Basis` quotes.
 
 When independent review is not selected, this pass completes DEEPEN. Report findings and their resolution as main-session review; do not report subagent approval.
 
@@ -338,7 +344,7 @@ The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Aud
 1. One task equals one verifiable unit: one behavior with its red, green, and refactor steps inside the same task. A failing test is a step of a task, never a task of its own.
 2. Verification Commands are included in each implementation task. The only verification-only task allowed is `Final Audit + Review`.
 3. Keep separation of concerns.
-4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output.
+4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output. With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and stays inside one layer.
 5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + risk-selected Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
 `$impl` performs routine simplification in the main session. Do not create a separate simplifier task or use diff size alone to request an agent.
@@ -367,6 +373,7 @@ The user must be able to decide whether to approve `$impl` from a compact Approv
 
 - **Overview**: intended outcome and non-goals.
 - **Approach**: key decisions, constraints, and implementation discretion; assumptions marked `user-overridden: default` are listed as 仮置き.
+- **Delivery**: level, draft, merge, and the basis, marked 仮置き when the basis is `no signal`, with the words after `$impl` that override it (`$impl PR まで`, `$impl stack`, `$impl merge まで`); granted operations on their own line.
 - **Files to Change**: affected components and representative paths.
 - **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation, each stated as the fact to be established rather than a command, closed by one sentence that once they pass the change can be accepted without reading the diff, apart from the Human Review items.
 - **Human Review**: the Files to Change entries that meet `references/human-review.md`, one line each with the label and what changes, or none.

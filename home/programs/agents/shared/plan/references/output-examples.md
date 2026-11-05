@@ -9,7 +9,7 @@ What stays the same across them is what approval and the gate read: the closing 
 Two files and one behavior, so sentences carry it. No diagram, no tree, no table.
 
 ````
-`greet` に `--version` フラグを足し、指定されたらバージョン文字列を出して終了するようにします。触るのは `src/cli.ts` の引数処理と、そのテスト `src/cli_test.ts` の 2 ファイルです。
+`greet` に `--version` フラグを足し、指定されたらバージョン文字列を出して終了するようにします。触るのは `src/cli.ts` の引数処理と、そのテスト `src/cli_test.ts` の 2 ファイルです。出荷は手がかりがないので commit しないまま終えます（仮置き。`/impl PR まで` で PR も出します）。
 
 ## 完了の条件
 
@@ -54,6 +54,7 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 | Slack への送信が失敗しても、端末の通知は出す | 失敗したら全体をエラーにする | 通知の失敗でビルドの結果を見失わない |
 | Webhook の URL は環境変数から読む | 設定ファイルに書く | 設定ファイルはリポジトリに入る |
 | （仮置き）通知の宛先は Slack の既定チャンネル | 設定で選べるようにする | 1 チャンネルで足りる間は設定を増やさない。`/impl` の前に覆せる |
+| 出荷: draft PR を 1 本、CI 通過まで。merge しない | commit で止める | 依頼文の「PR まで出して」。`/impl merge まで` で merge も行う |
 
 ほかの前提 2 件は計画ファイルにあります。
 

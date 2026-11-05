@@ -109,7 +109,8 @@ const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
 const LIVE_TAG_DEFINITION =
   "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — reported in the conversation with that run method; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
 const RUC_ITEM_TEMPLATE =
-  "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
+  "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | real PR | device> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
+const DELIVERY_LEVEL_TEMPLATE = "- Level: <none | commit | push | pr | stack>";
 const SELF_RESOLVED_SOURCE_TEMPLATE =
   "source: [Direct|Supported|Inferred] <probe command + file:lines>";
 const FINAL_TASK_SUBJECT = "Final Audit + Review";
@@ -450,14 +451,19 @@ test("check-plan.ts mirrors the contract vocabulary", async () => {
       "auth",
       "dialog",
       "role switch",
-      "dev server",
       "real PR",
       "device",
-      "interactive session",
     ]
   ) {
     assertStringIncludes(checkPlan, `"${needs}"`);
     assertStringIncludes(contract, needs);
+  }
+  for (const gone of ["dev server", "interactive session"]) {
+    assertExcludesAll(checkPlan, [`"${gone}"`]);
+  }
+  assertStringIncludes(contract, DELIVERY_LEVEL_TEMPLATE);
+  for (const level of ["none", "commit", "push", "pr", "stack"]) {
+    assertStringIncludes(checkPlan, `"${level}"`, level);
   }
 });
 

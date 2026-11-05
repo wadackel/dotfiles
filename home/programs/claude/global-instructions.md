@@ -8,6 +8,15 @@
 - Dispatch subagents without asking first when the work is wide and independent enough to repay the context each one rebuilds: a multi-file investigation, a broad search, an independent review. Do not pass `name` unless you will message the agent again, and call TaskStop on a named one when done. Ignore messages that carry only an idle notification.
 - When dispatching general-purpose or a teammate, pass `model` by the kind of work: `opus` for review, audit, falsification and design judgment, `sonnet` for search, research, scripted runs and well-scoped edits; never lower a model the user or a skill named. Leave `model` unset for Explore, Plan and agents whose definition sets one, unless a skill names a model for that dispatch, because a per-call `model` overrides the definition. An unset general-purpose dispatch runs on `CLAUDE_CODE_SUBAGENT_MODEL` (Sonnet).
 
+## Verification
+
+<!-- Mirrored for Codex in home/programs/agents/shared/verification.md; update both together. -->
+
+- A run of the changed thing where it actually runs is the evidence that counts; tests, type checks, and reading code support it and do not replace it. Run it before reporting, without being asked.
+- Bring the surface up yourself: a server or watcher in the background, a TUI in a tmux pane read with `capture-pane`, a page through the agent-browser skill (`abr` for a signed-in session), a headless agent run (`claude -p`, `codex exec`) for a skill or an instruction. On the local machine and in dev environments this needs no confirmation, test data included; an operation in production, deleting a shared resource, and anything that notifies people are asked once, before the work starts.
+- Check a rendered change by looking at it: screenshots before and after at the page's breakpoints (375px and 1280px when none are defined), each image read and compared.
+- A failing check is a defect: fix it and run it again until it passes. Hand a check to the user only after an attempt failed on something only they hold (a sudo password, their own second factor, an OS dialog, a device), with the command and its output. Report results with their evidence, so the user only reads them.
+
 ## Communication
 
 <!-- Mirrored for Codex in home/programs/agents/shared/communication.md; update both together. -->

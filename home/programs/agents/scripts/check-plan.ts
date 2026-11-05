@@ -21,6 +21,7 @@
 // stay with the critic and the adversarial agent.
 
 import { readFile, stat } from "node:fs/promises";
+import { resolve } from "node:path";
 
 const REQUIRED_SECTIONS = [
   "## Context",
@@ -46,11 +47,17 @@ const NEEDS_VOCAB = [
   "auth",
   "dialog",
   "role switch",
-  "dev server",
   "real PR",
   "device",
-  "interactive session",
 ];
+// Same lines and values as the Delivery block pinned in contract.md; change both.
+const DELIVERY_FIELDS = {
+  Level: ["none", "commit", "push", "pr", "stack"],
+  Draft: ["yes", "no"],
+  Merge: ["yes", "no"],
+  Via: undefined,
+  Basis: undefined,
+} as const;
 const NEEDED_BY_PREFIXES = ["task ", "final gate", "next real run"];
 // Same three grades as the template line pinned in contract.md; [Unknown]
 // is deliberately absent because an unknown belongs under Unresolved Items.
@@ -190,6 +197,54 @@ function checkRucItem(item: Line, findings: Finding[]): void {
   }
 }
 
+function checkDelivery(
+  body: Line[],
+  headingLine: number,
+  findings: Finding[],
+): void {
+  const values = new Map<string, string>();
+  for (const item of bullets(body)) {
+    const m = item.text.match(/^([A-Za-z]+):\s*(.*)$/);
+    if (!m) continue;
+    if (values.has(m[1])) {
+      findings.push({
+        line: item.no,
+        severity: "error",
+        rule: "delivery-format",
+        message: `${m[1]}: appears twice`,
+      });
+    }
+    values.set(m[1], m[2].trim());
+  }
+  for (const [key, allowed] of Object.entries(DELIVERY_FIELDS)) {
+    const v = values.get(key);
+    if (!v || (allowed && !(allowed as readonly string[]).includes(v))) {
+      findings.push({
+        line: headingLine,
+        severity: "error",
+        rule: "delivery-format",
+        message: allowed
+          ? `${key}: must be one of ${allowed.join(" | ")}${
+            v ? ` (got ${v})` : ""
+          }`
+          : `${key}: must not be empty`,
+      });
+    }
+  }
+  if (
+    values.get("Merge") === "yes" &&
+    (!["pr", "stack"].includes(values.get("Level") ?? "") ||
+      values.get("Draft") === "yes")
+  ) {
+    findings.push({
+      line: headingLine,
+      severity: "error",
+      rule: "delivery-merge",
+      message: "Merge: yes needs Level: pr or stack and Draft: no",
+    });
+  }
+}
+
 function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
   // Backtick spans are blanked (not removed, so indices still map to the original
   // text) before locating `source:`: a plan about plans quotes the template line
@@ -261,7 +316,12 @@ function checkSelfResolvedItem(item: Line, findings: Finding[]): void {
   }
 }
 
-export function checkPlan(source: string): Finding[] {
+// requireDelivery: the plan skills write ## Delivery, but this lint also runs on
+// fixtures and plans outside them, so the caller decides by where the plan lives.
+export function checkPlan(
+  source: string,
+  opts: { requireDelivery?: boolean } = {},
+): Finding[] {
   const findings: Finding[] = [];
   const lines = outsideFences(source.split("\n"));
   const headings = new Map<string, number>();
@@ -288,6 +348,18 @@ export function checkPlan(source: string): Finding[] {
         message: `${heading} not found`,
       });
     }
+  }
+  const delivery = section(lines, "## Delivery");
+  if (delivery) {
+    checkDelivery(delivery.body, delivery.headingLine, findings);
+  } else if (opts.requireDelivery) {
+    findings.push({
+      line: 0,
+      severity: "error",
+      rule: "delivery-missing",
+      message:
+        "## Delivery not found (required in ~/.claude/plans/ and ~/.codex/plans/)",
+    });
   }
   const av = section(lines, "### Autonomous Verification");
   if (av) {
@@ -372,7 +444,9 @@ if (import.meta.main) {
       `cannot read: ${path} (${e instanceof Error ? e.message : String(e)})`,
     );
   }
-  const findings = checkPlan(source);
+  const findings = checkPlan(source, {
+    requireDelivery: /\/\.(claude|codex)\/plans\//.test(resolve(path)),
+  });
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.length - errors;
   if (asJson) {

@@ -1,6 +1,6 @@
 import { test } from "bun:test";
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../lib/proc.ts";
@@ -28,7 +28,7 @@ async function runPath(path: string, extra: string[] = []): Promise<Outcome> {
 }
 
 const RUC_ITEM =
-  "- [live] Observe: the dialog opens / Why not autonomous: needs a signed-in browser / Needs: auth, dev server / Your steps: run `pnpm dev` and open http://localhost:3000 / Needed by: final gate";
+  "- [live] Observe: the dialog opens / Why not autonomous: needs a signed-in browser / Needs: auth, role switch / Your steps: run `pnpm dev` and open http://localhost:3000 / Needed by: final gate";
 
 function plan(opts: {
   sections?: string[];
@@ -75,7 +75,7 @@ test("missing section, untagged bullet, and bad Needs value are errors", async (
   const r = await runOn(plan({
     sections: ["## Context", "## Files to Change"],
     av: ["- the file exists", "- [live] ok"],
-    ruc: RUC_ITEM.replace("Needs: auth, dev server", "Needs: none"),
+    ruc: RUC_ITEM.replace("Needs: auth, role switch", "Needs: none"),
   }));
   assertEquals(r.code, 1);
   assertStringIncludes(
@@ -143,7 +143,7 @@ test("continuation lines, a trailing paragraph, and slashes inside Observe are a
   const ruc = [
     "- [live] Observe: the list shows done / in-flight / next in that order",
     "  and the footer stays visible / Why not autonomous: needs a real device",
-    "  / Needs: device | interactive session / Your steps: open the app / Needed by: next real run (the next release)",
+    "  / Needs: device | dialog / Your steps: open the app / Needed by: next real run (the next release)",
     "",
     "※ the release train is monthly.",
   ].join("\n");
@@ -334,4 +334,113 @@ test("a provisional assumption without a scope: field is an error", async () => 
     ]),
   }));
   assertEquals(scoped.code, 0, scoped.stdout);
+});
+
+const DELIVERY = [
+  "## Delivery",
+  "",
+  "- Level: stack",
+  "- Draft: yes",
+  "- Merge: no",
+  "- Via: /gh-stack",
+  "- Basis: 「gh-stackで進めよう」",
+  "",
+].join("\n");
+
+async function runInPlans(
+  agent: ".claude" | ".codex",
+  content: string,
+): Promise<Outcome> {
+  const dir = await mkdtemp(join(tmpdir(), "check-plan-test-"));
+  try {
+    await mkdir(join(dir, agent, "plans"), { recursive: true });
+    const path = join(dir, agent, "plans", "plan.md");
+    await writeFile(path, content);
+    return await runPath(path);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+}
+
+test("a Claude or Codex plan without ## Delivery is an error, any other path is not", async () => {
+  for (const agent of [".claude", ".codex"] as const) {
+    const missing = await runInPlans(agent, plan({}));
+    assertEquals(missing.code, 1, agent + missing.stdout);
+    assertStringIncludes(missing.stdout, "[error] delivery-missing:");
+    const ok = await runInPlans(agent, plan({ extra: DELIVERY }));
+    assertEquals(ok.code, 0, agent + ok.stdout + ok.stderr);
+    assertStringIncludes(ok.stdout, "0 errors, 0 warnings");
+  }
+  const other = await runOn(plan({}));
+  assertEquals(other.code, 0, other.stdout + other.stderr);
+});
+
+test("Delivery values outside the vocabulary, a missing line, and a merge without a PR are errors", async () => {
+  const bad = await runOn(plan({
+    extra: DELIVERY.replace("Level: stack", "Level: ship").replace(
+      "- Basis: 「gh-stackで進めよう」\n",
+      "",
+    ),
+  }));
+  assertEquals(bad.code, 1);
+  assertStringIncludes(bad.stdout, "[error] delivery-format: Level:");
+  assertStringIncludes(bad.stdout, "[error] delivery-format: Basis:");
+  const merge = await runOn(plan({
+    extra: DELIVERY.replace("Level: stack", "Level: commit").replace(
+      "Merge: no",
+      "Merge: yes",
+    ),
+  }));
+  assertEquals(merge.code, 1);
+  assertStringIncludes(merge.stdout, "[error] delivery-merge:");
+  const draft = await runOn(
+    plan({ extra: DELIVERY.replace("Draft: yes", "Draft: maybe") }),
+  );
+  assertEquals(draft.code, 1);
+  assertStringIncludes(draft.stdout, "[error] delivery-format: Draft:");
+  for (const level of ["pr", "stack"]) {
+    const ok = await runOn(plan({
+      extra: DELIVERY.replace("Level: stack", `Level: ${level}`)
+        .replace("Merge: no", "Merge: yes").replace("Draft: yes", "Draft: no"),
+    }));
+    assertEquals(ok.code, 0, level + ok.stdout);
+  }
+});
+
+test("a relative path inside ~/.claude/plans is held to Delivery too", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "check-plan-test-"));
+  try {
+    const plans = join(dir, ".claude", "plans");
+    await mkdir(plans, { recursive: true });
+    await writeFile(join(plans, "plan.md"), plan({}));
+    const out = await run(SCRIPT, ["plan.md"], { cwd: plans });
+    assertEquals(out.code, 1, out.stdout);
+    assertStringIncludes(out.stdout, "[error] delivery-missing:");
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test("a bad Merge value, a repeated line, and a draft that merges are errors", async () => {
+  const merge = await runOn(plan({ extra: DELIVERY.replace("Merge: no", "Merge: maybe") }));
+  assertEquals(merge.code, 1);
+  assertStringIncludes(merge.stdout, "[error] delivery-format: Merge:");
+  const repeated = await runOn(plan({
+    extra: DELIVERY.replace("- Draft: yes", "- Level: none\n- Draft: yes"),
+  }));
+  assertEquals(repeated.code, 1);
+  assertStringIncludes(repeated.stdout, "[error] delivery-format: Level: appears twice");
+  const draftMerge = await runOn(plan({ extra: DELIVERY.replace("Merge: no", "Merge: yes") }));
+  assertEquals(draftMerge.code, 1);
+  assertStringIncludes(draftMerge.stdout, "[error] delivery-merge:");
+});
+
+test("dev server and interactive session are no longer Needs values", async () => {
+  for (const need of ["dev server", "interactive session"]) {
+    const r = await runOn(
+      plan({ ruc: RUC_ITEM.replace("auth, role switch", need) }),
+    );
+    assertEquals(r.code, 1, need);
+    assertStringIncludes(r.stdout, `(got ${need})`);
+  }
 });

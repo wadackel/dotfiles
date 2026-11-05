@@ -1,6 +1,6 @@
 # Contract
 
-The fixed strings that the plan, impl, and gate skills (Claude), `$plan` / `$impl` (Codex), `check-plan.ts`, `reviewer-dispatch-policy.ts`, and the reviewer prompts read or write. `check-plan.ts` mirrors the headings and the Requires User Confirmation vocabulary; `codex-plan-clarification-contract_test.ts` pins each entry against the files that carry it. Question judgment is in `interview.md`.
+The fixed strings that the plan, impl, and gate skills (Claude), `$plan` / `$impl` (Codex), `check-plan.ts`, `reviewer-dispatch-policy.ts`, and the reviewer prompts read or write. `check-plan.ts` mirrors the headings, the Requires User Confirmation vocabulary, and the Delivery vocabulary; `codex-plan-clarification-contract_test.ts` pins each entry against the files that carry it. Question judgment is in `interview.md`.
 
 ## Plan file
 
@@ -12,6 +12,8 @@ Path: `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (Claude) or `~/.codex/plans/…`
 | `## Overview` | | ✓ | ✓ |
 | `## Approach` (with `### Alternatives Considered`) | | ✓ | ✓ |
 | `## NOT Building` | | ✓ | ✓ |
+| `## Delivery` | ✓ | ✓ | ✓ |
+| `## Verification Grants` | | ✓ | ✓ |
 | `## Mandatory Reading` | | | ✓ |
 | `## Patterns to Mirror` | | | ✓ |
 | `## Intentional Conventions` | | | ✓ |
@@ -21,7 +23,31 @@ Path: `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` (Claude) or `~/.codex/plans/…`
 | `## Completion Criteria` with `### Autonomous Verification`, `### Requires User Confirmation`, `### Baseline` | ✓ | ✓ | ✓ |
 | `## Risks + Open Questions` | | ✓ | ✓ |
 
-`check-plan.ts` requires Context, Files to Change, Task Outline, and Completion Criteria; the trivial column applies when a trivial plan is written anyway.
+`check-plan.ts` requires Context, Files to Change, Task Outline, and Completion Criteria, and `## Delivery` for a plan under `~/.claude/plans/` or `~/.codex/plans/`; the trivial column applies when a trivial plan is written anyway.
+
+## Delivery
+
+How far `/impl` or `$impl` ships the change after the gate or the Review passes. Five lines, in this order:
+
+```
+- Level: <none | commit | push | pr | stack>
+- Draft: <yes | no>
+- Merge: <yes | no>
+- Via: <the skill that ships it, or none>
+- Basis: <the words or rule the level rests on, quoted, or no signal>
+```
+
+`none` leaves the change uncommitted; `commit` commits on the current branch; `push` also pushes it, for a repository whose rule is to commit on the default branch; `pr` opens one PR; `stack` opens a gh-stack stack, one layer per task group. `Draft` and `Merge` matter only for `pr` and `stack`; `Draft: yes` keeps the PRs drafts after CI passes; `check-plan.ts` refuses `Merge: yes` below `pr` or with `Draft: yes` (`delivery-merge`) and a line given twice. The handoff shows the Delivery, marked 仮置き when `Basis` is `no signal`.
+
+## Verification Grants
+
+Operations outside the local machine and dev environments that verification needs (a merge that deploys to production, observing or writing test data in production), granted by the user in AGREE before the plan is written. `- None`, or one line each, the same lines the AGREE question listed:
+
+```
+- <operation> / Env: <environment> / Undo: <how to undo, or none needed>
+```
+
+`/impl` and `$impl` perform a listed operation without asking again; one that is not listed stops the run as a deviation.
 
 ## AGREE subsections
 
@@ -49,8 +75,10 @@ A plan that changes user-observable behavior carries at least one `[live]` item.
 `### Requires User Confirmation` holds `- None` or items in this exact five-field form, labels in English:
 
 ```
-- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
+- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | real PR | device> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
 ```
+
+An item is for what only the user holds: a sudo password, their own second factor, an OS dialog, a device, a role the agent's account lacks, a PR the plan's Delivery does not open, or an event after a merge or deploy that no Verification Grant covers. A local server or watcher, a TUI in a tmux pane read with `capture-pane`, and a browser session signed in through `abr` are brought up by the agent and are never an item.
 
 `Needed by: task N` and `final gate` block completion until the user reports or waives; `next real run <trigger>` defers to an event this session cannot produce. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source instead.
 
