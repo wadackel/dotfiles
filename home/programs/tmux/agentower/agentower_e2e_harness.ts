@@ -344,7 +344,7 @@ export async function sandboxEnv(): Promise<Record<string, string>> {
   // Bun keeps its transpiler cache under HOME, so a replaced HOME would start
   // every scenario cold and collect cache files; aim it back at the real one.
   // An inherited value passes through as it is, since an empty one is how the
-  // cache is turned off. S8/S8b/S55 inject it inline for the same reason, and
+  // cache is turned off. S8/S55 inject it inline for the same reason, and
   // S8's HOME is a tracked fixture directory.
   const realHome = process.env.HOME;
   const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??

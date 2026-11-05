@@ -88,7 +88,7 @@ VERDICT: [PASS if every previous finding is CLOSED and the fix introduced no MUS
 | `{original_findings}` | The blocker-severity findings from the previous round, verbatim |
 | `{repo_path}` | Absolute path to the repository or worktree |
 | `{fix_diff}` | The content of `{diff_path}` |
-| `{diff_path}` | `~/.claude/plans/<plan-slug>.rereview-<n>.gate.diff`, written by `plan-state.ts diff <plan> --from <tree printed at the previous dispatch> --rereview <n>`; it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
+| `{diff_path}` | `<scratchpad>/<plan-slug>.rereview-<n>.gate.diff`, the diff from the tree kept at the previous dispatch to a new snapshot (gate §4); it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
 
 ## Usage
 

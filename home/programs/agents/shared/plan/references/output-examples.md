@@ -2,7 +2,7 @@
 
 Read before writing the `/plan` handoff or the `/impl` final report. The handoff examples show how a shape follows from the material: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram. The report examples share one fixed skeleton (the result line and the four bold groups of `impl/SKILL.md`) and differ in what the material puts inside it: a diagram or none, a tree of files or one folded by directory, zero to three groups under `**あなたがすること**`. Copy neither the subjects nor the wording, and build the content again from the plan in front of you.
 
-What stays the same across them is what approval and the gate read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's group names, its sub-group `レビューしてほしい N か所`, `仮置き` for a provisional assumption, and its last line `Sidecar:`. The block is written with its placeholders here so that it is never taken for a real plan.
+What stays the same across them is what approval and the gate read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's group names, its sub-group `レビューしてほしい N か所`, and `仮置き` for a provisional assumption. The block is written with its placeholders here so that it is never taken for a real plan.
 
 ## Handoff: a small change
 
@@ -115,8 +115,6 @@ src/
 ```
 
 **あなたがすること** なし
-
-Sidecar: ~/.claude/plans/<basename>.gate.log.md
 ````
 
 ## Final report: a refactor
@@ -150,8 +148,6 @@ src/
 
 決める 1 つ
 - `counts.dumped` は旧名のまま詰め替えで残した → 読む側がいないなら「API のキーも変える」
-
-Sidecar: ~/.claude/plans/<basename>.gate.log.md
 ````
 
 ## Final report: parts that act on each other
@@ -200,6 +196,4 @@ src/
 
 確かめてほしい 1 つ
 - 本物の URL を `NOTIFY_SLACK_URL` に入れて `build --fail-fixture` を走らせ、届いた文面か status code を知らせる
-
-Sidecar: ~/.claude/plans/<basename>.gate.log.md
 ````

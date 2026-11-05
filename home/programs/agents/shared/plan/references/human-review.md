@@ -1,6 +1,6 @@
 # Human review
 
-Which changes a person reads in the diff instead of accepting them on the Completion Criteria evidence and the gate verdict. The plan skills apply it to `## Files to Change` before approval; `/gate` and `$impl` apply it to the final diff before the report.
+Which changes a person reads in the diff instead of accepting them on the Completion Criteria checks and the gate verdict. The plan skills apply it to `## Files to Change` before approval; `/gate` and `$impl` apply it to the final diff before the report.
 
 A change is read by a person when its effect, not its file type, crosses one of these boundaries. Each has a fixed label, used as written in the plan handoff's `## レビューしてほしい変更`; the report line names the boundary in a word or two:
 
@@ -13,10 +13,10 @@ Not included: wording of a review or approval procedure that grants no permissio
 
 ## Item
 
-In the report, one line per hunk under `レビューしてほしい N か所` (the first group of `**あなたがすること**`), which means the change is not accepted on the evidence and the reviewers' verdict alone: the reader reads this hunk of the diff. The line carries the place, the boundary in a word or two with what changes, what happens if it stays, and how to undo it, with no sentence-final 。; a security finding on the same hunk follows on the same line with its severity in words:
+In the report, one line per hunk under `レビューしてほしい N か所` (the first group of `**あなたがすること**`), which means the change is not accepted on the checks and the reviewers' verdict alone: the reader reads this hunk of the diff. The line carries the place, the boundary in a word or two with what changes, what happens if it stays, and how to undo it, with no sentence-final 。; a security finding on the same hunk follows on the same line with its severity in words:
 
 ```
 - `claude/settings.json:24` — 権限。allow に `Bash(curl *)` を追加。残すと curl が無確認で通る。戻すなら行を消す
 ```
 
-The path may be shortened to the suffix that is unique in the diff, and the line stays within the report's 90 characters; when a security finding does not fit, keep its severity word and point at the sidecar for the rest. A hunk that crosses more than one boundary is still one line; it names each boundary in the order listed above. Whether to fix a security finding carried on a line is a `決める` line that points at it. These lines need reading whatever the gate verdict.
+The path may be shortened to the suffix that is unique in the diff, and the line stays within the report's 90 characters; when a security finding does not fit, keep its severity word and leave the rest to the review in the conversation. A hunk that crosses more than one boundary is still one line; it names each boundary in the order listed above. Whether to fix a security finding carried on a line is a `決める` line that points at it. These lines need reading whatever the gate verdict.

@@ -93,5 +93,5 @@ Not pure TDD but a "structural verification gate":
 ## Related
 
 - **tdd-guide agent** -- subagent that assists with TDD execution
-- **gate** -- final gate (audits evidence with `plan-state.ts`, then reviews the diff)
+- **gate** -- final gate (checks that every completion criterion was run, then reviews the diff)
 - **qa-planner** -- QA test case design

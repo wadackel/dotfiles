@@ -22,7 +22,7 @@ Worktree (the change applied): {worktree}
 Your temp directory: {temp_dir}
 Diff file: {diff_path}
 Workspace: write only inside the breaker worktree and your temp directory.
-Repro files go in your temp directory and reach the worktree by absolute path; the worktree is refilled before your commands are re-run. Create every temporary file and directory inside {temp_dir}, never with a bare `mktemp`: a command that writes anywhere else is not re-run, so its finding is lost. tmux only with `-L <name>` or `-S <path>`; no `launchctl`; no network. The worktree's `node_modules` is a link to the user's install: read it, never write to it. When the change is plan-state itself, run the worktree's copy with `HOME={temp_dir}`, written inside a script in {temp_dir} and started as `bash {temp_dir}/<name>.sh` (the hook refuses a `HOME=` prefix on a plan-state command); the installed `~/.agents/scripts/plan-state.ts` is refused for you.
+Repro files go in your temp directory and reach the worktree by absolute path; the worktree is rebuilt before your commands are re-run. Create every temporary file and directory inside {temp_dir}, never with a bare `mktemp`: a command that writes anywhere else is not re-run, so its finding is lost. tmux only with `-L <name>` or `-S <path>`; no `launchctl`; no network. The worktree's `node_modules` is a link to the user's install: read it, never write to it.
 
 ## Output Format
 
@@ -48,9 +48,9 @@ VERDICT: [PASS if no finding shows a failure that breaks the intent, FAIL otherw
 | Placeholder | Value |
 |---|---|
 | `{intent}` | The plan's `## Overview` direction and the user-visible behaviors it changes, in two to four sentences |
-| `{worktree}` | The path `plan-state.ts materialize` printed after `worktree ` |
+| `{worktree}` | `<scratchpad>/<plan-slug>.breaker`, the worktree `/gate` built in §3 |
 | `{temp_dir}` | A fresh directory from `mktemp -d` outside the repository |
-| `{diff_path}` | `~/.claude/plans/<plan-slug>.gate.diff` |
+| `{diff_path}` | `<scratchpad>/<plan-slug>.gate.diff` |
 
 ## Usage
 

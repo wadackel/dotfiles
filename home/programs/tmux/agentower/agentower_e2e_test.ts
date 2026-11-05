@@ -41,7 +41,7 @@ import {
   waitFor,
   waitForExit,
 } from "./agentower_e2e_harness.ts";
-import { codexCwdHash, MOUSE_WHEEL_DOWN } from "./agentower.tsx";
+import { MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 import { parseEtime } from "./restore.ts";
 
@@ -208,35 +208,6 @@ function listStatuses(out: string): string[] {
   return ["run", "wait", "idle", "err"].filter((s) =>
     rows.some((l) => l.includes(` ${s} `))
   );
-}
-
-async function writeCodexProgressFixture(
-  home: string,
-  cwd: string,
-): Promise<void> {
-  await mkdir(cwd, { recursive: true });
-  const plansDir = `${home}/.codex/plans`;
-  await mkdir(plansDir, { recursive: true });
-  const planPath = `${plansDir}/agentower-e2e-plan.md`;
-  await writeFile(planPath, "## agentower e2e plan\n");
-  await writeFile(
-    `${plansDir}/agentower-e2e-plan.evidence.json`,
-    JSON.stringify(
-      {
-        plan: "agentower-e2e-plan.md",
-        tasks: [
-          { id: "task-1", subject: "one", status: "completed" },
-          { id: "task-2", subject: "two", status: "completed" },
-          { id: "task-3", subject: "three", status: "in_progress" },
-        ],
-      },
-      null,
-      2,
-    ),
-  );
-  const hash = await codexCwdHash(cwd);
-  if (!hash) throw new Error("failed to hash codex e2e cwd");
-  await writeFile(`${plansDir}/.active-${hash}`, `${planPath}\n`);
 }
 
 // S0: Smoke test — exercises the harness itself. No Claude panes in the
@@ -490,40 +461,6 @@ test("S8: task progress 2/3 from tasks dir", async () => {
     await waitForExit();
   } finally {
     await teardown();
-  }
-});
-
-// S8b: Codex progress reads ~/.codex/plans/.active-<cwd-hash> and its
-// sibling evidence JSON. The pane starts elsewhere, so the 2/3 appears only
-// when the hash comes from @pane_cwd and not from pane_current_path.
-test("S8b: codex task progress 2/3 from evidence json", async () => {
-  const originalHome = process.env.HOME;
-  const tempHome = await mkdtemp("/tmp/agentower-codex-e2e-");
-  const cacheDir = process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH ??
-    (originalHome ? `${originalHome}/Library/Caches/bun/@t@` : undefined);
-  const cwd = `${tempHome}/work/project`;
-  await writeCodexProgressFixture(tempHome, cwd);
-  const env: Record<string, string> = { HOME: tempHome };
-  if (cacheDir !== undefined) env.BUN_RUNTIME_TRANSPILER_CACHE_PATH = cacheDir;
-  await setupServer();
-  try {
-    await createClaudePane({
-      agent: "codex",
-      status: "idle",
-      prompt: "codex-row-progress",
-      lastTool: "Read",
-      cwd,
-      startDir: tempHome,
-    });
-    const agentower = await spawnAgentower({ env });
-    const out = await waitFor(agentower, (o) => o.includes("2/3"));
-    assertStringIncludes(out, "codex-row-progress");
-    assertStringIncludes(out, "2/3");
-    await sendKey(agentower, "Escape");
-    await waitForExit();
-  } finally {
-    await teardown();
-    await rm(tempHome, { recursive: true }).catch(() => undefined);
   }
 });
 
@@ -1563,7 +1500,7 @@ test("S-N5: stale label from a closed session is not shown after a new session s
 // Fixtures are built at test time with offsets from now, never with committed
 // absolute timestamps: a fixed resetsAt written today drifts into the past and
 // would silently turn the "normal render" case into the "expired" case with no
-// failure to announce it. Same reasoning as S8b's makeTempDir.
+// failure to announce it.
 
 interface UsageWindowFixture {
   label: string;

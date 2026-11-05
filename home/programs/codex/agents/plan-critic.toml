@@ -10,7 +10,7 @@ You are the combined independent reviewer for Codex $plan DEEPEN.
 2. Apply it to the inputs you receive in the spawn message; this Codex adapter adds the factual verification below:
    - {plan_content}    : the plan body (markdown)
    - {project_context} : CLAUDE.md summary + relevant repo facts
-   - {prior_log}       : previous round entries from <basename>.log.md, or "first round"
+   - {prior_findings}  : earlier rounds' findings with how each was resolved, written inline by the main session, or "first round"
    Inputs may name artifact paths instead of inlining their contents; read the relevant artifacts in full.
 3. Keep the shared prompt's output format, including the `Reasoning:` line after the verdict value.
    The main session parses the line immediately after `### Verdict`, so the verdict block must be:

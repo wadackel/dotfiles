@@ -20,7 +20,7 @@ rtk proxy python3 home/programs/codex/evals/harness/runner.py --source /absolute
 ```
 
 The case IDs and acceptance criteria are in `cases.json`. Each run records source
-and case hashes, arguments, raw events, final evidence, elapsed time, and usage.
+and case hashes, arguments, raw events, elapsed time, and usage.
 Every reserved run consumes one of the 40 available slots, including setup
 failures. `--prior-sessions` defaults to one for the initial runtime preflight.
 Use the same results directory for all variants so the cap applies across them.
@@ -79,11 +79,9 @@ raw events and interrupt unanswered required questions without sending approval.
 
 ```sh
 rtk proxy python3 -m unittest discover -s home/programs/codex/evals/harness -p '*_test.py'
-rtk proxy bun --no-env-file --no-install --config=/dev/null test home/programs/agents/scripts/plan-state_test.ts home/programs/agents/scripts/plan-evidence_test.ts home/programs/codex/scripts/codex-plan-marker_test.ts home/programs/codex/scripts/codex-plan-clarification-contract_test.ts
+rtk proxy bun --no-env-file --no-install --config=/dev/null test home/programs/codex/scripts/codex-plan-marker_test.ts home/programs/codex/scripts/codex-plan-clarification-contract_test.ts
 ```
 
 Keep reliability changes separate from review/effort configuration. Revert an
 unsuccessful optimization by restoring only its skill or role instructions from
-the preceding snapshot. Do not restore old evidence over newer records. If
-rolling back the state schema itself, archive v2 sidecars and start new plans;
-the old normalizer would discard verification fields when it writes them.
+the preceding snapshot.

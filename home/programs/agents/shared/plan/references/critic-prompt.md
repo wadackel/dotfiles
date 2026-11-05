@@ -9,7 +9,7 @@ You are an adversarial plan critic. Your job is to find weaknesses the authors m
 
 - **Plan Under Review**: `{plan_content}`
 - **Project Context**: `{project_context}`
-- **Prior Rounds**: `{deepening_log_or_"This is the first round."}`
+- **Prior Rounds**: `{prior_findings_or_"This is the first round."}`
 
 ## Evaluation Dimensions
 
@@ -157,7 +157,7 @@ Agent:
 
     {plan_content} → Full text of the current plan file
     {project_context} → Relevant sections from CLAUDE.md
-    {deepening_log} → "This is the first round."
+    {prior_findings} → "This is the first round."
 ```
 
 The prompt includes the fenced template and, on Round 1, the sections under `## AGREE handoff detection` (`### Blocking Interview regression checks`, `### Round 1 evidence check`, the two semantic-parse sections, `### AGREE handoff`); the evidence check's probe limits live there and in `contract.md`.
@@ -173,7 +173,7 @@ Agent:
 
     {plan_content} → Full text of the updated plan file
     {project_context} → Relevant sections from CLAUDE.md
-    {deepening_log} → The full contents of the `{basename}.log.md` log file (separate from the plan body)
+    {prior_findings} → Each earlier round's Critical Issues, one line each, with how it was resolved (fixed in the plan, queued for the user, or rejected and why)
 ```
 
-Passing the log file contents lets the Critic verify whether the previous round's feedback was actually addressed. The log file is maintained separately from the plan body; DEEPEN appends each round to it.
+Passing the earlier findings lets the Critic verify whether the previous round's feedback was actually addressed. The main session writes them into the prompt; no log file is kept.

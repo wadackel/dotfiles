@@ -1,15 +1,4 @@
 {
-  "stale": {
-    "files": {
-      "main.py": "print('ready')\n"
-    },
-    "changes": {
-      "main.py": "print('wrong')\n"
-    },
-    "plan": "# Fixture plan\n## Context\nProduce a CLI that prints ready. The user has accepted the scope.\n## Overview\nA working command.\n## Approach\nUse main.py. Preserve external deployment constraints.\n## NOT Building\nNo external services or new dependencies.\n## Files to Change\n- {repo}/main.py\n## Patterns to Mirror\nExisting Python print statement.\n## Intentional Conventions\nNo dependencies.\n## Task Outline\n1. Behavior: main.py prints ready; verify python3 main.py outputs ready.\n## Completion Criteria\n### Autonomous Verification\n- [file-state] python3 main.py outputs ready.\n\n### Requires User Confirmation\n- None\n### Baseline\n- Verify acceptance and review the final diff.\n## Verification Commands\npython3 main.py\n## Definition of Done\nRequired checks pass for current artifacts.\n",
-    "prompt": "$impl {plan}\nContinue the accepted implementation. You may repair main.py. Do not access external services.",
-    "acceptance": "main.py must print ready before claiming completion; pre-edit evidence is stale"
-  },
   "live": {
     "files": {
       "main.py": "print('ready')\n",

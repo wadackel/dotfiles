@@ -37,7 +37,7 @@ Agree on purpose and approach before drafting. One turn per dependency level, in
 
 AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` for the plan body (fields in `contract.md`). Each Self-resolved entry ends with `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`; a claim the Approach relies on is Direct, or Supported only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets replaced by `<redacted: what it is>`. User-only questions never go to Unresolved Items.
 
-**Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report per `## Final report` in the impl skill. No plan file, no sidecar, no `/impl`.
+**Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report per `## Final report` in the impl skill. No plan file, no `/impl`.
 
 ## EXPLORE
 
@@ -59,15 +59,11 @@ Skipped for trivial. Read the plan once as its own reviewer; no subagent is disp
 - No decision only the user can make was settled here: `user-overridden: default` is for scope boundaries only.
 - Over-engineering: mark suspects `<!-- over-eng? -->` without deleting.
 
-Fix what you find in the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`, and queue a User decision (`interview.md`) for what only the user can settle. Log the round to `<plan>.log.md` in the fixed form of `contract.md`: `### Round 1`, the contract's `Round N: main review` line as `Round 1: main review, Critical <n> (form <f> / behavior <b> / user <u>); verdicts CONVERGED`, a `Lint:` line, and the `| # | Finding | Kind | Action |` table with one row per fix. Then ask the queued items, one turn per dependency level per `interview.md`.
+Fix what you find in the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`, and queue a User decision (`interview.md`) for what only the user can settle. Nothing is logged to a file. Then ask the queued items, one turn per dependency level per `interview.md`.
 
 ## DECOMPOSE
 
-One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one argv (`/impl` records it with `plan-state.ts run`), so a criterion that needs two commands is two bullets, and a count or content condition is written so the command's exit code decides it (`--grep` and `--tail` only trim what is shown). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task's `rerun` skips checks already passing at the current target. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task with `addBlockedBy`); the evidence sidecar is the record either way. Then initialize the evidence sidecar, subjects in task order and the last one literally `Final Audit + Review`:
-
-```
-~/.agents/scripts/plan-state.ts init ~/.claude/plans/<basename>.evidence.json <basename>.md '["<task 1>", …, "Final Audit + Review"]'
-```
+One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one command that `/impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task runs every bullet again. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task, literally `Final Audit + Review`, with `addBlockedBy`).
 
 ## ACTIVATE
 
@@ -84,7 +80,7 @@ The handoff then closes in this order whatever the plan, because approval rests 
 3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `レビューしてほしい変更を確かめたうえで、` when that section is not `なし`.
 4. The plan path, then the block below.
 
-When the user adds a condition, append it as the last Autonomous Verification bullet (`cc-<n>` numbering is positional, so never insert it earlier), name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again. When the user overrides a 仮置き, update the Assumption, re-run `check-plan.ts`, and emit this output again.
+When the user adds a condition, append it as the last Autonomous Verification bullet, name it in the owning task under `## Task Outline`, re-run `check-plan.ts`, and emit this output again. When the user overrides a 仮置き, update the Assumption, re-run `check-plan.ts`, and emit this output again.
 
 ```
 ## Plan ready

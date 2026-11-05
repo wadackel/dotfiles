@@ -225,7 +225,7 @@ Nix keeps all previous generations - you can always rollback safely. See [README
 Each subsystem keeps its notes in an `AGENTS.md` next to its code. Claude Code loads one when it reads a file in that directory; Codex, and anyone reading files through a shell, has to open it. Before changing files in one of these directories, read its notes:
 
 - `home/programs/claude/AGENTS.md`: Claude Code settings, hooks (bash-policy, rtk, pane status), scripts, agents, gate, the global instructions, permission rules
-- `home/programs/agents/scripts/AGENTS.md`: plan-state / plan-evidence, check-plan, config-lint, vocab, abr, rebase-guard, vendored skills sync
+- `home/programs/agents/scripts/AGENTS.md`: check-plan, config-lint, vocab, abr, rebase-guard, vendored skills sync
 - `home/programs/hermes/AGENTS.md`: applying Hermes changes, the gateway, `!claude` tasks
 - `home/programs/tmux/agentower/AGENTS.md`: the Agentower binary, snapshot and restore (`restore.ts`), its e2e and bench
 

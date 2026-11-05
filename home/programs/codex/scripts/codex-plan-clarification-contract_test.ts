@@ -92,7 +92,7 @@ const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
 // too is a deliberate mirror (check-plan.ts constants, plan skills that show
 // the template to the writer). Reference-only files carry `references/contract.md`.
 const LIVE_TAG_DEFINITION =
-  "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
+  "observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — reported in the conversation with that run method; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)";
 const RUC_ITEM_TEMPLATE =
   "- [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>";
 const SELF_RESOLVED_SOURCE_TEMPLATE =
@@ -125,7 +125,7 @@ const REVIEWER_VOCAB = [
   "#### Falsified (CRITICAL)",
 ];
 const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
-  [LIVE_TAG_DEFINITION, [CONTRACT]],
+  [LIVE_TAG_DEFINITION, [CONTRACT, CODEX_PLAN]],
   [RUC_ITEM_TEMPLATE, [CONTRACT]],
   [SELF_RESOLVED_SOURCE_TEMPLATE, [
     CONTRACT,
@@ -159,9 +159,6 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
     CODEX_PLAN,
   ]],
   ["scope: <the boundary: what is in or out>", [CONTRACT, INTERVIEW]],
-  ["Round N: critic", [CONTRACT, CODEX_PLAN]],
-  ["Round N: main review", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
-  ["| # | Finding | Kind | Action |", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
   ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
 ];
 // Only the plan skills have a `references/` that links to the shared
@@ -296,7 +293,7 @@ test("Codex Requirement Clarification enforces blocking interview contract", asy
   assertIncludesAll(clarification, [
     "Blocking Interview Protocol",
     "clarity-gated",
-    "create no plan file, evidence sidecar, or pending marker",
+    "create no plan file or pending marker",
     "Here I will wait for your answer",
     "$plan --answer <answer>",
     ".clarifying-<cwd-hash>.json",
@@ -373,9 +370,7 @@ test("contract.md defines every fixed string once", async () => {
     ...PLAN_READY_LINES,
     ...REVIEWER_VOCAB,
     "PENDING APPROVAL — $impl [plan-path]",
-    "`cc-<n>`",
-    ".evidence.json",
-    ".gate.log.md",
+    "refs/impl-base",
     ".gate.diff",
     ".rereview-<n>.gate.diff",
     "[BLOCKED: gate escalated]",
@@ -474,6 +469,36 @@ test("Codex plan skill preserves user-facing output language", async () => {
     "Japanese unless the user asks otherwise",
     "Section headers are fixed English strings",
     "Machine-consumed contents",
+  ]);
+});
+
+test("Codex impl documents the combined final review contract", async () => {
+  const skill = await readRepoFile(CODEX_IMPL);
+  assertIncludesAll(skill, [
+    "Combined Generic Review",
+    "git ls-files --others --exclude-standard",
+    "Area: SPEC|QUALITY",
+    "Domain-Specific Reviewer Dispatch",
+    "Review lifecycle budget",
+    "Security Dispatch Heuristic",
+    "Reviewer self-modification",
+    "main-review",
+    'fork_turns: "none"',
+    "same frozen target",
+    "at most three concurrently",
+    "reruns all selected reviewers",
+    "[live]",
+    "explicitly waived",
+    "clear-matching",
+  ]);
+  assertExcludesAll(skill, [
+    "Select every applicable specialist",
+    "at least 20 files or 500 added/deleted lines",
+    "### Step 4b: Code Quality",
+    "fresh `code-reviewer` subagent を再 spawn",
+    "Spec Compliance PASS 後",
+    "同一 assistant turn で" + "並列 spawn",
+    "同一 turn で" + "並列 dispatch",
   ]);
 });
 

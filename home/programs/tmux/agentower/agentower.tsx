@@ -2,7 +2,7 @@
 // ink + React on Bun. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
 
 import { spawn } from "node:child_process";
-import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { useEffect, useRef, useState } from "react";
 import { Box, type Key, render, Text, useApp, useInput, useStdout } from "ink";
 import { run } from "../../agents/lib/proc.ts";
@@ -621,159 +621,10 @@ export async function readTaskProgress(
   return total === 0 ? null : { done, total };
 }
 
-const CODEX_MARKER_TTL_MS = 24 * 60 * 60 * 1000;
-const CODEX_TASK_STATUSES = new Set([
-  "pending",
-  "in_progress",
-  "completed",
-]);
-
-// Mirrors codex-plan-marker.ts:canonical so Agentower hashes the same cwd string
-// as the marker writer even when the leaf path has disappeared.
-async function canonical(p: string): Promise<string> {
-  try {
-    return await realpath(p);
-  } catch {
-    // fall through
-  }
-  const tail: string[] = [];
-  let cur = p;
-  while (cur.length > 1) {
-    const idx = cur.lastIndexOf("/");
-    if (idx < 0) break;
-    tail.unshift(cur.slice(idx + 1));
-    cur = idx === 0 ? "/" : cur.slice(0, idx);
-    try {
-      const real = await realpath(cur);
-      return real === "/" ? "/" + tail.join("/") : real + "/" + tail.join("/");
-    } catch {
-      // keep walking up
-    }
-  }
-  return p;
-}
-
-export async function codexCwdHash(cwd: string): Promise<string | null> {
-  if (!cwd) return null;
-  try {
-    const real = await canonical(cwd);
-    const data = new TextEncoder().encode(real);
-    const buf = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(buf))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, 16);
-  } catch {
-    return null;
-  }
-}
-
-async function readFreshMarker(path: string): Promise<string | null> {
-  try {
-    const stat = await lstat(path);
-    if (!stat.isFile() || stat.isSymbolicLink()) return null;
-    const mtime = stat.mtime.getTime();
-    if (Date.now() - mtime >= CODEX_MARKER_TTL_MS) return null;
-    return (await readFile(path, "utf8")).trim();
-  } catch {
-    return null;
-  }
-}
-
-async function activeMarkerPresence(
-  path: string,
-): Promise<"present" | "absent" | "blocked"> {
-  try {
-    await lstat(path);
-    return "present";
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "ENOENT"
-      ? "absent"
-      : "blocked";
-  }
-}
-
-async function evidencePathFromMarker(
-  plansDir: string,
-  marker: string,
-): Promise<string | null> {
-  if (!marker.startsWith("/") || !marker.endsWith(".md")) return null;
-  const basename = marker.slice(marker.lastIndexOf("/") + 1);
-  if (!basename || basename.startsWith(".")) return null;
-  let plansDirReal = "";
-  let planReal = "";
-  try {
-    plansDirReal = await realpath(plansDir);
-    planReal = await realpath(marker);
-  } catch {
-    return null;
-  }
-  if (planReal !== plansDirReal + "/" + basename) return null;
-
-  const evidence = `${plansDirReal}/${basename.slice(0, -3)}.evidence.json`;
-  try {
-    const info = await lstat(evidence);
-    if (!info.isFile() || info.isSymbolicLink()) return null;
-  } catch {
-    return null;
-  }
-  return evidence;
-}
-
-async function readCodexTaskProgress(
-  cwd: string,
-): Promise<TaskProgress | null> {
-  const home = process.env.HOME;
-  if (!home) return null;
-  const hash = await codexCwdHash(cwd);
-  if (!hash) return null;
-
-  const plansDir = `${home}/.codex/plans`;
-  const activePath = `${plansDir}/.active-${hash}`;
-  const pendingPath = `${plansDir}/.pending-${hash}`;
-  const active = await activeMarkerPresence(activePath);
-  if (active === "blocked") return null;
-  const marker = active === "present"
-    ? await readFreshMarker(activePath)
-    : await readFreshMarker(pendingPath);
-  if (!marker) return null;
-
-  const evidence = await evidencePathFromMarker(plansDir, marker);
-  if (!evidence) return null;
-
-  try {
-    const raw: unknown = JSON.parse(await readFile(evidence, "utf8"));
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const tasks = (raw as { tasks?: unknown }).tasks;
-    if (!Array.isArray(tasks)) return null;
-    let done = 0;
-    let total = 0;
-    for (const task of tasks) {
-      if (!task || typeof task !== "object" || Array.isArray(task)) {
-        return null;
-      }
-      const status = (task as { status?: unknown }).status ?? "pending";
-      if (typeof status !== "string" || !CODEX_TASK_STATUSES.has(status)) {
-        return null;
-      }
-      total++;
-      if (status === "completed") done++;
-    }
-    return total === 0 ? null : { done, total };
-  } catch {
-    return null;
-  }
-}
-
 export async function readTaskProgressForRow(
   row: PaneRow,
 ): Promise<TaskProgress | null> {
   if (row.startup) return null;
-  if (row.agent === "codex") {
-    // Not paneDir: the marker is hashed from the directory Codex's commands run
-    // in, which @pane_cwd tracks and the pane's own process may not.
-    return await readCodexTaskProgress(row.cwd || row.currentPath);
-  }
   if (row.agent === "claude") {
     return await readTaskProgress(row.sessionId);
   }

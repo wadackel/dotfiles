@@ -78,7 +78,7 @@ VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and
 |---|---|
 | `{repo_path}` | Absolute path to the repository or worktree under review |
 | `{branch}` | Branch name, or `detached at <sha>` |
-| `{diff_path}` | The diff file the gate wrote (`~/.claude/plans/<plan-slug>.gate.diff` from `plan-state.ts diff`, or the scratchpad file under `--diff-only`) |
+| `{diff_path}` | The diff file the gate wrote (`<scratchpad>/<plan-slug>.gate.diff`, or `<scratchpad>/<timestamp>.gate.diff` under `--diff-only`) |
 | `{diff_body}` | The diff text for `code-reviewer` and `security-auditor`, which have no Bash; `(see Diff file)` for every other specialist |
 | `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns |
 

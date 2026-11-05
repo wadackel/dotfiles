@@ -158,10 +158,8 @@ def run(args):
         copy_tree(source / "home/programs/agents/skills/requirements-interview", skills / "requirements-interview")
         agent_scripts = home / ".agents/scripts"
         agent_scripts.mkdir()
-        for name in ("check-plan.ts", "plan-state.ts", "plan-evidence.ts"):
-            shutil.copyfile(Path(args.root) / "home/programs/agents/scripts" / name, agent_scripts / name)
-        for name in ("check-plan.ts", "plan-state.ts"):
-            (agent_scripts / name).chmod(0o755)
+        shutil.copyfile(Path(args.root) / "home/programs/agents/scripts/check-plan.ts", agent_scripts / "check-plan.ts")
+        (agent_scripts / "check-plan.ts").chmod(0o755)
         if args.setup_only:
             (work / "manifest.json").write_text(json.dumps(dict(status="setup-only", case=args.case, variant=args.variant)))
             print(json.dumps(dict(status="setup-only", work=str(work), agent_scripts=sorted(p.name for p in agent_scripts.iterdir()))), flush=True)
@@ -178,7 +176,6 @@ def run(args):
         for command in (["config", "user.email", "test@example.invalid"], ["config", "user.name", "Test"],
                         ["add", "."], ["commit", "-qm", "fixture"]):
             subprocess.run(["git", *command], cwd=repo, check=True, env=git_env)
-        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True, env=git_env).strip()
         for name, contents in case.get("changes", {}).items():
             file = fixture_path(repo, name)
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -187,11 +184,6 @@ def run(args):
         if case.get("plan"):
             plan = plans / "case.md"
             plan.write_text(case["plan"].replace("{repo}", str(repo)))
-            sidecar = dict(plan="case.md", tasks=[
-                dict(id="task-1", subject="Behavior", baseline_sha=head, evidence=case.get("evidence", "python3 main.py: ready (PASS)"), status="completed"),
-                dict(id="task-2", subject="Final Audit + Review", baseline_sha=None, evidence=None, status="pending"),
-            ])
-            (plans / "case.evidence.json").write_text(json.dumps(sidecar))
             cwd_hash = hashlib.sha256(str(repo.resolve()).encode()).hexdigest()[:16]
             marker = plans / f".active-{cwd_hash}"
             marker.write_text(str(plan) + "\n")
@@ -260,9 +252,6 @@ def run(args):
                       scripted_answers_used=used_answers, commands=commands)
         result["tree_usage"] = session_usage(codex_home)
         result["tree_usage"]["complete"] &= result["completed_turn"]
-        evidence = plans / "case.evidence.json"
-        if evidence.exists():
-            result["final_evidence"] = json.loads(evidence.read_text())
         (work / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False))
         print(json.dumps({key: result[key] for key in ("case", "variant", "completed_turn", "elapsed_seconds", "input_tokens", "output_tokens", "verdict")}), flush=True)
     finally:

@@ -93,7 +93,7 @@ export function requirementMessage(
   missing: Missing,
 ): string {
   const line = missing === "a diff file path"
-    ? "  Diff file: ~/.claude/plans/<plan-slug>.gate.diff   (or paste the diff so a `diff --git` hunk is in the prompt)"
+    ? "  Diff file: <scratchpad>/<plan-slug>.gate.diff   (or paste the diff so a `diff --git` hunk is in the prompt)"
     : missing === "the workspace sentence"
     ? "  Workspace: write only inside the breaker worktree and your temp directory."
     : "  Read-only: run only commands that read (git diff / show / log, rg, sed -n, cat, ls); do not create, modify, or delete files.";

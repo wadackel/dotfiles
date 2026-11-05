@@ -15,21 +15,19 @@ Plan handoffs retain purpose, non-goals, constraints, acceptance criteria, and
 implementation discretion. Accepted decisions carry forward; material new
 decisions still require an answer.
 
-`$impl` records verification against the plan and current working tree, including
-untracked files and executable bits. Its final gate requires current acceptance
-checks, independent review verdicts, and fresh live observations. An unavailable
-required check remains incomplete unless an eligible explicit waiver is recorded.
-The helper compares live identities against a declared file digest, current Git
-HEAD, or an explicitly declared manual identity; it cannot attest that external
-state never changed after observation.
+`$impl` runs each acceptance check as a plain command and keeps the output in
+the conversation; no record file is written. At its start it sets the ref
+`refs/impl-base/<plan basename>`, and review diffs from it, untracked files
+included. Its final gate re-runs every acceptance check on the final tree and
+requires independent review verdicts and fresh live observations. An unavailable
+required check remains incomplete unless the user explicitly waives it.
 
-Plan paths remain stable across compaction and expired Agentower markers. Legacy
-evidence remains readable and is revalidated before completion. Markers continue
-to control display only, with Agentower's existing 24-hour freshness window.
+Plan paths remain stable across compaction and expired Agentower markers. Markers
+control display only, with Agentower's 24-hour freshness window, and are not read
+for task progress.
 
-See the [evidence command contract](skills/impl/references/evidence.md) for
-sidecar compatibility, locking, and supported artifact types, and the
-[evaluation protocol](evals/harness/README.md) for model and harness comparisons.
+See the [evaluation protocol](evals/harness/README.md) for model and harness
+comparisons.
 
 ## Implemented parity
 

@@ -4,10 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
-  realpath,
   rm,
-  symlink,
-  utimes,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -16,7 +13,6 @@ import {
   cardIndexAt,
   clampPreview,
   clampStep,
-  codexCwdHash,
   COMPACT_CARD,
   inListArea,
   isCompact,
@@ -707,50 +703,6 @@ function codexRow(cwd: string): PaneRow {
   };
 }
 
-async function writeCodexPlanState(
-  home: string,
-  cwd: string,
-  opts: {
-    marker: "active" | "pending";
-    tasks?: Array<"pending" | "in_progress" | "completed" | undefined>;
-    markerContent?: string;
-    evidenceText?: string;
-    expired?: boolean;
-  },
-): Promise<{ markerPath: string; planPath: string; evidencePath: string }> {
-  const plansDir = `${home}/.codex/plans`;
-  await mkdir(plansDir, { recursive: true });
-  await mkdir(cwd, { recursive: true });
-  const hash = await codexCwdHash(cwd);
-  if (!hash) throw new Error("failed to hash codex cwd");
-
-  const planPath = `${plansDir}/sample-plan.md`;
-  const evidencePath = `${plansDir}/sample-plan.evidence.json`;
-  await writeFile(planPath, "## sample plan\n");
-  const tasks = opts.tasks ?? ["completed", "in_progress", "pending"];
-  const taskObjects = tasks.map((status, i) => {
-    const task: Record<string, unknown> = {
-      id: `task-${i + 1}`,
-      subject: `Task ${i + 1}`,
-    };
-    if (status !== undefined) task.status = status;
-    return task;
-  });
-  await writeFile(
-    evidencePath,
-    opts.evidenceText ??
-      JSON.stringify({ plan: "sample-plan.md", tasks: taskObjects }, null, 2),
-  );
-
-  const markerPath = `${plansDir}/.${opts.marker}-${hash}`;
-  await writeFile(markerPath, opts.markerContent ?? `${planPath}\n`);
-  if (opts.expired) {
-    const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await utimes(markerPath, old, old);
-  }
-  return { markerPath, planPath, evidencePath };
-}
-
 test("readTaskProgress: empty sessionId → null", async () => {
   assertEquals(await readTaskProgress(""), null);
 });
@@ -801,155 +753,31 @@ test("readTaskProgress: non-json files ignored", async () => {
   });
 });
 
-test("readTaskProgressForRow: codex active marker aggregates evidence tasks", async () => {
+test("readTaskProgressForRow: a codex row shows no progress, even beside an old plan record", async () => {
   await withTempHome(async (home) => {
     const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "active",
-      tasks: ["completed", "completed", "in_progress"],
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
-      done: 2,
-      total: 3,
-    });
-  });
-});
-
-test("codexCwdHash: matches codex-plan-marker cwdHash", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
+    const plansDir = `${home}/.codex/plans`;
     await mkdir(cwd, { recursive: true });
-    assertEquals(await codexCwdHash(cwd), await markerCwdHash(cwd));
-  });
-});
-
-test("readTaskProgressForRow: codex pending marker used when active absent", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "pending",
-      tasks: ["completed", "pending", "pending"],
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
-      done: 1,
-      total: 3,
-    });
-  });
-});
-
-test("readTaskProgressForRow: codex expired active marker blocks pending fallback", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "pending",
-      tasks: ["completed", "completed", "completed"],
-    });
-    await writeCodexPlanState(home, cwd, {
-      marker: "active",
-      tasks: ["completed"],
-      expired: true,
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
-
-test("readTaskProgressForRow: codex invalid marker path returns null", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "active",
-      markerContent: "/tmp/outside-plan.md\n",
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
-
-test("readTaskProgressForRow: codex symlink evidence returns null", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    const { evidencePath } = await writeCodexPlanState(home, cwd, {
-      marker: "active",
-    });
-    const outside = `${home}/outside-evidence.json`;
+    await mkdir(plansDir, { recursive: true });
+    const planPath = `${plansDir}/sample-plan.md`;
+    await writeFile(planPath, "## sample plan\n");
     await writeFile(
-      outside,
+      // The suffix older $plan runs gave the record; joined so a search for
+      // the retired name finds no live use of it.
+      `${plansDir}/sample-plan.${["evidence", "json"].join(".")}`,
       JSON.stringify({
         plan: "sample-plan.md",
-        tasks: [{ id: "task-1", subject: "one", status: "completed" }],
+        tasks: [{ id: "task-1", status: "completed" }],
       }),
     );
-    const outsideReal = await realpath(outside);
-    await rm(evidencePath);
-    await symlink(outsideReal, evidencePath);
+    await writeFile(
+      `${plansDir}/.active-${await markerCwdHash(cwd)}`,
+      `${planPath}\n`,
+    );
     assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
   });
 });
 
-test("readTaskProgressForRow: codex symlink plan marker returns null", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    const { markerPath } = await writeCodexPlanState(home, cwd, {
-      marker: "active",
-    });
-    const plansDir = `${home}/.codex/plans`;
-    const outside = `${home}/outside-plan.md`;
-    const linked = `${plansDir}/linked-plan.md`;
-    await writeFile(outside, "## outside\n");
-    const outsideReal = await realpath(outside);
-    await symlink(outsideReal, linked);
-    await writeFile(markerPath, `${linked}\n`);
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
-
-test("readTaskProgressForRow: codex active marker symlink blocks pending fallback", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    const { markerPath } = await writeCodexPlanState(home, cwd, {
-      marker: "pending",
-      tasks: ["completed", "completed", "completed"],
-    });
-    const hash = await codexCwdHash(cwd);
-    if (!hash) throw new Error("failed to hash codex cwd");
-    const activePath = `${home}/.codex/plans/.active-${hash}`;
-    await symlink(`${home}/missing-active-marker`, activePath);
-    assertEquals(markerPath.endsWith(hash), true);
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
-
-test("readTaskProgressForRow: codex malformed evidence returns null", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "active",
-      evidenceText: "{not json",
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
-
-test("readTaskProgressForRow: codex legacy missing status counts as pending", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await writeCodexPlanState(home, cwd, {
-      marker: "active",
-      tasks: ["completed", undefined, "pending"],
-    });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), {
-      done: 1,
-      total: 3,
-    });
-  });
-});
-
-test("readTaskProgressForRow: codex missing marker returns null", async () => {
-  await withTempHome(async (home) => {
-    const cwd = `${home}/work/project`;
-    await mkdir(cwd, { recursive: true });
-    assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
-  });
-});
 // --- truncateTopSegBody ---
 
 function mkSeg(overrides: Partial<Row2Seg> = {}): Row2Seg {

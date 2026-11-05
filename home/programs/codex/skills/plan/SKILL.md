@@ -45,7 +45,7 @@ Independent DEEPEN review uses `~/.codex/agents/plan-critic.toml`. Routine plann
 
 `$plan` exists to produce a plan that lets the implementer execute without drifting from user intent. Do not proceed to plan creation merely because an implementation path is technically visible.
 
-For small, medium, and large requests, do not create the plan file, evidence sidecar, or pending marker until user-intent decisions are resolved. Resolved means the user answered, the user explicitly authorized a stated assumption, or the remaining uncertainty is codebase-recoverable technical discovery with a concrete downstream `next:`.
+For small, medium, and large requests, do not create the plan file or pending marker until user-intent decisions are resolved. Resolved means the user answered, the user explicitly authorized a stated assumption, or the remaining uncertainty is codebase-recoverable technical discovery with a concrete downstream `next:`.
 
 Self-resolve observable facts before asking. Facts may come from code, config, logs, existing issues, and the current conversation. Do not infer desired behavior, priorities, scope boundaries, success criteria, risk tolerance, or trade-off acceptance from observation.
 
@@ -125,7 +125,7 @@ Clarity-gated loop: AGREE is clarity-gated. For small, medium, large, and xl req
 
 Interview gate: classify every unresolved ambiguity with the observed-fact / user-decision / technical-deferral / draft-assumption table in `references/interview.md` before plan creation.
 
-If any `User decision` remains, create no plan file, evidence sidecar, or pending marker in this turn. Ask and wait for the answer before dependent work. End the turn when using text-only continuation; otherwise continue independent investigation.
+If any `User decision` remains, create no plan file or pending marker in this turn. Ask and wait for the answer before dependent work. End the turn when using text-only continuation; otherwise continue independent investigation.
 
 Each clarification pass:
 
@@ -183,7 +183,7 @@ Write the plan body to `~/.codex/plans/YYYYMMDDTHHmm-<slug>.md`. The slug comes 
 
 - Skill instruction prose in this file is English.
 - User-facing generated output remains in the user's configured language. In this repository, that means Japanese unless the user asks otherwise.
-- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, `## Deepening Log`, and `## Completion Criteria`.
+- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, and `## Completion Criteria`.
 - Machine-consumed contents, including `## Completion Criteria` subsections and Acceptance Criteria lines, are English.
 - AGREE-output subsection headings are fixed English: `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`.
 - File paths, commands, and `EXPECT:` values stay as-is.
@@ -223,17 +223,17 @@ For PoC work, state the successful primary path and stopping condition so Goal d
 
 After writing the body, state the plan path, the section headings, and the key design decisions in at most 3 lines in the user's configured language, then proceed directly to DEEPEN. Do not ask whether to proceed — direction agreement happened in AGREE, and drift detection is DEEPEN's job. For trivial plans (DEEPEN skipped), the ACTIVATE Approval Summary and the `$impl` approval gate are the review surface.
 
-Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN as the `Lint:` line under the round line, not as rows of the `| # | Finding | Kind | Action |` table; for a trivial plan (no DEEPEN) carry them into the Approval Summary as one `Lint:` line.
+Before the handoff, run `~/.agents/scripts/check-plan.ts <plan path>`. Fix every `error` in the plan file first (missing required sections, untagged Autonomous Verification bullets, malformed Requires User Confirmation items). Carry `warn` lines into DEEPEN; for a trivial plan (no DEEPEN) carry them into the Approval Summary as one `Lint:` line.
 
-Keep the plan body lightweight (target ~120-180 lines, excluding the Deepening Log).
+Keep the plan body lightweight (target ~120-180 lines).
 
 ### Completion Criteria item tags
 
 Tag every Autonomous Verification item at every complexity, trivial included (`$impl` Audit consumes these):
 
 - `[file-state]`: observable with Read / Grep / Glob
-- `[orchestrator-only]`: requires host access commands such as `nix flake check`, `darwin-rebuild`, or sudo; main session pre-runs and records evidence in the sidecar before the final gate
-- `[live]`: observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
+- `[orchestrator-only]`: requires host access commands such as `nix flake check`, `darwin-rebuild`, or sudo; main session runs it and keeps the output in the conversation before the final gate
+- `[live]`: observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — reported in the conversation with that run method; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
 - `[outcome]`: circular by design (e.g. `$impl` built-in Review PASS); derived from the review's own verdict
 
 When unsure, default to `[orchestrator-only]`.
@@ -253,11 +253,11 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 - None
 
 ### Baseline
-- Each implementation task has raw verification evidence recorded in the sidecar JSON.
-- The reserved `Final Audit + Review` task is completed only after `$impl` records `REVIEW_VERDICT: PASS` and `plan-state.ts complete` accepts the final task.
+- Each implementation task's checks ran as plain commands with their output in the conversation.
+- The reserved `Final Audit + Review` task is completed only after `$impl` re-runs every check on the final tree and emits `REVIEW_VERDICT: PASS`.
 ```
 
-`[outcome]` may appear under `### Autonomous Verification`, but `plan-state.ts coverage` never requires it and `$impl` checks it only after final Review. Verdict format `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Review; the audit is `plan-state.ts coverage` / `complete`.
+`[outcome]` may appear under `### Autonomous Verification`; `$impl` checks it only after final Review. Verdict format `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Review.
 
 ### Requires User Confirmation item format
 
@@ -267,11 +267,11 @@ Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator
 - [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | dev server | real PR | device | interactive session> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
 ```
 
-Questions for the user do not belong here — ask them in AGREE or list them under `### Unresolved Items`. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source (1Password item, env var) instead, because the line is copied into chat and the gate sidecar. Write `- None` when there is nothing to confirm. An item missing any field is not a valid item.
+Questions for the user do not belong here — ask them in AGREE or list them under `### Unresolved Items`. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source (1Password item, env var) instead, because the line is copied into chat. Write `- None` when there is nothing to confirm. An item missing any field is not a valid item.
 
 ## DEEPEN
 
-Review the plan against the original request and observed evidence. Edit the plan with `apply_patch` or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. Logs go to `<plan-basename>.log.md`. Record the review selection and its concrete reason: `Review executor: main session` or `Review executor: independent plan-critic`.
+Review the plan against the original request and observed evidence. Edit the plan with `apply_patch` or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`. No log file is written. State the review selection and its concrete reason: `Review executor: main session` or `Review executor: independent plan-critic`.
 
 ### Main-session review
 
@@ -279,7 +279,7 @@ Check requirement alignment, technical evidence, failure behavior, verification 
 
 Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item.
 
-When independent review is not selected, this pass completes DEEPEN. Record findings and their resolution as main-session review; do not report subagent approval.
+When independent review is not selected, this pass completes DEEPEN. Report findings and their resolution as main-session review; do not report subagent approval.
 
 ### Independent review
 
@@ -295,23 +295,19 @@ The Critic returns `CONVERGED` or `ITERATE` immediately after `### Verdict`, and
 - Resolve FALSIFIED claims before activation. For UNVERIFIED claims the approach depends on, obtain evidence or revise the approach to remove that dependency; a favorable verdict does not clear them.
 - Return consequential user-intent decisions to AGREE. Do not invent agreement from a reviewer's recommendation.
 
-Use one review round by default. A Test Coverage veto earns one more round; an explicit `--max-rounds` allows more, within a cap of five, regardless of the verdict. Reuse the same reviewer for fixes and rechecks, supplying the updated artifact and relevant changes. Obtain a current review after substantive plan changes. At the limit, leave actual blockers unresolved and report them; do not convert exhaustion into approval.
+Use one review round by default. A Test Coverage veto earns one more round; an explicit `--max-rounds` allows more, within a cap of five, regardless of the verdict. Reuse the same reviewer for fixes and rechecks, supplying the updated artifact, relevant changes, and the earlier findings with how each was resolved. Obtain a current review after substantive plan changes. At the limit, leave actual blockers unresolved and report them; do not convert exhaustion into approval.
 
 ### Review lifecycle
 
-Keep `agent_id / role / target / result` in the log. Collect each result before changing its target. Reuse the reviewer until the review is finished, then close it when the runtime supports closing. No close operation is not a review failure. On capacity exhaustion, collect outstanding work and retry dispatch once; a required review that remains unavailable is incomplete. Do not spawn nested agents.
+Keep `agent_id / role / target / result` in the conversation. Collect each result before changing its target. Reuse the reviewer until the review is finished, then close it when the runtime supports closing. No close operation is not a review failure. On capacity exhaustion, collect outstanding work and retry dispatch once; a required review that remains unavailable is incomplete. Do not spawn nested agents.
 
 ### Consolidated Interview
 
 Collect only consequential user decisions from the review and follow AGREE's question format and frontier ordering. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect. Each real question needs a recommendation and rationale. Technical corrections and optional style suggestions do not need another user approval. Preserve decisions already settled in AGREE.
 
-### Deepening Log artifact
-
-Append main-session observations, verbatim independent reviewer output when used, and finding resolutions to `<plan-basename>.log.md`. Redact credentials. Start entries with `### Round N`, followed by the `Round N: critic` or `Round N: main review` line, the `Lint:` line, and the `| # | Finding | Kind | Action |` table that `references/contract.md` fixes; distinguish main and independent review. Record the agent and current target for any follow-up. The plan body must contain exactly one `## Deepening Log` section with only `See [./<basename>.log.md](./<basename>.log.md)`.
-
 ## DECOMPOSE
 
-The main session initializes the evidence sidecar JSON and, when available, mirrors tasks with Codex `update_plan`. If that tool is unavailable, the sidecar remains authoritative; report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE. An Autonomous Verification bullet is one argv (`$impl` records it with `plan-state.ts run`), so a criterion that needs two commands is two bullets, and a count or content condition is written so the command's exit code decides it (`--grep` and `--tail` only trim what is shown). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task's `rerun` skips checks already passing at the current target.
+The main session mirrors tasks with Codex `update_plan` when it is available; otherwise report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE. An Autonomous Verification bullet is one command that `$impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task runs every bullet again.
 
 ### update_plan constraints
 
@@ -334,16 +330,6 @@ update_plan({
   ]
 })
 ```
-
-### Sidecar JSON initialization
-
-Initialize `~/.codex/plans/<plan-basename>.evidence.json` in the same order as tasks. The helper assigns IDs by array order: `task-1`, `task-2`, etc. Start the helper by its path; it is executable, and its shebang carries the flags that keep Bun from loading a `bunfig.toml` or `.env` out of the working directory:
-
-```bash
-~/.agents/scripts/plan-state.ts init "$HOME/.codex/plans/<basename>.evidence.json" '<basename>.md' '["subject 1","subject 2","Final Audit + Review"]'
-```
-
-The helper exits 1 if `subjects-json` does not end with `Final Audit + Review`. Sidecar writes are atomic via tmpfile + rename.
 
 The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Audit and risk-selected Review phase. It is not an implementation task.
 
@@ -394,7 +380,7 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 - `home/programs/agents/shared/plan/references/contract.md` and `interview.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): shared with the Claude version through whole-dir linking. Fixed strings and the interview judgment.
 - `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
 - `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
-- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, runs `plan-state.ts coverage` / `complete` as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
+- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, re-runs every check on the final tree as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
 - Marker helper (`codex-plan-marker.ts`): writes Agentower's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes

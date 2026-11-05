@@ -420,7 +420,11 @@ test("replyKind: 質問・報告・Plan ready・その他を見出しと固定�
     "question",
   );
   assertEquals(
-    replyKind("Gate は PASS。\n\nFull record: ~/x.gate.log.md"),
+    replyKind("Gate は PASS。\n\nFull record: ~/x.md"),
+    "report",
+  );
+  assertEquals(
+    replyKind("計画どおり、gate を通過\n\n**どこまで確かめたか**\n- テスト 12 件"),
     "report",
   );
   assertEquals(

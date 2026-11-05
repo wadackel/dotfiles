@@ -1,6 +1,6 @@
 # Contract
 
-The fixed strings that the plan, impl, and gate skills (Claude), `$plan` / `$impl` (Codex), `check-plan.ts`, `plan-state.ts`, `reviewer-dispatch-policy.ts`, and the reviewer prompts read or write. `check-plan.ts` mirrors the headings and the Requires User Confirmation vocabulary; `codex-plan-clarification-contract_test.ts` pins each entry against the files that carry it. Question judgment is in `interview.md`.
+The fixed strings that the plan, impl, and gate skills (Claude), `$plan` / `$impl` (Codex), `check-plan.ts`, `reviewer-dispatch-policy.ts`, and the reviewer prompts read or write. `check-plan.ts` mirrors the headings and the Requires User Confirmation vocabulary; `codex-plan-clarification-contract_test.ts` pins each entry against the files that carry it. Question judgment is in `interview.md`.
 
 ## Plan file
 
@@ -40,11 +40,11 @@ A reviewer re-runs a quoted probe only when it is exactly one of `sed -n '<N>,<M
 Every `### Autonomous Verification` bullet starts with one tag:
 
 - `[file-state]` — verifiable with Read / Grep / Glob.
-- `[orchestrator-only]` — needs host access the reviewer sandbox lacks; the main session runs it and records evidence.
-- `[live]` — observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — recorded in the task evidence; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
+- `[orchestrator-only]` — needs host access the reviewer sandbox lacks; the main session runs it and keeps its output in the conversation.
+- `[live]` — observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — reported in the conversation with that run method; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
 - `[outcome]` — circular by design (a review verdict); never a substitute for acceptance evidence.
 
-A plan that changes user-observable behavior carries at least one `[live]` item. Bullets are numbered in order for `plan-state.ts coverage`: the n-th bullet's required check id is `cc-<n>` with the bullet's tag as its kind; `[outcome]` bullets take a number but need no check.
+A plan that changes user-observable behavior carries at least one `[live]` item.
 
 `### Requires User Confirmation` holds `- None` or items in this exact five-field form, labels in English:
 
@@ -54,12 +54,11 @@ A plan that changes user-observable behavior carries at least one `[live]` item.
 
 `Needed by: task N` and `final gate` block completion until the user reports or waives; `next real run <trigger>` defers to an event this session cannot produce. `Your steps` must not inline tokens, passwords, or credentialed URLs — name the credential source instead.
 
-## Tasks and evidence
+## Tasks and checks
 
-- The final task subject is `Final Audit + Review`; `plan-state.ts` refuses any other last subject. Claude's `/plan` and Codex's `$plan` both create it.
-- Evidence sidecar: `<plan basename>.evidence.json` next to the plan, written only through `plan-state.ts` (`init` / `start` / `require` / `snapshot` / `run` / `rerun` / `record` / `review` / `append-evidence` / `coverage` / `complete` / `reconcile` / `diff` / `materialize`), which also takes the plan's name in place of the sidecar path. `run --red` records a check that fails before the source change; a red record never verifies a task, and `rerun` replays it expecting exit 0. Check kinds `file-state`, `orchestrator-only`, `live`, `audit`, `review`; statuses `pass`, `fail`, `blocked`, `waived`. The final task needs one `review` check; `audit` is accepted, not required. A `file-state` / `orchestrator-only` check holds one argv, recorded by `run`: an Autonomous Verification bullet is one command, so a criterion that needs two commands is two bullets. A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; `plan-state.ts rerun <evidence>` on the final task skips a check already passing at the current target, so it does not run twice.
-- Other sidecars: `<plan>.log.md` (deepening log), `<plan>.gate.log.md` (gate record), `<plan>.gate.diff` and `<plan>.rereview-<n>.gate.diff` (review inputs written by `plan-state.ts diff`; the hook matches `.gate.diff`), `<plan>.objects/` (the git objects `run` and `snapshot` write; never inside `.git`), `<plan>.breaker` and `<plan>.breaker.tree` (the Claude gate's breaker worktree and the tree it holds, written and removed by `plan-state.ts materialize`).
-- Deepening log form, per round: `### Round N`, then one round line — `Round N: critic <min> min, Critical <n> (form <f> / behavior <b> / user <u>)[; adversarial <min> min, Falsified <n>, DQ <n>]; verdicts <critic>[ / <adversarial>]` when an independent reviewer ran (minutes: Claude the Agent completion notification's duration, Codex the wall clock from spawn to result), or `Round N: main review, Critical <n> (form <f> / behavior <b> / user <u>); verdicts <v>` for a main-session review (Codex when it reviews alone; Claude's `/plan`, which no longer dispatches reviewers) — then `Lint: …`, one line carrying check-plan's warn lines (never table rows), then the table `| # | Finding | Kind | Action |` with one row per critic Critical Issue and one per adversarial Falsified claim (a finding both reported may share one row, Kind from the critic side). Kind values: `form` = a defect of citation, grade, or format; `behavior` = a wrong or missing claim about code or behavior; `user` = needs the user's decision. plan-metrics splits rounds on the `Round N:` lines when a log has them.
+- The final task subject is `Final Audit + Review`. Claude's `/plan` and Codex's `$plan` both create it.
+- An Autonomous Verification bullet is one command, run as written; its exit code, or the lines the bullet names, decides it, and its output stays in the conversation. No record file is written. A test a task adds runs before the source change and fails. A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task runs every bullet again on the current tree.
+- Claude's `/impl` and Codex's `$impl` set the ref `refs/impl-base/<plan basename>` at their start; review diffs from it, and Claude's `/gate` (when it passes) or Codex's `$impl` (at Finish) deletes it. The gate's working files sit in the session scratchpad: `<slug>.gate.diff`, `<slug>.rereview-<n>.gate.diff` and `<slug>.final.gate.diff` (review inputs and the final diff `human-review.md` is applied to; the hook matches `.gate.diff`), and, removed when the gate ends, `<slug>.index` (the index copy a snapshot uses) and `<slug>.breaker` / `<slug>.before` (the breaker's worktrees).
 
 ## Activation
 
@@ -79,7 +78,7 @@ Codex ends `$plan` with an Approval Summary and `PENDING APPROVAL — $impl [pla
 
 ## Final report
 
-Claude's `/impl` final report and the standalone `/gate` reply are a short card defined in `impl/SKILL.md`: a result line, then the bold groups `**何が起きたか**`, `**どこまで確かめたか**`, `**触ったファイル**` (a tree) and `**あなたがすること**` with the sub-groups `レビューしてほしい N か所`, `決める N つ` and `確かめてほしい N つ`, one fact per line. Fixed strings: the last line `Sidecar: <path>` (plan-metrics reads it as the end of the report); `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` in the result line when the gate escalated. Codex `$impl` writes the same card, with `レビューしてほしい N か所` used the same way.
+Claude's `/impl` final report and the standalone `/gate` reply are a short card defined in `impl/SKILL.md`: a result line, then the bold groups `**何が起きたか**`, `**どこまで確かめたか**`, `**触ったファイル**` (a tree) and `**あなたがすること**` with the sub-groups `レビューしてほしい N か所`, `決める N つ` and `確かめてほしい N つ`, one fact per line. Fixed strings: `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` in the result line when the gate escalated. Codex `$impl` writes the same card, with `レビューしてほしい N か所` used the same way.
 
 ## Reviewer output
 
@@ -93,4 +92,4 @@ Critic replies end with `### Verdict` holding `ITERATE` or `CONVERGED`; adversar
 
 ## Escalation markers
 
-`[BLOCKED: gate escalated]` appended to the final task when a blocker is still open at the end (the Claude gate: after the first wave, one re-review, and one closing pass in which the main session escalates a spec Issue, hands a security or human-review boundary blocker to the reader, closes another that a red-then-green `fix-<n>` run shows fixed, and escalates the rest; Codex `$impl`: as its skill says); `BLOCKED BY USER` for a waived `[live]` item; `USER CONFIRMATION PENDING` when a `Needed by: final gate` item is unanswered.
+`[BLOCKED: gate escalated]` in the report's result line when a blocker is still open at the end (the Claude gate: after the first wave, one re-review, and one closing pass in which the main session escalates a spec Issue, hands a security or human-review boundary blocker to the reader, closes another that a run failing before the fix and passing after it shows fixed, and escalates the rest; Codex `$impl`: as its skill says); `BLOCKED BY USER` for a waived `[live]` item; `USER CONFIRMATION PENDING` when a `Needed by: final gate` item is unanswered.
