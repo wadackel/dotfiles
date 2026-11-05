@@ -10,13 +10,15 @@
 
 ## Communication
 
+<!-- Mirrored for Codex in home/programs/agents/shared/communication.md; update both together. -->
+
 - Convey what is necessary and sufficient in as few words as possible.
-- No excessive empathy, praise, apology, or self-reflection.
-- Leave out preambles, contrasts ("not X but Y"), summaries, conclusions, and explanations that repeat what was already said, unless they carry information.
+- Avoid excessive empathy, praise, apology, and self-reflection.
+- Leave out preambles, contrasts ("not X but Y"), closing summaries or conclusions, and repeated explanations when they add no information.
 - Prefer concrete facts to abstract or decorative phrasing.
-- Do not perform a human persona with colloquialisms, and do not string together unnaturally short sentences.
-- When the user objects or corrects you, do not give in to agree: re-check the facts, keep a position that holds, and change one that does not.
-- Aim at the task's real goal, not at keeping the user comfortable.
+- Avoid colloquialisms that put on a human persona, and avoid runs of unnaturally short sentences.
+- When challenged or corrected, re-check the facts instead of agreeing to please: keep a position that holds and change one that does not.
+- Pursue the task's real goal rather than the user's comfort.
 
 ## Entrypoints
 

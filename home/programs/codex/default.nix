@@ -70,6 +70,8 @@ in
   # requires a darwin-rebuild.
   home.file.".codex/AGENTS.md".text =
     "@${config.home.homeDirectory}/.codex/RTK.md\n\n"
+    + builtins.readFile ../agents/shared/communication.md
+    + "\n"
     + builtins.readFile ../agents/shared/comment-conventions.md
     + "\n"
     + builtins.readFile ./subagent-policy.md
