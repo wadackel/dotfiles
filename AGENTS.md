@@ -21,6 +21,7 @@ When working on tasks in this repository, Claude Code should:
      - `.#work` for the work machine (tsuyoshi.wada)
    - Check the current user/hostname with `whoami` and `hostname` if uncertain
    - Example: `sudo darwin-rebuild switch --flake .#private`
+   - On the private profile, run `sudo -n darwin-rebuild switch --flake .#private` yourself: a sudoers entry lets `/run/current-system/sw/bin/darwin-rebuild` run without a password there, and every other `sudo` command still needs one. On the work profile `sudo` needs the user's Touch ID or password, so ask the user to run the switch
    - When editing symlinked config files (tmux.conf, zshrc, etc.) managed by home-manager, darwin-rebuild is not needed. Changes are immediately reflected since the file is symlinked, not copied. Only run darwin-rebuild when modifying Nix files themselves (*.nix).
 
 2. **Verify changes programmatically**
@@ -96,7 +97,7 @@ The `programs/default.nix` auto-imports all subdirectories, enabling modular con
 - **`mkDarwin`**: Creates nix-darwin configuration with embedded home-manager
 - **`mkHomeDir`**: Derives home directory from username (`/Users/${username}`)
 
-Both configurations use the same overlays and extraSpecialArgs to ensure consistency.
+Both configurations use the same overlays and pass `inputs`, `username`, `homeDir`, and `storeRoot` to home modules. Only the home-manager embedded in `mkDarwin` also passes `profile`. The module system does not fall back to a `profile ? null` default (it looks the argument up in `_module.args` instead), so a home module that reads `profile` makes the standalone `homeConfigurations` fail to evaluate with `attribute 'profile' missing`.
 
 ## Configuration Scope
 
@@ -155,7 +156,7 @@ Edit `darwin/configuration.nix` under the `system.defaults.*` sections. Settings
 
 ### Profile-Specific Configuration
 
-Use the `profile` parameter (available in darwin modules) for conditional configuration:
+Use the `profile` parameter (available in darwin modules, and in home modules evaluated through `mkDarwin`) for conditional configuration:
 
 ```nix
 system.defaults.NSGlobalDomain.AppleShowScrollBars =

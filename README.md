@@ -15,12 +15,15 @@ macOS development environment configuration managed with Nix, nix-darwin, and ho
 - `flake.lock` - Locked dependency versions
 - `treefmt.nix` - Code formatting configuration
 - `darwin/` - nix-darwin system configuration
+- `lib/dotfiles-path.nix` - `linkHere` / `pathHere`, which link or point at files in the `~/dotfiles` worktree
 - `home/` - home-manager user configuration
   - `home.nix` - Main home-manager configuration
-  - `programs/` - Program-specific modules (21 programs, auto-imported)
+  - `programs/` - Program-specific modules (one directory per program, auto-imported)
     - `programs/default.nix` - Auto-import helper
     - `programs/<name>/default.nix` - Each program's Nix module
     - `programs/<name>/<config>` - Co-located configuration files
+- `package.json`, `bun.lock`, `.npmrc`, `tsconfig.json` - Dependencies and type check for the TypeScript scripts, which run on Bun
+- `AGENTS.md` (root and next to some subsystems) - Notes for coding agents
 
 ## Setup
 
@@ -31,6 +34,7 @@ macOS development environment configuration managed with Nix, nix-darwin, and ho
    git clone https://github.com/wadackel/dotfiles.git ~/dotfiles
    cd ~/dotfiles
    ```
+   The repository must live at `~/dotfiles`: many config files are symlinked from there rather than copied. Every switch runs `bun install --frozen-lockfile` in it (the network is needed only after `bun.lock` changed); if that step fails, the switch stops, so run `bun install --frozen-lockfile --ignore-scripts` in `~/dotfiles` by hand and switch again.
 
 2. Apply darwin configuration (first time - bootstrap):
    ```bash
@@ -67,6 +71,8 @@ sudo darwin-rebuild switch --flake .#private
 # or for work profile:
 sudo darwin-rebuild switch --flake .#work
 ```
+
+On the private profile, `sudo darwin-rebuild` needs no password (a sudoers entry in `darwin/configuration.nix` covers that command only), so a coding agent without a terminal can apply changes with `sudo -n darwin-rebuild switch --flake .#private`. Every other `sudo` command still asks for the password.
 
 ## Updating Dependencies
 
@@ -114,3 +120,5 @@ darwin-rebuild --list-generations
 # Switch to specific generation
 sudo darwin-rebuild --switch-generation <number>
 ```
+
+Automatic garbage collection periodically deletes generations older than 14 days, so a generation older than that may no longer be there to switch back to.
