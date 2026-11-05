@@ -17,6 +17,12 @@
     reattach = true; # tmux/screen内でTouch IDを有効化
   };
 
+  # Touch ID のない Mac mini で、端末を持たない agent が switch できるようにする。
+  # flake はユーザーが書き換えられるため、引数を絞っても root 相当になる点は承知のうえ
+  security.sudo.extraConfig = lib.mkIf (profile == "private") ''
+    ${username} ALL=(root) NOPASSWD: /run/current-system/sw/bin/darwin-rebuild
+  '';
+
   # プライマリユーザー設定（Dock など per-user 設定に必要）
   system.primaryUser = username;
 
