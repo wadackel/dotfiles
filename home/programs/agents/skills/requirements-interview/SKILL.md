@@ -101,7 +101,7 @@ Group related ambiguities and prioritize — resolve the ones that affect scope 
 
 ### Phase 3: Interview
 
-Ask in the chat body, one question per turn, following `references/interview.md`: its question format, frontier ordering, non-blocking fact-finding, recommended answer on every question, and the observed-fact / user-decision / technical-deferral / draft-assumption classification. Read it before the first question. A structured question tool, when the runtime has one, is for self-contained confirmations only; tool absence never establishes approval.
+Ask in the chat body, one question per turn, following `references/interview.md`: its question format, frontier ordering, facts before the question, non-blocking fact-finding, recommended answer on every question, and the observed-fact / user-decision / technical-deferral / draft-assumption classification. Read it before the first question. A structured question tool, when the runtime has one, is for self-contained confirmations only; tool absence never establishes approval.
 
 Before producing the deliverable, classify every unresolved ambiguity with that table. If any user decision remains, ask before drafting; a reasonable default never converts a user decision into a draft assumption.
 

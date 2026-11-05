@@ -60,11 +60,16 @@ const INTERVIEW_RULE_NEEDLES = [
   "A question that depends on an open answer or an in-flight investigation waits.",
   "The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.",
   "The question is the last content in the turn; end the turn and do not advance until the answer arrives.",
-  "independent questions whose prerequisites are all settled go in one message",
+  "**One question per turn.** Ask the single highest-impact question on the frontier",
+  "Bundle only when the user asks to see the remaining questions together.",
+  "**Facts before the question.**",
+  "A fact that needs a heavy investigation (a subagent, an experiment) is investigated before the question is asked, not after",
+  "A fact that could not be observed is written as a guess (推測) with what was tried.",
+  "A question the user could answer only after asking for an explanation, an example, or an investigation is not ready.",
   "**Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.",
-  "Background stays at 2–3 sentences, and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — with `file:lines`, so a wrong premise gets corrected instead of questioned back.",
+  "Background lists the facts the choice rests on, one per line, each with its source (`file:lines`, the command, or the document), and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — so a wrong premise gets corrected instead of questioned back.",
   "When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready.",
-  "<背景 2〜3 文。前提を file:lines 付きで 1 文、見せられる選択肢はサンプルを fenced block で>",
+  "<判断材料を 1 行 1 事実で、各行に出典（file:lines、コマンド、文書）。見せられる選択肢はサンプルを fenced block で>",
   "When the recommended answer is settled by a CLAUDE.md rule, a decision already made in this conversation, or the dominant convention in the code being changed, and the choice can be reversed later, do not ask: adopt it and record it under `### Assumptions` with `observation` / `value` / `reason`.",
   // Pinned on its own so the carve-out cannot be dropped while the rule survives.
   "Desired behavior, design decisions, priority, success criteria, and risk tolerance never fall under this rule — they are asked.",
@@ -80,6 +85,16 @@ const INTERVIEW_LEGACY_NEEDLES = [
   "operating limit",
   "Max 3 real questions",
   "Self-resolved earlier:",
+  // Bundled questions were tried and reverted: each bundled one tended to need
+  // its own context or investigation before it could be answered.
+  "One turn per dependency level",
+  "one turn per dependency level",
+  "go in one message",
+  "the answer is `1a 2b`",
+  "When questions are bundled",
+  "bundle them per",
+  "may share the runtime's supported question batch",
+  "Background stays at 2–3 sentences",
 ];
 const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["Codex plan", CODEX_PLAN],
@@ -359,6 +374,19 @@ for (const [name, path] of INTERVIEW_SKILLS) {
         "Wait for required answers",
       ]);
     }
+  });
+}
+
+for (
+  const [path, reference] of [
+    [CLAUDE_IMPL, "~/.claude/skills/plan/references/interview.md"],
+    [CODEX_IMPL, "~/.agents/skills/plan/references/interview.md"],
+  ] as const
+) {
+  test(`${path} references interview.md by its public path`, async () => {
+    const skill = await readRepoFile(path);
+    assertStringIncludes(skill, reference);
+    assertExcludesAll(skill, INTERVIEW_LEGACY_NEEDLES);
   });
 }
 

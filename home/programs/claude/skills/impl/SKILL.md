@@ -35,7 +35,7 @@ For each task in order, skipping tasks whose `blockedBy` is open:
 
 ## When the plan cannot be followed
 
-Stop before deviating. Tell the user that the plan cannot be followed as written, why, and the alternative; wait for the answer. The report names the deviation under `決める`. A re-plan request keeps completed tasks and re-runs `/plan` with them as context.
+Stop before deviating. Tell the user that the plan cannot be followed as written, why, and the alternative, as one question, in the format and with the facts `~/.claude/skills/plan/references/interview.md` requires; the why is the output of the command that failed or the lines read, not a guess. Wait for the answer. The report names the deviation under `決める`. A re-plan request keeps completed tasks and re-runs `/plan` with them as context.
 
 ## Resuming after compaction
 

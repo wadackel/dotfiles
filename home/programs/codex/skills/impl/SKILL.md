@@ -43,7 +43,7 @@ For external artifacts, `[live]` evidence must identify what was actually observ
 
 Proceed with reversible changes to internal paths, naming, or implementation mechanics when they preserve the agreed behavior, compatibility, dependency choices, and operating conditions. Name the adjustment and reason in the final report; keep the plan's technical instructions accurate.
 
-Ask before changing the purpose, public behavior, scope, acceptance criteria, dependencies with operational consequences, cost, or destructive operations outside existing authorization. Show the concrete decision and its consequence. Wait for the answer while continuing independent work; elapsed time is not approval. Do not ask again for a decision already made in the conversation or an accepted Issue.
+Ask before changing the purpose, public behavior, scope, acceptance criteria, dependencies with operational consequences, cost, or destructive operations outside existing authorization. Show the concrete decision and its consequence, one question per turn, in the format and with the facts `~/.agents/skills/plan/references/interview.md` requires. Wait for the answer while continuing independent work; elapsed time is not approval. Do not ask again for a decision already made in the conversation or an accepted Issue.
 
 When the user explicitly requests re-planning, preserve the prior plan as history. Create a new plan and carry applicable completed work over to revalidate. Do not add a second confirmation just to begin requested re-planning.
 

@@ -25,10 +25,10 @@ If the request cannot be restated in one sentence, ask a clarifying question in 
 
 ## AGREE
 
-Agree on purpose and approach before drafting. One turn per dependency level, in the format from `interview.md`; decide for yourself what a CLAUDE.md rule, a decision already made in this conversation, or the code's dominant convention already settles, and record it under `### Assumptions`.
+Agree on purpose and approach before drafting. One question per turn, in the format and with the facts `interview.md` requires; decide for yourself what a CLAUDE.md rule, a decision already made in this conversation, or the code's dominant convention already settles, and record it under `### Assumptions`.
 
 - **A1 Direction check** (one question): the restate plus a direction or behavior question with concrete options and a marked recommendation; a scope candidate the probes found becomes a `user-overridden: default` assumption shown in the handoff marked 仮置き, not the question. Never ask a bare "is this right?" yes/no. For trivial, this is the only question: it carries the restate, the one-line design, and proceed/adjust. For small and above, skip A1 when the user has stated or chosen the direction (an agent proposal the user has not answered is not settled); an adjacent candidate the probes found then goes into Files to Change when that direction covers it, otherwise under `## NOT Building` in one line, recorded as a `user-overridden: default` assumption under `### Assumptions` and shown in the handoff marked 仮置き.
-- **A2 Re-ask** on an empty or ambiguous answer, still one turn per dependency level.
+- **A2 Re-ask** on an empty or ambiguous answer, still one question per turn.
 - **A3 List approaches** only when their difference changes the user's outcome or constraints, each with its tradeoff axis in one sentence; routine reversible mechanics are chosen autonomously and listed in one line under `### Alternatives Considered`.
 - **A4 Recommend** one, with one or two sentences of reasoning.
 - **A5 Approve approach** (one question): go with recommended / pick another / modify. Skip only when A1's answer already chose the approach or A3 made no comparison.
@@ -59,7 +59,7 @@ Skipped for trivial. Read the plan once as its own reviewer; no subagent is disp
 - No decision only the user can make was settled here: `user-overridden: default` is for scope boundaries only.
 - Over-engineering: mark suspects `<!-- over-eng? -->` without deleting.
 
-Fix what you find in the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`, and queue a User decision (`interview.md`) for what only the user can settle. Nothing is logged to a file. Then ask the queued items, one turn per dependency level per `interview.md`.
+Fix what you find in the plan with the Edit tool or by rewriting the whole file, never through a script's `String.replace`, whose replacement string expands `$`, and queue a User decision (`interview.md`) for what only the user can settle. Nothing is logged to a file. Then ask the queued items, one per turn per `interview.md`.
 
 ## DECOMPOSE
 
