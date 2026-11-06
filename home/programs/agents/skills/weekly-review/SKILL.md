@@ -44,13 +44,19 @@ Compute Monday-Sunday dates and prev/next week numbers:
 ~/.claude/skills/weekly-review/iso-week.ts YYYY-WNN
 ```
 
-Output: 7 lines of dates (Mon-Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`.
+Output: 7 lines of dates (Mon-Sun as `YYYY-MM-DD`), then `PREV:YYYY-WNN` and `NEXT:YYYY-WNN`. A week the year does not have (`2027-W53`) exits non-zero; report it and stop.
 
 ### Step 2: Load Data (Parallel)
 
-Fetch all of the following in **parallel Bash calls** using `obsidian read`:
+Read all of the following with **parallel Read tool calls** on the vault paths under `~/Documents/Main/`. Not the `obsidian` CLI: the Bash policy asks for confirmation on each of its reads, and a file read through Bash does not count as read, so the Write tool refuses to overwrite it in Step 7.
 
-1. **Weekly note**: `99_Tracking/Weekly/YYYY-WWW.md` -- if not found, print error and **abort**
+1. **Weekly note**: `99_Tracking/Weekly/YYYY-WNN.md` -- when it does not exist, create it from the vault's weekly template and then read it:
+
+   ```
+   ~/.claude/skills/weekly-review/create-weekly.ts YYYY-WNN
+   ```
+
+   It expands the template's Templater date expressions for that week and prints the created path. It never overwrites an existing file, and it exits non-zero without writing when the template is missing or holds an expression it cannot expand; report its error and stop. A note created here is a bare template, so Step 3 takes fresh generation, and Step 7's summary says the note was created
 2. **Previous week**: `99_Tracking/Weekly/YYYY-W{prev}.md` -- for "next week" carryover; skip if missing
 3. **Daily notes**: Mon-Sun (7 files) -- skip missing days silently
 
@@ -203,7 +209,7 @@ Otherwise re-running on the same week would let the previous run's output count 
 
 ### Step 7: Rewrite Weekly Note
 
-Before writing, output a brief summary: section counts, major changes, merge/fresh mode.
+Before writing, output a brief summary: section counts, major changes, merge/fresh mode, and whether Step 2 created the note.
 
 Use the **Write tool** to write directly to the vault file path: `~/Documents/Main/99_Tracking/Weekly/YYYY-WNN.md`
 
@@ -219,7 +225,7 @@ Use the **Write tool** to write directly to the vault file path: `~/Documents/Ma
 
 Collect reusable knowledge from the daily memos into the candidate list the user judges later. The procedure, criteria, source keys, and list format live in `~/.claude/skills/llm-wiki/references/daily.md` — read it and follow its "Harvest" section. It is kept there because `/llm-wiki ingest daily` reads the same rules; do not restate them here.
 
-- Input: the seven daily notes loaded in Step 2, plus the previous week's Saturday and Sunday (Monday minus 2 and minus 1 days, via `obsidian read`; skip missing days silently). A run on Friday misses the weekend; the next week's run picks it up
+- Input: the seven daily notes loaded in Step 2, plus the previous week's Saturday and Sunday (Monday minus 2 and minus 1 days, with the Read tool; skip missing days silently). A run on Friday misses the weekend; the next week's run picks it up
 - Output: new candidates added at the top of `## 候補` in `~/Documents/Main/98_Maintenance/daily-mining/デイリー候補一覧.md` with the Edit tool. Write nothing else, and never write to a daily note
 - Report one line: the number of new candidates, and the number already ticked and waiting for `/llm-wiki ingest daily`
 
@@ -228,7 +234,7 @@ Collect reusable knowledge from the daily memos into the candidate list the user
 Rebuild the list of genre-less articles bundled by subject, which the user reads when deciding whether a new genre is due. The input, bundling, and list format live in `~/.claude/skills/llm-wiki/references/genre-candidates.md` — read it and follow its "Harvest" section. It is kept there because `ingest` points at the same list; do not restate it here.
 
 - Input: the vault as it is now, not the week's daily notes
-- Output: `~/Documents/Main/98_Maintenance/genre-mining/ジャンル候補一覧.md`, overwritten with the Write tool. Write nothing else
+- Output: `~/Documents/Main/98_Maintenance/genre-mining/ジャンル候補一覧.md`, read with the Read tool and then overwritten with the Write tool, which refuses to overwrite a file it has not read. Write nothing else
 - Report one line: the number of bundles, the size of the largest, and the number of articles still waiting for `ingest`
 
 ### Step 9b: Vocabulary Proposals
