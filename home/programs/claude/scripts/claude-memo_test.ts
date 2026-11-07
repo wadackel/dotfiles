@@ -144,7 +144,7 @@ test(
   () =>
     assertMemoPublication(
       "claude",
-      "c4b1ad2ef160fc5cfd4395325ef354f42f5fbb1a321f097aefa672f6b9da8124",
+      "2c64e68410228788aeab1547bb4c65cc2772ce851c2e2aa2a294bfc5ce9bfef2",
     ),
   10000,
 );

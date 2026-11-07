@@ -11,7 +11,7 @@ test(
   () =>
     assertMemoPublication(
       "codex",
-      "33825ae0f52a8cb0e2574f470a4de2d4c8ebf985f9c818aa7a3952f8357e5a88",
+      "275d83a57246b2f99ac0c5e968b13bc347b817fa2664bfcd2586a35c3b01a149",
     ),
   10000,
 );

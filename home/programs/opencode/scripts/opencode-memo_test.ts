@@ -14,7 +14,7 @@ test(
   () =>
     assertMemoPublication(
       "opencode",
-      "cb63f6001c1ccb9524f95a28d1624a7c357780ac3e096d5a9ea9513aeda62d08",
+      "c618cfc5b841816be7846e7de9317eee67a94d05d817ac88df658c388cfe778b",
     ),
   10000,
 );
