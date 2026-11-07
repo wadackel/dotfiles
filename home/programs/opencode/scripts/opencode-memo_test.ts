@@ -4,6 +4,31 @@ import { join } from "node:path";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { test } from "bun:test";
 import {
+  assertMemoFailurePaths,
+  assertMemoPublication,
+  assertReservationDoesNotDelayMemo,
+} from "../../agents/memo/memo-test-fixture.ts";
+
+test(
+  "opencode memo cache: existing request and result are reused",
+  () =>
+    assertMemoPublication(
+      "opencode",
+      "cb63f6001c1ccb9524f95a28d1624a7c357780ac3e096d5a9ea9513aeda62d08",
+    ),
+  10000,
+);
+test(
+  "opencode memo cache: missing daily and failed provider keep existing behavior",
+  () => assertMemoFailurePaths("opencode"),
+  10000,
+);
+test(
+  "opencode memo cache: reservation never delays existing effects",
+  () => assertReservationDoesNotDelayMemo("opencode"),
+  10000,
+);
+import {
   buildLLMInput,
   countToolUses,
   countUserMessages,

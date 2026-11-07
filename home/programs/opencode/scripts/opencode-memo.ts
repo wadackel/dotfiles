@@ -26,6 +26,11 @@ import {
   upsertDailyNote,
 } from "../../agents/memo/memo-shared.ts";
 import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
+import {
+  beginSummaryPublication,
+  publishSummary,
+  type SummaryTicket,
+} from "../../agents/memo/summary-publisher.ts";
 
 // --- Types ---
 
@@ -333,6 +338,7 @@ async function main(): Promise<void> {
     repo: repoName,
     turns: turnsFromRows(rows.messages, rows.parts),
   });
+  let publication: Promise<SummaryTicket | null> | undefined;
   try {
     const heuristic = heuristicSummary(parsedRows);
     if (!heuristic) {
@@ -369,6 +375,11 @@ async function main(): Promise<void> {
     await log(
       `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
     );
+    publication = beginSummaryPublication({
+      homeDir: process.env.HOME ?? "",
+      agent: "opencode",
+      sessionId,
+    }, log).catch(() => null);
     const llmResult = await callClaude(
       condensed,
       "opencode",
@@ -387,8 +398,9 @@ async function main(): Promise<void> {
     upsertDailyNote(dailyPath, sessionShort, llmLines);
     await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
     saveDebounceState(statePath, userCount);
+    await publishSummary(await publication, llmResult.task ?? "", log);
   } finally {
-    await vocab;
+    await Promise.all([vocab, publication]);
   }
 }
 

@@ -4,6 +4,7 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { useEffect, useRef, useState } from "react";
+import { readSessionSummary } from "../../agents/memo/summary-cache.ts";
 import { Box, type Key, render, Text, useApp, useInput, useStdout } from "ink";
 import { run } from "../../agents/lib/proc.ts";
 
@@ -45,14 +46,6 @@ export {
   type UserLabel,
 };
 
-// Row-1 repo/branch column width caps for the dynamic layout. App computes
-// per-render repoMax / branchMax by scanning every row and clamps to these
-// upper bounds so a single long branch cannot starve the summary slot.
-const REPO_CAP = 24;
-const BRANCH_CAP = 28;
-// Minimum visible summary width the layout must preserve after repo + branch.
-const MIN_SUMMARY = 15;
-
 // Dashboard-style auto-refresh cadence. Both the list fetch (fetchPanes) and
 // the preview capture (capturePane) re-run at this interval so the popup
 // reflects pane status / prompt / subagents / elapsed time / preview without
@@ -83,7 +76,6 @@ import {
   HintBar,
   type ListScreen,
   PaneRowLine,
-  ROW1_FIXED_OVERHEAD,
   type TaskProgress,
   UsageCard,
   usageCardRows,
@@ -183,34 +175,6 @@ export function splitLayout(totalCols: number): {
     listWidth,
     previewWidth: totalCols - listWidth - PREVIEW_GUTTER,
   };
-}
-
-// Row-1 repo / branch column widths for a given list width. Both columns are
-// padEnd'd to these widths by PaneRowLine, so their sum plus
-// ROW1_FIXED_OVERHEAD is what row-1 actually occupies — overshoot it and Ink
-// wraps the row, pushing the following panes off-screen.
-//
-// Two budgets, because the 4-cell floors have to survive one of them and not
-// the other: `soft` keeps MIN_SUMMARY visible and is the target, while `hard`
-// is the width that physically exists. A list narrow enough to make `soft`
-// unaffordable used to leave the floors in place and overflow the box.
-export function row1Columns(
-  listWidth: number,
-  repoWant: number,
-  branchWant: number,
-): { repoMax: number; branchMax: number } {
-  const hard = Math.max(0, listWidth - ROW1_FIXED_OVERHEAD);
-  const soft = Math.max(0, hard - MIN_SUMMARY);
-  let repoMax = Math.min(REPO_CAP, Math.max(4, repoWant));
-  let branchMax = Math.min(BRANCH_CAP, Math.max(4, branchWant));
-  if (repoMax + branchMax > soft) {
-    branchMax = Math.max(4, soft - repoMax);
-  }
-  if (repoMax + branchMax > hard) {
-    branchMax = Math.max(0, hard - repoMax);
-    repoMax = Math.min(repoMax, hard);
-  }
-  return { repoMax, branchMax };
 }
 
 // Both agents are read on every tick rather than cached: the files are a few
@@ -886,6 +850,32 @@ function App({
     };
   }, [stdout]);
   const [rows, setRows] = useState(initialRows);
+  const [summaries, setSummaries] = useState(new Map<string, string | null>());
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(rows.map(async (row) =>
+      [
+        `${row.agent}/${row.sessionId}`,
+        await readSessionSummary({
+          homeDir: process.env.HOME ?? "",
+          agent: row.agent,
+          sessionId: row.sessionId,
+        }),
+      ] as const
+    )).then((entries) => {
+      if (cancelled) return;
+      setSummaries((previous) => {
+        const next = new Map(entries);
+        return previous.size === next.size &&
+            entries.every(([key, value]) => previous.get(key) === value)
+          ? previous
+          : next;
+      });
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
   // Pending `m`/`M` writes the tmux SSOT has not yet acknowledged. The fetch
   // tick (≤ TICK_INTERVAL_MS) can race ahead of an in-flight tmuxRun and read
   // the stale label, reverting an optimistic update on screen. Keying by
@@ -1311,24 +1301,6 @@ function App({
   listOffset.current = view.offset;
   const previewHeight = previewRows -
     (usageVisible ? usageCardRows(usages.length) : 0);
-  // Dynamic repo/branch column widths: scan every row, clamp to caps, and
-  // shrink branch first if the combined width would starve the summary slot.
-  // Every row rather than the visible window, so scrolling does not move the
-  // columns and shift each row sideways.
-  const rowsParts: ReturnType<typeof locationParts>[] = derivedRows.map(
-    (r: PaneRow) => locationParts(r),
-  );
-  const { repoMax, branchMax } = row1Columns(
-    listWidth,
-    Math.max(
-      0,
-      ...rowsParts.map((p) =>
-        stringCells(p.worktree ? `${p.repo}(${p.worktree})` : p.repo)
-      ),
-    ),
-    Math.max(0, ...rowsParts.map((p) => stringCells(p.branch))),
-  );
-
   const listBody = (
     <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
       {empty && (
@@ -1363,13 +1335,15 @@ function App({
             .map((row: PaneRow, i: number) => (
               <PaneRowLine
                 key={row.paneId}
-                row={row}
+                row={{
+                  ...row,
+                  sessionSummary:
+                    summaries.get(`${row.agent}/${row.sessionId}`) ?? undefined,
+                }}
                 now={now}
                 selected={view.offset + i === index}
                 taskProgress={taskProgressMap.get(row.paneId) ?? null}
                 listWidth={listWidth}
-                repoMax={repoMax}
-                branchMax={branchMax}
                 padded={card === FULL_CARD}
               />
             ))}

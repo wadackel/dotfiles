@@ -46,24 +46,8 @@ export interface TaskProgress {
 
 // --- Layout constants ---
 
-// Row-1 fixed-width overhead before the summary body:
-//   marker(2) + icon(1) + " textPad"(1 + 9) + agentSlot(13) + " · "(3) + "  "(2) = 31
-// `textPad` holds either the pane-status short text (run/wait/idle/err) or
-// the user-defined label text (review/parked/feedback/pending), whichever
-// displayMeta() selects for the row. Padded to STATUS_OR_LABEL_TEXT_WIDTH
-// so repo column left-edge aligns across labeled and unlabeled rows. The
-// leading space sits on the textPad side (not appended to icon) because
-// PUA glyphs inside the same <Text> as a trailing space hit Ink 5.2.1's
-// supplementary-plane clip bug — see the JSX comment on the renderer.
-// `agentSlot` is fixed at 13 cells = PILL_LEFT(1) + " " + agentLabel +
-// " "(2 + agentLabel.length) + PILL_RIGHT(1) + trailingPad(9 - agentLabel.length).
-// Chip width tracks the canonical name length (claude=10 / opencode=12 /
-// codex=9) so the chip itself hugs the text, while the trailing pad keeps the
-// total slot width constant so repoCol's left edge aligns across rows. Same
-// decorative idiom as the filter chip in the title bar.
-// Excludes repoMax/branchMax (dynamic). Used by both App()'s columnBudget and
-// PaneRowLine's summaryBudget — keep them in sync via this single constant.
-export const ROW1_FIXED_OVERHEAD = 31;
+// A status-dependent prefix would move every summary when a pane enters review.
+export const ROW1_FIXED_OVERHEAD = 26;
 
 // Width of the row-1 status/label text column (icon is rendered separately
 // as a 2-cell <Text>: icon glyph + trailing space). Sized to fit the
@@ -208,8 +192,6 @@ interface PaneRowLineProps {
   selected: boolean;
   taskProgress: TaskProgress | null;
   listWidth: number;
-  repoMax: number;
-  branchMax: number;
   // Blank rows above and below that make the pane a four-row card; dropped on
   // a short popup so more panes fit.
   padded: boolean;
@@ -222,33 +204,35 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     selected,
     taskProgress,
     listWidth,
-    repoMax,
-    branchMax,
     padded,
   }: PaneRowLineProps,
 ) => {
   const display = displayMeta(row);
   const marker = selected ? "▌ " : "  ";
-  // Pad text to fixed width so repo column left-edge stays aligned across
-  // labeled and unlabeled rows. Trailing space in each padded column
-  // produces inter-column gaps without extra spacer <Text> nodes.
   const textPad = display.text.padEnd(STATUS_OR_LABEL_TEXT_WIDTH);
   const { repo, worktree, branch: branchName } = locationParts(row);
-  const repoText = repoLabel(repo, worktree, repoMax);
-  const repoPad = " ".repeat(
-    Math.max(0, repoMax - stringCells(repoText.head + repoText.suffix)),
+  const budget = Math.max(0, listWidth - 2 - ROW2_RIGHT_CELLS);
+  const locationBudget = Math.max(
+    0,
+    budget - SEG_PREFIX_CELLS - ROW2_SEP.length - 18,
   );
-  const branchText = truncateToCells(branchName, branchMax);
-  const branchCol = branchText +
-    " ".repeat(Math.max(0, branchMax - stringCells(branchText)));
-  const separator = repo && branchName ? " · " : "   ";
+  const repoText = repoLabel(
+    repo,
+    worktree,
+    Math.max(0, Math.min(20, Math.floor((locationBudget - 3) * 0.6))),
+  );
+  const repoBody = repoText.head + repoText.suffix;
+  const branchText = truncateToCells(
+    branchName,
+    Math.max(0, Math.min(24, locationBudget - stringCells(repoBody) - 3)),
+  );
   const summary = summaryOf(row);
   // Truncate so CJK prompts (each char = 2 cells) do not wrap the row into a
   // third line — the previous 40 code-point cap was width-unaware.
   // truncateToCells short-circuits when the string already fits.
   const summaryBudget = Math.max(
     0,
-    listWidth - ROW1_FIXED_OVERHEAD - repoMax - branchMax,
+    listWidth - ROW1_FIXED_OVERHEAD,
   );
   const renderedSummary = truncateToCells(summary, summaryBudget);
   const subagents = parseSubagents(row.subagents);
@@ -258,7 +242,22 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
   // segments are dropped from the tail if over. target sits in flexGrow-pushed
   // right slot outside this budget.
   const segs: Row2Seg[] = [];
-  if (row.currentTool) {
+  if (repoBody || branchText) {
+    segs.push({
+      key: "location",
+      icon: " ",
+      body: repoBody + (branchText ? ` · ${branchText}` : ""),
+      color: DOGRUN.fgDim,
+    });
+  }
+  if (row.waitReason && (row.status === "waiting" || row.status === "error")) {
+    segs.push({
+      key: "attention",
+      icon: "!",
+      body: row.waitReason,
+      color: STATUS_META[row.status].color,
+    });
+  } else if (row.currentTool) {
     segs.push({
       key: "tool",
       icon: ROW2_ICONS.tool,
@@ -304,7 +303,23 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
   const segCells = (s: Row2Seg): number =>
     SEG_PREFIX_CELLS + stringCells(s.body);
 
-  const budget = Math.max(0, listWidth - 2 - ROW2_RIGHT_CELLS);
+  if (segs.length === 0 || (segs.length === 1 && segs[0].key === "location")) {
+    segs.push({
+      key: "empty",
+      icon: " ",
+      body: ROW2_EMPTY_TEXT,
+      color: DOGRUN.muted,
+    });
+  }
+  if (segs.length > 1 && segs[0].key === "location") {
+    segs[1] = {
+      ...segs[1],
+      body: truncateTopSegBody(
+        segs[1],
+        Math.max(0, budget - segCells(segs[0]) - ROW2_SEP.length),
+      ),
+    };
+  }
   let totalCells = segs.length > 0 ? segCells(segs[0]) : 0;
   for (let i = 1; i < segs.length; i++) {
     totalCells += ROW2_SEP.length + segCells(segs[i]);
@@ -322,12 +337,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     segs[0] = { ...segs[0], body: truncateTopSegBody(segs[0], budget) };
   }
 
-  // Agent chip: canonical name wrapped in a Powerline-style rounded chip —
-  // same idiom as the filter chip in the title bar. Chip width hugs the
-  // label (claude=10, opencode=12, codex=9 cells); trailing pad fills the
-  // rest of the fixed 13-cell agentSlot so repoCol stays aligned across
-  // mixed-agent rows. Default branch ("claude") is unreachable — fetchPanes
-  // filters row.agent to claude/opencode/codex.
+  // Varying agent names would otherwise shift the start of each summary.
   const agentLabel = row.agent === "opencode"
     ? "opencode"
     : row.agent === "codex"
@@ -365,8 +375,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
       }
       {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
       {
-        /* Line 1: marker + icon + status-or-label + agent-chip + repo · branch + summary.
-          The icon and text are emitted as TWO sibling <Text> nodes (rather
+        /* The icon and text are emitted as TWO sibling <Text> nodes (rather
           than concatenated as `icon + " "`) to dodge the Ink 5.2.1 supplementary-
           plane clipping bug — UserLabel icons live in the PUA, so the trailing
           space gets eaten if combined with the glyph inside one <Text>. Same
@@ -382,15 +391,8 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
         </Text>
         <Text color={chipFill}>{PILL_RIGHT}</Text>
         <Text>{agentTrailingPad}</Text>
-        <Text color={DOGRUN.fg}>{repoText.head}</Text>
-        {repoText.suffix
-          ? <Text color={DOGRUN.fgDim}>{repoText.suffix}</Text>
-          : null}
-        <Text>{repoPad}</Text>
-        <Text color={DOGRUN.muted}>{separator}</Text>
-        <Text color={DOGRUN.accent}>{branchCol}</Text>
         <Text color={DOGRUN.fg} bold={selected}>
-          {"  " + renderedSummary}
+          {renderedSummary}
         </Text>
       </Box>
       {

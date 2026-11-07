@@ -147,16 +147,8 @@ export function freeCommandLabel(command: string, others: string[]): string {
   return others.length > 0 ? `${command}  + ${others.join(", ")}` : command;
 }
 
-// summary 表示: status が waiting/error なら wait_reason を優先、それ以外は prompt。
-// どちらも空なら "·"。Mirrors bash tmux-window-picker.sh:118-125.
-// Width-based truncation is the caller's responsibility (PaneRowLine applies
-// stringCells/truncateToCells against listWidth so CJK prompts do not wrap
-// into a third row).
 export function summaryOf(row: PaneRow): string {
-  const src = row.status === "waiting" || row.status === "error"
-    ? (row.waitReason || row.prompt)
-    : row.prompt;
-  return src || "·";
+  return row.sessionSummary || row.prompt || "·";
 }
 
 // Same glyph as STATUS_META.error.icon, deliberately not shared: that one marks

@@ -4,6 +4,8 @@ import { statSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { run } from "../lib/proc.ts";
+import { createMemoFixture } from "./memo-test-fixture.ts";
 import {
   composeLLMInput,
   debounceStatePath,
@@ -17,6 +19,28 @@ import {
   shouldRunLLM,
   upsertDailyNote,
 } from "./memo-shared.ts";
+
+test("callClaude: empty and whitespace-only inputs never start the provider", async () => {
+  const f = await createMemoFixture("claude");
+  try {
+    const module = new URL("./memo-shared.ts", import.meta.url).href;
+    const code = `import {callClaude} from ${
+      JSON.stringify(module)
+    }; console.log(JSON.stringify([await callClaude('', 'Claude Code'),await callClaude(' \\n\\t', 'Claude Code')]));`;
+    const result = await run(process.execPath, [
+      "--no-env-file",
+      "--no-install",
+      "--config=/dev/null",
+      "-e",
+      code,
+    ], { env: f.env });
+    assertEquals(result.code, 0, result.stderr);
+    assertEquals((await f.calls()).length, 0);
+    assertEquals(JSON.parse(result.stdout), [null, null]);
+  } finally {
+    await f.cleanup();
+  }
+});
 
 test("isThrowawaySession: tool use or a second prompt keeps the session", () => {
   assertEquals(isThrowawaySession(0, 0), true);
@@ -307,4 +331,48 @@ test("shouldRunLLM / saveDebounceState: round-trip controls debounce decisions",
   assertEquals(shouldRunLLM(path, 2), false);
   // Higher count → run
   assertEquals(shouldRunLLM(path, 4), true);
+});
+
+test("parseLLMOutput: returns the task line apart from summary and details", () => {
+  assertEquals(
+    parseLLMOutput("要約\n作業: Agentower のセッション要約表示\n- one"),
+    {
+      summary: "要約",
+      details: ["one"],
+      task: "Agentower のセッション要約表示",
+    },
+  );
+});
+
+test("parseLLMOutput: recognizes the task line in echoed or bulleted forms", () => {
+  for (
+    const line of [
+      "- 作業: X",
+      "・作業: X",
+      "作業：X",
+      "**作業**: X",
+      "2行目: 作業: X",
+    ]
+  ) {
+    const out = parseLLMOutput(`要約\n${line}\n- one`);
+    assertEquals(out?.task, "X", line);
+    assertEquals(out?.details, ["one"], line);
+  }
+});
+
+test("parseLLMOutput: a task line first does not become the summary", () => {
+  assertEquals(parseLLMOutput("作業: X\n要約\n- one"), {
+    summary: "要約",
+    details: ["one"],
+    task: "X",
+  });
+});
+
+test("parseLLMOutput: omits a missing, empty, or capped task line", () => {
+  assertEquals(parseLLMOutput("要約\n- one")?.task, undefined);
+  for (const empty of ["作業:", "作業: なし", "作業: -"]) {
+    assertEquals(parseLLMOutput(`要約\n${empty}`)?.task, undefined, empty);
+  }
+  const long = "あ".repeat(50);
+  assertEquals(parseLLMOutput(`要約\n作業: ${long}`)?.task, "あ".repeat(40));
 });

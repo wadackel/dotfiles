@@ -25,7 +25,6 @@ import {
   parseRow,
   readTaskProgress,
   readTaskProgressForRow,
-  row1Columns,
   showUsageCard,
   splitLayout,
   TMUX_FORMAT,
@@ -38,7 +37,6 @@ import {
   DOGRUN,
   emptyMessage,
   hintTokens,
-  ROW1_FIXED_OVERHEAD,
   type Row2Seg,
   truncateTopSegBody,
   usageLayout,
@@ -1169,35 +1167,6 @@ test("listGeometry: an empty list ignores the auto rule and p", () => {
       String(previewOverride),
     );
   }
-});
-
-test("row1Columns: repo plus branch never overflow the list column", () => {
-  for (const listWidth of [34, 36, 40, 45, 50, 67, 90, 118]) {
-    const { repoMax, branchMax } = row1Columns(listWidth, 8, 4);
-    assertEquals(
-      ROW1_FIXED_OVERHEAD + repoMax + branchMax <= listWidth,
-      true,
-      `listWidth=${listWidth} repo=${repoMax} branch=${branchMax}`,
-    );
-  }
-});
-
-test("row1Columns: a wide list seats both columns at their natural width", () => {
-  assertEquals(row1Columns(90, 8, 20), { repoMax: 8, branchMax: 20 });
-  assertEquals(row1Columns(112, 30, 40), { repoMax: 24, branchMax: 28 });
-});
-
-test("row1Columns: the 152-column popup keeps repo(worktree) whole and narrows branch", () => {
-  assertEquals(row1Columns(90, 30, 40), { repoMax: 24, branchMax: 20 });
-});
-
-test("row1Columns: branch shrinks before repo when the summary is starved", () => {
-  assertEquals(row1Columns(60, 8, 20), { repoMax: 8, branchMax: 6 });
-});
-
-test("row1Columns: the 4-cell floors give way rather than overflow", () => {
-  assertEquals(row1Columns(40, 8, 4), { repoMax: 8, branchMax: 1 });
-  assertEquals(row1Columns(31, 8, 4), { repoMax: 0, branchMax: 0 });
 });
 
 test("splitLayout: preview drops once the width is too thin", () => {

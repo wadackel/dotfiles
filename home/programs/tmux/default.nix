@@ -28,11 +28,9 @@ let
       files =
         lib.fileset.toList (lib.fileset.fileFilter isSrc ./agentower)
         ++ lib.fileset.toList (lib.fileset.fileFilter isSrc ./shared);
-      # What decides the binary besides its sources: the one module imported
-      # from outside this directory, the dependency versions, and the
-      # type-check settings.
       inputs = [
         ../agents/lib/proc.ts
+        ../agents/memo/summary-cache.ts
         ../../../bun.lock
         ../../../tsconfig.json
         ./agentower/tsconfig.json

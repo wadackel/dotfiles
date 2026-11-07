@@ -27,6 +27,7 @@ import {
   innerTmux,
   paneExitCode,
   runInnerCli,
+  sandboxEnv,
   sandboxHomePath,
   sendBurst,
   sendKey,
@@ -44,6 +45,136 @@ import {
 import { MOUSE_WHEEL_DOWN } from "./agentower.tsx";
 import { stringCells } from "./cell_width.ts";
 import { parseEtime } from "./restore.ts";
+import {
+  createMemoFixture,
+  FIXTURE_TASK,
+  type MemoAgent,
+} from "../../agents/memo/memo-test-fixture.ts";
+import {
+  beginSummaryPublication,
+  publishSummary,
+} from "../../agents/memo/summary-publisher.ts";
+
+for (const cols of [120, 152]) {
+  test(
+    `S_SUMMARY_FLOW: memo results reach the installed ${
+      cols < 130 ? "popup" : "dashboard"
+    } at ${cols} columns`,
+    async () => {
+      await setupServer({ cols, rows: 40 });
+      try {
+        const homeDir = await sandboxHomePath();
+        const fixtures = await Promise.all(
+          (["claude", "codex", "opencode"] as MemoAgent[]).map((agent) =>
+            createMemoFixture(agent, { homeDir })
+          ),
+        );
+        const panes: string[] = [];
+        for (const [i, f] of fixtures.entries()) {
+          const pane = await createClaudePane({
+            agent: f.id.agent,
+            sessionId: f.id.sessionId,
+            cwd: f.cwd,
+            status: i === 0 ? "running" : i === 1 ? "waiting" : "error",
+            prompt: `PROMPT-${f.id.agent}`,
+            waitReason: i ? "確認が必要です" : "",
+            currentTool: i ? "" : "Read",
+          });
+          panes.push(pane);
+          await tmux([
+            "set-option",
+            "-p",
+            "-t",
+            pane,
+            "@pane_worktree_branch",
+            i === 2 ? "feature/long-summary-branch-name" : "main",
+          ]);
+          await tmux([
+            "set-option",
+            "-p",
+            "-t",
+            pane,
+            "@pane_context_used_pct",
+            String(35 + i * 15),
+          ]);
+        }
+        const target = await spawnAgentower({
+          args: cols >= 130 ? ["--dashboard"] : [],
+          env: {
+            PATH: `${fixtures[0].bin}:${(await sandboxEnv()).PATH}`,
+            FAKE_TRACE_FILE: fixtures[0].trace,
+          },
+        });
+        assertStringIncludes(await captureOutput(target), "PROMPT-claude");
+        for (const f of fixtures) assertEquals((await f.calls()).length, 0);
+        for (const f of fixtures) {
+          assertEquals((await f.invoke()).code, 0);
+          await f.completed();
+        }
+        const before = process.env.AGENTOWER_SUMMARY_CAPTURE === "before";
+        const out = before
+          ? await captureOutput(target)
+          : await waitFor(target, (o) =>
+            o.split("\n").filter((line) =>
+              line.includes(FIXTURE_TASK)
+            )
+              .length === 3);
+        if (process.env.AGENTOWER_SUMMARY_CAPTURE) {
+          const dir = join(
+            import.meta.dirname,
+            "../../../../.wadackel/qa/agentower-summary",
+          );
+          await mkdir(dir, { recursive: true });
+          const stem = `${before ? "before" : "after"}-${cols}`;
+          await writeFile(join(dir, `${stem}.txt`), out);
+          await writeFile(
+            join(dir, `${stem}.ansi`),
+            await tmux(["capture-pane", "-p", "-e", "-t", target]),
+          );
+          console.log(`${stem}:\n${out}\nCAPTURE: ${join(dir, stem)}.ansi`);
+        }
+        for (const f of fixtures) {
+          const lines = out.split("\n");
+          const row = lines.findIndex((line) =>
+            line.includes(` ${f.id.agent} `)
+          );
+          assertStringIncludes(lines[row], FIXTURE_TASK);
+          assertFalse(lines[row].includes("memo-project"));
+          assertStringIncludes(lines[row + 1], "memo-project");
+          assertEquals((await f.calls()).length, 1);
+        }
+        assertStringIncludes(out, "確認が必要です");
+        const ticket = await beginSummaryPublication(fixtures[0].id);
+        await publishSummary(ticket, "更新されたセッション要約");
+        await waitFor(target, (o) => o.includes("更新されたセッション要約"));
+        await tmux([
+          "set-option",
+          "-p",
+          "-t",
+          panes[0],
+          "@pane_session_id",
+          "fresh-session",
+        ]);
+        await tmux([
+          "set-option",
+          "-p",
+          "-t",
+          panes[0],
+          "@pane_prompt",
+          "NEW-SESSION-PROMPT",
+        ]);
+        await waitFor(target, (o) =>
+          o.includes("NEW-SESSION-PROMPT") &&
+          !o.includes("更新されたセッション要約"));
+        await sendKey(target, cols >= 130 ? "q" : "Escape");
+        await waitForExit();
+      } finally {
+        await teardown();
+      }
+    },
+    60000,
+  );
+}
 
 test("S68: startup Codex is idle, filterable and selectable before hook registration", async () => {
   await setupServer();
@@ -228,10 +359,7 @@ test("S0: harness smoke (no panes)", async () => {
   }
 });
 
-// S2: summaryOf in agentower.tsx:220-226 picks waitReason when status is
-// waiting/error (even if prompt is set), otherwise picks prompt. Assert both
-// branches fire in a single capture to avoid a second cold start.
-test("S2: summary switches between waitReason and prompt by status", async () => {
+test("S2: waiting keeps the topic on row 1 and the reason on row 2", async () => {
   await setupServer();
   try {
     await createClaudePane({
@@ -244,10 +372,11 @@ test("S2: summary switches between waitReason and prompt by status", async () =>
     const out = await captureOutput(agentower);
     assertStringIncludes(out, "perm-X");
     assertStringIncludes(out, "go-Y");
-    assertFalse(
-      out.includes("ignore-X"),
-      `waiting pane showed prompt instead of waitReason:\n${out}`,
-    );
+    const lines = listColumn(out);
+    const row = lines.findIndex((line) => line.includes("ignore-X"));
+    assertEquals(row >= 0, true);
+    assertFalse(lines[row].includes("perm-X"));
+    assertStringIncludes(lines[row + 1], "perm-X");
     await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
@@ -585,15 +714,8 @@ test("S12: navigation wraps at boundaries", async () => {
   }
 });
 
-// S13: row-2 icons (Nerd Font nf-md glyphs) prefix each segment. Under a
-// 60-col width (listWidth=60) the budget `listWidth - 2 - 20 (right block)` = 38
-// still leaves room for tool / tree / file segments to all fit. The actual
-// Unicode code points come from agentower.tsx:ROW2_ICONS — we assert by literal
-// glyph so a regression that changes the constants (or drops the prefix) fails
-// here. cols=60 stacks the list at 60 columns, the same budget the scenario
-// had side by side at cols=100.
 test("S13: row-2 segments are prefixed with Nerd Font icons (fit)", async () => {
-  await setupServer({ cols: 60, rows: 20 });
+  await setupServer({ cols: 100, rows: 20 });
   try {
     await createClaudePane({
       status: "running",
@@ -1142,11 +1264,6 @@ test("S24: opencode pane visible in Agentower", async () => {
   }
 });
 
-// S25: claude and opencode panes coexist in one list and are visually
-// disambiguated by the row-1 agent column rendered immediately to the left of
-// the repo column. Each agent's canonical name (`claude`, `opencode`) is
-// padded to 8 cells (length of the longest name) plus a 1-cell separator so
-// the repo column lines up vertically across mixed-agent rows.
 test("S25: claude+opencode mixed list renders both with agent column", async () => {
   await setupServer();
   try {
@@ -1227,11 +1344,6 @@ test("S27: codex pane visible in Agentower", async () => {
   }
 });
 
-// S28: claude, opencode, and codex panes coexist in one list and are visually
-// disambiguated by the row-1 agent column rendering each canonical name
-// (`claude`, `opencode`, `codex`) padded to 8 cells immediately before the
-// repo column. Pads keep the repo column aligned vertically across all 3
-// agent rows.
 test("S28: claude+opencode+codex mixed list renders all agent columns", async () => {
   await setupServer();
   try {
@@ -1390,11 +1502,6 @@ test("S-N2: m keypress cycles userLabel none → review", async () => {
   }
 });
 
-// S-N3: Column alignment is preserved when labeled and unlabeled rows
-// coexist. The fixed-width status-or-label column (9 cells) ensures the
-// agent chip and repo columns start at the same horizontal offset on
-// both rows. We assert this indirectly by checking both labels render
-// AND both rows reach the repo column.
 test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
   await setupServer();
   const root = await mkdtemp("/tmp/agentower-repos-");
@@ -1418,7 +1525,6 @@ test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () =>
     // Both label text and status text coexist (label only on first row).
     assertStringIncludes(out, "feedback");
     assertStringIncludes(out, "idle");
-    // Both repo basenames reach the repo column (no truncation collapse).
     assertStringIncludes(out, "alpha");
     assertStringIncludes(out, "beta");
 
@@ -1809,8 +1915,9 @@ test("S38: repo column shows repo(worktree) from git", async () => {
     // Only the list column: the preview card beside it shows the full path,
     // which does contain the subdirectory name.
     const lines = out.split("\n").map((l) => l.split(/[│╭╰]/)[0]);
-    const mainRow = lines.find((l) => l.includes("main-row")) ?? "";
-    const wtRow = lines.find((l) => l.includes("wt-row")) ?? "";
+    const mainRow = lines[lines.findIndex((l) => l.includes("main-row")) + 1] ??
+      "";
+    const wtRow = lines[lines.findIndex((l) => l.includes("wt-row")) + 1] ?? "";
 
     assertStringIncludes(mainRow, "proj");
     assertFalse(mainRow.includes("sub"), `subdir leaked: ${mainRow}`);
@@ -2353,8 +2460,8 @@ test("S57: a CJK branch name gets the width it actually occupies", async () => {
     });
     const agentower = await spawnAgentower();
     const out = await waitFor(agentower, (o) => o.includes("cjk-row"));
-    const row = out.split("\n").map((l) => l.split(/[│╭╰]/)[0])
-      .find((l) => l.includes("cjk-row")) ?? "";
+    const lines = listColumn(out);
+    const row = lines[lines.findIndex((l) => l.includes("cjk-row")) + 1] ?? "";
 
     assertStringIncludes(row, "機能追加");
 
@@ -2396,7 +2503,9 @@ test("S103: row and preview show the launch directory, not @pane_cwd", async () 
     const agentower = await spawnAgentower();
     const out = await waitFor(agentower, (o) => o.includes("launch-row"));
 
-    const row = listColumn(out).find((l) => l.includes("launch-row")) ?? "";
+    const lines = listColumn(out);
+    const row = lines[lines.findIndex((l) => l.includes("launch-row")) + 1] ??
+      "";
     assertStringIncludes(row, "launched");
     assertStringIncludes(row, "topic");
     assertStringIncludes(out, "/launched");
@@ -3699,25 +3808,39 @@ const GEOMETRY = "#{window_index}|#{window_name}|#{pane_index}|#{pane_left}|" +
 const FOCUS = "#{window_index}|#{window_active}|#{window_zoomed_flag}|" +
   "#{pane_index}|#{pane_active}";
 
-// tmux reads pane_current_path from the foreground process on every format, so it
-// comes back empty now and then while a shell starts. The check and the values
-// have to come from the same read.
-async function paneList(format: string): Promise<string[]> {
+// tmux can resolve repeated pane_current_path fields against different foreground
+// processes during shell startup. Reuse the checked value instead of reading twice.
+async function paneList(format: string, read = innerTmux): Promise<string[]> {
   const deadline = Date.now() + 2000;
   let rows: string[][] = [];
   do {
-    const out = await innerTmux([
+    const out = await read([
       "list-panes",
       "-a",
       "-F",
-      `#{pane_current_path}\x1f${format}`,
+      `#{pane_current_path}\x1f${
+        format.replaceAll("#{pane_current_path}", "\x1e")
+      }`,
     ]);
     rows = out.trimEnd().split("\n").map((line) => line.split("\x1f"));
     if (rows.every(([path]) => path !== "")) break;
     await new Promise((r) => setTimeout(r, 25));
   } while (Date.now() < deadline);
-  return rows.map(([, ...rest]) => rest.join("\x1f"));
+  return rows.map(([path, ...rest]) =>
+    rest.join("\x1f").replaceAll("\x1e", () => path)
+  );
 }
+
+test("S_PATH_CAPTURE: repeated cwd fields reuse one foreground-process observation", async () => {
+  const rows = await paneList("geometry|#{pane_current_path}", async (args) => {
+    let reads = 0;
+    return args.at(-1)!.replaceAll(
+      "#{pane_current_path}",
+      () => reads++ === 0 ? "/ready" : "",
+    );
+  });
+  assertEquals(rows, ["geometry|/ready"]);
+});
 
 async function makeDirs(names: string[]): Promise<string[]> {
   const paths = names.map((name) => join(innerPaths().dir, name));

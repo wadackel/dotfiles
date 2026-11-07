@@ -15,6 +15,11 @@ import {
   upsertDailyNote,
 } from "../../agents/memo/memo-shared.ts";
 import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
+import {
+  beginSummaryPublication,
+  publishSummary,
+  type SummaryTicket,
+} from "../../agents/memo/summary-publisher.ts";
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -426,11 +431,17 @@ async function mainWorker(workerInput: HookData): Promise<void> {
     repo: ctx.repoName,
     turns: extractTurns(ctx.entries),
   });
+  let publication: Promise<SummaryTicket | null> | undefined;
   try {
     const condensed = buildLLMInput(ctx.entries);
     await log(
       `WORKER LLM: calling claude -p (haiku) (userCount=${ctx.userCount}, condensed=${condensed.length} chars)`,
     );
+    publication = beginSummaryPublication({
+      homeDir: process.env.HOME ?? "",
+      agent: "codex",
+      sessionId: workerInput.session_id,
+    }, log).catch(() => null);
     const llmResult = await callClaude(
       condensed,
       "Codex",
@@ -448,8 +459,9 @@ async function mainWorker(workerInput: HookData): Promise<void> {
       debounceStatePath("codex", ctx.sessionShort),
       ctx.userCount,
     );
+    await publishSummary(await publication, llmResult.task ?? "", log);
   } finally {
-    await vocab;
+    await Promise.all([vocab, publication]);
   }
 }
 

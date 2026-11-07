@@ -54,6 +54,7 @@ export interface PaneRow {
   worktreeBranch: string;
   subagents: string;
   prompt: string;
+  sessionSummary?: string;
   waitReason: string;
   currentTool: string;
   sessionId: string;

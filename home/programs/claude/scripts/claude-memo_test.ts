@@ -1,6 +1,14 @@
 import { test } from "bun:test";
+import {
+  assertMemoFailurePaths,
+  assertMemoPublication,
+  assertReservationDoesNotDelayMemo,
+  createMemoFixture,
+  FIXTURE_TASK,
+  waitUntil,
+} from "../../agents/memo/memo-test-fixture.ts";
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
@@ -15,6 +23,141 @@ import {
   proposeVocab,
 } from "./claude-memo.ts";
 import { resolveRepoName } from "../../agents/memo/memo-shared.ts";
+import { readSessionSummary } from "../../agents/memo/summary-cache.ts";
+import {
+  beginSummaryPublication,
+  publishSummary,
+} from "../../agents/memo/summary-publisher.ts";
+
+const unflushedShortTurn = [
+  { type: "user", message: { content: "今何時？" } },
+  {
+    type: "assistant",
+    message: { content: [{ type: "tool_use", name: "Bash" }] },
+  },
+  {
+    type: "user",
+    message: { content: [{ type: "tool_result", content: "22:51" }] },
+  },
+].map((entry) => JSON.stringify(entry)).join("\n") + "\n";
+
+test(
+  "empty input: waits for the final response without adding duplicate model calls",
+  async () => {
+    const f = await createMemoFixture("claude");
+    let first: ReturnType<typeof f.invoke> | undefined;
+    try {
+      await writeFile(f.transcript, unflushedShortTurn);
+      first = f.invoke();
+      await waitUntil(async () => {
+        const log = await readFile(
+          join(f.env.TMPDIR, "claude-memo.log"),
+          "utf8",
+        ).catch(() => "");
+        return log.includes("WAIT: empty summary input") ||
+          (await f.calls()).length > 0;
+      }, "empty input observation");
+      assertEquals((await f.calls()).length, 0);
+      assertEquals((await f.invoke()).code, 0);
+      assertEquals((await f.calls()).length, 0);
+      await appendFile(
+        f.transcript,
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "現在の時刻は22時51分です。" }],
+          },
+        }) + "\n",
+      );
+      assertEquals((await first).code, 0);
+      const calls = await f.calls();
+      assertEquals(calls.length, 1);
+      assertStringIncludes(
+        calls[0].stdin,
+        "[Last assistant response]\n現在の時刻は22時51分です。",
+      );
+      assertEquals(await readSessionSummary(f.id), FIXTURE_TASK);
+      assertEquals((await f.invoke()).code, 0);
+      assertEquals((await f.calls()).length, 1);
+    } finally {
+      await first;
+      await f.cleanup();
+    }
+  },
+  10000,
+);
+
+test(
+  "empty input: timeout keeps the heuristic and previous cache without inference",
+  async () => {
+    const f = await createMemoFixture("claude");
+    try {
+      await writeFile(f.transcript, unflushedShortTurn);
+      await publishSummary(
+        await beginSummaryPublication(f.id),
+        "前回の有効な要約",
+      );
+      assertEquals((await f.invoke()).code, 0);
+      assertEquals((await f.calls()).length, 0);
+      assertStringIncludes(await readFile(f.daily, "utf8"), "Bash: 1 を使用");
+      assertEquals(await readSessionSummary(f.id), "前回の有効な要約");
+      assertEquals((await f.invoke()).code, 0);
+      assertEquals((await f.calls()).length, 0);
+    } finally {
+      await f.cleanup();
+    }
+  },
+  10000,
+);
+
+test(
+  "empty input: a vanished transcript does not start inference",
+  async () => {
+    const f = await createMemoFixture("claude");
+    let first: ReturnType<typeof f.invoke> | undefined;
+    try {
+      await writeFile(f.transcript, unflushedShortTurn);
+      first = f.invoke();
+      await waitUntil(async () => {
+        const log = await readFile(
+          join(f.env.TMPDIR, "claude-memo.log"),
+          "utf8",
+        ).catch(() => "");
+        return log.includes("WAIT: empty summary input") ||
+          (await f.calls()).length > 0;
+      }, "empty input observation");
+      assertEquals((await f.calls()).length, 0);
+      await rm(f.transcript);
+      assertEquals((await first).code, 0);
+      assertEquals((await f.calls()).length, 0);
+      assertEquals(await readSessionSummary(f.id), null);
+    } finally {
+      await first;
+      await f.cleanup();
+    }
+  },
+  10000,
+);
+
+test(
+  "claude memo cache: existing request and result are reused",
+  () =>
+    assertMemoPublication(
+      "claude",
+      "c4b1ad2ef160fc5cfd4395325ef354f42f5fbb1a321f097aefa672f6b9da8124",
+    ),
+  10000,
+);
+test(
+  "claude memo cache: missing daily and failed provider keep existing behavior",
+  () => assertMemoFailurePaths("claude"),
+  10000,
+);
+test(
+  "claude memo cache: reservation never delays existing effects",
+  () => assertReservationDoesNotDelayMemo("claude"),
+  10000,
+);
 
 // Shared helpers (resolveRepoName, escapeObsidianSyntax, parseLLMOutput,
 // upsertDailyNote, debounceStatePath, etc.) are tested in

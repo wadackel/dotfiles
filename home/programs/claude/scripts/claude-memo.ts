@@ -18,6 +18,11 @@ import {
   upsertDailyNote,
 } from "../../agents/memo/memo-shared.ts";
 import type { SessionInput, Turn } from "../../agents/scripts/vocab-propose.ts";
+import {
+  beginSummaryPublication,
+  publishSummary,
+  type SummaryTicket,
+} from "../../agents/memo/summary-publisher.ts";
 
 // --- Types ---
 
@@ -331,6 +336,7 @@ async function main(): Promise<void> {
     repo: repoName,
     turns: extractTurns(entries),
   });
+  let publication: Promise<SummaryTicket | null> | undefined;
   try {
     const sessionShort = sessionId.slice(0, 8);
     const timestamp = nowTimestamp();
@@ -378,11 +384,33 @@ async function main(): Promise<void> {
 
     saveDebounceState(statePath, userCount);
 
-    const condensed = buildLLMInput(entries);
+    let condensed = buildLLMInput(entries);
+    if (!condensed) {
+      await log("WAIT: empty summary input; awaiting transcript text");
+      const deadline = performance.now() + 1000;
+      while (!condensed && performance.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        try {
+          condensed = buildLLMInput(parseTranscript(transcriptPath));
+        } catch (error) {
+          await log(`SKIP: cannot reread transcript: ${error}`);
+          return;
+        }
+      }
+      if (!condensed) {
+        await log("SKIP: empty summary input after transcript wait");
+        return;
+      }
+    }
     await log(
       `LLM: calling claude -p (haiku) (userCount=${userCount}, condensed=${condensed.length} chars)`,
     );
 
+    publication = beginSummaryPublication({
+      homeDir: process.env.HOME ?? "",
+      agent: "claude",
+      sessionId,
+    }, log).catch(() => null);
     const llmResult = await callClaude(
       condensed,
       "Claude Code",
@@ -404,8 +432,9 @@ async function main(): Promise<void> {
 
     upsertDailyNote(dailyPath, sessionShort, llmLines);
     await log(`LLM UPDATED: ${llmLines.join(" | ")}`);
+    await publishSummary(await publication, llmResult.task ?? "", log);
   } finally {
-    await vocab;
+    await Promise.all([vocab, publication]);
   }
 }
 

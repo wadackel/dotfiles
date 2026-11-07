@@ -106,18 +106,30 @@ test("statusIcon: known statuses", () => {
 
 // --- summaryOf ---
 
-test("summaryOf: waiting uses wait_reason", () => {
+test("summaryOf: waiting preserves the session topic", () => {
   assertEquals(
     summaryOf(mkRow({ status: "waiting", waitReason: "perm", prompt: "p" })),
-    "perm",
+    "p",
   );
 });
 
-test("summaryOf: error uses wait_reason", () => {
+test("summaryOf: error preserves the session topic", () => {
   assertEquals(
     summaryOf(mkRow({ status: "error", waitReason: "err", prompt: "p" })),
-    "err",
+    "p",
   );
+});
+
+test("summaryOf: a cached summary wins in every state", () => {
+  for (const status of ["running", "idle", "waiting", "error"] as const) {
+    assertEquals(
+      summaryOf({
+        ...mkRow({ status, prompt: "依頼", waitReason: "待機理由" }),
+        sessionSummary: "セッションの要約",
+      }),
+      "セッションの要約",
+    );
+  }
 });
 
 test("summaryOf: waiting falls back to prompt if wait_reason empty", () => {

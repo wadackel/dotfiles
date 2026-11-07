@@ -14,6 +14,7 @@ export interface LLMResult {
   summary: string;
   details: string[];
   learning?: string;
+  task?: string;
 }
 
 export interface DebounceState {
@@ -105,11 +106,24 @@ const EMPTY_LEARNINGS = new Set(["", "なし", "無し", "特になし", "-", "n
 // haiku 5.5 は出力全体をコードフェンスで囲んだり、指示の「1行目:」を書き写したりする。1 行目をそのまま要約にすると ``` が載る。
 const FENCE_LINE = /^\s*```/;
 const FORMAT_LABEL = /^\s*(?:[-・]\s*)?\d+行目\s*[:：]\s*/;
+const TASK_PATTERN = /^\s*(?:[-・]\s*)?作業\s*[:：]\s*(.*)$/;
 
 export function parseLLMOutput(raw: string): LLMResult | null {
-  const lines = raw.trim().split("\n").filter((line) =>
-    line.trim() && !FENCE_LINE.test(line)
-  );
+  let task: string | undefined;
+  const lines = raw.trim().split("\n").filter((line) => {
+    if (!line.trim() || FENCE_LINE.test(line)) return false;
+    // 学び行のように要約を選んだ後で拾うと、作業行が 1 行目に来たとき要約として daily note に載る。
+    const match = line.replace(FORMAT_LABEL, "").replace(/\*\*/g, "").match(
+      TASK_PATTERN,
+    );
+    if (!match) return true;
+    const value = match[1].trim();
+    const bare = value.replace(/^[（(]|[)）。．.]+$/g, "").toLowerCase();
+    if (!EMPTY_LEARNINGS.has(bare)) {
+      task = Array.from(value).slice(0, 40).join("");
+    }
+    return false;
+  });
   if (lines.length === 0) return null;
   const summary = lines[0].replace(FORMAT_LABEL, "").replace(/^#+\s*/, "")
     .replace(/\*\*/g, "").slice(
@@ -136,7 +150,12 @@ export function parseLLMOutput(raw: string): LLMResult | null {
     )
     .filter((line) => line.length > 0)
     .slice(0, 3);
-  return learning ? { summary, details, learning } : { summary, details };
+  return {
+    summary,
+    details,
+    ...(learning ? { learning } : {}),
+    ...(task ? { task } : {}),
+  };
 }
 
 // --- Daily Note entry lines ---
@@ -311,6 +330,8 @@ export async function callClaude(
   agentLabel: string,
   opts: CallClaudeOptions = {},
 ): Promise<LLMResult | null> {
+  // An empty snapshot turns the model's request for data into a saved summary.
+  if (!condensed.trim()) return null;
   const { onStderr, timeoutMs = DEFAULT_CLAUDE_TIMEOUT_MS, extraEnv } = opts;
 
   let cwd: string | undefined;
@@ -330,13 +351,15 @@ export async function callClaude(
     "このセッションで何が行われたかを日本語で要約してください。\n\n" +
     "出力フォーマット:\n" +
     "1行目: 40〜80文字の要約（意図と結果を含む）\n" +
-    "2行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n" +
+    "2行目: 「作業: 」で始まる1行。このセッションが取り組んでいる作業を体言止めで全角20字以内" +
+    "（例: 「作業: Agentower のセッション要約表示」「作業: PR 時 CI の高速化」）。結果や進み具合は書かない\n" +
+    "3行目以降: 補足情報を箇条書きで2〜3項目（各項目は「- 」で始め、30〜60文字）\n" +
     "最終行（任意）: 「学び: 」で始まる1行（30〜100文字）。このリポジトリの外でも役立つ知見" +
     "（不具合の原因、ツールや仕様の制約、理由のある設計判断など）が得られたときだけ書く。" +
     "該当しなければこの行は書かない。作業内容、ツールの実行回数、" +
     "「〜が重要」「〜すべき」のような一般論は学びではない。ツール名・設定・挙動など具体的な対象を含めて書く。" +
     "ただしトークン、パスワード、URL、社内のホスト名、個人名は書かない。\n\n" +
-    "補足が不要なほど単純なセッションなら1行目だけでもOK。\n" +
+    "補足が不要なほど単純なセッションなら1行目と2行目だけでもOK。\n" +
     "出力は要約のみ。説明や前置きは不要です。";
 
   let proc: ChildProcess | null = null;

@@ -1,5 +1,30 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { test } from "bun:test";
+import {
+  assertMemoFailurePaths,
+  assertMemoPublication,
+  assertReservationDoesNotDelayMemo,
+} from "../../agents/memo/memo-test-fixture.ts";
+
+test(
+  "codex memo cache: existing request and result are reused",
+  () =>
+    assertMemoPublication(
+      "codex",
+      "33825ae0f52a8cb0e2574f470a4de2d4c8ebf985f9c818aa7a3952f8357e5a88",
+    ),
+  10000,
+);
+test(
+  "codex memo cache: missing daily and failed provider keep existing behavior",
+  () => assertMemoFailurePaths("codex"),
+  10000,
+);
+test(
+  "codex memo cache: reservation never delays existing effects",
+  () => assertReservationDoesNotDelayMemo("codex"),
+  10000,
+);
 import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
