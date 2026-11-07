@@ -17,7 +17,11 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { text } from "node:stream/consumers";
 import { parse } from "@std/yaml";
-import { getSegments, globToRegex, stripGitGlobalFlags } from "./shell-utils.ts";
+import {
+  getSegments,
+  globToRegex,
+  stripGitGlobalFlags,
+} from "./shell-utils.ts";
 
 export interface Rule {
   pattern: string;
@@ -87,8 +91,7 @@ function unwrap(words: string[]): string[] {
       if (/^\w+=/.test(w)) i++;
       else if (w.startsWith("-")) {
         i += WRAPPER_ARG_OPTIONS[wrapper]?.has(w) ? 2 : 1;
-      }
-      else if (wrapper === "timeout" && /^\d/.test(w)) i++;
+      } else if (wrapper === "timeout" && /^\d/.test(w)) i++;
       else break;
     }
   }
@@ -103,7 +106,9 @@ function tmuxReachesDefault(args: string[]): boolean {
     // A socket given by name is private unless it names the user's own server.
     if (w === "-L" || w === "-S") {
       const socket = args[i + 1] ?? "";
-      return w === "-L" ? socket === "default" : /\/tmux-\d+\/default$/.test(socket);
+      return w === "-L"
+        ? socket === "default"
+        : /\/tmux-\d+\/default$/.test(socket);
     }
     if (/^-L/.test(w)) return w === "-Ldefault";
     if (/^-S/.test(w)) return /\/tmux-\d+\/default$/.test(w);
@@ -120,11 +125,15 @@ function tmuxReachesDefault(args: string[]): boolean {
  * the common wrappers and a shell's -c string; the main session and the other
  * reviewers are unaffected.
  */
-export async function breakerRefusal(segments: string[]): Promise<string | null> {
+export async function breakerRefusal(
+  segments: string[],
+): Promise<string | null> {
   for (const segment of segments) {
     const all = segment.trim().split(/\s+/).filter(Boolean);
     // `env -S <string>` runs the split string as a command, like a shell's -c.
-    const envSplit = basenameOf(all[0] ?? "") === "env" ? all.indexOf("-S") : -1;
+    const envSplit = basenameOf(all[0] ?? "") === "env"
+      ? all.indexOf("-S")
+      : -1;
     if (envSplit >= 0) {
       const inner = await breakerRefusal(
         await getSegments(unquote(all.slice(envSplit + 1).join(" "))),

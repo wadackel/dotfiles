@@ -285,7 +285,9 @@ function layoutText(cell: LayoutCell): string {
   const head = `${cell.w}x${cell.h},${cell.x},${cell.y}`;
   if (cell.id !== null) return `${head},${cell.id}`;
   const close = cell.split === "{" ? "}" : "]";
-  return `${head}${cell.split}${cell.children.map(layoutText).join(",")}${close}`;
+  return `${head}${cell.split}${
+    cell.children.map(layoutText).join(",")
+  }${close}`;
 }
 
 // tmux's layout_checksum: select-layout refuses a body whose sum disagrees.

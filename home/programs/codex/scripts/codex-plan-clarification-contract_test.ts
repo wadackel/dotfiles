@@ -536,6 +536,104 @@ test("Codex impl documents the combined final review contract", async () => {
   ]);
 });
 
+test("Codex final gate includes repository checks absent from the plan", async () => {
+  const skill = await readRepoFile(CODEX_IMPL);
+  const audit = section(skill, "### Built-in Audit");
+  assertIncludesAll(audit, [
+    "routine checks named by the repository's `AGENTS.md` or `CLAUDE.md`",
+    "even when the plan omitted them",
+    "formatter, lint, type check",
+    "read their output and fix failures before Review",
+    "same final run satisfies both",
+  ]);
+  assertStringIncludes(
+    section(skill, "## Final gate: built-in Audit and Review"),
+    "run every Autonomous Verification command again on the current tree",
+  );
+});
+
+test("Codex added regression tests establish missing behavior before source edits", async () => {
+  const loop = section(await readRepoFile(CODEX_IMPL), "## Task loop");
+  assertInOrder(loop, [
+    "Write new or updated regression tests before changing the source they cover",
+    "failure caused by the missing behavior",
+    "Implement the behavior",
+    "green (expected PASS)",
+  ]);
+  assertIncludesAll(loop, [
+    "already passes",
+    "setup or environment failure",
+    "red (expected FAIL)",
+    "Do not introduce redundant tests for a low-impact edit",
+  ]);
+  assertExcludesAll(loop, ["For test-first work"]);
+});
+
+test("Codex routes the existing comments card through its selected reviewer", async () => {
+  const skill = await readRepoFile(CODEX_IMPL);
+  const card = section(skill, "#### Comment Review Card");
+  const reference = card.match(
+    /`(~\/\.claude\/skills\/gate\/references\/[^`]+)`/,
+  );
+  assert(reference, "comments card needs a resolvable public reference");
+  const contents = await readRepoFile(
+    reference[1].replace("~/.claude/", "home/programs/claude/"),
+  );
+  assertStringIncludes(contents.split("\n")[1], "Trigger:");
+  assertIncludesAll(contents, ["## Check", "## Do not flag"]);
+  assertIncludesAll(card, [
+    "`Trigger:`",
+    "apply the card in `main-review`",
+    "paste it verbatim into the selected `code-reviewer` prompt",
+    "Do not dispatch `comment-reviewer`",
+    "MUST_FIX remains blocking",
+    "SHOULD_FIX and NIT remain non-blocking",
+  ]);
+  assertIncludesAll(
+    await readRepoFile("home/programs/codex/agents/code-reviewer.toml"),
+    [
+      "Use VERDICT: FAIL only when MUST_FIX is non-empty",
+      "SHOULD_FIX and NIT do not block",
+    ],
+  );
+});
+
+test("Codex evidence admissibility delegates both instruction sites to the shared contract", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  for (const heading of ["### Requirement Clarification", "### AGREE output"]) {
+    const body = section(skill, heading);
+    assertStringIncludes(body, SELF_RESOLVED_SOURCE_TEMPLATE);
+    assertStringIncludes(
+      body,
+      "apply the evidence grades and admissibility rules in `references/contract.md`",
+    );
+    assertExcludesAll(body, ["a claim the Approach relies on must be Direct"]);
+  }
+  const contract = section(
+    await readRepoFile(CONTRACT),
+    "## AGREE subsections",
+  );
+  assertIncludesAll(contract, [
+    "`[Supported]` only by an observed mechanism whose target does not exist yet",
+    "a delegate observation recorded verbatim",
+    "`<redacted: what it is>`",
+    "`[Unknown]` never appears here",
+  ]);
+});
+
+test("Codex acceptance guidance does not point to the removed Claude table", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  assertExcludesAll(skill, [
+    "Use the Claude version table as a reference",
+    "### Acceptance criteria by change type",
+  ]);
+  assertIncludesAll(
+    section(skill, "### Completion Criteria item tags"),
+    CC_TAGS,
+  );
+  assertStringIncludes(section(skill, "## DECOMPOSE"), "Verification Commands");
+});
+
 test("Codex plan selects independent review before the trivial bypass", async () => {
   const skill = await readRepoFile(CODEX_PLAN);
   const parse = section(skill, "## PARSE");

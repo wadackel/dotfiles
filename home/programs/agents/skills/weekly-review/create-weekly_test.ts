@@ -1,4 +1,9 @@
-import { assert, assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from "@std/assert";
 import { test } from "bun:test";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -35,10 +40,17 @@ test("2026-W45: prev/next links, seven history days, reading range", () => {
   const out = renderWeeklyTemplate(TEMPLATE, "2026-W45");
   assertStringIncludes(out, 'previous: "[[2026-W44]]"');
   assertStringIncludes(out, 'next: "[[2026-W46]]"');
-  const days = [...out.matchAll(/^### \[\[(\d{4}-\d{2}-\d{2})\]\]$/gm)].map((m) => m[1]);
+  const days = [...out.matchAll(/^### \[\[(\d{4}-\d{2}-\d{2})\]\]$/gm)].map((
+    m,
+  ) => m[1]);
   assertEquals(days, [
-    "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05",
-    "2026-11-06", "2026-11-07", "2026-11-08",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
   ]);
   assertStringIncludes(out, "![[2026-11-08#✍️ Memo]]");
   assertStringIncludes(out, 'date >= "2026-11-02"');
@@ -54,9 +66,13 @@ test("2026-W53: next crosses into 2027-W01, prev is W52", () => {
 });
 
 test("an unknown Templater expression or format throws", () => {
-  assertThrows(() => renderWeeklyTemplate(`${TEMPLATE}<% tp.file.title %>\n`, "2026-W45"));
+  assertThrows(() =>
+    renderWeeklyTemplate(`${TEMPLATE}<% tp.file.title %>\n`, "2026-W45")
+  );
   assertThrows(() => renderWeeklyTemplate(`${tp("dddd", 0)}\n`, "2026-W45"));
-  assertThrows(() => renderWeeklyTemplate(`${TEMPLATE}<% tp.file.title\n`, "2026-W45"));
+  assertThrows(() =>
+    renderWeeklyTemplate(`${TEMPLATE}<% tp.file.title\n`, "2026-W45")
+  );
 });
 
 const SCRIPT = join(import.meta.dirname, "create-weekly.ts");
@@ -71,7 +87,10 @@ function run(args: string[]): Promise<{ stdout: string; code: number | null }> {
   });
 }
 
-async function withVault(fn: (vault: string) => Promise<void>, template?: string) {
+async function withVault(
+  fn: (vault: string) => Promise<void>,
+  template?: string,
+) {
   const vault = await mkdtemp(join(tmpdir(), "create-weekly-"));
   try {
     await mkdir(join(vault, "99_Tracking/Weekly"), { recursive: true });
@@ -85,14 +104,18 @@ async function withVault(fn: (vault: string) => Promise<void>, template?: string
   }
 }
 
-const notePath = (vault: string) => join(vault, "99_Tracking/Weekly/2026-W45.md");
+const notePath = (vault: string) =>
+  join(vault, "99_Tracking/Weekly/2026-W45.md");
 
 test("CLI creates the note and prints its path", () =>
   withVault(async (vault) => {
     const r = await run(["2026-W45", vault]);
     assertEquals(r.code, 0);
     assertEquals(r.stdout.trim(), notePath(vault));
-    assertEquals(await readFile(notePath(vault), "utf8"), renderWeeklyTemplate(TEMPLATE, "2026-W45"));
+    assertEquals(
+      await readFile(notePath(vault), "utf8"),
+      renderWeeklyTemplate(TEMPLATE, "2026-W45"),
+    );
   }, TEMPLATE));
 
 test("CLI refuses an existing note and leaves it unchanged", () =>

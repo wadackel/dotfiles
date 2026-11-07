@@ -149,16 +149,24 @@ def run(args):
             copy_tree(codex_source / "skills" / skill, skills / skill)
         shared = source / "home/programs/agents/shared/plan/references"
         copy_tree(shared, skills / "plan/references")
+        claude = source / "home/programs/claude"
+        comment_card = home / ".claude/skills/gate/references/comments-card.md"
+        comment_card.parent.mkdir(parents=True)
+        shutil.copy2(claude / "skills/gate/references/comments-card.md", comment_card)
+        shutil.copy2(claude / "global-instructions.md", home / ".claude/CLAUDE.md")
         (codex_home / "scripts").mkdir()
         for script in (codex_source / "scripts").glob("codex-plan-*.ts"):
             shutil.copy2(script, codex_home / "scripts" / script.name)
         copy_tree(codex_source / "agents", codex_home / "agents")
         for definition in (codex_home / "agents").glob("*.toml"):
-            definition.write_text(definition.read_text().replace(str(Path(args.root).resolve()), str(source)))
+            contents = definition.read_text().replace(str(Path(args.root).resolve()), str(source))
+            contents = contents.replace(str(Path.home() / ".agents/skills/plan/references") + "/",
+                                        str(skills / "plan/references") + "/")
+            definition.write_text(contents)
         copy_tree(source / "home/programs/agents/skills/requirements-interview", skills / "requirements-interview")
         agent_scripts = home / ".agents/scripts"
         agent_scripts.mkdir()
-        shutil.copyfile(Path(args.root) / "home/programs/agents/scripts/check-plan.ts", agent_scripts / "check-plan.ts")
+        shutil.copyfile(source / "home/programs/agents/scripts/check-plan.ts", agent_scripts / "check-plan.ts")
         (agent_scripts / "check-plan.ts").chmod(0o755)
         if args.setup_only:
             (work / "manifest.json").write_text(json.dumps(dict(status="setup-only", case=args.case, variant=args.variant)))

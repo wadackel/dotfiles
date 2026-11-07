@@ -1,4 +1,7 @@
+import argparse
+import contextlib
 import importlib.util
+import io
 import pathlib
 import tempfile
 import unittest
@@ -10,6 +13,79 @@ spec.loader.exec_module(runner)
 
 
 class ResultsTest(unittest.TestCase):
+    def setup_fixture(self, temp):
+        base = pathlib.Path(temp).resolve()
+        source, repository, original_home = (base / name for name in ("snapshot", "repository", "original-home"))
+        files = {
+            "home/programs/codex/skills/plan/SKILL.md": "plan",
+            "home/programs/codex/skills/impl/SKILL.md": "impl",
+            "home/programs/agents/shared/plan/references/critic-prompt.md": "critic prompt",
+            "home/programs/agents/shared/plan/references/adversarial-prompt.md": "adversarial prompt",
+            "home/programs/agents/skills/requirements-interview/SKILL.md": "interview",
+            "home/programs/agents/scripts/check-plan.ts": "snapshot linter",
+            "home/programs/claude/skills/gate/references/comments-card.md": "comments card",
+            "home/programs/claude/global-instructions.md": "comment conventions",
+        }
+        for role in ("code-reviewer", "security-auditor"):
+            target = f"home/programs/claude/agents/{role}.md"
+            files[target] = f"snapshot {role}"
+            files[f"home/programs/codex/agents/{role}.toml"] = f'Read "{repository / target}"'
+        for role, prompt in (("plan-critic", "critic-prompt.md"), ("plan-adversarial", "adversarial-prompt.md")):
+            files[f"home/programs/codex/agents/{role}.toml"] = f'Read "{original_home / ".agents/skills/plan/references" / prompt}"'
+        for name, contents in files.items():
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(contents)
+        live_linter = repository / "home/programs/agents/scripts/check-plan.ts"
+        live_linter.parent.mkdir(parents=True)
+        live_linter.write_text("live linter must not be copied")
+        cases = base / "cases.json"
+        cases.write_text('{"setup": {"files": {}}}')
+        args = argparse.Namespace(source=str(source), root=str(repository), output=str(base / "results"),
+                                  cases=str(cases), case="setup", variant="test", prior_sessions=0, setup_only=True)
+        with patch.object(runner.Path, "home", return_value=original_home), contextlib.redirect_stdout(io.StringIO()):
+            runner.run(args)
+        home = base / "results/run-01-test-setup/home"
+        return source, repository, original_home, home
+
+    def test_setup_stages_comment_dependencies(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, _, _, home = self.setup_fixture(temp)
+            for origin, destination in (
+                ("home/programs/claude/skills/gate/references/comments-card.md", ".claude/skills/gate/references/comments-card.md"),
+                ("home/programs/claude/global-instructions.md", ".claude/CLAUDE.md"),
+            ):
+                with self.subTest(destination=destination):
+                    self.assertTrue((home / destination).is_file())
+                    self.assertEqual((home / destination).read_bytes(), (source / origin).read_bytes())
+
+    def test_setup_rebinds_reviewer_sources_and_public_home_prompts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, repository, original_home, home = self.setup_fixture(temp)
+            targets = {
+                "code-reviewer": source / "home/programs/claude/agents/code-reviewer.md",
+                "security-auditor": source / "home/programs/claude/agents/security-auditor.md",
+                "plan-critic": home / ".agents/skills/plan/references/critic-prompt.md",
+                "plan-adversarial": home / ".agents/skills/plan/references/adversarial-prompt.md",
+            }
+            for role, target in targets.items():
+                with self.subTest(role=role):
+                    definition = (home / f".codex/agents/{role}.toml").read_text()
+                    self.assertIn(str(target), definition)
+                    self.assertNotIn(str(repository), definition)
+                    self.assertNotIn(str(original_home), definition)
+                    self.assertTrue(target.is_file())
+            self.assertEqual(targets["plan-critic"].read_text(), "critic prompt")
+            self.assertEqual(targets["plan-adversarial"].read_text(), "adversarial prompt")
+
+    def test_setup_uses_snapshot_linter_and_preserves_executable_mode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source, _, _, home = self.setup_fixture(temp)
+            linter = home / ".agents/scripts/check-plan.ts"
+            self.assertEqual(linter.read_bytes(), (source / "home/programs/agents/scripts/check-plan.ts").read_bytes())
+            self.assertEqual(linter.stat().st_mode & 0o777, 0o755)
+            self.assertFalse((home / ".codex/auth.json").exists())
+
     def test_tree_usage_includes_children_without_summing_cumulative_events(self):
         with tempfile.TemporaryDirectory() as temp:
             home = pathlib.Path(temp)

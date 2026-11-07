@@ -238,7 +238,9 @@ test("statusline.sh appends to the history only when a value moves", async () =>
     await runStatusline(home, at(11));
     const lines = await readHistory(home);
     assertEquals(
-      lines.map((l) => (l.fiveHour as { used_percentage: number }).used_percentage),
+      lines.map((l) =>
+        (l.fiveHour as { used_percentage: number }).used_percentage
+      ),
       [10, 11],
     );
   });

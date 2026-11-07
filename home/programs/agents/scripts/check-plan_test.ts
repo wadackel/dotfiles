@@ -422,15 +422,22 @@ test("a relative path inside ~/.claude/plans is held to Delivery too", async () 
 });
 
 test("a bad Merge value, a repeated line, and a draft that merges are errors", async () => {
-  const merge = await runOn(plan({ extra: DELIVERY.replace("Merge: no", "Merge: maybe") }));
+  const merge = await runOn(
+    plan({ extra: DELIVERY.replace("Merge: no", "Merge: maybe") }),
+  );
   assertEquals(merge.code, 1);
   assertStringIncludes(merge.stdout, "[error] delivery-format: Merge:");
   const repeated = await runOn(plan({
     extra: DELIVERY.replace("- Draft: yes", "- Level: none\n- Draft: yes"),
   }));
   assertEquals(repeated.code, 1);
-  assertStringIncludes(repeated.stdout, "[error] delivery-format: Level: appears twice");
-  const draftMerge = await runOn(plan({ extra: DELIVERY.replace("Merge: no", "Merge: yes") }));
+  assertStringIncludes(
+    repeated.stdout,
+    "[error] delivery-format: Level: appears twice",
+  );
+  const draftMerge = await runOn(
+    plan({ extra: DELIVERY.replace("Merge: no", "Merge: yes") }),
+  );
   assertEquals(draftMerge.code, 1);
   assertStringIncludes(draftMerge.stdout, "[error] delivery-merge:");
 });

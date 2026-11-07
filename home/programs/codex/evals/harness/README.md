@@ -11,9 +11,20 @@ publish changes or invoke external task services.
 ## Reproduce a case
 
 Freeze a source tree containing `home/programs/codex`, shared plan references,
-`requirements-interview`, and the Claude reviewer definitions referenced by the
-Codex adapters. Preserve file modes and resolve the skill-directory links within
-that snapshot. Use separate immutable trees for each variant.
+`requirements-interview`, `home/programs/agents/scripts/check-plan.ts`, and the
+Claude reviewer definitions referenced by the Codex adapters. Include Claude's
+`skills/gate/references/comments-card.md` and `global-instructions.md`: the
+runner publishes them under the isolated home's `.claude/`. Preserve file modes
+and resolve the skill-directory links within that snapshot. Use separate
+immutable trees for each variant, outside any repository or project instruction
+ancestor.
+
+`--root` identifies the original repository for rewriting adapter references;
+leave it at the default when running this runner from that repository. Do not
+set it to `--source`. The linter comes from the snapshot; repository references
+in staged adapters point into that snapshot, and absolute public-home plan
+prompt references point into the isolated home. Check their actual reads in
+session records as well as their staged paths.
 
 ```sh
 rtk proxy python3 home/programs/codex/evals/harness/runner.py --source /absolute/snapshot --output /absolute/results --variant C --case expired --timeout 360
@@ -33,6 +44,26 @@ only after a question-bearing final message and resumes the same thread. These
 turns count as interventions, not new independent sessions. Ambiguous cases have
 no scripted answer; waiting is the expected behavior. A turn completing does not
 establish task success: each result starts as `unadjudicated`.
+
+## Harness parity cases
+
+| Case | Required observation |
+|---|---|
+| `impl_checks` | The added regression fails for the missing behavior before the source edit, then passes. The mandatory routine check omitted from the plan runs and exits 17. Its immutable failure leaves the gate incomplete, with both verification inputs unchanged. |
+| `comments_review` | The existing code-reviewer receives the comments card, flags the prefix/conversation violations as SHOULD_FIX, and respects the negative controls. No comment-reviewer or source mutation; SHOULD_FIX alone remains non-blocking. |
+| `evidence_grades` | Direct and the two bounded Supported records are admissible; an unrecorded delegate report and a guess cannot support the Approach. No invented observations or plan activation. |
+| `explicit` | The exact accepted wording produces a plan and pending marker without another scope question or an implementation edit. |
+
+Freeze the same cases and staging behavior for before/after runs. Inspect raw
+command order and outputs, reviewer dispatch inputs, session reads and fixture
+state; a model's PASS or the runner's exit code is not adjudication. Dispatch
+messages may be encrypted in session logs. The comments case asks the reviewer
+to echo the exact cards it received; compare that appendix with the staged card,
+and do not infer card delivery solely from a coincidental finding. A before
+case can pass because another instruction compensates; record that result
+instead of claiming a reproduced regression. If cases or staging change,
+repeat both variants. Keep setup/model failures separate from behavior failures.
+Compare source hashes with the final worktree before claiming the after result.
 
 ## Comparison stages
 

@@ -556,7 +556,9 @@ export type ReplyKind = "question" | "report" | "plan-ready" | "other";
 
 /** 返答の種類を固定文字列で近似する。順序は特異な印から */
 export function replyKind(text: string): ReplyKind {
-  if (/Full record:|VERDICT|\*\*どこまで確かめたか\*\*/.test(text)) return "report";
+  if (/Full record:|VERDICT|\*\*どこまで確かめたか\*\*/.test(text)) {
+    return "report";
+  }
   if (/Plan ready|PENDING APPROVAL/.test(text)) return "plan-ready";
   if (/^### .+[?？]$/m.test(text) && /> 推奨/.test(text)) return "question";
   return "other";

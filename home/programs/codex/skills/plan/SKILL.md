@@ -135,7 +135,7 @@ Each clarification pass:
 
 1. **Step A Walk**: Walk the 8 observations: Why, What, Who, When, Where, How, Success, Failure. Apply prior answers, then identify NotClear items. Restate is not a substitute for Ask.
 2. **Step B Triage**: Choose Ask / Assume / Self-resolve by cost-if-wrong and downstream recoverability. For items not asked, record the no-ask reason in `### Assumptions`, `### Self-resolved`, or `### Unresolved Items`. Never assume values that depend on user intent without an explicit user choice, except a scope boundary, which `references/interview.md` lets `$plan` adopt as `user-overridden: default` with a `scope:` field naming the boundary.
-3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE and no question rests on it, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` (a `[Direct]` one followed by `→ <output excerpt>`) per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+3. **Step C Self-resolve probe**: Resolve anything answerable by lightweight grep/read. If an item is codebase-recoverable but too heavy for AGREE and no question rests on it, defer it with a concrete `next:`. If it depends on user-only knowledge, promote it to Ask. Record each result as `source: [Direct|Supported|Inferred] <probe command + file:lines>` (a `[Direct]` one followed by `→ <output excerpt>`); apply the evidence grades and admissibility rules in `references/contract.md`, including its bounded Supported exceptions for claims the Approach relies on. `[Unknown]` belongs in `### Unresolved Items`.
 4. **Step D Re-Ask trigger detection**: Triggers are (i) an open-ended return question in a prior answer, (ii) ambiguous or empty answer, (iii) a tentative assumption still NotClear after re-walk, and (iv) carried-over Ask items. If the same trigger remains, do not advance by count exhaustion; ask the user to choose between proceeding with a stated assumption, proceeding with stated risk, continuing clarification, or scoping it out.
 5. **Step E Ask issuance**: Order remaining real questions by frontier ordering and impact priority, then ask the highest-impact decision alone, with the facts `references/interview.md` requires collected first; the rest wait for later turns. A question that depends on another open answer waits. Every question must include a recommended answer and short rationale. For text-only continuation, immediately before asking, create or overwrite `~/.codex/plans/.clarifying-<cwd-hash>.json` with `request`, `questions`, `selfResolvedSummary`, `createdAt`, `cwd`, `version`, and `interviewId`. Show `interviewId` in the question text and verify it on continuation. Starting a new Blocking Interview overwrites the previous marker.
 6. **Step F Wait**: Wait for required answers; continue independent work if the question tool allows it. For text-only continuation, say: `Here I will wait for your answer. In the next turn, answer naturally, or use $plan --answer <answer> if you need guaranteed continuation.` Then end the turn without executing dependent work.
@@ -150,7 +150,7 @@ Convergence conditions, any one:
 
 ### AGREE output
 
-Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`, per `references/contract.md`; `[Unknown]` belongs in `### Unresolved Items`, and a claim the Approach relies on must be Direct.
+Write these four subsections into the plan body immediately before `## Overview`: `### Requirement Clarification` (one-line status), `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`. Keep these subsection names in English for downstream parsing. Record each `### Self-resolved` entry as `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`; apply the evidence grades and admissibility rules in `references/contract.md`, including its bounded Supported exceptions for claims the Approach relies on. `[Unknown]` belongs in `### Unresolved Items`.
 
 ## EXPLORE
 
@@ -348,10 +348,6 @@ The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Aud
 5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + risk-selected Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
 `$impl` performs routine simplification in the main session. Do not create a separate simplifier task or use diff size alone to request an agent.
-
-### Acceptance criteria by change type
-
-Use the Claude version table as a reference: `~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`.
 
 ## ACTIVATE
 

@@ -3564,7 +3564,12 @@ test("S89: --snapshot writes nothing while a restore is under way", async () => 
     await setupInner();
     await innerTmux(["new-session", "-d", "-s", "work"]);
     // This test process stands in for a restore that is still running.
-    const { stdout } = await run("ps", ["-o", "etime=", "-p", `${process.pid}`]);
+    const { stdout } = await run("ps", [
+      "-o",
+      "etime=",
+      "-p",
+      `${process.pid}`,
+    ]);
     const start = Math.floor(Date.now() / 1000) - (parseEtime(stdout) ?? 0);
     await innerTmux(
       ["set-option", "-g", "@agentower_restoring", `${process.pid}:${start}`],
@@ -4153,7 +4158,11 @@ test("S100: a failed restore's server is saved again, and the retry follows the 
       (await shimCalls()).some((c) => c.includes("attach-session")),
       false,
     );
-    const flag = await innerTmux(["show-options", "-gqv", "@agentower_restoring"]);
+    const flag = await innerTmux([
+      "show-options",
+      "-gqv",
+      "@agentower_restoring",
+    ]);
     assertEquals(/^\d+:\d+$/.test(flag.trim()), true);
 
     // Ten older files make one too many: pruning now would delete one of them.
@@ -4229,7 +4238,18 @@ test("S104: floating panes are left out and the splits come back in their layout
     await setupInner();
     const height = String(await innerWindowHeight());
     await innerTmux(
-      ["new-session", "-d", "-s", "main", "-n", "plain", "-x", "200", "-y", height],
+      [
+        "new-session",
+        "-d",
+        "-s",
+        "main",
+        "-n",
+        "plain",
+        "-x",
+        "200",
+        "-y",
+        height,
+      ],
     );
     await innerTmux(["split-window", "-t", "main:1"]);
     await innerTmux(["new-pane", "-d", "-t", "main:1"]);
@@ -4258,9 +4278,26 @@ test("S105: a name with a backslash comes back as it was", async () => {
   try {
     await setupInner();
     const window = (await innerTmux(
-      ["new-session", "-d", "-s", "se\\ss", "-n", "a\\b", "-P", "-F", "#{window_id}"],
+      [
+        "new-session",
+        "-d",
+        "-s",
+        "se\\ss",
+        "-n",
+        "a\\b",
+        "-P",
+        "-F",
+        "#{window_id}",
+      ],
     )).trim();
-    await innerTmux(["set-option", "-w", "-t", window, "automatic-rename", "off"]);
+    await innerTmux([
+      "set-option",
+      "-w",
+      "-t",
+      window,
+      "automatic-rename",
+      "off",
+    ]);
     const names = "#{session_name}|#{window_name}";
     const before = await innerTmux(["list-windows", "-a", "-F", names]);
     await saveAndKillInner();
@@ -4300,7 +4337,10 @@ test("S106: --restore refuses to run from a popup of the server it would kill", 
     await spawnInnerPopup(["--restore"], { out, code });
 
     assertEquals(await readWhenWritten(code), "1");
-    assertStringIncludes(await readFile(out, "utf8"), "tmux の外で実行してください");
+    assertStringIncludes(
+      await readFile(out, "utf8"),
+      "tmux の外で実行してください",
+    );
     assertEquals(
       (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
       "work",

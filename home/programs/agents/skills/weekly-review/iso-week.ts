@@ -23,7 +23,8 @@ export function computeIsoWeekDates(isoWeek: string): {
   if (!m) throw new Error(`not an ISO week (YYYY-WNN): ${isoWeek}`);
   const [y, w] = [Number(m[1]), Number(m[2])];
   const jan4 = new Date(Date.UTC(y, 0, 4));
-  const mon = jan4.getTime() + ((w - 1) * 7 - ((jan4.getUTCDay() || 7) - 1)) * DAY;
+  const mon = jan4.getTime() +
+    ((w - 1) * 7 - ((jan4.getUTCDay() || 7) - 1)) * DAY;
   const day = (offset: number) =>
     new Date(mon + offset * DAY).toISOString().slice(0, 10);
   if (isoWeekOf(day(0)) !== isoWeek) {

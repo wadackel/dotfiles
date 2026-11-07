@@ -799,7 +799,9 @@ export async function attachInnerClient(): Promise<void> {
     SESSION,
     "/usr/bin/env",
     "-i",
-    ...Object.entries(await innerEnv()).map(([key, value]) => `${key}=${value}`),
+    ...Object.entries(await innerEnv()).map(([key, value]) =>
+      `${key}=${value}`
+    ),
     realTmux,
     "-S",
     socket,
