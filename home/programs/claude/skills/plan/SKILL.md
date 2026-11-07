@@ -70,7 +70,7 @@ Fix what you find in the plan with the Edit tool or by rewriting the whole file,
 
 ## DECOMPOSE
 
-One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one command that `/impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task runs every bullet again. With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and a task stays inside one layer. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task, literally `Final Audit + Review`, with `addBlockedBy`).
+One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one command that `/impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task re-runs every bullet whose run is stale (`contract.md`). With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and a task stays inside one layer. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task, literally `Final Audit + Review`, with `addBlockedBy`).
 
 ## ACTIVATE
 
@@ -98,3 +98,14 @@ When the user adds a condition, append it as the last Autonomous Verification bu
 ```
 
 Approval is the user typing `/impl`; write no state file.
+
+## Under /autopilot
+
+This section applies only when the prompt is an autopilot unit brief (`~/.claude/skills/autopilot/references/unit-brief.md`), run by the `autopilot-unit` agent, whose definition (`~/.claude/agents/autopilot-unit.md`) holds the park rule and the report form. The user is away; the brief's goal and unit are the direction, and the autopilot advisor approves the plan in the user's place.
+
+- **Of `references/`, read only `contract.md`.** `interview.md` and `output-examples.md` serve questions and the handoff, neither of which happens here.
+- **AGREE asks nothing.** A1, A5, and the Verification Grants question are skipped. A question that would go to the user follows the park rule: a parked one stops with `STATUS: PARKED` in the report form; any other is decided by you and written under `### Assumptions` as an ordinary assumption whose `reason:` starts with `autopilot Decision:` and names the alternative it was chosen over. `user-overridden` is not used, since the user chose nothing. This overrides `interview.md`'s rule that design decisions are asked; the autopilot final report is where the user makes them.
+- **`## Delivery` and `## Verification Grants`** are the brief's lines, copied as written.
+- **DEEPEN** runs as above; a queued User decision follows the park rule instead of being asked.
+- **ACTIVATE** writes no handoff and no `## Plan ready` block: once `check-plan.ts` reports no `error`, end with `PLAN <plan path>` and stop until the controller answers.
+- **Trivial** writes no plan and needs no approval: make the change, verify it, commit on the worktree's branch, run `/gate --diff-only <start sha>`, then ship it as `/impl`'s Delivery and its `## Under /autopilot` say, and end with the report form.

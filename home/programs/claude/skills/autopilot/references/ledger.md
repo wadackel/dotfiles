@@ -7,6 +7,7 @@ One Markdown file per run at `~/.claude/plans/YYYYMMDDTHHmm-<slug>.autopilot.md`
 
 Status: running | finished | parked
 Goal: <the goal text as the user wrote it>
+Advisor: <agent id>
 
 ## Contract
 
@@ -20,14 +21,14 @@ Goal: <the goal text as the user wrote it>
 ### PR shape
 - <unit #s> — stack on <unit #> | own PR — why: <the dependency, or the goal or repository asking for stacks>
 
-### Parallel groups
-- <unit #s run at once> — why disjoint: <files and resources> (or "none: sequential")
+### Parallel lanes
+- <unit #s that may run at once> — why disjoint: <files and resources>; cap: <3, or the count the goal gave>
 
 ## Units
 
-| # | Unit | Branch | Start sha | Plan | Verdict | PR / commit | Verified by | State |
-|---|------|--------|-----------|------|---------|-------------|-------------|-------|
-| 1 | <unit> | <branch> | <sha> | <plan path or "trivial"> | APPROVE (round 2) | <url or sha> | <how> | done / in progress / parked / todo |
+| # | Unit | Agent | Branch | Start sha | Plan | Verdict | PR | ALL_PASS head | Verified by | State |
+|---|------|-------|--------|-----------|------|---------|----|---------------|-------------|-------|
+| 1 | <unit> | <agent id> | <branch> | <sha> | <plan path or "trivial"> | APPROVE (round 2) | <url> | <sha from the unit's report, checked with gh pr view> | <how> | done / in progress / parked / todo |
 
 ## Parked
 
@@ -45,4 +46,4 @@ Goal: <the goal text as the user wrote it>
 - <unit #>: <what was asked> → <verdict or advice> → <followed | overridden: reason>
 ```
 
-`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.
+`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. Only the controller writes this file; units read it. Decisions come from each unit's report and its plan's assumptions whose `reason:` starts with `autopilot Decision:`. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.

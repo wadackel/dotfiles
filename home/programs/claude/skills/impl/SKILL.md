@@ -43,7 +43,7 @@ Do not trust the inherited summary. Re-resolve the plan (confirming a fallback p
 
 ## Final task
 
-Run every Autonomous Verification command of the plan again on the current tree, in the background with a long timeout when the set is slow, and read each output: edits in later tasks can break an earlier task's check, so a pass seen before the last edit does not count. Take each `[live]` item again when the tree changed since it was observed. Then run the routine checks the repository's `AGENTS.md` or `CLAUDE.md` names (formatter, lint, type check), read their output, and fix what fails before claiming the work is done; the report's routine-checks line names what ran. Then invoke `/gate` with the plan path: it builds the diff from the start ref, checks that every criterion has its run, dispatches the reviewers, and deletes the ref when it passes. `[BLOCKED: gate escalated]` from the gate means the open blockers go to the user.
+Re-run every Autonomous Verification command whose last run is stale (`~/.claude/skills/plan/references/contract.md`, Tasks and checks), in the background with a long timeout when the set is slow, and read each output: edits in later tasks can break an earlier task's check, so a pass seen before an edit to what it reads does not count, while a run with no such edit after it stands and is not repeated. Take each stale `[live]` item again. Then run the routine checks the repository's `AGENTS.md` or `CLAUDE.md` names (formatter, lint, type check) unless a run of each is still fresh, read their output, and fix what fails before claiming the work is done; the report's routine-checks line names what ran. Then invoke `/gate` with the plan path: it builds the diff from the start ref, checks that every criterion has its run, dispatches the reviewers, and deletes the ref when it passes. `[BLOCKED: gate escalated]` from the gate means the open blockers go to the user.
 
 ## Delivery
 
@@ -52,8 +52,19 @@ After the gate passes, ship as `## Delivery` says; after `[BLOCKED: gate escalat
 - `none`: leave the change uncommitted. `commit`: the commit made before the gate stands. `push`: push the current branch.
 - `pr`: invoke `Via` (`/create-pr` with `no-watch`, since the next step watches CI, or the repository's PR skill), with `draft` when `Draft: yes`. `stack`: `/gh-stack` submits the stack (`gh stack submit --auto` opens drafts; `--open` when `Draft: no`).
 - Then run `/iterate-pr` on each PR until CI passes, fixing failures and pushing again; with `Draft: yes` the PR stays a draft, so skip its step that marks the PR ready. A layer above the bottom that reports no checks waits until it becomes the bottom.
-- Merge only with `Merge: yes` and when the gate listed no `レビューしてほしい` hunk, under the conditions of the merge paragraph of `~/.claude/skills/autopilot/SKILL.md` §4: its own tool call; an `ALL_PASS` whose head, recorded with `gh pr view --json headRefOid`, still matches right before merging; no review comment triaged `ask` left open; a stack one layer at a time from the bottom, each followed by `gh stack sync` and `/iterate-pr` on the new bottom. When the gate listed a hunk, the PRs stay open and the merge goes to the user.
+- Merge only with `Merge: yes`, when the gate listed no `レビューしてほしい` hunk, and when the latest `/iterate-pr` on that PR returned `ALL_PASS` for its current head with no review comment triaged `ask` left open. `/iterate-pr` does not print the head it judged, so record `gh pr view --json headRefOid` next to each `ALL_PASS` and compare it right before merging; a verdict for an older head does not count, and neither does reading a check's status inside the command that merges, so the merge is its own tool call. An own PR merges with `gh pr merge`. A stack merges one layer at a time from the bottom with `gh stack merge <PR> --yes`, because `gh pr merge` cannot merge a stack and `gh stack merge` checks nothing but that the PR is open and not a draft; after each layer, run `gh stack sync`, which rebases and force-pushes the layers above, and run `/iterate-pr` again on the new bottom layer before merging it. When the gate listed a hunk, the PRs stay open and the merge goes to the user.
 - After a merge that a Verification Grant covers, wait for the deploy and run the `[live]` bullets that observe production; a failure there is fixed through a new PR that sets a new start ref and goes through `/gate` and these steps again.
+
+## Under /autopilot
+
+This section applies only after an autopilot unit brief (`~/.claude/skills/autopilot/references/unit-brief.md`), when the controller's `APPROVED <plan path>` message stands in for the user's `/impl`, or when a trivial unit ships as the plan skill's `## Under /autopilot` says. The unit runs as the `autopilot-unit` agent, whose definition (`~/.claude/agents/autopilot-unit.md`) holds the park rule and the report form.
+
+- **The plan** is the path in that message; no fallback by mtime.
+- **Delivery** runs as written. Its `Merge` is `no`, so it ends when `/iterate-pr` returns `ALL_PASS`; record `gh pr view --json headRefOid` right after it, for the report. What `/iterate-pr` or `/auto-pr` would ask the user (the same failure three times, an exhausted budget, `BLOCKED`, three `PENDING` in a row, `NO_CHECKS` on a PR against the trunk, a review comment triaged `ask`) is a parked item.
+- **When the plan cannot be followed**, nobody is asked. A deviation the park rule does not park is decided, written under the plan's `### Assumptions` as an autopilot Decision (the plan skill's `## Under /autopilot`), and the work continues; a parked one stops that step.
+- **A Requires User Confirmation item** whose attempt fails parks that item, not the unit.
+- **The same failure three times** ends the unit with `STATUS: BLOCKED` and what was tried; the controller may come back with a hypothesis.
+- **No final report** card is written: end with the unit's report form instead.
 
 ## Final report
 
