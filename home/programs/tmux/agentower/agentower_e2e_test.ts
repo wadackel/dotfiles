@@ -1196,6 +1196,92 @@ test("S22: w toggles wait/idle filter (round-trip)", async () => {
   }
 });
 
+// S22b: a user label marks an agent as spoken for, so `w` leaves labeled
+// waiting/idle rows out. Labeled rows draw the label instead of the status, so
+// they are found by the label text.
+test("S22b: w leaves labeled waiting and idle agents out", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "waiting", prompt: "free-wait" });
+    await createClaudePane({ status: "waiting", userLabel: "parked" });
+    await createClaudePane({ status: "idle", userLabel: "pending" });
+    await createClaudePane({ status: "running" });
+
+    const agentower = await spawnAgentower();
+    const initial = await captureOutput(agentower);
+    assertStringIncludes(initial, "parked");
+    assertStringIncludes(initial, "pending");
+
+    await sendKey(agentower, "w");
+    const filtered = await waitFor(agentower, (o) => o.includes("wait/idle"));
+    assertEquals(listStatuses(filtered), ["wait"]);
+    assertStringIncludes(filtered, "free-wait");
+    for (const label of ["parked", "pending"]) {
+      assertFalse(
+        filtered.includes(label),
+        `labeled row '${label}' survived the filter:\n${filtered}`,
+      );
+    }
+
+    await sendKey(agentower, "w");
+    const restored = await waitFor(agentower, (o) => !o.includes("wait/idle"));
+    assertEquals(listStatuses(restored), ["run", "wait"]);
+    assertStringIncludes(restored, "parked");
+    assertStringIncludes(restored, "pending");
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// S22c: labeling inside the filter must not hide the row at once, or a second
+// `m` lands on the neighbour the selection moved to. The row stays until the
+// next `w`, and the filter after that leaves it out like any labeled row.
+test("S22c: a row labeled under the filter stays until the next w", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "waiting", prompt: "tri-a" });
+    await createClaudePane({ status: "waiting", prompt: "tri-b" });
+
+    const agentower = await spawnAgentower();
+    await waitFor(agentower, (o) => o.includes("tri-a") && o.includes("tri-b"));
+    await sendKey(agentower, "w");
+    const filtered = await waitFor(agentower, (o) => o.includes("wait/idle"));
+    const labeled = selectedLine(filtered).includes("tri-a") ? "tri-a" : "tri-b";
+    const other = labeled === "tri-a" ? "tri-b" : "tri-a";
+
+    await sendKey(agentower, "m");
+    await waitFor(agentower, selectedIncludes("review"), 4000);
+    await sendKey(agentower, "m");
+    const twice = await waitFor(agentower, selectedIncludes("parked"), 4000);
+    assertStringIncludes(selectedLine(twice), labeled);
+    assertStringIncludes(twice, other);
+    // List rows only: the hint bar's "preview" contains "review".
+    assertFalse(
+      twice.split("\n").some((l) => l.includes("claude") && l.includes("review")),
+      `the second m labeled the neighbouring row:\n${twice}`,
+    );
+
+    await sendKey(agentower, "w");
+    await waitFor(agentower, (o) => !o.includes("wait/idle"));
+    await sendKey(agentower, "w");
+    const again = await waitFor(
+      agentower,
+      (o) => o.includes("wait/idle") && !o.includes(labeled),
+    );
+    assertStringIncludes(again, other);
+    assertEquals(listStatuses(again), ["wait"]);
+    assertFalse(again.includes("parked"), `labeled row came back:\n${again}`);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
 // S23: filter applied with no waiting/idle panes shows a dedicated empty-state
 // message and `useInput` remains live so a second `w` press clears the filter.
 // The empty-state branch returns a 2-line <Box> rather than the full layout, so
@@ -1214,7 +1300,7 @@ test(
       await sendKey(agentower, "w");
       const empty = await waitFor(
         agentower,
-        (o) => o.includes("No agents waiting or idle"),
+        (o) => o.includes("No unlabeled agents waiting or idle"),
       );
       assertStringIncludes(empty, "1 agent is hidden by the filter");
       assertStringIncludes(empty, " clear");
@@ -1226,11 +1312,11 @@ test(
       await sendKey(agentower, "w");
       const restored = await waitFor(
         agentower,
-        (o) => !o.includes("No agents waiting or idle"),
+        (o) => !o.includes("No unlabeled agents waiting or idle"),
       );
       assertStringIncludes(restored, "run");
       assertFalse(
-        restored.includes("No agents waiting or idle"),
+        restored.includes("No unlabeled agents waiting or idle"),
         `empty-state message persisted after clearing filter:\n${restored}`,
       );
 
@@ -3117,7 +3203,7 @@ test("S73b: with an agent in every window, the free screen says so and f goes ba
     const agentower = await spawnAgentower();
 
     await sendKey(agentower, "w");
-    await waitFor(agentower, (o) => o.includes("No agents waiting or idle"));
+    await waitFor(agentower, (o) => o.includes("No unlabeled agents waiting or idle"));
     await sendKey(agentower, "f");
     const none = await waitFor(
       agentower,
@@ -3127,7 +3213,7 @@ test("S73b: with an agent in every window, the free screen says so and f goes ba
     assertStringIncludes(none, " agents  ");
 
     await sendKey(agentower, "f");
-    await waitFor(agentower, (o) => o.includes("No agents waiting or idle"));
+    await waitFor(agentower, (o) => o.includes("No unlabeled agents waiting or idle"));
     await sendKey(agentower, "w");
     await waitFor(agentower, selectedIncludes("row-a"));
     await sendKey(agentower, "Escape");

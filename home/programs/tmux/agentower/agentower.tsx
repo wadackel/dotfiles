@@ -427,6 +427,17 @@ export function nextWaitingIndex(rows: PaneRow[], from: number): number {
   return from;
 }
 
+// What `w` keeps: waiting or idle agents nobody has labeled. `kept` holds the
+// panes labeled while the filter is on; dropping them at once would move the
+// selection, and a second `m` meant for the same row would label its neighbour.
+export function matchesWaitFilter(
+  row: PaneRow,
+  kept: ReadonlySet<string>,
+): boolean {
+  return (row.status === "waiting" || row.status === "idle") &&
+    (row.userLabel === "" || kept.has(row.paneId));
+}
+
 // One stdin read can carry several keypresses: Ink splits escape sequences into
 // separate events but hands a run of printable characters over whole. Only the
 // navigation keys are split, because every printable character would also split
@@ -883,6 +894,9 @@ function App({
   // SSOT catches up. useRef (not useState) because mutations are always
   // paired with a setRows call that drives the re-render.
   const pendingLabelWrites = useRef<Map<string, UserLabel>>(new Map());
+  // Panes labeled since `w` last toggled; see matchesWaitFilter. A ref for the
+  // same reason as pendingLabelWrites: writeUserLabel's setRows re-renders.
+  const labeledInFilter = useRef<Set<string>>(new Set());
   // First visible pane of a scrolled list. Kept across renders so moving the
   // selection inside the window does not shift it.
   const listOffset = useRef(0);
@@ -988,7 +1002,9 @@ function App({
   const derivedRows = screen === "free"
     ? free.map((s: FreeWindow) => s.row)
     : filterEnabled
-    ? rows.filter((r: PaneRow) => r.status === "waiting" || r.status === "idle")
+    ? rows.filter((r: PaneRow) =>
+      matchesWaitFilter(r, labeledInFilter.current)
+    )
     : rows;
 
   useEffect(() => {
@@ -1099,6 +1115,7 @@ function App({
     // automatically. Both keys are written together; on label="" the session
     // value is irrelevant but writing it keeps the path uniform.
     pendingLabelWrites.current.set(paneId, label);
+    if (filterEnabled) labeledInFilter.current.add(paneId);
     setRows((prev: PaneRow[]) =>
       prev.map((r: PaneRow) =>
         r.paneId === paneId ? { ...r, userLabel: label } : r
@@ -1209,6 +1226,7 @@ function App({
       return;
     }
     if (input === "w") {
+      labeledInFilter.current.clear();
       setFilterEnabled((v: boolean) => !v);
       return;
     }

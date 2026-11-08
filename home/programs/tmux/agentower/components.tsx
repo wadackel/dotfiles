@@ -857,7 +857,7 @@ export function emptyMessage(opts: {
     };
   }
   return {
-    title: "No agents waiting or idle",
+    title: "No unlabeled agents waiting or idle",
     detail: opts.agents === 1
       ? "1 agent is hidden by the filter"
       : `${opts.agents} agents are hidden by the filter`,

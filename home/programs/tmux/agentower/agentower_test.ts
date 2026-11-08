@@ -13,6 +13,7 @@ import {
   isKeyBurst,
   isLivePaneCommand,
   listGeometry,
+  matchesWaitFilter,
   MOUSE_LEFT,
   MOUSE_RIGHT,
   MOUSE_WHEEL_DOWN,
@@ -29,6 +30,7 @@ import {
   splitLayout,
   TMUX_FORMAT,
   topRowsFor,
+  USER_LABEL_CYCLE,
   visibleWindow,
   wrapStep,
 } from "./agentower.tsx";
@@ -1384,6 +1386,55 @@ test("nextWaitingIndex: no waiting row → no move", () => {
   assertEquals(nextWaitingIndex([], 0), 0);
 });
 
+// --- matchesWaitFilter ---
+
+const NONE_KEPT: ReadonlySet<string> = new Set();
+
+test("matchesWaitFilter: unlabeled waiting and idle rows pass, other statuses do not", () => {
+  assertEquals(
+    statusRows("waiting", "idle", "running", "error", "").map((r) =>
+      matchesWaitFilter(r, NONE_KEPT)
+    ),
+    [true, true, false, false, false],
+  );
+});
+
+test("matchesWaitFilter: any user label hides a waiting or idle row", () => {
+  const [waiting, idle] = statusRows("waiting", "idle");
+  for (const label of USER_LABEL_CYCLE.filter((l) => l !== "")) {
+    assertEquals(
+      matchesWaitFilter({ ...waiting, userLabel: label }, NONE_KEPT),
+      false,
+      label,
+    );
+    assertEquals(
+      matchesWaitFilter({ ...idle, userLabel: label }, NONE_KEPT),
+      false,
+      label,
+    );
+  }
+});
+
+test("matchesWaitFilter: a row labeled during the filter stays while its status still matches", () => {
+  const rows = statusRows("waiting", "running", "error", "");
+  const kept = new Set(rows.map((r) => r.paneId));
+  assertEquals(
+    rows.map((r) => matchesWaitFilter({ ...r, userLabel: "parked" }, kept)),
+    [true, false, false, false],
+  );
+});
+
+test("matchesWaitFilter: a startup Codex row is idle and unlabeled", () => {
+  const [row] = statusRows("");
+  assertEquals(
+    matchesWaitFilter(
+      { ...row, startup: true, agent: "codex", status: "idle" },
+      NONE_KEPT,
+    ),
+    true,
+  );
+});
+
 // --- hintTokens ---
 
 const hintText = (
@@ -1482,7 +1533,7 @@ test("emptyMessage: no agent pane at all", () => {
 
 test("emptyMessage: the filter hid every agent, and says how many", () => {
   assertEquals(emptyMessage({ screen: "agents", agents: 3, shown: 0 }), {
-    title: "No agents waiting or idle",
+    title: "No unlabeled agents waiting or idle",
     detail: "3 agents are hidden by the filter",
   });
   assertEquals(
