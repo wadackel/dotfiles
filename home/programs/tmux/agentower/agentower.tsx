@@ -76,11 +76,15 @@ import {
   HintBar,
   type ListScreen,
   PaneRowLine,
+  previewFooterTokens,
+  SidebarRowLine,
   type TaskProgress,
   UsageCard,
   usageCardRows,
   usageLayout,
   usageRowWidth,
+  usageStackedCardRows,
+  type UsageToken,
 } from "./components.tsx";
 import { type AgentUsage, readAgentUsage } from "../shared/agent-usage.ts";
 import { trace } from "./trace.ts";
@@ -148,6 +152,9 @@ const STACK_BELOW_COLS = 130;
 // A stacked list stops growing at this share of the rows and scrolls instead,
 // so a long list never squeezes the preview.
 const STACK_LIST_SHARE = 0.4;
+// The sidebar's cards are three rows each and its preview is opened on
+// purpose, so the list keeps more of the column than the popup's does.
+const SIDEBAR_LIST_SHARE = 0.65;
 // Blank row between a stacked list and the card under it.
 const STACK_GUTTER = 1;
 // A stacked popup this short starts with the preview hidden. Not the compact
@@ -263,6 +270,7 @@ function stackedRows(opts: {
   previewWidth: number;
   preview: boolean;
   usageRows: number;
+  listShare: number;
 }): { bodyHeight: number; previewRows: number } {
   const { avail, total, card } = opts;
   const listOnly = { bodyHeight: avail, previewRows: 0 };
@@ -275,7 +283,7 @@ function stackedRows(opts: {
   }
   const content = total * card.rows + (total - 1) * card.gap;
   const cap = Math.min(
-    Math.floor(avail * STACK_LIST_SHARE),
+    Math.floor(avail * opts.listShare),
     avail - STACK_GUTTER - MIN_PREVIEW_CARD_ROWS,
   );
   let bodyHeight: number;
@@ -318,19 +326,29 @@ export function listGeometry(opts: {
   usageRows?: number;
   // What `p` chose; null leaves it to the height.
   previewOverride?: boolean | null;
+  // The WezTerm sidebar: one column at any width, compact cards, and the
+  // preview closed until `p` opens it.
+  sidebar?: boolean;
 }): ListGeometry {
-  const split = splitLayout(opts.columns);
+  const sidebar = opts.sidebar ?? false;
+  const split = sidebar
+    ? {
+      stacked: true,
+      listWidth: opts.columns,
+      previewWidth: opts.columns >= MIN_PREVIEW ? opts.columns : 0,
+    }
+    : splitLayout(opts.columns);
   const { stacked } = split;
   // An empty list has no preview to hide, and hiding would take its Usage
   // card with it where `p` cannot bring it back.
   const wanted = opts.total === 0 ||
     (opts.previewOverride ??
-      !(stacked && opts.rows < STACK_HIDE_PREVIEW_BELOW_ROWS));
+      (!sidebar && !(stacked && opts.rows < STACK_HIDE_PREVIEW_BELOW_ROWS)));
   const listWidth = stacked || wanted ? split.listWidth : opts.columns;
   const previewWidth = stacked || wanted ? split.previewWidth : 0;
   const topRows = topRowsFor(opts.rows);
   const avail = bodyHeightFor(opts.rows);
-  const card = isCompact(opts.rows) ? COMPACT_CARD : FULL_CARD;
+  const card = sidebar || isCompact(opts.rows) ? COMPACT_CARD : FULL_CARD;
   const { bodyHeight, previewRows } = stacked
     ? stackedRows({
       avail,
@@ -339,6 +357,7 @@ export function listGeometry(opts: {
       previewWidth,
       preview: wanted,
       usageRows: opts.usageRows ?? 0,
+      listShare: sidebar ? SIDEBAR_LIST_SHARE : STACK_LIST_SHARE,
     })
     : { bodyHeight: avail, previewRows: opts.rows - topRows };
   const previewShown = stacked
@@ -710,6 +729,20 @@ async function readPrefixKey(): Promise<string | null> {
   return parsePrefixKey(stdout);
 }
 
+// The popup's last `p`. A server option rather than a file under
+// ~/.local/state: the choice only has to outlive the popup, not the server.
+const PREVIEW_OPTION = "@agentower_preview";
+
+export function parsePreviewOption(raw: string): boolean | null {
+  const value = raw.trim();
+  return value === "on" ? true : value === "off" ? false : null;
+}
+
+async function readPreviewOption(): Promise<boolean | null> {
+  const { stdout } = await tmuxRun(["show-options", "-gqv", PREVIEW_OPTION]);
+  return parsePreviewOption(stdout);
+}
+
 // By pane id rather than `session:window.pane`: tmux accepts ':' and '.' in a
 // session name, and a name with ':' cannot be split back out of that string —
 // tmux itself fails to resolve it. Each command takes the window or session
@@ -718,6 +751,15 @@ async function jumpTo(paneId: string): Promise<void> {
   await tmuxRun(["switch-client", "-t", paneId]);
   await tmuxRun(["select-window", "-t", paneId]);
   await tmuxRun(["select-pane", "-t", paneId]);
+}
+
+// Tells a WezTerm sidebar (wezterm.lua's user-var-changed) that a jump landed,
+// so it hands focus back to the tmux pane beside it. The timestamp keeps a
+// second jump to the same pane from repeating the previous value, which
+// WezTerm may treat as no change.
+function notifyJumped(paneId: string): void {
+  const value = Buffer.from(`${paneId} ${Date.now()}`).toString("base64");
+  process.stdout.write(`\x1b]1337;SetUserVar=agentower_jumped=${value}\x07`);
 }
 
 // Keep preview bounded so it never pushes the list column to zero width and
@@ -745,7 +787,12 @@ function displayPath(path: string): string {
 }
 
 function Preview(
-  { row, width, height }: { row: PaneRow; width: number; height: number },
+  { row, width, height, footer }: {
+    row: PaneRow;
+    width: number;
+    height: number;
+    footer?: UsageToken[];
+  },
 ) {
   const paneId = row.paneId;
   const [content, setContent] = useState<string | null>(null);
@@ -792,7 +839,7 @@ function Preview(
   ];
   const path = displayPath(paneDir(row));
   return (
-    <Card title={title} width={width} height={height}>
+    <Card title={title} width={width} height={height} footer={footer}>
       <Text color={DOGRUN.fgDim}>
         {truncateToCells(path, Math.max(0, width - CARD_CHROME_COLS))}
       </Text>
@@ -804,8 +851,14 @@ function Preview(
 // "popup" is the one-shot prefix+w picker. "dashboard" (--dashboard) runs in a
 // terminal window of its own, outside tmux, and stays open after a jump; with
 // no client of its own, its switch-client lands on the client tmux resolves as
-// the most recently active one.
-type AgentowerMode = "popup" | "dashboard";
+// the most recently active one. "sidebar" (--sidebar) behaves as the dashboard
+// in a 48-column WezTerm pane beside tmux, with its own row layout.
+export type AgentowerMode = "popup" | "dashboard" | "sidebar";
+
+export function agentowerMode(args: string[]): AgentowerMode {
+  if (args.includes("--sidebar")) return "sidebar";
+  return args.includes("--dashboard") ? "dashboard" : "popup";
+}
 
 function App({
   initialRows,
@@ -815,6 +868,8 @@ function App({
   prefixKey,
   mode,
   onSelect,
+  initialPreviewOverride,
+  onPreviewChange,
 }: {
   initialRows: PaneRow[];
   initialSelectedPaneId: string;
@@ -823,6 +878,8 @@ function App({
   prefixKey: string | null;
   mode: AgentowerMode;
   onSelect: (row: PaneRow | null) => void;
+  initialPreviewOverride: boolean | null;
+  onPreviewChange?: (shown: boolean) => void;
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -910,10 +967,11 @@ function App({
   const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
   const [filterEnabled, setFilterEnabled] = useState(false);
-  // What `p` chose for the preview, kept for this process only; null until
-  // then, leaving it to the height.
-  const [previewOverride, setPreviewOverride] = useState<boolean | null>(
-    null,
+  // What `p` chose for the preview; null until then, leaving it to the
+  // height. The popup starts from its last `p` (PREVIEW_OPTION); the
+  // dashboard and the sidebar keep theirs for this process only.
+  const [previewOverride, setPreviewOverride] = useState(
+    initialPreviewOverride,
   );
   const [screen, setScreen] = useState<ListScreen>("agents");
   // The tick effect below never re-subscribes, so it reads the screen here.
@@ -1002,9 +1060,7 @@ function App({
   const derivedRows = screen === "free"
     ? free.map((s: FreeWindow) => s.row)
     : filterEnabled
-    ? rows.filter((r: PaneRow) =>
-      matchesWaitFilter(r, labeledInFilter.current)
-    )
+    ? rows.filter((r: PaneRow) => matchesWaitFilter(r, labeledInFilter.current))
     : rows;
 
   useEffect(() => {
@@ -1143,6 +1199,7 @@ function App({
 
   // The render, the mouse handler and `p` all read the frame from here, so a
   // click and a toggle act on the layout that is on screen.
+  const sidebar = mode === "sidebar";
   const geometryNow = () =>
     listGeometry({
       columns: size.columns,
@@ -1150,8 +1207,11 @@ function App({
       total: derivedRows.length,
       selected: index,
       prevOffset: listOffset.current,
-      usageRows: usageRowsFor(usages, size.columns),
+      usageRows: sidebar
+        ? usageStackedCardRows(usages)
+        : usageRowsFor(usages, size.columns),
       previewOverride,
+      sidebar,
     });
 
   const handleMouse = (mouse: MouseReport) => {
@@ -1215,7 +1275,9 @@ function App({
     }
     if (input === "p") {
       if (derivedRows.length > 0) {
-        setPreviewOverride(!geometryNow().previewShown);
+        const shown = !geometryNow().previewShown;
+        setPreviewOverride(shown);
+        onPreviewChange?.(shown);
       }
       return;
     }
@@ -1312,13 +1374,19 @@ function App({
     view,
   } = geometryNow();
   // A stacked list with no preview under it only leaves rows for the Usage
-  // card, which is too few for showUsageCard's preview minimum.
+  // card, which is too few for showUsageCard's preview minimum. The sidebar's
+  // stacked card always fits its width, so only its height decides.
+  const usageHeight = sidebar
+    ? usageStackedCardRows(usages)
+    : usageCardRows(usages.length);
   const usageVisible = previewWidth > 0 && previewRows > 0 &&
-    ((stacked && !previewShown) ||
-      showUsageCard(usages, previewWidth, previewRows));
+    (sidebar
+      ? usageHeight > 0 &&
+        previewRows - usageHeight >= (previewShown ? MIN_PREVIEW_CARD_ROWS : 0)
+      : (stacked && !previewShown) ||
+        showUsageCard(usages, previewWidth, previewRows));
   listOffset.current = view.offset;
-  const previewHeight = previewRows -
-    (usageVisible ? usageCardRows(usages.length) : 0);
+  const previewHeight = previewRows - (usageVisible ? usageHeight : 0);
   const listBody = (
     <Box flexDirection="column" height={bodyHeight} marginTop={topRows}>
       {empty && (
@@ -1350,21 +1418,35 @@ function App({
             ))
           : derivedRows
             .slice(view.offset, view.offset + view.count)
-            .map((row: PaneRow, i: number) => (
-              <PaneRowLine
-                key={row.paneId}
-                row={{
-                  ...row,
-                  sessionSummary:
-                    summaries.get(`${row.agent}/${row.sessionId}`) ?? undefined,
-                }}
-                now={now}
-                selected={view.offset + i === index}
-                taskProgress={taskProgressMap.get(row.paneId) ?? null}
-                listWidth={listWidth}
-                padded={card === FULL_CARD}
-              />
-            ))}
+            .map((row: PaneRow, i: number) => {
+              const withSummary = {
+                ...row,
+                sessionSummary:
+                  summaries.get(`${row.agent}/${row.sessionId}`) ?? undefined,
+              };
+              const selected = view.offset + i === index;
+              return sidebar
+                ? (
+                  <SidebarRowLine
+                    key={row.paneId}
+                    row={withSummary}
+                    now={now}
+                    selected={selected}
+                    listWidth={listWidth}
+                  />
+                )
+                : (
+                  <PaneRowLine
+                    key={row.paneId}
+                    row={withSummary}
+                    now={now}
+                    selected={selected}
+                    taskProgress={taskProgressMap.get(row.paneId) ?? null}
+                    listWidth={listWidth}
+                    padded={card === FULL_CARD}
+                  />
+                );
+            })}
       </Box>
       {view.scrolling && (
         <Text color={DOGRUN.muted}>
@@ -1398,10 +1480,18 @@ function App({
           row={previewCard}
           width={previewWidth}
           height={previewHeight}
+          footer={sidebar && screen === "agents"
+            ? previewFooterTokens(previewCard)
+            : undefined}
         />
       )}
       {usageVisible && (
-        <UsageCard usages={usages} now={now} width={previewWidth} />
+        <UsageCard
+          usages={usages}
+          now={now}
+          width={previewWidth}
+          stacked={sidebar}
+        />
       )}
     </Box>
   );
@@ -1429,9 +1519,7 @@ function App({
 // ---- Main ----
 
 export async function main(): Promise<void> {
-  const mode: AgentowerMode = process.argv.slice(2).includes("--dashboard")
-    ? "dashboard"
-    : "popup";
+  const mode = agentowerMode(process.argv.slice(2));
   if (mode === "popup" && !process.env.TMUX) {
     console.error("agentower must run inside tmux");
     process.exit(2);
@@ -1439,12 +1527,14 @@ export async function main(): Promise<void> {
   // Parallel with fetchPanes so the footer costs the popup no extra startup
   // latency — the whole reason Agentower is AOT-compiled in the first place.
   // The prefix chord exists to close a popup that swallows every key, so the
-  // dashboard skips it.
-  const [{ rows }, usages, prefixKey] = await Promise.all([
-    fetchPanes(false),
-    readAllAgentUsage(),
-    mode === "popup" ? readPrefixKey() : null,
-  ]);
+  // dashboard and the sidebar skip it.
+  const [{ rows }, usages, prefixKey, initialPreviewOverride] = await Promise
+    .all([
+      fetchPanes(false),
+      readAllAgentUsage(),
+      mode === "popup" ? readPrefixKey() : null,
+      mode === "popup" ? readPreviewOption() : null,
+    ]);
   trace("io-done");
 
   // tmux.conf bind-key w writes AGENTOWER_FROM_PANE to the session environment via
@@ -1484,8 +1574,26 @@ export async function main(): Promise<void> {
     }
     : (r: PaneRow | null) => {
       if (!r) return;
-      jumps = jumps.then(() => jumpTo(r.paneId)).catch(() => {});
+      jumps = jumps.then(async () => {
+        await jumpTo(r.paneId);
+        if (mode === "sidebar") notifyJumped(r.paneId);
+      }).catch(() => {});
     };
+  // Chained so the last `p` is the value left behind, and awaited at exit
+  // like `jumps`, so an Escape right after `p` does not cut the write.
+  let previewWrites = Promise.resolve();
+  const onPreviewChange = mode === "popup"
+    ? (shown: boolean) => {
+      previewWrites = previewWrites.then(async () => {
+        await tmuxRun([
+          "set-option",
+          "-g",
+          PREVIEW_OPTION,
+          shown ? "on" : "off",
+        ]);
+      }).catch(() => {});
+    }
+    : undefined;
   const { waitUntilExit } = render(
     <App
       initialRows={rows}
@@ -1495,6 +1603,8 @@ export async function main(): Promise<void> {
       prefixKey={prefixKey}
       mode={mode}
       onSelect={onSelect}
+      initialPreviewOverride={initialPreviewOverride}
+      onPreviewChange={onPreviewChange}
     />,
     {
       // Opt-in per-line diffing. Ink's default renderer rewrites every line of
@@ -1513,6 +1623,7 @@ export async function main(): Promise<void> {
   // agentower-main.ts exits the process as soon as main returns, which would
   // cut a jump started just before `q` between its tmux calls.
   await jumps;
+  await previewWrites;
 
   const picked = result.value;
   if (!picked) return;

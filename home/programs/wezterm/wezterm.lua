@@ -146,6 +146,66 @@ wezterm.on("gui-startup", function()
   w:maximize()
 end)
 
+-- Agentower サイドバー: tmux の外で --sidebar を動かすので、tmux のウィンドウを切り替えても残る
+local AGENTOWER_SIDEBAR_COLS = 48
+
+-- 実行ファイル名だけでは足りない。agentower --restore から起動した tmux のペインも、--dashboard のペインも名前は同じ
+local function is_agentower_sidebar(pane)
+  local info = pane:get_foreground_process_info()
+  if info == nil or not (info.executable or ""):match("/agentower$") then
+    return false
+  end
+  for _, arg in ipairs(info.argv or {}) do
+    if arg == "--sidebar" then
+      return true
+    end
+  end
+  return false
+end
+
+local function focus_other_pane(pane)
+  for _, p in ipairs(pane:tab():panes()) do
+    if p:pane_id() ~= pane:pane_id() then
+      p:activate()
+      return
+    end
+  end
+end
+
+-- 開いたあともフォーカスは tmux 側に残し、サイドバーへは Cmd+B かクリックで移る
+local function toggle_agentower_sidebar(_window, pane)
+  local sidebar
+  for _, p in ipairs(pane:tab():panes()) do
+    if is_agentower_sidebar(p) then
+      sidebar = p
+      break
+    end
+  end
+  if sidebar == nil then
+    pane:split({
+      direction = "Left",
+      top_level = true,
+      size = AGENTOWER_SIDEBAR_COLS,
+      args = {
+        "/bin/zsh",
+        "-c",
+        'exec env -u TMUX -u TMUX_PANE "$HOME/.local/share/agentower/agentower" --sidebar 2>>"$HOME/Library/Logs/agentower-dashboard.log"',
+      },
+    })
+    pane:activate()
+  elseif sidebar:pane_id() == pane:pane_id() then
+    focus_other_pane(sidebar)
+  else
+    sidebar:activate()
+  end
+end
+
+wezterm.on("user-var-changed", function(_window, pane, name, _value)
+  if name == "agentower_jumped" then
+    focus_other_pane(pane)
+  end
+end)
+
 wezterm.on("window-config-reloaded", function(window)
   window:toast_notification("wezterm", "Configuration reloaded!", nil, 4000)
 end)
@@ -263,6 +323,11 @@ return {
       key = "r",
       mods = "SUPER",
       action = wezterm.action.ReloadConfiguration,
+    },
+    {
+      key = "b",
+      mods = "SUPER",
+      action = wezterm.action_callback(toggle_agentower_sidebar),
     },
     {
       key = "v",

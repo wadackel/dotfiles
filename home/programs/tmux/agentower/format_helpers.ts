@@ -143,6 +143,44 @@ export function repoLabel(
   return { head: truncateToCells(repo + suffix, maxCells), suffix: "" };
 }
 
+// Narrowest a branch is cut to before the repo name starts giving way.
+const SIDEBAR_BRANCH_MIN = 8;
+export const SIDEBAR_SEP = " · ";
+
+// The sidebar's location line, `repo(worktree) · branch`, within `maxCells`.
+// The worktree survives as in repoLabel; the branch gives way first, because
+// its prefix (`fix/`, `refactor/`) still reads when cut and the repo name is
+// what the user scans for. A branch named like the worktree adds nothing.
+export function sidebarLocation(
+  repo: string,
+  worktree: string,
+  branch: string,
+  maxCells: number,
+): { head: string; suffix: string; branch: string } {
+  const suffix = worktree ? `(${worktree})` : "";
+  const b = branch && branch !== worktree ? branch : "";
+  const fixed = stringCells(suffix) + (b ? stringCells(SIDEBAR_SEP) : 0);
+  if (stringCells(repo) + fixed + stringCells(b) <= maxCells) {
+    return { head: repo, suffix, branch: b };
+  }
+  if (b) {
+    const branchCells = Math.min(
+      stringCells(b),
+      Math.max(SIDEBAR_BRANCH_MIN, maxCells - stringCells(repo) - fixed),
+    );
+    const room = maxCells - fixed - branchCells;
+    if (room >= 1) {
+      return {
+        head: truncateToCells(repo, room),
+        suffix,
+        branch: truncateToCells(b, branchCells),
+      };
+    }
+  }
+  const label = repoLabel(repo, worktree, maxCells);
+  return { ...label, branch: "" };
+}
+
 export function freeCommandLabel(command: string, others: string[]): string {
   return others.length > 0 ? `${command}  + ${others.join(", ")}` : command;
 }

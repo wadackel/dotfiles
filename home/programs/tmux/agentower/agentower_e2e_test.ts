@@ -1249,7 +1249,9 @@ test("S22c: a row labeled under the filter stays until the next w", async () => 
     await waitFor(agentower, (o) => o.includes("tri-a") && o.includes("tri-b"));
     await sendKey(agentower, "w");
     const filtered = await waitFor(agentower, (o) => o.includes("wait/idle"));
-    const labeled = selectedLine(filtered).includes("tri-a") ? "tri-a" : "tri-b";
+    const labeled = selectedLine(filtered).includes("tri-a")
+      ? "tri-a"
+      : "tri-b";
     const other = labeled === "tri-a" ? "tri-b" : "tri-a";
 
     await sendKey(agentower, "m");
@@ -1260,7 +1262,9 @@ test("S22c: a row labeled under the filter stays until the next w", async () => 
     assertStringIncludes(twice, other);
     // List rows only: the hint bar's "preview" contains "review".
     assertFalse(
-      twice.split("\n").some((l) => l.includes("claude") && l.includes("review")),
+      twice.split("\n").some((l) =>
+        l.includes("claude") && l.includes("review")
+      ),
       `the second m labeled the neighbouring row:\n${twice}`,
     );
 
@@ -3203,7 +3207,10 @@ test("S73b: with an agent in every window, the free screen says so and f goes ba
     const agentower = await spawnAgentower();
 
     await sendKey(agentower, "w");
-    await waitFor(agentower, (o) => o.includes("No unlabeled agents waiting or idle"));
+    await waitFor(
+      agentower,
+      (o) => o.includes("No unlabeled agents waiting or idle"),
+    );
     await sendKey(agentower, "f");
     const none = await waitFor(
       agentower,
@@ -3213,7 +3220,10 @@ test("S73b: with an agent in every window, the free screen says so and f goes ba
     assertStringIncludes(none, " agents  ");
 
     await sendKey(agentower, "f");
-    await waitFor(agentower, (o) => o.includes("No unlabeled agents waiting or idle"));
+    await waitFor(
+      agentower,
+      (o) => o.includes("No unlabeled agents waiting or idle"),
+    );
     await sendKey(agentower, "w");
     await waitFor(agentower, selectedIncludes("row-a"));
     await sendKey(agentower, "Escape");
@@ -4554,6 +4564,279 @@ test("S106: --restore refuses to run from a popup of the server it would kill", 
       (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
       "work",
     );
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- Sidebar mode (--sidebar) ----
+//
+// The WezTerm sidebar: 48 columns, the dashboard's lifecycle, two rows per pane
+// (`repo(worktree) · branch`, then the task), the preview closed until `p`, and
+// the stacked Usage card. At 48×60 with no scrolling, card 0 spans rows 1-2,
+// the gap row 3, and card 1 rows 4-5.
+
+const SIDEBAR = { cols: 48, rows: 60 };
+const SIDEBAR_CARD_1 = { x: 4, y: 4 };
+
+async function setContextPct(pane: string, pct: number): Promise<void> {
+  await tmux([
+    "set-option",
+    "-p",
+    "-t",
+    pane,
+    "@pane_context_used_pct",
+    String(pct),
+  ]);
+}
+
+async function writeSidebarUsage(): Promise<void> {
+  await writeUsageFixture("claude", [
+    { label: "5h", usedPct: 42, resetsInSec: 6450 },
+    { label: "7d", usedPct: 13, resetsInSec: 500000 },
+  ]);
+  await writeUsageFixture("codex", [
+    { label: "7d", usedPct: 81, resetsInSec: 400000 },
+  ]);
+}
+
+// The preview frame's top edge carries the selected pane's location.
+const previewOpen = (out: string) =>
+  out.split("\n").some((l) => /^╭─ (?!Usage)/.test(l));
+
+test("S107: sidebar rows show repo(worktree) · branch, the task, and no preview", async () => {
+  await setupServer(SIDEBAR);
+  const root = await mkdtemp("/tmp/agentower-git-");
+  try {
+    await mkdir(`${root}/proj`, { recursive: true });
+    await git(`${root}/proj`, "init", "-q", "-b", "main");
+    await git(`${root}/proj`, "commit", "-q", "--allow-empty", "-m", "init");
+    await git(
+      `${root}/proj`,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "feature",
+      `${root}/proj-wt`,
+    );
+    await writeSidebarUsage();
+    await createClaudePane({
+      status: "running",
+      prompt: "main-task-S107",
+      cwd: `${root}/proj`,
+    });
+    await createClaudePane({
+      status: "idle",
+      prompt: "wt-task-S107",
+      cwd: `${root}/proj-wt`,
+    });
+    const agentower = await spawnAgentower({ args: ["--sidebar"] });
+    const out = await waitFor(
+      agentower,
+      (o) => o.includes("proj(proj-wt) · feature"),
+    );
+
+    const lines = out.split("\n");
+    const wt = lines.findIndex((l) => l.includes("proj(proj-wt) · feature"));
+    assertStringIncludes(lines[wt + 1], "wt-task-S107");
+    assertStringIncludes(out, "proj · main");
+    assertFalse(previewOpen(out), `preview drawn before p:\n${out}`);
+    // Stacked Usage: an agent heading, then one gauge row per window.
+    assertStringIncludes(out, "│ claude ");
+    assertEquals(lines.filter((l) => /│ {3}(5h|7d) ━/.test(l)).length, 3);
+    for (const l of lines.filter((l) => l.trim() !== "")) {
+      assertEquals(stringCells(l.trimEnd()) <= SIDEBAR.cols, true, l);
+    }
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+    await rm(root, { recursive: true }).catch(() => {});
+  }
+});
+
+test("S108: sidebar p opens the preview with agent · reason · % on its bottom edge", async () => {
+  await setupServer(SIDEBAR);
+  try {
+    await writeSidebarUsage();
+    const pane = await createClaudePane({
+      status: "waiting",
+      waitReason: "permission",
+      prompt: "row-S108",
+    });
+    await setContextPct(pane, 34);
+    const agentower = await spawnAgentower({ args: ["--sidebar"] });
+    await waitFor(agentower, (o) => o.includes("row-S108"));
+
+    await sendKey(agentower, "p");
+    // The footer too: tmux can capture a frame Ink is still writing, whose
+    // top edge is drawn and whose bottom edge is not yet.
+    const opened = await waitFor(
+      agentower,
+      (o) => previewOpen(o) && o.includes("claude · permission · 34%"),
+    );
+    const footer = opened.split("\n").find((l) =>
+      l.includes("claude · permission · 34%")
+    );
+    if (footer === undefined) throw new Error(`no preview footer:\n${opened}`);
+    assertEquals(footer.trimEnd().endsWith(" ─╯"), true, footer);
+    assertEquals(footer.startsWith("╰"), true, footer);
+    assertEquals(stringCells(footer.trimEnd()), SIDEBAR.cols);
+    // The Usage card stays under the preview.
+    assertStringIncludes(opened, "╭─ Usage");
+
+    await sendKey(agentower, "p");
+    await waitFor(agentower, (o) => !previewOpen(o));
+
+    await sendKey(agentower, "Escape");
+    await new Promise((r) => setTimeout(r, 1000));
+    assertEquals(await windowAlive(), true);
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+test("S109: sidebar Enter and a click on the selected card jump and stay open", async () => {
+  await setupServer(SIDEBAR);
+  try {
+    const paneA = await createClaudePane({
+      status: "running",
+      prompt: "row-a-S109",
+    });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b-S109",
+    });
+    await createAwaySession();
+    const { clientName } = await attachClient("away");
+    const agentower = await spawnAgentower({ args: ["--sidebar"] });
+    await waitFor(agentower, selectedIncludes("row-a-S109"));
+
+    await sendKey(agentower, "Enter");
+    assertEquals(await waitForClientPane(clientName, paneA), {
+      session: "test",
+      pane: paneA,
+    });
+    assertEquals(await windowAlive(), true);
+
+    await sendClick(agentower, 0, SIDEBAR_CARD_1);
+    await waitFor(agentower, selectedIncludes("row-b-S109"));
+    await sendClick(agentower, 0, SIDEBAR_CARD_1);
+    assertEquals(await waitForClientPane(clientName, paneB), {
+      session: "test",
+      pane: paneB,
+    });
+    assertEquals(await windowAlive(), true);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+test("S110: sidebar without usage files draws no Usage card", async () => {
+  await setupServer(SIDEBAR);
+  try {
+    await createClaudePane({ status: "running", prompt: "row-S110" });
+    const agentower = await spawnAgentower({ args: ["--sidebar"] });
+    const out = await waitFor(agentower, (o) => o.includes("row-S110"));
+    assertFalse(out.includes("Usage"), out);
+    assertFalse(previewOpen(out), out);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
+// ---- the popup's last p across popups ----
+
+async function previewOption(): Promise<string> {
+  return (await tmux(["show-options", "-gqv", "@agentower_preview"])).trim();
+}
+
+test("S111: a reopened popup keeps the preview as the last p left it", async () => {
+  await setupServer({ cols: 200, rows: 50 });
+  try {
+    const long = "x".repeat(200);
+    await createClaudePane({ status: "idle", prompt: `keep-row-a-${long}` });
+    await createClaudePane({ status: "idle", prompt: `keep-row-b-${long}` });
+    // Same predicates as S85: splitLayout gives the list 120 of 200 columns.
+    const narrow = (o: string) =>
+      o.includes("╭") &&
+      listColumn(o).every((l) => stringCells(l.trimEnd()) <= 120);
+    const wide = (o: string) =>
+      o.includes("keep-row-a") && !o.includes("╭") &&
+      o.split("\n").some((l) => stringCells(l.trimEnd()) > 120);
+
+    let agentower = await spawnAgentower();
+    await waitFor(agentower, narrow);
+    assertEquals(await previewOption(), "");
+    await sendKey(agentower, "p");
+    await waitFor(agentower, wide);
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+
+    agentower = await spawnAgentower();
+    await waitFor(agentower, wide);
+    assertEquals(await previewOption(), "off");
+    await sendKey(agentower, "p");
+    await waitFor(agentower, narrow);
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+
+    agentower = await spawnAgentower();
+    await waitFor(agentower, narrow);
+    assertEquals(await previewOption(), "on");
+    // Escape straight after p, with no frame in between, still leaves it.
+    await sendKey(agentower, "p");
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+    assertEquals(await previewOption(), "off");
+  } finally {
+    await teardown();
+  }
+});
+
+test("S112: a saved open preview beats the short popup's default, not the sidebar's", async () => {
+  await setupServer({ cols: 121, rows: 23 });
+  try {
+    for (let i = 0; i < 10; i++) {
+      await createClaudePane({ status: "idle", prompt: `saved-row-${i}` });
+    }
+    await writeUsageFixture("claude", [
+      { label: "5h", usedPct: 42, resetsInSec: 6420 },
+    ]);
+    let agentower = await spawnAgentower();
+    await waitFor(agentower, (o) => footerLines(o).length === 1);
+    await sendKey(agentower, "p");
+    await waitFor(agentower, (o) => cardTitles(o).length === 2);
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+
+    // S84's popup starts with only the Usage card; the saved "on" opens it.
+    agentower = await spawnAgentower();
+    await waitFor(agentower, (o) => cardTitles(o).length === 2);
+    assertEquals(await previewOption(), "on");
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+
+    agentower = await spawnAgentower({ args: ["--sidebar"] });
+    const out = await waitFor(agentower, (o) => o.includes("saved-row-0"));
+    assertFalse(previewOpen(out), out);
+    await sendKey(agentower, "p");
+    await waitFor(agentower, previewOpen);
+    await sendKey(agentower, "p");
+    await waitFor(agentower, (o) => !previewOpen(o));
+    await sendKey(agentower, "q");
+    await waitForExit();
+    assertEquals(await previewOption(), "on");
   } finally {
     await teardown();
   }

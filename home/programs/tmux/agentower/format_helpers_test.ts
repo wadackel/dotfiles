@@ -13,6 +13,7 @@ import {
   parseSubagents,
   renderSubagentTree,
   repoLabel,
+  sidebarLocation,
   statusColor,
   statusIcon,
   statusShort,
@@ -20,6 +21,7 @@ import {
   toolSegmentText,
 } from "./format_helpers.ts";
 import type { PaneRow } from "./pane_row.ts";
+import { stringCells } from "./cell_width.ts";
 
 function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
   return {
@@ -321,6 +323,81 @@ test("repoLabel: no worktree → plain truncation", () => {
     head: "storyca…",
     suffix: "",
   });
+});
+
+// --- sidebarLocation ---
+
+const locCells = (l: { head: string; suffix: string; branch: string }) =>
+  stringCells(l.head) + stringCells(l.suffix) +
+  (l.branch ? stringCells(" · ") + stringCells(l.branch) : 0);
+
+test("sidebarLocation: repo and branch that fit stay whole", () => {
+  assertEquals(sidebarLocation("personal-feed", "", "feat/ui-refresh", 43), {
+    head: "personal-feed",
+    suffix: "",
+    branch: "feat/ui-refresh",
+  });
+});
+
+test("sidebarLocation: a branch named like the worktree is shown once", () => {
+  assertEquals(
+    sidebarLocation("dotfiles", "hermes-trace", "hermes-trace", 43),
+    {
+      head: "dotfiles",
+      suffix: "(hermes-trace)",
+      branch: "",
+    },
+  );
+});
+
+test("sidebarLocation: the branch gives way before the repo and the worktree", () => {
+  const loc = sidebarLocation(
+    "obsidian-web-clip",
+    "pstack",
+    "refactor/refetch-module-pstack",
+    43,
+  );
+  assertEquals(loc, {
+    head: "obsidian-web-clip",
+    suffix: "(pstack)",
+    branch: "refactor/refet…",
+  });
+  assertEquals(locCells(loc), 43);
+});
+
+test("sidebarLocation: past 8 branch cells the repo gives way", () => {
+  const loc = sidebarLocation(
+    "vitest-mutation-testing-sandbox",
+    "vitant-yaml-speed",
+    "experiment/yaml-speed-h3-01",
+    43,
+  );
+  assertEquals(loc, {
+    head: "vitest-mutat…",
+    suffix: "(vitant-yaml-speed)",
+    branch: "experim…",
+  });
+  assertEquals(locCells(loc), 43);
+});
+
+test("sidebarLocation: a short branch keeps its full name while the repo is cut", () => {
+  const loc = sidebarLocation("リポジトリ名がとても長いもの", "", "main", 20);
+  assertEquals(loc, { head: "リポジトリ名…", suffix: "", branch: "main" });
+  assertEquals(locCells(loc), 20);
+});
+
+test("sidebarLocation: a worktree too long for the room drops the branch and is cut with the repo", () => {
+  assertEquals(
+    sidebarLocation("repo", "a-very-long-worktree-name-here", "main", 20),
+    { head: "repo(a-very-long-wo…", suffix: "", branch: "" },
+  );
+});
+
+test("sidebarLocation: no worktree and no branch → plain truncation", () => {
+  assertEquals(
+    sidebarLocation("vitant-formbricks-minimal-diagnostic", "", "", 30),
+    { head: "vitant-formbricks-minimal-dia…", suffix: "", branch: "" },
+  );
 });
 
 // --- parseSubagents ---

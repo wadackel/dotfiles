@@ -3,11 +3,13 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  agentowerMode,
   bodyHeightFor,
   cardIndexAt,
   clampPreview,
   clampStep,
   COMPACT_CARD,
+  FULL_CARD,
   inListArea,
   isCompact,
   isKeyBurst,
@@ -23,6 +25,7 @@ import {
   type PaneRow,
   parseMouse,
   parsePrefixKey,
+  parsePreviewOption,
   parseRow,
   readTaskProgress,
   readTaskProgressForRow,
@@ -39,11 +42,14 @@ import {
   DOGRUN,
   emptyMessage,
   hintTokens,
+  previewFooterTokens,
   type Row2Seg,
   truncateTopSegBody,
   usageLayout,
   usageRows,
   usageRowWidth,
+  usageStackedCardRows,
+  usageStackedRows,
   type UsageToken,
 } from "./components.tsx";
 import type { AgentUsage } from "../shared/agent-usage.ts";
@@ -967,6 +973,55 @@ test("splitLayout: cols 150 gives the list the full 90-cell row-1 budget", () =>
   });
 });
 
+// --- Sidebar mode ---
+
+test("agentowerMode: --sidebar wins over --dashboard, neither is the popup", () => {
+  assertEquals(agentowerMode([]), "popup");
+  assertEquals(agentowerMode(["--dashboard"]), "dashboard");
+  assertEquals(agentowerMode(["--sidebar"]), "sidebar");
+  assertEquals(agentowerMode(["--dashboard", "--sidebar"]), "sidebar");
+});
+
+// 48 × 60 is the WezTerm sidebar; 7 rows is a stacked Usage card for claude
+// (5h, 7d) and codex (7d).
+const sidebarAt = (
+  overrides: Partial<Parameters<typeof listGeometry>[0]> = {},
+) =>
+  listGeometry({
+    columns: 48,
+    rows: 60,
+    total: 8,
+    selected: 0,
+    prevOffset: 0,
+    usageRows: 7,
+    previewOverride: null,
+    sidebar: true,
+    ...overrides,
+  });
+
+test("listGeometry sidebar: preview hidden by default, the list runs down to the Usage card", () => {
+  const g = sidebarAt();
+  assertEquals(g.previewShown, false);
+  assertEquals(g.card, COMPACT_CARD);
+  assertEquals(g.listWidth, 48);
+  // 57 rows under the top row and above the hint bar, less the gutter and Usage.
+  assertEquals(g.bodyHeight, 57 - 1 - 7);
+  assertEquals(g.previewRows, 7);
+});
+
+test("listGeometry sidebar: p opens the preview and caps the list at 65 %", () => {
+  const g = sidebarAt({ total: 20, previewOverride: true });
+  assertEquals(g.previewShown, true);
+  assertEquals(g.bodyHeight, Math.floor(57 * 0.65));
+  assertEquals(g.previewRows, 57 - g.bodyHeight - 1);
+});
+
+test("listGeometry: the same 48 × 60 outside the sidebar keeps the popup's shape", () => {
+  const g = sidebarAt({ sidebar: false, usageRows: 4 });
+  assertEquals(g.previewShown, true);
+  assertEquals(g.card, FULL_CARD);
+});
+
 test("listGeometry: a stacked list shrinks to its cards", () => {
   const g = listGeometry({
     columns: 121,
@@ -1256,6 +1311,138 @@ test("usageRows: bars appear only when the row width fits the budget", () => {
   assertEquals(rowText(withBars[0]).includes("─"), true);
   assertEquals(rowText(without[0]).includes("━"), false);
   assertEquals(rowText(without[0]).includes("─"), false);
+});
+
+// --- Stacked Usage card (sidebar) ---
+
+// The sidebar's 48-column card leaves 44 cells inside the border.
+const SIDEBAR_INNER = 44;
+
+test("usageStackedRows: an agent heading, then one row per window", () => {
+  const rows = usageStackedRows(
+    [mkUsage("claude"), mkCodex7d()],
+    USAGE_NOW,
+    SIDEBAR_INNER,
+  );
+  assertEquals(
+    rows.map((r) => rowText(r).trimEnd().split(" ").filter(Boolean)[0]),
+    [
+      "claude",
+      "5h",
+      "7d",
+      "codex",
+      "7d",
+    ],
+  );
+});
+
+test("usageStackedRows: window rows fill the width with aligned percentages", () => {
+  const rows = usageStackedRows(
+    [mkUsage("claude"), mkCodex7d()],
+    USAGE_NOW,
+    SIDEBAR_INNER,
+  );
+  const windows = [rows[1], rows[2], rows[4]];
+  for (const row of windows) {
+    assertEquals(stringCells(rowText(row)), SIDEBAR_INNER);
+  }
+  assertEquals(new Set(windows.map((row) => colStart(row, "%"))).size, 1);
+  // The gauge takes what the label, percentage and countdown slot leave.
+  assertStringIncludes(
+    rowText(rows[1]),
+    "5h " + "━".repeat(11) + "─".repeat(15) + "  42%",
+  );
+});
+
+test("usageStackedRows: the countdown rides the 5h row alone", () => {
+  const rows = usageStackedRows([mkUsage("claude")], USAGE_NOW, SIDEBAR_INNER);
+  assertStringIncludes(rowText(rows[1]), `${COUNTDOWN_ICON} 1h47m`);
+  assertEquals(rowText(rows[2]).includes(COUNTDOWN_ICON), false);
+});
+
+test("usageStackedRows: an expired window shows -- and no lit cells", () => {
+  const expired = mkUsage("claude", {
+    windows: [{ label: "5h", usedPct: 42, resetsAt: USAGE_NOW - 10 }],
+  });
+  const text = rowText(
+    usageStackedRows([expired], USAGE_NOW, SIDEBAR_INNER)[1],
+  );
+  assertStringIncludes(text, "--");
+  assertEquals(text.includes("━"), false);
+  assertEquals(text.includes(COUNTDOWN_ICON), false);
+});
+
+test("usageStackedRows: alert colour from 80 % up, and staleness on the heading", () => {
+  const hot = mkCodex7d({
+    updatedAt: USAGE_NOW - 3 * 86400,
+    windows: [{ label: "7d", usedPct: 81, resetsAt: USAGE_NOW + 500000 }],
+  });
+  const [heading, row] = usageStackedRows([hot], USAGE_NOW, SIDEBAR_INNER);
+  assertStringIncludes(rowText(heading), "codex (3d ago)");
+  assertEquals(row.find((t) => t.text.includes("81%"))?.color, DOGRUN.err);
+});
+
+test("usageStackedCardRows: edges plus a heading and a row per window", () => {
+  assertEquals(usageStackedCardRows([mkUsage("claude"), mkCodex7d()]), 7);
+  assertEquals(usageStackedCardRows([]), 0);
+  assertEquals(usageStackedCardRows([mkUsage("claude", { windows: [] })]), 0);
+});
+
+// --- Preview footer (sidebar) ---
+
+function mkFooterRow(overrides: Partial<PaneRow> = {}): PaneRow {
+  return {
+    paneId: "%1",
+    target: "0:0.0",
+    currentCommand: "claude",
+    currentPath: "",
+    agent: "claude",
+    status: "running",
+    startedAtSec: null,
+    cwd: "",
+    worktreeBranch: "",
+    subagents: "",
+    prompt: "",
+    waitReason: "",
+    currentTool: "",
+    sessionId: "",
+    lastTool: "",
+    lastEditFile: "",
+    lastActivityAtSec: null,
+    currentToolSubject: "",
+    lastToolSubject: "",
+    lastToolError: "",
+    contextUsedPct: null,
+    userLabel: "",
+    ...overrides,
+  };
+}
+
+test("previewFooterTokens: agent, the wait reason, and the context %", () => {
+  const tokens = previewFooterTokens(mkFooterRow({
+    status: "waiting",
+    waitReason: "permission",
+    contextUsedPct: 34,
+  }));
+  assertEquals(rowText(tokens), "claude · permission · 34%");
+  assertEquals(tokens.find((t) => t.text === "34%")?.color, DOGRUN.ok);
+});
+
+test("previewFooterTokens: the short status without a reason, no % without a value", () => {
+  assertEquals(
+    rowText(previewFooterTokens(mkFooterRow({ agent: "opencode" }))),
+    "opencode · run",
+  );
+  assertEquals(
+    rowText(
+      previewFooterTokens(mkFooterRow({ status: "idle", contextUsedPct: 82 })),
+    ),
+    "claude · idle · 82%",
+  );
+  assertEquals(
+    rowText(previewFooterTokens(mkFooterRow({ status: "waiting" }))),
+    "claude · wait",
+  );
 });
 
 test("usageRows: a countdown rides the 5h window alone", () => {
@@ -1649,6 +1836,15 @@ test("visibleWindow: compact cards plus indicators never exceed the height", () 
     const rows = 2 + view.count * 3 - 1;
     assertEquals(rows <= height, true, `height=${height} rows=${rows}`);
   }
+});
+
+test("parsePreviewOption: on and off are the popup's last p, anything else is unset", () => {
+  assertEquals(parsePreviewOption("on"), true);
+  assertEquals(parsePreviewOption("off"), false);
+  assertEquals(parsePreviewOption(" on\n"), true);
+  assertEquals(parsePreviewOption("off\n"), false);
+  assertEquals(parsePreviewOption(""), null);
+  assertEquals(parsePreviewOption("yes"), null);
 });
 
 test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {

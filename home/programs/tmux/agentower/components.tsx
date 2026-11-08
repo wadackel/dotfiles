@@ -27,6 +27,8 @@ import {
   parseSubagents,
   renderSubagentTree,
   repoLabel,
+  SIDEBAR_SEP,
+  sidebarLocation,
   summaryOf,
   toolSegmentText,
 } from "./format_helpers.ts";
@@ -123,10 +125,10 @@ const GAUGE_TRACK = "─";
 // Lit cells for a percentage. A window that has been touched at all keeps one
 // lit cell: plain rounding draws 1% and 0% identically, and "have I started
 // spending this" is the first question a gauge exists to answer.
-function gaugeFill(pct: number): number {
+function gaugeFill(pct: number, cells = GAUGE_CELLS): number {
   return Math.min(
-    GAUGE_CELLS,
-    pct > 0 ? Math.max(1, Math.round(pct / 100 * GAUGE_CELLS)) : 0,
+    cells,
+    pct > 0 ? Math.max(1, Math.round(pct / 100 * cells)) : 0,
   );
 }
 
@@ -161,6 +163,13 @@ export const DOGRUN = {
   ok: "#6ba291", // token <50% threshold — desaturated from STATUS_META.running
   err: "#d68888", // token ≥75% threshold — desaturated from STATUS_META.error
 } as const;
+
+// Three tiers for a pane's context usage, shared by the popup row's gauge and
+// the sidebar's preview footer so the two never disagree on a value's colour.
+function contextPctColor(pct: number | null): string {
+  if (pct === null) return DOGRUN.muted;
+  return pct < 50 ? DOGRUN.ok : pct < 75 ? DOGRUN.warn : DOGRUN.err;
+}
 
 // --- Row-1 display selector ---
 
@@ -354,13 +363,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
   // row.contextUsedPct is sourced from the @pane_context_used_pct tmux option
   // (written by statusline.sh, read via pane_row.ts's TMUX_FORMAT).
   const pct = row.contextUsedPct;
-  const pctColor = pct === null
-    ? DOGRUN.muted
-    : pct < 50
-    ? DOGRUN.ok
-    : pct < 75
-    ? DOGRUN.warn
-    : DOGRUN.err;
+  const pctColor = contextPctColor(pct);
   const lit = pct === null ? 0 : gaugeFill(pct);
 
   return (
@@ -429,6 +432,74 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
         )}
       </Box>
       {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+    </Box>
+  );
+};
+
+// --- SidebarRowLine ---
+
+// Marker (2) + status icon (1) + space (1): where both rows' text starts.
+const SIDEBAR_ROW_INDENT = 4;
+
+interface SidebarRowLineProps {
+  row: PaneRow;
+  now: number;
+  selected: boolean;
+  listWidth: number;
+}
+
+// The WezTerm sidebar's two rows per pane: where (`repo(worktree) · branch`),
+// then what (the task line) with the elapsed time on the right. The agent,
+// state and context usage live on the preview's bottom edge instead. Both rows
+// leave the last cell free so text never touches the pane's edge.
+export const SidebarRowLine: React.FC<SidebarRowLineProps> = (
+  { row, now, selected, listWidth }: SidebarRowLineProps,
+) => {
+  const display = displayMeta(row);
+  const marker = selected ? "▌ " : "  ";
+  const { repo, worktree, branch } = locationParts(row);
+  const loc = sidebarLocation(
+    repo,
+    worktree,
+    branch,
+    Math.max(0, listWidth - SIDEBAR_ROW_INDENT - 1),
+  );
+  const since = elapsedSource(row);
+  const elapsed = since === null || since > now
+    ? ""
+    : formatElapsed(since, now);
+  const right = " " + elapsed.padStart(ELAPSED_CELLS) + " ";
+  const summary = truncateToCells(
+    summaryOf(row),
+    Math.max(0, listWidth - SIDEBAR_ROW_INDENT - right.length - 1),
+  );
+  return (
+    <Box
+      flexDirection="column"
+      backgroundColor={selected ? DOGRUN.band : undefined}
+    >
+      <Box>
+        <Text color={DOGRUN.accent}>{marker}</Text>
+        <Text color={display.color}>{display.icon}</Text>
+        <Text>{" "}</Text>
+        <Text color={DOGRUN.fg}>{loc.head}</Text>
+        {loc.suffix ? <Text color={DOGRUN.fgDim}>{loc.suffix}</Text> : null}
+        {loc.branch
+          ? (
+            <>
+              <Text color={DOGRUN.muted}>{SIDEBAR_SEP}</Text>
+              <Text color={DOGRUN.accent}>{loc.branch}</Text>
+            </>
+          )
+          : null}
+      </Box>
+      <Box>
+        <Text color={DOGRUN.accent}>{marker}</Text>
+        <Text>{"  "}</Text>
+        <Text color={DOGRUN.fg} bold={selected}>{summary}</Text>
+        <Box flexGrow={1} />
+        <Text color={DOGRUN.fgDim}>{right}</Text>
+      </Box>
     </Box>
   );
 };
@@ -635,14 +706,18 @@ export function usageLayout(
     : { ...withBars, bars: false };
 }
 
-function barTokens(pct: number, alert: boolean): UsageToken[] {
-  const filled = gaugeFill(pct);
+function barTokens(
+  pct: number,
+  alert: boolean,
+  cells = GAUGE_CELLS,
+): UsageToken[] {
+  const filled = gaugeFill(pct, cells);
   return [
     {
       text: GAUGE_FILLED.repeat(filled),
       color: alert ? DOGRUN.err : DOGRUN.fgDim,
     },
-    { text: GAUGE_TRACK.repeat(GAUGE_CELLS - filled), color: DOGRUN.dim },
+    { text: GAUGE_TRACK.repeat(cells - filled), color: DOGRUN.dim },
   ].filter((t) => t.text.length > 0);
 }
 
@@ -729,6 +804,95 @@ export function usageRows(
   );
 }
 
+// The sidebar's card is too narrow for usageRows' one row per agent with bars
+// (60 cells for 5h + 7d), so it stacks: the agent on a heading row, then one
+// row per window whose gauge takes whatever the label, percentage and
+// countdown slot leave. The slot is reserved on every row so the percentages
+// line up.
+const STACKED_INDENT = "  ";
+const STACKED_GAUGE_MIN = 4;
+
+export function usageStackedRows(
+  usages: AgentUsage[],
+  nowSec: number,
+  innerWidth: number,
+): UsageToken[][] {
+  const present = agentsWithWindows(usages);
+  if (present.length === 0) return [];
+  const labelW = Math.max(...usageColumns(present).map((l) => l.length));
+  const gaugeW = Math.max(
+    STACKED_GAUGE_MIN,
+    innerWidth - STACKED_INDENT.length - labelW - 1 - 1 - PCT_W - COUNTDOWN_W,
+  );
+  return present.flatMap((usage) => {
+    const heading: UsageToken[] = [{ text: usage.agent, color: DOGRUN.fgDim }];
+    if (isUsageStale(usage, nowSec)) {
+      heading.push({
+        text: ` (${formatAge(nowSec - usage.updatedAt)} ago)`,
+        color: DOGRUN.muted,
+      });
+    }
+    const windows = usage.windows.map((w): UsageToken[] => {
+      const expired = isWindowExpired(w, nowSec);
+      const alert = !expired && w.usedPct >= USAGE_ALERT_PCT;
+      const out: UsageToken[] = [
+        {
+          text: STACKED_INDENT + w.label.padEnd(labelW) + " ",
+          color: DOGRUN.fgDim,
+        },
+        ...(expired
+          ? [{ text: " ".repeat(gaugeW), color: DOGRUN.muted }]
+          : barTokens(w.usedPct, alert, gaugeW)),
+        { text: " ", color: DOGRUN.muted },
+        {
+          text: (expired ? "--" : `${w.usedPct}%`).padStart(PCT_W),
+          color: alert ? DOGRUN.err : DOGRUN.fgDim,
+        },
+      ];
+      if (w.label !== COUNTDOWN_LABEL || expired) {
+        out.push({ text: " ".repeat(COUNTDOWN_W), color: DOGRUN.muted });
+        return out;
+      }
+      out.push({ text: " ", color: DOGRUN.fgDim });
+      out.push({ text: COUNTDOWN_ICON, color: DOGRUN.fgDim });
+      out.push({
+        text: " " +
+          truncateToCells(formatRemaining(w.resetsAt, nowSec), REMAIN_W)
+            .padEnd(REMAIN_W),
+        color: DOGRUN.fgDim,
+      });
+      return out;
+    });
+    return [heading, ...windows];
+  });
+}
+
+// Rows the stacked card takes, edges included; 0 when there is nothing to draw.
+export function usageStackedCardRows(usages: AgentUsage[]): number {
+  const present = agentsWithWindows(usages);
+  if (present.length === 0) return 0;
+  return 2 + present.reduce((n, u) => n + 1 + u.windows.length, 0);
+}
+
+// The sidebar keeps the agent off the list rows and shows it, with the state
+// and the context usage, on the preview's bottom edge. A waiting or failed
+// pane names its reason instead of the bare state.
+export function previewFooterTokens(row: PaneRow): UsageToken[] {
+  const sep: UsageToken = { text: " · ", color: DOGRUN.muted };
+  const out: UsageToken[] = [{ text: row.agent, color: DOGRUN.fgChip }];
+  const meta = STATUS_META[row.status];
+  const attention = row.status === "waiting" || row.status === "error";
+  const state = attention && row.waitReason ? row.waitReason : meta.short;
+  if (state) out.push(sep, { text: state, color: meta.color });
+  if (row.contextUsedPct !== null) {
+    out.push(sep, {
+      text: `${row.contextUsedPct}%`,
+      color: contextPctColor(row.contextUsedPct),
+    });
+  }
+  return out;
+}
+
 // Ink clips against the root box height, so a wrapped row would silently
 // eat the bottom pane row instead of overflowing visibly.
 export function clampUsageTokens(
@@ -762,11 +926,13 @@ interface CardProps {
   title: UsageToken[];
   width: number;
   height?: number;
+  // Right-aligned on the bottom edge, as `╰──── footer ─╯`.
+  footer?: UsageToken[];
   children?: React.ReactNode;
 }
 
 export const Card: React.FC<CardProps> = (
-  { title, width, height, children }: CardProps,
+  { title, width, height, footer, children }: CardProps,
 ) => {
   // CARD_TOP_LEFT + title + " " + at least one "─" + "╮"
   const shown = clampUsageTokens(title, Math.max(0, width - 6));
@@ -788,11 +954,35 @@ export const Card: React.FC<CardProps> = (
         flexGrow={1}
         borderStyle="round"
         borderTop={false}
+        borderBottom={footer === undefined}
         borderColor={DOGRUN.dim}
         paddingX={1}
       >
         {children}
       </Box>
+      {footer !== undefined && <CardFooter tokens={footer} width={width} />}
+    </Box>
+  );
+};
+
+// Ink draws no text on a border either, so a card with a footer leaves its
+// bottom side off and draws this row in its place.
+const CardFooter: React.FC<{ tokens: UsageToken[]; width: number }> = (
+  { tokens, width },
+) => {
+  // "╰" + at least one "─" + " " + tokens + " ─╯"
+  const shown = clampUsageTokens(tokens, Math.max(0, width - 6));
+  const cells = shown.reduce((n, t) => n + stringCells(t.text), 0);
+  const rule = "─".repeat(Math.max(1, width - 5 - cells));
+  return (
+    <Box>
+      <Text color={DOGRUN.dim}>{"╰" + rule + " "}</Text>
+      {shown.map((t, i) => (
+        <React.Fragment key={i}>
+          <Text color={t.color}>{t.text}</Text>
+        </React.Fragment>
+      ))}
+      <Text color={DOGRUN.dim}>{" ─╯"}</Text>
     </Box>
   );
 };
@@ -809,15 +999,20 @@ interface UsageCardProps {
   usages: AgentUsage[];
   now: number;
   width: number;
+  // The sidebar's agent-heading layout (usageStackedRows).
+  stacked?: boolean;
 }
 
 export const UsageCard: React.FC<UsageCardProps> = (
-  { usages, now, width }: UsageCardProps,
+  { usages, now, width, stacked = false }: UsageCardProps,
 ) => {
   const inner = Math.max(0, width - CARD_CHROME_COLS);
+  const rows = stacked
+    ? usageStackedRows(usages, now, inner)
+    : usageRows(usages, now, inner);
   return (
     <Card title={[{ text: "Usage", color: DOGRUN.fg }]} width={width}>
-      {usageRows(usages, now, inner).map((row, ri) => (
+      {rows.map((row, ri) => (
         <Box key={ri}>
           {clampUsageTokens(row, inner).map((t, i) => (
             // Ink 7 types Text's props as a closed object, so `key` on it fails
