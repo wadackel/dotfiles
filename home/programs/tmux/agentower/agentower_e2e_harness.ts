@@ -375,7 +375,7 @@ export async function spawnAgentower(
     waitForReady?: boolean;
     // Delay the exec by this many seconds' worth of milliseconds, so keys sent
     // in the meantime are already sitting in the pane's tty when the process
-    // starts — the real prefix+w symptom, made deterministic.
+    // starts — the real prefix+e symptom, made deterministic.
     startDelayMs?: number;
     // Redirect the process's stderr here. agentower-bench.ts pairs it with
     // AGENTOWER_TRACE, whose marks would otherwise land in the pane and be
@@ -395,7 +395,7 @@ export async function spawnAgentower(
   }
   // `tmux new-window -e K=V` sets K in the child's env (literal value, no
   // format expansion). Mirrors the interactive popup path where tmux.conf's
-  // `bind-key w` writes `AGENTOWER_FROM_PANE` to session env via
+  // `bind-key e` writes `AGENTOWER_FROM_PANE` to session env via
   // `set-environment` before `display-popup` (the popup inherits session env
   // at spawn). Reserved `TMUX_PANE` is unsuitable — tmux clobbers it with
   // the spawned pane's own id when the process starts, so the originating-

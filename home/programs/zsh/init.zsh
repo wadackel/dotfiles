@@ -383,7 +383,7 @@ agentower() {
   # tell: a terminal app launched from a tmux pane hands TMUX and TMUX_PANE to
   # every window it opens later, so ask tmux whether this tty is a pane.
   if env -u TMUX tmux list-panes -a -F '#{pane_tty}' 2>/dev/null | grep -qxF "$(tty)"; then
-    print -u2 "agentower: the dashboard runs in a terminal window outside tmux; inside tmux, use prefix+w."
+    print -u2 "agentower: the dashboard runs in a terminal window outside tmux; inside tmux, use prefix+e."
     return 1
   fi
   # Ink draws every tmux error above its frame, and a dashboard left open

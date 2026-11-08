@@ -172,27 +172,64 @@ local function focus_other_pane(pane)
   end
 end
 
--- 開いたあともフォーカスは tmux 側に残し、サイドバーへは Cmd+B かクリックで移る
-local function toggle_agentower_sidebar(_window, pane)
-  local sidebar
-  for _, p in ipairs(pane:tab():panes()) do
+local function find_agentower_sidebar(tab)
+  for _, p in ipairs(tab:panes()) do
     if is_agentower_sidebar(p) then
-      sidebar = p
-      break
+      return p
     end
   end
+  return nil
+end
+
+local function tab_is_zoomed(tab)
+  for _, info in ipairs(tab:panes_with_info()) do
+    if info.is_zoomed then
+      return true
+    end
+  end
+  return false
+end
+
+local function open_agentower_sidebar(pane)
+  pane:split({
+    direction = "Left",
+    top_level = true,
+    size = AGENTOWER_SIDEBAR_COLS,
+    args = {
+      "/bin/zsh",
+      "-c",
+      'exec env -u TMUX -u TMUX_PANE "$HOME/.local/share/agentower/agentower" --sidebar 2>>"$HOME/Library/Logs/agentower-dashboard.log"',
+    },
+  })
+end
+
+-- Cmd+E: 表示と非表示。閉じずに tmux 側をズームして隠すので、出し直したときも一覧の状態はそのまま
+local function toggle_agentower_sidebar(_window, pane)
+  local tab = pane:tab()
+  local sidebar = find_agentower_sidebar(tab)
   if sidebar == nil then
-    pane:split({
-      direction = "Left",
-      top_level = true,
-      size = AGENTOWER_SIDEBAR_COLS,
-      args = {
-        "/bin/zsh",
-        "-c",
-        'exec env -u TMUX -u TMUX_PANE "$HOME/.local/share/agentower/agentower" --sidebar 2>>"$HOME/Library/Logs/agentower-dashboard.log"',
-      },
-    })
+    open_agentower_sidebar(pane)
     pane:activate()
+  elseif tab_is_zoomed(tab) then
+    tab:set_zoomed(false)
+  else
+    -- ズームは前面のペインに掛かるので、サイドバーにいるときは tmux 側へ移ってから掛ける
+    if sidebar:pane_id() == pane:pane_id() then
+      focus_other_pane(sidebar)
+    end
+    tab:set_zoomed(true)
+  end
+end
+
+-- Cmd+Shift+E: サイドバーと tmux 側の間でフォーカスを移す。無ければ開き、隠れていれば出してから移る
+local function focus_agentower_sidebar(_window, pane)
+  local tab = pane:tab()
+  local sidebar = find_agentower_sidebar(tab)
+  if sidebar == nil then
+    open_agentower_sidebar(pane)
+  elseif tab_is_zoomed(tab) then
+    tab:set_zoomed(false)
+    sidebar:activate()
   elseif sidebar:pane_id() == pane:pane_id() then
     focus_other_pane(sidebar)
   else
@@ -325,9 +362,14 @@ return {
       action = wezterm.action.ReloadConfiguration,
     },
     {
-      key = "b",
+      key = "e",
       mods = "SUPER",
       action = wezterm.action_callback(toggle_agentower_sidebar),
+    },
+    {
+      key = "e",
+      mods = "SUPER|SHIFT",
+      action = wezterm.action_callback(focus_agentower_sidebar),
     },
     {
       key = "v",

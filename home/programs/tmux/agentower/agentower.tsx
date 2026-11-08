@@ -1,4 +1,4 @@
-// Agentower: the tmux prefix+w popup that lists AI agent panes.
+// Agentower: the tmux prefix+e popup that lists AI agent panes.
 // ink + React on Bun. SSOT: @pane_* tmux pane options written by claude-pane-status.ts.
 
 import { spawn } from "node:child_process";
@@ -716,7 +716,7 @@ async function capturePane(paneId: string): Promise<string> {
 }
 
 // A popup takes every key before tmux's prefix table sees it, so the
-// `prefix w` that opened Agentower has to be recognised here to close it.
+// `prefix e` that opened Agentower has to be recognised here to close it.
 // Only the Ctrl+letter form is supported; anything else disables the chord.
 // C-h/i/j/m are excluded because Ink reports them as backspace/tab/enter/return
 // without the ctrl flag.
@@ -848,7 +848,7 @@ function Preview(
   );
 }
 
-// "popup" is the one-shot prefix+w picker. "dashboard" (--dashboard) runs in a
+// "popup" is the one-shot prefix+e picker. "dashboard" (--dashboard) runs in a
 // terminal window of its own, outside tmux, and stays open after a jump; with
 // no client of its own, its switch-client lands on the client tmux resolves as
 // the most recently active one. "sidebar" (--sidebar) behaves as the dashboard
@@ -1322,7 +1322,7 @@ function App({
     }
     let input = chunk;
     // Keys that reach stdin in one read arrive as a single unsplit chunk
-    // (`\x13w`), so the prefix byte is peeled off here rather than relying on
+    // (`\x13e`), so the prefix byte is peeled off here rather than relying on
     // Ink to report it as its own Ctrl keypress.
     if (prefixByte !== null && chunk.length > 1 && chunk[0] === prefixByte) {
       prefixPending.current = true;
@@ -1330,7 +1330,7 @@ function App({
     }
     if (prefixPending.current) {
       prefixPending.current = false;
-      if (input === "w") {
+      if (input === "e") {
         onSelect(null);
         exit();
         return;
@@ -1537,7 +1537,7 @@ export async function main(): Promise<void> {
     ]);
   trace("io-done");
 
-  // tmux.conf bind-key w writes AGENTOWER_FROM_PANE to the session environment via
+  // tmux.conf bind-key e writes AGENTOWER_FROM_PANE to the session environment via
   // `set-environment` BEFORE display-popup runs; the popup process inherits the value at spawn.
   // The earlier `display-popup -e "VAR=#{pane_id}"` form was empirically observed to deliver
   // a stale pane id (off-by-one against the previous invocation's source pane) — see the

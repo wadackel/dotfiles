@@ -306,7 +306,7 @@ async function ctrlCBeforeMountExits(bin: string): Promise<boolean> {
 
 // The activation writes a new Mach-O and renames it into place; macOS charges
 // the first exec of those bytes over a second, every rebuild. A warm-up run
-// inside the activation moves that cost off the next prefix+w.
+// inside the activation moves that cost off the next prefix+e.
 async function freshExec(
   bin: string,
   warmUpFirst: boolean,

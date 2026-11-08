@@ -1,5 +1,5 @@
 // opencode plugin: bridges opencode session/chat/tool events → tmux pane
-// options consumed by ~/.local/share/agentower/agentower (the prefix+w popup
+// options consumed by ~/.local/share/agentower/agentower (the prefix+e popup
 // SSOT lives in ../tmux/agentower/pane_row.ts:TMUX_FORMAT). The Bun-specific I/O
 // boundary lives here; pure logic + types live in plugin_logic.ts so they can
 // be unit-tested outside opencode.

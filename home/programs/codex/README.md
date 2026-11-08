@@ -32,7 +32,7 @@ comparisons.
 ## Implemented parity
 
 - `codex-pane-status.ts`: writes Codex lifecycle state to tmux `@pane_*` options
-  so Agentower (`prefix+w`) can show Codex panes next to Claude and opencode
+  so Agentower (`prefix+e`) can show Codex panes next to Claude and opencode
   panes. It also writes best-effort diagnostics to
   `~/.codex/logs/codex-pane-status.log`.
 - `codex-hook-log.ts`: records sanitized hook payloads to

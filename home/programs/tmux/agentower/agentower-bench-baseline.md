@@ -55,7 +55,7 @@ agentower-bench.ts \
 | `fresh_after_warmup_s` | 0.108 | 0.085 |
 
 新規に書かれた Mach-O の初回 exec に macOS が課すコスト。activation が `mv` 直後に 1 回
-空打ちするので、`darwin-rebuild` 直後の `prefix+w` はこの 1.3 秒を払わない。その空打ちの
+空打ちするので、`darwin-rebuild` 直後の `prefix+e` はこの 1.3 秒を払わない。その空打ちの
 終了コード（2 = `main()` の TMUX ガード）は、出荷バイナリが起動すること自体の唯一の検査でもある。
 
 ## 測れなかったもの

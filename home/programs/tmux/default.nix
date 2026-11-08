@@ -14,7 +14,7 @@ let
   # The contents are hashed by the activation, from the worktree it builds.
   # `./shared` is included wholesale even though only pane-shared.ts is a
   # runtime dependency today; a spurious recompile costs seconds while a
-  # missed dependency ships a stale binary to `prefix+w`.
+  # missed dependency ships a stale binary to `prefix+e`.
   agentowerInputs =
     let
       isSrc =
@@ -51,7 +51,7 @@ let
 
   # Released tmux (3.7b) lets a repainting background pane draw over an open
   # popup's top border row, so the border blinks out and back while an agent
-  # renders behind `prefix+w`. That is tmux issue 4920; 3.7 fixed most of it and
+  # renders behind `prefix+e`. That is tmux issue 4920; 3.7 fixed most of it and
   # 3.8 finishes the job ("Fix redraw issues around ... popups ..."). Verified
   # against this exact repro: broken on 3.7b, clean on master.
   # Drop this override and go back to pkgs.tmux once nixpkgs ships 3.8.
@@ -81,7 +81,7 @@ in
   home.file.".local/bin/tmux-popup-session.sh".source =
     dotfiles.linkHere ./. "scripts/popup-session.sh";
 
-  # Agentower (prefix+w: ink + React on Bun; --snapshot and --restore without
+  # Agentower (prefix+e: ink + React on Bun; --snapshot and --restore without
   # ink). The source entry, for a manual run without the compiled binary.
   home.file.".local/bin/agentower-main.ts".source =
     dotfiles.linkHere ./. "agentower/agentower-main.ts";
@@ -138,7 +138,7 @@ in
         "$SRC/agentower-main.ts"
       run /bin/mv -f "$TMP" "$BIN"
       # macOS charges ~0.5s to the first exec of a freshly written Mach-O of
-      # this size, so without this the next `prefix+w` after every rebuild
+      # this size, so without this the next `prefix+e` after every rebuild
       # waits for it. The exit code doubles as the only check that the binary
       # starts at all: 2 is main()'s own guard on the missing TMUX, so
       # anything else means the graph did not evaluate and the stamp must not

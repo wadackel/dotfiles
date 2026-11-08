@@ -659,10 +659,10 @@ test("S10: narrow width drops low-priority segments first", async () => {
 
 // S11: Regression for the self-exclusion bug. Before the fix, fetchPanes
 // excluded any row whose paneId matched the originating-pane env var, which
-// caused the pane that launched prefix+w to silently drop out of the list.
+// caused the pane that launched prefix+e to silently drop out of the list.
 // spawnAgentower({ selfPane }) injects AGENTOWER_FROM_PANE=<claude-pane-id> into
 // Agentower's child env via `tmux new-window -e`, reproducing the interactive
-// key-binding path (where tmux.conf's `bind-key w` writes the same env name to
+// key-binding path (where tmux.conf's `bind-key e` writes the same env name to
 // session env via `set-environment` before `display-popup`).
 test("S11: self-launching Claude pane remains visible", async () => {
   await setupServer();
@@ -1021,7 +1021,7 @@ test("S19: context gauge sits in a fixed right column (gauge + percent + color)"
 });
 
 // S20: launching pane is initially selected when present in list.
-// tmux.conf's `bind-key w` writes the originating pane id into the session
+// tmux.conf's `bind-key e` writes the originating pane id into the session
 // environment as `AGENTOWER_FROM_PANE` via `set-environment` immediately
 // before `display-popup` runs; the popup inherits the session env at spawn
 // so agentower.tsx main() can resolve initialSelectedPaneId from it. Reserved
@@ -1067,7 +1067,7 @@ test("S20: launching pane is initially selected when present in list", async () 
   }
 });
 
-// S21: tmux.conf bind-key w writes the source pane id to session env BEFORE
+// S21: tmux.conf bind-key e writes the source pane id to session env BEFORE
 // display-popup. Static assertion against the conf text — not a runtime test.
 //
 // The two regressions this catches:
@@ -1091,24 +1091,24 @@ test("S20: launching pane is initially selected when present in list", async () 
 // The runtime assertion (popup actually opens with the right pane highlighted)
 // stays a manual user check — that is the second tier of the two-stage
 // verification (conf-shape + runtime).
-test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
+test("S21: tmux.conf bind-key e uses source-pane capture pattern", async () => {
   const confPath = join(import.meta.dirname, "../config/tmux.conf");
   const conf = await readFile(confPath, "utf8");
 
   const bindLines = conf
     .split("\n")
-    .filter((line) => /^\s*bind-key\s+w\s/.test(line));
+    .filter((line) => /^\s*bind-key\s+e\s/.test(line));
   assertEquals(
     bindLines.length,
     1,
-    `expected exactly one 'bind-key w ...' line in tmux.conf, got ${bindLines.length}`,
+    `expected exactly one 'bind-key e ...' line in tmux.conf, got ${bindLines.length}`,
   );
   const bind = bindLines[0];
 
   // Diagnostic instrumentation must not leak into committed conf.
   assertFalse(
     /@cc-picker-debug|cc-picker-debug\.log/.test(bind),
-    `diagnostic instrumentation residue in bind-key w: ${bind}`,
+    `diagnostic instrumentation residue in bind-key e: ${bind}`,
   );
 
   // Required: set-environment writes the source pane id to session env. Capture
@@ -1121,7 +1121,7 @@ test("S21: tmux.conf bind-key w uses source-pane capture pattern", async () => {
   const popupMatch = popupRe.exec(bind);
   if (!setEnvMatch || !popupMatch) {
     throw new Error(
-      `bind-key w must contain both set-environment (AGENTOWER_FROM_PANE = ` +
+      `bind-key e must contain both set-environment (AGENTOWER_FROM_PANE = ` +
         `#{pane_id}) and display-popup. Line: ${bind}`,
     );
   }
@@ -2161,9 +2161,9 @@ test("S43: a short popup drops the card padding and starts at the top row", asyn
 });
 
 // S44/S45: inside a popup tmux hands every key to Agentower, so the
-// `prefix w` that opened it arrives as two keys. The harness server runs with
+// `prefix e` that opened it arrives as two keys. The harness server runs with
 // `-f /dev/null`, so the prefix is read back instead of assuming C-b.
-test("S44: prefix then w closes Agentower instead of toggling the filter", async () => {
+test("S44: prefix then e closes Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
@@ -2171,7 +2171,7 @@ test("S44: prefix then w closes Agentower instead of toggling the filter", async
     const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
 
     await sendKey(agentower, prefix);
-    await sendKey(agentower, "w");
+    await sendKey(agentower, "e");
     await waitForExit();
   } finally {
     await teardown();
@@ -2202,14 +2202,14 @@ test("S45: prefix then another key keeps Agentower open and handles the key", as
 
 // One send-keys call writes both keys back to back, so they usually reach
 // Agentower in a single read — the unsplit-chunk path S44 rarely takes.
-test("S46: prefix and w sent together still close Agentower", async () => {
+test("S46: prefix and e sent together still close Agentower", async () => {
   await setupServer();
   try {
     await createClaudePane({ status: "running" });
     const agentower = await spawnAgentower();
     const prefix = (await tmux(["show-options", "-gv", "prefix"])).trim();
 
-    await tmux(["send-keys", "-t", agentower, prefix, "w"]);
+    await tmux(["send-keys", "-t", agentower, prefix, "e"]);
     await waitForExit();
   } finally {
     await teardown();
@@ -2363,7 +2363,7 @@ test("S51: a key typed before the first frame still reaches the list", async () 
     await createClaudePane({ status: "running", prompt: "row-a" });
     await createClaudePane({ status: "running", prompt: "row-b" });
     // startDelayMs parks the key in the pane's tty while sh sleeps, so it is
-    // already buffered when Agentower execs — the prefix+w symptom, without a
+    // already buffered when Agentower execs — the prefix+e symptom, without a
     // race. Before the entry module set raw mode ahead of the ink import, a
     // key delivered this early stayed invisible until the next keypress.
     const agentower = await spawnAgentower({

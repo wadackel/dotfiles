@@ -1,7 +1,7 @@
 ---
 name: agentower-verify
 description: >-
-  Runs e2e tests for Agentower, the tmux prefix+w AI agent popup
+  Runs e2e tests for Agentower, the tmux prefix+e AI agent popup
   (home/programs/tmux/agentower/agentower-main.ts) in an isolated tmux server sandbox.
   Use proactively after any change to agentower-main.ts, agentower.tsx, restore.ts, agentower_e2e_harness.ts,
   or agentower_e2e_test.ts — even if the user doesn't explicitly ask for

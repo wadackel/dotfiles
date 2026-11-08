@@ -2,7 +2,7 @@
 
 // Diagnostic snapshot for Agentower.
 //
-// Run this when Agentower (prefix+w) is missing a pane that has Claude Code
+// Run this when Agentower (prefix+e) is missing a pane that has Claude Code
 // or Codex running. It enumerates every tmux pane, walks each pane's descendant
 // processes, and classifies whether the pane matches what Agentower expects:
 //
