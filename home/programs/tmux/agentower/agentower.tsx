@@ -758,25 +758,40 @@ async function readPreviewOption(): Promise<boolean | null> {
   return parsePreviewOption(stdout);
 }
 
-// The sidebar's neighbour is found by its tty (AGENTOWER_CLIENT_TTY, set by
-// wezterm.lua) in list-clients rather than with `display-message -c`, which
-// answers for some other client when no client has that tty.
-export function clientPaneOf(listClients: string, tty: string): string | null {
-  for (const line of listClients.split("\n")) {
+// The tmux client whose pane the selection follows: the sidebar's neighbour
+// by its tty (AGENTOWER_CLIENT_TTY, set by wezterm.lua), or for the dashboard
+// the most recently active client, which is where its jump lands.
+export type ClientFollow = { tty: string } | "recent";
+
+const CLIENT_PANE_FORMAT = "#{client_tty}\x1f#{pane_id}";
+
+// tty null takes the first line that names a client: display-message prints
+// one, with an empty tty when no client is attached.
+export function clientPaneOf(lines: string, tty: string | null): string | null {
+  for (const line of lines.split("\n")) {
     const [clientTty, paneId] = line.split("\x1f");
-    if (clientTty === tty && paneId) return paneId;
+    if (clientTty && paneId && (tty === null || clientTty === tty)) {
+      return paneId;
+    }
   }
   return null;
 }
 
-async function readClientPane(tty: string | null): Promise<string | null> {
-  if (!tty) return null;
-  const { stdout } = await tmuxRun([
-    "list-clients",
-    "-F",
-    "#{client_tty}\x1f#{pane_id}",
-  ]);
-  return clientPaneOf(stdout, tty);
+// "recent" asks display-message with no -c, which resolves the client the way
+// jumpTo's switch-client does; client_activity has one-second resolution and
+// cannot tell two clients used in the same second apart. A tty is matched in
+// list-clients because `display-message -c` with a tty no client has answers
+// for some other client.
+async function readClientPane(
+  follow: ClientFollow | null,
+): Promise<string | null> {
+  if (!follow) return null;
+  const { stdout } = await tmuxRun(
+    follow === "recent"
+      ? ["display-message", "-p", CLIENT_PANE_FORMAT]
+      : ["list-clients", "-F", CLIENT_PANE_FORMAT],
+  );
+  return clientPaneOf(stdout, follow === "recent" ? null : follow.tty);
 }
 
 // By pane id rather than `session:window.pane`: tmux accepts ':' and '.' in a
@@ -906,7 +921,7 @@ function App({
   onSelect,
   initialPreviewOverride,
   onPreviewChange,
-  clientTty,
+  clientFollow,
   initialClientPane,
 }: {
   initialRows: PaneRow[];
@@ -918,8 +933,8 @@ function App({
   onSelect: (row: PaneRow | null) => void;
   initialPreviewOverride: boolean | null;
   onPreviewChange?: (shown: boolean) => void;
-  // The tmux client beside the sidebar; null leaves the selection to the keys.
-  clientTty: string | null;
+  // null leaves the selection to the keys.
+  clientFollow: ClientFollow | null;
   initialClientPane: string | null;
 }) {
   const { exit } = useApp();
@@ -1077,7 +1092,7 @@ function App({
         // blanking it, which would resize the preview column for one tick.
         const [nextUsages, nextClientPane] = await Promise.all([
           readAllAgentUsage().catch(() => null),
-          readClientPane(clientTty).catch(() => null),
+          readClientPane(clientFollow).catch(() => null),
         ]);
         // All of them together, after every read: each await between two sets
         // ends a commit, and a commit is a full frame (~8ms, render-us). Setting
@@ -1587,8 +1602,11 @@ export async function main(): Promise<void> {
   // latency — the whole reason Agentower is AOT-compiled in the first place.
   // The prefix chord exists to close a popup that swallows every key, so the
   // dashboard and the sidebar skip it.
-  const clientTty = mode === "sidebar"
-    ? process.env.AGENTOWER_CLIENT_TTY || null
+  const clientTty = process.env.AGENTOWER_CLIENT_TTY;
+  const clientFollow: ClientFollow | null = mode === "dashboard"
+    ? "recent"
+    : mode === "sidebar" && clientTty
+    ? { tty: clientTty }
     : null;
   const [{ rows }, usages, prefixKey, initialPreviewOverride, clientPane] =
     await Promise.all([
@@ -1596,7 +1614,7 @@ export async function main(): Promise<void> {
       readAllAgentUsage(),
       mode === "popup" ? readPrefixKey() : null,
       mode === "popup" ? readPreviewOption() : null,
-      readClientPane(clientTty),
+      readClientPane(clientFollow),
     ]);
   trace("io-done");
 
@@ -1668,7 +1686,7 @@ export async function main(): Promise<void> {
       onSelect={onSelect}
       initialPreviewOverride={initialPreviewOverride}
       onPreviewChange={onPreviewChange}
-      clientTty={clientTty}
+      clientFollow={clientFollow}
       initialClientPane={clientPane}
     />,
     {

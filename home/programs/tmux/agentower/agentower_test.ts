@@ -1876,6 +1876,12 @@ test("clientPaneOf: the pane of the client whose tty matches, else null", () => 
   assertEquals(clientPaneOf("", "/dev/ttys000"), null);
 });
 
+test("clientPaneOf: with no tty, display-message's client, none when it names none", () => {
+  assertEquals(clientPaneOf("/dev/ttys012\x1f%3\n", null), "%3");
+  assertEquals(clientPaneOf("\x1f%0\n", null), null);
+  assertEquals(clientPaneOf("", null), null);
+});
+
 test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {
   assertEquals(parsePrefixKey("C-s\n"), "s");
   assertEquals(parsePrefixKey("C-b"), "b");

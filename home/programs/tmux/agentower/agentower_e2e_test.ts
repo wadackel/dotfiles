@@ -4847,6 +4847,52 @@ test("S114: sidebar follows the client beside it, and keeps a k until that clien
   }
 });
 
+// B attaches last and sits on the shell session, so nothing is followed at
+// start. Typing into A after it moves to row-b makes A the client the
+// dashboard's jump would switch; typing into B afterwards leaves the shell
+// session it shows, which lists nothing, so the k stays.
+test("S115: dashboard follows the most recently active client", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({ status: "running", prompt: "row-a-S115" });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b-S115",
+    });
+    const paneC = await createClaudePane({
+      status: "running",
+      prompt: "row-c-S115",
+    });
+    await createAwaySession();
+    const clientA = await attachClient("away");
+    const clientB = await attachClient("away");
+    const agentower = await spawnAgentower({ args: ["--dashboard"] });
+    await new Promise((r) => setTimeout(r, 2500));
+    const start = await captureOutput(agentower);
+    assertEquals(selectedIncludes("row-a-S115")(start), true, start);
+
+    await showOnClient(clientA.clientName, paneB);
+    await sendKey(clientA.hostPane, "Z");
+    await waitFor(agentower, selectedIncludes("row-b-S115"));
+
+    await showOnClient(clientA.clientName, paneC);
+    await waitFor(agentower, selectedIncludes("row-c-S115"));
+
+    await sendKey(agentower, "k");
+    await waitFor(agentower, selectedIncludes("row-b-S115"));
+    await sendKey(clientB.hostPane, "Z");
+    await waitFor("away", (o) => o.includes("Z"));
+    await new Promise((r) => setTimeout(r, 2500));
+    const kept = await captureOutput(agentower);
+    assertEquals(selectedIncludes("row-b-S115")(kept), true, kept);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
 // ---- the popup's last p across popups ----
 
 async function previewOption(): Promise<string> {
