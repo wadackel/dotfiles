@@ -36,7 +36,8 @@
 - `/goal /autopilot <goal>` is the user's entrypoint for a long unattended run: each unit's plan → impl → gate → PR in its own subagent, a Fable advisor approving the plans, and the main session merging. Load `/autopilot` only when the user names it, because it replaces their plan approval.
 - `/systematic-debugging` for bugs: observe the symptom directly, treat the fix as a hypothesis to falsify, and present both the minimal workaround and the root-cause fix when both exist.
 - `/qa-planner` for QA-style verification, `/agent-browser` for browser or UI checks (screenshots, console, responsive), `/gdocs-to-md` for Google Docs URLs, `/repo-dive` for GitHub repository code, `/obsidian-cli` for vault notes.
-- Questions with more than one defensible answer (design, technology choice, whether to adopt a practice, recalling a prior conclusion): search the vault with `/llm-wiki query` first and prefer its record; skip only for what the current repository settles or single-answer facts. Offer `/llm-wiki save` when a reusable insight surfaces.
+- `/consult` for a consultation or evaluation whose answer rests on facts (weighing options, judging a run, re-examining a problem): it re-checks prior decisions, measures what can be observed, and reports what is still unknown.
+- Questions with more than one defensible answer (design, technology choice, whether to adopt a practice, recalling a prior conclusion): search the vault with `/llm-wiki query` first and treat its record as one source to check against current evidence, since a recorded conclusion can be stale; skip only for what the current repository settles or single-answer facts. Offer `/llm-wiki save` when a reusable insight surfaces.
 
 ## Tooling
 

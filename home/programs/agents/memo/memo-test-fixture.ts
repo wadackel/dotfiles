@@ -93,7 +93,8 @@ console.log(process.env.FAKE_NO_TASK==='1'?${
       JSON.stringify(FIXTURE_SUMMARY + "\n- 既存の呼び出し条件を維持")
     }:${
       JSON.stringify(
-        FIXTURE_SUMMARY + "\n作業: " + FIXTURE_TASK + "\n- 既存の呼び出し条件を維持",
+        FIXTURE_SUMMARY + "\n作業: " + FIXTURE_TASK +
+          "\n- 既存の呼び出し条件を維持",
       )
     });
 `,
