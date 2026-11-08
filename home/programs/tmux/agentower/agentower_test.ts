@@ -8,6 +8,7 @@ import {
   cardIndexAt,
   clampPreview,
   clampStep,
+  clientPaneOf,
   COMPACT_CARD,
   FULL_CARD,
   inListArea,
@@ -1864,6 +1865,15 @@ test("parsePreviewOption: on and off are the popup's last p, anything else is un
   assertEquals(parsePreviewOption("off\n"), false);
   assertEquals(parsePreviewOption(""), null);
   assertEquals(parsePreviewOption("yes"), null);
+});
+
+test("clientPaneOf: the pane of the client whose tty matches, else null", () => {
+  const out = "/dev/ttys000\x1f%7\n/dev/ttys012\x1f%3\n";
+  assertEquals(clientPaneOf(out, "/dev/ttys012"), "%3");
+  assertEquals(clientPaneOf(out, "/dev/ttys000"), "%7");
+  assertEquals(clientPaneOf(out, "/dev/ttys999"), null);
+  assertEquals(clientPaneOf(out, "/dev/ttys01"), null);
+  assertEquals(clientPaneOf("", "/dev/ttys000"), null);
 });
 
 test("parsePrefixKey: only a Ctrl+letter prefix enables the close chord", () => {

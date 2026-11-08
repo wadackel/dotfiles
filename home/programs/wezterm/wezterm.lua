@@ -200,6 +200,8 @@ local function open_agentower_sidebar(pane)
       "-c",
       'exec env -u TMUX -u TMUX_PANE "$HOME/.local/share/agentower/agentower" --sidebar 2>>"$HOME/Library/Logs/agentower-dashboard.log"',
     },
+    -- 追従する tmux クライアントを tty で教える。tmux に最後に使われたクライアントを聞くと、別のウィンドウの tmux を指すことがある
+    set_environment_variables = { AGENTOWER_CLIENT_TTY = pane:get_tty_name() },
   })
 end
 

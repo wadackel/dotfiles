@@ -4783,6 +4783,70 @@ test("S110: sidebar without usage files draws no Usage card", async () => {
   }
 });
 
+// What the client shows, the way a user lands there: switch-client alone
+// leaves the session on whichever window it last had current.
+async function showOnClient(clientName: string, pane: string): Promise<void> {
+  await tmux(["switch-client", "-c", clientName, "-t", pane]);
+  await tmux(["select-window", "-t", pane]);
+  await tmux(["select-pane", "-t", pane]);
+  assertEquals((await waitForClientPane(clientName, pane)).pane, pane);
+}
+
+test("S114: sidebar follows the client beside it, and keeps a k until that client moves", async () => {
+  await setupServer(SIDEBAR);
+  try {
+    const paneA = await createClaudePane({
+      status: "running",
+      prompt: "row-a-S114",
+    });
+    const paneB = await createClaudePane({
+      status: "running",
+      prompt: "row-b-S114",
+    });
+    const paneC = await createClaudePane({
+      status: "running",
+      prompt: "row-c-S114",
+    });
+    await createAwaySession();
+    const { clientName } = await attachClient("away");
+    const clientTty = (await tmux([
+      "display-message",
+      "-c",
+      clientName,
+      "-p",
+      "#{client_tty}",
+    ])).trim();
+    await showOnClient(clientName, paneB);
+    const agentower = await spawnAgentower({
+      args: ["--sidebar"],
+      env: { AGENTOWER_CLIENT_TTY: clientTty },
+    });
+    await waitFor(agentower, selectedIncludes("row-b-S114"));
+
+    await showOnClient(clientName, paneC);
+    await waitFor(agentower, selectedIncludes("row-c-S114"));
+
+    await sendKey(agentower, "k");
+    await waitFor(agentower, selectedIncludes("row-b-S114"));
+    await new Promise((r) => setTimeout(r, 2500));
+    const kept = await captureOutput(agentower);
+    assertEquals(selectedIncludes("row-b-S114")(kept), true, kept);
+
+    await showOnClient(clientName, paneA);
+    await waitFor(agentower, selectedIncludes("row-a-S114"));
+
+    await tmux(["switch-client", "-c", clientName, "-t", "away"]);
+    await new Promise((r) => setTimeout(r, 2500));
+    const away = await captureOutput(agentower);
+    assertEquals(selectedIncludes("row-a-S114")(away), true, away);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
 // ---- the popup's last p across popups ----
 
 async function previewOption(): Promise<string> {

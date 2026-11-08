@@ -758,6 +758,27 @@ async function readPreviewOption(): Promise<boolean | null> {
   return parsePreviewOption(stdout);
 }
 
+// The sidebar's neighbour is found by its tty (AGENTOWER_CLIENT_TTY, set by
+// wezterm.lua) in list-clients rather than with `display-message -c`, which
+// answers for some other client when no client has that tty.
+export function clientPaneOf(listClients: string, tty: string): string | null {
+  for (const line of listClients.split("\n")) {
+    const [clientTty, paneId] = line.split("\x1f");
+    if (clientTty === tty && paneId) return paneId;
+  }
+  return null;
+}
+
+async function readClientPane(tty: string | null): Promise<string | null> {
+  if (!tty) return null;
+  const { stdout } = await tmuxRun([
+    "list-clients",
+    "-F",
+    "#{client_tty}\x1f#{pane_id}",
+  ]);
+  return clientPaneOf(stdout, tty);
+}
+
 // By pane id rather than `session:window.pane`: tmux accepts ':' and '.' in a
 // session name, and a name with ':' cannot be split back out of that string —
 // tmux itself fails to resolve it. Each command takes the window or session
@@ -885,6 +906,8 @@ function App({
   onSelect,
   initialPreviewOverride,
   onPreviewChange,
+  clientTty,
+  initialClientPane,
 }: {
   initialRows: PaneRow[];
   initialSelectedPaneId: string;
@@ -895,6 +918,9 @@ function App({
   onSelect: (row: PaneRow | null) => void;
   initialPreviewOverride: boolean | null;
   onPreviewChange?: (shown: boolean) => void;
+  // The tmux client beside the sidebar; null leaves the selection to the keys.
+  clientTty: string | null;
+  initialClientPane: string | null;
 }) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -981,6 +1007,11 @@ function App({
   const [taskProgressMap, setTaskProgressMap] = useState(initialTaskProgress);
   const [usages, setUsages] = useState(initialUsages);
   const [selectedPaneId, setSelectedPaneId] = useState(initialSelectedPaneId);
+  const [clientPane, setClientPane] = useState(initialClientPane);
+  // The client pane the selection last moved to. Following only a change of
+  // it, not the pane itself, is what keeps a j/k from being pulled back on the
+  // next tick while the client stays where it was.
+  const followedPane = useRef<string | null>(null);
   const [filterEnabled, setFilterEnabled] = useState(false);
   // What `p` chose for the preview; null until then, leaving it to the
   // height. The popup starts from its last `p` (PREVIEW_OPTION); the
@@ -1044,16 +1075,20 @@ function App({
         );
         // A rejected usage read leaves the previous footer standing instead of
         // blanking it, which would resize the preview column for one tick.
-        const nextUsages = await readAllAgentUsage().catch(() => null);
-        // All three together, after every read: each await between two sets
+        const [nextUsages, nextClientPane] = await Promise.all([
+          readAllAgentUsage().catch(() => null),
+          readClientPane(clientTty).catch(() => null),
+        ]);
+        // All of them together, after every read: each await between two sets
         // ends a commit, and a commit is a full frame (~8ms, render-us). Setting
-        // the rows first would show them ~0.6ms sooner — the two reads above —
+        // the rows first would show them ~0.6ms sooner — the reads above —
         // at the price of that extra frame every second.
         if (!cancelled) {
           setRows(merged);
           if (nextFree) setFree(nextFree);
           setTaskProgressMap(new Map(entries));
           if (nextUsages) setUsages(nextUsages);
+          setClientPane(nextClientPane);
         }
       } catch (e) {
         console.error("agentower: fetchPanes tick failed:", e);
@@ -1151,6 +1186,15 @@ function App({
       setSelectedPaneId(shownPaneId);
     }
   }, [shownPaneId, selectedPaneId]);
+  // A client pane that is not listed yet (a shell window, hidden by `w`) is
+  // not marked as followed, so the selection still moves once it is listed.
+  const clientPaneListed = clientPane !== null &&
+    derivedRows.some((r: PaneRow) => r.paneId === clientPane);
+  useEffect(() => {
+    if (!clientPaneListed || clientPane === followedPane.current) return;
+    followedPane.current = clientPane;
+    setSelectedPaneId(clientPane);
+  }, [clientPane, clientPaneListed]);
 
   // The resolver runs inside the state updater rather than against `index`
   // above: `index` is this render's value, and Ink dispatches every event from
@@ -1543,12 +1587,16 @@ export async function main(): Promise<void> {
   // latency — the whole reason Agentower is AOT-compiled in the first place.
   // The prefix chord exists to close a popup that swallows every key, so the
   // dashboard and the sidebar skip it.
-  const [{ rows }, usages, prefixKey, initialPreviewOverride] = await Promise
-    .all([
+  const clientTty = mode === "sidebar"
+    ? process.env.AGENTOWER_CLIENT_TTY || null
+    : null;
+  const [{ rows }, usages, prefixKey, initialPreviewOverride, clientPane] =
+    await Promise.all([
       fetchPanes(false),
       readAllAgentUsage(),
       mode === "popup" ? readPrefixKey() : null,
       mode === "popup" ? readPreviewOption() : null,
+      readClientPane(clientTty),
     ]);
   trace("io-done");
 
@@ -1561,9 +1609,9 @@ export async function main(): Promise<void> {
   // Reserved TMUX_PANE is unsuitable: tmux overwrites it with the popup's own pane id at spawn.
   const fromPane = process.env.AGENTOWER_FROM_PANE ?? null;
   const initialSelectedPaneId =
-    fromPane && rows.some((r) => r.paneId === fromPane)
-      ? fromPane
-      : (rows[0]?.paneId ?? "");
+    [fromPane, clientPane].find((pane) =>
+      pane && rows.some((r) => r.paneId === pane)
+    ) ?? rows[0]?.paneId ?? "";
 
   // Needs `rows`, so it cannot join the Promise.all above. Without it the
   // progress segments appear a full tick after the popup opens and shift the
@@ -1620,6 +1668,8 @@ export async function main(): Promise<void> {
       onSelect={onSelect}
       initialPreviewOverride={initialPreviewOverride}
       onPreviewChange={onPreviewChange}
+      clientTty={clientTty}
+      initialClientPane={clientPane}
     />,
     {
       // Opt-in per-line diffing. Ink's default renderer rewrites every line of
