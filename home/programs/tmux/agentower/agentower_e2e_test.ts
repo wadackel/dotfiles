@@ -3572,6 +3572,34 @@ test("S82: a long stacked list scrolls and leaves the preview its rows", async (
   }
 });
 
+test("S113: a short stacked list leaves the preview where a long one puts it", async () => {
+  await setupServer({ cols: 121, rows: 40 });
+  try {
+    const edges = async () => {
+      const agentower = await spawnAgentower();
+      const out = await waitFor(
+        agentower,
+        (o) => o.includes("short-stack-0") && o.includes(" quit"),
+      );
+      await sendKey(agentower, "Escape");
+      await waitForExit();
+      const [preview] = cardEdges(out.split("\n"));
+      return { preview, out };
+    };
+    await createClaudePane({ status: "idle", prompt: "short-stack-0" });
+    const one = await edges();
+    for (let i = 1; i < 10; i++) {
+      await createClaudePane({ status: "idle", prompt: `short-stack-${i}` });
+    }
+    const ten = await edges();
+
+    assertEquals(one.preview, ten.preview, `${one.out}\n---\n${ten.out}`);
+    assertEquals(one.preview.bottom - one.preview.top + 1, 22, one.out);
+  } finally {
+    await teardown();
+  }
+});
+
 test("S83: an empty stacked list centres its message above the usage card", async () => {
   await setupServer({ cols: 121, rows: 40 });
   try {

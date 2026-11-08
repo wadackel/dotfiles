@@ -1022,7 +1022,7 @@ test("listGeometry: the same 48 × 60 outside the sidebar keeps the popup's shap
   assertEquals(g.card, FULL_CARD);
 });
 
-test("listGeometry: a stacked list shrinks to its cards", () => {
+test("listGeometry: a short stacked list keeps the rows of a scrolling one", () => {
   const g = listGeometry({
     columns: 121,
     rows: 40,
@@ -1032,9 +1032,28 @@ test("listGeometry: a stacked list shrinks to its cards", () => {
   });
   assertEquals(
     { stacked: g.stacked, body: g.bodyHeight, preview: g.previewRows },
-    { stacked: true, body: 8, preview: 28 },
+    { stacked: true, body: 14, preview: 22 },
   );
   assertEquals(g.view.scrolling, false);
+});
+
+test("listGeometry: a stacked preview never grows past a long list's", () => {
+  for (const rows of [40, 45]) {
+    const at = (total: number) =>
+      listGeometry({ columns: 121, rows, total, selected: 0, prevOffset: 0 })
+        .previewRows;
+    const long = at(10);
+    for (let total = 1; total <= 10; total++) {
+      assertEquals(at(total) <= long, true, `rows ${rows} total ${total}`);
+    }
+    assertEquals(at(1), long, `rows ${rows}`);
+  }
+});
+
+test("listGeometry sidebar: a short list opened with p still shrinks to its cards", () => {
+  const g = sidebarAt({ total: 1, previewOverride: true });
+  assertEquals(g.bodyHeight, COMPACT_CARD.rows);
+  assertEquals(g.previewRows, 57 - COMPACT_CARD.rows - 1);
 });
 
 test("listGeometry: a long stacked list scrolls within 40 % of the rows", () => {
@@ -1067,7 +1086,7 @@ test("listGeometry: a short stacked popup shown with p uses compact cards", () =
     });
     return { body: g.bodyHeight, preview: g.previewRows };
   };
-  assertEquals(at(1), { body: 2, preview: 15 });
+  assertEquals(at(1), { body: 7, preview: 10 });
   assertEquals(at(10), { body: 7, preview: 10 });
 });
 
@@ -1925,10 +1944,12 @@ test("cardIndexAt: compact gap rows belong to no card", () => {
 });
 
 test("cardIndexAt: the stacked preview below the list is not a card", () => {
-  // List rows 1-8, gutter 9, preview from 10.
+  // Cards on rows 1-8, blank list rows 9-14, gutter 15, preview from 16.
   const g = geometryAt(121, 40, 2);
   assertEquals(cardIndexAt(g, { x: 120, y: 8 }), 1);
   assertEquals(cardIndexAt(g, { x: 0, y: 9 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 15 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 16 }), null);
   assertEquals(cardIndexAt(g, { x: 0, y: 20 }), null);
 });
 
@@ -1941,9 +1962,10 @@ test("cardIndexAt: a scrolled stacked list ends at its bottom indicator", () => 
 });
 
 test("inListArea: the stacked preview and the hint bar are outside the list", () => {
+  // Two cards end at row 8; the list keeps a scrolling list's 14 rows.
   const g = geometryAt(121, 40, 2);
-  assertEquals(inListArea(g, { x: 60, y: 8 }), true);
-  assertEquals(inListArea(g, { x: 60, y: 9 }), false);
+  assertEquals(inListArea(g, { x: 60, y: 14 }), true);
+  assertEquals(inListArea(g, { x: 60, y: 15 }), false);
   assertEquals(inListArea(g, { x: 60, y: 20 }), false);
   assertEquals(inListArea(g, { x: 60, y: 39 }), false);
 });

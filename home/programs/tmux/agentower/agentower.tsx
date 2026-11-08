@@ -150,7 +150,8 @@ const MIN_PREVIEW = 14;
 // width instead.
 const STACK_BELOW_COLS = 130;
 // A stacked list stops growing at this share of the rows and scrolls instead,
-// so a long list never squeezes the preview.
+// so a long list never squeezes the preview, and the preview a long list
+// leaves is as tall as it gets.
 const STACK_LIST_SHARE = 0.4;
 // The sidebar's cards are three rows each and its preview is opened on
 // purpose, so the list keeps more of the column than the popup's does.
@@ -262,7 +263,10 @@ export function visibleWindow(
 
 // Rows of a stacked list and of the preview area under it, out of `avail`.
 // A scrolling list takes only the rows its cards and indicators use, because
-// the remainder of the cap would sit blank above the preview.
+// the remainder of the cap would sit blank above the preview. A shorter list
+// still takes a scrolling list's height: handing the spare rows to the preview
+// would stretch it a card taller per missing pane and move its top edge as
+// panes come and go.
 function stackedRows(opts: {
   avail: number;
   total: number;
@@ -271,6 +275,9 @@ function stackedRows(opts: {
   preview: boolean;
   usageRows: number;
   listShare: number;
+  // The sidebar's preview is opened on purpose, so a short list hands it
+  // every row it does not use.
+  shrinkToCards: boolean;
 }): { bodyHeight: number; previewRows: number } {
   const { avail, total, card } = opts;
   const listOnly = { bodyHeight: avail, previewRows: 0 };
@@ -286,12 +293,19 @@ function stackedRows(opts: {
     Math.floor(avail * opts.listShare),
     avail - STACK_GUTTER - MIN_PREVIEW_CARD_ROWS,
   );
+  const scrolls = cap >= card.rows + 2;
+  const scrollingHeight = () => {
+    // A list that can never fit, so the window takes the scrolling branch.
+    const { count } = visibleWindow(Infinity, 0, cap, 0, card);
+    return count * (card.rows + card.gap) - card.gap + 2;
+  };
   let bodyHeight: number;
   if (content <= cap) {
-    bodyHeight = content;
-  } else if (cap >= card.rows + 2) {
-    const { count } = visibleWindow(total, 0, cap, 0, card);
-    bodyHeight = count * (card.rows + card.gap) - card.gap + 2;
+    bodyHeight = scrolls && !opts.shrinkToCards
+      ? Math.max(content, scrollingHeight())
+      : content;
+  } else if (scrolls) {
+    bodyHeight = scrollingHeight();
   } else {
     return listOnly;
   }
@@ -358,6 +372,7 @@ export function listGeometry(opts: {
       preview: wanted,
       usageRows: opts.usageRows ?? 0,
       listShare: sidebar ? SIDEBAR_LIST_SHARE : STACK_LIST_SHARE,
+      shrinkToCards: sidebar,
     })
     : { bodyHeight: avail, previewRows: opts.rows - topRows };
   const previewShown = stacked
