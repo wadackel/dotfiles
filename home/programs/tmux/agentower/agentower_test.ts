@@ -5,14 +5,12 @@ import { join } from "node:path";
 import {
   agentowerMode,
   bodyHeightFor,
+  CARD_ROWS,
   cardIndexAt,
   clampPreview,
   clampStep,
   clientPaneOf,
-  COMPACT_CARD,
-  FULL_CARD,
   inListArea,
-  isCompact,
   isKeyBurst,
   isLivePaneCommand,
   listGeometry,
@@ -33,7 +31,6 @@ import {
   showUsageCard,
   splitLayout,
   TMUX_FORMAT,
-  topRowsFor,
   USER_LABEL_CYCLE,
   visibleWindow,
   wrapStep,
@@ -1003,7 +1000,6 @@ const sidebarAt = (
 test("listGeometry sidebar: preview hidden by default, the list runs down to the Usage card", () => {
   const g = sidebarAt();
   assertEquals(g.previewShown, false);
-  assertEquals(g.card, COMPACT_CARD);
   assertEquals(g.listWidth, 48);
   // 57 rows under the top row and above the hint bar, less the gutter and Usage.
   assertEquals(g.bodyHeight, 57 - 1 - 7);
@@ -1013,14 +1009,14 @@ test("listGeometry sidebar: preview hidden by default, the list runs down to the
 test("listGeometry sidebar: p opens the preview and caps the list at 65 %", () => {
   const g = sidebarAt({ total: 20, previewOverride: true });
   assertEquals(g.previewShown, true);
-  assertEquals(g.bodyHeight, Math.floor(57 * 0.65));
+  // 65 % of 57 is 37 rows: 8 cards and the two scroll indicators take 34.
+  assertEquals(g.bodyHeight, 34);
   assertEquals(g.previewRows, 57 - g.bodyHeight - 1);
 });
 
-test("listGeometry: the same 48 × 60 outside the sidebar keeps the popup's shape", () => {
+test("listGeometry: the same 48 × 60 outside the sidebar opens the preview", () => {
   const g = sidebarAt({ sidebar: false, usageRows: 4 });
   assertEquals(g.previewShown, true);
-  assertEquals(g.card, FULL_CARD);
 });
 
 test("listGeometry: a short stacked list keeps the rows of a scrolling one", () => {
@@ -1053,8 +1049,8 @@ test("listGeometry: a stacked preview never grows past a long list's", () => {
 
 test("listGeometry sidebar: a short list opened with p still shrinks to its cards", () => {
   const g = sidebarAt({ total: 1, previewOverride: true });
-  assertEquals(g.bodyHeight, COMPACT_CARD.rows);
-  assertEquals(g.previewRows, 57 - COMPACT_CARD.rows - 1);
+  assertEquals(g.bodyHeight, CARD_ROWS);
+  assertEquals(g.previewRows, 57 - CARD_ROWS - 1);
 });
 
 test("listGeometry: a long stacked list scrolls within 40 % of the rows", () => {
@@ -1075,7 +1071,7 @@ test("listGeometry: a long stacked list scrolls within 40 % of the rows", () => 
   });
 });
 
-test("listGeometry: a short stacked popup shown with p uses compact cards", () => {
+test("listGeometry: a short stacked popup shown with p keeps a scrolling list's rows", () => {
   const at = (total: number) => {
     const g = listGeometry({
       columns: 120,
@@ -1087,22 +1083,16 @@ test("listGeometry: a short stacked popup shown with p uses compact cards", () =
     });
     return { body: g.bodyHeight, preview: g.previewRows };
   };
-  assertEquals(at(1), { body: 7, preview: 10 });
-  assertEquals(at(10), { body: 7, preview: 10 });
+  assertEquals(at(1), { body: 6, preview: 10 });
+  assertEquals(at(10), { body: 6, preview: 10 });
 });
 
-test("listGeometry: the preview keeps 8 rows before the list gets its 40 %", () => {
-  const g = listGeometry({
-    columns: 120,
-    rows: 15,
-    total: 10,
-    selected: 0,
-    prevOffset: 0,
-    previewOverride: true,
-  });
+test("listGeometry: the preview's 8 rows cap the sidebar list before its 65 %", () => {
+  // 22 rows: 65 % would give the list 14 and 3 cards, the floor caps it at 13.
+  const g = sidebarAt({ rows: 25, total: 10, previewOverride: true });
   assertEquals({ body: g.bodyHeight, preview: g.previewRows }, {
-    body: 4,
-    preview: 8,
+    body: 10,
+    preview: 11,
   });
 });
 
@@ -1190,9 +1180,9 @@ test("listGeometry: a stacked popup under 32 rows hides the preview", () => {
     preview: 0,
     count: 6,
   });
-  assertEquals(at(20), { shown: false, body: 18, preview: 0, count: 5 });
+  assertEquals(at(20), { shown: false, body: 17, preview: 0, count: 3 });
   // The Usage card stays under the list.
-  assertEquals(at(20, 3), { shown: false, body: 14, preview: 3, count: 4 });
+  assertEquals(at(20, 3), { shown: false, body: 13, preview: 3, count: 2 });
   assertEquals(at(32), { shown: true, body: 10, preview: 18, count: 2 });
 });
 
@@ -1240,7 +1230,7 @@ test("listGeometry: an empty list ignores the auto rule and p", () => {
     });
     assertEquals(
       { body: g.bodyHeight, preview: g.previewRows },
-      { body: 14, preview: 3 },
+      { body: 13, preview: 3 },
       String(previewOverride),
     );
   }
@@ -1824,38 +1814,8 @@ test("visibleWindow: a tiny height still shows the selected card", () => {
   assertEquals(view.offset, 7);
 });
 
-// --- compact layout ---
-
-test("isCompact: a popup under 30 rows uses the compact layout", () => {
-  assertEquals(isCompact(29), true);
-  assertEquals(isCompact(30), false);
-});
-
-test("topRowsFor / bodyHeightFor: the compact layout starts on the top row", () => {
-  assertEquals(topRowsFor(24), 0);
-  assertEquals(bodyHeightFor(24), 22);
-  assertEquals(topRowsFor(50), 1);
-  assertEquals(bodyHeightFor(50), 47);
-});
-
-test("visibleWindow: compact cards cost two rows plus a gap between them", () => {
-  // 5 compact cards = 5 × 2 + 4 gaps = 14.
-  assertEquals(visibleWindow(5, 0, 14, 0, COMPACT_CARD).scrolling, false);
-  assertEquals(visibleWindow(5, 0, 13, 0, COMPACT_CARD), {
-    offset: 0,
-    count: 4,
-    above: 0,
-    below: 1,
-    scrolling: true,
-  });
-});
-
-test("visibleWindow: compact cards plus indicators never exceed the height", () => {
-  for (let height = 5; height <= 40; height++) {
-    const view = visibleWindow(40, 0, height, 0, COMPACT_CARD);
-    const rows = 2 + view.count * 3 - 1;
-    assertEquals(rows <= height, true, `height=${height} rows=${rows}`);
-  }
+test("bodyHeightFor: a short popup keeps the top blank row", () => {
+  assertEquals(bodyHeightFor(24), 21);
 });
 
 test("parsePreviewOption: on and off are the popup's last p, anything else is unset", () => {
@@ -1950,13 +1910,18 @@ test("cardIndexAt: a scrolled list skips the indicators and adds the offset", ()
   assertEquals(cardIndexAt(g, { x: 0, y: 46 }), null);
 });
 
-test("cardIndexAt: compact gap rows belong to no card", () => {
+test("cardIndexAt: a 24-row popup keeps the top row and four-row cards", () => {
   const g = geometryAt(150, 24, 2);
-  assertEquals(cardIndexAt(g, { x: 0, y: 0 }), 0);
-  assertEquals(cardIndexAt(g, { x: 0, y: 1 }), 0);
-  assertEquals(cardIndexAt(g, { x: 0, y: 2 }), null);
-  assertEquals(cardIndexAt(g, { x: 0, y: 3 }), 1);
-  assertEquals(cardIndexAt(g, { x: 0, y: 5 }), null);
+  assertEquals(cardIndexAt(g, { x: 0, y: 0 }), null);
+  for (const y of [1, 2, 3, 4]) assertEquals(cardIndexAt(g, { x: 0, y }), 0);
+  for (const y of [5, 6, 7, 8]) assertEquals(cardIndexAt(g, { x: 0, y }), 1);
+});
+
+test("cardIndexAt: sidebar cards are four rows like the popup's", () => {
+  const g = sidebarAt({ total: 2 });
+  assertEquals(cardIndexAt(g, { x: 0, y: 0 }), null);
+  for (const y of [1, 2, 3, 4]) assertEquals(cardIndexAt(g, { x: 0, y }), 0);
+  for (const y of [5, 6, 7, 8]) assertEquals(cardIndexAt(g, { x: 0, y }), 1);
 });
 
 test("cardIndexAt: the stacked preview below the list is not a card", () => {

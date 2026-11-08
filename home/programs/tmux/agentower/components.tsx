@@ -201,9 +201,6 @@ interface PaneRowLineProps {
   selected: boolean;
   taskProgress: TaskProgress | null;
   listWidth: number;
-  // Blank rows above and below that make the pane a four-row card; dropped on
-  // a short popup so more panes fit.
-  padded: boolean;
 }
 
 export const PaneRowLine: React.FC<PaneRowLineProps> = (
@@ -213,7 +210,6 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     selected,
     taskProgress,
     listWidth,
-    padded,
   }: PaneRowLineProps,
 ) => {
   const display = displayMeta(row);
@@ -376,7 +372,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
           are Text rather than paddingY so the selection marker runs down the
           whole card. */
       }
-      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+      <Text color={DOGRUN.accent}>{marker}</Text>
       {
         /* The icon and text are emitted as TWO sibling <Text> nodes (rather
           than concatenated as `icon + " "`) to dodge the Ink 5.2.1 supplementary-
@@ -431,7 +427,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
           </>
         )}
       </Box>
-      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+      <Text color={DOGRUN.accent}>{marker}</Text>
     </Box>
   );
 };
@@ -448,10 +444,11 @@ interface SidebarRowLineProps {
   listWidth: number;
 }
 
-// The WezTerm sidebar's two rows per pane: where (`repo(worktree) · branch`),
-// then what (the task line) with the elapsed time on the right. The agent,
-// state and context usage live on the preview's bottom edge instead. Both rows
-// leave the last cell free so text never touches the pane's edge.
+// The WezTerm sidebar's card: where (`repo(worktree) · branch`), then what
+// (the task line) with the elapsed time on the right, between the same blank
+// rows as PaneRowLine's. The agent, state and context usage live on the
+// preview's bottom edge instead. Both content rows leave the last cell free so
+// text never touches the pane's edge.
 export const SidebarRowLine: React.FC<SidebarRowLineProps> = (
   { row, now, selected, listWidth }: SidebarRowLineProps,
 ) => {
@@ -478,6 +475,7 @@ export const SidebarRowLine: React.FC<SidebarRowLineProps> = (
       flexDirection="column"
       backgroundColor={selected ? DOGRUN.band : undefined}
     >
+      <Text color={DOGRUN.accent}>{marker}</Text>
       <Box>
         <Text color={DOGRUN.accent}>{marker}</Text>
         <Text color={display.color}>{display.icon}</Text>
@@ -500,6 +498,7 @@ export const SidebarRowLine: React.FC<SidebarRowLineProps> = (
         <Box flexGrow={1} />
         <Text color={DOGRUN.fgDim}>{right}</Text>
       </Box>
+      <Text color={DOGRUN.accent}>{marker}</Text>
     </Box>
   );
 };
@@ -533,13 +532,12 @@ interface FreeWindowLineProps {
   now: number;
   selected: boolean;
   listWidth: number;
-  padded: boolean;
 }
 
 // Same height as PaneRowLine, so listGeometry and the mouse hit-test serve
 // both lists.
 export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
-  { entry, dirty, now, selected, listWidth, padded }: FreeWindowLineProps,
+  { entry, dirty, now, selected, listWidth }: FreeWindowLineProps,
 ) => {
   const marker = selected ? "▌ " : "  ";
   const { repo, worktree, branch } = locationParts(entry.row);
@@ -562,7 +560,7 @@ export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
       flexDirection="column"
       backgroundColor={selected ? DOGRUN.band : undefined}
     >
-      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+      <Text color={DOGRUN.accent}>{marker}</Text>
       <Box>
         <Text color={DOGRUN.accent}>{marker}</Text>
         <Text color={DOGRUN.fg} bold={selected}>{repoText.head}</Text>
@@ -590,7 +588,7 @@ export const FreeWindowLine: React.FC<FreeWindowLineProps> = (
             "  "}
         </Text>
       </Box>
-      {padded ? <Text color={DOGRUN.accent}>{marker}</Text> : null}
+      <Text color={DOGRUN.accent}>{marker}</Text>
     </Box>
   );
 };

@@ -2137,10 +2137,9 @@ test("S42: the selected card carries the marker on all four rows", async () => {
   }
 });
 
-// S43: a popup under 30 rows switches to compact cards — no padding rows, so
-// the marker covers only the two content rows — and starts the list on the top
-// row.
-test("S43: a short popup drops the card padding and starts at the top row", async () => {
+// S43: a short popup keeps the tall popup's layout: a blank top row, then
+// four-row cards whose padding rows the marker runs down.
+test("S43: a short popup keeps the card padding and the top row", async () => {
   await setupServer({ cols: 150, rows: 24 });
   try {
     await createClaudePane({ status: "running", prompt: "compact-first" });
@@ -2148,10 +2147,9 @@ test("S43: a short popup drops the card padding and starts at the top row", asyn
     const agentower = await spawnAgentower();
     const lines = (await captureOutput(agentower)).split("\n");
     const marked = lines.flatMap((l, i) => (l.startsWith("▌") ? [i] : []));
-    assertEquals(marked, [0, 1], `marker rows: ${marked}`);
-    assertStringIncludes(lines[0], "compact-first");
-    // One blank row separates the two panes.
-    assertStringIncludes(lines[3], "compact-second");
+    assertEquals(marked, [1, 2, 3, 4], `marker rows: ${marked}`);
+    assertStringIncludes(lines[2], "compact-first");
+    assertStringIncludes(lines[6], "compact-second");
 
     await sendKey(agentower, "Escape");
     await waitForExit();
@@ -3647,7 +3645,8 @@ test("S84: a short stacked popup hides the preview until p", async () => {
     assertEquals(titles.length, 1, hidden);
     assertStringIncludes(titles[0], "Usage", hidden);
     const listed = hidden.split("\n").filter((l) => /short-row-\d/.test(l));
-    assertEquals(listed.length >= 5, true, hidden);
+    // Three cards here, against the one the list keeps with the preview open.
+    assertEquals(listed.length, 3, hidden);
 
     await sendKey(agentower, "p");
     const shown = await waitFor(agentower, (o) => cardTitles(o).length === 2);
@@ -4599,13 +4598,18 @@ test("S106: --restore refuses to run from a popup of the server it would kill", 
 
 // ---- Sidebar mode (--sidebar) ----
 //
-// The WezTerm sidebar: 48 columns, the dashboard's lifecycle, two rows per pane
-// (`repo(worktree) · branch`, then the task), the preview closed until `p`, and
-// the stacked Usage card. At 48×60 with no scrolling, card 0 spans rows 1-2,
-// the gap row 3, and card 1 rows 4-5.
+// The WezTerm sidebar: 48 columns, the dashboard's lifecycle, two content rows
+// per pane (`repo(worktree) · branch`, then the task), the preview closed until
+// `p`, and the stacked Usage card. At 48×60 with no scrolling, card 0 spans
+// rows 1-4 and card 1 rows 5-8, each with its content on the middle two.
 
 const SIDEBAR = { cols: 48, rows: 60 };
-const SIDEBAR_CARD_1 = { x: 4, y: 4 };
+const SIDEBAR_CARD_1 = { x: 4, y: 6 };
+
+// The marked rows of the selected sidebar card are the top padding, the
+// location, the task, and the bottom padding; the task names the pane.
+const sidebarSelectedIncludes = (task: string) => (out: string) =>
+  (out.split("\n").filter((l) => l.includes("▌"))[2] ?? "").includes(task);
 
 async function setContextPct(pane: string, pct: number): Promise<void> {
   await tmux([
@@ -4742,7 +4746,7 @@ test("S109: sidebar Enter and a click on the selected card jump and stay open", 
     await createAwaySession();
     const { clientName } = await attachClient("away");
     const agentower = await spawnAgentower({ args: ["--sidebar"] });
-    await waitFor(agentower, selectedIncludes("row-a-S109"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-a-S109"));
 
     await sendKey(agentower, "Enter");
     assertEquals(await waitForClientPane(clientName, paneA), {
@@ -4752,7 +4756,7 @@ test("S109: sidebar Enter and a click on the selected card jump and stay open", 
     assertEquals(await windowAlive(), true);
 
     await sendClick(agentower, 0, SIDEBAR_CARD_1);
-    await waitFor(agentower, selectedIncludes("row-b-S109"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-b-S109"));
     await sendClick(agentower, 0, SIDEBAR_CARD_1);
     assertEquals(await waitForClientPane(clientName, paneB), {
       session: "test",
@@ -4821,24 +4825,24 @@ test("S114: sidebar follows the client beside it, and keeps a k until that clien
       args: ["--sidebar"],
       env: { AGENTOWER_CLIENT_TTY: clientTty },
     });
-    await waitFor(agentower, selectedIncludes("row-b-S114"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-b-S114"));
 
     await showOnClient(clientName, paneC);
-    await waitFor(agentower, selectedIncludes("row-c-S114"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-c-S114"));
 
     await sendKey(agentower, "k");
-    await waitFor(agentower, selectedIncludes("row-b-S114"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-b-S114"));
     await new Promise((r) => setTimeout(r, 2500));
     const kept = await captureOutput(agentower);
-    assertEquals(selectedIncludes("row-b-S114")(kept), true, kept);
+    assertEquals(sidebarSelectedIncludes("row-b-S114")(kept), true, kept);
 
     await showOnClient(clientName, paneA);
-    await waitFor(agentower, selectedIncludes("row-a-S114"));
+    await waitFor(agentower, sidebarSelectedIncludes("row-a-S114"));
 
     await tmux(["switch-client", "-c", clientName, "-t", "away"]);
     await new Promise((r) => setTimeout(r, 2500));
     const away = await captureOutput(agentower);
-    assertEquals(selectedIncludes("row-a-S114")(away), true, away);
+    assertEquals(sidebarSelectedIncludes("row-a-S114")(away), true, away);
 
     await sendKey(agentower, "q");
     await waitForExit();

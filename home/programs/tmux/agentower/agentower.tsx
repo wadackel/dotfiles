@@ -126,17 +126,15 @@ export function showUsageCard(
     columnHeight >= usageCardRows(usages.length) + MIN_PREVIEW_CARD_ROWS;
 }
 
-// Blank rows above the list and the preview column: one keeps the first card
-// off the popup border, and a short popup spends it on panes instead.
-export function topRowsFor(totalRows: number): number {
-  return isCompact(totalRows) ? 0 : 1;
-}
+// Blank row above the list and the preview column, keeping the first card off
+// the popup border.
+const TOP_ROWS = 1;
 
 const MIN_BODY_ROWS = 5;
 
 // The list also gives up 2 rows to the key-hint bar and its marginTop.
 export function bodyHeightFor(totalRows: number): number {
-  return Math.max(MIN_BODY_ROWS, totalRows - topRowsFor(totalRows) - 2);
+  return Math.max(MIN_BODY_ROWS, totalRows - TOP_ROWS - 2);
 }
 
 // Gutter between the list and the preview, spent as the preview's marginLeft.
@@ -153,13 +151,12 @@ const STACK_BELOW_COLS = 130;
 // so a long list never squeezes the preview, and the preview a long list
 // leaves is as tall as it gets.
 const STACK_LIST_SHARE = 0.4;
-// The sidebar's cards are three rows each and its preview is opened on
-// purpose, so the list keeps more of the column than the popup's does.
+// The sidebar's preview is opened on purpose, so the list keeps more of the
+// column than the popup's does.
 const SIDEBAR_LIST_SHARE = 0.65;
 // Blank row between a stacked list and the card under it.
 const STACK_GUTTER = 1;
-// A stacked popup this short starts with the preview hidden. Not the compact
-// card threshold, so the two can be tuned apart.
+// A stacked popup this short starts with the preview hidden.
 const STACK_HIDE_PREVIEW_BELOW_ROWS = 32;
 
 // From STACK_BELOW_COLS up, 60 % gives the list at least 78 columns and the
@@ -212,25 +209,10 @@ export interface ListWindow {
   scrolling: boolean;
 }
 
-export interface CardShape {
-  rows: number;
-  gap: number;
-}
-
 // A four-row card: the two content rows between blank padding rows.
-export const FULL_CARD: CardShape = { rows: 4, gap: 0 };
-// A short popup drops the padding and keeps one blank row between panes.
-export const COMPACT_CARD: CardShape = { rows: 2, gap: 1 };
+export const CARD_ROWS = 4;
 
-// Below this many rows the popup switches to COMPACT_CARD and starts the list
-// on the top row, trading the padding for panes.
-const COMPACT_BELOW_ROWS = 30;
-
-export function isCompact(totalRows: number): boolean {
-  return totalRows < COMPACT_BELOW_ROWS;
-}
-
-// Which panes fit in `height` rows given the card shape.
+// Which panes fit in `height` rows.
 // On overflow the `↑ N more` / `↓ N more` lines are reserved even at count 0,
 // so the window does not resize as the selection moves. Letting Yoga shrink
 // an overflowing list instead collapses rows unevenly and overlaps each pane's
@@ -240,14 +222,13 @@ export function visibleWindow(
   selected: number,
   height: number,
   prevOffset: number,
-  card: CardShape = FULL_CARD,
 ): ListWindow {
-  if (total * card.rows + Math.max(0, total - 1) * card.gap <= height) {
+  if (total * CARD_ROWS <= height) {
     return { offset: 0, count: total, above: 0, below: 0, scrolling: false };
   }
   const count = Math.max(
     1,
-    Math.floor((height - 2 + card.gap) / (card.rows + card.gap)),
+    Math.floor((height - 2) / CARD_ROWS),
   );
   let offset = Math.min(Math.max(0, prevOffset), total - count);
   if (selected < offset) offset = selected;
@@ -270,7 +251,6 @@ export function visibleWindow(
 function stackedRows(opts: {
   avail: number;
   total: number;
-  card: CardShape;
   previewWidth: number;
   preview: boolean;
   usageRows: number;
@@ -279,7 +259,7 @@ function stackedRows(opts: {
   // every row it does not use.
   shrinkToCards: boolean;
 }): { bodyHeight: number; previewRows: number } {
-  const { avail, total, card } = opts;
+  const { avail, total } = opts;
   const listOnly = { bodyHeight: avail, previewRows: 0 };
   if (opts.previewWidth === 0) return listOnly;
   if (total === 0 || !opts.preview) {
@@ -288,16 +268,16 @@ function stackedRows(opts: {
       ? { bodyHeight, previewRows: opts.usageRows }
       : listOnly;
   }
-  const content = total * card.rows + (total - 1) * card.gap;
+  const content = total * CARD_ROWS;
   const cap = Math.min(
     Math.floor(avail * opts.listShare),
     avail - STACK_GUTTER - MIN_PREVIEW_CARD_ROWS,
   );
-  const scrolls = cap >= card.rows + 2;
+  const scrolls = cap >= CARD_ROWS + 2;
   const scrollingHeight = () => {
     // A list that can never fit, so the window takes the scrolling branch.
-    const { count } = visibleWindow(Infinity, 0, cap, 0, card);
-    return count * (card.rows + card.gap) - card.gap + 2;
+    const { count } = visibleWindow(Infinity, 0, cap, 0);
+    return count * CARD_ROWS + 2;
   };
   let bodyHeight: number;
   if (content <= cap) {
@@ -323,7 +303,6 @@ export interface ListGeometry {
   previewRows: number;
   // Whether the preview card is drawn; `p` asks for the opposite.
   previewShown: boolean;
-  card: CardShape;
   view: ListWindow;
 }
 
@@ -340,8 +319,8 @@ export function listGeometry(opts: {
   usageRows?: number;
   // What `p` chose; null leaves it to the height.
   previewOverride?: boolean | null;
-  // The WezTerm sidebar: one column at any width, compact cards, and the
-  // preview closed until `p` opens it.
+  // The WezTerm sidebar: one column at any width, and the preview closed
+  // until `p` opens it.
   sidebar?: boolean;
 }): ListGeometry {
   const sidebar = opts.sidebar ?? false;
@@ -360,14 +339,12 @@ export function listGeometry(opts: {
       (!sidebar && !(stacked && opts.rows < STACK_HIDE_PREVIEW_BELOW_ROWS)));
   const listWidth = stacked || wanted ? split.listWidth : opts.columns;
   const previewWidth = stacked || wanted ? split.previewWidth : 0;
-  const topRows = topRowsFor(opts.rows);
+  const topRows = TOP_ROWS;
   const avail = bodyHeightFor(opts.rows);
-  const card = sidebar || isCompact(opts.rows) ? COMPACT_CARD : FULL_CARD;
   const { bodyHeight, previewRows } = stacked
     ? stackedRows({
       avail,
       total: opts.total,
-      card,
       previewWidth,
       preview: wanted,
       usageRows: opts.usageRows ?? 0,
@@ -383,7 +360,6 @@ export function listGeometry(opts: {
     opts.selected,
     bodyHeight,
     opts.prevOffset,
-    card,
   );
   return {
     stacked,
@@ -393,7 +369,6 @@ export function listGeometry(opts: {
     bodyHeight,
     previewRows,
     previewShown,
-    card,
     view,
   };
 }
@@ -436,18 +411,17 @@ export function inListArea(
 }
 
 // Index into derivedRows of the card under (x, y), or null for the preview,
-// the scroll indicators, compact gaps, and the hint bar.
+// the scroll indicators, and the hint bar.
 export function cardIndexAt(
   geometry: ListGeometry,
   point: { x: number; y: number },
 ): number | null {
-  const { topRows, card, view } = geometry;
+  const { topRows, view } = geometry;
   if (!inListArea(geometry, point)) return null;
   const r = point.y - topRows - (view.scrolling ? 1 : 0);
   if (r < 0) return null;
-  const stride = card.rows + card.gap;
-  const i = Math.floor(r / stride);
-  if (i >= view.count || r % stride >= card.rows) return null;
+  const i = Math.floor(r / CARD_ROWS);
+  if (i >= view.count) return null;
   return view.offset + i;
 }
 
@@ -1444,7 +1418,6 @@ function App({
     bodyHeight,
     previewRows,
     previewShown,
-    card,
     view,
   } = geometryNow();
   // A stacked list with no preview under it only leaves rows for the Usage
@@ -1475,7 +1448,7 @@ function App({
           {view.above > 0 ? `  ↑ ${view.above} more` : " "}
         </Text>
       )}
-      <Box flexDirection="column" gap={card.gap}>
+      <Box flexDirection="column">
         {screen === "free"
           ? free
             .slice(view.offset, view.offset + view.count)
@@ -1487,7 +1460,6 @@ function App({
                 now={now}
                 selected={view.offset + i === index}
                 listWidth={listWidth}
-                padded={card === FULL_CARD}
               />
             ))
           : derivedRows
@@ -1517,7 +1489,6 @@ function App({
                     selected={selected}
                     taskProgress={taskProgressMap.get(row.paneId) ?? null}
                     listWidth={listWidth}
-                    padded={card === FULL_CARD}
                   />
                 );
             })}
