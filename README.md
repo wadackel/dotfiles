@@ -79,9 +79,9 @@ On the private profile, `sudo darwin-rebuild` needs no password (a sudoers entry
 `flake.lock` is updated on GitHub by the `update-flake-lock` workflow (`.github/workflows/update-flake-lock.yml`), which commits straight to `main`:
 
 - Daily at 08:00 JST: `nix-claude-code`, `mo-nix`, `mise-nix`, `codex-nix`, `ctx-nix`.
-- Saturdays at 03:00 JST: the same inputs plus `nixpkgs`, `home-manager`, and `nix-darwin`, pushed only when the `private` and `work` systems build on a macOS runner. A failed run sends GitHub's workflow-failure email and leaves `main` untouched.
+- Saturdays at 03:00 JST: the same inputs plus `nixpkgs`, `home-manager`, and `nix-darwin`, pushed only when the `private` and `work` systems build on a macOS runner. A failed run, including one whose push is rejected because `main` moved while it ran, sends GitHub's workflow-failure email and leaves `main` untouched.
 
-Run it by hand with `gh workflow run update-flake-lock.yml -f mode=daily` (or `mode=weekly`). Locally, `git pull` and switch:
+Run it by hand with `gh workflow run update-flake-lock.yml -f mode=daily` (or `mode=weekly`). Locally, pull and switch (`.#work` on the work machine):
 
 ```bash
 git pull --rebase

@@ -2,6 +2,8 @@ name: Update flake.lock
 
 on:
   schedule:
+    # runs-on and timeout-minutes cannot read env, so the weekly cron string is
+    # repeated in the job's mode checks below; change all four together.
     - cron: "0 23 * * *"
     - cron: "0 18 * * 5"
   workflow_dispatch:
@@ -60,5 +62,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if [ "$WEEKLY" = true ]; then msg='Update nixpkgs and flake inputs'; else msg='Update flake inputs'; fi
           git commit -m "$msg" -- flake.lock
-          git pull --rebase origin main
+          # No rebase onto a newer main: the weekly push must be the exact tree that was built.
+          # If main moved during the run, the push is rejected and the next run retries.
           git push origin HEAD:main
