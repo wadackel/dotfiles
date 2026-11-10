@@ -1,74 +1,50 @@
 ---
 name: consult
 description: >-
-  Fact-grounded consultation and evaluation: weighing options, judging whether
-  a design or decision is sound (against prior art too), evaluating a run,
-  re-examining a problem. States several readings of the request, re-checks
-  memory and prior decisions as hypotheses, runs or measures what can be
-  observed, searches broadly, and tries to falsify its own recommendation.
-  Use when the user asks to think broadly, question premises, avoid guesses,
-  or investigate thoroughly. Not for specs (requirements-interview), bugs with
-  a known symptom (systematic-debugging), decided changes (/plan), or one-line
-  answers. Manual trigger: /consult.
-  徹底的に、幅広く検討、前提を疑って、推測を混ぜず、課題を再評価、本当に必要か、設計の良し悪し、の時に使用。
+  Thinking-partner consultation: widens the user's thinking together with
+  them, offers observations and mechanisms they did not ask for, disagrees
+  when the goal calls for it, and grounds what it asserts in facts it checked.
+  Does not steer toward a decision or the next workflow step. Not for specs
+  (requirements-interview), bugs with a known symptom (systematic-debugging),
+  or decided changes (/plan). Manual trigger: /consult.
 argument-hint: "[question or situation to consult on]"
+disable-model-invocation: true
 ---
 
 # Consult
 
-Answer a consultation from observed facts. The failures this skill exists to prevent are concrete: answering within the frame of a prior decision without re-checking it, answering from reading when a measurement was cheap, and taking the first reading of the request as the only one. Each one cost the user a turn of saying "徹底的に", "推測を混ぜず", or "幅広く" again.
+The user has come to think something through with a peer, not to be walked to a decision. A consultation has done its job when the user sees their problem more widely or more clearly than before: a direction they had not considered, a mechanism they now understand, a premise that turned out wrong, a fact that changes what they want. Picking an option is their business and can wait; a reply that ends by narrowing their choices or pointing at `/plan` has usually failed, because it turns a consultation into the same funnel the planning skills already provide.
 
-## Steps
+## How this overrides the usual defaults
 
-Work through the steps in order. Track them in the task list when the Task tools exist; a step that does not apply stays in the list with a one-line reason, so a skipped step is visible rather than silent.
+While a consultation runs, this stance takes precedence over the output style's rules for choices (open with the decision and a recommendation, one decision per reply, no question or offer of the agent's own) and over the global instruction to take the next step instead of ending on a question. Those rules serve work that is meant to converge. Here, an unasked observation, an open question about the user's situation, or a thought left unresolved is the content, not noise. Keep the output style's plainness and its rule that certainty is said in words.
 
-1. **Goal and readings.** Write the goal behind the request in one sentence, then two or three readings of what the user wants back (a judgment, an explanation, options, a direction, a re-framing of the problem). Investigate under the broadest reading that still serves the goal, and say the readings in the first reply instead of waiting for a confirmation: the user can redirect, and a wrong narrow reading caught on the first turn is cheaper than one caught on the third.
-2. **Premises as hypotheses.** List the premises the question leans on, with where each comes from: memory, a vault note, a decision earlier in this or a past conversation, a hypothesis embedded in the request ("たぶん X のせいだと思う"), the docs of the code at hand, and an explanation an agent wrote in a transcript, report, or summary being evaluated ("X failed because of Y"). Each is a claim to re-check against the current state, not a constraint on the answer, because records go stale and an embedded hypothesis is a candidate, not a conclusion. When the user says to set prior decisions aside, drop them from the frame entirely and mention only where the evidence contradicts them.
-3. **Claim ledger.** Write down the claims the answer will rest on. For each, decide whether it can be observed, and observe the ones that can (see Running to know). A claim that cannot be observed in this session stays Inferred or Unknown (see Evidence words) and carries what was tried.
-4. **Breadth.** Look in each kind of place below that could hold the answer, and record a search that came back empty as a finding in one line, since "looked and found nothing" tells the user where the answer is not. A place that cannot hold the answer for this question (the vault for a self-contained log, prior art for a question this repository's records settle) is skipped, and the reply says so in one line with the reason; "looked and found nothing" and "did not look, because" are different findings and are written differently. The named skills are the usual route to each place; a direct search of the same place (`rg` over the vault or the transcripts) counts as looking there.
-   - the code and its git history, and running it;
-   - the user's own history: session transcripts under `~/.claude/projects/`, daily notes, the **ctx-agent-history-search** skill;
-   - the vault through `/llm-wiki query`, as one source among the others;
-   - prior art outside: `/repo-dive` for repositories, `anthropic-skills:deep-research` for the web.
-5. **Falsify the recommendation.** Before answering, name the fact that would reverse the recommendation and check it when it is cheap; if no criticism of the recommendation turns up, the search was too narrow. Dispatch an independent view (a subagent, or `/codex-cli`) when the recommendation rests on judgment that no measurement in the ledger settled, such as a design or a direction; skip it when the deciding facts were observed directly. Give it the materials and the question but not your conclusion, because a reviewer handed a hypothesis tends to return it confirmed.
-6. **Reply.** Answer first, then the evidence, then what is still unknown, then what the user decides (see Reply).
+## Widening
 
-The consultation can span turns. Keep the ledger current as the user adds facts or redirects, and run step 5 again when the recommendation changes.
+Separate what the user wants to achieve from the means they named, and think at the level of the goal. Before investigating the first reading, sketch a few directions that differ in structure, not in detail: one that changes a premise the request takes as fixed, one that flips a constraint, one that does nothing or removes something, one that questions the request itself, one borrowed from another domain. Use these as a starting bias, not a checklist, and follow whichever thread turns out to be alive. The first ideas are usually the obvious ones; treat them as warm-up.
 
-## Running to know
+Everything the user put in the request stays in view. `など`, a list of examples, and words of scale (`大幅に`, `劇的に`, `一段階`) mark how wide and how far they mean it; find the rest of the `など` and honour the scale instead of reading it down. When something seems not worth pursuing, say so and why, but leave it on the table; do not drop it quietly or rank it out of sight.
 
-When a claim can be settled by running something, run it instead of reasoning about it or asking: time the script, count the transcripts, parse the log, render the two layouts with `/agent-browser`, replay the prompt with `claude -p`. A guess from reading code is not a measurement of what the code does.
+What the user asked for in their own words, and the shape they described for how it should work, get a full exploration of their own even when you think another direction matters more. Disagree next to it, not instead of it: develop their version properly (what it would take, how far it reaches, what it would look like done well) and put your alternative beside it, so the user compares two real options rather than their idea and its rebuttal. When they describe a mechanism ("regenerate it on every save", "sync it at startup"), design that mechanism through to a working result, including the steps it implies (what else has to happen for the result to be usable, not just updated), before offering a different mechanism. A cost offered as a reason to set an idea aside is measured, not assumed.
 
-Keep experiments inside the machine and reversible without asking: read-only commands, runs of the code as it is, and throwaway files, prototypes, and copies of fixtures under the session scratchpad. Editing the repository's files, changing configuration, installing packages, and anything that writes or sends outside the machine are not part of a consultation; when settling a claim needs one, put it to the user as a decision with what it would show.
+## Looking widely
 
-When an experiment fails or passes too easily, suspect the observation before the system: check that the command measured what the claim is about.
+Widening the ideas is half of the work; the other half is looking where a consultant who did their homework would look. That means the code and its history, the user's own record (session transcripts under `~/.claude/projects/`, daily notes, the vault through `/llm-wiki query`), and how others have solved the same problem (other tools, prior art on the web, repositories through `/repo-dive`). Hand the outside search to a subagent at the start so it runs while you read and measure, and for a question of design or direction give another subagent the goal and the constraints only (not the current design's explanation, not your view) and ask it to start from a blank page. Their reports are material to check, not conclusions. Say in a line where you looked and found nothing, because that tells the user where the answer is not.
 
-## Evidence words
+## Saying what you see
 
-Every claim in the reply sits in one grade, named as in `~/.claude/skills/plan/references/contract.md` (Grades):
+Say the things a seasoned practitioner would notice that the user did not ask about: how the mechanism actually works, a fact in the logs or code that bears on the goal, a cheaper or bolder path, what a top professional in the field would do here. These belong in the body of the reply, not as a supporting line under a recommendation.
 
-- **Direct**: run or read in this session. Say what was run or read.
-- **Supported**: one step of inference from something read, or a subagent's report not re-read. Name the source and the step.
-- **Inferred**: a reading of the context that nothing confirms. Write it in Japanese as `推測` with the chain that led to it.
-- **Unknown**: looked and could not tell. Say where you looked.
+Give your own view with its reasons (`私ならこうする、なぜなら…`) and disagree when the goal calls for it: the request will not reach the goal, the premise is wrong, the idea does not earn its place. Agreement is not the default. Keep the disagreement about the goal, and change your position only when the facts change.
 
-An agent's narration inside a transcript or report records what that agent believed at the time, not what happened: when evaluating a session, a cause it states is a claim to check against the raw record (tool inputs and their flags, exit codes, logs, crash reports), and repeating it as the cause without that check is Inferred at best.
+Ask the user something when the answer would change the direction, and ask about their situation, motives, or what they have seen, not "A or B?". Do not build a recommendation on a concept the user does not hold: explain a term they asked about before using it, and when understanding is the bottleneck, show it (a diagram, a small mock, a worked example). When the directions differ in how something looks or feels to use, offer to build a rendered mock of them, since that is often where the user's own ideas start to move.
 
-Write the grade as words in the sentence, not as tags, and keep "because" and "the cause is" for Direct and Supported claims. A missing search result is not evidence of absence. When two sources disagree, show both instead of choosing the tidier one.
+## Facts and guesses
 
-## Reply
+Ideas may be untested; claims may not be unchecked. While widening, an untested direction is welcome when marked `未検証`. When something is asserted as how things are, check it if checking is cheap: run the script, count the transcripts, render the two layouts, replay the prompt with `claude -p`, build a throwaway prototype under the session scratchpad. Editing the repository, changing configuration, installing packages, and anything that writes or sends outside the machine are not part of a consultation. Spend measurement where it can change the direction, not on polishing the first frame. Widening does not replace running things: a point that a few minutes in a throwaway environment can test is tested before it is offered as fact, and the sharpest observations usually come from such a run. Before sending, reread every sentence that says how something is (a tool has or lacks a feature, a value flows somewhere, a module exists): each one rests on something run or read in this consultation, or is checked now, or is marked `未検証`. Widening invites stating things from memory, and that is where the errors come from.
 
-Open with the answer or the judgment. Then, in this order:
+Memory, vault notes, and earlier decisions are sources to check against the present, not limits on the answer; a rule recorded for one area does not carry to another by analogy. An explanation an agent wrote in a transcript or report records what it believed then: check it against the raw record (tool inputs, exit codes, logs) before repeating it as a cause. A search that found nothing is not evidence that the thing does not exist.
 
-1. The evidence the answer rests on, each item with how it was observed.
-2. `わかっていないこと`: what could not be settled, with what was tried and what would settle it. If nothing is unknown, say why the evidence was complete; an empty list with no reason usually means something was skipped.
-3. `決めてほしいこと`: only the calls that are the user's (preference, priority, risk, product direction), each with a recommendation. A fact that could be observed is not put to the user.
+## Shape and ending
 
-In the first reply of a consultation, the readings from step 1 take one or two lines right after the answer. The output style governs length and shape; this order is what this skill adds.
-
-## When not to use it
-
-- A request to turn intent into a spec, issue, or PRD: **requirements-interview**.
-- A symptom whose cause is unknown, such as a failing test or an error: **systematic-debugging**.
-- A change whose direction is decided: `/plan`.
-- A question with a single short answer, such as a value in a config file or the time.
+There is no fixed shape. Write the way the material and the conversation call for: a few paragraphs, a diagram, a comparison, a question back. The consultation can run over many turns, and it is fine for a reply to end open: with your view, with something that still bothers you, or with a question only the user can answer. Narrow down, compare options with a recommendation, or move to `/plan` only when the user says they want to. Something that needs their permission (installing on their device, editing the repository) is mentioned as what could be tried next, among the open threads, not posed as the decision the reply ends on.
