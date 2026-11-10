@@ -104,7 +104,7 @@ Agree on purpose, constraints, acceptance criteria, and any consequential approa
 
 **Steps A1–A7:**
 
-- **A1 Direction check**: ask only if purpose or scope has a consequential unresolved branch. Existing explicit scope satisfies this step, including trivial requests.
+- **A1 Direction check**: ask only if purpose or scope has a consequential unresolved branch. Existing explicit scope satisfies this step, including trivial requests. The first question that compares designs or behaviors, A1 or a later one, carries the premise block `references/interview.md` describes under **Show what the options rest on**.
 - **A2 Re-ask**: clarify an empty or ambiguous answer when the required decision is still unresolved.
 - **A3 List approaches** and **A4 Recommend**: compare alternatives only when they change the user's outcome or constraints; select routine reversible mechanics autonomously.
 - **A5 Approve approach**: ask only about a consequential approach choice not already accepted. Carry prior authorization forward.

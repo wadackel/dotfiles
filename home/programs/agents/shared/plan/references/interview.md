@@ -15,6 +15,7 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user, and how `
     - what each term in the question refers to, when the user has not used that name.
 
   A fact that needs a heavy investigation (a subagent, an experiment) is investigated before the question is asked, not after; an experiment with an effect outside the machine becomes the question itself. A fact that could not be observed is written as a guess (推測) with what was tried. A question the user could answer only after asking for an explanation, an example, or an investigation is not ready.
+- **Show what the options rest on.** The first question that compares designs or behaviors carries, between its background and its options, the premises its options were built on: two to four lines, only those that would change the set of options if they were wrong. Mark each line 事実 with its source, 過去の決定 with where it was made, or 推測 with what it was guessed from; 推測 covers what the user has not said, such as the quality they expect, a constraint, or what they care about most. Memory, earlier decisions, and the means the repository uses now are listed here as premises, never applied silently as limits. The user corrects a line instead of writing their criteria out, and a corrected line sends the options back to be rebuilt.
 - **Non-blocking fact-finding.** While the user answers the current question, collect the facts for the next ones in the background. The interview ends when the frontier is empty and no investigation is pending: nothing left to ask, nothing left to collect.
 - **Observe before asking.** If the answer is a fact you could observe by running or reading something (behavior, layout, timing, whether a file or path exists, whether a test passes), probe it or sketch it in a throwaway file and present the result as an option. Reserve questions for preference and product calls no probe can settle.
 - **Recommended answer on every question**, with one or two sentences of reasoning. No recommendation means investigate more or narrow the question.
@@ -28,13 +29,17 @@ How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user, and how `
 
 <判断材料を 1 行 1 事実で、各行に出典（file:lines、コマンド、文書）。見せられる選択肢はサンプルを fenced block で>
 
+前提にしたこと（違えば選択肢が変わります）
+- <前提> …… 事実（<出典>）
+- <前提> …… 推測（<何から推測したか>）
+
 - **A. <ラベル>** — <含意 1 文>
 - **B. <ラベル>** — <含意 1 文>
 
 > 推奨: A。<理由 1〜2 文>
 ```
 
-The heading is the question itself. Background lists the facts the choice rests on, one per line, each with its source (`file:lines`, the command, or the document), and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — so a wrong premise gets corrected instead of questioned back. A fact that does not bear on the choice stays out. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. When the options differ in arrangement or look (position, balance, density, how a screen reads at another width), the samples stay text or ASCII and one more option offers to compare them in a rendered mock, a standalone HTML page shown the way this runtime shows a page. The mock, or any other rendered prototype of the options, is built only when the user picks that option; a choice between behaviors gets no such option. An option line carries one sentence. A cost, a constraint, or a second consequence goes on a nested bullet under it, or in its own column when the options are a table, never into the option line. The options take the shape their material asks for: a table when every option has the same fields and none needs a sample (columns 案 / すること / 代償, or Option / What / Cost in English), prose that leads with the recommendation and its reason when one answer is clearly right and the others are fallbacks, and the bullet list above otherwise. Every shape keeps each line short enough for a narrow screen and ends with the recommendation blockquote (`> 推奨`, or `> Recommendation:` in English conversations).
+The premise block appears only on the question that **Show what the options rest on** names, whichever shape the options take; on that question the background's premise line moves into the block instead of appearing twice. The heading is the question itself. Background lists the facts the choice rests on, one per line, each with its source (`file:lines`, the command, or the document), and one of them states the premise the question rests on — current behavior, the file's role, a prior decision — so a wrong premise gets corrected instead of questioned back. A fact that does not bear on the choice stays out. When an option's shape can be shown (output sample, layout, wording), the body carries a sample of each option as a fenced block; a question the user can only answer by first asking to see it is not ready. When the options differ in arrangement or look (position, balance, density, how a screen reads at another width), the samples stay text or ASCII and one more option offers to compare them in a rendered mock, a standalone HTML page shown the way this runtime shows a page. The mock, or any other rendered prototype of the options, is built only when the user picks that option; a choice between behaviors gets no such option. An option line carries one sentence. A cost, a constraint, or a second consequence goes on a nested bullet under it, or in its own column when the options are a table, never into the option line. The options take the shape their material asks for: a table when every option has the same fields and none needs a sample (columns 案 / すること / 代償, or Option / What / Cost in English), prose that leads with the recommendation and its reason when one answer is clearly right and the others are fallbacks, and the bullet list above otherwise. Every shape keeps each line short enough for a narrow screen and ends with the recommendation blockquote (`> 推奨`, or `> Recommendation:` in English conversations).
 
 When the options are a table:
 
@@ -43,6 +48,10 @@ When the options are a table:
 
 <判断材料を 1 行 1 事実で、出典付き>
 
+前提にしたこと（違えば選択肢が変わります）
+- <前提> …… 過去の決定（<どこで決めたか>）
+- <前提> …… 推測（<何から推測したか>）
+
 | 案 | すること | 代償 |
 |---|---|---|
 | A. <ラベル> | <1 句> | <1 句> |
@@ -50,6 +59,15 @@ When the options are a table:
 
 > 推奨: A。<理由 1〜2 文>
 ```
+
+## Questions about look
+
+When the options differ in arrangement or look, these hold on top of the format above.
+
+- **Spread, don't climb.** The first set of options, and the set after a reply that rejects every option ("どれも違う", "しっくりこない"), are each spread across different axes of the screen (placement, density, grouping, emphasis, what is shown at all), one option per axis, instead of refining the axis of the last pick. Every later set keeps one or two earlier options the user did not reject.
+- **Name the measure.** When a recommendation rests on a count you chose (truncated rows, lines used, items that fit), say that the count is its basis, so the user can replace it with what they care about.
+- **Keep what is fixed.** What the user has settled ("最大 2 段", "経過時間は要らない") is listed at the top of the samples or the mock and holds in every later set.
+- **Widen how the user answers, on a signal.** After the first reply that rejects every option, ask which axes are off before building the next set, as a question answered by picking several (位置・密度・強調・情報量・段数, or the axes of that screen), and spread the next set across the axes the user picked. After a second such reply, or when the choice is a combination of where several elements go, build the mock so that the user can mark each part good or bad and switch the placements directly; where the runtime can store the page's data, read that state back instead of asking for it in words. A two-way choice of a color or a wording stays with text samples.
 
 ## What to ask
 

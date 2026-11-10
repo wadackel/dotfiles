@@ -77,6 +77,16 @@ const INTERVIEW_RULE_NEEDLES = [
   "Facts can be inferred from observation; user intent cannot.",
   "a scope boundary takes the recommendation as a `user-overridden: default` assumption",
   "choose an assumption / proceed as-is / continue clarifying / scope out",
+  "**Show what the options rest on.** The first question that compares designs or behaviors carries",
+  "only those that would change the set of options if they were wrong",
+  "Memory, earlier decisions, and the means the repository uses now are listed here as premises, never applied silently as limits.",
+  "前提にしたこと（違えば選択肢が変わります）",
+  "**Spread, don't climb.**",
+  "each spread across different axes of the screen",
+  "**Name the measure.**",
+  "**Keep what is fixed.**",
+  "**Widen how the user answers, on a signal.**",
+  "ask which axes are off before building the next set",
 ];
 const INTERVIEW_LEGACY_NEEDLES = [
   "Round budget",

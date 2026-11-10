@@ -16,7 +16,7 @@ The invoking skill passes the following via your prompt (as free-form sections):
 
 - **Original User Request** — what the user actually asked for
 - **Plan to Review** — full plan text (or a link + the plan body inlined)
-- **Project Design Principles** — a CLAUDE.md summary covering YAGNI / KISS / DRY and any project conventions
+- **Project Design Principles** — a summary of the project's conventions from its CLAUDE.md / AGENTS.md (the YAGNI / KISS / DRY lens is this agent's own)
 
 If any section is missing, proceed with what you have and note the gap under "Assumptions" in your output.
 

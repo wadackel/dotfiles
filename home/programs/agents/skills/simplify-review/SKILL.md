@@ -35,7 +35,7 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 
 On `/simplify-review` invocation, parse `$ARGUMENTS`:
 
-- `plan` → dispatch `plan-simplifier` with the current plan file, the original user request, and a CLAUDE.md design-principles summary.
+- `plan` → dispatch `plan-simplifier` with the current plan file, the original user request, and a summary of the project's conventions from its CLAUDE.md / AGENTS.md.
 - `code` → dispatch `code-simplifier` with the changed files, `git diff` (or `git diff <baseline_sha>..HEAD`), and the project CLAUDE.md path.
 - `auto` or empty — detect: plan mode active → `plan`; otherwise uncommitted changes or a recent task completion → `code`; both applicable → run `plan` first, then `code`.
 
@@ -59,7 +59,7 @@ The main session auto-applies HIGH-confidence proposals **only when all of these
 - No behavioral change — functionality is preserved
 - No scope reduction — the set of supported actions/endpoints/contexts is unchanged
 - No removal of correctness mechanisms — items the plan explicitly identifies as needed for correctness (guards, synchronization, validation) require code-level verification before removal and cannot be auto-applied
-- The proposal aligns with CLAUDE.md design principles (YAGNI, KISS, DRY)
+- The proposal follows the simplifier's YAGNI / KISS / DRY lens and does not contradict the project's conventions
 - The change does not affect public APIs or user-facing interfaces
 
 When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals to the user before changes. After applying, run relevant tests / static checks to confirm no behavioral regression; revert and report on regression.
@@ -78,6 +78,6 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 **Why confidence-based triage instead of binary PASS/FAIL:** Simplification is inherently subjective. Some proposals are obvious wins (dead code), others are judgment calls. Confidence-based triage lets the main session auto-apply safe changes while escalating trade-offs to the user.
 
-**Why auto-apply HIGH confidence:** Requiring user approval for every dead code removal creates noise. The guardrails (subtractive only, no behavioral change, CLAUDE.md aligned) ensure auto-applied changes are safe.
+**Why auto-apply HIGH confidence:** Requiring user approval for every dead code removal creates noise. The guardrails (subtractive only, no behavioral change, consistent with the project's conventions) ensure auto-applied changes are safe.
 
 **Why this skill has no step-by-step workflow:** the review instructions live in the `plan-simplifier` and `code-simplifier` agent definitions. This skill holds only what the main session needs around a manual dispatch: the inputs to pass and the triage / auto-apply protocol for what comes back.

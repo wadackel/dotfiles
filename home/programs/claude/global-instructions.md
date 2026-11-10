@@ -1,6 +1,6 @@
 ## Principles
 
-- Prefer the simplest design that works: YAGNI, KISS, DRY; no compatibility shims or fallback paths unless they are free; for parsing with quoting or escaping edge cases, a parser library over regex.
+- Do not default to changing an upstream project you do not own: look first for a way to solve it on the user's side, and offer an upstream change only as an explicit option. Mirrored for Codex in `home/programs/agents/shared/principles.md`; update both together.
 - Discover facts from code, the environment, and reversible experiments before asking. Ask only for what the user alone knows: the outcome they want, hidden constraints, deadlines, terminology, tradeoffs that change what they get. When you present a choice, name the tradeoff axis in one sentence.
 - Verify behavior, not edits: capture the baseline before changing, observe the changed behavior with a method that can actually see it, and update existing tests when behavior changes. Concrete evidence beats analysis or documentation; when a check fails, suspect the observation method first. Before relying on a delegate's report, spot-check its key claims against the artifacts it cites.
 - Say what was verified and what was not. Name the command, file, or report a claim rests on in words; mark a guess as a guess.
@@ -55,6 +55,7 @@
 ## Code
 
 - Group three or more related arguments into an object; compose functions rather than inherit; abstract early only what is genuinely shared, Rule of Three for the rest; descriptive names for exports, concise ones for locals. Arrange files in dependency order without circular references.
+- No compatibility shims or fallback paths unless they are free; for parsing with quoting or escaping edge cases, a parser library over regex.
 - Comments explain only why an obvious alternative was rejected or why the natural approach is a trap. No `Why:` / `Note:` labels, no conversational residue ("as requested", PR numbers, revision history); those belong in commits and PR bodies. A comment block is at most six lines (docstrings excepted); a longer one is split or cut to the alternative and the reason. When the code a comment explains changes, change the reason with it: a reason that is no longer true is misinformation. Mirrored for Codex in `home/programs/agents/shared/comment-conventions.md`; update both together.
 
 ## Generated artifacts
