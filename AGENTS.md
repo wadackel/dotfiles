@@ -165,6 +165,8 @@ system.defaults.NSGlobalDomain.AppleShowScrollBars =
 
 ### Updating Dependencies
 
+The `update-flake-lock` workflow commits `flake.lock` updates to `main` every day (and `nixpkgs`, `home-manager`, `nix-darwin` weekly), so run `git pull --rebase` before touching `flake.lock` by hand. See [README.md](README.md#updating-dependencies) for the schedule.
+
 ```bash
 # Update all flake inputs (nixpkgs, home-manager, nix-darwin, etc.)
 nix flake update
