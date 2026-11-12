@@ -5,7 +5,7 @@ description: Codex design-first planning skill. Mirrors Claude `/plan`'s eight n
 
 # $plan
 
-Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with seven named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for Agentower. `$impl` promotes `.pending-` to `.active-` at the start of its run.
+Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with eight named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for Agentower. `$impl` promotes `.pending-` to `.active-` at the start of its run.
 
 Resolve consequential user-intent decisions before drafting. Existing choices in the conversation or an accepted Issue count as agreement; a fully specified request does not need another confirmation. Do not implement code while planning.
 
@@ -39,7 +39,7 @@ Guaranteed continuation syntax is `$plan --answer <answer>`. If `$plan --answer`
 
 ## Prerequisites
 
-Independent DEEPEN review uses `~/.codex/agents/plan-critic.toml`. Routine planning has no subagent prerequisite. Dedicated adversarial and simplifier agents remain available for explicit independent-review requests.
+Independent DEEPEN review uses `~/.codex/agents/plan-critic.toml`. Routine planning needs only the built-in explorer that SURVEY runs. Dedicated adversarial and simplifier agents remain available for explicit independent-review requests.
 
 ## Core behavior
 
@@ -92,7 +92,7 @@ Trivial short-circuit: if complexity is trivial, skip DEEPEN only when independe
 
 ## SURVEY
 
-Skipped for trivial. Before any question about direction, run one explorer subagent with the brief in `references/survey.md`; it inherits EXPLORE's observation limits. Wait for its report. Then, before reading further yourself, write down from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
+Skipped for trivial. Before any question about direction, run one explorer subagent with the brief in `references/survey.md`; it inherits EXPLORE's observation limits. Wait for its report. Then, before reading further yourself, write down in your own notes, not as reply text, from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
 
 ## AGREE
 

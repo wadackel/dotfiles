@@ -25,7 +25,7 @@ If the request cannot be restated in one sentence, ask a clarifying question in 
 
 ## SURVEY
 
-Skipped for trivial. Before any question about direction, dispatch one subagent with the brief in `references/survey.md` and wait for its report. Then, before reading further yourself, write down from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
+Skipped for trivial. Before any question about direction, dispatch one unnamed `Explore` subagent with the brief in `references/survey.md` and wait for its report. Then, before reading further yourself, write down in your own notes, not as reply text, from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
 
 ## AGREE
 
@@ -108,7 +108,7 @@ Approval is the user typing `/impl`; write no state file.
 
 This section applies only when the prompt is an autopilot unit brief (`~/.claude/skills/autopilot/references/unit-brief.md`), run by the `autopilot-unit` agent, whose definition (`~/.claude/agents/autopilot-unit.md`) holds the park rule and the report form. The user is away; the brief's goal and unit are the direction, and the autopilot advisor approves the plan in the user's place.
 
-- **Of `references/`, read only `contract.md`.** `interview.md` and `output-examples.md` serve questions and the handoff, neither of which happens here.
+- **Of `references/`, read only `contract.md` and `survey.md`.** `interview.md` and `output-examples.md` serve questions and the handoff, neither of which happens here. SURVEY runs as above; its directions feed the brief's unit and the plan's Assumptions instead of a question.
 - **AGREE asks nothing.** A1, A5, and the Verification Grants question are skipped. A question that would go to the user follows the park rule: a parked one stops with `STATUS: PARKED` in the report form; any other is decided by you and written under `### Assumptions` as an ordinary assumption whose `reason:` starts with `autopilot Decision:` and names the alternative it was chosen over. `user-overridden` is not used, since the user chose nothing. This overrides `interview.md`'s rule that design decisions are asked; the autopilot final report is where the user makes them.
 - **`## Delivery` and `## Verification Grants`** are the brief's lines, copied as written.
 - **DEEPEN** runs as above; a queued User decision follows the park rule instead of being asked.

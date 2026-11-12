@@ -85,6 +85,8 @@ const INTERVIEW_RULE_NEEDLES = [
   "the question's heading asks whether departing is acceptable",
   "A departure is never only in a cost column or a background line",
   "names where the mechanism could live",
+  "- <既存のもの>（<path>）に従う …… 事実（<出典>）",
+  "  - <what> から外れる（<path>）",
   "**Criteria and axis before options.**",
   "never from a quota",
   "Neither an axis nor the reason for a recommendation is the agent's own effort",
