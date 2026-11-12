@@ -70,7 +70,7 @@ Every `### Autonomous Verification` bullet starts with one tag:
 - `[live]` — observed on the real surface with the user's own run method — start command, mode, target URL or PR, network condition, account role — reported in the conversation with that run method; gating at every complexity, waivable only by explicit user decision (BLOCKED BY USER)
 - `[outcome]` — circular by design (a review verdict); never a substitute for acceptance evidence.
 
-A plan that changes user-observable behavior carries at least one `[live]` item. Claude's `/plan` writes each bullet as the state to establish, not the command that observes it; a `[live]` bullet adds, on its next line indented without a list marker, a `観測:` line naming the surface and the means, and `/impl` reports a different means as one. Codex's `$plan` writes each bullet as its skill says.
+A plan that changes user-observable behavior carries at least one `[live]` item. Both plan skills write each bullet as the state to establish, not the command that observes it; a `[live]` bullet adds, on its next line indented without a list marker, a `観測:` line naming the surface and the means, and the impl skills say in the report when they used a different means.
 
 `### Requires User Confirmation` holds `- None` or items in this exact five-field form, labels in English:
 
@@ -85,8 +85,7 @@ An item is for what only the user holds: a sudo password, their own second facto
 ## Tasks and checks
 
 - The final task subject is `Final Audit + Review`. Claude's `/plan` and Codex's `$plan` both create it.
-- Claude's `/impl` chooses how to observe each criterion's state, observes again a criterion a later edit could have changed, and runs a suite-style check (a whole test directory, `nix flake check`) once on the final tree. Codex's `$impl` runs each bullet's command as its skill says, a suite-style check on the last implementation task once. No record file is written; output stays in the conversation.
-- For Codex, a run of a check is stale once a file the command reads is edited after it, and when compaction removed its output; a `[live]` observation is stale once the tree it observed changes. A suite-style or routine check reads everything the repository builds, tests, or lints, so only an edit confined to files none of them reads leaves it fresh; a Markdown file counts as read when a test, a lint, or a doc build reads it.
+- `/impl` and `$impl` choose how to observe each criterion's state, observe again a criterion a later edit could have changed, and run a suite-style check (a whole test directory, `nix flake check`) once on the final tree. No record file is written; output stays in the conversation.
 - Claude's `/impl` and Codex's `$impl` set the ref `refs/impl-base/<plan basename>` at their start; review diffs from it, and Claude's `/impl` review (when it passes) or Codex's `$impl` (at Finish) deletes it. The review's working files sit in the session scratchpad: `<slug>.gate.diff`, `<slug>.rereview-<n>.gate.diff` and `<slug>.final.gate.diff` (review inputs and the final diff `human-review.md` is applied to; the hook matches `.gate.diff`), and, removed when the review ends, `<slug>.index` (the index copy a snapshot uses) and `<slug>.breaker` / `<slug>.before` (the breaker's worktrees).
 
 ## Activation
@@ -107,7 +106,7 @@ Codex ends `$plan` with an Approval Summary and `PENDING APPROVAL — $impl [pla
 
 ## Final report
 
-Claude's `/impl` final report, and its reply under `--review`, is defined in `impl/SKILL.md`. Fixed strings: `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` when the review escalated. Codex `$impl` writes its own card with the same strings.
+The final report of `/impl` (and its reply under `--review`) and of `$impl` is defined in each impl skill with the same headings and order. Fixed strings: `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` when Claude's review escalated.
 
 ## Reviewer output
 
@@ -121,4 +120,4 @@ Critic replies end with `### Verdict` holding `ITERATE` or `CONVERGED`; adversar
 
 ## Escalation markers
 
-`[BLOCKED: gate escalated]` in the report's opening (Claude) or result line (Codex) when a blocker is still open at the end (Claude's `/impl` review: after the first wave, one re-review, and one closing pass in which the main session escalates a spec Issue, hands a security or human-review boundary blocker to the reader, closes another that a run failing before the fix and passing after it shows fixed, and escalates the rest; Codex `$impl`: as its skill says); `BLOCKED BY USER` for a waived `[live]` item; `USER CONFIRMATION PENDING` when a `Needed by: final gate` item is unanswered.
+`[BLOCKED: gate escalated]` in the report's opening when a blocker is still open at the end (Claude's `/impl` review: after the first wave, one re-review, and one closing pass in which the main session escalates a spec Issue, hands a security or human-review boundary blocker to the reader, closes another that a run failing before the fix and passing after it shows fixed, and escalates the rest; Codex `$impl`: as its skill says); `BLOCKED BY USER` for a waived `[live]` item; `USER CONFIRMATION PENDING` when a `Needed by: final gate` item is unanswered.

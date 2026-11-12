@@ -13,7 +13,7 @@ Not included: wording of a review or approval procedure that grants no permissio
 
 ## Item
 
-In the Claude report, each such hunk is marked `← レビューしてほしい` in the tree under `**変更したファイル**`, and below the tree `レビューしてほしい N か所` lists one line per hunk (in Codex's card, the first group of `**あなたがすること**`), which means the change is not accepted on the checks and the reviewers' verdict alone: the reader reads this hunk of the diff. The line carries the place, the boundary in a word or two with what changes, what happens if it stays, and how to undo it, with no sentence-final 。; a security finding on the same hunk follows on the same line with its severity in words:
+In the final report, each such hunk is marked `← レビューしてほしい` in the tree under `**変更したファイル**`, and below the tree `レビューしてほしい N か所` lists one line per hunk, which means the change is not accepted on the checks and the reviewers' verdict alone: the reader reads this hunk of the diff. The line carries the place, the boundary in a word or two with what changes, what happens if it stays, and how to undo it, with no sentence-final 。; a security finding on the same hunk follows on the same line with its severity in words:
 
 ```
 - `claude/settings.json:24` — 権限。allow に `Bash(curl *)` を追加。残すと curl が無確認で通る。戻すなら行を消す

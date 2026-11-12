@@ -430,6 +430,12 @@ test("replyKind: 質問・報告・Plan ready・その他を見出しと固定�
     "report",
   );
   assertEquals(
+    replyKind(
+      "依頼どおり。\n\n**確かめたこと**\n- テスト 12 件\n\n**あなたに決めてほしいこと**（1 つ）\n\n### 残しますか？\n\n> 推奨: A。",
+    ),
+    "report",
+  );
+  assertEquals(
     replyKind("## Plan ready\n- Status: PENDING APPROVAL"),
     "plan-ready",
   );

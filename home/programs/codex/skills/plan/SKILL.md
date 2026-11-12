@@ -88,7 +88,7 @@ An explicit user request for independent review also selects it. Evaluate these 
 
 **Ambiguity Gate**: if the request cannot be restated in one sentence (uninterpretable / contradictory / 1-2 words with no signal), re-elicit through AGREE before drafting.
 
-Trivial short-circuit: if complexity is trivial, skip DEEPEN only when independent review is not required. Write a minimal DRAFT (then DEEPEN when required): Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
+Trivial short-circuit: if complexity is trivial, skip DEEPEN only when independent review is not required. Write a minimal DRAFT (then DEEPEN when required): Context, Files to Change, Task Outline, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
 
 ## SURVEY
 
@@ -191,14 +191,14 @@ Write the plan body to `~/.codex/plans/YYYYMMDDTHHmm-<slug>.md`. The slug comes 
 
 - Skill instruction prose in this file is English.
 - User-facing generated output remains in the user's configured language. In this repository, that means Japanese unless the user asks otherwise.
-- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Delivery`, `## Verification Grants`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Verification Commands`, `## Definition of Done`, `## Risks + Open Questions`, and `## Completion Criteria`.
+- Section headers are fixed English strings because DEEPEN, DECOMPOSE, and `$impl` Audit/Review locate them literally: `## Context`, `## Overview`, `## Approach`, `## NOT Building`, `## Delivery`, `## Verification Grants`, `## Mandatory Reading`, `## Patterns to Mirror`, `## Intentional Conventions`, `## Files to Change`, `## Task Outline`, `## Test Strategy`, `## Risks + Open Questions`, and `## Completion Criteria`.
 - Machine-consumed contents, including `## Completion Criteria` subsections and Acceptance Criteria lines, are English.
 - AGREE-output subsection headings are fixed English: `### Requirement Clarification`, `### Assumptions`, `### Self-resolved`, and `### Unresolved Items`.
-- File paths, commands, and `EXPECT:` values stay as-is.
+- File paths and commands stay as-is.
 
 ### Required sections (complexity-gated)
 
-Plan body section contract (16 headers; the shared 14-row base plus Codex-specific `Verification Commands` and `Definition of Done`):
+Plan body section contract (the shared 14 headers):
 
 | Section | trivial | small | medium+ |
 |---|---|---|---|
@@ -214,12 +214,8 @@ Plan body section contract (16 headers; the shared 14-row base plus Codex-specif
 | Files to Change (CREATE / UPDATE / DELETE) | ✓ | ✓ | ✓ |
 | Task Outline | ✓ | ✓ | ✓ |
 | Test Strategy (when there is a behavior change) |   | ✓ | ✓ |
-| Verification Commands | ✓ | ✓ | ✓ |
-| Definition of Done | ✓ | ✓ | ✓ |
 | Completion Criteria (Autonomous Verification + Requires User Confirmation + Baseline) | ✓ | ✓ | ✓ |
 | Risks + Open Questions |   | ✓ | ✓ |
-
-`Verification Commands` and `Definition of Done` are required for every complexity level because Codex `$impl` Audit and Approval Summary consume them.
 
 The AGREE-derived `### Requirement Clarification` / `### Assumptions` / `### Self-resolved` / `### Unresolved Items` subsections are written into the plan body just before `## Overview`.
 
@@ -248,7 +244,7 @@ Tag every Autonomous Verification item at every complexity, trivial included (`$
 
 When unsure, default to `[orchestrator-only]`.
 
-A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification that runs the changed thing where it actually runs (the CLI, the fired hook, a headless `codex exec` or `claude -p` for a skill or instruction, the page), because a run outranks tests, types and reading. A change to what a screen renders carries a `[live]` item that captures it before and after (`$agent-browser` screenshots at the page's breakpoints, 375px and 1280px when none are defined; `tmux capture-pane` for a TUI) and views the images. Codex `$impl` gates on `[live]`, including required user observations, unless explicitly waived. Evidence must identify the actual runtime or deployed artifact; local source tests do not establish deployment or CI freshness. Items only the user can observe go under `### Requires User Confirmation` in the item format below, limited to what `references/contract.md` says only the user holds; never hand a check to another person, issue, or later plan.
+A plan that changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses) carries at least one `[live]` item under Autonomous Verification that runs the changed thing where it actually runs (the CLI, the fired hook, a headless `codex exec` or `claude -p` for a skill or instruction, the page), because a run outranks tests, types and reading. Write each Autonomous Verification item as the state to establish, not the command that observes it; a `[live]` item adds, on its next line indented without a list marker, a `観測:` line naming the surface and the means (the CLI, the fired hook, a headless run, the page in a browser, a simulator, e2e). A change to what a screen renders carries a `[live]` item whose `観測:` line captures it before and after (`$agent-browser` screenshots at the page's breakpoints, 375px and 1280px when none are defined; `tmux capture-pane` for a TUI) and views the images. Codex `$impl` gates on `[live]`, including required user observations, unless explicitly waived. Evidence must identify the actual runtime or deployed artifact; local source tests do not establish deployment or CI freshness. Items only the user can observe go under `### Requires User Confirmation` in the item format below, limited to what `references/contract.md` says only the user holds; never hand a check to another person, issue, or later plan.
 
 `## Completion Criteria` is machine-consumed and must keep these subsection names:
 
@@ -256,15 +252,16 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 ## Completion Criteria
 
 ### Autonomous Verification
-- [file-state] ...
-- [orchestrator-only] ...
+- [file-state] <the state to establish>
+- [live] <the state to establish>
+  観測: <the surface and the means>
 
 ### Requires User Confirmation
 - None
 
 ### Baseline
-- Each implementation task's checks ran as plain commands with their output in the conversation.
-- The reserved `Final Audit + Review` task is completed only after `$impl` re-runs every check on the final tree and emits `REVIEW_VERDICT: PASS`.
+- Each criterion was observed with its output in the conversation.
+- The reserved `Final Audit + Review` task is completed only after `$impl` observes again what later edits could have changed, runs the suite-style checks once on the final tree, and emits `REVIEW_VERDICT: PASS`.
 ```
 
 `[outcome]` may appear under `### Autonomous Verification`; `$impl` checks it only after final Review. Verdict format `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` is consumed by `$impl` Review.
@@ -287,7 +284,7 @@ Review the plan against the original request and observed evidence. Edit the pla
 
 Check requirement alignment, technical evidence, failure behavior, verification coverage, and unnecessary complexity. Apply behavior-preserving simplifications directly; do not expand scope to satisfy optional suggestions. Use the shared checklist and specialist guidance as reading lenses without automatically dispatching their agents.
 
-Check that every existing thing the survey found that the change touches or resembles is in the plan with its path, whether the change follows or departs from it, and the reason for a departure; a departure the user has not agreed to is asked. Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item. Check that no Requires User Confirmation item is something the agent can bring up itself, that every operation outside local and dev a `[live]` item needs is under `## Verification Grants`, that a rendered change has its before-and-after screenshot item, and that `## Delivery` rests on the signal its `Basis` quotes.
+Check that every existing thing the survey found that the change touches or resembles is in the plan with its path, whether the change follows or departs from it, and the reason for a departure; a departure the user has not agreed to is asked. Check that every behavior the change alters has a Completion Criteria item whose state does not hold without the change. Check that no Requires User Confirmation item is something the agent can bring up itself, that every operation outside local and dev a `[live]` item needs is under `## Verification Grants`, that a rendered change has its before-and-after screenshot item, and that `## Delivery` rests on the signal its `Basis` quotes.
 
 When independent review is not selected, this pass completes DEEPEN. Report findings and their resolution as main-session review; do not report subagent approval.
 
@@ -317,7 +314,7 @@ Collect only consequential user decisions from the review and follow AGREE's que
 
 ## DECOMPOSE
 
-The main session mirrors tasks with Codex `update_plan` when it is available; otherwise report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE. An Autonomous Verification bullet is one command that `$impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task runs every bullet again.
+The main session mirrors tasks with Codex `update_plan` when it is available; otherwise report task progress directly without inventing a tool result. No subagent dispatch in DECOMPOSE. A suite-style check (a whole test directory, `nix flake check`) runs once, on the final tree.
 
 ### update_plan constraints
 
@@ -345,10 +342,10 @@ The trailing `Final Audit + Review` entry is a marker for `$impl`'s built-in Aud
 
 ### Decomposition Rules
 
-1. One task equals one verifiable unit: one behavior with its red, green, and refactor steps inside the same task. A failing test is a step of a task, never a task of its own.
-2. Verification Commands are included in each implementation task. The only verification-only task allowed is `Final Audit + Review`.
+1. One task equals one verifiable unit: one behavior, with a test and the change it observes inside the same task. A failing test is a step of a task, never a task of its own.
+2. The only verification-only task allowed is `Final Audit + Review`.
 3. Keep separation of concerns.
-4. Each task has three elements: target files, expected behavior, verification commands + EXPECTED output. With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and stays inside one layer.
+4. Each task has three elements: target files, expected behavior, and the criteria it establishes. With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and stays inside one layer.
 5. The final `Final Audit + Review` task is the entry point for `$impl` built-in Audit + risk-selected Review. No separate skill invocation is required because Codex has no skill-to-skill invocation API.
 
 `$impl` performs routine simplification in the main session. Do not create a separate simplifier task or use diff size alone to request an agent.
@@ -387,7 +384,7 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 - `home/programs/agents/shared/plan/references/contract.md` and `interview.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): shared with the Claude version through whole-dir linking. Fixed strings and the interview judgment.
 - `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
 - `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
-- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, re-runs every check on the final tree as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
+- `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, observes the criteria again on the final tree as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.
 - Marker helper (`codex-plan-marker.ts`): writes Agentower's UI-pointer markers. Owns ACTIVATE pending activation, `$impl` start-of-run `.pending-` → `.active-` promotion and active plan-path resolution, and active cleanup after final PASS. The markers are display pointers only and do not gate edits.
 
 ## Design notes

@@ -207,6 +207,7 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
   ]],
   ["scope: <the boundary: what is in or out>", [CONTRACT, INTERVIEW]],
   ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
+  ["観測:", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN, CLAUDE_IMPL, CODEX_IMPL]],
 ];
 // Only the plan skills have a `references/` that links to the shared
 // directory; the impl skills must name the public path, or a bare
@@ -576,16 +577,38 @@ test("Codex final gate includes repository checks absent from the plan", async (
     "read their output and fix failures before Review",
     "same final run satisfies both",
   ]);
+  const gate = section(skill, "## Final gate: built-in Audit and Review");
   assertStringIncludes(
-    section(skill, "## Final gate: built-in Audit and Review"),
-    "run every Autonomous Verification command again on the current tree",
+    gate,
+    "observe again any criterion a later edit could have changed",
   );
+  assertExcludesAll(gate, ["run every Autonomous Verification command again"]);
+});
+
+test("Codex and Claude impl write the same final report", async () => {
+  const headings = [
+    "**使う人から見て変わること**",
+    "**変更したファイル**",
+    "**確かめたこと**",
+    "**確かめていないこと**",
+    "**次に進められること**",
+    "**あなたに決めてほしいこと**",
+  ];
+  for (const path of [CODEX_IMPL, CLAUDE_IMPL]) {
+    const skill = await readRepoFile(path);
+    assertInOrder(skill, headings);
+    assertExcludesAll(skill, [
+      "**何が起きたか**",
+      "at most 90 characters",
+      "runs every check as a plain command",
+    ]);
+  }
 });
 
 test("Codex added regression tests establish missing behavior before source edits", async () => {
   const loop = section(await readRepoFile(CODEX_IMPL), "## Task loop");
   assertInOrder(loop, [
-    "Write new or updated regression tests before changing the source they cover",
+    "write new or updated regression tests before changing the source they cover",
     "failure caused by the missing behavior",
     "Implement the behavior",
     "green (expected PASS)",
@@ -595,6 +618,7 @@ test("Codex added regression tests establish missing behavior before source edit
     "setup or environment failure",
     "red (expected FAIL)",
     "Do not introduce redundant tests for a low-impact edit",
+    "A config value, skill or document text, or a refactor the existing tests already cover gets no new test",
   ]);
   assertExcludesAll(loop, ["For test-first work"]);
 });
@@ -661,7 +685,15 @@ test("Codex acceptance guidance does not point to the removed Claude table", asy
     section(skill, "### Completion Criteria item tags"),
     CC_TAGS,
   );
-  assertStringIncludes(section(skill, "## DECOMPOSE"), "Verification Commands");
+  assertStringIncludes(
+    section(skill, "## DECOMPOSE"),
+    "the criteria it establishes",
+  );
+  assertExcludesAll(skill, [
+    "## Verification Commands",
+    "Definition of Done",
+    "Verification Commands are included",
+  ]);
 });
 
 test("Codex plan selects independent review before the trivial bypass", async () => {

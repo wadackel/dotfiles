@@ -15,11 +15,12 @@ Plan handoffs retain purpose, non-goals, constraints, acceptance criteria, and
 implementation discretion. Accepted decisions carry forward; material new
 decisions still require an answer.
 
-`$impl` runs each acceptance check as a plain command and keeps the output in
-the conversation; no record file is written. At its start it sets the ref
-`refs/impl-base/<plan basename>`, and review diffs from it, untracked files
-included. Its final gate re-runs every acceptance check on the final tree and
-requires independent review verdicts and fresh live observations. An unavailable
+`$impl` establishes each completion criterion by observing its state and keeps
+the output in the conversation; no record file is written. At its start it sets
+the ref `refs/impl-base/<plan basename>`, and review diffs from it, untracked
+files included. Its final gate observes again what later edits could have
+changed, runs the suite-style checks once on the final tree, and requires
+independent review verdicts and fresh live observations. An unavailable
 required check remains incomplete unless the user explicitly waives it.
 
 Plan paths remain stable across compaction and expired Agentower markers. Markers

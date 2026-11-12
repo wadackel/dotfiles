@@ -37,7 +37,7 @@ Focus on: missing error handling where failure is plausible, race conditions on 
 ### 3. Scope Appropriateness (intent drift + hidden scope gap + over-engineering)
 
 Does the plan solve the user's actual problem, no more and no less, by the simplest viable path?
-Focus on: YAGNI violations (building speculative features), missing critical functionality implied by the request, gold-plating, doing more than what was requested, abstractions introduced before a second caller exists, insufficient Definition of Done, missing verification that would observe the behavior the plan changes. Also check whether `### Unresolved Items` in the plan's AGREE subsections actually matter for Success — items left unresolved without a defensible `next:` plan are hidden scope gaps.
+Focus on: YAGNI violations (building speculative features), missing critical functionality implied by the request, gold-plating, doing more than what was requested, abstractions introduced before a second caller exists, insufficient completion criteria, missing verification that would observe the behavior the plan changes. Also check whether `### Unresolved Items` in the plan's AGREE subsections actually matter for Success — items left unresolved without a defensible `next:` plan are hidden scope gaps.
 
 ### 4. Test Coverage
 
@@ -45,7 +45,7 @@ Does the plan design tests that actually observe the behavior it changes? Test o
 
 **MUST-check:**
 1. For `small+` plans with any behavior-change target, is a `## Test Strategy` section present? A missing section with at least one behavior-change target is a Critical Issue.
-2. If `## Test Strategy` lists `Tests to add / update`, does `## Task Outline` cover each listed test — as a named step with its command inside the behavior task that owns it, or as its own task only when no behavior task owns it? Mismatch is a Critical Issue.
+2. If `## Test Strategy` lists `Tests to add / update`, does `## Task Outline` cover each listed test — as a named step inside the behavior task that owns it, or as its own task only when no behavior task owns it? Mismatch is a Critical Issue.
 3. If the plan changes behavior a user can observe (UI, CLI output, hook or config effects, runtime responses), does `## Completion Criteria` carry at least one `[live]` item under Autonomous Verification? A missing `[live]` item is a Critical Issue. A `[live]` item placed under Requires User Confirmation without a one-line reason why the agent cannot bring up the environment is also a Critical Issue. A Requires User Confirmation item lacking any of `Observe` / `Why not autonomous` / `Needs` / `Your steps` / `Needed by`, or marked `next real run` although its trigger could be produced in this session, is also a Critical Issue.
 
 **SHOULD-check:**
