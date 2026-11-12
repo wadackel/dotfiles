@@ -77,8 +77,24 @@ const INTERVIEW_RULE_NEEDLES = [
   "Facts can be inferred from observation; user intent cannot.",
   "a scope boundary takes the recommendation as a `user-overridden: default` assumption",
   "choose an assumption / proceed as-is / continue clarifying / scope out",
-  "**Show what the options rest on.** The first question that compares designs or behaviors carries",
+  "**Show what the options rest on.** Every question that compares designs or behaviors carries",
+  "a later question lists only the lines that changed since the last one and the lines it rests on",
+  "marks whether the options follow it or depart from it",
   "only those that would change the set of options if they were wrong",
+  "**Show a departure as a departure.**",
+  "the question's heading asks whether departing is acceptable",
+  "A departure is never only in a cost column or a background line",
+  "names where the mechanism could live",
+  "**Criteria and axis before options.**",
+  "never from a quota",
+  "Neither an axis nor the reason for a recommendation is the agent's own effort",
+  "holds what the user or the product gives up",
+  "**Read the reply before moving on.**",
+  "A choice with a reservation",
+  "not a refinement of the last set",
+  "its options are rebuilt, not pruned",
+  "how the mechanism the options change works",
+  "nothing that reads as a report comes before the question's heading",
   "Memory, earlier decisions, and the means the repository uses now are listed here as premises, never applied silently as limits.",
   "前提にしたこと（違えば選択肢が変わります）",
   "**Spread, don't climb.**",
@@ -96,6 +112,10 @@ const INTERVIEW_LEGACY_NEEDLES = [
   "operating limit",
   "Max 3 real questions",
   "Self-resolved earlier:",
+  // A premise block on the first question only left later questions resting
+  // on facts the reader never saw.
+  "The premise block appears only on the question",
+  "such as the quality they expect, a constraint, or what they care about most",
   // Bundled questions were tried and reverted: each bundled one tended to need
   // its own context or investigation before it could be answered.
   "One turn per dependency level",
@@ -751,5 +771,51 @@ test("Vault-first policy reaches both Codex and opencode", async () => {
     "more than one defensible answer",
     "`llm-wiki` skill's `query` verb",
     "Skip it only for what the current repository settles",
+  ]);
+});
+
+const SURVEY = "home/programs/agents/shared/plan/references/survey.md";
+const CLAUDE_GLOBAL = "home/programs/claude/global-instructions.md";
+const SHARED_COMMUNICATION = "home/programs/agents/shared/communication.md";
+
+// Directions written after the agent's own reading anchored on what it
+// happened to read; the survey report is the material they are built from.
+test("survey.md holds the pre-question survey brief and both plans run it before AGREE", async () => {
+  const survey = await readRepoFile(SURVEY);
+  assertIncludesAll(survey, [
+    "Do not propose a direction, an option, or a fix",
+    "do not create, modify, or delete files",
+    "not only by the words of the request",
+    "what you searched for and did not find",
+    "never a question to the user",
+  ]);
+  for (const [, path] of AGENT_PLANS) {
+    const skill = await readRepoFile(path);
+    assertStringIncludes(skill, "references/survey.md");
+    assertInOrder(skill, ["## PARSE", "## SURVEY", "## AGREE"]);
+    assertStringIncludes(
+      section(skill, "## SURVEY"),
+      "before reading further yourself",
+    );
+  }
+  assertExcludesAll(await readRepoFile(CODEX_PLAN), ["go back to A3"]);
+});
+
+function communicationBullets(markdown: string): string[] {
+  return section(markdown, "## Communication")
+    .split("\n")
+    .filter((line) => line.startsWith("- "));
+}
+
+// The Codex copy is concatenated into ~/.codex/AGENTS.md by Nix; a reader
+// line added to one side only would leave the other agent writing blind.
+test("the reader model is in Communication and its Codex mirror alike", async () => {
+  const claude = communicationBullets(await readRepoFile(CLAUDE_GLOBAL));
+  const codex = communicationBullets(await readRepoFile(SHARED_COMMUNICATION));
+  assertEquals(codex, claude);
+  assertIncludesAll(claude.join("\n"), [
+    "decides with little attention",
+    "data flow, module boundaries and their inputs and outputs",
+    "say how that was established",
   ]);
 });

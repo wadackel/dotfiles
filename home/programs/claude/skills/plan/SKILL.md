@@ -11,7 +11,7 @@ Read `references/interview.md` before the first question and `references/contrac
 
 ## PARSE
 
-Restate the request in one sentence for yourself; it is carried into A1's question, never emitted alone. Estimate complexity with a few Grep/Glob probes and remember what you probed:
+Restate the request in one sentence for yourself; it is carried into A1's question, never emitted alone. Estimate complexity with a few Grep/Glob probes and remember what you probed; they size the work, and directions come from SURVEY:
 
 | Level | Signals | Process |
 |---|---|---|
@@ -23,11 +23,15 @@ Restate the request in one sentence for yourself; it is carried into A1's questi
 
 If the request cannot be restated in one sentence, ask a clarifying question in the interview format before anything else.
 
+## SURVEY
+
+Skipped for trivial. Before any question about direction, dispatch one subagent with the brief in `references/survey.md` and wait for its report. Then, before reading further yourself, write down from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
+
 ## AGREE
 
 Agree on purpose and approach before drafting. One question per turn, in the format and with the facts `interview.md` requires; decide for yourself what a CLAUDE.md rule, a decision already made in this conversation, or the code's dominant convention already settles, and record it under `### Assumptions`.
 
-- **A1 Direction check** (one question): the restate plus a direction or behavior question with concrete options and a marked recommendation; a scope candidate the probes found becomes a `user-overridden: default` assumption shown in the handoff marked 仮置き, not the question. Never ask a bare "is this right?" yes/no. The first question that compares designs or behaviors, A1 or a later one, carries the premise block `interview.md` describes under **Show what the options rest on**. For trivial, this is the only question: it carries the restate, the one-line design, and proceed/adjust. For small and above, skip A1 when the user has stated or chosen the direction (an agent proposal the user has not answered is not settled); an adjacent candidate the probes found then goes into Files to Change when that direction covers it, otherwise under `## NOT Building` in one line, recorded as a `user-overridden: default` assumption under `### Assumptions` and shown in the handoff marked 仮置き.
+- **A1 Direction check** (one question): the restate plus a direction or behavior question with concrete options and a marked recommendation; a scope candidate the probes found becomes a `user-overridden: default` assumption shown in the handoff marked 仮置き, not the question. Never ask a bare "is this right?" yes/no. Every question that compares designs or behaviors, A1 and the later ones, carries the premise block `interview.md` describes under **Show what the options rest on**. For trivial, this is the only question: it carries the restate, the one-line design, and proceed/adjust. For small and above, skip A1 when the user has stated or chosen the direction (an agent proposal the user has not answered is not settled); an adjacent candidate the probes found then goes into Files to Change when that direction covers it, otherwise under `## NOT Building` in one line, recorded as a `user-overridden: default` assumption under `### Assumptions` and shown in the handoff marked 仮置き.
 - **A2 Re-ask** on an empty or ambiguous answer, still one question per turn.
 - **A3 List approaches** only when their difference changes the user's outcome or constraints, each with its tradeoff axis in one sentence; routine reversible mechanics are chosen autonomously and listed in one line under `### Alternatives Considered`.
 - **A4 Recommend** one, with one or two sentences of reasoning.
@@ -45,7 +49,7 @@ AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` 
 
 ## EXPLORE
 
-Find three things: patterns to mirror (`file:lines` and a snippet), the execution path the change flows through (every caller and consumer of the interface), and the existing behavior with the tests that observe it. Read directly for a small surface; dispatch unnamed `Explore` agents only for disjoint regions. For a behavior revision, also observe what actually happens (run the CLI, fire the hook, read effective config). Keep only findings that decide something.
+Start from the survey report and what SURVEY read. Find three things: patterns to mirror (`file:lines` and a snippet), the execution path the change flows through (every caller and consumer of the interface), and the existing behavior with the tests that observe it. Read directly for a small surface; dispatch unnamed `Explore` agents only for disjoint regions. For a behavior revision, also observe what actually happens (run the CLI, fire the hook, read effective config). Keep only findings that decide something.
 
 ## DRAFT
 
@@ -58,6 +62,7 @@ Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` li
 Skipped for trivial. Read the plan once as its own reviewer; no subagent is dispatched. Independent plan reviewers cost a wait of several minutes per plan, and a blind replay of the hardest defects they had caught found the same defects in plans written with no reviewer at all; what they still miss surfaces in `/impl`'s checks and in `/gate`. Check, in this order:
 
 - Every claim the Approach relies on carries its `source:`, and its excerpt says what the plan claims.
+- Every existing thing the survey found that the change touches or resembles is in the plan with its path, whether the change follows or departs from it, and the reason for a departure; a departure the user has not agreed to is a User decision.
 - Every behavior the change alters has an Autonomous Verification bullet that fails without the change, and a `[live]` one when the user can see it.
 - Every entry point or caller of a changed behavior is named, and special inputs and states are covered: special names and values, repeats, concurrency, failure and partial failure, waits without an end, a different run environment (launchd, cron, a non-interactive shell, CI).
 - No Requires User Confirmation item is something the agent can bring up itself, no check is handed to another person, issue, or later plan, and every operation outside local and dev that a `[live]` bullet needs is under `## Verification Grants`.

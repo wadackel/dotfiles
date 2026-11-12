@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Codex design-first planning skill. Mirrors Claude `/plan`'s seven named phases (PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan` with a request. Auto-loading is disabled by agents/openai.yaml.
+description: Codex design-first planning skill. Mirrors Claude `/plan`'s eight named phases (PARSE → SURVEY → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan` with a request. Auto-loading is disabled by agents/openai.yaml.
 ---
 
 # $plan
@@ -21,7 +21,7 @@ Once `$plan` ends with PENDING APPROVAL, the user types `$impl` as a top-level p
 
 ## Phase overview
 
-PARSE → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
+PARSE → SURVEY → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE.
 
 AGREE resolves remaining intent decisions using the available question tool or the Blocking Interview Protocol with `$plan --answer` continuation. DEEPEN runs in the main session by default, with one combined independent reviewer when the risk selection below requires it.
 
@@ -63,7 +63,7 @@ Form a one-sentence summary of the user's request. This is a restate of understa
 
 ### Complexity estimate
 
-Estimate complexity with quick `rg`/`fd` probes (no Explore subagents yet):
+Estimate complexity with quick `rg`/`fd` probes (no Explore subagents yet); they size the work, and directions come from SURVEY:
 
 | Level | Signals | Scope |
 |---|---|---|
@@ -90,6 +90,10 @@ An explicit user request for independent review also selects it. Evaluate these 
 
 Trivial short-circuit: if complexity is trivial, skip DEEPEN only when independent review is not required. Write a minimal DRAFT (then DEEPEN when required): Context, Files to Change, Task Outline, Verification Commands, Definition of Done, Completion Criteria, and one task. Check intent even for trivial requests, but ask only about consequential unresolved decisions.
 
+## SURVEY
+
+Skipped for trivial. Before any question about direction, run one explorer subagent with the brief in `references/survey.md`; it inherits EXPLORE's observation limits. Wait for its report. Then, before reading further yourself, write down from the report alone what `references/survey.md` asks under **Using the report**: the goal with its source, the criteria and the axis, the directions along it, and where the mechanism could live with the places no direction occupies. Only then read what A1 needs. The report's found items become premise lines marked follow or depart; its searched-but-not-found lines stay facts about the search, never questions to the user.
+
 ## AGREE
 
 Agree on purpose, constraints, acceptance criteria, and any consequential approach choices. Carry forward accepted Issue requirements and prior answers; do not require the user to approve them again.
@@ -104,7 +108,7 @@ Agree on purpose, constraints, acceptance criteria, and any consequential approa
 
 **Steps A1–A7:**
 
-- **A1 Direction check**: ask only if purpose or scope has a consequential unresolved branch. Existing explicit scope satisfies this step, including trivial requests. The first question that compares designs or behaviors, A1 or a later one, carries the premise block `references/interview.md` describes under **Show what the options rest on**.
+- **A1 Direction check**: ask only if purpose or scope has a consequential unresolved branch. Existing explicit scope satisfies this step, including trivial requests. Every question that compares designs or behaviors, A1 and the later ones, carries the premise block `references/interview.md` describes under **Show what the options rest on**.
 - **A2 Re-ask**: clarify an empty or ambiguous answer when the required decision is still unresolved.
 - **A3 List approaches** and **A4 Recommend**: compare alternatives only when they change the user's outcome or constraints; select routine reversible mechanics autonomously.
 - **A5 Approve approach**: ask only about a consequential approach choice not already accepted. Carry prior authorization forward.
@@ -117,7 +121,7 @@ Agree on purpose, constraints, acceptance criteria, and any consequential approa
 
 AGREE produces three subsections that get written into the plan body (preserving the downstream Critic parse contract): `### Assumptions`, `### Self-resolved`, `### Unresolved Items`. See `### AGREE output` below.
 
-If the user changes direction mid-AGREE, go back to A3 and restart the approach list. No penalty for revisiting.
+When a reply carries a reservation, rejects every option, corrects a premise, or changes direction, follow **Read the reply before moving on** in `references/interview.md`: the reservation stays open, the options are rebuilt on new axes or from fact-finding, never pruned.
 
 ### Requirement Clarification
 
@@ -154,7 +158,7 @@ Write these four subsections into the plan body immediately before `## Overview`
 
 ## EXPLORE
 
-Investigate the codebase as needed for the agreed direction. The main session owns these three discovery outcomes. Usually `rg`, `sed`, file reads, and other deterministic read-only commands are enough. Use an explorer only for a bounded, substantial investigation whose intermediate output benefits from isolation; explain that benefit and avoid duplicating work already assigned to a reviewer. Evidence from file lines, snippets, and commands must be integrated by the main session into DRAFT: Mandatory Reading, Patterns to Mirror, Test Strategy, and Completion Criteria.
+Start from the survey report and what SURVEY read, and investigate the codebase as needed for the agreed direction. The main session owns these three discovery outcomes. Usually `rg`, `sed`, file reads, and other deterministic read-only commands are enough. Use an explorer only for a bounded, substantial investigation whose intermediate output benefits from isolation; explain that benefit and avoid duplicating work already assigned to a reviewer. Evidence from file lines, snippets, and commands must be integrated by the main session into DRAFT: Mandatory Reading, Patterns to Mirror, Test Strategy, and Completion Criteria.
 
 EXPLORE commands are for observation only. Do not use network access, package-manager install or run-script, shell eval, write operations, credential access, or destructive commands during EXPLORE discovery unless explicitly approved by the user.
 
@@ -283,7 +287,7 @@ Review the plan against the original request and observed evidence. Edit the pla
 
 Check requirement alignment, technical evidence, failure behavior, verification coverage, and unnecessary complexity. Apply behavior-preserving simplifications directly; do not expand scope to satisfy optional suggestions. Use the shared checklist and specialist guidance as reading lenses without automatically dispatching their agents.
 
-Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item. Check that no Requires User Confirmation item is something the agent can bring up itself, that every operation outside local and dev a `[live]` item needs is under `## Verification Grants`, that a rendered change has its before-and-after screenshot item, and that `## Delivery` rests on the signal its `Basis` quotes.
+Check that every existing thing the survey found that the change touches or resembles is in the plan with its path, whether the change follows or departs from it, and the reason for a departure; a departure the user has not agreed to is asked. Cross-check that every implementation task's Verification Commands have a corresponding Completion Criteria item. Check that no Requires User Confirmation item is something the agent can bring up itself, that every operation outside local and dev a `[live]` item needs is under `## Verification Grants`, that a rendered change has its before-and-after screenshot item, and that `## Delivery` rests on the signal its `Basis` quotes.
 
 When independent review is not selected, this pass completes DEEPEN. Report findings and their resolution as main-session review; do not report subagent approval.
 
