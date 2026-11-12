@@ -15,7 +15,7 @@ Restate the request in one sentence for yourself; it is carried into A1's questi
 
 | Level | Signals | Process |
 |---|---|---|
-| trivial | typo, comment, one config value, one-line edit | no plan file: A1, then implement inline, verify, `/gate --diff-only` |
+| trivial | typo, comment, one config value, one-line edit | no plan file: A1, then implement inline, verify, `## Review` of the impl skill with `--review` |
 | small | one addition along an existing pattern, 1–3 files | plan file, one question turn, one self-review |
 | medium | multi-file feature on existing conventions | plan file, interview as needed, one self-review |
 | large | cross-cutting change, new architectural piece | as medium |
@@ -45,7 +45,7 @@ Agree on purpose and approach before drafting. One question per turn, in the for
 
 AGREE yields `### Assumptions`, `### Self-resolved`, and `### Unresolved Items` for the plan body (fields in `contract.md`). Each Self-resolved entry ends with `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>`; a claim the Approach relies on is Direct, or Supported only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets replaced by `<redacted: what it is>`. User-only questions never go to Unresolved Items.
 
-**Trivial path**: after A1, make the change, run the verification you named, run `/gate --diff-only`, and report per `## Final report` in the impl skill. No plan file, no `/impl`.
+**Trivial path**: after A1, make the change, run the verification you named, run `## Review` in `~/.claude/skills/impl/SKILL.md` with `--review`, and report per `## Final report` in the impl skill. No plan file, no `/impl`.
 
 ## EXPLORE
 
@@ -53,17 +53,17 @@ Start from the survey report and what SURVEY read. Find three things: patterns t
 
 ## DRAFT
 
-Write `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` with the headings the complexity requires (`contract.md`); prose in the user's language, headings and machine lines in English. Tag every Autonomous Verification bullet; a behavior change carries a `[live]` bullet that runs the changed thing where it actually runs (the CLI, the fired hook, a headless `claude -p` for a skill or instruction, the page), because a run outranks tests, types and reading. A change to what a screen renders carries a `[live]` bullet that captures it before and after (`/agent-browser` screenshots at the page's breakpoints, 375px and 1280px when none are defined; `tmux capture-pane` for a TUI) and reads the images. Requires User Confirmation holds only what `contract.md` says only the user holds, in the five-field form; never hand a check to another person, issue, or later plan. Size the plan to what the task needs, without filler sections or restated context.
+Write `~/.claude/plans/YYYYMMDDTHHmm-<slug>.md` with the headings the complexity requires (`contract.md`); prose in the user's language, headings and machine lines in English. Write each Autonomous Verification bullet as the state to establish, not the command that observes it, and tag it; a behavior change carries a `[live]` bullet observed where the changed thing actually runs, with a `観測:` line naming the surface and the means (the CLI, the fired hook, a headless `claude -p` for a skill or instruction, the page in a browser, a simulator, e2e), because a run outranks tests, types and reading. A change to what a screen renders carries a `[live]` bullet whose `観測:` line captures it before and after (`/agent-browser` screenshots at the page's breakpoints, 375px and 1280px when none are defined; `tmux capture-pane` for a TUI) and reads the images. Requires User Confirmation holds only what `contract.md` says only the user holds, in the five-field form; never hand a check to another person, issue, or later plan. Size the plan to what the task needs, without filler sections or restated context.
 
 Run `~/.agents/scripts/check-plan.ts <plan>`; fix every `error`, carry `warn` lines into DEEPEN. Then state the plan path, its headings, and the key design decisions briefly and proceed. Do not ask whether to proceed; drift is DEEPEN's job.
 
 ## DEEPEN
 
-Skipped for trivial. Read the plan once as its own reviewer; no subagent is dispatched. Independent plan reviewers cost a wait of several minutes per plan, and a blind replay of the hardest defects they had caught found the same defects in plans written with no reviewer at all; what they still miss surfaces in `/impl`'s checks and in `/gate`. Check, in this order:
+Skipped for trivial. Read the plan once as its own reviewer; no subagent is dispatched. Independent plan reviewers cost a wait of several minutes per plan, and a blind replay of the hardest defects they had caught found the same defects in plans written with no reviewer at all; what they still miss surfaces in `/impl`'s checks and in its review. Check, in this order:
 
 - Every claim the Approach relies on carries its `source:`, and its excerpt says what the plan claims.
 - Every existing thing the survey found that the change touches or resembles is in the plan with its path, whether the change follows or departs from it, and the reason for a departure; a departure the user has not agreed to is a User decision.
-- Every behavior the change alters has an Autonomous Verification bullet that fails without the change, and a `[live]` one when the user can see it.
+- Every behavior the change alters has an Autonomous Verification bullet whose state does not hold without the change, and a `[live]` one with its `観測:` line when the user can see it.
 - Every entry point or caller of a changed behavior is named, and special inputs and states are covered: special names and values, repeats, concurrency, failure and partial failure, waits without an end, a different run environment (launchd, cron, a non-interactive shell, CI).
 - No Requires User Confirmation item is something the agent can bring up itself, no check is handed to another person, issue, or later plan, and every operation outside local and dev that a `[live]` bullet needs is under `## Verification Grants`.
 - A change to what a screen renders has a `[live]` bullet that captures it before and after and reads the images.
@@ -75,7 +75,7 @@ Fix what you find in the plan with the Edit tool or by rewriting the whole file,
 
 ## DECOMPOSE
 
-One task is one verifiable unit: target files, expected behavior, and acceptance commands with expected output; red and green steps stay together, and the only standalone verification task is the final one. An Autonomous Verification bullet is one command that `/impl` runs as written, and a count or content condition is written so the command's exit code decides it (`rg` exits 1 on no match; `awk '… END{exit n!=N}'` for a count). A suite-style check (a whole test directory, `nix flake check`) goes on the last implementation task once; the final task re-runs every bullet whose run is stale (`contract.md`). With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and a task stays inside one layer. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task, literally `Final Audit + Review`, with `addBlockedBy`).
+One task is one verifiable unit: target files, expected behavior, and the criteria it establishes; a test and the change it observes stay together, and the only standalone verification task is the final one. A suite-style check (a whole test directory, `nix flake check`) runs once, on the final tree (`contract.md`). With `Level: stack`, each implementation task opens with `Layer: <branch>`, bottom layer first, and a task stays inside one layer. Register the tasks with the Task tools when available (pass 1 implementation tasks, pass 2 the final task, literally `Final Audit + Review`, with `addBlockedBy`).
 
 ## ACTIVATE
 
@@ -87,7 +87,7 @@ Open with the direction from `## Overview` in one or two sentences, then show th
 
 The handoff then closes in this order whatever the plan, because approval rests on it:
 
-1. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, each as its own list item or table row and never merged with another, with `[live]` the only tag shown and those first. The subject of each is the fact to be established, and the command or path closes it in words; never paste the plan's `rg` or command lines. A label line, not a list item, may group them so the ones that carry the weight stand out.
+1. `## 完了の条件`: every Autonomous Verification bullet except `[outcome]`, then every Requires User Confirmation item, each as its own list item or table row and never merged with another, with `[live]` the only tag shown and those first. The subject of each is the fact to be established, and the means of observation closes it in words; never paste the plan's `rg` or command lines. A label line, not a list item, may group them so the ones that carry the weight stand out.
 2. `## レビューしてほしい変更`: the `## Files to Change` entries that meet `references/human-review.md`, each with its label and what changes, or `なし`.
 3. One sentence, not a question: `上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。`, prefixed with `レビューしてほしい変更を確かめたうえで、` when that section is not `なし`.
 4. The plan path, then the block below.
@@ -113,4 +113,4 @@ This section applies only when the prompt is an autopilot unit brief (`~/.claude
 - **`## Delivery` and `## Verification Grants`** are the brief's lines, copied as written.
 - **DEEPEN** runs as above; a queued User decision follows the park rule instead of being asked.
 - **ACTIVATE** writes no handoff and no `## Plan ready` block: once `check-plan.ts` reports no `error`, end with `PLAN <plan path>` and stop until the controller answers.
-- **Trivial** writes no plan and needs no approval: make the change, verify it, commit on the worktree's branch, run `/gate --diff-only <start sha>`, then ship it as `/impl`'s Delivery and its `## Under /autopilot` say, and end with the report form.
+- **Trivial** writes no plan and needs no approval: make the change, verify it, commit on the worktree's branch, run `## Review` of `~/.claude/skills/impl/SKILL.md` with `--review <start sha>`, then ship it as `/impl`'s Delivery and its `## Under /autopilot` say, and end with the report form.

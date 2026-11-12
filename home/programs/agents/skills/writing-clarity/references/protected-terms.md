@@ -10,7 +10,7 @@ where no judgment is needed.
 - Commands and their arguments: `git rebase`, `darwin-rebuild switch`, `deno fmt --check`
 - File paths and extensions: `home/programs/claude/global-instructions.md`, `.jsonl`
 - Product, tool, and service names: Claude Code, nix-darwin, home-manager, GitHub Actions, tmux
-- Skill and agent names: `/gate`, `check-plan`, `code-simplifier`
+- Skill and agent names: `/impl`, `check-plan`, `code-simplifier`
 - Machine-contract labels: severity (MUST_FIX / SHOULD_FIX / NIT / CRITICAL / HIGH / MEDIUM / LOW), verdict values (PASS / FAIL / VERIFIED / ITERATE / CONVERGED), status values (pending / in_progress / completed)
 - Established acronyms: API, CLI, PR, CI, URL, JSON, YAML, AST, LSP
 

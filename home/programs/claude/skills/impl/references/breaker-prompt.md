@@ -1,6 +1,6 @@
 # Breaker Prompt Template
 
-Use this template when `/gate` dispatches `breaker-reviewer`. Replace `{placeholders}` with actual values. The breaker tries to break the change by running it; a finding survives only when the main session re-runs its command and sees the same failure.
+Use this template when `/impl`'s review dispatches `breaker-reviewer`. Replace `{placeholders}` with actual values. The breaker tries to break the change by running it; a finding survives only when the main session re-runs its command and sees the same failure.
 
 **Paste the `## Template` block verbatim.** The workspace sentence and the `VERDICT` rule are machine contract: `reviewer-dispatch-policy.ts` rejects a `breaker-reviewer` dispatch without them.
 
@@ -48,7 +48,7 @@ VERDICT: [PASS if no finding shows a failure that breaks the intent, FAIL otherw
 | Placeholder | Value |
 |---|---|
 | `{intent}` | The plan's `## Overview` direction and the user-visible behaviors it changes, in two to four sentences |
-| `{worktree}` | `<scratchpad>/<plan-slug>.breaker`, the worktree `/gate` built in §3 |
+| `{worktree}` | `<scratchpad>/<plan-slug>.breaker`, the worktree `/impl`'s review built (Dispatch one wave) |
 | `{temp_dir}` | A fresh directory from `mktemp -d` outside the repository |
 | `{diff_path}` | `<scratchpad>/<plan-slug>.gate.diff` |
 

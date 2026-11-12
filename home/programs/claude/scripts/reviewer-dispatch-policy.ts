@@ -4,10 +4,10 @@
 // Rejects an Agent/Task dispatch to a reviewer subagent whose prompt does not
 // carry the verdict rule. Measured over 774 recorded reviewer dispatches, only
 // 24% carried the rule, and reviewers that were not told it returned PASS while
-// listing blocker-severity findings in 45% of cases — the gate then advanced
+// listing blocker-severity findings in 45% of cases — the review then advanced
 // past findings that were never fixed.
 //
-// The prose instruction in the gate skill is what failed to land, so
+// The prose instruction in the impl skill's review is what failed to land, so
 // a stronger prose instruction is not the fix; this check is.
 
 import { text } from "node:stream/consumers";
@@ -18,10 +18,10 @@ interface HookInput {
 }
 
 export const TEMPLATE =
-  "~/.claude/skills/gate/references/domain-reviewer-prompt.md";
+  "~/.claude/skills/impl/references/domain-reviewer-prompt.md";
 
 /**
- * The reviewers /gate dispatches, listed explicitly. A `-reviewer$`
+ * The reviewers /impl's review dispatches, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer` and `skill-guide-reviewer`,
  * which belong to other workflows and have no template to satisfy the check.
  * Language checklists ride inside `code-reviewer`'s prompt as review cards,
@@ -63,7 +63,7 @@ export function isReviewerAgent(subagentType: string | undefined): boolean {
   return GUARDED.has(subagentType);
 }
 
-/** The /gate templates end their VERDICT line with "FAIL otherwise". */
+/** The /impl review templates end their VERDICT line with "FAIL otherwise". */
 export function hasVerdictRule(prompt: string | undefined): boolean {
   if (!prompt) return false;
   return /FAIL otherwise/i.test(prompt);
@@ -100,7 +100,7 @@ export function requirementMessage(
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
     "",
-    "Add this line to the prompt (it comes from the /gate template):",
+    "Add this line to the prompt (it comes from the /impl review template):",
     line,
   ].join("\n");
 }
@@ -109,7 +109,7 @@ export function denialMessage(subagentType: string): string {
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without the verdict rule.`,
     "",
-    "The prompt must state how PASS and FAIL are decided. For /gate,",
+    "The prompt must state how PASS and FAIL are decided. For /impl's review,",
     "load the template and paste its `## Template` block verbatim — do not",
     "summarise it and do not rewrite the VERDICT line:",
     `  ${TEMPLATE}`,

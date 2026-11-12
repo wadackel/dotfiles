@@ -1,10 +1,10 @@
 # Domain Reviewer Prompt Template
 
-Use this template when dispatching a domain specialist (`database-reviewer`, `cloud-architecture-reviewer`) or `security-auditor` from `/gate`; language concerns go to `code-reviewer` through its review cards, not to a specialist. Replace `{placeholders}` with actual values.
+Use this template when dispatching a domain specialist (`database-reviewer`, `cloud-architecture-reviewer`) or `security-auditor` from `/impl`'s review; language concerns go to `code-reviewer` through its review cards, not to a specialist. Replace `{placeholders}` with actual values.
 
 One template covers the domain specialists and `security-auditor`. The verdict line is schema-neutral, so the 3-tier (MUST_FIX / SHOULD_FIX / NIT) and 4-tier (CRITICAL / HIGH / MEDIUM / LOW) reviewers both read a rule that applies to them — `security-auditor` carries its own severity table in its agent definition.
 
-**Paste the `## Template` block verbatim.** Do not summarise it, do not rewrite the verdict line, and do not turn the verdict line into a placeholder. Dropping the verdict rule is the single failure mode this template exists to prevent: reviewers that are not told the rule return `PASS` while listing blocker-severity findings, and the gate then advances without those findings being fixed.
+**Paste the `## Template` block verbatim.** Do not summarise it, do not rewrite the verdict line, and do not turn the verdict line into a placeholder. Dropping the verdict rule is the single failure mode this template exists to prevent: reviewers that are not told the rule return `PASS` while listing blocker-severity findings, and the review then advances without those findings being fixed.
 
 ## Template
 
@@ -78,7 +78,7 @@ VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and
 |---|---|
 | `{repo_path}` | Absolute path to the repository or worktree under review |
 | `{branch}` | Branch name, or `detached at <sha>` |
-| `{diff_path}` | The diff file the gate wrote (`<scratchpad>/<plan-slug>.gate.diff`, or `<scratchpad>/<timestamp>.gate.diff` under `--diff-only`) |
+| `{diff_path}` | The diff file the review wrote (`<scratchpad>/<plan-slug>.gate.diff`, or `<scratchpad>/<timestamp>.gate.diff` under `--review`) |
 | `{diff_body}` | The diff text for `code-reviewer` and `security-auditor`, which have no Bash; `(see Diff file)` for every other specialist |
 | `{review_focus}` | What this specialist should look at, in one or two sentences — the reviewer's domain and any scope another reviewer in the same wave owns |
 

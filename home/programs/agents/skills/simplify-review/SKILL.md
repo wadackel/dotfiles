@@ -1,6 +1,6 @@
 ---
 name: simplify-review
-description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', or 'YAGNI check'. Also use proactively before finalizing non-trivial plans."
+description: "Reviews plans and code for over-engineering, then proposes simplifications. Spawns a fresh subagent (plan-simplifier or code-simplifier) with no prior context to objectively detect unnecessary complexity — abstractions without callers, speculative features, excessive error handling, premature optimization. Use when asked to 'simplify', 'シンプルにして', 'simplify review', '過剰設計をレビュー', '簡素化', or 'YAGNI check'."
 argument-hint: "[plan|code|auto]"
 ---
 
@@ -28,7 +28,7 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 |---|---|
 | User says "simplify", "YAGNI check", "過剰設計をレビュー" | Manual |
 | Re-running simplify on an already-iterated plan / diff | Manual |
-| Independent review of a plan or diff before `/gate` | Manual |
+| Independent review of a plan or diff before `/impl`'s review | Manual |
 | User review feedback says "too complex" | Reactive |
 
 ## Manual Workflow
@@ -66,7 +66,7 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 ## Integration Points
 
-- `/gate` is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/gate`.
+- `/impl`'s review is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/impl`'s review.
 
 ## Design Decisions
 

@@ -96,7 +96,7 @@ Two separate agents remain for a blast radius the combined review cannot cover; 
 
 #### Comment Review Card
 
-Before selecting reviewers, read `~/.claude/skills/gate/references/comments-card.md` when its `Trigger:` matches the aggregate diff. Follow its scope and exclusions: apply the card in `main-review`, or paste it verbatim into the selected `code-reviewer` prompt for independent review. Do not dispatch `comment-reviewer` just because the card matches. The card supplies checks, not a different verdict policy: MUST_FIX remains blocking; SHOULD_FIX and NIT remain non-blocking under the Codex review contract.
+Before selecting reviewers, read `~/.claude/skills/impl/references/comments-card.md` when its `Trigger:` matches the aggregate diff. Follow its scope and exclusions: apply the card in `main-review`, or paste it verbatim into the selected `code-reviewer` prompt for independent review. Do not dispatch `comment-reviewer` just because the card matches. The card supplies checks, not a different verdict policy: MUST_FIX remains blocking; SHOULD_FIX and NIT remain non-blocking under the Codex review contract.
 
 #### Security Dispatch Heuristic
 

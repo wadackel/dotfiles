@@ -28,7 +28,7 @@ const READ_ONLY =
 const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
-test("isReviewerAgent matches the reviewers /gate dispatches", () => {
+test("isReviewerAgent matches the reviewers /impl's review dispatches", () => {
   assertEquals(GUARDED.size, 6);
   assertEquals(isReviewerAgent("breaker-reviewer"), true);
   assertEquals(isReviewerAgent("database-reviewer"), true);
@@ -146,7 +146,7 @@ test("applies to the Task tool name as well", async () => {
   assertEquals(code, 2);
 });
 
-// --- Diff and read-only requirements (gate contract only) ---
+// --- Diff and read-only requirements (review contract only) ---
 
 test("blocks a no-Bash reviewer dispatched without a diff", async () => {
   const { code, stderr } = await runHook({

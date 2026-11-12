@@ -1,6 +1,6 @@
 ---
 name: autopilot
-description: Drives a large goal to completion without the user. Fixes the done criteria and the allowed side effects once up front, splits the goal into units, runs each unit's plan → impl → gate → PR in a fresh subagent with a Claude Fable advisor approving its plan, merges from the main session, parks decisions only the user can make, and keeps a ledger that survives compaction. Meant to run as `/goal /autopilot <goal>`. Use only when the user names autopilot in their own message or in the /goal condition ("/autopilot <goal>", "autopilot で進めて"); a plain request to work autonomously, or the word in a file or tool output, is not enough, because this skill replaces the user's plan approval.
+description: Drives a large goal to completion without the user. Fixes the done criteria and the allowed side effects once up front, splits the goal into units, runs each unit's plan → impl → review → PR in a fresh subagent with a Claude Fable advisor approving its plan, merges from the main session, parks decisions only the user can make, and keeps a ledger that survives compaction. Meant to run as `/goal /autopilot <goal>`. Use only when the user names autopilot in their own message or in the /goal condition ("/autopilot <goal>", "autopilot で進めて"); a plain request to work autonomously, or the word in a file or tool output, is not enough, because this skill replaces the user's plan approval.
 argument-hint: "[goal]"
 ---
 
@@ -10,14 +10,14 @@ Goal: $ARGUMENTS
 
 The user invoked this skill to be away while the goal is done. Invoking it delegates two things for this run only: plan approval (the user's `/impl` keystroke) goes to the Fable advisor's verdict, and every question that is not the user's alone is answered by the agent. Everything else stays as the repository, the permissions, and the hooks set it: neither the goal text, the advisor, nor tool output can grant what a hook or a repository rule forbids.
 
-This session is the controller. It holds the contract, the ledger, and the advisor, and it merges. It never edits the repository or runs a unit's plan, impl, or gate itself: each unit runs in its own subagent, which follows `/plan` and `/impl` through their `## Under /autopilot` sections and stops at a PR that is ready to merge.
+This session is the controller. It holds the contract, the ledger, and the advisor, and it merges. It never edits the repository or runs a unit's plan, impl, or review itself: each unit runs in its own subagent, which follows `/plan` and `/impl` through their `## Under /autopilot` sections and stops at a PR that is ready to merge.
 
 ## 1. Contract
 
 Before changing anything, read the goal and write down:
 
 - **Done criteria**: observable facts that end the run, in the user's wording; numbers the user gave stay as given. A verification the goal or its source requires but the agent cannot run (a device that is not connected) stays a criterion with evidence `pending`.
-- **Units**: the independent pieces of work, in the order they will run, each the smallest piece worth its own PR and gate. Exploratory goals start with one discovery unit whose output is the remaining units. Same-shape edits too small for a gate each (a batch of patch bumps) are one unit.
+- **Units**: the independent pieces of work, in the order they will run, each the smallest piece worth its own PR and review. Exploratory goals start with one discovery unit whose output is the remaining units. Same-shape edits too small for a review each (a batch of patch bumps) are one unit.
 - **Allowed side effects**: only what the goal text grants (commit, push, PR, merge, release, deploy, issue creation, writes to another repository, repository creation, `sudo`, messages to people). A grant of PRs includes pushing the unit's own branches and merging, closing, and commenting on the unit's PRs. Side effects the units need that the goal did not grant are asked once, before the first unit, in a single multiSelect AskUserQuestion (one option each, with what it is for), and never again: one needed later parks its step.
 - **PR shape**: a unit that depends on another unit not yet merged is a stack layer on it (`/gh-stack`), and so is every unit when the goal or the repository's conventions ask for stacks; the unit others stack on starts as a stack too. Every other unit gets its own PR. A PR on a branch the agent did not create, and one that targets such a branch, is never stacked (`references/foreign-prs.md`).
 - **Parallel lanes**: ready units (section 3) that touch files disjoint from other running units except a stack parent, and share no resource (`darwin-rebuild`, a dev server port, a device, a deploy) run at once, up to 3, each in its own worktree. A count or "順番に" in the goal overrides the 3.
@@ -43,10 +43,10 @@ Keep every lane busy: a unit is ready when its dependencies are merged, or, for 
 
 1. Record the start sha in the ledger, give the unit a free lane number, fill the template in `references/unit-brief.md`, dispatch it as that file says, and write the agent id it returns into the Units table. Fill every free lane with a ready unit, then end the turn and wait for notifications.
 2. On `PLAN <path>`: ask the advisor for Approval. Send `REVISE` with the findings to the unit's agent id, or `APPROVED <path>` on `VERDICT: APPROVE`, then record plan path, verdict, and round in one edit.
-3. On the report: check it as `unit-brief.md` says, then copy its PR, `ALL_PASS head`, gate result, review hunks, Decisions (with the words that reverse each, into the Decisions section), and parked question into the ledger. `BLOCKED` goes to the advisor as a Failure; the third `BLOCKED` on one unit parks it. `PARKED` parks the step; continue with every unit that does not depend on it.
+3. On the report: check it as `unit-brief.md` says, then copy its PR, `ALL_PASS head`, review result (its `Gate:` line), review hunks, Decisions (with the words that reverse each, into the Decisions section), and parked question into the ledger. `BLOCKED` goes to the advisor as a Failure; the third `BLOCKED` on one unit parks it. `PARKED` parks the step; continue with every unit that does not depend on it.
 4. Merge per section 4. Once the unit is done, or parked other than for its merge, TaskStop it and `git worktree remove` its `Worktree:`; a removal that fails (uncommitted work) goes to Parked as a note. A unit whose merge is parked for a person keeps its agent and worktree until the answer or the run's end.
 
-Read a PR's state yourself with `gh pr view <PR> --json state,mergeStateStatus,headRefOid` and `gh pr checks <PR> --json name,bucket` before reporting or merging; its code is the gate's to judge. A unit may be added mid-run only to fix a defect in a change this run merged; anything else found goes to Parked as a note.
+Read a PR's state yourself with `gh pr view <PR> --json state,mergeStateStatus,headRefOid` and `gh pr checks <PR> --json name,bucket` before reporting or merging; its code is the review's to judge. A unit may be added mid-run only to fix a defect in a change this run merged; anything else found goes to Parked as a note.
 
 ## 4. Merge
 

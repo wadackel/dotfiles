@@ -1,6 +1,6 @@
 ---
 name: autopilot-unit
-description: Runs one unit of an /autopilot run (plan, impl, gate, PR) from the brief in its prompt. Dispatched only by the /autopilot controller; do NOT select it for any other task.
+description: Runs one unit of an /autopilot run (plan, impl, review, PR) from the brief in its prompt. Dispatched only by the /autopilot controller; do NOT select it for any other task.
 model: opus
 experimental:
   cacheTtl: 1h
@@ -19,11 +19,11 @@ Run the brief's Setup line. Then read `~/.claude/skills/plan/SKILL.md` and follo
 Phase 2 starts with a message from the controller. Work in the worktree you ran Phase 1 in; when that directory is gone (worktree isolation removes one that Phase 1 left unchanged), recreate it with `git worktree add <path> <branch>` run in the main repository (`git -C <main repository>`) (`-b <branch> <start sha>` when the branch does not exist yet) and continue there. Recreating it, and the branch name it takes, is routine, not a Decision: it stays out of the report.
 
 - `REVISE` with numbered findings: apply or reject each (a rejection gets one line of reason in your reply), fix the plan, run check-plan again, and end with `PLAN <plan path>`.
-- `APPROVED <plan path>`: read `~/.claude/skills/impl/SKILL.md` and follow it with its `## Under /autopilot` section, through `/gate`, the PR, and `/iterate-pr` until `ALL_PASS`. Dispatch every subagent, `/gate`'s reviewers included, without `run_in_background`: ending your turn while one runs makes you report before it returns. End with the report below.
+- `APPROVED <plan path>`: read `~/.claude/skills/impl/SKILL.md` and follow it with its `## Under /autopilot` section, through its `## Review`, the PR, and `/iterate-pr` until `ALL_PASS`. Dispatch every subagent, the review's reviewers included, without `run_in_background`: ending your turn while one runs makes you report before it returns. End with the report below.
 - `ITERATE <PR>` (the base moved: another unit merged first, the layer below merged, or the user approved a merge that waited): bring the branch onto the current base (`git fetch origin <base>` then `git rebase origin/<base>`; for a stack layer, `gh stack rebase --downstack`, never `gh stack sync`, which would rewrite and push the layers above that other units own), re-run the checks the rebase made stale, push only your branch with `--force-with-lease`, run `/iterate-pr` until `ALL_PASS`, and end with the report below. The report after it lists under Review hunks only a hunk an earlier report listed that resolving a conflict changed, with what changed at the end of its line; otherwise `none`.
 - `HYPOTHESIS` with the advisor's next idea after you reported BLOCKED: try it and end with the report below.
 
-A brief that ends with `ITERATE <PR>` comes after the unit that opened the PR stopped: skip Phase 1, run the Setup line, work in the worktree `git worktree list` shows holding the PR's branch, or else take the branch with `gh pr checkout <PR>` (it counts as a branch you created, unless the brief names a Foreign PR), and handle it as the `ITERATE` message above; its `Gate:` line is `PASS`, since the PR exists only after the unit's gate passed.
+A brief that ends with `ITERATE <PR>` comes after the unit that opened the PR stopped: skip Phase 1, run the Setup line, work in the worktree `git worktree list` shows holding the PR's branch, or else take the branch with `gh pr checkout <PR>` (it counts as a branch you created, unless the brief names a Foreign PR), and handle it as the `ITERATE` message above; its `Gate:` line is `PASS`, since the PR exists only after the unit's review passed.
 
 ## Park rule
 
@@ -43,7 +43,7 @@ Worktree: <absolute path of the worktree you ran in>
 PR: <url, or none>
 ALL_PASS head: <sha from `gh pr view --json headRefOid` taken right after ALL_PASS, or none>
 Gate: <PASS | BLOCKED: gate escalated | not run: why>
-Review hunks: <one line per hunk the gate listed, in the line form of ~/.claude/skills/plan/references/human-review.md; advice never removes one; or none>
+Review hunks: <one line per hunk the review listed, in the line form of ~/.claude/skills/plan/references/human-review.md; advice never removes one; or none>
 Decisions: <one line each: what was chosen, over what, → the words that reverse it, starting with `(plan)` when the plan already recorded it when the controller sent `APPROVED`, never for one added during impl; or none>
 Parked: <the question in one line with the recommendation, or none>
 Blocked: <for BLOCKED, what failed three times and what was tried; else none>

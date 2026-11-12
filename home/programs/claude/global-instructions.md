@@ -36,8 +36,8 @@
 
 ## Entrypoints
 
-- `/plan <request>` is the user's entrypoint for implementation work and sizes the process to the request, small requests included; `/impl` executes the approved plan and ends with `/gate`. Both are user-invoked.
-- `/goal /autopilot <goal>` is the user's entrypoint for a long unattended run: each unit's plan → impl → gate → PR in its own subagent, a Fable advisor approving the plans, and the main session merging. Load `/autopilot` only when the user names it, because it replaces their plan approval.
+- `/plan <request>` is the user's entrypoint for implementation work and sizes the process to the request, small requests included; `/impl` executes the approved plan and ends with its own review of the change. Both are user-invoked.
+- `/goal /autopilot <goal>` is the user's entrypoint for a long unattended run: each unit's plan → impl → PR in its own subagent, a Fable advisor approving the plans, and the main session merging. Load `/autopilot` only when the user names it, because it replaces their plan approval.
 - `/systematic-debugging` for bugs: observe the symptom directly, treat the fix as a hypothesis to falsify, and present both the minimal workaround and the root-cause fix when both exist.
 - `/qa-planner` for QA-style verification, `/agent-browser` for browser or UI checks (screenshots, console, responsive), `/gdocs-to-md` for Google Docs URLs, `/repo-dive` for GitHub repository code, `/obsidian-cli` for vault notes.
 - `/consult` is the user's entrypoint for a consultation with a thinking partner: it widens the problem with them, says what it notices and disagrees when the goal calls for it, checks what it asserts, and does not push toward a decision or the next workflow step.

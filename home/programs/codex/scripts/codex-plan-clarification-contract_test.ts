@@ -15,7 +15,6 @@ const CRITIC_PROMPT =
 const ADVERSARIAL_PROMPT =
   "home/programs/agents/shared/plan/references/adversarial-prompt.md";
 const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
-const CLAUDE_GATE = "home/programs/claude/skills/gate/SKILL.md";
 const CLAUDE_IMPL = "home/programs/claude/skills/impl/SKILL.md";
 const CODEX_IMPL = "home/programs/codex/skills/impl/SKILL.md";
 const HUMAN_REVIEW =
@@ -193,7 +192,6 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
     CONTRACT,
     HUMAN_REVIEW,
     CLAUDE_IMPL,
-    CLAUDE_GATE,
     CODEX_IMPL,
   ]],
   ["権限・信頼境界", [HUMAN_REVIEW]],
@@ -211,11 +209,10 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
   ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
 ];
 // Only the plan skills have a `references/` that links to the shared
-// directory; gate and the impl skills must name the public path, or a bare
+// directory; the impl skills must name the public path, or a bare
 // `references/human-review.md` would resolve to their own directory.
 const HUMAN_REVIEW_REFERRERS: ReadonlyArray<readonly [string, string]> = [
   [CLAUDE_PLAN, "references/human-review.md"],
-  [CLAUDE_GATE, "~/.claude/skills/plan/references/human-review.md"],
   [CLAUDE_IMPL, "~/.claude/skills/plan/references/human-review.md"],
   [CODEX_PLAN, "references/human-review.md"],
   [CODEX_IMPL, "~/.agents/skills/plan/references/human-review.md"],
@@ -606,7 +603,7 @@ test("Codex routes the existing comments card through its selected reviewer", as
   const skill = await readRepoFile(CODEX_IMPL);
   const card = section(skill, "#### Comment Review Card");
   const reference = card.match(
-    /`(~\/\.claude\/skills\/gate\/references\/[^`]+)`/,
+    /`(~\/\.claude\/skills\/impl\/references\/[^`]+)`/,
   );
   assert(reference, "comments card needs a resolvable public reference");
   const contents = await readRepoFile(

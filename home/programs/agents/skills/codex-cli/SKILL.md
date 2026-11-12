@@ -165,4 +165,4 @@ Non-obvious behavior to be aware of:
 
 ## Code review
 
-A review that must end in a PASS / FAIL verdict with fixes applied belongs to `/gate`. A one-off Codex opinion on a diff is an ordinary task here: `codex exec -s read-only review --uncommitted` (or `--base <ref>` / `--commit <sha>`), run with the same flags as above.
+A review that must end in a PASS / FAIL verdict with fixes applied belongs to `/impl`'s review (`/impl --review`). A one-off Codex opinion on a diff is an ordinary task here: `codex exec -s read-only review --uncommitted` (or `--base <ref>` / `--commit <sha>`), run with the same flags as above.

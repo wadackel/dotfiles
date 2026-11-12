@@ -271,7 +271,7 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 
 ### Requires User Confirmation item format
 
-Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/gate`, and the final report read them as written:
+Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/impl`, and the final report read them as written:
 
 ```
 - [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | real PR | device> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>

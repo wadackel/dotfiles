@@ -1,8 +1,8 @@
 # Output examples
 
-Read before writing the `/plan` handoff or the `/impl` final report. The handoff examples show how a shape follows from the material: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram. The report examples share one fixed skeleton (the result line and the four bold groups of `impl/SKILL.md`) and differ in what the material puts inside it: a diagram or none, a tree of files or one folded by directory, zero to three groups under `**あなたがすること**`. Copy neither the subjects nor the wording, and build the content again from the plan in front of you.
+Read before writing the `/plan` handoff or the `/impl` final report. The handoff examples show how a shape follows from the material: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram. The report example shows the fixed headings and their order from `impl/SKILL.md`; a report keeps only the sections that have content, and what goes in each comes from the request in front of you. Copy neither the subjects nor the wording, and build the content again from the plan.
 
-What stays the same across them is what approval and the gate read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's group names, its sub-group `レビューしてほしい N か所`, and `仮置き` for a provisional assumption. The block is written with its placeholders here so that it is never taken for a real plan.
+What stays the same is what approval and the review read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's headings and their order, the marks in its tree, `レビューしてほしい N か所`, and `仮置き` for a provisional assumption. The block is written with its placeholders here so that it is never taken for a real plan.
 
 ## Handoff: a small change
 
@@ -74,7 +74,7 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 **あなたが確かめる**
 
 - [live] 実際のチャンネルに通知が 1 件届き、文面が読める
-    - 本物の Webhook の URL を `NOTIFY_SLACK_URL` に入れ、`build --fail-fixture` を 1 回実行して、届いた文面を知らせる。gate の前に必要
+    - 本物の Webhook の URL を `NOTIFY_SLACK_URL` に入れ、`build --fail-fixture` を 1 回実行して、届いた文面を知らせる。レビューの前に必要
 
 ## レビューしてほしい変更
 
@@ -91,110 +91,50 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 - Status: PENDING APPROVAL — type `/impl` to approve and execute
 ````
 
-## Final report: a small change
+## Final report
 
-One behavior, two files, nothing for the reader to do. The groups are short lines, the tree has two files, and `**あなたがすること**` is `なし` on the same line. No diagram.
-
-````
-`greet --version` が動くようになった。レビュー通過、未 commit
-
-**何が起きたか**
-- `src/cli.ts` の引数処理が、ほかの引数より先に `--version` を判定する
-- 前は `--version` を未知の引数として拒んだ。今は `greet 1.4.0` を出して exit 0
-- コマンドの利用者は、入っているバージョンを確かめられる
-
-**どこまで確かめたか**
-- 実機: ビルドした `dist/greet` に `--version` を渡し、`greet 1.4.0` と exit 0
-- 定型: 全テスト（新しいテストを含む）
-- 未確認: なし
-
-**触ったファイル**
-```
-src/
-├── cli.ts        --version の判定
-└── cli_test.ts   2 件追加
-```
-
-**あなたがすること** なし
-````
-
-## Final report: a refactor
-
-A behavior-preserving split and rename. The structure after the change is one line, the shape before and after is two lines, the kept old name is one line, and the equivalence check is the first line of `**どこまで確かめたか**`. One decision for the reader, written as what was chosen and the words that reverse it.
+A change a user can see, one hunk the reader must read, one thing not established, and two decisions. The opening answers the request and the concern raised while planning, and says that something was not established. The tree carries the marks, so the reader sees where to look without reading code. The first decision is asked as a question; the second waits for the next turn.
 
 ````
-書き出しを `writer.ts` に分け、`dump` を `export` に改名。挙動は不変。レビュー通過、未 push（`refactor/writer-module`）
+#157479 の「共有設定の未指定」を「共有しない」に揃えた。依頼どおりで、
+気にしていた service.ts の既存の記述は残した。確かめていないことが 1 つある。
+draft PR #160301、CI 通過
 
-**何が起きたか**
-- `scan.ts` はスキャンと `Entry` 型、`writer.ts` は書き出し、`api.ts` が両方を呼ぶ
-- `scan.ts` は 181 行から約 50 行。`exportOne` / `exportAll` と補助関数は `writer.ts` へ
-- JSON のキー `counts.dumped` だけ旧名のまま（外から読む側がいる形）
-- 利用者に見える動きは不変。次に `scan.ts` を読む人はスキャンだけ読めばよい
+**使う人から見て変わること**
+- 共有ダイアログで未指定のまま保存すると、これまではエラー → 今は「共有しない」で保存
+- API の sharing は null を返さなくなる。呼び出し側 3 か所は対応済み
 
-**どこまで確かめたか**
-- 本計画: 移動前に同じ改名を当てて比べ、差分は `export` 2 つ、空行 1 つ、フィクスチャの複製 1 つ
-- 定型: 型検査、lint、テスト 281 件（件数は作業前と同じ）
-- 未確認: 書き出しの速さ。関数の中身が同じなので測っていない
-
-**触ったファイル**
+**変更したファイル**
 ```
-src/
-├── scan.ts          書き出しを抜いてスキャンだけに
-├── writer.ts        新規。exportOne / exportAll と補助関数
-├── writer.test.ts   新規。書き出しのテストを移動
-└── api.ts           counts.dumped への詰め替え
+backend/
+├── sharing/
+│   ├── normalize.ts        未指定を「共有しない」に変換
+│   └── normalize_test.ts   変換のテスト
+└── migrations/
+    └── 0042_sharing.sql    既存の null を書き換え ← レビューしてほしい
+frontend/share/Dialog.tsx   保存時のエラー表示を削除（削除あり）
 ```
-
-**あなたがすること**
-
-決める 1 つ
-- `counts.dumped` は旧名のまま詰め替えで残した → 読む側がいないなら「API のキーも変える」
-````
-
-## Final report: parts that act on each other
-
-A new path between parts, so `**何が起きたか**` opens with a diagram. The tree folds the three test files into one line. All three groups appear under `**あなたがすること**`: one human-review line that also carries the security finding on the same hunk, three decisions (the finding, a 仮置き default, a file the plan did not name), and the real-channel check the reader runs.
-
-````
-ビルド失敗を Slack にも知らせる `notify.slack` が動くようになった。既定はオフ。レビュー通過、未 commit
-
-**何が起きたか**
-
-```
-build 失敗 ──▶ notifier ──┬──▶ 端末の通知（今までどおり）
-                           └──▶ slack sender ──▶ Webhook へ POST（on のときだけ）
-```
-
-- 前は失敗の通知は端末だけ。今は on にすると Slack にも 1 件届く
-- 送信に失敗しても端末の通知は出る
-- ビルドを回す人は離席中でも失敗に気づける。`notifier.ts` の次の読者は分岐が 1 つ増える
-
-**どこまで確かめたか**
-- 実機: 手元の受信先で、on なら失敗したターゲット名を含む本文が 1 件届き、off なら届かない
-- 本計画: 受信先が 500 を返しても端末の通知が出て、終了コードはビルドの結果のまま
-- 定型: 型検査と全テスト
-- 未確認: 本物のチャンネルへの送信（手元に本物の URL がない）
-
-**触ったファイル**
-```
-src/
-├── notifier.ts        送り先の分岐
-├── slack_sender.ts    新規。Webhook へ POST
-├── config.ts          notify.slack と NOTIFY_SLACK_URL
-├── cli.ts             --fail-fixture の終了コード（計画外）
-└── *_test.ts (3)
-```
-
-**あなたがすること**
 
 レビューしてほしい 1 か所
-- `slack_sender.ts:12-40` — 外部送信。Webhook へ POST。残すと失敗ごとに送信。戻すなら分岐ごと消す。URL ログ（31 行目）は「直すべき」
+- `migrations/0042_sharing.sql` — 取り消せない操作。既存の null を「共有しない」に書き換える。残すと元の未指定は区別できない。戻すなら down migration で null に戻す
 
-決める 3 つ
-- URL のログは直していない →「URL のログを消す」
-- 宛先は Slack の既定チャンネル（仮置き）→「宛先を設定で選べるようにする」
-- 計画外の `src/cli.ts:88` に了承を得て 1 行追加 →「この 1 行を戻す」
+**確かめたこと**
+- dev のブラウザで、未指定のまま保存して一覧に「共有しない」と出た（375px / 1280px）
+- 型検査、lint、全テスト
 
-確かめてほしい 1 つ
-- 本物の URL を `NOTIFY_SLACK_URL` に入れて `build --fail-fixture` を走らせ、届いた文面か status code を知らせる
+**確かめていないこと**
+- 本番の既存データに null が何件あるか
+  - なぜ: 本番の DB を読む権限がこのセッションに無い
+  - 外れていたら: 件数が多いと、migration の実行に時間がかかる
+  - 確かめ方: 本番の読み取りを許可してもらえれば、件数を数えて報告できる
+
+**次に進められること**
+- #157479 は、この PR の merge で close できる（受け入れ条件 3 つすべて満たした）
+- 次に着手できる: #157480（この PR に依存しない）
+
+**あなたに決めてほしいこと**（2 つ。1 つずつ聞きます）
+
+### 既存の null を、一括で「共有しない」に書き換えますか
+
+<判断材料・前提・選択肢・推奨。`interview.md` の形式>
 ````

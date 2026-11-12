@@ -1,6 +1,6 @@
 # Re-review Diagnostic Prompt Template
 
-Use this template for the one re-review the Claude gate runs: after the main session fixed a reviewer's blocker (`MUST_FIX`, `CRITICAL`, a spec Issue, or a security `HIGH`), the reviewer that reported it gets the fix diff and its previous findings. Replace `{placeholders}` with actual values.
+Use this template for the one re-review `/impl`'s review runs: after the main session fixed a reviewer's blocker (`MUST_FIX`, `CRITICAL`, a spec Issue, or a security `HIGH`), the reviewer that reported it gets the fix diff and its previous findings. Replace `{placeholders}` with actual values.
 
 What a fix can break lives mostly inside the fix diff, so this round looks at the fix diff and asks one question: did the fix close the reported findings?
 
@@ -60,7 +60,7 @@ If the fix diff itself introduces a **new** `MUST_FIX` (or `CRITICAL`) defect, o
 
   ESCALATE: fix introduced a new blocker
 
-The main session counts that line as a FAIL; the gate's round budget is then spent, so the main session takes the blocker through the gate's closing pass and it is not re-reviewed.
+The main session counts that line as a FAIL; the review's round budget is then spent, so the main session takes the blocker through the review's closing pass and it is not re-reviewed.
 
 New findings below blocker severity that you notice inside the fix diff go under `### Nits`. Do not escalate for those. A problem you notice in code the fix did not touch, which was there before this change, goes under `### Notes` marked `pre-existing`: it never fails this round.
 
@@ -88,7 +88,7 @@ VERDICT: [PASS if every previous finding is CLOSED and the fix introduced no MUS
 | `{original_findings}` | The blocker-severity findings from the previous round, verbatim |
 | `{repo_path}` | Absolute path to the repository or worktree |
 | `{fix_diff}` | The content of `{diff_path}` |
-| `{diff_path}` | `<scratchpad>/<plan-slug>.rereview-<n>.gate.diff`, the diff from the tree kept at the previous dispatch to a new snapshot (gate §4); it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
+| `{diff_path}` | `<scratchpad>/<plan-slug>.rereview-<n>.gate.diff`, the diff from the tree kept at the previous dispatch to a new snapshot (Judge and re-review in `/impl`); it is what a reviewer without Bash reads, and its `.gate.diff` suffix is what `reviewer-dispatch-policy.ts` matches |
 
 ## Usage
 

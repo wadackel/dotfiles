@@ -118,7 +118,7 @@ function tmuxReachesDefault(args: string[]): boolean {
 }
 
 /**
- * The /gate breaker runs commands in a throwaway worktree. These are the ones
+ * The /impl review's breaker runs commands in a throwaway worktree. These are the ones
  * that reach past it: the user's tmux server (a tmux whose subcommand comes
  * before a global -L / -S talks to the default socket), launchd and the
  * network. They are refused for that agent alone, through
