@@ -69,9 +69,7 @@ Dispatch `code-reviewer` with `references/reviewer-prompt.md`. When the diff cro
 
 ## Ship
 
-Ship as far as the repository's shipping default goes, and leave the change uncommitted where there is none. The default is the one in the repository's `AGENTS.md` or `CLAUDE.md`, else the list below; when neither has one, ask at the first stop.
-
-- `dotfiles`: commit and push on `main`.
+Ship as far as the repository's shipping default goes, and leave the change uncommitted where there is none. The default is what the repository's `AGENTS.md` or `CLAUDE.md` states; this skill names no repository. When they state none, ask at the first stop and offer to record the answer there.
 
 ## Report
 
