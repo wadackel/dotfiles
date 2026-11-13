@@ -11,7 +11,9 @@ The user runs several sessions at once and comes back hours later. Finish the wo
 
 ## Understand first
 
-Requests are short and lean on context: an issue number, or a continuation of the conversation so far. Read the issue, the conversation, and the code, and run the thing, until you can say what changes and how it behaves now. A question the user can only answer with "investigate first" was asked too early.
+Requests are short and lean on context: an issue number, or a continuation of the conversation so far. Read the issue, the conversation, and the code until you can say what changes. Look for what already does part of the work (the repository's helpers, its dependencies, its test fixtures) and build on it; writing your own instead is a decision the report names.
+
+Then, before the first edit, call `TaskCreate` once per done state (the state as the subject, where it will be observed as the description), and observe the behavior you are about to change where it runs: the built CLI, the fired hook, the page, a headless agent run. Keep the command. The same observation on the final tree is what establishes a done state and completes its task, and setting it up now costs less than at the end. A question the user can only answer with "investigate first" was asked too early.
 
 ## Ask only what the user alone holds
 
@@ -35,11 +37,13 @@ When nothing above remains, proceed without waiting for approval, whatever the s
 
 When you stop, open with where the work stands, because the user may have been away.
 
+Work that serves no done state is outside the request: name it under 次に進められること instead of doing it.
+
 Keep `git rev-parse HEAD` as the start before the first edit. When the work may outlast the context window, write `~/.claude/plans/<YYYYMMDDTHHmm>-<slug>.do.md` with four things only: the decisions (the user's and yours, each with what it was chosen over), the done states and where each is observed, the shipping scope, and decisions that changed on the way. Progress lives in git. After compaction, read that file and `git status` before going on.
 
 ## Done
 
-The work is done when each done state holds on the final tree, observed where the changed thing runs. A part the user called risky is verified the way they asked. Run the repository's routine checks (formatter, lint, type check, the tests covering the change) once at the end.
+The work is done when every done state was observed on the final tree where the changed thing runs, or is listed under 確かめていないこと with the attempt that failed. A test, a type check, or reading the code supports that observation and does not replace it. A part the user called risky is verified the way they asked. Run the repository's routine checks (formatter, lint, type check, the tests covering the change) once at the end.
 
 ## Review
 
@@ -51,7 +55,7 @@ GIT_INDEX_FILE=<scratchpad>/<slug>.index git add -A
 git diff -D --no-ext-diff --no-textconv --no-color <start> "$(GIT_INDEX_FILE=<scratchpad>/<slug>.index git write-tree)" > <scratchpad>/<slug>.gate.diff
 ```
 
-Dispatch `code-reviewer` with `references/reviewer-prompt.md`, and also `security-auditor` when the diff crosses a boundary in `references/human-review.md`. Fix what blocks, and have the same reviewer check the fix once. What stays open goes to the user. Delete the index copy when the review ends.
+Dispatch `code-reviewer` with `references/reviewer-prompt.md`. When the diff crosses a boundary in `references/human-review.md`, or the user asked to break it, also dispatch `security-auditor` and, per `references/breaker-prompt.md`, `breaker-reviewer`, all in one message. Fix what blocks, and have the same reviewer check the fix once; a breaker finding counts only after you re-ran its command yourself, and its fix is checked by re-running that command. What stays open goes to the user. Delete the index copy and the breaker worktree when the review ends.
 
 ## Ship
 

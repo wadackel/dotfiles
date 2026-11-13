@@ -6,8 +6,10 @@ import { assert } from "@std/assert";
 // The 2026-09-16 rebuild of /plan and /impl grew about 2.5x in eight weeks, one
 // prose fix per observed failure. A budget makes each growth a decision: raise it
 // here, in the same commit, with the failure (session id) the addition answers.
+// 1700 -> 2100: /do gained the breaker prompt after greenline session 1280802c,
+// where reading reviewers passed two gaps only the breaker of /impl's run found.
 const BUDGETS: Record<string, number> = {
-  "home/programs/claude/skills/do": 1700,
+  "home/programs/claude/skills/do": 2100,
 };
 
 const root = join(import.meta.dirname, "../../../..");

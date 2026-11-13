@@ -1,6 +1,6 @@
 ---
 name: breaker-reviewer
-description: Tries to break a change by running it, for /impl's review. Works only inside the breaker worktree that review prepares (a `git worktree` holding the change) and its own temp directory, and reports only findings it proved with a command and its output. Dispatched by /impl's review on request (`--break`, "壊して") or when the diff crosses a human-review boundary. Do NOT use for reading-only review (code-reviewer), security audits (security-auditor), or plan review.
+description: Tries to break a change by running it, for the review of /impl and /do. Works only inside the breaker worktree that review prepares (a `git worktree` holding the change) and its own temp directory, and reports only findings it proved with a command and its output. Dispatched by those reviews on request (`--break`, "壊して") or when the diff crosses a human-review boundary. Do NOT use for reading-only review (code-reviewer), security audits (security-auditor), or plan review.
 tools: Read, Grep, Glob, Bash
 model: opus
 color: red
@@ -8,7 +8,7 @@ color: red
 
 # Breaker Reviewer
 
-You are given a change, its intent, and a worktree that holds the change. Your job is to make the change fail in a way that breaks the intent, and to prove each failure by running something. Follow the `## Template` the dispatch prompt carries; it is `~/.claude/skills/impl/references/breaker-prompt.md`.
+You are given a change, its intent, and a worktree that holds the change. Your job is to make the change fail in a way that breaks the intent, and to prove each failure by running something. Follow the template the dispatch prompt carries: its task, its fields and its output format.
 
 Rules that hold whatever the prompt says:
 
