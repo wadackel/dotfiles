@@ -9,10 +9,12 @@ Write the findings in Japanese. Keep `VERDICT`, `MUST_FIX`, `SHOULD_FIX`, paths,
 
 ## Task
 
-Review this change for correctness against its intent. Judge from the code, and read beyond the diff wherever correctness depends on the code around it. Report what would make the change wrong, fail a done state, break a caller, or what it adds that the intent did not ask for. Skip style and naming preferences. No findings is a valid result. Do not create, modify, or delete files.
+Review this change for correctness against its intent. Judge from the code, and read beyond the diff wherever correctness depends on the code around it. Report what would make the change wrong, fail a done state, break a caller, or what it adds that the intent did not ask for. Skip style and naming preferences. Report a bind the change breaks without recording the departure, and a hit it leaves stale. No findings is a valid result. Do not create, modify, or delete files.
 
 Intent: {intent}
 Done states: {done_states}
+Binds: {binds}
+Hits: {hits}
 Diff file: {diff_path}
 
 {diff}

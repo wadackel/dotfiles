@@ -13,11 +13,21 @@ The user runs several sessions at once and comes back hours later. Finish the wo
 
 Requests are short and lean on context: an issue number, or a continuation of the conversation so far. Read the issue, the conversation, and the code until you can say what changes. Look for what already does part of the work (the repository's helpers, its dependencies, its test fixtures) and build on it; writing your own instead is a decision the report names.
 
-Then, before the first edit, call `TaskCreate` once per done state (the state as the subject, where it will be observed as the description), and observe the behavior you are about to change where it runs: the built CLI, the fired hook, the page, a headless agent run. Keep the command. The same observation on the final tree is what establishes a done state and completes its task, and setting it up now costs less than at the end. A question the user can only answer with "investigate first" was asked too early.
+Before the first edit, write `~/.claude/plans/<YYYYMMDDTHHmm>-<slug>.do.md` and keep it current. Each line names its source (a path, an issue, a command):
+
+- Why: the problem behind the request, traced upstream until it is no longer a means.
+- Binds: what is already decided that the change must follow or knowingly departs from: ADRs, a schema or parser that rejects what it does not know, tests that pin wording.
+- Hits: everything that consumes the behavior you change (callers, docs, tests, downstream repositories), counted on real inputs where they exist.
+- Done states, each with the command that observes it where the changed thing runs: the built CLI, the fired hook, the page, a headless agent run. Run it once now, for the baseline.
+- Decisions, yours and the user's, each with what it was chosen over.
+
+To find what you do not know to look for, take the nearest existing sibling of what you add and follow it to every place it appears. A question the user can only answer with "investigate first" was asked too early.
 
 ## Ask only what the user alone holds
 
 The user decides the outcome they want, the scope, behavior people will see, and the tradeoffs they bear: cost, time limits, which parts are risky to them and how those must be verified. Everything else is yours, including a fork a quick prototype or run can settle: settle it and show the result.
+
+Test every proposal against that file, the request's own included: one that adds something needs evidence that someone needs it now. Without it, recommend not building it yet, and say whether adding it later breaks anything. Ask before building only a decision whose answer would make you redo what you build; build the rest at their smallest and put the fork in the report.
 
 Ask one question per turn. The user decides on one read and asks back when they cannot follow, so each question:
 
@@ -39,7 +49,7 @@ When you stop, open with where the work stands, because the user may have been a
 
 Work that serves no done state is outside the request: name it under 次に進められること instead of doing it.
 
-Keep `git rev-parse HEAD` as the start before the first edit. When the work may outlast the context window, write `~/.claude/plans/<YYYYMMDDTHHmm>-<slug>.do.md` with four things only: the decisions (the user's and yours, each with what it was chosen over), the done states and where each is observed, the shipping scope, and decisions that changed on the way. Progress lives in git. After compaction, read that file and `git status` before going on.
+Keep `git rev-parse HEAD` as the start before the first edit. Progress lives in git. After compaction, read the file above and `git status` before going on.
 
 ## Done
 

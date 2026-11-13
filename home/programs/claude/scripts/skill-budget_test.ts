@@ -8,8 +8,10 @@ import { assert } from "@std/assert";
 // here, in the same commit, with the failure (session id) the addition answers.
 // 1700 -> 2100: /do gained the breaker prompt after greenline session 1280802c,
 // where reading reviewers passed two gaps only the breaker of /impl's run found.
+// 2100 -> 2250: the Why / Binds / Hits file, after greenline session d07598af
+// proposed an opt-out key where an existing parser rejects unknown keys.
 const BUDGETS: Record<string, number> = {
-  "home/programs/claude/skills/do": 2100,
+  "home/programs/claude/skills/do": 2250,
 };
 
 const root = join(import.meta.dirname, "../../../..");
