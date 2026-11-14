@@ -3570,11 +3570,6 @@ require("lazy").setup({
       end,
     },
 
-    {
-      "tyru/open-browser.vim",
-      event = "VeryLazy",
-    },
-
     -- =============================================================
     -- Quickfix
     -- =============================================================
@@ -3969,31 +3964,6 @@ require("lazy").setup({
           render.setVirt(0, lnum - 1, col - 1, chunks, nearest)
         end,
       },
-    },
-
-    -- =============================================================
-    -- WebAssembly
-    -- =============================================================
-    {
-      "rhysd/vim-wasm",
-      event = "VeryLazy",
-    },
-
-    -- =============================================================
-    -- Markdown
-    -- =============================================================
-    {
-      "plasticboy/vim-markdown",
-      ft = "markdown",
-      init = function()
-        vim.g.vim_markdown_no_default_key_mappings = 1
-        vim.g.vim_markdown_folding_disabled = 1
-      end,
-    },
-
-    {
-      "rhysd/vim-gfm-syntax",
-      ft = "markdown",
     },
   },
 })
