@@ -985,8 +985,6 @@ require("lazy").setup({
       disabled_plugins = {
         "gzip",
         "man",
-        "matchit",
-        "matchparen",
         "netrwPlugin",
         "shada",
         "spellfile",
@@ -1759,9 +1757,6 @@ require("lazy").setup({
     {
       "nvim-treesitter/nvim-treesitter",
       branch = "main",
-      dependencies = {
-        { "nvim-treesitter/nvim-treesitter-textobjects", branch = "main" },
-      },
       lazy = false,
       build = ":TSUpdate",
       config = function()
@@ -3819,16 +3814,6 @@ require("lazy").setup({
           merge = nil,
         },
       },
-    },
-
-    {
-      "andymass/vim-matchup",
-      dependencies = {
-        "nvim-treesitter/nvim-treesitter",
-      },
-      init = function()
-        vim.g.matchup_matchparen_offscreen = {}
-      end,
     },
 
     {
