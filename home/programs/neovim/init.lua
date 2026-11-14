@@ -3603,11 +3603,6 @@ require("lazy").setup({
     },
 
     {
-      "thinca/vim-qfreplace",
-      ft = "qf",
-    },
-
-    {
       "itchyny/vim-qfedit",
       ft = "qf",
     },
