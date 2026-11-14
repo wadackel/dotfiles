@@ -39,6 +39,7 @@
       "Bash(*comment-metrics*)",
       "Bash(*gdocs-to-md/gdoc-json-to-md.ts*)",
       "Bash(*llm-wiki/scripts/wiki-doctor.ts*)",
+      "Bash(*ui-design/scripts/build-board.ts*)",
       "Bash(*writing-metrics/baseline-mixing.ts*)",
       "Bash(*writing-metrics/fire-rate.ts*)",
       "Bash(*writing-metrics/lint.ts*)",

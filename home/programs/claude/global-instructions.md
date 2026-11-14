@@ -41,6 +41,7 @@
 - `/systematic-debugging` for bugs: observe the symptom directly, treat the fix as a hypothesis to falsify, and present both the minimal workaround and the root-cause fix when both exist.
 - `/qa-planner` for QA-style verification, `/agent-browser` for browser or UI checks (screenshots, console, responsive), `/gdocs-to-md` for Google Docs URLs, `/repo-dive` for GitHub repository code, `/obsidian-cli` for vault notes.
 - `/consult` is the user's entrypoint for a consultation with a thinking partner: it widens the problem with them, says what it notices and disagrees when the goal calls for it, checks what it asserts, and does not push toward a decision or the next workflow step.
+- `/ui-design` is the user's entrypoint for exploring how a UI should be structured and look: six stages from problem definition to validation, options shown as mockups on one artifact page where the user picks them.
 - Questions with more than one defensible answer (design, technology choice, whether to adopt a practice, recalling a prior conclusion): search the vault with `/llm-wiki query` first and treat its record as one source to check against current evidence, since a recorded conclusion can be stale; skip only for what the current repository settles or single-answer facts. Offer `/llm-wiki save` when a reusable insight surfaces.
 
 ## Tooling

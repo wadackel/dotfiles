@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --ink: #1c1d1f;
+    --sub: #5b5f66;
+    --line: #d9dbdf;
+    --ground: #f6f6f4;
+    --card: #ffffff;
+    --on: #1f5fbf;
+    --warn: #a33a1f;
+    font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+    color: var(--ink);
+    background: var(--ground);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 24px; }
+  main > *, section, details { min-width: 0; }
+  h1, h2, h3, p, li, summary { overflow-wrap: anywhere; }
+  h1 { font-size: 1.25rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0; }
+  p { margin: 0; line-height: 1.6; }
+  .meta { color: var(--sub); font-size: 0.875rem; }
+  .stages { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; margin: 8px 0 0; list-style: none; font-size: 0.8125rem; }
+  .stages li { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--sub); }
+  .stages li[aria-current="step"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+  section, details { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; }
+  summary { cursor: pointer; font-weight: 600; }
+  .decisions { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; line-height: 1.5; }
+  .decisions .over { color: var(--sub); font-size: 0.875rem; }
+  .options { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+  .option { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+  .option[data-picked="true"] { border-color: var(--on); box-shadow: 0 0 0 2px var(--on) inset; }
+  .option h3 { font-size: 1rem; margin: 0; }
+  .axis { font-size: 0.875rem; }
+  .tradeoff { font-size: 0.875rem; color: var(--sub); }
+  .fit { width: 100%; min-width: 0; overflow: hidden; }
+  .fit.actual { overflow-x: auto; }
+  .frame { position: relative; overflow: hidden; margin: 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  .frame iframe { position: absolute; top: 0; left: 0; border: 0; display: block; transform-origin: 0 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; min-height: 44px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--ink); background: var(--card); color: var(--ink); cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--on); border-color: var(--on); color: #fff; }
+  button.quiet { border-color: var(--line); color: var(--sub); }
+  label { font-size: 0.875rem; display: grid; gap: 4px; }
+  textarea { font: inherit; width: 100%; min-height: 64px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+  .values { font-size: 0.8125rem; color: var(--sub); white-space: pre-wrap; word-break: break-all; }
+  .status { font-size: 0.875rem; color: var(--sub); }
+  .status.error { color: var(--warn); }
+  .notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: #fbefea; }
+  :focus-visible { outline: 2px solid var(--on); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script type="application/json" id="board-data">__BOARD_DATA__</script>
+<script>
+(() => {
+  const STAGES = [
+    ["define", "問題定義"],
+    ["criteria", "判断基準"],
+    ["sketch", "スケッチ"],
+    ["style-tile", "スタイルタイル"],
+    ["refine", "詳細化"],
+    ["validate", "検証"],
+  ];
+  const board = JSON.parse(document.getElementById("board-data").textContent);
+  const app = document.getElementById("app");
+  const stageName = (id) => (STAGES.find(([k]) => k === id) || [id, id])[1];
+
+  const el = (tag, attrs = {}, ...children) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === "text") node.textContent = v;
+      else node.setAttribute(k, v === true ? "" : String(v));
+    }
+    for (const c of children) if (c) node.append(c);
+    return node;
+  };
+
+  const header = el("header", {},
+    el("h1", { text: board.title }),
+    el("p", { class: "meta", text: `検討の対象: ${board.target}` }),
+  );
+  const stages = el("ol", { class: "stages", "aria-label": "段階" });
+  for (const [id, name] of STAGES) {
+    stages.append(el("li", { text: name, "aria-current": id === board.stage ? "step" : undefined }));
+  }
+  header.append(stages);
+  app.append(header);
+
+  const decided = el("section", { "aria-labelledby": "decided-h" }, el("h2", { id: "decided-h", text: "決まったこと" }));
+  if (board.decisions.length === 0) {
+    decided.append(el("p", { class: "meta", text: "まだありません。" }));
+  } else {
+    const list = el("ol", { class: "decisions" });
+    for (const d of board.decisions) {
+      const item = el("li", {}, el("span", { text: `${stageName(d.stage)}: ${d.text}` }));
+      if (d.over) item.append(el("div", { class: "over", text: `採らなかったもの: ${d.over}` }));
+      list.append(item);
+    }
+    decided.append(list);
+  }
+  app.append(decided);
+
+  const notice = el("p", { class: "notice", hidden: true });
+  app.append(notice);
+
+  // One record per round: { picks: [optionId], notes: {optionId: text}, values: {optionId: object}, comment }
+  const records = new Map();
+  const views = new Map();
+  let store = null;
+  let noStore = false;
+  let readOnly = false;
+
+  const fitFrames = new Set();
+  // The frame is scaled to the width it has, never above actual size; "actual" shows 1:1 and scrolls sideways.
+  const fit = (wrap, box, frame, opt) => {
+    const scale = wrap.classList.contains("actual") ? 1 : Math.min(1, (wrap.clientWidth - 2) / opt.width);
+    frame.style.transform = `scale(${scale})`;
+    box.style.width = `${Math.floor(opt.width * scale) + 2}px`;
+    box.style.height = `${Math.ceil(opt.height * scale) + 2}px`;
+  };
+  const resizer = new ResizeObserver(() => fitFrames.forEach((f) => f()));
+
+  const renderRound = (round, latest) => {
+    const record = { picks: [], notes: Object.create(null), values: Object.create(null), comment: "" };
+    records.set(round.id, record);
+    const container = latest
+      ? el("section", { "aria-labelledby": `h-${round.id}` })
+      : el("details", {});
+    const heading = el(latest ? "h2" : "summary", { id: `h-${round.id}`, text: `${round.id}（${stageName(round.stage)}）: ${round.question}` });
+    container.append(heading);
+    const optionsBox = el("div", { class: "options" });
+    const optionViews = new Map();
+    for (const opt of round.options) {
+      const card = el("article", { class: "option", "data-picked": "false" });
+      card.append(el("h3", { text: `${opt.id}. ${opt.name}` }));
+      if (opt.axis) card.append(el("p", { class: "axis", text: opt.axis }));
+      if (opt.tradeoff) card.append(el("p", { class: "tradeoff", text: opt.tradeoff }));
+      const wrap = el("div", { class: "fit" });
+      const box = el("div", { class: "frame" });
+      const frame = el("iframe", { title: `${opt.id}. ${opt.name}`, width: opt.width, height: opt.height, sandbox: "allow-scripts" });
+      frame.srcdoc = opt.html;
+      box.append(frame);
+      wrap.append(box);
+      card.append(wrap);
+      const refit = () => fit(wrap, box, frame, opt);
+      fitFrames.add(refit);
+      resizer.observe(wrap);
+      const pick = el("button", { type: "button", "aria-pressed": "false", text: "この案を選ぶ" });
+      const actual = el("button", { type: "button", class: "quiet", "aria-pressed": "false", text: "実寸で見る" });
+      actual.addEventListener("click", () => {
+        const on = wrap.classList.toggle("actual");
+        actual.setAttribute("aria-pressed", String(on));
+        refit();
+      });
+      card.append(el("div", { class: "row" }, pick, actual));
+      const note = el("textarea", { "aria-label": `${opt.id} について残したい点・気になる点` });
+      card.append(el("label", {}, el("span", { text: "残したい点・気になる点" }), note));
+      const values = el("p", { class: "values", hidden: true });
+      card.append(values);
+      pick.addEventListener("click", () => {
+        const set = new Set(record.picks);
+        set.has(opt.id) ? set.delete(opt.id) : set.add(opt.id);
+        record.picks = round.options.map((o) => o.id).filter((id) => set.has(id));
+        paint();
+        save(round.id);
+      });
+      note.addEventListener("input", () => {
+        record.notes[opt.id] = note.value;
+        save(round.id, 800);
+      });
+      optionViews.set(opt.id, { card, pick, note, values, frame });
+      optionsBox.append(card);
+    }
+    container.append(optionsBox);
+    const comment = el("textarea", { "aria-label": "この回全体へのメモ" });
+    comment.addEventListener("input", () => {
+      record.comment = comment.value;
+      save(round.id, 800);
+    });
+    container.append(el("label", {}, el("span", { text: "この回全体へのメモ（組み合わせたい部分など）" }), comment));
+    const status = el("p", { class: "status", role: "status", text: "" });
+    const copy = el("button", { type: "button", class: "quiet", text: "選んだ内容をコピー" });
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(summarize(round));
+        status.textContent = "コピーしました。チャットに貼ってください。";
+      } catch {
+        status.textContent = "コピーできませんでした。選んだ案の名前をチャットで伝えてください。";
+      }
+    });
+    container.append(el("div", { class: "row" }, copy, status));
+    const paint = () => {
+      for (const [id, v] of optionViews) {
+        const on = record.picks.includes(id);
+        v.pick.setAttribute("aria-pressed", String(on));
+        v.pick.textContent = on ? "選んでいます" : "この案を選ぶ";
+        v.card.dataset.picked = String(on);
+        if (document.activeElement !== v.note) v.note.value = record.notes[id] || "";
+        const val = record.values[id];
+        v.values.hidden = !val;
+        if (val) v.values.textContent = `値: ${JSON.stringify(val)}`;
+      }
+      if (document.activeElement !== comment) comment.value = record.comment || "";
+    };
+    views.set(round.id, { paint, status, optionViews });
+    return container;
+  };
+
+  const summarize = (round) => {
+    const r = records.get(round.id);
+    const lines = [`${round.id}: 選んだ案 ${r.picks.join(", ") || "なし"}`];
+    for (const [id, text] of Object.entries(r.notes)) if (text) lines.push(`${id}: ${text}`);
+    for (const [id, val] of Object.entries(r.values)) lines.push(`${id} の値: ${JSON.stringify(val)}`);
+    if (r.comment) lines.push(`全体: ${r.comment}`);
+    return lines.join("\n");
+  };
+
+  // A round with local edits not yet confirmed by the store is "dirty": snapshots
+  // skip it, so a delivery between typing and saving cannot roll the edit back.
+  const timers = new Map();
+  const inflight = new Map();
+  const dirty = new Set();
+  let ready = false;
+  const save = (roundId, delay = 0) => {
+    dirty.add(roundId);
+    clearTimeout(timers.get(roundId));
+    timers.set(roundId, setTimeout(() => {
+      timers.delete(roundId);
+      flush(roundId);
+    }, delay));
+  };
+  const flush = async (roundId) => {
+    const view = views.get(roundId);
+    if (noStore || readOnly) {
+      view.status.textContent = "このページでは保存できません。「選んだ内容をコピー」でチャットに貼ってください。";
+      return;
+    }
+    if (!store || !ready) {
+      view.status.textContent = "保存先につながるのを待っています。";
+      return;
+    }
+    if (inflight.get(roundId)) {
+      inflight.set(roundId, "again");
+      return;
+    }
+    inflight.set(roundId, true);
+    const r = records.get(roundId);
+    let saved = false;
+    try {
+      await store.doc(`rounds/${roundId}`).set({ ...r, updatedAt: new Date().toISOString() });
+      saved = true;
+      view.status.classList.remove("error");
+      view.status.textContent = `保存しました（${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）`;
+    } catch (e) {
+      if (e && e.code === "invalid_argument") readOnly = true;
+      view.status.classList.add("error");
+      view.status.textContent = "保存できませんでした。「選んだ内容をコピー」でチャットに貼ってください。";
+    }
+    const again = inflight.get(roundId) === "again";
+    inflight.delete(roundId);
+    if (again) flush(roundId);
+    else if (saved && !timers.has(roundId)) dirty.delete(roundId);
+  };
+
+  const rounds = board.rounds;
+  const latestId = rounds.length ? rounds[rounds.length - 1].id : null;
+  for (const round of [...rounds].reverse()) app.append(renderRound(round, round.id === latestId));
+  fitFrames.forEach((f) => f());
+
+  // Values come from a variant's own code, not from the user's typing: keep only
+  // short scalars so a variant cannot fill the record Claude reads with text.
+  const KEY = /^[A-Za-z0-9_-]{1,40}$/;
+  const cleanValues = (raw) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const out = Object.create(null);
+    for (const [k, v] of Object.entries(raw).slice(0, 20)) {
+      if (!KEY.test(k)) continue;
+      if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+      else if (typeof v === "boolean") out[k] = v;
+      else if (typeof v === "string" && v.length <= 64) out[k] = v;
+    }
+    return Object.keys(out).length ? out : null;
+  };
+
+  // A variant reports tuned values with parent.postMessage({ uiDesignValues: {...} }, "*")
+  // and receives the saved ones as { uiDesignInit: {...} } when it loads.
+  window.addEventListener("message", (event) => {
+    const values = cleanValues(event.data && event.data.uiDesignValues);
+    if (!values) return;
+    for (const [roundId, view] of views) {
+      for (const [optId, v] of view.optionViews) {
+        if (v.frame.contentWindow !== event.source) continue;
+        records.get(roundId).values[optId] = values;
+        view.paint();
+        save(roundId, 800);
+      }
+    }
+  });
+  const sendInit = (roundId, optId) => {
+    const v = views.get(roundId).optionViews.get(optId);
+    const values = records.get(roundId).values[optId];
+    if (values && v.frame.contentWindow) v.frame.contentWindow.postMessage({ uiDesignInit: values }, "*");
+  };
+  for (const [roundId, view] of views) {
+    for (const [optId, v] of view.optionViews) v.frame.addEventListener("load", () => sendInit(roundId, optId));
+  }
+
+  const loading = setTimeout(() => {
+    notice.hidden = false;
+    notice.textContent = "選択の保存先にまだつながりません。選んだ内容は「選んだ内容をコピー」でチャットに貼れます。";
+  }, 10000);
+
+  (async () => {
+    const db = typeof claude !== "undefined" && typeof claude.use === "function" ? await claude.use("db") : null;
+    if (!db) {
+      noStore = true;
+      clearTimeout(loading);
+      notice.hidden = false;
+      notice.textContent = "このページでは選択を保存できません。選んだ内容は「選んだ内容をコピー」でチャットに貼ってください。";
+      return;
+    }
+    store = db;
+    // An unchanged document arrives as the same object; skipping it keeps a control
+    // the user is dragging from being reset by a delivery meant for another round.
+    const seen = new Map();
+    db.collection("rounds").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) {
+        clearTimeout(loading);
+        notice.hidden = true;
+      }
+      for (const doc of snap.docs) {
+        const view = views.get(doc.id);
+        if (!view || dirty.has(doc.id)) continue;
+        const data = doc.data() || {};
+        if (seen.get(doc.id) === data) continue;
+        seen.set(doc.id, data);
+        const r = records.get(doc.id);
+        r.picks = Array.isArray(data.picks) ? data.picks : [];
+        r.notes = Object.assign(Object.create(null), data.notes && typeof data.notes === "object" ? data.notes : {});
+        r.values = Object.assign(Object.create(null), data.values && typeof data.values === "object" ? data.values : {});
+        r.comment = typeof data.comment === "string" ? data.comment : "";
+        view.paint();
+        for (const optId of Object.keys(r.values)) if (view.optionViews.has(optId)) sendInit(doc.id, optId);
+      }
+      if (!ready && !snap.metadata.fromCache) {
+        ready = true;
+        for (const roundId of dirty) save(roundId);
+      }
+    }, () => {
+      clearTimeout(loading);
+      notice.hidden = false;
+      notice.textContent = "選択の保存先との接続が切れました。選んだ内容は「選んだ内容をコピー」でチャットに貼ってください。";
+    });
+  })();
+})();
+</script>
+</body>
+</html>

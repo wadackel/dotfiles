@@ -20,6 +20,7 @@
     "home/programs/tmux/**/*.ts",
     "home/programs/tmux/**/*.tsx",
     "home/programs/claude/scripts/**/*.ts",
+    "home/programs/claude/skills/ui-design/scripts/*.ts",
     "home/programs/codex/scripts/*.ts",
     "home/programs/opencode/plugin_logic*.ts",
     "home/programs/opencode/scripts/*.ts",
