@@ -4084,9 +4084,6 @@ require("lazy").setup({
 
     {
       "haya14busa/vim-asterisk",
-      dependencies = {
-        { "haya14busa/is.vim" },
-      },
       init = function()
         vim.g.asterisk_keeppos = 1
       end,
