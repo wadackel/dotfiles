@@ -1949,26 +1949,6 @@ require("lazy").setup({
     },
 
     {
-      "antosha417/nvim-lsp-file-operations",
-      event = "LspAttach",
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-      },
-      opts = {
-        debug = false,
-        operations = {
-          willRenameFiles = true,
-          didRenameFiles = true,
-          willCreateFiles = true,
-          didCreateFiles = true,
-          willDeleteFiles = true,
-          didDeleteFiles = true,
-        },
-        timeout_ms = 10000,
-      },
-    },
-
-    {
       "folke/snacks.nvim",
       priority = 1000,
       lazy = false,
