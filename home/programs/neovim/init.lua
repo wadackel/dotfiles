@@ -1147,158 +1147,7 @@ require("lazy").setup({
     },
 
     {
-      "nvim-flutter/flutter-tools.nvim",
-      lazy = false,
-      commit = "818ad42b204cda5317baa399377ea30b35f6f8be",
-      dependencies = {
-        "nvim-lua/plenary.nvim",
-      },
-      config = function()
-        local dev_log_open_cmd = "rightbelow vertical split"
-
-        require("flutter-tools").setup({
-          flutter_path = nil,
-          flutter_lookup_cmd = "mise where flutter",
-          fvm = false,
-          ui = {
-            border = "rounded",
-          },
-          decorations = {
-            statusline = {
-              app_version = false,
-              device = false,
-              project_config = false,
-            },
-          },
-          closing_tags = {
-            prefix = "∙ ",
-          },
-          dev_log = {
-            enabled = true,
-            notify_errors = false,
-            open_cmd = dev_log_open_cmd,
-          },
-          lsp = {
-            on_init = lsp_on_init,
-            on_attach = function(client, bufnr)
-              lsp_on_attach(client, bufnr)
-
-              local dev_log = "__FLUTTER_DEV_LOG__$"
-
-              local get_win = function(buf)
-                for _, win in ipairs(vim.api.nvim_list_wins()) do
-                  if vim.api.nvim_win_get_buf(win) == buf then
-                    return win
-                  end
-                end
-                return nil
-              end
-
-              local find_dev_log = function()
-                for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-                  local bufname = vim.api.nvim_buf_get_name(buf)
-                  if string.match(bufname, dev_log) then
-                    local win = get_win(buf)
-                    return buf, win
-                  end
-                end
-                return nil
-              end
-
-              local open_dev_log = function()
-                local log = require("flutter-tools.log")
-                local buf, win = find_dev_log()
-
-                if not buf then
-                  vim.notify("Flutter Dev Log not found", "warn")
-                  return
-                end
-
-                if win then
-                  vim.api.nvim_set_current_win(win)
-                else
-                  vim.api.nvim_command(dev_log_open_cmd)
-                  vim.api.nvim_set_current_buf(buf)
-                  win = vim.api.nvim_get_current_win()
-
-                  -- Move to the end of the buffer
-                  local line_count = vim.api.nvim_buf_line_count(buf)
-                  if line_count > 0 then
-                    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-                  else
-                    vim.api.nvim_win_set_cursor(0, { 1, 0 })
-                  end
-                end
-
-                -- Reset module state
-                log.win = win
-                log.buf = buf
-              end
-
-              local close_dev_log = function()
-                local _, win = find_dev_log()
-                if not win then
-                  vim.notify("Flutter Dev Log not found", "warn")
-                  return
-                end
-                vim.api.nvim_win_close(win, true)
-              end
-
-              keymap({ "n" }, "<Space>f", function()
-                Snacks.picker.commands({ pattern = "Flutter" })
-              end)
-              keymap({ "n" }, "<Space>do", open_dev_log)
-              keymap({ "n" }, "<Space>dc", close_dev_log)
-
-              vim.api.nvim_create_autocmd("FileType", {
-                pattern = "log",
-                callback = function()
-                  local bufname = vim.api.nvim_buf_get_name(0)
-                  if string.match(bufname, dev_log) then
-                    keymap({ "n" }, "q", close_dev_log, { buffer = 0 })
-                  end
-                end,
-              })
-            end,
-            settings = {
-              analysisExcludedFolders = {
-                vim.fn.expand("$HOME/.pub-cache"),
-                vim.fn.expand("$HOME/.local/share/mise/installs/flutter"),
-                vim.fn.expand("$HOME/.local/share/mise/installs/dart"),
-              },
-              completeFunctionCalls = false,
-              showTodos = false,
-            },
-          },
-          debugger = {
-            enabled = true,
-            exception_breakpoints = {},
-            register_configurations = function(paths)
-              local dap = require("dap")
-              dap.adapters.dart = {
-                type = "executable",
-                command = paths.flutter_bin,
-                args = { "debug_adapter" },
-              }
-              dap.configurations.dart = {}
-              require("dap.ext.vscode").load_launchjs()
-            end,
-          },
-        })
-      end,
-    },
-
-    {
       "saghen/blink.cmp",
-      dependencies = {
-        {
-          "Kaiser-Yang/blink-cmp-git",
-          dependencies = {
-            "nvim-lua/plenary.nvim",
-          },
-        },
-        "onsails/lspkind-nvim",
-      },
       version = "1.*",
       build = "cargo build --release",
       opts_extend = {
@@ -1331,9 +1180,6 @@ require("lazy").setup({
               "path",
               "buffer",
             },
-            per_filetype = {
-              gitcommit = { "git", "buffer", "path" },
-            },
             providers = {
               lazydev = {
                 name = "LazyDev",
@@ -1344,11 +1190,6 @@ require("lazy").setup({
                 enabled = function()
                   return vim.fn.getcmdtype() ~= ":" or not vim.fn.getcmdline():match("^[%%0-9,'<>%-]*!")
                 end,
-              },
-              git = {
-                module = "blink-cmp-git",
-                name = "Git",
-                opts = {},
               },
             },
           },
@@ -1382,10 +1223,6 @@ require("lazy").setup({
                         if dev_icon then
                           icon = dev_icon
                         end
-                      else
-                        icon = require("lspkind").symbolic(ctx.kind, {
-                          mode = "symbol",
-                        })
                       end
 
                       return icon .. ctx.icon_gap
@@ -1685,47 +1522,6 @@ require("lazy").setup({
           desc = "Re-enable autoformat-on-save",
         })
       end,
-    },
-
-    {
-      "mfussenegger/nvim-dap",
-      event = "LspAttach",
-      dependencies = {
-        "nvim-neotest/nvim-nio",
-        {
-          "rcarriga/nvim-dap-ui",
-          opts = {
-            icons = { expanded = "▾", collapsed = "▸" },
-            layouts = {
-              elements = {
-                { id = "scopes", size = 0.25 },
-                "breakpoints",
-                "stacks",
-                "watches",
-              },
-              size = 10, -- columns
-              position = "bottom",
-            },
-          },
-        },
-      },
-    },
-
-    -- =============================================================
-    -- AI Integration
-    -- =============================================================
-    {
-      "zbirenbaum/copilot.lua",
-      lazy = false,
-      opts = {
-        -- copilot_node_command = vim.fn.expand("$HOME") .. "/.local/share/mise/shims/node",
-        suggestion = {
-          auto_trigger = true,
-          keymap = {
-            accept = "<Tab>",
-          },
-        },
-      },
     },
 
     -- =============================================================
