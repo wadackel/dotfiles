@@ -2086,6 +2086,26 @@ require("lazy").setup({
         }
       end,
       keys = {
+        -- bufdelete
+        {
+          "<Leader>bda",
+          function()
+            Snacks.bufdelete.all()
+          end,
+          mode = "n",
+          noremap = true,
+          silent = true,
+        },
+        {
+          "<Leader>bdh",
+          function()
+            Snacks.bufdelete.invisible()
+          end,
+          mode = "n",
+          noremap = true,
+          silent = true,
+        },
+
         -- picker
         {
           "<C-p>",
@@ -2300,150 +2320,6 @@ require("lazy").setup({
     },
 
     -- =============================================================
-    -- Terminal
-    -- =============================================================
-    {
-      "akinsho/toggleterm.nvim",
-      event = "VeryLazy",
-      dependencies = {
-        "kwkarlwang/bufresize.nvim",
-      },
-      config = function()
-        local bufresize = require("bufresize")
-
-        require("toggleterm").setup({
-          size = function(term)
-            if term.direction == "horizontal" then
-              return vim.o.lines * 0.4
-            elseif term.direction == "vertical" then
-              return vim.o.columns * 0.5
-            end
-          end,
-          shade_terminals = false,
-          float_opts = {
-            border = "rounded",
-            width = function()
-              return math.ceil(vim.o.columns * 0.95)
-            end,
-            height = function()
-              return math.ceil(vim.o.lines * 0.85)
-            end,
-          },
-          highlights = {
-            FloatBorder = {
-              link = "FloatBorder",
-            },
-          },
-          auto_scroll = false,
-          start_in_insert = false,
-          winbar = {
-            enabled = false,
-          },
-          on_open = function(term)
-            -- Disable LSP diagnostics in terminal
-            vim.diagnostic.enable(false, { bufnr = term.bufnr })
-            for _, c in ipairs(vim.lsp.get_clients({ bufnr = term.bufnr })) do
-              vim.lsp.buf_detach_client(term.bufnr, c.id)
-            end
-          end,
-        })
-
-        local function find_toggleterm_buffer()
-          local windows = vim.api.nvim_tabpage_list_wins(0)
-          for _, win in ipairs(windows) do
-            local buf = vim.api.nvim_win_get_buf(win)
-            local filetype = vim.bo[buf].filetype
-            if filetype == "toggleterm" then
-              return buf
-            end
-          end
-          return nil
-        end
-
-        ToggleTerm = function(direction)
-          local command = 'exe v:count1 "ToggleTerm'
-          if direction == "float" then
-            command = command .. " direction=float"
-          elseif direction == "horizontal" then
-            command = command .. " direction=horizontal"
-          elseif direction == "vertical" then
-            command = command .. " direction=vertical"
-          end
-          command = command .. '"'
-
-          bufresize.block_register()
-          if find_toggleterm_buffer() ~= nil then
-            vim.api.nvim_command(command)
-            bufresize.resize_close()
-          else
-            vim.api.nvim_command(command)
-            bufresize.resize_open()
-          end
-        end
-
-        keymap({ "n" }, "<Leader>tt", function()
-          ToggleTerm("float")
-        end)
-
-        keymap({ "n" }, "<Leader>ts", function()
-          ToggleTerm("horizontal")
-        end)
-
-        keymap({ "n" }, "<Leader>tv", function()
-          ToggleTerm("vertical")
-        end)
-
-        keymap({ "n" }, "<Leader>tl", function()
-          vim.cmd("TermSelect")
-        end)
-
-        keymap(
-          { "t" },
-          "<C-q>",
-          "<C-\\><C-n>"
-            .. ':lua require("bufresize").block_register()<CR>'
-            .. "<C-w>c"
-            .. ':lua require("bufresize").resize_close()<CR>'
-        )
-      end,
-    },
-
-    -- =============================================================
-    -- Session
-    -- =============================================================
-    {
-      "folke/persistence.nvim",
-      event = "VeryLazy",
-      keys = {
-        {
-          "<Leader>ql",
-          function()
-            require("persistence").select()
-          end,
-          mode = "n",
-          noremap = true,
-        },
-        {
-          "<Leader>qs",
-          function()
-            require("persistence").load()
-          end,
-          mode = "n",
-          noremap = true,
-        },
-        {
-          "<Leader>qd",
-          function()
-            require("persistence").stop()
-          end,
-          mode = "n",
-          noremap = true,
-        },
-      },
-      opts = {},
-    },
-
-    -- =============================================================
     -- UI
     -- =============================================================
     {
@@ -2637,9 +2513,7 @@ require("lazy").setup({
             lualine_z = {},
           },
           extensions = {
-            "nvim-tree",
             "fugitive",
-            "toggleterm",
           },
         })
       end,
@@ -3817,21 +3691,6 @@ require("lazy").setup({
           },
         })
       end,
-    },
-
-    {
-      "kazhala/close-buffers.nvim",
-      keys = {
-        { "<Leader>bda", "<cmd>BDelete! all<CR>", mode = "n", noremap = true, silent = true },
-        { "<Leader>bdh", "<cmd>BDelete! hidden<CR>", mode = "n", noremap = true, silent = true },
-      },
-      opts = {
-        filetype_ignore = {},
-        file_glob_ignore = {},
-        file_regex_ignore = {},
-        preserve_window_layout = { "this", "nameless" },
-        next_buffer_cmd = nil,
-      },
     },
 
     {
