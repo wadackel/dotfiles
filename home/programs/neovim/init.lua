@@ -1874,27 +1874,6 @@ require("lazy").setup({
     },
 
     {
-      "Wansmer/treesj",
-      keys = {
-        {
-          "<Leader>m",
-          '<cmd>lua require"treesj".toggle()<CR>',
-          mode = "n",
-          noremap = true,
-        },
-      },
-      opts = {
-        use_default_keymaps = false,
-        check_syntax_error = true,
-        max_join_length = 120,
-        cursor_behavior = "hold",
-        notify = true,
-        dot_repeat = true,
-        on_error = nil,
-      },
-    },
-
-    {
       "windwp/nvim-autopairs",
       event = { "BufReadPre", "BufNewFile" },
       config = function()
@@ -4041,62 +4020,6 @@ require("lazy").setup({
     },
 
     {
-      "mattn/emmet-vim",
-      submodules = false,
-      keys = {
-        { "<C-e>,", "<Plug>(emmet-expand-abbr)", mode = "i" },
-      },
-      init = function()
-        vim.g.user_emmet_mode = "iv"
-        vim.g.user_emmet_leader_key = "<C-e>"
-        vim.g.use_emmet_complete_tag = 1
-        vim.g.user_emmet_settings = {
-          lang = "en",
-          html = {
-            filters = "html",
-            snippets = {
-              ["html:5"] = table.concat({
-                "<!doctype html>",
-                '<html lang="en">',
-                "<head>",
-                '  <meta charset="${charset}">',
-                '  <meta http-equiv="X-UA-Compatible" content="IE=edge">',
-                '  <meta name="viewport" content="width=device-width,initial-scale=1.0">',
-                '  <meta name="format-detection" content="telephone=no,address=no,email=no">',
-                '  <meta name="description" content="">',
-                '  <link rel="shortcut icon" href="/favicon.ico">',
-                '  <link rel="stylesheet" href="/style.css">',
-                "  <title></title>",
-                "</head>",
-                "<body>",
-                "  ${child}|",
-                "</body>",
-                "</html>",
-              }, "\n"),
-            },
-          },
-          css = {
-            filters = "fc",
-          },
-          php = {
-            extends = "html",
-            filters = "html",
-          },
-        }
-      end,
-    },
-
-    {
-      "David-Kunz/treesitter-unit",
-      keys = {
-        { "iu", '<cmd>lua require"treesitter-unit".select()<CR>', mode = "x", noremap = true },
-        { "au", '<cmd>lua require"treesitter-unit".select(true)<CR>', mode = "x", noremap = true },
-        { "iu", '<cmd><C-u>lua require"treesitter-unit".select()<CR>', mode = "o", noremap = true },
-        { "au", '<cmd><C-u>lua require"treesitter-unit".select(true)<CR>', mode = "o", noremap = true },
-      },
-    },
-
-    {
       "gbprod/substitute.nvim",
       event = "VeryLazy",
       config = function()
@@ -4232,16 +4155,6 @@ require("lazy").setup({
           render.setVirt(0, lnum - 1, col - 1, chunks, nearest)
         end,
       },
-    },
-
-    {
-      "thinca/vim-partedit",
-      cmd = {
-        "Partedit",
-      },
-      init = function()
-        vim.g["partedit#opener"] = "split"
-      end,
     },
 
     -- =============================================================
