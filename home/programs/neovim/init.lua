@@ -1453,11 +1453,6 @@ require("lazy").setup({
             winblend = 0,
           },
         },
-        integration = {
-          ["nvim-tree"] = {
-            enable = true,
-          },
-        },
       },
     },
 
@@ -2025,7 +2020,13 @@ require("lazy").setup({
           dashboard = { enabled = false },
           explorer = { enabled = false },
           indent = { enabled = false },
-          notifier = { enabled = false },
+          notifier = {
+            enabled = true,
+            style = "compact",
+            top_down = false,
+            -- snacks は statusline を 1 行として確保するだけで cmdline 行を数えず、最下段の通知が statusline に重なる
+            margin = { bottom = 1 },
+          },
           quickfile = { enabled = false },
           scope = { enabled = false },
           scroll = { enabled = false },
@@ -2661,24 +2662,6 @@ require("lazy").setup({
             "toggleterm",
           },
         })
-      end,
-    },
-
-    {
-      "rcarriga/nvim-notify",
-      event = "VeryLazy",
-      config = function()
-        local notify = require("notify")
-        notify.setup({
-          background_colour = "NotifyBackground",
-          render = "wrapped-compact",
-          stages = "fade",
-          top_down = false,
-          -- max_width = function()
-          --   return vim.o.columns / 2
-          -- end,
-        })
-        vim.notify = notify
       end,
     },
 
