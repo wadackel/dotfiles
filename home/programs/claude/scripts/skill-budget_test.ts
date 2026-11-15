@@ -11,7 +11,10 @@ const BUDGETS: Record<string, number> = {
   // reviewer's conditions, after background-session evaluations (2026-11-13 to 15)
   // where a shared component was checked by its story alone, callers a type checker
   // cannot see stayed unchanged, and a one-expression replacement opened nine screens.
-  "home/programs/claude/skills/do": 3050,
+  // 3050 -> 3200: the question bullets name the forms that were asked back in 50
+  // /plan, /impl and /do questions from 10-17 to 11-15 (options as words only, no
+  // plain problem, labels coined mid-work), e.g. sessions 7faee790, f8d3c40b, c38512a1.
+  "home/programs/claude/skills/do": 3200,
 };
 
 const root = join(import.meta.dirname, "../../../..");

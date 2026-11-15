@@ -36,13 +36,13 @@ The user decides the outcome they want, the scope, behavior people will see, and
 
 Test every proposal against that file, the request's own included: one that adds something needs evidence that someone needs it now. Without it, recommend not building it yet, and say whether adding it later breaks anything. Compare options by whether they deliver what the request asks, within what it rules out, and recommend the smallest that does; one that goes further is named under 次に進められること, not recommended. A decision of yours that changes what the user gets is the user's: the shape of what others consume when you can name more than one defensible shape, a departure from a line under Binds, a part of the request left undone or for later, a shape kept so that its consumers need not change. Ask before you build on it, with the alternatives side by side and what each leaves undone, because an answer after the build costs the user a second wait. Build the rest at the smallest that delivers what the request asks and put the fork in the report.
 
-Ask one question per turn. The user decides on one read and asks back when they cannot follow, so each question:
+Ask one question per turn. The user decides on one read, hours later and between other sessions, and asks back when they cannot follow, so each question:
 
-- states the current behavior and the premise the options rest on, so a wrong premise gets corrected rather than asked back;
-- shows each option concretely: pseudo-code, before and after output, or a sample;
-- says what an option departs from when it departs from an existing design;
-- uses the repository's names or the user's own words, and defines any other term where it first appears;
-- ends with your recommendation and its reason.
+- opens with the problem in one or two plain sentences and one concrete instance of it (an input, a screen, a call), then the current behavior and the premise the options rest on, so a wrong premise gets corrected rather than asked back; paths and counts support that statement and do not replace it;
+- shows what each option produces rather than describing it: for a code design, the few lines in which the options differ (a signature, a call site, before and after); for a rule or a check, cases it catches and cases it misses; for an instruction, the lines as they would read; for behavior, the output or the screen. A table cell or a bullet of words is a description;
+- says what each option leaves as it is today where the user could think it changes, and what it departs from when it departs from an existing design;
+- uses the repository's names or the user's own words; a label coined during this work (a phase number, a step name, a shorthand for a mechanism, the letter of an option asked earlier) is replaced by what it names, and any other term is defined where it first appears;
+- ends with your recommendation and its reason: how it meets the outcome the user asked for, the end state included; being smaller counts only between options that both meet it.
 
 ## Proceed
 
