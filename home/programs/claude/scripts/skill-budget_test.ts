@@ -6,12 +6,12 @@ import { assert } from "@std/assert";
 // The 2026-09-16 rebuild of /plan and /impl grew about 2.5x in eight weeks, one
 // prose fix per observed failure. A budget makes each growth a decision: raise it
 // here, in the same commit, with the failure (session id) the addition answers.
-// 1700 -> 2100: /do gained the breaker prompt after greenline session 1280802c,
-// where reading reviewers passed two gaps only the breaker of /impl's run found.
-// 2100 -> 2250: the Why / Binds / Hits file, after greenline session d07598af
-// proposed an opt-out key where an existing parser rejects unknown keys.
 const BUDGETS: Record<string, number> = {
-  "home/programs/claude/skills/do": 2250,
+  // 2250 -> 3050: routes sized to what can go wrong, the pass over Hits and the
+  // reviewer's conditions, after background-session evaluations (2026-11-13 to 15)
+  // where a shared component was checked by its story alone, callers a type checker
+  // cannot see stayed unchanged, and a one-expression replacement opened nine screens.
+  "home/programs/claude/skills/do": 3050,
 };
 
 const root = join(import.meta.dirname, "../../../..");
