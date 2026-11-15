@@ -6,8 +6,6 @@ const CWD_ROOT = new URL(`file://${process.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
 const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
-const REQUIREMENTS_INTERVIEW =
-  "home/programs/agents/skills/requirements-interview/SKILL.md";
 const CONTRACT = "home/programs/agents/shared/plan/references/contract.md";
 const INTERVIEW = "home/programs/agents/shared/plan/references/interview.md";
 const CRITIC_PROMPT =
@@ -51,9 +49,9 @@ const AGREE_LEGACY_NEEDLES = [
   "Each AskUserQuestion call asks a single question",
 ];
 
-// The interview cadence is defined once in interview.md; the three skills that
-// interview a user point at it instead of restating it, so a rewording cannot
-// diverge between them.
+// The interview cadence is defined once in interview.md; the two plan skills
+// point at it instead of restating it, so a rewording cannot diverge between
+// them.
 const INTERVIEW_RULE_NEEDLES = [
   "Ask only from the frontier: the set of questions whose prerequisites — prior decisions and pending investigations — are all settled.",
   "A question that depends on an open answer or an in-flight investigation waits.",
@@ -131,7 +129,6 @@ const INTERVIEW_LEGACY_NEEDLES = [
 const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["Codex plan", CODEX_PLAN],
   ["Claude plan", CLAUDE_PLAN],
-  ["requirements-interview", REQUIREMENTS_INTERVIEW],
 ];
 
 // Contract entries: the string, and every file that must carry it verbatim.
@@ -224,7 +221,7 @@ const CONTRACT_REFERRERS = [
   CRITIC_PROMPT,
   ADVERSARIAL_PROMPT,
 ];
-const INTERVIEW_REFERRERS = [CLAUDE_PLAN, CODEX_PLAN, REQUIREMENTS_INTERVIEW];
+const INTERVIEW_REFERRERS = [CLAUDE_PLAN, CODEX_PLAN];
 
 const REPRESENTATIVE_ARTIFACTS = [
   {

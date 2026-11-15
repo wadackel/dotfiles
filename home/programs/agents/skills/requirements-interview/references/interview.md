@@ -1,1 +1,0 @@
-../../../shared/plan/references/interview.md

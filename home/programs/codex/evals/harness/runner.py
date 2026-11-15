@@ -163,7 +163,7 @@ def run(args):
             contents = contents.replace(str(Path.home() / ".agents/skills/plan/references") + "/",
                                         str(skills / "plan/references") + "/")
             definition.write_text(contents)
-        copy_tree(source / "home/programs/agents/skills/requirements-interview", skills / "requirements-interview")
+        copy_tree(source / "home/programs/agents/skills/spec", skills / "spec")
         agent_scripts = home / ".agents/scripts"
         agent_scripts.mkdir()
         shutil.copyfile(source / "home/programs/agents/scripts/check-plan.ts", agent_scripts / "check-plan.ts")

@@ -9,7 +9,7 @@ used in this dotfiles repo.
 |---|---|
 | Small, well-defined changes | Native Plan mode |
 | Everyday development | `$plan` followed by `$impl [absolute-plan-path]` |
-| Proofs of concept | `requirements-interview`, then Goal with explicit acceptance and stopping conditions |
+| Proofs of concept | `$spec`, then Goal with explicit acceptance and stopping conditions |
 
 Plan handoffs retain purpose, non-goals, constraints, acceptance criteria, and
 implementation discretion. Accepted decisions carry forward; material new

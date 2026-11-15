@@ -1,6 +1,6 @@
 # Interview
 
-How `/plan` AGREE, `$plan`, and `requirements-interview` ask the user, and how `/impl` and `$impl` ask before deviating from a plan. Read it before the first question.
+How `/plan` AGREE and `$plan` ask the user, and how `/impl` and `$impl` ask before deviating from a plan. Read it before the first question.
 
 ## Cadence
 
@@ -85,7 +85,7 @@ Classify every unresolved point before asking:
 | Bucket | Meaning | Action |
 |---|---|---|
 | Observed fact | Answerable from code, logs, docs, issues, or this conversation | Probe it; keep secrets out of artifacts |
-| User decision | Desired behavior, design decision, priority, audience, risk tolerance, success criteria, trade-off acceptance; scope boundary in `requirements-interview` | Ask |
+| User decision | Desired behavior, design decision, priority, audience, risk tolerance, success criteria, trade-off acceptance | Ask |
 | Scope boundary (plan skills) | A boundary of what the change covers, in `/plan` and `$plan` | `user-overridden: default` with `scope: <the boundary: what is in or out>` under `### Assumptions`, marked 仮置き in the handoff; ask only when including it makes a different deliverable. A value that is not a boundary has no scope to name and is asked |
 | Process / procedure / environment (plan skills) | Whether to commit, where to verify, who ships | Never asked; CLAUDE.md and the skill decide, and a missing rule is named under the handoff's decisions. The plan skills infer shipping into `## Delivery`; an operation outside local and dev that verification needs is a user decision (Verification Grants) |
 | Technical deferral | Codebase-recoverable but too heavy for a quick probe, and no question rests on it | `### Unresolved Items` with a concrete `next:`; a fact a question rests on is investigated before that question instead |

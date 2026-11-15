@@ -21,7 +21,7 @@ class ResultsTest(unittest.TestCase):
             "home/programs/codex/skills/impl/SKILL.md": "impl",
             "home/programs/agents/shared/plan/references/critic-prompt.md": "critic prompt",
             "home/programs/agents/shared/plan/references/adversarial-prompt.md": "adversarial prompt",
-            "home/programs/agents/skills/requirements-interview/SKILL.md": "interview",
+            "home/programs/agents/skills/spec/SKILL.md": "spec",
             "home/programs/agents/scripts/check-plan.ts": "snapshot linter",
             "home/programs/claude/skills/impl/references/comments-card.md": "comments card",
             "home/programs/claude/global-instructions.md": "comment conventions",

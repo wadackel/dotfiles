@@ -11,7 +11,7 @@ publish changes or invoke external task services.
 ## Reproduce a case
 
 Freeze a source tree containing `home/programs/codex`, shared plan references,
-`requirements-interview`, `home/programs/agents/scripts/check-plan.ts`, and the
+`spec`, `home/programs/agents/scripts/check-plan.ts`, and the
 Claude reviewer definitions referenced by the Codex adapters. Include Claude's
 `skills/impl/references/comments-card.md` and `global-instructions.md`: the
 runner publishes them under the isolated home's `.claude/`. Preserve file modes
