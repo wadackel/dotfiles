@@ -1,12 +1,6 @@
 ---
 name: ui-design
-description: >-
-  Explores how a screen or component should work and look together with the
-  user, from the problem to a detailed direction, using mockups published as
-  private artifact pages that the user can try and give feedback on inside the
-  page. For deciding a design before it is built. Not for implementing a decided
-  design (/plan, /do) or for open-ended consultation (/consult). Manual trigger:
-  /ui-design.
+description: Explores how a UI should work and look with the user, from the problem to a detailed direction, through mockups on private artifact pages.
 argument-hint: "[screen, component, or UI problem]"
 disable-model-invocation: true
 ---
