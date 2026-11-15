@@ -197,11 +197,12 @@
   .sbar .ctl { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto; }
   .sbar .hint { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .scl { font-size: 12px; color: var(--sub); white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .figs { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; gap: 16px; padding: 0 24px 12px; }
+  .figs { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; gap: 16px; padding: 1px 24px 12px; overflow: hidden; scrollbar-gutter: stable; }
   .pane { flex: none; min-width: 0; }
   .pane .ph { height: 30px; overflow: hidden; }
   .figs:not(.two) .ph { display: none; }
   .figs.two { align-items: center; }
+  .figs.wide { overflow-y: auto; align-items: flex-start; }
   .slot { outline: 1px solid var(--line); }
 
   .panel { grid-column: 2; grid-row: 2; justify-self: end; z-index: 30; width: min(400px, 100%); display: flex; flex-direction: column; min-height: 0; background: var(--raise); border-left: 1px solid var(--line); box-shadow: -14px 0 28px oklch(0% 0 0 / .35); }
@@ -268,7 +269,7 @@
   .it.is-cur em, .it.is-par em { color: var(--fg); }
   .it-r .rmk { font-size: 15px; line-height: 1; }
   .it-role { display: block; min-height: 30px; font-size: 11px; line-height: 15px; color: var(--fg); }
-  .pinb { position: absolute; right: -5px; top: -6px; z-index: 1; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--line2); border-radius: 3px; color: var(--acc); }
+  .pinb { position: absolute; right: -5px; top: -6px; z-index: 1; pointer-events: none; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--line2); border-radius: 3px; color: var(--acc); }
   .pinb .ico { width: 9px; height: 11px; }
   .p-opt { padding: 14px 0 18px; border-bottom: 1px solid var(--line); }
   .sh { min-height: 28px; padding: 0 16px; }
@@ -343,10 +344,10 @@
   <aside class="lp" aria-label="案の一覧">
     <div class="lh"><span class="lbl">案</span><button type="button" class="btn" id="d-list-btn" data-act="list" aria-expanded="true" aria-controls="d-lists"><kbd>L</kbd><span class="lbl" id="d-list-label">一覧を畳む</span></button></div>
     <div class="lists" id="d-lists"></div>
-    <div class="lf">
+    <div class="lf" data-needs-partner>
       <p>選んだ案が表示中になり、直前まで表示中だった案が比べる相手になる</p>
       <p><kbd class="t">←</kbd> <kbd class="t">→</kbd> 前後の案を選ぶ</p>
-      <p data-needs-partner><kbd class="t">P</kbd> 比べる相手を固定する</p>
+      <p><kbd class="t">P</kbd> 比べる相手を固定する</p>
     </div>
   </aside>
 
@@ -357,6 +358,7 @@
         <p class="hint" id="d-hold" data-needs-partner></p>
         <button type="button" class="btn" data-act="pin" data-needs-partner aria-pressed="false"><kbd>P</kbd><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span data-t="pin-label"></span></button>
         <span class="scl" id="d-scale"></span>
+        <button type="button" class="btn" id="d-wide-btn" data-act="wide" aria-pressed="false" hidden><kbd>W</kbd><span id="d-wide-label"></span></button>
         <button type="button" class="btn" data-act="two" data-needs-partner aria-pressed="false"><kbd>N</kbd><span id="d-two-label"></span></button>
         <button type="button" class="btn" data-act="operate" data-needs-partner aria-pressed="false"><kbd>O</kbd>図を操作</button>
       </div>
@@ -422,7 +424,7 @@
     <h2 data-t="question"></h2>
     <p class="how">案ごとに ○ △ × を付け、残したい部分・嫌な部分をメモに</p>
   </section>
-  <p class="p-oh"><b>案</b><span>選んだ案が表示中に、直前の案が比べる相手になる</span></p>
+  <p class="p-oh"><b>案</b><span data-needs-partner>選んだ案が表示中に、直前の案が比べる相手になる</span></p>
   <nav class="stripw" id="p-stripw" aria-label="案"><div id="p-strip"></div></nav>
   <main id="p-main">
     <section class="p-opt" id="p-shown" aria-label="表示中の案">
@@ -555,6 +557,9 @@
 
   // One record per round: { ratings: {optionId: mark}, notes: {optionId: text}, values: {optionId: object}, comment }
   const records = new Map();
+  // Rounds the store just delivered: their memo fields are refilled even while focused,
+  // or a field focused before the store answered would show nothing and save over it.
+  const refresh = new Set();
   const views = new Map();
   const status = new Map();
   for (const r of rounds) {
@@ -562,7 +567,7 @@
     views.set(r.id, { shown: r.options[0].id, partner: r.options[1] ? r.options[1].id : null, pinned: null });
     status.set(r.id, { kind: "idle", at: 0 });
   }
-  const ui = { round: currentId, list: true, two: false, panel: null, hist: false, drawer: null, peek: false, operate: false, big: false };
+  const ui = { round: currentId, list: true, two: false, wide: false, panel: null, hist: false, drawer: null, peek: false, operate: false, big: false };
   const partnerWord = (v) => (v.pinned && v.pinned === v.partner ? "比べる相手（固定）" : "比べる相手");
   const roleOf = (v, id) => (id === v.shown ? "shown" : id === v.partner ? "partner" : null);
   const inSlot = (v, slot) => {
@@ -572,7 +577,8 @@
 
   // Frames are moved with transform, never re-parented: moving an iframe in the
   // DOM reloads it, which loses what the user tuned inside it and makes the
-  // hold flash blank instead of switching at once.
+  // hold flash blank instead of switching at once. The one exception is the layer
+  // changing host when the window crosses 860px (see sync).
   const layer = $("layer");
   const surfaces = [$("surf-a"), $("surf-b")];
   const frameSets = new Map();
@@ -585,8 +591,10 @@
   };
   const makeFrame = (round, opt, cls) => {
     const frame = el("iframe", { class: cls, title: `${opt.id} ${opt.name}`, width: opt.width, height: opt.height, sandbox: "allow-scripts" });
-    frame.srcdoc = opt.html;
-    frame.addEventListener("load", () => sendInit(round.id, opt.id));
+    // A root with overscroll-behavior stops a wheel over the frame from scrolling the
+    // stage, and an app-like mock often sets it; appended, so the doctype stays first.
+    frame.srcdoc = `${opt.html}<style>html{overscroll-behavior:auto!important}</style>`;
+    frame.addEventListener("load", () => sendInit(round.id, opt.id, frame));
     return frame;
   };
   const stageFrame = (round, opt) => {
@@ -607,11 +615,13 @@
     frameSet(round.id, opt.id).thumbs.push(frame);
     return frame;
   };
-  const sendInit = (roundId, optId) => {
+  // A frame that loads gets the values alone: the option's other frames may hold a
+  // change the user is making right now, which the saved values would undo.
+  const sendInit = (roundId, optId, only) => {
     const values = records.get(roundId).values[optId];
     const set = frameSets.get(roundId) && frameSets.get(roundId).get(optId);
     if (!values || !set) return;
-    for (const f of [set.stage, ...set.thumbs]) if (f && f.contentWindow) f.contentWindow.postMessage({ uiDesignInit: values }, "*");
+    for (const f of only ? [only] : [set.stage, ...set.thumbs]) if (f && f.contentWindow) f.contentWindow.postMessage({ uiDesignInit: values }, "*");
   };
 
   const rowSets = new Map();
@@ -778,6 +788,19 @@
   let lost = false;
   let ready = false;
   let lastSaid = "";
+  // Fields the user changed before the store answered, per round, each with the value it
+  // had when first changed: the store's copy is laid under the ones that differ now, so an
+  // early rating, or a mark set and cleared, does not erase notes from an earlier visit.
+  const touched = new Map();
+  const touch = (roundId, field, id) => {
+    if (ready) return;
+    const r = records.get(roundId);
+    let t = touched.get(roundId);
+    if (!t) touched.set(roundId, (t = { ratings: new Map(), notes: new Map(), values: new Map(), comment: undefined }));
+    if (field === "comment") {
+      if (t.comment === undefined) t.comment = r.comment;
+    } else if (!t[field].has(id)) t[field].set(id, r[field][id]);
+  };
   const statusView = (roundId) => {
     const st = status.get(roundId);
     if (noStore || readOnly) return ["warn", "このページでは保存できません。コピーしてチャットに貼ってください"];
@@ -860,15 +883,17 @@
     }
     for (const ta of all("[data-memo]")) {
       const moved = ta.dataset.memoOpt !== so.id || ta.dataset.memoRound !== round.id;
-      if (moved || document.activeElement !== ta) ta.value = rec.notes[so.id] || "";
+      const note = rec.notes[so.id] || "";
+      if ((moved || document.activeElement !== ta || refresh.has(round.id)) && ta.value !== note) ta.value = note;
       ta.dataset.memoOpt = so.id;
       ta.dataset.memoRound = round.id;
       ta.setAttribute("aria-label", `${so.id} のメモ`);
     }
     for (const ta of all("[data-comment]")) {
-      if (ta.dataset.memoRound !== round.id || document.activeElement !== ta) ta.value = rec.comment;
+      if ((ta.dataset.memoRound !== round.id || document.activeElement !== ta || refresh.has(round.id)) && ta.value !== rec.comment) ta.value = rec.comment;
       ta.dataset.memoRound = round.id;
     }
+    refresh.clear();
     all('[data-ax="shown"]').forEach((n) => fillAx(n, so));
     all('[data-ax="partner"]').forEach((n) => fillAx(n, po));
     const val = rec.values[so.id];
@@ -922,7 +947,7 @@
   const SIDE = 24;
   const GAP = 16;
   const PH = 30;
-  const FOOT = 12;
+  const FOOT = 13;
   const rel = (node, origin) => {
     const r = node.getBoundingClientRect();
     return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
@@ -937,6 +962,15 @@
     const r = host.getBoundingClientRect();
     Object.assign(layer.style, { left: `${r.left - b.left}px`, top: `${r.top - b.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     return r;
+  };
+  // On a desktop the layer sits inside the stage and spans its scrolled content, so a
+  // wheel over a frame scrolls the stage; a layer outside it would need the frames to
+  // pass the wheel on, which a sandboxed frame cannot.
+  const stageLayer = (figs) => {
+    layer.classList.remove("over");
+    Object.assign(layer.style, { left: "0px", top: "0px", width: `${figs.clientWidth}px`, height: "0px" });
+    layer.style.height = `${figs.scrollHeight}px`;
+    return layer.getBoundingClientRect();
   };
   const size = (node, w, h) => {
     const W = `${Math.floor(w)}px`;
@@ -961,6 +995,10 @@
     if (box) Object.assign(surf.style, { transform: `translate(${box.x}px, ${box.y}px)`, width: `${box.w}px`, height: `${box.h}px` });
   };
   const sync = () => {
+    // Moving the layer reloads its frames, so it moves only when the window crosses
+    // 860px; each frame gets its saved values back when it loads.
+    const home = desk.matches ? $("d-figs") : document.body;
+    if (layer.parentNode !== home) home.append(layer);
     const round = roundOf(ui.round);
     const v = views.get(round.id);
     const so = optOf(round, v.shown);
@@ -1003,20 +1041,26 @@
       const two = ui.two && !!po;
       const W = figs.clientWidth;
       const H = figs.clientHeight;
-      const one = (o) => Math.min(1, (W - SIDE * 2) / o.width, (H - FOOT) / o.height);
-      const pair = (a, b) => {
+      const one = (o, byWidth) => Math.min(1, (W - SIDE * 2) / o.width, byWidth ? 1 : (H - FOOT) / o.height);
+      const pair = (a, b, byWidth) => {
         const pw = (W - SIDE * 2 - GAP) / 2;
         const ph = H - PH - FOOT;
-        return Math.min(1, pw / a.width, pw / b.width, ph / a.height, ph / b.height);
+        return Math.min(1, pw / a.width, pw / b.width, byWidth ? 1 : Math.min(ph / a.height, ph / b.height));
       };
-      const s = Math.max(0.01, two ? pair(po, so) : one(so));
+      const fit = (pairs, byWidth) => Math.max(0.01, pairs ? pair(po, so, byWidth) : one(so, byWidth));
+      // Fitting a tall option to the width is offered only where it reads markedly larger.
+      const widens = (pairs) => fit(pairs, true) >= fit(pairs, false) * 1.25;
+      const wide = ui.wide && widens(two);
+      figs.classList.toggle("wide", wide);
+      if (!wide) figs.scrollTop = 0;
+      const s = fit(two, wide);
       size($("d-pane-shown"), so.width * s, null);
       size($("d-slot-shown"), so.width * s, so.height * s);
       if (two) {
         size($("d-pane-partner"), po.width * s, null);
         size($("d-slot-partner"), po.width * s, po.height * s);
       }
-      const origin = hostLayer(figs);
+      const origin = stageLayer(figs);
       const bs = rel($("d-slot-shown"), origin);
       if (two) {
         const bp = rel($("d-slot-partner"), origin);
@@ -1031,7 +1075,14 @@
         cover(sb, null);
       }
       $("d-scale").textContent = `図の倍率 ${fmt(s)} 倍${s >= 1 ? "（実寸）" : ""}`;
-      $("d-two-label").textContent = !po ? "" : two ? `1 枚で大きく ${fmt(one(so))} 倍` : `並べる ${fmt(pair(po, so))} 倍`;
+      const wb = $("d-wide-btn");
+      wb.hidden = !widens(two);
+      wb.setAttribute("aria-pressed", String(wide));
+      $("d-wide-label").textContent = wide ? `全体を収める ${fmt(fit(two, false))} 倍` : `幅に合わせる ${fmt(fit(two, true))} 倍`;
+      if (po) {
+        const other = !two;
+        $("d-two-label").textContent = `${two ? "1 枚で大きく" : "並べる"} ${fmt(fit(other, ui.wide && widens(other)))} 倍`;
+      } else $("d-two-label").textContent = "";
       return;
     }
     const slotS = $("p-slot-shown");
@@ -1115,6 +1166,7 @@
     const round = roundOf(ui.round);
     const v = views.get(round.id);
     const rec = records.get(round.id);
+    touch(round.id, "ratings", v.shown);
     if (rec.ratings[v.shown] === mark) delete rec.ratings[v.shown];
     else rec.ratings[v.shown] = mark;
     paint();
@@ -1127,6 +1179,7 @@
     if (id !== ui.round) {
       ui.round = id;
       ui.peek = false;
+      $("d-figs").scrollTop = 0;
       buildRows(roundOf(id), "desk");
       buildRows(roundOf(id), "phone");
       announce(id === currentId ? `今の回 ${id} に戻りました` : `${id} を見ています（過去の回）`);
@@ -1231,6 +1284,7 @@
       case "list": ui.list = !ui.list; return paint();
       case "pin": return pinPartner();
       case "two": ui.two = !ui.two; ui.peek = false; return paint();
+      case "wide": ui.wide = !ui.wide; ui.peek = false; return paint();
       case "operate": ui.operate = !ui.operate; ui.peek = false; return paint();
       case "copy": return copy();
       case "big": return setBig(true);
@@ -1249,6 +1303,7 @@
     ta.addEventListener("input", () => {
       const rec = records.get(ta.dataset.memoRound);
       if (!rec) return;
+      touch(ta.dataset.memoRound, "notes", ta.dataset.memoOpt);
       if (ta.value) rec.notes[ta.dataset.memoOpt] = ta.value;
       else delete rec.notes[ta.dataset.memoOpt];
       paint();
@@ -1259,6 +1314,7 @@
     ta.addEventListener("input", () => {
       const rec = records.get(ta.dataset.memoRound);
       if (!rec) return;
+      touch(ta.dataset.memoRound, "comment");
       rec.comment = ta.value;
       paint();
       save(ta.dataset.memoRound, 800);
@@ -1284,6 +1340,7 @@
       p: pinPartner,
       n: () => { if (desk.matches && views.get(ui.round).partner) { ui.two = !ui.two; ui.peek = false; paint(); } },
       o: () => { if (views.get(ui.round).partner) { ui.operate = !ui.operate; ui.peek = false; paint(); } },
+      w: () => { if (desk.matches && !$("d-wide-btn").hidden) { ui.wide = !ui.wide; ui.peek = false; paint(); } },
       ArrowLeft: () => step(-1),
       ArrowRight: () => step(1),
       l: () => { if (desk.matches) { ui.list = !ui.list; paint(); } },
@@ -1348,8 +1405,9 @@
     paint();
   });
 
-  // A round with local edits not yet confirmed by the store is "dirty": snapshots
-  // skip it, so a delivery between typing and saving cannot roll the edit back.
+  // A round with local edits not yet confirmed by the store is "dirty": once the store
+  // has answered, snapshots skip it, so a delivery between typing and saving cannot
+  // roll the edit back. Before that, its touched fields are laid over the stored doc.
   const timers = new Map();
   const inflight = new Map();
   const dirty = new Set();
@@ -1415,11 +1473,24 @@
       if (!KEY.test(k)) continue;
       if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
       else if (typeof v === "boolean") out[k] = v;
-      // Line breaks, other controls and bidi overrides would let a value pose as the
-      // user's own line in the message they paste to Claude.
-      else if (typeof v === "string" && v.length <= 64 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(v)) out[k] = v;
+      // Line breaks, bidi controls and invisible format characters would let a value pose
+      // as the user's own line, or hide text, in the message they paste to Claude. A class
+      // rather than a list: a listed range misses the next invisible character.
+      else if (typeof v === "string" && v.length <= 64 && !/[\p{C}\p{Zl}\p{Zp}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/u.test(v)) out[k] = v;
     }
     return Object.keys(out).length ? out : null;
+  };
+  const readDoc = (data) => {
+    const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
+    const r = { ratings: Object.create(null), notes: Object.create(null), values: Object.create(null), comment: "" };
+    for (const [k, m] of Object.entries(obj(data.ratings))) if (MARKS.includes(m)) r.ratings[k] = m;
+    for (const [k, t] of Object.entries(obj(data.notes))) if (typeof t === "string" && t) r.notes[k] = t;
+    for (const [k, val] of Object.entries(obj(data.values))) {
+      const clean = cleanValues(val);
+      if (clean) r.values[k] = clean;
+    }
+    if (typeof data.comment === "string") r.comment = data.comment;
+    return r;
   };
 
   // A variant reports tuned values with parent.postMessage({ uiDesignValues: {...} }, "*")
@@ -1432,6 +1503,7 @@
         const values = cleanValues(event.data && event.data.uiDesignValues);
         const rec = records.get(roundId);
         if (!values || JSON.stringify(values) === JSON.stringify(rec.values[optId])) return;
+        touch(roundId, "values", optId);
         rec.values[optId] = values;
         paint();
         save(roundId, 800);
@@ -1469,29 +1541,47 @@
       }
       let changed = false;
       for (const doc of snap.docs) {
-        if (!records.has(doc.id) || dirty.has(doc.id)) continue;
+        if (!records.has(doc.id)) continue;
+        const early = dirty.has(doc.id);
+        if (early && ready) continue;
         const data = doc.data() || {};
         if (seen.get(doc.id) === data) continue;
         seen.set(doc.id, data);
         const r = records.get(doc.id);
-        const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
-        r.ratings = Object.create(null);
-        for (const [k, m] of Object.entries(obj(data.ratings))) if (MARKS.includes(m)) r.ratings[k] = m;
-        r.notes = Object.create(null);
-        for (const [k, t] of Object.entries(obj(data.notes))) if (typeof t === "string" && t) r.notes[k] = t;
-        r.values = Object.create(null);
-        for (const [k, val] of Object.entries(obj(data.values))) {
-          const clean = cleanValues(val);
-          if (clean) r.values[k] = clean;
+        const stored = readDoc(data);
+        const t = early && touched.get(doc.id);
+        const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+        const kept = new Set();
+        if (t) {
+          // A field back at its first value takes the store's, which becomes the value to
+          // compare with: a later, newer snapshot must not be overruled by an older one.
+          for (const f of ["ratings", "notes", "values"]) {
+            for (const [id, first] of t[f]) {
+              if (same(r[f][id], first)) {
+                t[f].set(id, stored[f][id]);
+                continue;
+              }
+              if (id in r[f]) stored[f][id] = r[f][id];
+              else delete stored[f][id];
+              if (f === "values") kept.add(id);
+            }
+          }
+          if (t.comment !== undefined) {
+            if (r.comment !== t.comment) stored.comment = r.comment;
+            else t.comment = stored.comment;
+          }
         }
-        r.comment = typeof data.comment === "string" ? data.comment : "";
+        Object.assign(r, stored);
+        refresh.add(doc.id);
         const at = Date.parse(data.updatedAt);
         if (Number.isFinite(at) && status.get(doc.id).kind === "idle") status.set(doc.id, { kind: "saved", at });
         changed = true;
-        for (const optId of Object.keys(r.values)) sendInit(doc.id, optId);
+        // A frame whose own values were kept already shows them, and may be mid-change.
+        for (const optId of Object.keys(r.values)) if (!kept.has(optId)) sendInit(doc.id, optId);
       }
       if (!ready && !snap.metadata.fromCache) {
         ready = true;
+        touched.clear();
         for (const roundId of dirty) save(roundId);
       }
       if (changed) paint();

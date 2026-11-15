@@ -1,6 +1,6 @@
 # The board
 
-One private artifact page per exploration. It shows the current round's options one at a time at the largest scale the screen allows, with the option shown before it held as the partner the user can flip to in place; the decisions so far and the earlier rounds open from the header. The user rates options ○ △ ×, writes notes, and tunes values inside the page; the page saves them to the artifact's `db`, where Claude reads them. On a desktop the page is one screen like an application; on a phone it is a page that scrolls.
+One private artifact page per exploration. It shows the current round's options one at a time at the largest scale the screen allows, with the option shown before it held as the partner the user can flip to in place; the decisions so far and the earlier rounds open from the header. The user rates options ○ △ ×, writes notes, and tunes values inside the page; the page saves them to the artifact's `db`, where Claude reads them. On a desktop the page is one screen like an application, and a tall option can be fitted to the width instead (W) and scrolled in place; on a phone it is a page that scrolls.
 
 ## Files
 
@@ -51,7 +51,7 @@ Keep everything under the session scratchpad, one directory per exploration:
 - `decisions[].over` is what the decision was chosen over. Leave it out when nothing else was considered.
 - `rounds` are appended in order and never renumbered or rewritten, so the ids in `db` stay attached to what the user saw. The last round is the one the page opens on; earlier ones open from 「これまでの回」.
 - `question` is the question alone. The page already tells the user how to answer (rate each option and note what to keep or change), so instructions repeated in the question only lengthen the header.
-- `options[].axis` names the decision the option changes, `tradeoff` its main cost. `width` and `height` are the option's real size in CSS px (a phone screen at its dp size, a desktop screen at 1280 or 1440). The page fits the shown option to the stage, never above 1:1, so any number of options of any size can share a round.
+- `options[].axis` names the decision the option changes, `tradeoff` its main cost. `width` and `height` are the option's real size in CSS px (a phone screen at its dp size, a desktop screen at 1280 or 1440). The page fits the shown option to the stage, never above 1:1, so any number of options of any size can share a round; on a desktop the user can fit a tall one to the width and scroll it.
 - User-facing strings (`title`, `target`, `question`, `name`, `axis`, `tradeoff`, decisions) are in the user's language.
 
 Build after every change:
@@ -101,7 +101,7 @@ A variant with controls reports values to the board:
 parent.postMessage({ uiDesignValues: { size: 18, opacity: 0.4 } }, "*");
 ```
 
-Post on `change`, not on every `input` event. The board keeps up to 20 keys of letters, digits, `_` or `-` with finite numbers, booleans, or strings up to 64 characters, saves them under `values[<option id>]` of the round, and shows them with the option's memo. A string with a line break, another control character, or a bidi override is dropped: values are copied into the message the user pastes to Claude. When the page loads, the board sends the saved values back as `{ uiDesignInit: {...} }`; the variant applies them to its controls, so a reload does not reset the tuning.
+Post on `change`, not on every `input` event. The board keeps up to 20 keys of letters, digits, `_` or `-` with finite numbers, booleans, or strings up to 64 characters, saves them under `values[<option id>]` of the round, and shows them with the option's memo. A string with a line break, another control character, or an invisible format character (bidi controls, zero-width and tag characters) is dropped: values are copied into the message the user pastes to Claude. When the page loads, the board sends the saved values back as `{ uiDesignInit: {...} }`; the variant applies them to its controls, so a reload does not reset the tuning.
 
 ## Looking at it
 
