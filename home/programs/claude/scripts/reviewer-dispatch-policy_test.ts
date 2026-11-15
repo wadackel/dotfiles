@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
 import {
   denialMessage,
+  DO_TEMPLATE,
   GUARDED,
   hasVerdictRule,
   isReviewerAgent,
-  DO_TEMPLATE,
   TEMPLATE,
 } from "./reviewer-dispatch-policy.ts";
 
@@ -226,8 +226,16 @@ test("a JSON verdict field is not the verdict rule", async () => {
 // in only one place fails silently, so both are checked against the repository.
 test("template path and every guarded reviewer exist in the repository", async () => {
   const repoRoot = join(import.meta.dirname, "../../../..");
-  for (const path of [TEMPLATE, DO_TEMPLATE, DO_TEMPLATE.replace(/reviewer-prompt\.md$/, "breaker-prompt.md")]) {
-    await stat(join(repoRoot, path.replace(/^~\/\.claude\//, "home/programs/claude/")));
+  for (
+    const path of [
+      TEMPLATE,
+      DO_TEMPLATE,
+      DO_TEMPLATE.replace(/reviewer-prompt\.md$/, "breaker-prompt.md"),
+    ]
+  ) {
+    await stat(
+      join(repoRoot, path.replace(/^~\/\.claude\//, "home/programs/claude/")),
+    );
   }
   for (const name of GUARDED) {
     await stat(join(repoRoot, `home/programs/claude/agents/${name}.md`));
