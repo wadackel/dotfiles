@@ -4,7 +4,7 @@ Read by an autopilot unit whose brief names a PR on a branch the agent did not c
 
 ## A PR on a branch the agent did not create
 
-Renovate, Dependabot, another person's: never push to that branch. Review the bot's change with `## Review` of `~/.claude/skills/impl/SKILL.md` with `--review <merge base>` (`git merge-base origin/<base> HEAD` after `gh pr checkout`), since the agent has no commit of its own to start from. `/iterate-pr` reports the verdict there and stops before pushing, because the PR's author is not the user.
+Renovate, Dependabot, another person's: never push to that branch. Review the bot's change with `## Review` of `~/.claude/skills/do/SKILL.md`, taking the merge base (`git merge-base origin/<base> HEAD` after `gh pr checkout`) as the start, since the agent has no commit of its own to start from. `/iterate-pr` reports the verdict there and stops before pushing, because the PR's author is not the user.
 
 When the PR needs a change, commit it on the agent's own branch cut from the bot's branch, open that PR with `gh pr create --base <bot's branch>`, and run `/iterate-pr` on it; not `/auto-pr`, whose `/create-pr` always targets the default branch and rebases onto it, which would replace the bot's PR. The controller merges it only once the bot's branch is current, because a branch carrying the agent's commit is one the bot no longer rebases. When that PR gets no checks (`NO_CHECKS`, CI limited to PRs against the trunk), it merges on the review's PASS: it lands only on the bot's branch, and the bot's PR still needs its own `ALL_PASS` on the combined change before anything reaches the trunk.
 

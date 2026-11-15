@@ -26,24 +26,32 @@ Advisor: <agent id>
 
 ## Units
 
-| # | Unit | Agent | Branch | Start sha | Plan | Verdict | PR | ALL_PASS head | Verified by | State |
-|---|------|-------|--------|-----------|------|---------|----|---------------|-------------|-------|
-| 1 | <unit> | <agent id> | <branch> | <sha> | <plan path or "trivial"> | APPROVE (round 2) | <url> | <sha from the unit's report, checked with gh pr view> | <how> | done / in progress / parked / todo |
+| # | Unit | Agent | Branch | Start sha | Do file | Review | Check | PR | ALL_PASS head | Verified by | State |
+|---|------|-------|--------|-----------|---------|--------|-------|----|---------------|-------------|-------|
+| 1 | <unit> | <agent id> | <branch> | <sha> | <do file path> | PASS at <Review head> | CLEAR (check 2) | <url> | <sha from the unit's report, checked with gh pr view> | <how> | done / in progress / parked / todo |
 
 ## Parked
 
 1. <question the user can answer in one line>
-    - Why the user: <irreversible, drops what the goal asked, a contract term, an ungranted side effect, or a person's observation>
+    - Why the user: <cannot be undone, an ungranted side effect, a classifier denial, the advisor's PARK, or a person's observation>
     - Recommendation: <option> — <why>
     - On each answer: <what proceeds>
 
+## Review hunks
+
+- <unit #> <PR>: <the hunk line as the unit reported it> — <merged, to read afterwards | parked>
+
 ## Decisions
 
-- <unit #>: <what was chosen> over <the alternative> — reverse with: <the words the user would say>
+- <unit #>: <(goal) when it loosens, replaces, or leaves undone what the goal asked> <what was chosen> over <the alternative> (<unit | advisor>) — reverse with: <the words the user would say>
+
+## Notes
+
+- <unit #>: <a closing-check finding left after the second check, a worktree that could not be removed, or something found outside the units>
 
 ## Advisor log
 
 - <unit #>: <what was asked> → <verdict or advice> → <followed | overridden: reason>
 ```
 
-`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. Only the controller writes this file; units read it. Decisions come from each unit's report and its plan's assumptions whose `reason:` starts with `autopilot Decision:`. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.
+`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. Only the controller writes this file; units read it. Decisions come from each unit's report, which carries each advisor `ANSWER`. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.

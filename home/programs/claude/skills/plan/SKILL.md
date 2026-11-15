@@ -104,13 +104,3 @@ When the user adds a condition, append it as the last Autonomous Verification bu
 
 Approval is the user typing `/impl`; write no state file.
 
-## Under /autopilot
-
-This section applies only when the prompt is an autopilot unit brief (`~/.claude/skills/autopilot/references/unit-brief.md`), run by the `autopilot-unit` agent, whose definition (`~/.claude/agents/autopilot-unit.md`) holds the park rule and the report form. The user is away; the brief's goal and unit are the direction, and the autopilot advisor approves the plan in the user's place.
-
-- **Of `references/`, read only `contract.md` and `survey.md`.** `interview.md` and `output-examples.md` serve questions and the handoff, neither of which happens here. SURVEY runs as above; its directions feed the brief's unit and the plan's Assumptions instead of a question.
-- **AGREE asks nothing.** A1, A5, and the Verification Grants question are skipped. A question that would go to the user follows the park rule: a parked one stops with `STATUS: PARKED` in the report form; any other is decided by you and written under `### Assumptions` as an ordinary assumption whose `reason:` starts with `autopilot Decision:` and names the alternative it was chosen over. `user-overridden` is not used, since the user chose nothing. This overrides `interview.md`'s rule that design decisions are asked; the autopilot final report is where the user makes them.
-- **`## Delivery` and `## Verification Grants`** are the brief's lines, copied as written.
-- **DEEPEN** runs as above; a queued User decision follows the park rule instead of being asked.
-- **ACTIVATE** writes no handoff and no `## Plan ready` block: once `check-plan.ts` reports no `error`, end with `PLAN <plan path>` and stop until the controller answers.
-- **Trivial** writes no plan and needs no approval: make the change, verify it, commit on the worktree's branch, run `## Review` of `~/.claude/skills/impl/SKILL.md` with `--review <start sha>`, then ship it as `/impl`'s Delivery and its `## Under /autopilot` say, and end with the report form.

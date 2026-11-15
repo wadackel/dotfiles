@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # /impl
 
-Approval is the user's `/impl` keystroke; there is no state file. `/impl --review [<baseline>]` skips the plan and the tasks and runs `## Review` alone; a caller that cannot type a slash command (the trivial path of `/plan`, `/autopilot`) reads this file and follows `## Review` with `--review` itself. Fixed strings are in `~/.claude/skills/plan/references/contract.md`; `<scratchpad>` is this session's scratchpad directory.
+Approval is the user's `/impl` keystroke; there is no state file. `/impl --review [<baseline>]` skips the plan and the tasks and runs `## Review` alone; a caller that cannot type a slash command (the trivial path of `/plan`) reads this file and follows `## Review` with `--review` itself. Fixed strings are in `~/.claude/skills/plan/references/contract.md`; `<scratchpad>` is this session's scratchpad directory.
 
 ## Resolve the plan
 
@@ -49,7 +49,7 @@ Every Autonomous Verification criterion other than `[outcome]` needs, in the con
 
 ## Review
 
-Two modes. **Plan mode** (the final task, or an `/autopilot` unit with its plan path): the base is the commit `git rev-parse -q --verify refs/impl-base/<slug>` prints; keep that sha as `<base>`, because Clean up deletes the ref before Reply diffs again. Without the ref, the base is `HEAD`, and the report says so, since changes committed during the work then fall outside the diff. **`--review [<baseline>]`**: no plan; `<slug>` is a timestamp, and `<base>` is the baseline given, else `HEAD` when the working tree has uncommitted changes and `HEAD~1` when it has none. `--break` (or "壊して") asks for the breaker in plan mode.
+Two modes. **Plan mode** (the final task): the base is the commit `git rev-parse -q --verify refs/impl-base/<slug>` prints; keep that sha as `<base>`, because Clean up deletes the ref before Reply diffs again. Without the ref, the base is `HEAD`, and the report says so, since changes committed during the work then fall outside the diff. **`--review [<baseline>]`**: no plan; `<slug>` is a timestamp, and `<base>` is the baseline given, else `HEAD` when the working tree has uncommitted changes and `HEAD~1` when it has none. `--break` (or "壊して") asks for the breaker in plan mode.
 
 ### Collect
 
@@ -130,17 +130,6 @@ After the review passes, ship as `## Delivery` says; after `[BLOCKED: gate escal
 - Then run `/iterate-pr` on each PR until CI passes, fixing failures and pushing again; with `Draft: yes` the PR stays a draft, so skip its step that marks the PR ready. A layer above the bottom that reports no checks waits until it becomes the bottom.
 - Merge only with `Merge: yes`, when the review listed no `レビューしてほしい` hunk, and when the latest `/iterate-pr` on that PR returned `ALL_PASS` for its current head with no review comment triaged `ask` left open. `/iterate-pr` does not print the head it judged, so record `gh pr view --json headRefOid` next to each `ALL_PASS` and compare it right before merging; a verdict for an older head does not count, and neither does reading a check's status inside the command that merges, so the merge is its own tool call. An own PR merges with `gh pr merge`. A stack merges one layer at a time from the bottom with `gh stack merge <PR> --yes`, because `gh pr merge` cannot merge a stack and `gh stack merge` checks nothing but that the PR is open and not a draft; after each layer, run `gh stack sync`, which rebases and force-pushes the layers above, and run `/iterate-pr` again on the new bottom layer before merging it. When the review listed a hunk, the PRs stay open and the merge goes to the user.
 - After a merge that a Verification Grant covers, wait for the deploy and observe the `[live]` criteria that observe production; a failure there is fixed through a new PR that sets a new start ref and goes through `## Review` and these steps again.
-
-## Under /autopilot
-
-This section applies only after an autopilot unit brief (`~/.claude/skills/autopilot/references/unit-brief.md`), when the controller's `APPROVED <plan path>` message stands in for the user's `/impl`, or when a trivial unit ships as the plan skill's `## Under /autopilot` says. The unit runs as the `autopilot-unit` agent, whose definition (`~/.claude/agents/autopilot-unit.md`) holds the park rule and the report form.
-
-- **The plan** is the path in that message; no fallback by mtime.
-- **Delivery** runs as written. Its `Merge` is `no`, so it ends when `/iterate-pr` returns `ALL_PASS`; record `gh pr view --json headRefOid` right after it, for the report. What `/iterate-pr` or `/auto-pr` would ask the user (the same failure three times, an exhausted budget, `BLOCKED`, three `PENDING` in a row, `NO_CHECKS` on a PR against the trunk, a review comment triaged `ask`) is a parked item.
-- **When the plan cannot be followed**, nobody is asked. A deviation the park rule does not park is decided, written under the plan's `### Assumptions` as an autopilot Decision (the plan skill's `## Under /autopilot`), and the work continues; a parked one stops that step.
-- **A Requires User Confirmation item** whose attempt fails parks that item, not the unit.
-- **The same failure three times** ends the unit with `STATUS: BLOCKED` and what was tried; the controller may come back with a hypothesis.
-- **No final report** is written: end with the unit's report form instead.
 
 ## Final report
 
