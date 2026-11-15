@@ -99,7 +99,7 @@ Use the **repo-dive** skill to clone and explore a GitHub repository.
 
 ## After writing
 
-Execute `/skill-improver <name>` for quality evaluation and optimization before considering a new skill complete. Its Step 2.5 measures the description; of two candidates that measure the same, keep the shorter.
+Run the skill once where it runs: a headless `claude -p` (or `codex exec` for a Codex skill) with a request it should handle, then read which skills loaded and what it produced. Use `/skill-improver <name>` only when that run or real use shows the skill misfiring or not firing, or when the user asks for it: it dispatches many subagents, and a skill that already works gains nothing from it. Its Step 2.5 measures the description; of two candidates that measure the same, keep the shorter.
 
 ## Anti-patterns
 
