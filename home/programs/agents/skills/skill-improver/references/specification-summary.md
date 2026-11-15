@@ -21,7 +21,7 @@ This document provides a compact summary of key specifications from both Agent S
 - 1-1024 characters
 - Non-empty
 - Should describe both WHAT the skill does and WHEN to use it
-- Should include specific trigger phrases and keywords
+- Should name the task and the domain nouns that identify it
 
 ### Optional Fields
 
@@ -108,8 +108,8 @@ Example:
 - **Start with an action verb** (e.g., "Sends...", "Adds...", "Reviews...", "Translates...")
 - **Always write in third person** (not "I can help" or "You can use")
 - Include both WHAT and WHEN
-- Add specific trigger phrases users would naturally say, including bilingual phrases if the user communicates in multiple languages
-- Be comprehensive but concise (max 1024 chars)
+- Front-load the task and its domain nouns; Claude Code cuts each listing entry at 1,536 chars and Codex shortens descriptions when its budget overflows
+- This repository's length and phrasing rules are in skill-design's "Write the description"
 
 Good example:
 ```yaml
@@ -193,7 +193,7 @@ Avoid:
 1. **Windows-style paths**: Use forward slashes, not backslashes
 2. **Too many options**: Provide a default with escape hatch, not a list of 5 alternatives
 3. **Over-explained content**: Don't explain well-known concepts
-4. **Vague descriptions**: Include specific trigger phrases and keywords
+4. **Vague descriptions**: Name the task and its domain nouns
 5. **Description not starting with action verb**: "Helps with X" → "Reviews X and..."
 6. **Missing progressive disclosure**: Don't put everything in SKILL.md
 7. **Inconsistent terminology**: Choose one term and use it throughout

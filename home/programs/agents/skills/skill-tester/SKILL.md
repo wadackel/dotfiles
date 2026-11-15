@@ -70,8 +70,7 @@ Before designing test scenarios, check the skill's description against these cri
 - [ ] Starts with an action verb (third person singular, e.g., "Validates", "Generates", "Converts")
 - [ ] Includes WHAT the skill does
 - [ ] Includes WHEN to use it (trigger conditions)
-- [ ] Contains specific trigger phrases users would say
-- [ ] Has bilingual triggers if the user communicates in multiple languages
+- [ ] Front-loads the task and its domain nouns, with no list of trigger phrases or their translations (skill-design, "Write the description")
 - [ ] If `$ARGUMENTS` is used, `argument-hint` is present in frontmatter
 - [ ] Description length is justified: of two candidates that measure the same in skill-improver's `measure-trigger.ts`, the shorter is kept
 

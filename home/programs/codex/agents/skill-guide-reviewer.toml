@@ -29,13 +29,14 @@ The description is the skill's only discovery mechanism. Codex selects skills pu
 - Starts with an action verb (third person singular: "Validates", "Generates", "Converts")
 - States WHAT the skill does
 - States WHEN to use it (trigger conditions)
-- Includes concrete trigger phrases users would type
-- Includes bilingual triggers if the target user is multilingual
+- Front-loads the task and its domain nouns; hosts truncate from the end
+- Carries no list of trigger phrases or their translations: the model matches paraphrases and other languages to the stated intent, and every listed phrase costs every session
 - Uses `argument-hint` frontmatter when `$ARGUMENTS` is referenced
 
 **Discovery anti-patterns:**
 - Vague opening ("This skill helps with...")
-- No explicit trigger phrases
+- An inventory of the body ("Covers A, B, C, and D")
+- Emphasis meant to raise triggering ("Make sure to use this whenever …")
 - Overlaps with other skills without disambiguation
 
 ### 5. Undertriggering Diagnostics
@@ -64,8 +65,8 @@ When invoked, read the target skill's SKILL.md and any referenced files, then ev
 - Action verb: ✅/❌ — {finding}
 - WHAT clause: ✅/❌ — {finding}
 - WHEN/trigger conditions: ✅/❌ — {finding}
-- Explicit trigger phrases: ✅/❌ — {finding}
-- Bilingual triggers: ✅/⚠️/N/A — {finding}
+- Front-loaded task and domain nouns: ✅/❌ — {finding}
+- Length (no phrase lists; over 300 chars needs a measured reason): ✅/⚠️/❌ — {finding}
 - argument-hint: ✅/❌/N/A — {finding}
 
 ### 2. Triggering Test Coverage

@@ -316,11 +316,11 @@ Based on test results, the conductor compiles recommendations:
 
 ### Issue: Skill doesn't trigger when expected
 
-**Signal pattern**: Multiple positive tests fail → strong signal that description lacks clear trigger phrases or domain boundaries.
+**Signal pattern**: Multiple positive tests fail → strong signal that description lacks the intent or the domain nouns those prompts carry.
 
 **Possible causes:**
 - Description too narrow or vague
-- Missing key trigger phrases
+- Missing a domain noun the failing prompts share
 - Competing with another skill
 
 **Solutions:**

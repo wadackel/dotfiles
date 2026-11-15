@@ -48,7 +48,7 @@ Invoked when empirical iteration cannot proceed — either because a guard trips
 
 Checks:
 - `name`: lowercase, hyphens, 1-64 chars, matches parent dir, no reserved words, gerund form preferred
-- `description`: action verb start, third person, includes WHAT and WHEN, specific trigger phrases, bilingual triggers when applicable, no vague terms ("helps with", "does stuff"), 1-1024 chars
+- `description`: follows skill-design's "Write the description": third person, WHAT then WHEN, task and domain nouns first, no trigger-phrase lists or translations, no unmeasured exclusion sentence, no vague terms ("helps with", "does stuff"); over 300 chars needs a measured reason
 - Optional fields: `argument-hint` present if `$ARGUMENTS` used, `disable-model-invocation` appropriate, `user-invocable` appropriate, `context: fork` only when needed
 
 Score guide:

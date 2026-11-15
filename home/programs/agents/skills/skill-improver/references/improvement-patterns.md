@@ -158,7 +158,9 @@ git commit -m "fix: ..."
 
 Replace blind staging/deletion commands with safety-first patterns. Always check before side-effect operations that can't be undone.
 
-## Pattern 5: Missing Trigger Phrases
+## Pattern 5: Missing Domain Nouns
+
+Add the noun a failing query carries, not the query's wording: a quoted phrase list memorizes vocabulary and costs every session.
 
 **Before:**
 ```yaml
@@ -167,7 +169,7 @@ description: Processes Excel files
 
 **After:**
 ```yaml
-description: Processes Excel files, creates pivot tables, generates charts. Use when analyzing Excel files, spreadsheets, tabular data, .xlsx files, or when the user asks to "work with Excel" or "analyze this spreadsheet".
+description: Processes Excel and .xlsx spreadsheets: pivot tables, charts, and cleanup of tabular data. Use when a task reads or edits a spreadsheet.
 ```
 
 ## Pattern 10: Skipped Rule → Reason or Script, Not Volume
