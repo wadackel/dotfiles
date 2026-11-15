@@ -36,7 +36,7 @@
 
 ## Entrypoints
 
-- `/plan <request>` is the user's entrypoint for implementation work and sizes the process to the request, small requests included; `/impl` executes the approved plan and ends with its own review of the change. Both are user-invoked.
+- `/do <request>` is the user's entrypoint for implementation work, small requests included: it takes the request to a verified change, shipped as far as the repository's shipping default goes, and asks only what the user alone decides. `/plan <request>` is for when the user wants to agree on a plan before any edit; `/impl` executes the approved plan and ends with its own review of the change. All three are user-invoked.
 - `/goal /autopilot <goal>` is the user's entrypoint for a long unattended run: each unit's plan → impl → PR in its own subagent, a Fable advisor approving the plans, and the main session merging. Load `/autopilot` only when the user names it, because it replaces their plan approval.
 - `/systematic-debugging` for bugs: observe the symptom directly, treat the fix as a hypothesis to falsify, and present both the minimal workaround and the root-cause fix when both exist.
 - `/qa-planner` for QA-style verification, `/agent-browser` for browser or UI checks (screenshots, console, responsive), `/gdocs-to-md` for Google Docs URLs, `/repo-dive` for GitHub repository code, `/obsidian-cli` for vault notes.

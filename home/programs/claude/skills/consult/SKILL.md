@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Consult
 
-The user has come to think something through with a peer, not to be walked to a decision. A consultation has done its job when the user sees their problem more widely or more clearly than before: a direction they had not considered, a mechanism they now understand, a premise that turned out wrong, a fact that changes what they want. Picking an option is their business and can wait; a reply that ends by narrowing their choices or pointing at `/plan` has usually failed, because it turns a consultation into the same funnel the planning skills already provide.
+The user has come to think something through with a peer, not to be walked to a decision. A consultation has done its job when the user sees their problem more widely or more clearly than before: a direction they had not considered, a mechanism they now understand, a premise that turned out wrong, a fact that changes what they want. Picking an option is their business and can wait; a reply that ends by narrowing their choices or pointing at `/do` or `/plan` has usually failed, because it turns a consultation into the same funnel the planning skills already provide.
 
 ## How this overrides the usual defaults
 
@@ -51,7 +51,7 @@ A reply is read in full or not at all: a user who stops halfway has lost everyth
 
 Build the reply to be read from the bottom up: facts and lists above; at the bottom, the view (how to think the next step through), the map line, and the question. Keep every line in a code block within 40 columns, counting a CJK character as two (20 Japanese characters fill a line), because a phone wraps wider lines and breaks the drawing; count the widest line before sending, break a long label onto the next line, and prefer a vertical tree to a wide box diagram.
 
-Beyond that there is no fixed shape: a few paragraphs, a diagram, a comparison, a question back. The consultation can run over many turns, and it is fine for a reply to end open: with your view, with something that still bothers you, or with a question only the user can answer. Narrow down, compare options with a recommendation, or move to `/plan` only when the user says they want to. Something that needs their permission (installing on their device, editing the repository) is mentioned as what could be tried next, among the open threads, not posed as the decision the reply ends on.
+Beyond that there is no fixed shape: a few paragraphs, a diagram, a comparison, a question back. The consultation can run over many turns, and it is fine for a reply to end open: with your view, with something that still bothers you, or with a question only the user can answer. Narrow down, compare options with a recommendation, or move to `/do` or `/plan` only when the user says they want to. Something that needs their permission (installing on their device, editing the repository) is mentioned as what could be tried next, among the open threads, not posed as the decision the reply ends on.
 
 ## The map
 

@@ -8,6 +8,7 @@ import {
   GUARDED,
   hasVerdictRule,
   isReviewerAgent,
+  DO_TEMPLATE,
   TEMPLATE,
 } from "./reviewer-dispatch-policy.ts";
 
@@ -65,6 +66,7 @@ test("denialMessage names the agent and points at the template", () => {
   const msg = denialMessage("database-reviewer");
   assertStringIncludes(msg, "database-reviewer");
   assertStringIncludes(msg, "domain-reviewer-prompt.md");
+  assertStringIncludes(msg, "do/references/reviewer-prompt.md");
   assertStringIncludes(msg, "how PASS and FAIL are decided");
 });
 
@@ -224,8 +226,9 @@ test("a JSON verdict field is not the verdict rule", async () => {
 // in only one place fails silently, so both are checked against the repository.
 test("template path and every guarded reviewer exist in the repository", async () => {
   const repoRoot = join(import.meta.dirname, "../../../..");
-  const template = TEMPLATE.replace(/^~\/\.claude\//, "home/programs/claude/");
-  await stat(join(repoRoot, template));
+  for (const path of [TEMPLATE, DO_TEMPLATE, DO_TEMPLATE.replace(/reviewer-prompt\.md$/, "breaker-prompt.md")]) {
+    await stat(join(repoRoot, path.replace(/^~\/\.claude\//, "home/programs/claude/")));
+  }
   for (const name of GUARDED) {
     await stat(join(repoRoot, `home/programs/claude/agents/${name}.md`));
   }

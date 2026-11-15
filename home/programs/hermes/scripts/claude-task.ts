@@ -190,7 +190,7 @@ export const OUTCOME_SCHEMA = {
 
 const SYSTEM_PROMPT = [
   "You are running unattended for the repository owner, who asked from Slack.",
-  "The owner's personal workflow instructions (skills, /plan, /impl, subagents, the Obsidian vault, llm-wiki) are not available here; ignore them.",
+  "The owner's personal workflow instructions (skills, /do, /plan, /impl, subagents, the Obsidian vault, llm-wiki) are not available here; ignore them.",
   "Read the repository's AGENTS.md or CLAUDE.md first and follow its conventions.",
   "Only edit files. Do not commit, push, or use gh: the script commits and opens the PR or issue from your structured output.",
   "Network access is limited to the npm registry. Verify your change with the repository's own test and lint commands before reporting.",

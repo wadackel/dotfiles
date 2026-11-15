@@ -20,8 +20,10 @@ interface HookInput {
 export const TEMPLATE =
   "~/.claude/skills/impl/references/domain-reviewer-prompt.md";
 
+export const DO_TEMPLATE = "~/.claude/skills/do/references/reviewer-prompt.md";
+
 /**
- * The reviewers /impl's review dispatches, listed explicitly. A `-reviewer$`
+ * The reviewers the reviews of /impl and /do dispatch, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer` and `skill-guide-reviewer`,
  * which belong to other workflows and have no template to satisfy the check.
  * Language checklists ride inside `code-reviewer`'s prompt as review cards,
@@ -63,7 +65,7 @@ export function isReviewerAgent(subagentType: string | undefined): boolean {
   return GUARDED.has(subagentType);
 }
 
-/** The /impl review templates end their VERDICT line with "FAIL otherwise". */
+/** The review templates of /impl and /do end their VERDICT line with "FAIL otherwise". */
 export function hasVerdictRule(prompt: string | undefined): boolean {
   if (!prompt) return false;
   return /FAIL otherwise/i.test(prompt);
@@ -100,7 +102,7 @@ export function requirementMessage(
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
     "",
-    "Add this line to the prompt (it comes from the /impl review template):",
+    "Add this line to the prompt (it comes from the review template of /impl or /do):",
     line,
   ].join("\n");
 }
@@ -114,6 +116,7 @@ export function denialMessage(subagentType: string): string {
     "summarise it and do not rewrite the VERDICT line:",
     `  ${TEMPLATE}`,
     "For a re-review after a blocker fix, use rereview-diagnostic-prompt.md; for breaker-reviewer, breaker-prompt.md.",
+    `For /do's review, use ${DO_TEMPLATE} and, for breaker-reviewer, the breaker-prompt.md beside it.`,
   ].join("\n");
 }
 

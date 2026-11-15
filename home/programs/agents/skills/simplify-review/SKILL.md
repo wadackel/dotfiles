@@ -8,7 +8,7 @@ argument-hint: "[plan|code|auto]"
 
 Detects over-engineering in plans and code by spawning a fresh subagent (`plan-simplifier` / `code-simplifier`) that reviews from a clean perspective. The reviewer has no knowledge of the design journey — only the artifact and its context — so it naturally spots complexity that feels justified to the author but isn't justified by the requirements.
 
-This skill is the entry point for an independent simplification review. `/impl` reviews simplification in the main session and dispatches neither subagent on its own, so a plan or diff gets a fresh-context simplification pass only through this skill.
+This skill is the entry point for an independent simplification review. `/impl` reviews simplification in the main session, `/do` picks the smallest option there and has its reviewer, when it dispatches one, flag what the intent did not ask for; neither dispatches these subagents on its own, so a plan or diff gets a fresh-context simplification pass only through this skill.
 
 ## Why This Matters
 
@@ -28,7 +28,7 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 |---|---|
 | User says "simplify", "YAGNI check", "過剰設計をレビュー" | Manual |
 | Re-running simplify on an already-iterated plan / diff | Manual |
-| Independent review of a plan or diff before `/impl`'s review | Manual |
+| Independent review of a plan or diff before `/impl`'s review, or before a `/do` change ships | Manual |
 | User review feedback says "too complex" | Reactive |
 
 ## Manual Workflow
