@@ -6,58 +6,472 @@
 <title>__TITLE__</title>
 <style>
   :root {
-    --ink: #1c1d1f;
-    --sub: #5b5f66;
-    --line: #d9dbdf;
-    --ground: #f6f6f4;
-    --card: #ffffff;
-    --on: #1f5fbf;
-    --warn: #a33a1f;
-    font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
-    color: var(--ink);
-    background: var(--ground);
+    --g: 26;
+    --t: 88;
+    --ln: 11;
+    --bg: oklch(calc(var(--g) * 1%) 0 0);
+    --raise: oklch(calc((var(--g) + 3) * 1%) 0 0);
+    --line: oklch(calc((var(--g) + var(--ln)) * 1%) 0 0);
+    --line2: oklch(calc((var(--g) + min(var(--ln) * 1.8, (var(--t) - var(--g)) * 0.7)) * 1%) 0 0);
+    --fg: oklch(calc(var(--t) * 1%) 0 0);
+    --sub: oklch(calc((var(--g) + (var(--t) - var(--g)) * 0.76) * 1%) 0 0);
+    --mute: oklch(calc((var(--g) + (var(--t) - var(--g)) * 0.56) * 1%) 0 0);
+    --acc: oklch(calc(min(88, var(--g) + 56) * 1%) 0.2 277);
+    --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --lw: 224px;
+    color-scheme: dark;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; }
-  main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 24px; }
-  main > *, section, details { min-width: 0; }
-  h1, h2, h3, p, li, summary { overflow-wrap: anywhere; }
-  h1 { font-size: 1.25rem; margin: 0; }
-  h2 { font-size: 1.05rem; margin: 0; }
-  p { margin: 0; line-height: 1.6; }
-  .meta { color: var(--sub); font-size: 0.875rem; }
-  .stages { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; margin: 8px 0 0; list-style: none; font-size: 0.8125rem; }
-  .stages li { padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--sub); }
-  .stages li[aria-current="step"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
-  section, details { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; }
-  summary { cursor: pointer; font-weight: 600; }
-  .decisions { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; line-height: 1.5; }
-  .decisions .over { color: var(--sub); font-size: 0.875rem; }
-  .options { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
-  .option { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; align-content: start; }
-  .option[data-picked="true"] { border-color: var(--on); box-shadow: 0 0 0 2px var(--on) inset; }
-  .option h3 { font-size: 1rem; margin: 0; }
-  .axis { font-size: 0.875rem; }
-  .tradeoff { font-size: 0.875rem; color: var(--sub); }
-  .fit { width: 100%; min-width: 0; overflow: hidden; }
-  .fit.actual { overflow-x: auto; }
-  .frame { position: relative; overflow: hidden; margin: 0 auto; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
-  .frame iframe { position: absolute; top: 0; left: 0; border: 0; display: block; transform-origin: 0 0; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  button { font: inherit; min-height: 44px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--ink); background: var(--card); color: var(--ink); cursor: pointer; }
-  button[aria-pressed="true"] { background: var(--on); border-color: var(--on); color: #fff; }
-  button.quiet { border-color: var(--line); color: var(--sub); }
-  label { font-size: 0.875rem; display: grid; gap: 4px; }
-  textarea { font: inherit; width: 100%; min-height: 64px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
-  .values { font-size: 0.8125rem; color: var(--sub); white-space: pre-wrap; word-break: break-all; }
-  .status { font-size: 0.875rem; color: var(--sub); }
-  .status.error { color: var(--warn); }
-  .notice { border-left: 3px solid var(--warn); padding: 8px 12px; background: #fbefea; }
-  :focus-visible { outline: 2px solid var(--on); outline-offset: 2px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  html { background: var(--bg); }
+  html.lock, html.lock body { overflow: hidden; }
+  body { position: relative; min-width: 320px; overflow-x: clip; background: var(--bg); color: var(--fg); font: 400 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
+  textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ico { width: 11px; height: 13px; flex: none; }
+
+  kbd { display: inline-block; min-width: 18px; padding: 2px 4px 1px; font: 600 10.5px/1.2 var(--mono); color: var(--sub); text-align: center; background: var(--bg); border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 3px; }
+  kbd.t { min-width: 0; padding: 0 3px; font-weight: 500; color: var(--sub); background: none; border-color: var(--line); border-bottom-width: 1px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 5px; border: 1px solid var(--line2); border-radius: 3px; background: var(--raise); font-size: 12px; line-height: 1; color: var(--fg); white-space: nowrap; }
+  .btn:hover { border-color: var(--sub); }
+  .btn[aria-pressed="true"], .btn[aria-expanded="true"] { border-color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); }
+  .btn .n { color: var(--sub); font-variant-numeric: tabular-nums; }
+  .btn .ico { color: var(--sub); }
+  .btn[aria-pressed="true"] .ico { color: var(--acc); }
+  .hint { font-size: 12px; line-height: 1.5; color: var(--sub); }
+  .hint b { font-weight: 600; color: var(--fg); }
+  .hint .ico { margin: 0 3px -1px 0; color: var(--acc); }
+
+  .role { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 12px; font-weight: 400; line-height: 16px; padding-bottom: 1px; border-bottom: 2px solid var(--line2); color: var(--fg); white-space: nowrap; }
+  .role.cur { border-bottom-color: var(--acc); }
+  .role .ico { width: 10px; height: 12px; color: var(--acc); }
+  .oh { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+  .oh .pid { flex: none; font-size: 14px; font-weight: 600; color: var(--sub); }
+  .oh h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 600; }
+  .mk { flex: none; font-size: 15px; line-height: 1; color: var(--fg); }
+  .mk.none { font-size: 12px; color: var(--mute); }
+
+  .stages { display: flex; gap: 2px; list-style: none; }
+  .stages li { display: flex; align-items: center; padding: 0 6px 0 1px; border-bottom: 2px solid var(--line); font-size: 11.5px; color: var(--mute); white-space: nowrap; }
+  .stages li.done { border-bottom-color: var(--line2); color: var(--sub); }
+  .stages li.now { border-bottom-color: var(--fg); color: var(--fg); font-weight: 600; }
+
+  .rate { display: flex; gap: 6px; }
+  .rate button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line2); border-radius: 3px; background: var(--bg); color: var(--sub); line-height: 1; }
+  .rate button:hover { border-color: var(--sub); color: var(--fg); }
+  .rate button.on { background: var(--acc); border-color: var(--acc); color: var(--bg); font-weight: 700; }
+  .rate button.on kbd { color: var(--bg); background: none; border-color: var(--bg); }
+
+  .saved { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .saved i { display: none; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--acc); }
+  .saved.ok i { display: block; }
+  .saved span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .saved.warn { padding: 1px 8px; border: 1px solid var(--fg); border-radius: 3px; color: var(--fg); font-weight: 600; }
+  .saved.warn::before { content: "!"; font-weight: 700; }
+  .saved:empty, .saved.idle { display: none; }
+
+  .ax { display: grid; grid-template-columns: 56px 1fr; column-gap: 10px; row-gap: 3px; font-size: 12px; line-height: 1.55; }
+  .ax dt { color: var(--mute); }
+  .ax dd { color: var(--sub); overflow-wrap: anywhere; }
+  .ax:empty { display: none; }
+  .memo { display: block; }
+  .memo span { display: block; font-size: 12px; line-height: 18px; color: var(--sub); }
+  .memo textarea { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; font: 400 13px/20px var(--sans); color: var(--fg); background: var(--bg); border: 1px solid var(--line2); border-radius: 3px; resize: vertical; }
+  .memo textarea:focus { outline: 0; border-color: var(--fg); }
+  .memo textarea::placeholder { color: var(--mute); }
+  .vals { font: 400 12px/1.5 var(--mono); color: var(--sub); overflow-wrap: anywhere; }
+  .pmemo { padding-left: 10px; border-left: 1px solid var(--line2); font-size: 13px; line-height: 1.6; color: var(--sub); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pmemo b { display: block; font-size: 12px; font-weight: 400; color: var(--mute); }
+
+  .dgrp + .dgrp { margin-top: 4px; }
+  .dgrp h4 { padding: 10px 0 2px; font-size: 12px; font-weight: 600; color: var(--sub); }
+  .dec { list-style: none; }
+  .dec li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+  .dec li:first-child { border-top: 0; }
+  .dec .over { margin-top: 2px; font-size: 12px; color: var(--mute); }
+  .empty { padding: 12px 0; font-size: 13px; color: var(--mute); }
+
+  .h-st { display: flex; align-items: baseline; gap: 8px; padding: 10px 14px 4px; font-size: 11.5px; color: var(--mute); }
+  .h-st b { font-weight: 600; color: var(--sub); }
+  .h-ls { list-style: none; }
+  .h-row { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; column-gap: 10px; align-items: center; padding: 6px 12px 6px 14px; }
+  .h-row:hover { background: var(--bg); }
+  .h-row .hr { font-size: 12.5px; font-weight: 600; color: var(--sub); font-variant-numeric: tabular-nums; }
+  .h-row .hq { min-width: 0; font-size: 13px; line-height: 1.45; color: var(--fg); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .h-row .hp { display: block; font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .h-row .go { padding: 3px 8px; font-size: 12px; color: var(--sub); border: 1px solid var(--line2); border-radius: 3px; white-space: nowrap; }
+  .h-row[aria-current="true"] { box-shadow: inset 2px 0 0 var(--fg); }
+  .h-row[aria-current="true"] .hr, .h-row[aria-current="true"] .hq { font-weight: 600; color: var(--fg); }
+  .h-row[aria-current="true"] .go { border-color: transparent; color: var(--mute); }
+  .h-ft { padding: 8px 14px 10px; border-top: 1px solid var(--line); font-size: 11.5px; line-height: 1.5; color: var(--mute); }
+
+  .pastbar { display: flex; align-items: center; gap: 12px; padding: 6px 12px 6px 16px; border-bottom: 1px solid var(--line); background: var(--bg); font-size: 13px; font-weight: 600; box-shadow: inset 3px 0 0 var(--fg); }
+  .pastbar span { min-width: 0; }
+
+  .thumb { position: relative; display: block; flex: none; overflow: hidden; background: #fff; outline: 1px solid var(--line); }
+  .thumb iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; pointer-events: none; }
+
+  .layer { position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+  .layer.over { position: fixed; z-index: 41; }
+  .sf { position: absolute; left: 0; top: 0; z-index: 1; border: 0; transform-origin: 0 0; background: #fff; visibility: hidden; pointer-events: auto; }
+  .surf { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: auto; cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .surf.peek { box-shadow: inset 0 0 0 2px var(--fg); }
+
+  .desk { display: none; }
+  @media (min-width: 860px) {
+    html, body { height: 100%; overflow: hidden; }
+    .phone { display: none; }
+    .desk { position: relative; display: grid; height: 100vh; height: 100dvh; grid-template-columns: var(--lw) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 64px; }
+    .desk.rail { grid-template-columns: 40px minmax(0, 1fr); }
+  }
+  .top { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+  .band { display: flex; align-items: center; min-width: 0; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .study { height: 36px; gap: 12px; background: var(--raise); }
+  .study h1 { flex: 0 1 auto; max-width: 30%; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+  .study .scope { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: var(--mute); }
+  .study .stages { flex: none; align-self: stretch; }
+  .study .stages li { margin-bottom: -1px; }
+  .study .btn { flex: none; height: 26px; padding: 0 8px 0 3px; }
+  .study .btn .ico { width: 9px; height: 6px; margin-left: 2px; }
+  .round { min-height: 54px; padding: 0 16px 0 0; gap: 16px; white-space: normal; }
+  .round .cell { align-self: stretch; flex: none; display: flex; align-items: center; gap: 6px; width: var(--lw); padding-left: 16px; border-right: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
+  .round .rn { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .round .rs, .round .dot { color: var(--sub); }
+  .round .q { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 1px; padding: 8px 0; }
+  .round h2 { flex: 0 1 auto; min-width: 0; font-size: 18px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .round .how { flex: none; font-size: 12px; color: var(--sub); }
+  .round .prog { flex: none; font-size: 12px; color: var(--sub); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .prog b { font-weight: 600; color: var(--fg); }
+
+  .hist { position: absolute; right: 12px; top: 40px; z-index: 50; width: min(460px, calc(100% - 24px)); max-height: calc(100% - 40px - 76px); display: flex; flex-direction: column; background: var(--raise); border: 1px solid var(--line2); border-radius: 3px; box-shadow: 0 10px 28px oklch(0% 0 0 / .45); }
+  .h-hd { height: 40px; flex: none; display: flex; align-items: center; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 600; }
+  .h-hd .btn { margin-left: auto; font-weight: 400; }
+  .h-bd { flex: 1; min-height: 0; overflow: auto; padding-bottom: 4px; }
+
+  .lp { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+  .lh { height: 38px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--sub); }
+  .lh .btn { margin-left: auto; height: 26px; padding: 0 8px 0 3px; }
+  .lh .btn[aria-expanded] { border-color: var(--line2); box-shadow: none; }
+  .lists { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+  .list { list-style: none; }
+  .row { position: relative; display: flex; gap: 10px; padding: 8px 36px 8px 14px; border-bottom: 1px solid var(--line); }
+  .row:hover { background: var(--raise); }
+  .row.is-cur { background: var(--raise); box-shadow: inset 3px 0 0 var(--acc); }
+  .row .thumb { width: 56px; height: 35px; margin-top: 2px; }
+  .row .pick { flex: 1; min-width: 0; display: block; }
+  /* the button's hit area covers the row, so the thumbnail beside it is clickable too */
+  .row .pick::after { content: ""; position: absolute; inset: 0; }
+  .row .pick:focus-visible, .it .pick:focus-visible { outline: 0; }
+  .row:has(.pick:focus-visible), .it:has(.pick:focus-visible) { outline: 2px solid var(--fg); outline-offset: -2px; }
+  .row .r1 { display: flex; align-items: center; gap: 6px; height: 18px; }
+  .row em { font-style: normal; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+  .row.is-cur em, .row.is-par em { color: var(--fg); }
+  .row .rmk { margin-left: auto; font-size: 14px; line-height: 1; }
+  .row .pg { display: none; color: var(--acc); }
+  .row .rl { display: flex; margin: 3px 0 1px; }
+  .row .rl:empty { display: none; }
+  .row b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 2px; font-size: 12px; font-weight: 500; line-height: 1.35; color: var(--sub); overflow-wrap: anywhere; }
+  .row.is-cur b, .row.is-par b { color: var(--fg); }
+  .row .pin { position: absolute; z-index: 1; right: 6px; top: 7px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line2); border-radius: 3px; background: var(--bg); color: var(--sub); }
+  .row .pin:hover { border-color: var(--sub); color: var(--fg); }
+  .row .pin[aria-pressed="true"] { border-color: var(--fg); color: var(--acc); }
+  .lf { flex: none; padding: 10px 12px 12px 16px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.55; color: var(--mute); }
+  .lf p + p { margin-top: 5px; }
+  .desk.rail .lh { justify-content: center; padding: 0; }
+  .desk.rail .lh .lbl, .desk.rail .row .thumb, .desk.rail .row b, .desk.rail .row .rl, .desk.rail .row .pin, .desk.rail .lf { display: none; }
+  .desk.rail .lh .btn { margin: 0; }
+  .desk.rail .row { justify-content: center; padding: 8px 0; }
+  .desk.rail .row .r1 { flex-direction: column; height: auto; gap: 3px; }
+  .desk.rail .row em { padding-bottom: 1px; border-bottom: 2px solid transparent; }
+  .desk.rail .row.is-cur em { border-bottom-color: var(--acc); }
+  .desk.rail .row.is-par em { border-bottom-color: var(--line2); }
+  .desk.rail .row .rmk { margin: 0; font-size: 12px; }
+  .desk.rail .row.pinned .pg { display: block; }
+
+  .stage { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+  .sbar { flex: none; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; row-gap: 4px; min-height: 44px; padding: 6px 24px; }
+  .sbar .ctl { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto; }
+  .sbar .hint { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scl { font-size: 12px; color: var(--sub); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .figs { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; gap: 16px; padding: 0 24px 12px; }
+  .pane { flex: none; min-width: 0; }
+  .pane .ph { height: 30px; overflow: hidden; }
+  .figs:not(.two) .ph { display: none; }
+  .figs.two { align-items: center; }
+  .slot { outline: 1px solid var(--line); }
+
+  .panel { grid-column: 2; grid-row: 2; justify-self: end; z-index: 30; width: min(400px, 100%); display: flex; flex-direction: column; min-height: 0; background: var(--raise); border-left: 1px solid var(--line); box-shadow: -14px 0 28px oklch(0% 0 0 / .35); }
+  .p-hd { height: 42px; flex: none; display: flex; align-items: stretch; gap: 16px; padding: 0 10px 0 16px; border-bottom: 1px solid var(--line); }
+  .p-tab { display: flex; align-items: center; gap: 6px; margin-bottom: -1px; font-size: 12.5px; color: var(--sub); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .p-tab[aria-selected="true"] { color: var(--fg); font-weight: 600; border-bottom-color: var(--fg); }
+  .p-hd .btn { align-self: center; margin-left: auto; }
+  .p-bd { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 16px; }
+  .p-sec { display: grid; gap: 10px; padding: 12px 0 16px; border-top: 1px solid var(--line); }
+  .p-sec:first-child { border-top: 0; }
+  .p-sec .oh { height: 24px; }
+  .p-hint { font-size: 11.5px; line-height: 1.5; color: var(--mute); }
+
+  .bot { grid-column: 1 / -1; grid-row: 3; display: flex; align-items: center; min-width: 0; padding: 0 12px 0 16px; background: var(--raise); border-top: 1px solid var(--line); }
+  .grp { flex: none; display: flex; align-items: center; height: 40px; padding: 0 14px; border-left: 1px solid var(--line); }
+  .grp:first-child { padding-left: 0; border-left: 0; }
+  .rt-lbl { margin-right: 10px; font-size: 12px; color: var(--sub); white-space: nowrap; }
+  .rt-lbl b { font-weight: 600; color: var(--fg); }
+  .desk .rate button { height: 32px; min-width: 52px; padding: 0 9px 0 4px; font-size: 15px; }
+  .say { flex: 1; min-width: 0; padding: 0 14px; border-left: 1px solid var(--line); }
+  .say .sent { display: flex; align-items: baseline; gap: 10px; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.45; white-space: nowrap; }
+  .say .k { flex: none; font-size: 12px; font-weight: 400; color: var(--mute); }
+  .say .msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .say .line2 { display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 2px; font-size: 11.5px; color: var(--sub); white-space: nowrap; }
+  .say .next { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .copy { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px 0 8px; font-size: 13px; font-weight: 600; background: var(--bg); border: 1px solid var(--line2); border-radius: 3px; white-space: nowrap; }
+  .copy:hover { border-color: var(--fg); }
+
+  .phone kbd { display: none; }
+  .phone .btn { min-height: 44px; padding: 0 12px; font-size: 13px; }
+  .p-study { padding: 12px 16px; background: var(--raise); border-bottom: 1px solid var(--line); }
+  .p-study h1 { font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
+  .p-study .scope { margin-top: 2px; font-size: 12px; line-height: 18px; color: var(--mute); overflow-wrap: anywhere; }
+  .p-study .stages { flex-wrap: wrap; gap: 6px 3px; margin-top: 12px; }
+  .p-study .stages li { flex: 1 1 auto; padding: 0 0 5px 1px; font-size: 11.5px; line-height: 16px; }
+  .tools { display: flex; gap: 8px; margin-top: 12px; }
+  .tools .btn { flex: 1; min-width: 0; }
+  .tools .btn .ico { width: 10px; height: 7px; margin-left: auto; color: var(--sub); }
+  .tools .btn[aria-expanded="true"] .ico { transform: rotate(180deg); }
+  .drawer { margin: 12px -16px -12px; padding: 0 16px; background: var(--bg); border-top: 1px solid var(--line); }
+  .drawer .h-st, .drawer .h-row, .drawer .h-ft { padding-left: 0; padding-right: 0; }
+  .drawer .h-row { min-height: 52px; }
+  .phone .pastbar { padding: 8px 16px; flex-wrap: wrap; }
+  .p-round { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); }
+  .rmeta { display: flex; align-items: baseline; gap: 6px; font-size: 12px; line-height: 18px; color: var(--sub); }
+  .rmeta .rn { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .rmeta .prog { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .p-round h2 { margin-top: 6px; font-size: 20px; font-weight: 600; line-height: 28px; overflow-wrap: anywhere; }
+  .p-round .how { margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--sub); }
+  .p-oh { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px 0; font-size: 12px; line-height: 18px; color: var(--mute); }
+  .p-oh b { flex: none; font-size: 13px; font-weight: 600; color: var(--sub); }
+  .stripw { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .strip { display: flex; gap: 4px; padding: 6px 16px 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; list-style: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .it { position: relative; flex: 1 0 64px; display: flex; flex-direction: column; padding: 7px 3px 5px; border-bottom: 2px solid var(--line); }
+  .it.is-cur { border-bottom-color: var(--acc); background: var(--raise); }
+  .it.is-par { border-bottom-color: var(--line2); }
+  .it .thumb { width: 58px; height: 36px; overflow: visible; }
+  .it .thumb .clip { position: absolute; inset: 0; overflow: hidden; }
+  .it .pick { display: block; }
+  .it .pick::after { content: ""; position: absolute; inset: 0; }
+  .it-r { height: 20px; margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+  .it-r em { font-style: normal; font-size: 14px; font-weight: 600; color: var(--sub); }
+  .it.is-cur em, .it.is-par em { color: var(--fg); }
+  .it-r .rmk { font-size: 15px; line-height: 1; }
+  .it-role { display: block; min-height: 30px; font-size: 11px; line-height: 15px; color: var(--fg); }
+  .pinb { position: absolute; right: -5px; top: -6px; z-index: 1; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--line2); border-radius: 3px; color: var(--acc); }
+  .pinb .ico { width: 9px; height: 11px; }
+  .p-opt { padding: 14px 0 18px; border-bottom: 1px solid var(--line); }
+  .sh { min-height: 28px; padding: 0 16px; }
+  .sh h3 { font-size: 16px; }
+  .sh .mk { margin-left: auto; padding-left: 6px; font-size: 17px; }
+  .p-slot { margin: 10px auto 0; outline: 1px solid var(--line); }
+  .cue { display: flex; align-items: center; gap: 12px; min-height: 48px; margin-top: 6px; padding: 0 16px; }
+  .cue .hint { flex: 1; min-width: 0; font-size: 12.5px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
+  .acts .btn { flex: 1 1 0; justify-content: center; }
+  .p-opt .ax { margin: 16px 16px 0; font-size: 13px; }
+  .p-opt .pmemo { margin: 10px 16px 0; }
+  .swap { width: calc(100% - 32px); margin: 16px 16px 0; justify-content: center; }
+  .p-eval { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px 16px 22px; border-bottom: 1px solid var(--line); }
+  .eh { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; line-height: 24px; white-space: nowrap; }
+  .eh .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 400; color: var(--sub); }
+  .phone .rate { gap: 8px; }
+  .phone .rate button { flex: 1; height: 52px; font-size: 20px; }
+  .phone .saved { font-size: 12.5px; }
+  .phone .saved.warn { display: flex; padding: 6px 10px; }
+  .phone .memo textarea { height: 98px; font-size: 16px; line-height: 24px; resize: none; }
+  .p-cmt { padding: 16px; border-bottom: 1px solid var(--line); }
+  .p-say { padding: 16px 16px calc(22px + env(safe-area-inset-bottom)); background: var(--raise); }
+  .say-h { font-size: 12px; line-height: 18px; color: var(--mute); }
+  .p-say .sent { margin-top: 6px; font-size: 15px; font-weight: 500; line-height: 23px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .p-say .copy { width: 100%; height: 48px; justify-content: center; margin-top: 14px; font-size: 15px; }
+  .p-say .next { margin-top: 8px; font-size: 12px; line-height: 18px; color: var(--sub); text-align: center; }
+
+  .full { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: var(--bg); }
+  .rot { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; gap: 12px; padding: 8px; transform-origin: 0 0; }
+  .rot.wide { flex-direction: row; align-items: center; gap: 16px; padding: 8px 8px 8px 16px; }
+  .f-side { flex: none; display: flex; flex-direction: column; gap: 10px; }
+  .rot.wide .f-side { width: 176px; align-self: stretch; padding: 4px 0; }
+  .rot:not(.wide) .f-side { padding: 4px 8px 0; }
+  .f-side .btn { align-self: flex-start; }
+  .f-side .oh { white-space: normal; flex-wrap: wrap; }
+  .f-ft { margin-top: auto; min-height: 18px; font-size: 12px; line-height: 18px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .f-slot { flex: none; margin: 0 auto; }
 </style>
 </head>
 <body>
-<main id="app"></main>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pin" viewBox="0 0 12 15"><path d="M3.4 1.2h5.2l-.8 4.3 2.6 2.7H1.6l2.6-2.7z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 8.6v5.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-pin-on" viewBox="0 0 12 15"><path d="M3.4 1.2h5.2l-.8 4.3 2.6 2.7H1.6l2.6-2.7z" fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 8.6v5.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-dd" viewBox="0 0 10 7"><path d="M.9 .9 5 5.1 9.1 .9" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+</svg>
+<p id="live" class="vh" role="status" aria-live="polite"></p>
+
+<div class="desk" id="desk">
+  <header class="top">
+    <div class="band study" aria-label="検討全体">
+      <h1 data-t="title"></h1>
+      <p class="scope" id="d-scope" data-t="target"></p>
+      <ol class="stages" data-stages aria-label="段階"></ol>
+      <button type="button" class="btn" data-act="panel-dec" aria-expanded="false" aria-controls="d-panel"><kbd>K</kbd>決まったこと<span class="n" data-t="dec-n"></span></button>
+      <button type="button" class="btn" id="d-hist-btn" data-act="hist" aria-expanded="false" aria-controls="d-hist"><kbd>R</kbd>これまでの回<span class="n" data-t="round-n"></span><svg class="ico" aria-hidden="true"><use href="#i-dd"/></svg></button>
+    </div>
+    <div class="pastbar" data-past hidden><span data-t="past-label"></span><button type="button" class="btn" data-act="back">今の回に戻る</button></div>
+    <div class="band round" aria-label="この回">
+      <p class="cell"><span class="rn" data-t="rid"></span><span class="dot">·</span><span class="rs" data-t="rstage"></span></p>
+      <div class="q"><h2 data-t="question"></h2><span class="how">案ごとに ○ △ × を付け、残したい部分・嫌な部分をメモに</span></div>
+      <span class="prog">評価した案 <b data-t="rated"></b> / <span data-t="total"></span></span>
+    </div>
+  </header>
+
+  <section class="hist" id="d-hist" role="dialog" aria-label="これまでの回" hidden>
+    <div class="h-hd"><span>これまでの回</span><button type="button" class="btn" data-act="close-hist"><kbd>Esc</kbd>閉じる</button></div>
+    <div class="h-bd" data-hist></div>
+    <p class="h-ft">回を選ぶと、その回の案・評価・メモに切り替わる。過去の回も書き換えられる</p>
+  </section>
+
+  <aside class="lp" aria-label="案の一覧">
+    <div class="lh"><span class="lbl">案</span><button type="button" class="btn" id="d-list-btn" data-act="list" aria-expanded="true" aria-controls="d-lists"><kbd>L</kbd><span class="lbl" id="d-list-label">一覧を畳む</span></button></div>
+    <div class="lists" id="d-lists"></div>
+    <div class="lf">
+      <p>選んだ案が表示中になり、直前まで表示中だった案が比べる相手になる</p>
+      <p><kbd class="t">←</kbd> <kbd class="t">→</kbd> 前後の案を選ぶ</p>
+      <p data-needs-partner><kbd class="t">P</kbd> 比べる相手を固定する</p>
+    </div>
+  </aside>
+
+  <main class="stage" aria-label="表示中の案">
+    <div class="sbar">
+      <div class="oh" id="d-head-one"></div>
+      <div class="ctl">
+        <p class="hint" id="d-hold" data-needs-partner></p>
+        <button type="button" class="btn" data-act="pin" data-needs-partner aria-pressed="false"><kbd>P</kbd><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span data-t="pin-label"></span></button>
+        <span class="scl" id="d-scale"></span>
+        <button type="button" class="btn" data-act="two" data-needs-partner aria-pressed="false"><kbd>N</kbd><span id="d-two-label"></span></button>
+        <button type="button" class="btn" data-act="operate" data-needs-partner aria-pressed="false"><kbd>O</kbd>図を操作</button>
+      </div>
+    </div>
+    <div class="figs" id="d-figs">
+      <div class="pane" id="d-pane-partner"><div class="oh ph" id="d-head-partner"></div><div class="slot" id="d-slot-partner"></div></div>
+      <div class="pane" id="d-pane-shown"><div class="oh ph" id="d-head-shown"></div><div class="slot" id="d-slot-shown"></div></div>
+    </div>
+  </main>
+
+  <aside class="panel" id="d-panel" aria-label="説明とメモ・決まったこと" hidden>
+    <div class="p-hd" role="tablist">
+      <button type="button" class="p-tab" role="tab" data-act="tab-memo" aria-selected="true" aria-controls="d-tab-memo"><kbd>M</kbd>説明とメモ</button>
+      <button type="button" class="p-tab" role="tab" data-act="tab-dec" aria-selected="false" aria-controls="d-tab-dec"><kbd>K</kbd>決まったこと</button>
+      <button type="button" class="btn" data-act="close-panel"><kbd>Esc</kbd>閉じる</button>
+    </div>
+    <div class="p-bd" id="d-tab-memo" role="tabpanel">
+      <section class="p-sec">
+        <div class="oh" id="d-head-memo-shown"></div>
+        <dl class="ax" data-ax="shown"></dl>
+        <label class="memo"><span data-t="memo-label"></span><textarea data-memo rows="3" placeholder="残したい部分・嫌な部分"></textarea></label>
+        <p class="vals" data-vals hidden></p>
+      </section>
+      <section class="p-sec" data-needs-partner>
+        <div class="oh" id="d-head-memo-partner"></div>
+        <dl class="ax" data-ax="partner"></dl>
+        <p class="pmemo" data-pmemo hidden></p>
+        <p class="p-hint" data-t="partner-hint"></p>
+      </section>
+      <section class="p-sec">
+        <label class="memo"><span>この回全体へのメモ</span><textarea data-comment rows="3" placeholder="組み合わせたい部分など"></textarea></label>
+      </section>
+    </div>
+    <div class="p-bd" id="d-tab-dec" role="tabpanel" data-decisions hidden></div>
+  </aside>
+
+  <footer class="bot">
+    <div class="grp"><span class="rt-lbl">表示中 <b data-t="shown-id"></b> を評価</span><div class="rate" data-rate role="group"></div></div>
+    <div class="grp"><button type="button" class="btn" data-act="panel-memo" aria-expanded="false" aria-controls="d-panel"><kbd>M</kbd>説明とメモ<span class="n" data-t="memo-n"></span></button></div>
+    <div class="say">
+      <p class="sent"><span class="k">チャットに伝える文</span><span class="msg" data-t="msg"></span></p>
+      <p class="line2"><span class="saved idle" data-status></span><span class="next" data-next>コピーしたらチャットで『選んだ』と伝える</span></p>
+    </div>
+    <button type="button" class="copy" data-act="copy"><kbd>Y</kbd><span data-copy-label>コピー</span></button>
+  </footer>
+</div>
+
+<div class="phone" id="phone">
+  <header class="p-study" aria-label="検討全体">
+    <h1 data-t="title"></h1>
+    <p class="scope" data-t="target"></p>
+    <ol class="stages" data-stages aria-label="段階"></ol>
+    <div class="tools">
+      <button type="button" class="btn" data-act="drawer-dec" aria-expanded="false" aria-controls="p-drawer-dec">決まったこと<span class="n" data-t="dec-n"></span><svg class="ico" aria-hidden="true"><use href="#i-dd"/></svg></button>
+      <button type="button" class="btn" data-act="drawer-hist" aria-expanded="false" aria-controls="p-drawer-hist">これまでの回<span class="n" data-t="round-n"></span><svg class="ico" aria-hidden="true"><use href="#i-dd"/></svg></button>
+    </div>
+    <div class="drawer" id="p-drawer-dec" data-decisions aria-label="決まったこと" hidden></div>
+    <div class="drawer" id="p-drawer-hist" aria-label="これまでの回" hidden><div data-hist></div><p class="h-ft">回を選ぶと、その回の案・評価・メモに切り替わる。過去の回も書き換えられる</p></div>
+  </header>
+  <div class="pastbar" data-past hidden><span data-t="past-label"></span><button type="button" class="btn" data-act="back">今の回に戻る</button></div>
+  <section class="p-round" id="p-round" aria-label="この回">
+    <p class="rmeta"><span class="rn" data-t="rid"></span><span>·</span><span data-t="rstage"></span><span class="prog">評価した案 <b data-t="rated"></b> / <span data-t="total"></span></span></p>
+    <h2 data-t="question"></h2>
+    <p class="how">案ごとに ○ △ × を付け、残したい部分・嫌な部分をメモに</p>
+  </section>
+  <p class="p-oh"><b>案</b><span>選んだ案が表示中に、直前の案が比べる相手になる</span></p>
+  <nav class="stripw" id="p-stripw" aria-label="案"><div id="p-strip"></div></nav>
+  <main id="p-main">
+    <section class="p-opt" id="p-shown" aria-label="表示中の案">
+      <div class="oh sh" id="p-head-shown"></div>
+      <div class="p-slot" id="p-slot-shown"></div>
+      <div class="cue"><p class="hint" id="p-hold"></p><span class="scl" id="p-scale"></span></div>
+      <div class="acts">
+        <button type="button" class="btn" data-act="pin" data-needs-partner aria-pressed="false"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span data-t="pin-label"></span></button>
+        <button type="button" class="btn" id="p-big-btn" data-act="big" aria-haspopup="dialog" aria-expanded="false" aria-controls="full">大きく見る</button>
+        <button type="button" class="btn" data-act="operate" data-needs-partner aria-pressed="false">図を操作</button>
+      </div>
+      <dl class="ax" data-ax="shown"></dl>
+    </section>
+    <section class="p-eval" aria-labelledby="p-eh">
+      <h3 class="eh" id="p-eh"><span class="role cur">表示中</span><span><span data-t="shown-id"></span> を評価</span><span class="nm" data-t="shown-name"></span></h3>
+      <div class="rate" data-rate role="group"></div>
+      <p class="saved idle" data-status></p>
+      <label class="memo"><span data-t="memo-label"></span><textarea data-memo rows="3" placeholder="残したい部分・嫌な部分"></textarea></label>
+      <p class="vals" data-vals hidden></p>
+    </section>
+    <section class="p-opt" id="p-partner" aria-label="比べる相手の案" data-needs-partner>
+      <div class="oh sh" id="p-head-partner"></div>
+      <div class="p-slot" id="p-slot-partner"></div>
+      <dl class="ax" data-ax="partner"></dl>
+      <p class="pmemo" data-pmemo hidden></p>
+      <button type="button" class="btn swap" data-act="swap"><span data-t="swap-label"></span></button>
+    </section>
+  </main>
+  <section class="p-cmt"><label class="memo"><span>この回全体へのメモ</span><textarea data-comment rows="3" placeholder="組み合わせたい部分など"></textarea></label></section>
+  <footer class="p-say" aria-label="チャットに伝える">
+    <p class="say-h">チャットに伝える文</p>
+    <p class="sent" data-t="msg"></p>
+    <button type="button" class="copy" data-act="copy"><span data-copy-label>コピー</span></button>
+    <p class="next" data-next>コピーしたらチャットで『選んだ』と伝える</p>
+  </footer>
+  <section class="full" id="full" role="dialog" aria-modal="true" aria-label="大きく見る" hidden>
+    <div class="rot" id="rot">
+      <div class="f-side" id="f-side">
+        <button type="button" class="btn" id="f-close" data-act="close-big">閉じる</button>
+        <div class="oh" id="f-head"></div>
+        <p class="hint" id="f-hold"></p>
+        <p class="f-ft" id="f-ft"></p>
+      </div>
+      <div class="f-slot" id="f-slot"></div>
+    </div>
+  </section>
+</div>
+
+<div class="layer" id="layer"><div class="surf" id="surf-a" aria-hidden="true" hidden></div><div class="surf" id="surf-b" aria-hidden="true" hidden></div></div>
 <script type="application/json" id="board-data">__BOARD_DATA__</script>
 <script>
 (() => {
@@ -69,9 +483,18 @@
     ["refine", "詳細化"],
     ["validate", "検証"],
   ];
+  const MARKS = ["○", "△", "×"];
   const board = JSON.parse(document.getElementById("board-data").textContent);
-  const app = document.getElementById("app");
+  const rounds = board.rounds;
+  const currentId = rounds.length ? rounds[rounds.length - 1].id : null;
+  const desk = matchMedia("(min-width: 860px)");
+  const $ = (id) => document.getElementById(id);
+  const all = (sel) => [...document.querySelectorAll(sel)];
   const stageName = (id) => (STAGES.find(([k]) => k === id) || [id, id])[1];
+  const roundOf = (id) => rounds.find((r) => r.id === id);
+  const optOf = (round, id) => round.options.find((o) => o.id === id);
+  const fmt = (s) => s.toFixed(2);
+  const hhmm = (t) => new Date(t).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
 
   const el = (tag, attrs = {}, ...children) => {
     const node = document.createElement(tag);
@@ -83,198 +506,904 @@
     for (const c of children) if (c) node.append(c);
     return node;
   };
+  const icon = (name) => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ico");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#i-${name}`);
+    svg.append(use);
+    return svg;
+  };
+  const setText = (key, text) => all(`[data-t="${key}"]`).forEach((n) => { n.textContent = text; });
+  const live = $("live");
+  const announce = (text) => { live.textContent = text; };
 
-  const header = el("header", {},
-    el("h1", { text: board.title }),
-    el("p", { class: "meta", text: `検討の対象: ${board.target}` }),
-  );
-  const stages = el("ol", { class: "stages", "aria-label": "段階" });
-  for (const [id, name] of STAGES) {
-    stages.append(el("li", { text: name, "aria-current": id === board.stage ? "step" : undefined }));
+  setText("title", board.title);
+  setText("target", board.target);
+  $("d-scope").title = board.target;
+  setText("dec-n", String(board.decisions.length));
+  setText("round-n", String(rounds.length));
+  const stageAt = STAGES.findIndex(([k]) => k === board.stage);
+  for (const ol of all("[data-stages]")) {
+    STAGES.forEach(([, name], i) => ol.append(el("li", {
+      class: i < stageAt ? "done" : i === stageAt ? "now" : undefined,
+      "aria-current": i === stageAt ? "step" : undefined,
+      text: name,
+    })));
   }
-  header.append(stages);
-  app.append(header);
-
-  const decided = el("section", { "aria-labelledby": "decided-h" }, el("h2", { id: "decided-h", text: "決まったこと" }));
-  if (board.decisions.length === 0) {
-    decided.append(el("p", { class: "meta", text: "まだありません。" }));
-  } else {
-    const list = el("ol", { class: "decisions" });
-    for (const d of board.decisions) {
-      const item = el("li", {}, el("span", { text: `${stageName(d.stage)}: ${d.text}` }));
-      if (d.over) item.append(el("div", { class: "over", text: `採らなかったもの: ${d.over}` }));
-      list.append(item);
+  const decisionsView = () => {
+    if (!board.decisions.length) return el("p", { class: "empty", text: "まだありません。" });
+    const box = el("div");
+    for (const [stage, name] of STAGES) {
+      const items = board.decisions.filter((d) => d.stage === stage);
+      if (!items.length) continue;
+      const list = el("ol", { class: "dec" });
+      for (const d of items) {
+        list.append(el("li", {}, el("p", { text: d.text }), d.over ? el("p", { class: "over", text: `採らなかったもの: ${d.over}` }) : null));
+      }
+      box.append(el("section", { class: "dgrp" }, el("h4", { text: name }), list));
     }
-    decided.append(list);
+    return box;
+  };
+  for (const host of all("[data-decisions]")) host.append(decisionsView());
+  if (!rounds.length) {
+    setText("question", "まだ回がありません。");
+    for (const main of all("main")) main.append(el("section", { class: "empty-dec" }, el("h2", { text: "決まったこと" }), decisionsView()));
+    return;
   }
-  app.append(decided);
 
-  const notice = el("p", { class: "notice", hidden: true });
-  app.append(notice);
-
-  // One record per round: { picks: [optionId], notes: {optionId: text}, values: {optionId: object}, comment }
+  // One record per round: { ratings: {optionId: mark}, notes: {optionId: text}, values: {optionId: object}, comment }
   const records = new Map();
   const views = new Map();
-  let store = null;
-  let noStore = false;
-  let readOnly = false;
-
-  const fitFrames = new Set();
-  // The frame is scaled to the width it has, never above actual size; "actual" shows 1:1 and scrolls sideways.
-  const fit = (wrap, box, frame, opt) => {
-    const scale = wrap.classList.contains("actual") ? 1 : Math.min(1, (wrap.clientWidth - 2) / opt.width);
-    frame.style.transform = `scale(${scale})`;
-    box.style.width = `${Math.floor(opt.width * scale) + 2}px`;
-    box.style.height = `${Math.ceil(opt.height * scale) + 2}px`;
+  const status = new Map();
+  for (const r of rounds) {
+    records.set(r.id, { ratings: Object.create(null), notes: Object.create(null), values: Object.create(null), comment: "" });
+    views.set(r.id, { shown: r.options[0].id, partner: r.options[1] ? r.options[1].id : null, pinned: null });
+    status.set(r.id, { kind: "idle", at: 0 });
+  }
+  const ui = { round: currentId, list: true, two: false, panel: null, hist: false, drawer: null, peek: false, operate: false, big: false };
+  const partnerWord = (v) => (v.pinned && v.pinned === v.partner ? "比べる相手（固定）" : "比べる相手");
+  const roleOf = (v, id) => (id === v.shown ? "shown" : id === v.partner ? "partner" : null);
+  const inSlot = (v, slot) => {
+    const swap = ui.peek && v.partner;
+    return slot === "shown" ? (swap ? v.partner : v.shown) : swap ? v.shown : v.partner;
   };
-  const resizer = new ResizeObserver(() => fitFrames.forEach((f) => f()));
 
-  const renderRound = (round, latest) => {
-    const record = { picks: [], notes: Object.create(null), values: Object.create(null), comment: "" };
-    records.set(round.id, record);
-    const container = latest
-      ? el("section", { "aria-labelledby": `h-${round.id}` })
-      : el("details", {});
-    const heading = el(latest ? "h2" : "summary", { id: `h-${round.id}`, text: `${round.id}（${stageName(round.stage)}）: ${round.question}` });
-    container.append(heading);
-    const optionsBox = el("div", { class: "options" });
-    const optionViews = new Map();
-    for (const opt of round.options) {
-      const card = el("article", { class: "option", "data-picked": "false" });
-      card.append(el("h3", { text: `${opt.id}. ${opt.name}` }));
-      if (opt.axis) card.append(el("p", { class: "axis", text: opt.axis }));
-      if (opt.tradeoff) card.append(el("p", { class: "tradeoff", text: opt.tradeoff }));
-      const wrap = el("div", { class: "fit" });
-      const box = el("div", { class: "frame" });
-      const frame = el("iframe", { title: `${opt.id}. ${opt.name}`, width: opt.width, height: opt.height, sandbox: "allow-scripts" });
-      frame.srcdoc = opt.html;
-      box.append(frame);
-      wrap.append(box);
-      card.append(wrap);
-      const refit = () => fit(wrap, box, frame, opt);
-      fitFrames.add(refit);
-      resizer.observe(wrap);
-      const pick = el("button", { type: "button", "aria-pressed": "false", text: "この案を選ぶ" });
-      const actual = el("button", { type: "button", class: "quiet", "aria-pressed": "false", text: "実寸で見る" });
-      actual.addEventListener("click", () => {
-        const on = wrap.classList.toggle("actual");
-        actual.setAttribute("aria-pressed", String(on));
-        refit();
-      });
-      card.append(el("div", { class: "row" }, pick, actual));
-      const note = el("textarea", { "aria-label": `${opt.id} について残したい点・気になる点` });
-      card.append(el("label", {}, el("span", { text: "残したい点・気になる点" }), note));
-      const values = el("p", { class: "values", hidden: true });
-      card.append(values);
-      pick.addEventListener("click", () => {
-        const set = new Set(record.picks);
-        set.has(opt.id) ? set.delete(opt.id) : set.add(opt.id);
-        record.picks = round.options.map((o) => o.id).filter((id) => set.has(id));
-        paint();
-        save(round.id);
-      });
-      note.addEventListener("input", () => {
-        record.notes[opt.id] = note.value;
-        save(round.id, 800);
-      });
-      optionViews.set(opt.id, { card, pick, note, values, frame });
-      optionsBox.append(card);
+  // Frames are moved with transform, never re-parented: moving an iframe in the
+  // DOM reloads it, which loses what the user tuned inside it and makes the
+  // hold flash blank instead of switching at once.
+  const layer = $("layer");
+  const surfaces = [$("surf-a"), $("surf-b")];
+  const frameSets = new Map();
+  const frameSet = (roundId, optId) => {
+    let byOpt = frameSets.get(roundId);
+    if (!byOpt) frameSets.set(roundId, (byOpt = new Map()));
+    let set = byOpt.get(optId);
+    if (!set) byOpt.set(optId, (set = { stage: null, thumbs: [] }));
+    return set;
+  };
+  const makeFrame = (round, opt, cls) => {
+    const frame = el("iframe", { class: cls, title: `${opt.id} ${opt.name}`, width: opt.width, height: opt.height, sandbox: "allow-scripts" });
+    frame.srcdoc = opt.html;
+    frame.addEventListener("load", () => sendInit(round.id, opt.id));
+    return frame;
+  };
+  const stageFrame = (round, opt) => {
+    const set = frameSet(round.id, opt.id);
+    if (!set.stage) {
+      set.stage = makeFrame(round, opt, "sf");
+      layer.append(set.stage);
     }
-    container.append(optionsBox);
-    const comment = el("textarea", { "aria-label": "この回全体へのメモ" });
-    comment.addEventListener("input", () => {
-      record.comment = comment.value;
-      save(round.id, 800);
-    });
-    container.append(el("label", {}, el("span", { text: "この回全体へのメモ（組み合わせたい部分など）" }), comment));
-    const status = el("p", { class: "status", role: "status", text: "" });
-    const copy = el("button", { type: "button", class: "quiet", text: "選んだ内容をコピー" });
-    copy.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(summarize(round));
-        status.textContent = "コピーしました。チャットに貼ってください。";
-      } catch {
-        status.textContent = "コピーできませんでした。選んだ案の名前をチャットで伝えてください。";
-      }
-    });
-    container.append(el("div", { class: "row" }, copy, status));
-    const paint = () => {
-      for (const [id, v] of optionViews) {
-        const on = record.picks.includes(id);
-        v.pick.setAttribute("aria-pressed", String(on));
-        v.pick.textContent = on ? "選んでいます" : "この案を選ぶ";
-        v.card.dataset.picked = String(on);
-        if (document.activeElement !== v.note) v.note.value = record.notes[id] || "";
-        const val = record.values[id];
-        v.values.hidden = !val;
-        if (val) v.values.textContent = `値: ${JSON.stringify(val)}`;
-      }
-      if (document.activeElement !== comment) comment.value = record.comment || "";
-    };
-    views.set(round.id, { paint, status, optionViews });
-    return container;
+    return set.stage;
+  };
+  const THUMB = { desk: [56, 35], phone: [58, 36] };
+  const makeThumb = (round, opt, shell) => {
+    const [w, h] = THUMB[shell];
+    const frame = makeFrame(round, opt, "tf");
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    frame.style.transform = `scale(${Math.max(w / opt.width, h / opt.height)})`;
+    frameSet(round.id, opt.id).thumbs.push(frame);
+    return frame;
+  };
+  const sendInit = (roundId, optId) => {
+    const values = records.get(roundId).values[optId];
+    const set = frameSets.get(roundId) && frameSets.get(roundId).get(optId);
+    if (!values || !set) return;
+    for (const f of [set.stage, ...set.thumbs]) if (f && f.contentWindow) f.contentWindow.postMessage({ uiDesignInit: values }, "*");
   };
 
-  const summarize = (round) => {
-    const r = records.get(round.id);
-    const lines = [`${round.id}: 選んだ案 ${r.picks.join(", ") || "なし"}`];
-    for (const [id, text] of Object.entries(r.notes)) if (text) lines.push(`${id}: ${text}`);
-    for (const [id, val] of Object.entries(r.values)) lines.push(`${id} の値: ${JSON.stringify(val)}`);
-    if (r.comment) lines.push(`全体: ${r.comment}`);
+  const rowSets = new Map();
+  const buildRows = (round, shell) => {
+    const key = `${shell}/${round.id}`;
+    if (rowSets.has(key)) return;
+    const box = el("ul", { class: shell === "desk" ? "list" : "strip" });
+    const items = new Map();
+    for (const opt of round.options) {
+      const thumb = el("span", { class: "thumb", "aria-hidden": "true" });
+      const role = el("span", { class: shell === "desk" ? "rl" : "it-role" });
+      const mark = el("span", { class: "rmk" });
+      const refs = { thumb, role, mark, thumbed: false };
+      if (shell === "desk") {
+        refs.pick = el("button", { type: "button", class: "pick", title: `${opt.id} ${opt.name}` },
+          el("span", { class: "r1" }, el("em", { text: opt.id }), el("span", { class: "pg" }, icon("pin-on")), mark), role, el("b", { text: opt.name }));
+        refs.pin = el("button", { type: "button", class: "pin", "aria-pressed": "false" }, icon("pin"));
+        refs.pin.addEventListener("click", () => pinOption(opt.id));
+        refs.li = el("li", { class: "row" }, thumb, refs.pick, refs.pin);
+      } else {
+        refs.clip = el("span", { class: "clip" });
+        refs.badge = el("span", { class: "pinb", hidden: true }, icon("pin-on"));
+        thumb.append(refs.clip, refs.badge);
+        refs.pick = el("button", { type: "button", class: "pick" }, el("span", { class: "it-r" }, el("em", { text: opt.id }), mark), role);
+        refs.li = el("li", { class: "it" }, thumb, refs.pick);
+      }
+      refs.pick.addEventListener("click", () => show(opt.id));
+      items.set(opt.id, refs);
+      box.append(refs.li);
+    }
+    (shell === "desk" ? $("d-lists") : $("p-strip")).append(box);
+    rowSets.set(key, { box, items, round });
+  };
+  const ensureThumbs = () => {
+    const shell = desk.matches ? "desk" : "phone";
+    const set = rowSets.get(`${shell}/${ui.round}`);
+    for (const [optId, refs] of set.items) {
+      if (refs.thumbed) continue;
+      refs.thumbed = true;
+      (refs.clip || refs.thumb).append(makeThumb(set.round, optOf(set.round, optId), shell));
+    }
+  };
+
+  const roleTag = (v, id) => {
+    const role = roleOf(v, id);
+    if (!role) return null;
+    const tag = el("span", { class: role === "shown" ? "role cur" : "role" });
+    if (role === "partner" && v.pinned === id) tag.append(icon("pin-on"));
+    if (role === "shown") tag.append("表示中");
+    else {
+      const [word, fixed] = partnerWord(v).split("（");
+      tag.append(word);
+      if (fixed) tag.append(el("wbr"), `（${fixed}`);
+    }
+    return tag;
+  };
+  const fillHead = (host, round, id) => {
+    const v = views.get(round.id);
+    const o = optOf(round, id);
+    const m = records.get(round.id).ratings[id];
+    host.replaceChildren(el("span", { class: "pid", text: o.id }), el("h3", { text: o.name, title: o.name }), roleTag(v, id), el("span", { class: m ? "mk" : "mk none", text: m || "未評価" }));
+  };
+  const fillAx = (host, o) => {
+    host.replaceChildren();
+    if (!o) return;
+    if (o.axis) host.append(el("dt", { text: "変えた軸" }), el("dd", { text: o.axis }));
+    if (o.tradeoff) host.append(el("dt", { text: "代償" }), el("dd", { text: o.tradeoff }));
+  };
+  const partnerB = (v) => {
+    const b = el("b");
+    if (v.pinned === v.partner) b.append(icon("pin-on"));
+    b.append(`${partnerWord(v)} ${v.partner}`);
+    return b;
+  };
+  const holdHint = (host, v, { keys = false, two = false } = {}) => {
+    host.replaceChildren();
+    if (!v.partner) return;
+    if (ui.peek) {
+      host.append("離すと ", el("b", { text: `表示中 ${v.shown}` }), " に戻る");
+      return;
+    }
+    if (keys) host.append(el("kbd", { class: "t", text: "Space" }), ui.operate ? " を押している間は " : " か図を押している間は ");
+    else if (ui.operate) {
+      host.append("図を操作中。押しても切り替わらない");
+      return;
+    } else host.append("図を押している間は ");
+    if (two) host.append("左右を入れ替える");
+    else host.append(partnerB(v));
+  };
+  const message = (round) => {
+    const rec = records.get(round.id);
+    const parts = [];
+    for (const o of round.options) {
+      const mark = rec.ratings[o.id];
+      const note = (rec.notes[o.id] || "").trim().replace(/\s*\n\s*/g, " / ");
+      if (!mark && !note) continue;
+      parts.push(`${o.id}${mark ? ` ${mark}` : ""}${note ? `（${o.id}: ${note}）` : ""}`);
+    }
+    const lines = [`${round.id}: ${parts.length ? parts.join("、") : "評価なし"}`];
+    if (rec.comment.trim()) lines.push(`全体: ${rec.comment.trim()}`);
+    for (const o of round.options) if (rec.values[o.id]) lines.push(`値: ${o.id} ${JSON.stringify(rec.values[o.id])}`);
     return lines.join("\n");
   };
+  const resultLine = (round) => {
+    const rec = records.get(round.id);
+    const rated = round.options.filter((o) => rec.ratings[o.id]).map((o) => `${o.id} ${rec.ratings[o.id]}`);
+    return rated.length ? rated.join(" · ") : "評価なし";
+  };
+  const histView = () => {
+    const box = el("div");
+    for (const [stage, name] of STAGES) {
+      const rs = rounds.filter((r) => r.stage === stage);
+      if (!rs.length) continue;
+      const list = el("ol", { class: "h-ls" });
+      for (const r of rs) {
+        const viewing = r.id === ui.round;
+        list.append(el("li", {}, el("button", { type: "button", class: "h-row", "data-round": r.id, "aria-current": viewing ? "true" : undefined },
+          el("span", { class: "hr", text: r.id }),
+          el("span", {}, el("span", { class: "hq", text: r.question }), el("span", { class: "hp", text: resultLine(r) })),
+          el("span", { class: "go", text: viewing ? "見ている回" : r.id === currentId ? "今の回" : "開く" }))));
+      }
+      box.append(el("p", { class: "h-st" }, el("b", { text: name }), `${rs.length} 回`), list);
+    }
+    return box;
+  };
+
+  const paintRows = (round, v, rec) => {
+    for (const [key, set] of rowSets) {
+      const on = set.round.id === round.id;
+      set.box.hidden = !on;
+      if (!on) continue;
+      const desktop = key.startsWith("desk/");
+      for (const o of round.options) {
+        const refs = set.items.get(o.id);
+        const role = roleOf(v, o.id);
+        const mark = rec.ratings[o.id] || "";
+        refs.li.classList.toggle("is-cur", role === "shown");
+        refs.li.classList.toggle("is-par", role === "partner");
+        refs.li.classList.toggle("pinned", v.pinned === o.id && role === "partner");
+        if (desktop) refs.role.replaceChildren(roleTag(v, o.id) || "");
+        else if (role === "partner" && v.pinned === o.id) refs.role.replaceChildren("比べる相手", el("wbr"), "（固定）");
+        else refs.role.replaceChildren(role === "shown" ? "表示中" : role === "partner" ? "比べる相手" : "");
+        refs.mark.textContent = mark;
+        refs.pick.setAttribute("aria-label", `${o.id} ${o.name}${role === "shown" ? "、表示中" : role === "partner" ? `、${partnerWord(v)}` : ""}${mark ? `、評価 ${mark}` : ""}`);
+        if (role === "shown") refs.pick.setAttribute("aria-current", "true");
+        else refs.pick.removeAttribute("aria-current");
+        if (refs.badge) refs.badge.hidden = !(v.pinned === o.id && role === "partner");
+        if (refs.pin) {
+          const pressed = v.pinned === o.id;
+          refs.pin.hidden = !v.partner || (role === "shown" && !pressed);
+          refs.pin.setAttribute("aria-pressed", String(pressed));
+          refs.pin.replaceChildren(icon(pressed ? "pin-on" : "pin"));
+          const label = pressed ? `${o.id} の固定を外す` : `${o.id} を比べる相手に固定`;
+          refs.pin.setAttribute("aria-label", label);
+          refs.pin.title = label;
+        }
+      }
+    }
+  };
+
+  let noStore = false;
+  let readOnly = false;
+  let slow = false;
+  let lost = false;
+  let ready = false;
+  let lastSaid = "";
+  const statusView = (roundId) => {
+    const st = status.get(roundId);
+    if (noStore || readOnly) return ["warn", "このページでは保存できません。コピーしてチャットに貼ってください"];
+    if (st.kind === "error") return ["warn", "保存できませんでした。コピーしてチャットに貼ってください"];
+    if (lost) return ["warn", "保存先との接続が切れました。コピーしてチャットに貼ってください"];
+    if (st.kind === "saving") return ["", "保存しています"];
+    if (st.kind === "saved") return ["ok", `保存済み ${hhmm(st.at)}`];
+    if (slow) return ["warn", "保存先にまだつながりません。評価はコピーしてチャットに貼れます"];
+    if (st.kind === "waiting") return ["", "保存先につながるのを待っています"];
+    return ["idle", ""];
+  };
+  const paintStatus = () => {
+    const [kind, text] = statusView(ui.round);
+    for (const n of all("[data-status]")) {
+      n.className = `saved ${kind}`;
+      n.title = text;
+      n.replaceChildren(el("i", { "aria-hidden": "true" }), el("span", { text }));
+    }
+    if ((kind === "ok" || kind === "warn") && text !== lastSaid) announce(text);
+    lastSaid = text;
+  };
+
+  const paint = () => {
+    const round = roundOf(ui.round);
+    const v = views.get(round.id);
+    const rec = records.get(round.id);
+    const so = optOf(round, v.shown);
+    const po = v.partner ? optOf(round, v.partner) : null;
+    const two = ui.two && !!po;
+    const pinned = !!po && v.pinned === v.partner;
+
+    setText("rid", round.id);
+    setText("rstage", stageName(round.stage));
+    setText("question", round.question);
+    all('[data-t="question"]').forEach((n) => { n.title = round.question; });
+    setText("rated", String(round.options.filter((o) => rec.ratings[o.id]).length));
+    setText("total", String(round.options.length));
+    setText("past-label", `${round.id} を見ています（過去の回）`);
+    all("[data-past]").forEach((n) => { n.hidden = round.id === currentId; });
+    all("[data-needs-partner]").forEach((n) => { n.hidden = !po; });
+    setText("shown-id", so.id);
+    setText("shown-name", so.name);
+    setText("memo-label", `${so.id} のメモ`);
+    setText("memo-n", rec.notes[so.id] ? "記入済み" : "");
+    setText("swap-label", po ? `${po.id} を表示中にする` : "");
+    setText("pin-label", pinned ? "固定を外す" : "相手に固定");
+    setText("partner-hint", po ? `${po.id} の評価とメモは、一覧で ${po.id} を選んで表示中にしてから` : "");
+    const msg = message(round);
+    setText("msg", msg);
+    all('[data-t="msg"]').forEach((n) => { n.title = msg; });
+
+    for (const b of all('[data-act="pin"]')) {
+      b.setAttribute("aria-pressed", String(pinned));
+      b.title = !po ? "" : pinned ? `${po.id} の固定を外す` : `表示中を変えても ${po.id} を比べる相手のままにする`;
+      b.querySelector("use").setAttribute("href", pinned ? "#i-pin-on" : "#i-pin");
+    }
+    all('[data-act="two"]').forEach((b) => b.setAttribute("aria-pressed", String(two)));
+    all('[data-act="operate"]').forEach((b) => {
+      b.setAttribute("aria-pressed", String(ui.operate));
+      b.title = ui.operate ? "図を押しても比べる相手に切り替わらず、図の中を操作できる" : "図の中のボタンや入力を操作する";
+    });
+    $("desk").classList.toggle("rail", !ui.list);
+    $("d-list-btn").setAttribute("aria-expanded", String(ui.list));
+    $("d-list-btn").setAttribute("aria-label", ui.list ? "一覧を畳む" : "一覧を開く");
+    $("d-list-label").textContent = ui.list ? "一覧を畳む" : "一覧を開く";
+    all('[data-act="panel-memo"]').forEach((b) => b.setAttribute("aria-expanded", String(ui.panel === "memo")));
+    all('[data-act="panel-dec"]').forEach((b) => b.setAttribute("aria-expanded", String(ui.panel === "dec")));
+    $("d-hist-btn").setAttribute("aria-expanded", String(ui.hist));
+    all('[data-act="drawer-dec"]').forEach((b) => b.setAttribute("aria-expanded", String(ui.drawer === "dec")));
+    all('[data-act="drawer-hist"]').forEach((b) => b.setAttribute("aria-expanded", String(ui.drawer === "hist")));
+    $("p-big-btn").setAttribute("aria-expanded", String(ui.big));
+
+    for (const group of all("[data-rate]")) {
+      group.setAttribute("aria-label", `表示中 ${so.id} の評価`);
+      for (const b of group.children) {
+        const on = rec.ratings[so.id] === b.dataset.mark;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-pressed", String(on));
+      }
+    }
+    for (const ta of all("[data-memo]")) {
+      const moved = ta.dataset.memoOpt !== so.id || ta.dataset.memoRound !== round.id;
+      if (moved || document.activeElement !== ta) ta.value = rec.notes[so.id] || "";
+      ta.dataset.memoOpt = so.id;
+      ta.dataset.memoRound = round.id;
+      ta.setAttribute("aria-label", `${so.id} のメモ`);
+    }
+    for (const ta of all("[data-comment]")) {
+      if (ta.dataset.memoRound !== round.id || document.activeElement !== ta) ta.value = rec.comment;
+      ta.dataset.memoRound = round.id;
+    }
+    all('[data-ax="shown"]').forEach((n) => fillAx(n, so));
+    all('[data-ax="partner"]').forEach((n) => fillAx(n, po));
+    const val = rec.values[so.id];
+    for (const n of all("[data-vals]")) {
+      n.hidden = !val;
+      n.textContent = val ? `調整した値: ${JSON.stringify(val)}` : "";
+    }
+    const pnote = po && rec.notes[po.id];
+    for (const n of all("[data-pmemo]")) {
+      n.hidden = !pnote;
+      n.replaceChildren(el("b", { text: po ? `${po.id} のメモ` : "" }), pnote || "");
+    }
+
+    $("d-head-one").hidden = two;
+    fillHead($("d-head-one"), round, inSlot(v, "shown"));
+    $("d-figs").classList.toggle("two", two);
+    $("d-pane-partner").hidden = !two;
+    if (two) {
+      fillHead($("d-head-partner"), round, inSlot(v, "partner"));
+      fillHead($("d-head-shown"), round, inSlot(v, "shown"));
+    }
+    fillHead($("d-head-memo-shown"), round, so.id);
+    if (po) fillHead($("d-head-memo-partner"), round, po.id);
+    fillHead($("p-head-shown"), round, inSlot(v, "shown"));
+    if (po) fillHead($("p-head-partner"), round, inSlot(v, "partner"));
+    fillHead($("f-head"), round, inSlot(v, "shown"));
+    holdHint($("d-hold"), v, { keys: true, two });
+    holdHint($("p-hold"), v);
+    holdHint($("f-hold"), v);
+    surfaces.forEach((s) => s.classList.toggle("peek", ui.peek));
+
+    paintRows(round, v, rec);
+    $("d-panel").hidden = !ui.panel;
+    for (const [tab, act] of [["memo", "tab-memo"], ["dec", "tab-dec"]]) {
+      const on = (ui.panel || "memo") === tab;
+      all(`[data-act="${act}"]`).forEach((b) => b.setAttribute("aria-selected", String(on)));
+      $(`d-tab-${tab}`).hidden = !on;
+    }
+    $("d-hist").hidden = !ui.hist;
+    $("p-drawer-dec").hidden = ui.drawer !== "dec";
+    $("p-drawer-hist").hidden = ui.drawer !== "hist";
+    if (ui.hist || ui.drawer === "hist") all("[data-hist]").forEach((n) => n.replaceChildren(histView()));
+    $("full").hidden = !ui.big;
+    document.documentElement.classList.toggle("lock", ui.big);
+
+    paintStatus();
+    ensureThumbs();
+    sync();
+  };
+
+  const SIDE = 24;
+  const GAP = 16;
+  const PH = 30;
+  const FOOT = 12;
+  const rel = (node, origin) => {
+    const r = node.getBoundingClientRect();
+    return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
+  };
+  const hostLayer = (host) => {
+    layer.classList.toggle("over", !host);
+    if (!host) {
+      Object.assign(layer.style, { left: "0px", top: "0px", width: `${innerWidth}px`, height: `${innerHeight}px` });
+      return { left: 0, top: 0 };
+    }
+    const b = document.body.getBoundingClientRect();
+    const r = host.getBoundingClientRect();
+    Object.assign(layer.style, { left: `${r.left - b.left}px`, top: `${r.top - b.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    return r;
+  };
+  const size = (node, w, h) => {
+    const W = `${Math.floor(w)}px`;
+    const H = `${Math.floor(h)}px`;
+    if (node.style.width !== W) node.style.width = W;
+    if (h !== null && node.style.height !== H) node.style.height = H;
+  };
+  // A frame narrower than its box is centred; a larger one is clipped to the box
+  // rather than refitted, so a held partner keeps the scale of the option it replaces.
+  const place = (frame, opt, box, s, on, turn = false) => {
+    const fw = opt.width * s;
+    const fh = opt.height * s;
+    const visW = Math.min(opt.width, (turn ? box.h : box.w) / s);
+    const visH = Math.min(opt.height, (turn ? box.w : box.h) / s);
+    const x = box.x + Math.max(0, (box.w - (turn ? fh : fw)) / 2);
+    frame.style.transform = turn ? `translate(${x + fh}px, ${box.y}px) rotate(90deg) scale(${s})` : `translate(${x}px, ${box.y}px) scale(${s})`;
+    frame.style.clipPath = `inset(0 ${opt.width - visW}px ${opt.height - visH}px 0)`;
+    frame.style.visibility = on ? "visible" : "hidden";
+  };
+  const cover = (surf, box) => {
+    surf.hidden = !box;
+    if (box) Object.assign(surf.style, { transform: `translate(${box.x}px, ${box.y}px)`, width: `${box.w}px`, height: `${box.h}px` });
+  };
+  const sync = () => {
+    const round = roundOf(ui.round);
+    const v = views.get(round.id);
+    const so = optOf(round, v.shown);
+    const po = v.partner ? optOf(round, v.partner) : null;
+    const fs = stageFrame(round, so);
+    const fp = po ? stageFrame(round, po) : null;
+    for (const byOpt of frameSets.values()) {
+      for (const set of byOpt.values()) if (set.stage && set.stage !== fs && set.stage !== fp) set.stage.style.visibility = "hidden";
+    }
+    const holdable = !!po && !ui.operate;
+    const swap = ui.peek && !!po;
+    const [sa, sb] = surfaces;
+    if (ui.big && !desk.matches) {
+      const vw = innerWidth;
+      const vh = innerHeight;
+      const turn = vh > vw && so.width > so.height;
+      const L = turn ? vh : vw;
+      const S = turn ? vw : vh;
+      const rot = $("rot");
+      const side = $("f-side");
+      const wide = L >= S;
+      rot.classList.toggle("wide", wide);
+      // The side column is measured below, so its caption must already have its final line count.
+      if (!$("f-ft").textContent) $("f-ft").textContent = "図の倍率";
+      Object.assign(rot.style, { width: `${L}px`, height: `${S}px`, transform: turn ? `translate(${vw}px, 0) rotate(90deg)` : "none" });
+      const avW = wide ? L - side.offsetWidth - 40 : L - 16;
+      const avH = wide ? S - 16 : S - side.offsetHeight - 28;
+      const s = Math.max(0.01, Math.min(1, avW / so.width, avH / so.height));
+      size($("f-slot"), so.width * s, so.height * s);
+      const box = rel($("f-slot"), hostLayer(null));
+      place(fs, so, box, s, !swap, turn);
+      if (fp) place(fp, po, box, s, swap, turn);
+      cover(sa, holdable ? box : null);
+      cover(sb, null);
+      $("f-ft").textContent = `図の倍率 ${fmt(s)} 倍${turn ? "。スマホを横に倒して見る" : ""}`;
+      return;
+    }
+    if (desk.matches) {
+      const figs = $("d-figs");
+      const two = ui.two && !!po;
+      const W = figs.clientWidth;
+      const H = figs.clientHeight;
+      const one = (o) => Math.min(1, (W - SIDE * 2) / o.width, (H - FOOT) / o.height);
+      const pair = (a, b) => {
+        const pw = (W - SIDE * 2 - GAP) / 2;
+        const ph = H - PH - FOOT;
+        return Math.min(1, pw / a.width, pw / b.width, ph / a.height, ph / b.height);
+      };
+      const s = Math.max(0.01, two ? pair(po, so) : one(so));
+      size($("d-pane-shown"), so.width * s, null);
+      size($("d-slot-shown"), so.width * s, so.height * s);
+      if (two) {
+        size($("d-pane-partner"), po.width * s, null);
+        size($("d-slot-partner"), po.width * s, po.height * s);
+      }
+      const origin = hostLayer(figs);
+      const bs = rel($("d-slot-shown"), origin);
+      if (two) {
+        const bp = rel($("d-slot-partner"), origin);
+        place(fs, so, swap ? bp : bs, s, true);
+        place(fp, po, swap ? bs : bp, s, true);
+        cover(sa, holdable ? bs : null);
+        cover(sb, holdable ? bp : null);
+      } else {
+        place(fs, so, bs, s, !swap);
+        if (fp) place(fp, po, bs, s, swap);
+        cover(sa, holdable ? bs : null);
+        cover(sb, null);
+      }
+      $("d-scale").textContent = `図の倍率 ${fmt(s)} 倍${s >= 1 ? "（実寸）" : ""}`;
+      $("d-two-label").textContent = !po ? "" : two ? `1 枚で大きく ${fmt(one(so))} 倍` : `並べる ${fmt(pair(po, so))} 倍`;
+      return;
+    }
+    const slotS = $("p-slot-shown");
+    const slotP = $("p-slot-partner");
+    const W = $("p-shown").clientWidth;
+    const sS = Math.min(1, W / so.width);
+    size(slotS, so.width * sS, so.height * sS);
+    const sP = po ? Math.min(1, W / po.width) : 0;
+    if (po) size(slotP, po.width * sP, po.height * sP);
+    const origin = hostLayer($("p-main"));
+    const bs = rel(slotS, origin);
+    const bp = po ? rel(slotP, origin) : null;
+    place(fs, so, swap ? bp : bs, swap ? sP : sS, true);
+    if (fp) place(fp, po, swap ? bs : bp, swap ? sS : sP, true);
+    cover(sa, holdable ? bs : null);
+    cover(sb, holdable ? bp : null);
+    $("p-scale").textContent = `図 ${fmt(sS)} 倍`;
+  };
+  let raf = 0;
+  const schedule = () => {
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; sync(); });
+  };
+
+  const show = (id) => {
+    const v = views.get(ui.round);
+    if (id === v.shown) return;
+    const prev = v.shown;
+    v.shown = id;
+    // The pin belongs to an option, not to the partner slot: showing the pinned option
+    // puts the previous one in the partner's place, and the pin takes the slot back
+    // once something else is shown.
+    v.partner = v.pinned && v.pinned !== id ? v.pinned : prev;
+    ui.peek = false;
+    paint();
+    announce(`表示中 ${id}、${partnerWord(v)} ${v.partner}`);
+    if (!desk.matches) {
+      const sec = $("p-shown");
+      const strip = $("p-stripw");
+      if (sec.getBoundingClientRect().top < strip.getBoundingClientRect().bottom - 1) {
+        sec.style.scrollMarginTop = `${strip.offsetHeight}px`;
+        sec.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      }
+    }
+  };
+  const step = (dir) => {
+    const opts = roundOf(ui.round).options;
+    if (opts.length < 2) return;
+    const i = opts.findIndex((o) => o.id === views.get(ui.round).shown);
+    show(opts[(i + dir + opts.length) % opts.length].id);
+  };
+  const pinPartner = () => {
+    const v = views.get(ui.round);
+    if (!v.partner) return;
+    v.pinned = v.pinned === v.partner ? null : v.partner;
+    paint();
+    announce(v.pinned ? `比べる相手（固定） ${v.partner}` : `${v.partner} の固定を外しました`);
+  };
+  const pinOption = (id) => {
+    const v = views.get(ui.round);
+    if (!v.partner) return;
+    if (v.pinned === id) v.pinned = null;
+    else {
+      v.pinned = id;
+      if (id !== v.shown) v.partner = id;
+    }
+    ui.peek = false;
+    paint();
+    announce(v.pinned ? `比べる相手（固定） ${v.pinned}` : `${id} の固定を外しました`);
+  };
+  const hold = (on) => {
+    if (on && !views.get(ui.round).partner) return;
+    if (ui.peek === on) return;
+    ui.peek = on;
+    // The bar's text changes while held and can rewrap; a bar of another height would
+    // resize the stage and show the partner at another place and scale.
+    const bar = document.querySelector(".desk .sbar");
+    if (bar) bar.style.height = on ? `${bar.offsetHeight}px` : "";
+    paint();
+  };
+  const rate = (mark) => {
+    const round = roundOf(ui.round);
+    const v = views.get(round.id);
+    const rec = records.get(round.id);
+    if (rec.ratings[v.shown] === mark) delete rec.ratings[v.shown];
+    else rec.ratings[v.shown] = mark;
+    paint();
+    save(round.id);
+  };
+  const setRound = (id) => {
+    if (!roundOf(id)) return;
+    ui.hist = false;
+    ui.drawer = null;
+    if (id !== ui.round) {
+      ui.round = id;
+      ui.peek = false;
+      buildRows(roundOf(id), "desk");
+      buildRows(roundOf(id), "phone");
+      announce(id === currentId ? `今の回 ${id} に戻りました` : `${id} を見ています（過去の回）`);
+    }
+    paint();
+    if (!desk.matches) (id === currentId ? $("p-round") : document.querySelector(".phone [data-past]")).scrollIntoView({ block: "start" });
+  };
+  const togglePanel = (tab) => {
+    if (!desk.matches) {
+      if (tab === "dec") toggleDrawer("dec");
+      else {
+        const ta = $("phone").querySelector("[data-memo]");
+        ta.scrollIntoView({ block: "center" });
+        ta.focus();
+      }
+      return;
+    }
+    ui.panel = ui.panel === tab ? null : tab;
+    ui.hist = false;
+    paint();
+  };
+  const toggleDrawer = (name) => {
+    ui.drawer = ui.drawer === name ? null : name;
+    paint();
+  };
+  const toggleHist = () => {
+    if (!desk.matches) return toggleDrawer("hist");
+    ui.hist = !ui.hist;
+    paint();
+  };
+  const setBig = (on) => {
+    if (on && desk.matches) return;
+    ui.big = on;
+    ui.peek = false;
+    paint();
+    (on ? $("f-close") : $("p-big-btn")).focus();
+  };
+  const closePanel = () => {
+    const inside = $("d-panel").contains(document.activeElement);
+    const opener = ui.panel === "memo" ? '.bot [data-act="panel-memo"]' : '.study [data-act="panel-dec"]';
+    ui.panel = null;
+    paint();
+    if (inside) document.querySelector(opener).focus();
+  };
+  const closeTop = () => {
+    if (ui.big) setBig(false);
+    else if (ui.hist) {
+      ui.hist = false;
+      paint();
+      $("d-hist-btn").focus();
+    } else if (ui.panel) closePanel();
+    else if (ui.drawer) toggleDrawer(ui.drawer);
+    else return false;
+    return true;
+  };
+
+  const copyTimers = [];
+  const copy = async () => {
+    const text = message(roundOf(ui.round));
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      ok = false;
+    }
+    copyTimers.forEach(clearTimeout);
+    copyTimers.length = 0;
+    if (ok) {
+      all("[data-copy-label]").forEach((n) => { n.textContent = "コピーしました"; });
+      announce("コピーしました。チャットで『選んだ』と伝えてください");
+      copyTimers.push(setTimeout(() => all("[data-copy-label]").forEach((n) => { n.textContent = "コピー"; }), 1600));
+    } else {
+      all("[data-next]").forEach((n) => { n.textContent = "コピーできませんでした。評価した案をチャットで伝えてください"; });
+      announce("コピーできませんでした。評価した案をチャットで伝えてください");
+      copyTimers.push(setTimeout(() => all("[data-next]").forEach((n) => { n.textContent = "コピーしたらチャットで『選んだ』と伝える"; }), 8000));
+    }
+  };
+
+  for (const group of all("[data-rate]")) {
+    const keys = group.closest(".desk");
+    MARKS.forEach((m, i) => group.append(el("button", { type: "button", "data-mark": m, "aria-pressed": "false" }, keys ? el("kbd", { text: String(i + 1) }) : null, m)));
+  }
+  document.addEventListener("click", (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    const mark = t.closest("[data-mark]");
+    if (mark) return rate(mark.dataset.mark);
+    const row = t.closest("[data-round]");
+    if (row) return setRound(row.dataset.round);
+    const act = t.closest("[data-act]");
+    if (!act) return;
+    switch (act.dataset.act) {
+      case "panel-memo": return togglePanel("memo");
+      case "panel-dec": return togglePanel("dec");
+      case "tab-memo": ui.panel = "memo"; return paint();
+      case "tab-dec": ui.panel = "dec"; return paint();
+      case "hist": return toggleHist();
+      case "close-hist": ui.hist = false; paint(); return $("d-hist-btn").focus();
+      case "close-panel": return closePanel();
+      case "close-big": return setBig(false);
+      case "back": return setRound(currentId);
+      case "list": ui.list = !ui.list; return paint();
+      case "pin": return pinPartner();
+      case "two": ui.two = !ui.two; ui.peek = false; return paint();
+      case "operate": ui.operate = !ui.operate; ui.peek = false; return paint();
+      case "copy": return copy();
+      case "big": return setBig(true);
+      case "swap": return show(views.get(ui.round).partner);
+      case "drawer-dec": return toggleDrawer("dec");
+      case "drawer-hist": return toggleDrawer("hist");
+    }
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (ui.hist && e.target instanceof Element && !e.target.closest("#d-hist, #d-hist-btn")) {
+      ui.hist = false;
+      paint();
+    }
+  });
+  for (const ta of all("[data-memo]")) {
+    ta.addEventListener("input", () => {
+      const rec = records.get(ta.dataset.memoRound);
+      if (!rec) return;
+      if (ta.value) rec.notes[ta.dataset.memoOpt] = ta.value;
+      else delete rec.notes[ta.dataset.memoOpt];
+      paint();
+      save(ta.dataset.memoRound, 800);
+    });
+  }
+  for (const ta of all("[data-comment]")) {
+    ta.addEventListener("input", () => {
+      const rec = records.get(ta.dataset.memoRound);
+      if (!rec) return;
+      rec.comment = ta.value;
+      paint();
+      save(ta.dataset.memoRound, 800);
+    });
+  }
+
+  // Option ids run A to J, so no shortcut uses one of those letters; copy is Y (yank).
+  // Space holds the partner even when a button has focus: choosing a row and then
+  // holding Space is the main way to compare, and Enter still presses the button.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (closeTop()) e.preventDefault();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const acts = {
+      " ": () => { if (!e.repeat) hold(true); },
+      1: () => rate(MARKS[0]),
+      2: () => rate(MARKS[1]),
+      3: () => rate(MARKS[2]),
+      p: pinPartner,
+      n: () => { if (desk.matches && views.get(ui.round).partner) { ui.two = !ui.two; ui.peek = false; paint(); } },
+      o: () => { if (views.get(ui.round).partner) { ui.operate = !ui.operate; ui.peek = false; paint(); } },
+      ArrowLeft: () => step(-1),
+      ArrowRight: () => step(1),
+      l: () => { if (desk.matches) { ui.list = !ui.list; paint(); } },
+      m: () => togglePanel("memo"),
+      k: () => togglePanel("dec"),
+      r: toggleHist,
+      y: copy,
+    };
+    if (!acts[k]) return;
+    e.preventDefault();
+    // A held key repeats; every action but stepping through options is a toggle,
+    // so a repeat would flip a rating or the pin back and forth.
+    if (e.repeat && k !== "ArrowLeft" && k !== "ArrowRight") return;
+    acts[k]();
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key !== " ") return;
+    if (!(e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]"))) e.preventDefault();
+    hold(false);
+  });
+  addEventListener("blur", () => hold(false));
+
+  // The surface over a figure catches the press, because a press inside the iframe never
+  // reaches this page. A touch starts the hold only after 250 ms without movement, so a
+  // scroll that starts on the figure stays a scroll.
+  let holdTimer = 0;
+  let holdFrom = null;
+  const endHold = () => {
+    clearTimeout(holdTimer);
+    holdFrom = null;
+    removeEventListener("pointermove", moveHold);
+    removeEventListener("pointerup", endHold);
+    removeEventListener("pointercancel", endHold);
+    hold(false);
+  };
+  const moveHold = (e) => {
+    if (holdFrom && !ui.peek && Math.hypot(e.clientX - holdFrom.x, e.clientY - holdFrom.y) > 8) clearTimeout(holdTimer);
+  };
+  for (const surf of surfaces) {
+    surf.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      clearTimeout(holdTimer);
+      holdFrom = { x: e.clientX, y: e.clientY };
+      addEventListener("pointermove", moveHold);
+      addEventListener("pointerup", endHold);
+      addEventListener("pointercancel", endHold);
+      if (e.pointerType === "mouse") {
+        e.preventDefault();
+        hold(true);
+      } else holdTimer = setTimeout(() => hold(true), 250);
+    });
+    surf.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+
+  const ro = new ResizeObserver(schedule);
+  for (const n of [document.body, $("d-figs"), $("p-main"), ...$("p-main").children]) ro.observe(n);
+  addEventListener("resize", schedule);
+  desk.addEventListener("change", () => {
+    if (desk.matches) ui.big = false;
+    else ui.hist = false;
+    ui.peek = false;
+    paint();
+  });
 
   // A round with local edits not yet confirmed by the store is "dirty": snapshots
   // skip it, so a delivery between typing and saving cannot roll the edit back.
   const timers = new Map();
   const inflight = new Map();
   const dirty = new Set();
-  let ready = false;
+  let store = null;
+  const setStatus = (roundId, kind, at = 0) => {
+    status.set(roundId, { kind, at });
+    if (roundId === ui.round) paintStatus();
+  };
+  // A pending save is never pushed later: a variant posting values every few
+  // hundred ms would otherwise keep the user's rating from ever being written.
+  const due = new Map();
   const save = (roundId, delay = 0) => {
     dirty.add(roundId);
+    if (store && ready) setStatus(roundId, "saving");
+    const at = Date.now() + delay;
+    if (timers.has(roundId) && due.get(roundId) <= at) return;
     clearTimeout(timers.get(roundId));
+    due.set(roundId, at);
     timers.set(roundId, setTimeout(() => {
       timers.delete(roundId);
+      due.delete(roundId);
       flush(roundId);
     }, delay));
   };
   const flush = async (roundId) => {
-    const view = views.get(roundId);
-    if (noStore || readOnly) {
-      view.status.textContent = "このページでは保存できません。「選んだ内容をコピー」でチャットに貼ってください。";
-      return;
-    }
-    if (!store || !ready) {
-      view.status.textContent = "保存先につながるのを待っています。";
-      return;
-    }
+    if (noStore || readOnly) return paintStatus();
+    if (!store || !ready) return setStatus(roundId, "waiting");
     if (inflight.get(roundId)) {
       inflight.set(roundId, "again");
       return;
     }
     inflight.set(roundId, true);
+    setStatus(roundId, "saving");
     const r = records.get(roundId);
     let saved = false;
     try {
-      await store.doc(`rounds/${roundId}`).set({ ...r, updatedAt: new Date().toISOString() });
+      await store.doc(`rounds/${roundId}`).set({
+        ratings: { ...r.ratings },
+        notes: { ...r.notes },
+        values: { ...r.values },
+        comment: r.comment,
+        updatedAt: new Date().toISOString(),
+      });
       saved = true;
-      view.status.classList.remove("error");
-      view.status.textContent = `保存しました（${new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）`;
+      setStatus(roundId, "saved", Date.now());
     } catch (e) {
       if (e && e.code === "invalid_argument") readOnly = true;
-      view.status.classList.add("error");
-      view.status.textContent = "保存できませんでした。「選んだ内容をコピー」でチャットに貼ってください。";
+      setStatus(roundId, "error");
     }
     const again = inflight.get(roundId) === "again";
     inflight.delete(roundId);
     if (again) flush(roundId);
     else if (saved && !timers.has(roundId)) dirty.delete(roundId);
   };
-
-  const rounds = board.rounds;
-  const latestId = rounds.length ? rounds[rounds.length - 1].id : null;
-  for (const round of [...rounds].reverse()) app.append(renderRound(round, round.id === latestId));
-  fitFrames.forEach((f) => f());
 
   // Values come from a variant's own code, not from the user's typing: keep only
   // short scalars so a variant cannot fill the record Claude reads with text.
@@ -286,37 +1415,38 @@
       if (!KEY.test(k)) continue;
       if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
       else if (typeof v === "boolean") out[k] = v;
-      else if (typeof v === "string" && v.length <= 64) out[k] = v;
+      // Line breaks, other controls and bidi overrides would let a value pose as the
+      // user's own line in the message they paste to Claude.
+      else if (typeof v === "string" && v.length <= 64 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(v)) out[k] = v;
     }
     return Object.keys(out).length ? out : null;
   };
 
   // A variant reports tuned values with parent.postMessage({ uiDesignValues: {...} }, "*")
-  // and receives the saved ones as { uiDesignInit: {...} } when it loads.
+  // and receives the saved ones as { uiDesignInit: {...} } when it loads. Only stage
+  // frames are matched: a thumbnail runs the same code and would report the same values.
   window.addEventListener("message", (event) => {
-    const values = cleanValues(event.data && event.data.uiDesignValues);
-    if (!values) return;
-    for (const [roundId, view] of views) {
-      for (const [optId, v] of view.optionViews) {
-        if (v.frame.contentWindow !== event.source) continue;
-        records.get(roundId).values[optId] = values;
-        view.paint();
+    for (const [roundId, byOpt] of frameSets) {
+      for (const [optId, set] of byOpt) {
+        if (!set.stage || set.stage.contentWindow !== event.source) continue;
+        const values = cleanValues(event.data && event.data.uiDesignValues);
+        const rec = records.get(roundId);
+        if (!values || JSON.stringify(values) === JSON.stringify(rec.values[optId])) return;
+        rec.values[optId] = values;
+        paint();
         save(roundId, 800);
+        return;
       }
     }
   });
-  const sendInit = (roundId, optId) => {
-    const v = views.get(roundId).optionViews.get(optId);
-    const values = records.get(roundId).values[optId];
-    if (values && v.frame.contentWindow) v.frame.contentWindow.postMessage({ uiDesignInit: values }, "*");
-  };
-  for (const [roundId, view] of views) {
-    for (const [optId, v] of view.optionViews) v.frame.addEventListener("load", () => sendInit(roundId, optId));
-  }
+
+  buildRows(roundOf(currentId), "desk");
+  buildRows(roundOf(currentId), "phone");
+  paint();
 
   const loading = setTimeout(() => {
-    notice.hidden = false;
-    notice.textContent = "選択の保存先にまだつながりません。選んだ内容は「選んだ内容をコピー」でチャットに貼れます。";
+    slow = true;
+    paintStatus();
   }, 10000);
 
   (async () => {
@@ -324,8 +1454,7 @@
     if (!db) {
       noStore = true;
       clearTimeout(loading);
-      notice.hidden = false;
-      notice.textContent = "このページでは選択を保存できません。選んだ内容は「選んだ内容をコピー」でチャットに貼ってください。";
+      paintStatus();
       return;
     }
     store = db;
@@ -335,30 +1464,42 @@
     db.collection("rounds").onSnapshot((snap) => {
       if (!snap.metadata.fromCache) {
         clearTimeout(loading);
-        notice.hidden = true;
+        slow = false;
+        lost = false;
       }
+      let changed = false;
       for (const doc of snap.docs) {
-        const view = views.get(doc.id);
-        if (!view || dirty.has(doc.id)) continue;
+        if (!records.has(doc.id) || dirty.has(doc.id)) continue;
         const data = doc.data() || {};
         if (seen.get(doc.id) === data) continue;
         seen.set(doc.id, data);
         const r = records.get(doc.id);
-        r.picks = Array.isArray(data.picks) ? data.picks : [];
-        r.notes = Object.assign(Object.create(null), data.notes && typeof data.notes === "object" ? data.notes : {});
-        r.values = Object.assign(Object.create(null), data.values && typeof data.values === "object" ? data.values : {});
+        const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
+        r.ratings = Object.create(null);
+        for (const [k, m] of Object.entries(obj(data.ratings))) if (MARKS.includes(m)) r.ratings[k] = m;
+        r.notes = Object.create(null);
+        for (const [k, t] of Object.entries(obj(data.notes))) if (typeof t === "string" && t) r.notes[k] = t;
+        r.values = Object.create(null);
+        for (const [k, val] of Object.entries(obj(data.values))) {
+          const clean = cleanValues(val);
+          if (clean) r.values[k] = clean;
+        }
         r.comment = typeof data.comment === "string" ? data.comment : "";
-        view.paint();
-        for (const optId of Object.keys(r.values)) if (view.optionViews.has(optId)) sendInit(doc.id, optId);
+        const at = Date.parse(data.updatedAt);
+        if (Number.isFinite(at) && status.get(doc.id).kind === "idle") status.set(doc.id, { kind: "saved", at });
+        changed = true;
+        for (const optId of Object.keys(r.values)) sendInit(doc.id, optId);
       }
       if (!ready && !snap.metadata.fromCache) {
         ready = true;
         for (const roundId of dirty) save(roundId);
       }
+      if (changed) paint();
+      else paintStatus();
     }, () => {
       clearTimeout(loading);
-      notice.hidden = false;
-      notice.textContent = "選択の保存先との接続が切れました。選んだ内容は「選んだ内容をコピー」でチャットに貼ってください。";
+      lost = true;
+      paintStatus();
     });
   })();
 })();

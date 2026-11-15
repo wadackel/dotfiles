@@ -3,7 +3,7 @@ name: ui-design
 description: >-
   Runs a UI design exploration with the user in six stages (Define, Criteria,
   Sketch, Style Tile, Refine, Validate), showing options as HTML mockups on one
-  private artifact page where the user picks options inside the page. For
+  private artifact page where the user rates options inside the page. For
   deciding how a screen or component should be structured and look before it is
   built. Not for implementing a decided design (/plan, /do) or for open-ended
   consultation (/consult). Manual trigger: /ui-design.
@@ -22,13 +22,13 @@ The user explores UI with mockups to widen the options and then narrow them. Ear
 | 1 | Define (`問題定義`) | What is designed, why, and what is out of scope | A 1–2 line problem statement with target and out-of-scope | None |
 | 2 | Criteria (`判断基準`) | Constraints, what "good" means here, assumptions | Constraints (platform, technical), judging criteria, guesses marked as guesses | None |
 | 3 | Sketch (`スケッチ`) | Structure and behavior | 3–5 options that differ in structure, then Merge | Low: grey boxes, real labels, no color or type choices |
-| 4 | Style Tile (`スタイルタイル`) | Visual direction on the fixed structure | References chosen first, then directions that differ in a named decision (up to 10 rough ones in a first round, 3–6 at real size), then Merge | A rough round: the direction's type, color and material on a simplified screen. Then the chosen structure at real size with real content |
+| 4 | Style Tile (`スタイルタイル`) | Visual direction on the fixed structure | References chosen first (real, well-made products found by research and offered as candidates), then directions that differ in a named decision (up to 10 rough ones in a first round, 3–6 at real size), then Merge | A rough round: the direction's type, color and material on a simplified screen. Then the chosen structure at real size with real content |
 | 5 | Refine (`詳細化`) | Exact values | One direction with its values tuned in the page | High, real size, controls for the open values |
 | 6 | Validate (`検証`) | Whether it meets the criteria | Critique against stage 2, a device check where feel matters, the handoff | The final mock |
 
 Start at the first stage the request leaves unsettled. A stage the request or the codebase already settles is recorded as a decision with its source, not re-asked: a request that names the screen and its job skips Define, and a restyle of a screen whose structure stays skips Sketch. A request that does not touch looks ends after Sketch and goes to Validate.
 
-Merge ends Sketch and Style Tile: read the user's picks and notes, keep the parts they liked, and vary only the parts they disliked; combine parts of different options when the notes ask for it. Picking a single winner is a special case of Merge, not its goal.
+Merge ends Sketch and Style Tile: read the user's ratings (○ keep, △ parts of it, × drop), notes and round memo, keep the parts they liked, and vary only the parts they disliked; combine parts of different options when the notes ask for it. Picking a single winner is a special case of Merge, not its goal.
 
 ## Rules for every reply
 
@@ -43,14 +43,18 @@ Merge ends Sketch and Style Tile: read the user's picks and notes, keep the part
 
 ## Diverging in Sketch and Style Tile
 
-Before drawing, write one line per option: the decision it changes and a concrete referent from the world, such as "an instrument scale with a fixed brand index" or "a museum label system", never adjectives like "clean and modern".
+Before drawing, write one line per option: the decision it changes and a concrete referent, never adjectives like "clean and modern". A referent is a real product or interface the user can look up, such as "Lightroom's compare view with its neutral grey surround" or "Percy's review screen, one key per action". Do not dress options in metaphors (a blueprint frame, a contact sheet) unless the user asks for one: a user shown metaphor references called them unnecessary and asked for researched, well-made UIs instead.
 
 - **Sketch decisions**: navigation model, layout topology, what is primary, interaction model, how much is visible at rest.
 - **Style Tile decisions**: material or worldview, type voice, color strategy, shape language, density, motion character. Load the `frontend-design` skill here for its list of generated-design defaults to steer away from.
 
+A general-purpose design system (Geist, Material, the macOS controls) gives an option its discipline (greys by role, type scale, spacing), not its identity. Pair it with parts that only this target's task has, or the option comes out as stock parts; the critic rightly called every such option interchangeable until it gained them.
+
 Read the lines side by side before rendering. Replace one of any two options that change the same decision or whose lines rhyme. Name the rut for this target (the category's default look and its obvious opposite) and keep both out unless the user asks for them. An option is too close to another when its headline or main control could be swapped into the other unnoticed.
 
 Render each option in its own subagent, all dispatched in one message, with `references/variant-brief.md`. A fresh context per option keeps earlier options from anchoring later ones and keeps the HTML out of the main context. Dispatch `general-purpose` with `model: sonnet` in Sketch and in a rough Style Tile round, where the option's decision is given and the drawing is a simplified screen, and with `model: opus` for Style Tile at real size and Refine, where the drawing itself is the visual judgment.
+
+Carry the user's words into a brief as they said them, for the context they said them in. A remark about one surface is not a constraint on another: "more like an application" said of the desktop board became "the phone page must not scroll" in three briefs, and the user called all three options unusable.
 
 
 ## Refine
@@ -73,8 +77,8 @@ Suggest `/plan` or an Issue for the implementation. This skill does not implemen
 
 Read `references/board.md` before the first round. In short:
 
-- One private artifact holds the whole exploration and is updated in place; earlier rounds stay on it, folded.
+- One private artifact holds the whole exploration and is updated in place; earlier rounds stay on it and open from its header.
 - `board.json` and the option files live in the session scratchpad under `ui-design/<slug>/`, and `~/.claude/skills/ui-design/scripts/build-board.ts <dir>` writes the page. `board.json` also keeps the artifact's slug and latest version, so a compacted or new session updates the same page.
-- The user picks options and writes notes in the page, then says so in chat. Read the picks with `db_get` on `rounds/<round id>`.
+- The user rates options ○ △ × and writes notes in the page, then says so in chat. Read them with `db_get` on `rounds/<round id>`.
 
 Before a round goes on the board, look at each option's screenshot (the option subagent saves it next to the file) and fix or drop one that renders broken; a past exploration showed mocks nobody had looked at. In Style Tile, also run the critic on the round's screenshots with only its first question (authored for this product, or interchangeable with any product in the category?) and replace an option it calls interchangeable before the user sees it.
