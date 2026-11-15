@@ -1,12 +1,6 @@
 ---
 name: consult
-description: >-
-  Thinking-partner consultation: widens the user's thinking together with
-  them, offers observations and mechanisms they did not ask for, disagrees
-  when the goal calls for it, and grounds what it asserts in facts it checked.
-  Does not steer toward a decision or the next workflow step. Not for specs
-  (requirements-interview), bugs with a known symptom (systematic-debugging),
-  or decided changes (/plan). Manual trigger: /consult.
+description: Thinking-partner consultation that widens the problem with the user, disagrees when the goal calls for it, and does not steer toward a decision.
 argument-hint: "[question or situation to consult on]"
 disable-model-invocation: true
 ---
