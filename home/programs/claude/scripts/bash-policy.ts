@@ -14,9 +14,10 @@
 //       message: "This push closes the Renovate PR; add the stop-updating label and push from a terminal"
 
 import { readFile, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parse } from "@std/yaml";
+import { run } from "../../agents/lib/proc.ts";
 import {
   getSegments,
   globToRegex,
@@ -98,24 +99,35 @@ function unwrap(words: string[]): string[] {
   return words.slice(i);
 }
 
-/** True when tmux reaches its subcommand before a global -L or -S picks a socket. */
-function tmuxReachesDefault(args: string[]): boolean {
+/**
+ * True when tmux reaches its subcommand before a global -L or -S picks a socket.
+ * `allowSocket` exempts a socket path that ends in `tmux-<uid>/default` but is not the user's.
+ */
+function tmuxReachesDefault(
+  args: string[],
+  allowSocket: (path: string) => boolean = () => false,
+): boolean {
+  const userDefault = (path: string) =>
+    !allowSocket(path) && /\/tmux-\d+\/default$/.test(path);
   for (let i = 0; i < args.length; i++) {
     const w = args[i];
     if (!w.startsWith("-") || w === "--") return true;
     // A socket given by name is private unless it names the user's own server.
     if (w === "-L" || w === "-S") {
       const socket = args[i + 1] ?? "";
-      return w === "-L"
-        ? socket === "default"
-        : /\/tmux-\d+\/default$/.test(socket);
+      return w === "-L" ? socket === "default" : userDefault(socket);
     }
     if (/^-L/.test(w)) return w === "-Ldefault";
-    if (/^-S/.test(w)) return /\/tmux-\d+\/default$/.test(w);
+    if (/^-S/.test(w)) return userDefault(w.slice(2));
     if (TMUX_ARG_OPTIONS.has(w)) i++;
   }
   return true;
 }
+
+type Decide = (head: string, words: string[]) => string | null | Promise<string | null>;
+
+/** Where an explorer's command runs, so a script it starts can be found and read. */
+type Follow = { cwd: string; depth: number };
 
 /**
  * The /impl review's breaker runs commands in a throwaway worktree. These are the ones
@@ -125,8 +137,161 @@ function tmuxReachesDefault(args: string[]): boolean {
  * the common wrappers and a shell's -c string; the main session and the other
  * reviewers are unaffected.
  */
-export async function breakerRefusal(
+export function breakerRefusal(segments: string[]): Promise<string | null> {
+  return refusalIn(segments, (head, words) => {
+    if (head === "tmux" && tmuxReachesDefault(words.slice(1))) {
+      return "tmux without a global -L or -S would reach the user's tmux server; use a private socket (tmux -L <name> <command>)";
+    }
+    if (head === "launchctl") return "launchctl reaches the user's launchd";
+    if (head === "curl" || head === "wget") {
+      return `${head} reaches the network`;
+    }
+    return null;
+  });
+}
+
+const SANDBOX_SOCKET = /^(\/private)?\/tmp\/xs-[^/]+\/tmux-\d+\/default$/;
+// gh reads the session may run; every other gh command (writes, credentials, extensions,
+// aliases) is refused, because a list of what to refuse kept missing groups.
+const GH_READ: Record<string, ReadonlySet<string>> = {
+  issue: new Set(["list", "view", "status"]),
+  pr: new Set(["list", "view", "status", "diff", "checks"]),
+  run: new Set(["list", "view"]),
+  release: new Set(["list", "view"]),
+  repo: new Set(["view"]),
+  label: new Set(["list"]),
+  workflow: new Set(["list", "view"]),
+  gist: new Set(["list", "view"]),
+  cache: new Set(["list"]),
+  auth: new Set(["status"]),
+};
+const GH_FREE = new Set(["", "search", "status", "help", "version", "--version", "-h", "--help"]);
+// Options of git itself that take the next word as their value.
+const GIT_VALUE_OPTIONS = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env", "--super-prefix",
+]);
+const SCRIPT_LIMIT = 256 * 1024;
+
+function ghRefusal(args: string[]): string | null {
+  const [group = "", verb = ""] = args;
+  if (group === "api") {
+    const m = args.findIndex((a) => a === "-X" || a === "--method");
+    const inline = args.find((a) => /^(-X|--method=)./.test(a));
+    const method = (m >= 0 ? args[m + 1] : inline?.replace(/^(-X|--method=)/, ""))?.toUpperCase();
+    const hasFields = args.some((a) =>
+      ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) ||
+      /^-[fF]./.test(a) || /^--(raw-field|field|input)=/.test(a)
+    );
+    if ((method && method !== "GET") || (!method && hasFields)) {
+      return "gh api with a method other than GET writes to GitHub";
+    }
+    return null;
+  }
+  if (GH_FREE.has(group)) return null;
+  if (GH_READ[group]?.has(verb)) {
+    if (group === "auth" && args.some((a) => a === "--show-token" || a === "-t")) {
+      return "gh auth status --show-token prints the user's token";
+    }
+    return null;
+  }
+  return `gh ${group} ${verb} is not a read the session needs; the main session files and edits`;
+}
+
+/** git's subcommand after its own options, from any spelling of git (`/usr/bin/git`, `git -P`). */
+function gitArgs(words: string[]): string[] {
+  const args = words.slice(1);
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i]!;
+    if (!w.startsWith("-")) return args.slice(i);
+    if (GIT_VALUE_OPTIONS.has(w)) i++;
+  }
+  return [];
+}
+
+async function gitRefusal(words: string[], cwd: string): Promise<string | null> {
+  const [sub = "", next = ""] = gitArgs(words);
+  if (sub === "push") return "git push is the main session's; record the finding instead";
+  if (sub === "worktree" && next === "add") {
+    return "git worktree add creates a branch in the real repository; clone into the sandbox instead";
+  }
+  if (!/^[\w-]+$/.test(sub)) return null;
+  // The user's own aliases (`pushf = push --force-with-lease`) reach push under another name.
+  const alias = await run("git", ["config", "--get", `alias.${sub}`], { cwd }).catch(() => null);
+  const value = alias?.code === 0 ? alias.stdout.trim() : "";
+  if (!value) return null;
+  if (value.startsWith("!")) return explorerRefusal(await getSegments(value.slice(1)), cwd);
+  return gitRefusal(["git", ...value.split(/\s+/)], cwd);
+}
+
+/** The inside of `explore-sandbox.ts exec <root> ... -- <cmd>`: only what the sandbox cannot redirect. */
+function sandboxedRefusal(words: string[]): string | null {
+  const dash = words.indexOf("--");
+  const root = words[2] ?? "";
+  if (words[1] !== "exec" || dash < 0) return null;
+  const inner = words.slice(dash + 1);
+  const head = basenameOf(inner[0] ?? "");
+  const valueOf = (names: string[]) => {
+    const i = inner.findIndex((w) => names.includes(w));
+    return i >= 0 ? inner[i + 1] : inner.find((w) => names.some((n) => w.startsWith(`${n}=`)))?.split("=")[1];
+  };
+  if (head === "tmux") {
+    const socket = valueOf(["-S"]);
+    if (socket && !SANDBOX_SOCKET.test(socket)) {
+      return "tmux -S outside the sandbox reaches a server the sandbox does not own";
+    }
+  }
+  if (head === "git") {
+    const target = valueOf(["-C", "--git-dir", "--work-tree"]);
+    if (target && root && !resolve(target).startsWith(`${resolve(root)}/`)) {
+      return "git pointed outside the sandbox with -C / --git-dir / --work-tree reaches the real repository";
+    }
+  }
+  return null;
+}
+
+/** The script a command runs: `sh file`, `source file`, `. file`, or a path to a shell script. */
+async function scriptOf(head: string, words: string[], cwd: string): Promise<string | null> {
+  let path: string | undefined;
+  if (SHELLS.has(head)) path = words.slice(1).find((w) => !w.startsWith("-"));
+  else if (head === "source" || head === ".") path = words[1];
+  else if (words[0]?.includes("/")) path = words[0];
+  if (!path) return null;
+  const full = resolve(cwd, path);
+  const st = await stat(full).catch(() => null);
+  if (!st?.isFile() || st.size > SCRIPT_LIMIT) return null;
+  const text = await readFile(full, "utf8");
+  if (text.includes("\u0000")) return null;
+  const shebang = /^#!.*\b(ba|z|da)?sh\b/.test(text.split("\n", 1)[0] ?? "");
+  if (!SHELLS.has(head) && head !== "source" && head !== "." && !shebang) return null;
+  return text;
+}
+
+/**
+ * An /exploratory-testing session explores a product from a sandbox while the main
+ * session reproduces, files and pushes. A written ban did not stop a past run from
+ * opening a window in the user's tmux and adding branches to the real repository,
+ * so these are refused for that agent: the user's tmux server (a sandbox socket under
+ * /tmp/xs-* is allowed), launchd, gh beyond a few reads, git push and git worktree add.
+ * Shell scripts it runs are read too, because its definition has it write multi-line
+ * commands to files.
+ */
+export function explorerRefusal(segments: string[], cwd: string): Promise<string | null> {
+  return refusalIn(segments, async (head, words) => {
+    if (head === "tmux" && tmuxReachesDefault(words.slice(1), (p) => SANDBOX_SOCKET.test(p))) {
+      return "tmux without a global -L or -S would reach the user's tmux server; name the sandbox socket (tmux -S <socket> <command>)";
+    }
+    if (head === "launchctl") return "launchctl reaches the user's launchd";
+    if (head === "gh") return ghRefusal(words.slice(1));
+    if (head === "git") return gitRefusal(words, cwd);
+    if (head === "explore-sandbox.ts") return sandboxedRefusal(words);
+    return null;
+  }, { cwd, depth: 0 });
+}
+
+async function refusalIn(
   segments: string[],
+  decide: Decide,
+  follow?: Follow,
 ): Promise<string | null> {
   for (const segment of segments) {
     const all = segment.trim().split(/\s+/).filter(Boolean);
@@ -135,8 +300,10 @@ export async function breakerRefusal(
       ? all.indexOf("-S")
       : -1;
     if (envSplit >= 0) {
-      const inner = await breakerRefusal(
+      const inner = await refusalIn(
         await getSegments(unquote(all.slice(envSplit + 1).join(" "))),
+        decide,
+        follow,
       );
       if (inner) return inner;
     }
@@ -144,18 +311,21 @@ export async function breakerRefusal(
     const head = basenameOf(words[0] ?? "");
     const flag = words.findIndex((w, i) => i > 0 && SHELL_C.test(w));
     if (SHELLS.has(head) && flag > 0) {
-      const inner = await breakerRefusal(
+      const inner = await refusalIn(
         await getSegments(unquote(words.slice(flag + 1).join(" "))),
+        decide,
+        follow,
       );
       if (inner) return inner;
+    } else if (follow && follow.depth < 3) {
+      const script = await scriptOf(head, words, follow.cwd);
+      if (script !== null) {
+        const inner = await refusalIn(await getSegments(script), decide, { ...follow, depth: follow.depth + 1 });
+        if (inner) return `${inner} (in the script ${words[SHELLS.has(head) || head === "source" || head === "." ? 1 : 0]})`;
+      }
     }
-    if (head === "tmux" && tmuxReachesDefault(words.slice(1))) {
-      return "tmux without a global -L or -S would reach the user's tmux server; use a private socket (tmux -L <name> <command>)";
-    }
-    if (head === "launchctl") return "launchctl reaches the user's launchd";
-    if (head === "curl" || head === "wget") {
-      return `${head} reaches the network`;
-    }
+    const refusal = await decide(head, words);
+    if (refusal) return refusal;
   }
   return null;
 }
@@ -224,12 +394,17 @@ if (import.meta.main) {
   // Project rules checked first, then global
   const rules = [...projectRules, ...globalRules];
 
-  if (input.agent_type === "breaker-reviewer") {
-    const refusal = await breakerRefusal(await getSegments(command));
+  const agentRefusal = input.agent_type === "breaker-reviewer"
+    ? breakerRefusal
+    : input.agent_type === "exploratory-session"
+    ? (segments: string[]) => explorerRefusal(segments, cwd)
+    : null;
+  if (agentRefusal) {
+    const refusal = await agentRefusal(await getSegments(command));
     if (refusal) {
       console.error(
         [
-          `[bash-policy] breaker-reviewer: ${refusal}`,
+          `[bash-policy] ${input.agent_type}: ${refusal}`,
           `Blocked: ${command}`,
         ].join("\n"),
       );
