@@ -94,4 +94,4 @@ Not pure TDD but a "structural verification gate":
 
 - **tdd-guide agent** -- subagent that assists with TDD execution
 - **impl** -- runs the plan, establishes each completion criterion, then reviews the diff
-- **qa-planner** -- QA test case design
+- **qa** -- runs a finished change where it runs and reports what was observed

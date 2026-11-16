@@ -51,7 +51,7 @@ Each run captures storage only for the origins it is asked about: `abr URL1 URL2
 
 ## Sharing one daemon across main + subagents
 
-Within a single Claude session, the main agent and any subagents (Agent tool / Task tool) all see the same `$PPID`, so they share one `claude-$PPID` daemon. This is intended for e.g. `qa-planner` Mode C: Lead and QA Tester both interact with the same authenticated browser. **Neither side should `close` until the workflow is complete** — `close` tears down the daemon for everyone.
+Within a single Claude session, the main agent and any subagents (Agent tool / Task tool) all see the same `$PPID`, so they share one `claude-$PPID` daemon. This lets a lead agent and a subagent it dispatches drive the same authenticated browser. **Neither side should `close` until the workflow is complete** — `close` tears down the daemon for everyone.
 
 ## Tab-Safe Navigation
 
