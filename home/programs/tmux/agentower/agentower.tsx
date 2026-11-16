@@ -471,6 +471,8 @@ export const NO_MODIFIERS = {
   return: false,
   upArrow: false,
   downArrow: false,
+  leftArrow: false,
+  rightArrow: false,
 } as const;
 
 // Wheel events clamp where j/k wrap: one trackpad fling delivers a burst, and
@@ -1296,7 +1298,10 @@ function App({
   // here instead of silently never matching.
   const dispatch = (
     input: string,
-    key: Pick<Key, "escape" | "return" | "upArrow" | "downArrow">,
+    key: Pick<
+      Key,
+      "escape" | "return" | "upArrow" | "downArrow" | "leftArrow" | "rightArrow"
+    >,
   ) => {
     // Escape closes only the popup: a stray press must not take down a
     // dashboard that is meant to stay on screen.
@@ -1340,14 +1345,14 @@ function App({
       setFilterEnabled((v: boolean) => !v);
       return;
     }
-    if (input === "m") {
+    if (input === "m" || key.rightArrow || key.leftArrow) {
       // Cycle the user-defined label on the currently selected pane.
       // writeUserLabel applies an optimistic local update + tmux write.
       const target = derivedRows[index];
       if (target) {
         writeUserLabel(
           target.paneId,
-          nextUserLabel(target.userLabel),
+          nextUserLabel(target.userLabel, key.leftArrow ? -1 : 1),
           target.sessionId,
         );
       }

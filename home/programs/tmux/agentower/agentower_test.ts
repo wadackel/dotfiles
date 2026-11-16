@@ -543,6 +543,14 @@ test("nextUserLabel: cycles none → review → parked → feedback → pending 
   assertEquals(nextUserLabel("pending"), "");
 });
 
+test("nextUserLabel: step -1 cycles none → pending → feedback → parked → review → none", () => {
+  assertEquals(nextUserLabel("", -1), "pending");
+  assertEquals(nextUserLabel("pending", -1), "feedback");
+  assertEquals(nextUserLabel("feedback", -1), "parked");
+  assertEquals(nextUserLabel("parked", -1), "review");
+  assertEquals(nextUserLabel("review", -1), "");
+});
+
 test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to space", () => {
   // Adversarial input: attacker-controlled cwd / branch / prompt embed ESC, BEL,
   // NUL bytes. parseRow must replace each with a space so Ink rendering cannot

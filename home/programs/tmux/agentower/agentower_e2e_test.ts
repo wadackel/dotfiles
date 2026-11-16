@@ -1592,6 +1592,36 @@ test("S-N2: m keypress cycles userLabel none → review", async () => {
   }
 });
 
+// Left steps the cycle backwards from none, so it wraps to the last label;
+// Right then walks forward through none to the first.
+test("S-N2b: Left and Right step userLabel through the cycle", async () => {
+  await setupServer();
+  try {
+    await createClaudePane({
+      status: "running",
+      prompt: "arrow-me",
+    });
+    const agentower = await spawnAgentower();
+    await waitFor(agentower, (out) => out.includes("arrow-me"));
+
+    await sendKey(agentower, "Left");
+    await waitFor(agentower, selectedIncludes("pending"), 4000);
+    await sendKey(agentower, "Right");
+    await waitFor(
+      agentower,
+      (out) => selectedIncludes("arrow-me")(out) && !out.includes("pending"),
+      4000,
+    );
+    await sendKey(agentower, "Right");
+    await waitFor(agentower, selectedIncludes("review"), 4000);
+
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});
+
 test("S-N3: mixed labeled/unlabeled rows preserve column alignment", async () => {
   await setupServer();
   const root = await mkdtemp("/tmp/agentower-repos-");
@@ -3244,9 +3274,11 @@ test("S74: the agent-only keys do nothing on the free screen", async () => {
     const first = selectedLine(await waitFor(agentower, onFreeScreen));
 
     await sendKey(agentower, "m");
+    await sendKey(agentower, "Right");
+    await sendKey(agentower, "Left");
     await sendKey(agentower, "w");
     await sendClick(agentower, 2, CARD_0);
-    // The move is handled after the three above, so once it shows they have
+    // The move is handled after the keys above, so once it shows they have
     // all been through dispatch.
     await sendKey(agentower, "j");
     const moved = await waitFor(agentower, (o) => selectedLine(o) !== first);

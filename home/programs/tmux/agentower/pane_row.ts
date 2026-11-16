@@ -100,7 +100,7 @@ export const USER_LABEL_META = {
   pending: { color: "#a6afff", short: "pending", icon: "\u{F00C3}" }, // nf-md-bookmark-outline
 } as const;
 
-// Cycling order for `m` keypress in Agentower. Length 5 so `(idx + 1) % 5`
+// Cycling order for `m` / Left / Right in Agentower. Length 5 so `(idx + 1) % 5`
 // closes the loop back to "" (none). The order is intentional, not derived
 // from Object.keys(USER_LABEL_META) — Object.keys order is technically
 // guaranteed for string keys in modern JS but the explicit array makes the
@@ -113,12 +113,13 @@ export const USER_LABEL_CYCLE: readonly UserLabel[] = [
   "pending",
 ] as const;
 
-// Compute the next label in Agentower's cycle. Unknown / out-of-cycle input
-// is treated as "" so the cycle restarts from the head.
-export function nextUserLabel(current: UserLabel): UserLabel {
-  const idx = USER_LABEL_CYCLE.indexOf(current);
-  if (idx < 0) return USER_LABEL_CYCLE[1];
-  return USER_LABEL_CYCLE[(idx + 1) % USER_LABEL_CYCLE.length];
+// Step through Agentower's label cycle: 1 for `m` and Right, -1 for Left.
+// Unknown / out-of-cycle input is treated as "" so the cycle restarts from
+// the head.
+export function nextUserLabel(current: UserLabel, step: 1 | -1 = 1): UserLabel {
+  const idx = Math.max(USER_LABEL_CYCLE.indexOf(current), 0);
+  const len = USER_LABEL_CYCLE.length;
+  return USER_LABEL_CYCLE[(idx + step + len) % len];
 }
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
