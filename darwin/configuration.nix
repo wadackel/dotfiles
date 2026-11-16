@@ -99,7 +99,6 @@
       # Applications
       "1password"
       "1password-cli"
-      "notion-cli"
       "appcleaner"
       "arc"
       "chatgpt"
