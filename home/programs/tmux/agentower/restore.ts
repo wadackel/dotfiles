@@ -1,6 +1,6 @@
 // `agentower --snapshot` and `agentower --restore`. Reached from
 // agentower-main.ts before raw mode and before ink is loaded: the snapshot runs
-// every minute from launchd, and the restore prompt needs a normal tty.
+// every minute from launchd. Only the restore's picker loads ink, on its own.
 
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
@@ -13,7 +13,6 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { z } from "zod";
 import { run } from "../../agents/lib/proc.ts";
 import {
@@ -23,6 +22,7 @@ import {
 } from "../shared/agent-presence.ts";
 import { truncate } from "../shared/pane-shared.ts";
 import { stringCells, truncateToCells } from "./cell_width.ts";
+import { formatSavedAt, plural } from "./format_helpers.ts";
 import {
   type Agent,
   isLivePaneCommand,
@@ -33,6 +33,7 @@ import {
   USER_LABEL_META,
   type UserLabel,
 } from "./pane_row.ts";
+import type { GenerationView } from "./restore_picker.tsx";
 
 const AGENT_KINDS = [
   "claude",
@@ -502,13 +503,6 @@ const SHELLS = new Set(["zsh", "bash", "fish", "sh"]);
 // Large enough never to cut anything: the width is cut by truncateToCells.
 const clean = (value: string): string => truncate(value, 4096);
 
-function formatSavedAt(sec: number): string {
-  const date = new Date(sec * 1000);
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${two(date.getMonth() + 1)}/${two(date.getDate())} ` +
-    `${two(date.getHours())}:${two(date.getMinutes())}`;
-}
-
 function countAgents(snapshot: Snapshot): number {
   return snapshot.sessions.flatMap((s) => s.windows)
     .flatMap((w) => w.panes)
@@ -547,87 +541,61 @@ function runningLabel(pane: SnapshotPane): string {
   return SHELLS.has(pane.command) ? "" : clean(pane.command);
 }
 
-function morePanesLabel(window: SnapshotWindow): string {
-  return window.panes.length > 1 ? `+${window.panes.length - 1} ペイン` : "";
-}
-
-export function listLines(
-  snapshot: Snapshot,
-  opts: {
-    home: string;
-    columns: number;
-    pathExists: (path: string) => boolean;
-    running?: { windows: number; agents: number };
-  },
-): string[] {
-  const windows = snapshot.sessions.flatMap((s) => s.windows);
-  const nameCells = Math.min(
-    NAME_COLUMN_CELLS,
-    Math.max(...windows.map((w) => stringCells(clean(w.name)))),
+export function generationView(
+  n: number,
+  snapshot: Snapshot | null,
+  opts: { home: string; pathExists: (path: string) => boolean },
+): GenerationView {
+  if (snapshot === null) {
+    return {
+      n,
+      savedAtSec: null,
+      windows: 0,
+      agents: 0,
+      sessions: [],
+      missing: [],
+    };
+  }
+  const sessions = snapshot.sessions.map((session) => ({
+    name: clean(session.name),
+    windows: session.windows.map((window) => {
+      const pane = representativePane(window);
+      return {
+        index: window.index,
+        name: clean(window.name),
+        dir: displayPath(clean(pane.path), opts.home),
+        running: runningLabel(pane),
+        agent: pane.agent?.kind ?? null,
+        userLabel: pane.agent?.userLabel ?? "",
+        morePanes: window.panes.length - 1,
+        prompt: clean(pane.agent?.prompt ?? ""),
+        active: window.active,
+      };
+    }),
+  }));
+  const missing = snapshot.sessions.flatMap((s) => s.windows).flatMap((
+    window,
+  ) =>
+    window.panes.filter((pane) => !opts.pathExists(pane.path)).map((pane) => ({
+      target: `${clean(window.name)}.${pane.index}`,
+      path: clean(pane.path),
+    }))
   );
-  const indexChars = Math.max(...windows.map((w) => String(w.index).length));
-  const runningCells = Math.max(
-    ...windows.map((w) => stringCells(runningLabel(representativePane(w)))),
-  );
-  const moreCells = Math.max(
-    ...windows.map((w) => stringCells(morePanesLabel(w))),
-  );
-
-  const row = (window: SnapshotWindow): string => {
-    const pane = representativePane(window);
-    const cells = [
-      ` ${String(window.index).padStart(indexChars)}`,
-      padCells(truncateToCells(clean(window.name), nameCells), nameCells),
-      "",
-      padCells(
-        displayPath(clean(pane.path), opts.home),
-        DIR_COLUMN_CELLS,
-      ),
-      "",
-      padCells(runningLabel(pane), runningCells),
-      "",
-      padCells(morePanesLabel(window), moreCells),
-      "",
-      clean(pane.agent?.prompt ?? ""),
-    ].join(" ").trimEnd();
-    return truncateToCells(cells, opts.columns);
+  return {
+    n,
+    savedAtSec: snapshot.savedAtSec,
+    windows: countWindows(snapshot),
+    agents: countAgents(snapshot),
+    sessions,
+    missing,
   };
-
-  const lines = [
-    `保存: ${formatSavedAt(snapshot.savedAtSec)}` +
-    `（${countWindows(snapshot)} ウィンドウ、エージェント ${
-      countAgents(snapshot)
-    }）`,
-  ];
-  for (const session of snapshot.sessions) {
-    if (snapshot.sessions.length > 1) lines.push(`[${clean(session.name)}]`);
-    lines.push(...session.windows.map(row));
-  }
-  if (opts.running !== undefined) {
-    lines.push(
-      `! 実行中の ${opts.running.windows} ウィンドウを閉じます` +
-        `（エージェント ${opts.running.agents}）`,
-    );
-  }
-  for (const window of windows) {
-    for (const pane of window.panes) {
-      if (opts.pathExists(pane.path)) continue;
-      lines.push(
-        `! ${clean(window.name)}.${pane.index}: ${
-          clean(pane.path)
-        } がありません`,
-      );
-    }
-  }
-  return lines;
 }
 
 export function generationLine(n: number, snapshot: Snapshot | null): string {
-  if (snapshot === null) return ` ${n} 読めません`;
+  if (snapshot === null) return ` ${n} unreadable`;
   return ` ${n} ${formatSavedAt(snapshot.savedAtSec)}  ` +
-    `${countWindows(snapshot)} ウィンドウ、エージェント ${
-      countAgents(snapshot)
-    }`;
+    `${plural(countWindows(snapshot), "window")}, ` +
+    plural(countAgents(snapshot), "agent");
 }
 
 // The rename is what keeps a crash mid-write from costing the previous snapshot,
@@ -719,18 +687,18 @@ async function runSnapshot(): Promise<number> {
   if (startTime === null) return 0;
   const restoring = await restoringValue();
   if (await isRestoreRunning(restoring)) {
-    console.error("復元中のため保存を飛ばしました");
+    console.error("skipped: a restore is in progress");
     return 0;
   }
   const snapshot = await captureSnapshot(startTime);
   if (snapshot === null) {
-    console.error("floating 以外のペインがないため保存を飛ばしました");
+    console.error("skipped: every pane is floating");
     return 0;
   }
   // A restore can replace the server between the reads; its panes would then be
   // written under the file of the server it replaced.
   if (await currentServer() !== startTime) {
-    console.error("読む間にサーバーが入れ替わったため保存を飛ばしました");
+    console.error("skipped: the server was replaced while it was read");
     return 0;
   }
   const dir = snapshotDir();
@@ -758,14 +726,11 @@ async function runList(): Promise<number> {
   const dir = snapshotDir();
   const files = await savedFiles(dir, await currentServer());
   if (files.length === 0) {
-    console.log("保存がありません");
+    console.log("no snapshots");
     return 0;
   }
   for (const [i, file] of files.entries()) {
-    const snapshot = await readFile(join(dir, file), "utf8")
-      .then(parseSnapshot)
-      .catch(() => null);
-    console.log(generationLine(i + 1, snapshot));
+    console.log(generationLine(i + 1, await readGeneration(dir, file)));
   }
   return 0;
 }
@@ -775,18 +740,18 @@ async function loadGeneration(
   files: string[],
   generation: number,
 ): Promise<Snapshot> {
-  if (files.length === 0) throw new Error("保存がありません");
+  if (files.length === 0) throw new Error("no snapshots");
   const file = files[generation - 1];
   if (file === undefined) {
     throw new Error(
-      `世代 ${generation} はありません（1 から ${files.length}）`,
+      `no generation ${generation} (1 to ${files.length})`,
     );
   }
   const path = join(dir, file);
   try {
     return parseSnapshot(await readFile(path, "utf8"));
   } catch {
-    throw new Error(`読めません: ${path}`);
+    throw new Error(`unreadable: ${path}`);
   }
 }
 
@@ -809,57 +774,63 @@ async function isInsideServer(): Promise<boolean> {
   return insideByAncestry(parseProcesses(stdout), process.pid, serverPid);
 }
 
-function readAnswer(prompt: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.once("close", () => resolve(""));
-    rl.question(prompt, (answer) => {
-      resolve(answer);
-      rl.close();
-    });
-  });
+async function readGeneration(
+  dir: string,
+  file: string,
+): Promise<Snapshot | null> {
+  return await readFile(join(dir, file), "utf8").then(parseSnapshot).catch(
+    () => null,
+  );
 }
 
-export function isConfirmed(answer: string): boolean {
-  return /^y(es)?$/i.test(answer.trim());
-}
-
-async function runRestore(generation: number): Promise<number> {
+async function runRestore(requested: number): Promise<number> {
   const home = homeDir();
   const current = await currentServer();
   const dir = snapshotDir();
-  const snapshot = await loadGeneration(
-    dir,
-    await savedFiles(dir, current),
-    generation,
-  );
+  const files = await savedFiles(dir, current);
+  // Checked before the picker so that a bad number or file fails as it always
+  // did, without a screen to dismiss first.
+  const preselected = await loadGeneration(dir, files, requested);
   if (!process.stdin.isTTY) {
-    throw new Error("確認の入力には端末が必要です");
+    throw new Error("the confirmation needs a terminal");
   }
   let running: { windows: number; agents: number } | undefined;
   if (current !== null) {
     if (await isInsideServer()) {
-      throw new Error("tmux の外で実行してください");
+      throw new Error("run this outside tmux");
     }
     const live = await captureSnapshot(current);
     running = live === null
       ? { windows: 0, agents: 0 }
       : { windows: countWindows(live), agents: countAgents(live) };
   }
-  const lines = listLines(snapshot, {
-    home,
-    columns: process.stdout.columns || 100,
-    pathExists: isDirectory,
+  const snapshots = await Promise.all(
+    files.map((file, i) =>
+      i + 1 === requested ? preselected : readGeneration(dir, file)
+    ),
+  );
+  // ink is loaded here and not at the top: --snapshot runs every minute.
+  const { pickGeneration } = await import("./restore_picker.tsx");
+  const generation = await pickGeneration({
+    generations: snapshots.map((snapshot, i) =>
+      generationView(i + 1, snapshot, { home, pathExists: isDirectory })
+    ),
+    initial: requested,
     running,
+    nowSec: Math.floor(Date.now() / 1000),
   });
-  console.log(lines.join("\n"));
-  if (!isConfirmed(await readAnswer("復元しますか？ [y/N] "))) {
-    console.log("取り消しました");
+  if (generation === null) {
+    console.log("cancelled");
     return 0;
   }
+  const snapshot = snapshots[generation - 1];
+  if (snapshot === null) {
+    throw new Error(`unreadable: generation ${generation}`);
+  }
+  console.log(`Restoring generation ${generation}…`);
 
   const start = await processStartSec(process.pid);
-  if (start === null) throw new Error("このプロセスの開始時刻を読めません");
+  if (start === null) throw new Error("cannot read this process's start time");
   // Saved even when a failed restore left it: the snapshot job saves such a server
   // too, and the retry number below holds only if every replaced server has a file.
   const live = current === null ? null : await captureSnapshot(current);
@@ -873,9 +844,9 @@ async function runRestore(generation: number): Promise<number> {
     const retry = live === null ? generation : generation + 1;
     throw new Error(
       `${message}\n` +
-        `\`agentower --restore ${retry}\` で再実行してください。` +
-        "`tmux kill-server` で途中のサーバーを閉じたあとは、" +
-        "番号を `agentower --restore --list` で確かめてください",
+        `Retry with \`agentower --restore ${retry}\`. ` +
+        "After closing the half-built server with `tmux kill-server`, " +
+        "check the number with `agentower --restore --list`.",
     );
   }
   return await attach(target);
@@ -894,7 +865,7 @@ async function stopServer(): Promise<void> {
     if (code !== 0 && isNoServerError(stderr)) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error("tmux サーバーが終了しませんでした");
+  throw new Error("the tmux server did not exit");
 }
 
 function startDir(path: string, home: string): string {

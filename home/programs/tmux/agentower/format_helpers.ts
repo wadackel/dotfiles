@@ -243,3 +243,15 @@ export function renderSubagentTree(entries: SubagentEntry[]): string {
     .map((t) => (counts.get(t)! > 1 ? `${t} ×${counts.get(t)}` : t))
     .join(", ");
 }
+
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// Local time, as the user reads a clock: `11/16 09:05`.
+export function formatSavedAt(sec: number): string {
+  const date = new Date(sec * 1000);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(date.getMonth() + 1)}/${two(date.getDate())} ` +
+    `${two(date.getHours())}:${two(date.getMinutes())}`;
+}

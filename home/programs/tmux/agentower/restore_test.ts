@@ -18,12 +18,11 @@ import {
   filesToPrune,
   generationFiles,
   generationLine,
+  generationView,
   insideByAncestry,
-  isConfirmed,
   isNoServerError,
   isSameStart,
   layoutChecksum,
-  listLines,
   parseCliArgs,
   parseEtime,
   parseRestoringFlag,
@@ -36,6 +35,7 @@ import {
   WINDOW_FORMAT,
   writeSnapshotFile,
 } from "./restore.ts";
+import { detailLines } from "./restore_picker.tsx";
 
 const US = "\x1f";
 const CLAUDE_ID = "2a27164a-e95b-479b-8626-85430aea9cb3";
@@ -600,60 +600,50 @@ function listSnapshot(): Snapshot {
   );
 }
 
-const listOpts = {
+const viewOpts = {
   home: "/Users/me",
-  columns: 100,
   pathExists: (path: string) => path !== "/gone",
 };
 
-test("listLines: header, aligned columns and missing directories", () => {
-  const lines = listLines(listSnapshot(), listOpts);
-  assertEquals(lines[0].includes("（3 ウィンドウ、エージェント 1）"), true);
-  assertEquals(lines[0].startsWith("保存: "), true);
-  const rows = lines.slice(1, 4);
-  assertEquals(rows[0].startsWith(" 1 dot     ~/dotfiles"), true);
-  assertEquals(rows[0].includes("claude"), true);
-  assertEquals(rows[0].endsWith("復元を相談"), true);
-  assertEquals(rows[1].includes("~/.../a-very-long-reposito…"), true);
-  assertEquals(rows[1].includes("just"), true);
-  assertEquals(rows[2].includes("+1 ペイン"), true);
-  // Every row starts its directory at the same cell.
-  const dirColumn = " 1 ".length + "daxial".length + 2;
-  assertEquals(rows[0].indexOf("~"), dirColumn);
-  assertEquals(rows[1].indexOf("~"), dirColumn);
-  assertEquals(rows[2].indexOf("~"), dirColumn);
-  assertEquals(lines.includes("! daxial.1: /gone がありません"), true);
+const text = (line: { text: string }[]): string =>
+  line.map((t) => t.text).join("");
+
+test("generationView: counts, columns and missing directories", () => {
+  const view = generationView(1, listSnapshot(), viewOpts);
+  assertEquals([view.windows, view.agents], [3, 1]);
+  const [dot, mf, daxial] = view.sessions[0].windows;
+  assertEquals(dot.dir, "~/dotfiles");
+  assertEquals([dot.agent, dot.running, dot.prompt], [
+    "claude",
+    "claude",
+    "復元を相談",
+  ]);
+  assertEquals(mf.dir, "~/.../a-very-long-reposito…");
+  assertEquals([mf.agent, mf.running], [null, "just"]);
+  assertEquals(daxial.morePanes, 1);
+  assertEquals(view.missing, [{ target: "daxial.1", path: "/gone" }]);
 });
 
-test("listLines: a shell is not shown as a command", () => {
-  const lines = listLines(listSnapshot(), listOpts);
-  assertEquals(lines[3].includes("zsh"), false);
+test("generationView: a shell is not shown as a command", () => {
+  const view = generationView(1, listSnapshot(), viewOpts);
+  assertEquals(view.sessions[0].windows[2].running, "");
 });
 
-test("listLines: a long line stops at the terminal width", () => {
-  const lines = listLines(listSnapshot(), { ...listOpts, columns: 30 });
-  assertEquals(lines[1].endsWith("…"), true);
-  assertEquals(stringCells(lines[1]), 30);
+test("generationView: an unreadable file keeps its number and nothing else", () => {
+  const view = generationView(3, null, viewOpts);
+  assertEquals([view.n, view.savedAtSec, view.sessions], [3, null, []]);
 });
 
-test("listLines: control bytes in names and prompts become spaces", () => {
+test("generationView: control bytes in names and prompts become spaces", () => {
   const snapshot = listSnapshot();
   const [window] = snapshot.sessions[0].windows;
   window.name = "a\x1b[31mb";
   window.panes[0].agent!.prompt = "p\x1b]0;title\x07q";
-  const [, row] = listLines(snapshot, listOpts);
-  assertEquals(row.includes("\x1b"), false);
-  assertEquals(row.includes("\x07"), false);
+  const [row] = generationView(1, snapshot, viewOpts).sessions[0].windows;
+  assertEquals(/[\x00-\x1f]/.test(row.name + row.prompt), false);
 });
 
-test("listLines: a long window name stops at the name column", () => {
-  const snapshot = listSnapshot();
-  snapshot.sessions[0].windows[0].name = "a-window-name-past-twelve-cells";
-  const [, row] = listLines(snapshot, listOpts);
-  assertEquals(row.startsWith(" 1 a-window-na…  ~/dotfiles"), true);
-});
-
-test("listLines: an agent in an inactive pane speaks for its window", () => {
+test("generationView: an agent in an inactive pane speaks for its window", () => {
   const snapshot = build(
     [
       paneLine({ paneIndex: 0, path: "/Users/me/shell" }),
@@ -669,14 +659,38 @@ test("listLines: an agent in an inactive pane speaks for its window", () => {
     ],
     [windowLine({ layout: TWO_PANE_LAYOUT })],
   );
-  const [, row] = listLines(snapshot, listOpts);
-  assertEquals(row.includes("~/agent"), true);
-  assertEquals(row.endsWith("ここ"), true);
+  const [row] = generationView(1, snapshot, viewOpts).sessions[0].windows;
+  assertEquals([row.dir, row.prompt], ["~/agent", "ここ"]);
 });
 
-test("listLines: a heading per session only when there are several", () => {
-  const one = listLines(listSnapshot(), listOpts);
-  assertEquals(one.some((l) => l.startsWith("[")), false);
+test("detailLines: aligned columns, missing directories, and the width", () => {
+  const view = generationView(1, listSnapshot(), viewOpts);
+  const lines = detailLines(view, 100).map(text);
+  // The pill caps around the agent are one cell each.
+  assertEquals(lines[0].startsWith("1 dot     ~/dotfiles  "), true);
+  assertEquals(lines[0].endsWith("復元を相談"), true);
+  assertEquals(lines[2].includes("+1 pane"), true);
+  const dirColumn = "1 ".length + "daxial".length + 2;
+  for (const line of lines.slice(0, 3)) {
+    assertEquals(line.indexOf("~"), dirColumn, line);
+  }
+  assertEquals(lines[3].startsWith("! daxial.1  /gone"), true);
+  const narrow = detailLines(view, 30).map(text);
+  assertEquals(narrow.every((l) => stringCells(l) <= 30), true);
+});
+
+test("detailLines: a long window name stops at the name column", () => {
+  const snapshot = listSnapshot();
+  snapshot.sessions[0].windows[0].name = "a-window-name-past-twelve-cells";
+  const [row] = detailLines(generationView(1, snapshot, viewOpts), 100).map(
+    text,
+  );
+  assertEquals(row.startsWith("1 a-window-na…  ~/dotfiles"), true);
+});
+
+test("detailLines: a heading per session only when there are several", () => {
+  const one = detailLines(generationView(1, listSnapshot(), viewOpts), 100);
+  assertEquals(one.some((l) => text(l).startsWith("▸ ")), false);
   const two = build(
     [paneLine({ session: "work" }), paneLine({ session: "side" })],
     [
@@ -684,9 +698,9 @@ test("listLines: a heading per session only when there are several", () => {
       windowLine({ session: "side", name: "b" }),
     ],
   );
-  const lines = listLines(two, listOpts);
-  assertEquals(lines.includes("[work]"), true);
-  assertEquals(lines.includes("[side]"), true);
+  const lines = detailLines(generationView(1, two, viewOpts), 100).map(text);
+  assertEquals(lines.includes("▸ work"), true);
+  assertEquals(lines.includes("▸ side"), true);
 });
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
@@ -752,20 +766,11 @@ test("isNoServerError: both messages of a missing server, and nothing else", () 
   assertEquals(isNoServerError("server exited unexpectedly\n"), false);
 });
 
-test("isConfirmed: y and yes in any case, everything else is no", () => {
-  for (const answer of ["y", "Y", "yes", "YES", " y \n"]) {
-    assertEquals(isConfirmed(answer), true, answer);
-  }
-  for (const answer of ["", "n", "no", "ye", "yy", "y n"]) {
-    assertEquals(isConfirmed(answer), false, answer);
-  }
-});
-
 test("generationLine: counts windows and agents, and flags an unreadable file", () => {
   const line = generationLine(2, listSnapshot());
   assertEquals(line.startsWith(" 2 "), true);
-  assertEquals(line.endsWith("3 ウィンドウ、エージェント 1"), true);
-  assertEquals(generationLine(3, null), " 3 読めません");
+  assertEquals(line.endsWith("3 windows, 1 agent"), true);
+  assertEquals(generationLine(3, null), " 3 unreadable");
 });
 
 test("restoringFlag: etime in all three shapes, and nothing else", () => {

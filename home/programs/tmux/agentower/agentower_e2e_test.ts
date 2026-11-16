@@ -3724,14 +3724,13 @@ test("S86: answering n to the prompt leaves the running server alone", async () 
     await innerTmux(["new-window", "-d", "-t", "work:", "-n", "keep2"]);
 
     const pane = await spawnRestore(["--restore"]);
-    const screen = await waitFor(pane, (o) => o.includes("[y/N]"));
+    const screen = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
     assertStringIncludes(screen, "old");
-    assertStringIncludes(screen, "! 実行中の 2 ウィンドウを閉じます");
+    assertStringIncludes(screen, "Replaces the running server: 2 windows");
 
-    await sendKey(pane, "n");
-    await sendKey(pane, "Enter");
+    await sendKey(pane, "q");
     assertEquals(await paneExitCode(pane), 0);
-    assertStringIncludes(await captureOutput(pane), "取り消しました");
+    assertStringIncludes(await captureOutput(pane), "cancelled");
     assertEquals(
       (await innerTmux(["list-windows", "-a", "-F", "#{window_name}"]))
         .trim().split("\n"),
@@ -3748,7 +3747,7 @@ test("S87: --restore --list numbers generations and names an unreadable file", a
     await setupInner();
     assertEquals(
       (await runInnerCli(["--restore", "--list"])).stdout,
-      "保存がありません\n",
+      "no snapshots\n",
     );
     await innerTmux(["new-session", "-d", "-s", "saved", "-n", "old"]);
     await saveAndKillInner();
@@ -3760,8 +3759,8 @@ test("S87: --restore --list numbers generations and names an unreadable file", a
     assertEquals(code, 0);
     const lines = stdout.trim().split("\n");
     assertEquals(lines.length, 2);
-    assertStringIncludes(lines[0], "1 ウィンドウ、エージェント 0");
-    assertEquals(lines[1], " 2 読めません");
+    assertStringIncludes(lines[0], "1 window, 0 agents");
+    assertEquals(lines[1], " 2 unreadable");
   } finally {
     await teardown();
   }
@@ -3779,7 +3778,7 @@ test("S88: --restore refuses to run from a pane of the server it would kill", as
     assertEquals(await paneExitCode(pane, innerTmux), 1);
     assertStringIncludes(
       await innerCapture(pane),
-      "tmux の外で実行してください",
+      "run this outside tmux",
     );
     assertEquals(
       (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
@@ -3808,7 +3807,7 @@ test("S89: --snapshot writes nothing while a restore is under way", async () => 
     );
     const { code, stderr } = await runInnerCli(["--snapshot"]);
     assertEquals(code, 0);
-    assertStringIncludes(stderr, "復元中のため保存を飛ばしました");
+    assertStringIncludes(stderr, "skipped: a restore is in progress");
     assertEquals(await readSnapshots(), []);
   } finally {
     await teardown();
@@ -3875,7 +3874,7 @@ test("S91: --restore without a terminal stops before touching the server", async
     await innerTmux(["new-session", "-d", "-s", "work", "-n", "keep"]);
     const { code, stderr } = await runInnerCli(["--restore"]);
     assertEquals(code, 1);
-    assertStringIncludes(stderr, "確認の入力には端末が必要です");
+    assertStringIncludes(stderr, "the confirmation needs a terminal");
     assertEquals(
       (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
       "work",
@@ -3896,10 +3895,19 @@ async function waitForInnerClient(): Promise<void> {
   throw new Error("no client attached to the inner server");
 }
 
-async function confirmRestore(pane: string): Promise<void> {
-  await waitFor(pane, (o) => o.includes("[y/N]"));
-  await sendKey(pane, "y");
+// The picker's key row: on screen once the list is drawn and taking keys.
+const PICKER_KEYS = " move";
+
+// Enter asks, y answers; anything else would go back to the list.
+async function confirmPicked(pane: string): Promise<void> {
   await sendKey(pane, "Enter");
+  await waitFor(pane, (o) => o.includes("Restore generation"));
+  await sendKey(pane, "y");
+}
+
+async function confirmRestore(pane: string): Promise<void> {
+  await waitFor(pane, (o) => o.includes(PICKER_KEYS));
+  await confirmPicked(pane);
 }
 
 async function restoreFromOuter(): Promise<string> {
@@ -4191,10 +4199,10 @@ test("S97: each agent resumes in its directory with its id and label", async () 
     const [saved] = await readSnapshots();
 
     const pane = await spawnRestore(["--restore"]);
-    const prompt = await waitFor(pane, (o) => o.includes("[y/N]"));
-    assertStringIncludes(prompt, "（1 ウィンドウ、エージェント 3）");
-    await sendKey(pane, "y");
-    await sendKey(pane, "Enter");
+    const prompt = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
+    assertStringIncludes(prompt, "1 window ");
+    assertStringIncludes(prompt, "3 agents");
+    await confirmPicked(pane);
     await waitForInnerClient();
 
     const deadline = Date.now() + 5000;
@@ -4250,11 +4258,10 @@ test("S98: a vanished directory leaves the resume command unsent", async () => {
     await rm(gone, { recursive: true });
 
     const pane = await spawnRestore(["--restore"]);
-    const prompt = await waitFor(pane, (o) => o.includes("[y/N]"));
-    assertStringIncludes(prompt, ".1:");
-    assertStringIncludes(prompt, "がありません");
-    await sendKey(pane, "y");
-    await sendKey(pane, "Enter");
+    const prompt = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
+    assertStringIncludes(prompt, ".1  ");
+    assertStringIncludes(prompt, "is gone");
+    await confirmPicked(pane);
     await waitForInnerClient();
 
     const [, resumed] = await paneList("#{pane_id}");
@@ -4313,11 +4320,10 @@ test("S102: a directory that became a file, or sits under one, counts as gone", 
     await writeFile(b, "");
 
     const pane = await spawnRestore(["--restore"]);
-    const prompt = await waitFor(pane, (o) => o.includes("[y/N]"));
-    assertStringIncludes(prompt, `${a} がありません`);
-    assertStringIncludes(prompt, `${nested} がありません`);
-    await sendKey(pane, "y");
-    await sendKey(pane, "Enter");
+    const prompt = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
+    assertStringIncludes(prompt, `${a}  is gone`);
+    assertStringIncludes(prompt, `${nested}  is gone`);
+    await confirmPicked(pane);
     await waitForInnerClient();
 
     const home = await realpath(await sandboxHomePath());
@@ -4354,10 +4360,9 @@ test("S99: a plain command is listed but not started again", async () => {
     await saveAndKillInner();
 
     const pane = await spawnRestore(["--restore"]);
-    const prompt = await waitFor(pane, (o) => o.includes("[y/N]"));
+    const prompt = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
     assertStringIncludes(prompt, "sleep");
-    await sendKey(pane, "y");
-    await sendKey(pane, "Enter");
+    await confirmPicked(pane);
     await waitForInnerClient();
     const [restored] = await paneList("#{pane_current_command}");
     assertEquals(restored.includes("sleep"), false, restored);
@@ -4421,10 +4426,9 @@ test("S100: a failed restore's server is saved again, and the retry follows the 
     await new Promise((r) => setTimeout(r, 1100));
 
     const retry = await spawnRestore(["--restore", "1"]);
-    const prompt = await waitFor(retry, (o) => o.includes("[y/N]"));
+    const prompt = await waitFor(retry, (o) => o.includes(PICKER_KEYS));
     assertStringIncludes(prompt, "two-panes");
-    await sendKey(retry, "y");
-    await sendKey(retry, "Enter");
+    await confirmPicked(retry);
     assertEquals(await paneExitCode(retry), 1);
     const again = await waitFor(retry, (o) => o.includes("invalid layout"));
     assertEquals(await generationOf(target), 2);
@@ -4455,10 +4459,9 @@ test("S101: every replaced server is saved and each retry names the shifted gene
     await new Promise((r) => setTimeout(r, 1100));
 
     const retry = await spawnRestore(["--restore", "2"]);
-    const prompt = await waitFor(retry, (o) => o.includes("[y/N]"));
+    const prompt = await waitFor(retry, (o) => o.includes(PICKER_KEYS));
     assertStringIncludes(prompt, "broken");
-    await sendKey(retry, "y");
-    await sendKey(retry, "Enter");
+    await confirmPicked(retry);
     assertEquals(await paneExitCode(retry), 1);
     const again = await waitFor(retry, (o) => o.includes("invalid layout"));
     assertEquals(await generationOf(target), 3);
@@ -4466,10 +4469,9 @@ test("S101: every replaced server is saved and each retry names the shifted gene
     assertEquals((await readSnapshots()).length, 3);
 
     const replaced = await spawnRestore(["--restore", "2"]);
-    const work = await waitFor(replaced, (o) => o.includes("[y/N]"));
+    const work = await waitFor(replaced, (o) => o.includes(PICKER_KEYS));
     assertStringIncludes(work, "replaced");
-    await sendKey(replaced, "n");
-    await sendKey(replaced, "Enter");
+    await sendKey(replaced, "q");
     assertEquals(await paneExitCode(replaced), 0);
   } finally {
     await teardown();
@@ -4585,7 +4587,7 @@ test("S106: --restore refuses to run from a popup of the server it would kill", 
     assertEquals(await readWhenWritten(code), "1");
     assertStringIncludes(
       await readFile(out, "utf8"),
-      "tmux の外で実行してください",
+      "run this outside tmux",
     );
     assertEquals(
       (await innerTmux(["list-sessions", "-F", "#{session_name}"])).trim(),
@@ -4979,6 +4981,37 @@ test("S112: a saved open preview beats the short popup's default, not the sideba
     await sendKey(agentower, "q");
     await waitForExit();
     assertEquals(await previewOption(), "on");
+  } finally {
+    await teardown();
+  }
+});
+
+test("S116: the picker restores the generation chosen with j, after a step back", async () => {
+  await setupServer();
+  try {
+    await setupInner();
+    await innerTmux(["new-session", "-d", "-s", "old", "-n", "first"]);
+    await saveAndKillInner();
+    await innerTmux(["new-session", "-d", "-s", "new", "-n", "second"]);
+    await saveAndKillInner();
+
+    const pane = await spawnRestore(["--restore"]);
+    const newest = await waitFor(pane, (o) => o.includes(PICKER_KEYS));
+    assertStringIncludes(newest, "Generation 1");
+    assertStringIncludes(newest, "second");
+    await sendKey(pane, "j");
+    const older = await waitFor(pane, (o) => o.includes("Generation 2"));
+    assertStringIncludes(older, "first");
+    await sendKey(pane, "Enter");
+    await waitFor(pane, (o) => o.includes("Restore generation 2?"));
+    await sendKey(pane, "x");
+    await waitFor(pane, (o) => !o.includes("Restore generation"));
+    await confirmPicked(pane);
+    await waitForInnerClient();
+    assertEquals(
+      (await innerTmux(["list-windows", "-a", "-F", "#{window_name}"])).trim(),
+      "first",
+    );
   } finally {
     await teardown();
   }

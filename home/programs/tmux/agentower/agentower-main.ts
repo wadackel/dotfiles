@@ -4,8 +4,8 @@
 // reached through the dynamic import below rather than a static one because ES
 // module evaluation is hoisted — a static `ink` import anywhere in this graph
 // would run before setRawMode, and a key typed during startup would be lost.
-// `--snapshot` and `--restore` leave before raw mode: the restore prompt reads a
-// normal line, and launchd's minutely snapshot must not load ink.
+// `--snapshot` and `--restore` leave before raw mode: launchd's minutely
+// snapshot must not load ink, and the restore loads its picker on its own.
 
 import { trace } from "./trace.ts";
 

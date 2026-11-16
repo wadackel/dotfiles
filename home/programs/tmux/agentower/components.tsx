@@ -1082,11 +1082,11 @@ export const EmptyState: React.FC<EmptyStateProps> = (
 
 // U+21B5 ↵ is absent from CaskaydiaCove Nerd Font Mono and would fall back to
 // a double-width glyph inside one cell, as ↻ did for the countdown.
-const ENTER_ICON = "\u{F0311}"; // nf-md-keyboard-return
+export const ENTER_ICON = "\u{F0311}"; // nf-md-keyboard-return
 
-const HINT_GAP = "   ";
+export const HINT_GAP = "   ";
 
-function chipTokens(
+export function chipTokens(
   text: string,
   color: string,
   fill: string,

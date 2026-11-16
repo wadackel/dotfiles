@@ -81,8 +81,7 @@ in
   home.file.".local/bin/tmux-popup-session.sh".source =
     dotfiles.linkHere ./. "scripts/popup-session.sh";
 
-  # Agentower (prefix+e: ink + React on Bun; --snapshot and --restore without
-  # ink). The source entry, for a manual run without the compiled binary.
+  # Agentower (prefix+e: ink + React on Bun; --snapshot without ink). The source entry, for a manual run without the compiled binary.
   home.file.".local/bin/agentower-main.ts".source =
     dotfiles.linkHere ./. "agentower/agentower-main.ts";
 
