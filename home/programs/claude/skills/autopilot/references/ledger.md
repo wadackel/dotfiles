@@ -12,7 +12,8 @@ Advisor: <agent id>
 ## Contract
 
 ### Done criteria
-- <observable fact> — evidence: <PR, command, URL, or "pending">
+- <observable fact, in the goal's words> — evidence: <PR, command, URL, or "pending">
+    - user, YYYY-MM-DD: 「<the user's message that relaxes it, quoted>」
 
 ### Allowed side effects
 - <side effect> — granted by: <goal text | answer on YYYY-MM-DD>
@@ -30,6 +31,10 @@ Advisor: <agent id>
 |---|------|-------|--------|-----------|---------|--------|-------|----|---------------|-------------|-------|
 | 1 | <unit> | <agent id> | <branch> | <sha> | <do file path> | PASS at <Review head> | CLEAR (check 2) | <url> | <sha from the unit's report, checked with gh pr view> | <how> | done / in progress / parked / todo |
 
+## Run rules
+
+- <unit # that found it>: <a fact every unit must follow> — source: <file:line, command, or the parked item it answers for now>
+
 ## Parked
 
 1. <question the user can answer in one line>
@@ -43,7 +48,7 @@ Advisor: <agent id>
 
 ## Decisions
 
-- <unit #>: <(goal) when it loosens, replaces, or leaves undone what the goal asked> <what was chosen> over <the alternative> (<unit | advisor>) — reverse with: <the words the user would say>
+- <unit #>: <(goal) when it loosens, replaces, or leaves undone what the goal asked> <what was chosen> over <the alternative> (<unit | advisor | user>) — reverse with: <the words the user would say>
 
 ## Notes
 
@@ -54,4 +59,4 @@ Advisor: <agent id>
 - <unit #>: <what was asked> → <verdict or advice> → <followed | overridden: reason>
 ```
 
-`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. Only the controller writes this file; units read it. Decisions come from each unit's report, which carries each advisor `ANSWER`. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.
+`Status` stays `running` while any work remains, so a resumed session finds the run. When the run ends it becomes `finished` if nothing is parked and every done criterion has evidence, and `parked` otherwise; a parked run goes back to `running` when the user answers. Only the controller writes this file; units read its Run rules before their review and their report, and the rows of the units they depend on. A done criterion's words never change after the contract: only its evidence and the user's quoted answers under it do. Decisions come from each unit's report, which carries each advisor `ANSWER`. The advisor log keeps only the line per consultation; the full exchange stays in the conversation.
