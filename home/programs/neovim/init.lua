@@ -2512,6 +2512,17 @@ require("lazy").setup({
             end,
           })
         end, { desc = "Git log → diffreel" })
+        vim.keymap.set("n", "<Leader>gP", function()
+          Snacks.picker.gh_pr({
+            confirm = function(picker)
+              local item = picker:current()
+              picker:close()
+              if item and item.item and item.item.number then
+                vim.api.nvim_cmd({ cmd = "Diffreel", args = { "--pr=" .. item.item.number } }, {})
+              end
+            end,
+          })
+        end, { desc = "GitHub PR → diffreel" })
       end,
       opts = function(plugin)
         return {
