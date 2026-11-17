@@ -31,7 +31,7 @@ abr               →  ~/.agent-browser-state/main.json (plaintext JSON, mode 60
 
 **No env var is required.** The state file lives at the fixed path `$HOME/.agent-browser-state/main.json`, and skill commands reference it as a literal. An `AGENT_BROWSER_STATE_PATH` env var is not used because it does not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells.
 
-`AGENT_BROWSER_STATE` (the CLI's auto-load env) **must not** be exported in this environment: agent-browser reads it on every command, and every command that carries a state relaunches the browser and discards its pages, exactly as an explicit `--state` does. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the command that starts the browser.
+`AGENT_BROWSER_STATE` (the CLI's auto-load env) **must not** be exported in this environment: agent-browser reads it on every command as if the command carried `--state`, so the first command to reach a browser started without that file relaunches it and discards its pages. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the command that starts the browser.
 
 No encryption key is involved. The state file matches the de facto convention for developer secrets on macOS (SSH keys, AWS credentials, npm tokens, GitHub tokens) — plaintext, mode 600, in a mode-700 directory. FileVault provides at-rest disk encryption.
 
@@ -81,7 +81,7 @@ Side effects:
 
 ### Step 2: Use agent-browser normally
 
-Pass the state file on the command that starts the session's browser, and on no other: `--state` relaunches a running browser and discards its pages. The session name comes from `AGENT_BROWSER_SESSION` (Codex: `--session "${AGENT_BROWSER_SESSION:-codex-$CODEX_THREAD_ID}"`):
+Pass the state file on the command that starts the session's browser, and on no other: `--state` relaunches a running browser that was started without that file and discards its pages. The session name comes from `AGENT_BROWSER_SESSION` (Codex: `--session "${AGENT_BROWSER_SESSION:-codex-$CODEX_THREAD_ID}"`):
 
 ```bash
 # The browser starts here, with the state

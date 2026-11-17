@@ -16,7 +16,7 @@ if [[ ! -f "$STATE_FILE" ]]; then
     exit 1
 fi
 
-# --state on a running browser relaunches it and discards its pages, and `open` would
+# --state relaunches a running browser started without it and discards its pages, and `open` would
 # replace its active tab, so a browser that is already up (the lead's, when a subagent
 # runs this) only gets a new tab.
 STARTED=0
