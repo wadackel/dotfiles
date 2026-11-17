@@ -621,6 +621,10 @@
           {
             "type": "command",
             "command": "~/.agents/scripts/vocab.ts hook claude"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/agent-browser-session.ts SessionStart"
           }
         ]
       }
@@ -632,6 +636,10 @@
           {
             "type": "command",
             "command": "~/.claude/scripts/claude-pane-status.ts SessionEnd"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/agent-browser-session.ts SessionEnd"
           }
         ]
       }

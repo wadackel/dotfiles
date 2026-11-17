@@ -20,61 +20,58 @@ agent-browser skills list                 # discover other skills (electron, sla
 
 The rest of this file describes only the environment-specific defaults you must apply on top of the core skill.
 
-## Default Flags
+## Session and sign-in state
 
-This environment runs agent-browser in **state-import + headless** mode by default. Pass two flags on every invocation:
+This environment runs agent-browser headless and loads the sign-ins the user imported with `abr`.
 
-- `--session "claude-$PPID"` — a daemon isolated to this Claude session. `$PPID` in a Bash subshell points at the Claude main process, so all calls within one Claude session (main + any subagents) share the same daemon.
-- `--state "$HOME/.agent-browser-state/main.json"` — load the plaintext state file produced by `abr`. Required on the **first** call of the session (whichever subcommand starts the daemon). Subsequent calls within the same session can omit it because the daemon already has the state loaded.
+- **The session name comes from the environment.** In Claude Code a SessionStart hook sets `AGENT_BROWSER_SESSION=claude-<pid of this Claude process>` for every Bash call, script, and subagent, so commands carry no `--session`. When it is empty there (a session started without that hook, such as `vclaude`), pass `--session "claude-$CLAUDE_PID"` on every command instead of falling into the shared `default` session. In Codex, pass `--session "${AGENT_BROWSER_SESSION:-codex-$CODEX_THREAD_ID}"` on every command: a Codex started from Claude Code inherits the variable and shares that browser. Do not build a name from `$PPID`: inside a script it is the script's shell, so each script would start a browser of its own.
+- **A separate browser** (its own cookies, a parallel charter) takes that name plus `-<label>`: `--session "${AGENT_BROWSER_SESSION:-claude-$CLAUDE_PID}-<label>"` in Claude Code, `--session "${AGENT_BROWSER_SESSION:-codex-$CODEX_THREAD_ID}-<label>"` in Codex. Claude Code closes a derived name together with the session; any other name lingers until the idle timeout.
+- **Pass `--state "$HOME/.agent-browser-state/main.json"` only on the command that starts the browser**, when `agent-browser session list` does not show the session yet. On a running browser `--state` relaunches it and discards every open page, so a subagent that shares the lead's browser never passes it. Do not export `AGENT_BROWSER_STATE` either: it is read on every command and relaunches the browser each time.
+- **A sign-in page after a pause** means the browser shut down while idle and the next command started a fresh one without the state: pass `--state` once more.
 
 ```bash
-# First call: include both flags
-agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" tab new <url>
-
-# Subsequent calls within the same Claude session: --state can be omitted
-agent-browser --session "claude-$PPID" snapshot -i
-agent-browser --session "claude-$PPID" click @e1
-agent-browser --session "claude-$PPID" screenshot <path>
+agent-browser --state "$HOME/.agent-browser-state/main.json" tab new <url>   # starts the browser
+agent-browser snapshot -i
+agent-browser click @e1
+agent-browser screenshot <path>
 ```
 
 The browser is independent and headless; the user's live Chrome window is never touched. `--auto-connect` is **not** used in normal commands.
-
-Do not export `AGENT_BROWSER_STATE`. If exported, the daemon may navigate to `origins[0]` on the first command and reject any subsequent `--state` flag with `⚠ --state ignored: daemon already running`. Passing `--state` on the initiating call avoids that failure mode. `AGENT_BROWSER_STATE_PATH` is intentionally not referenced either: it does not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells, so the literal path is used.
 
 ## Initial setup (one-time per Claude session)
 
 Before the first agent-browser call, the state file must exist. The user populates it by running the host's `abr` command (`home/programs/agents/scripts/abr.ts`, published at `~/.agents/scripts/` and wrapped by a zsh function in `home/programs/zsh/init.zsh`), which talks CDP to their running Chrome and saves cookies + localStorage + sessionStorage to `~/.agent-browser-state/main.json` (mode 600).
 
-If `agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`abr\` to import auth state from your Chrome.`
+If `agent-browser --state "$HOME/.agent-browser-state/main.json" <cmd>` fails with `No such file or directory: .../main.json`, the state file has not been created yet. **Stop and tell the user**: `Run \`abr\` to import auth state from your Chrome.`
 
 Each run captures storage only for the origins it is asked about: `abr URL1 URL2 ...` for specific origins, `abr -i` to pick from the open tabs, or no arguments for Chrome's active tab. Cookies are narrowed to those origins by default; `--all-cookies` is the escape hatch when an SSO flow needs a third-party domain. See [references/authentication.md](references/authentication.md) for the full architecture, edge cases, and troubleshooting.
 
-## Sharing one daemon across main + subagents
+## Sharing one browser across main + subagents
 
-Within a single Claude session, the main agent and any subagents (Agent tool / Task tool) all see the same `$PPID`, so they share one `claude-$PPID` daemon. This lets a lead agent and a subagent it dispatches drive the same authenticated browser. **Neither side should `close` until the workflow is complete** — `close` tears down the daemon for everyone.
+The main agent and its subagents see the same `AGENT_BROWSER_SESSION`, so they drive the same authenticated browser. Close a browser only if you started it: a `close` from a subagent tears it down for the lead too. Parallel subagents in one browser also take the active tab from each other; give each its own derived session instead.
 
 ## Tab-Safe Navigation
 
 `agent-browser open <url>` navigates the daemon's active tab. To keep multiple URLs in the same session without overwriting, always open a new tab:
 
 ```bash
-agent-browser --session "claude-$PPID" tab new <url>
-agent-browser --session "claude-$PPID" tab new <url> --label work   # name the tab for stable later reference
+agent-browser tab new <url>
+agent-browser tab new <url> --label work   # name the tab for stable later reference
 ```
 
 Tabs use stable string ids (`t1`, `t2`, ...). Pass `--label <name>` at creation time to reference the tab by a memorable name.
 
 ## Cleanup
 
-Daemon idle timeout is disabled by default in this environment (`AGENT_BROWSER_IDLE_TIMEOUT_MS` unset), so each Claude session's daemon stays up until you close it:
+Close a browser you started when the work is done, since each one holds about 300 MB:
 
 ```bash
-# Normal cleanup at end of workflow
-agent-browser --session "claude-$PPID" close
-
-# Stale socket / pid sidecars from a previous crash
-agent-browser doctor --fix
+agent-browser close                            # the session's browser
+agent-browser --session "<derived name>" close   # a derived one, spelled as above
+agent-browser doctor --fix                     # stale sockets / pid files after a crash
 ```
+
+What is left is closed without you: when a Claude Code session ends (`/clear` included), its SessionEnd hook closes `$AGENT_BROWSER_SESSION` and the sessions derived from it, and any daemon idle for 20 minutes shuts down, a `--headed` one included (`~/.agent-browser/config.json`, from `home/programs/agent-browser`).
 
 ## Escape hatch: `--auto-connect`
 
@@ -87,7 +84,7 @@ When using `--auto-connect`, expect to share the user's window — coordinate wi
 
 ## State-replay template
 
-For state-replay bootstrap that respects the `--session "claude-$PPID"` / `$HOME/.agent-browser-state/main.json` convention, use the local template:
+For state-replay bootstrap in the environment's session, use the local template. It passes `$HOME/.agent-browser-state/main.json` only when that session has no browser yet:
 
 ```bash
 ./templates/authenticated-session.sh <login-url>
@@ -107,4 +104,4 @@ agent-browser skills get vercel-sandbox    # agent-browser inside Vercel Sandbox
 agent-browser skills get agentcore         # AWS Bedrock AgentCore cloud browsers
 ```
 
-Specialized skills do not inherit the environment defaults above automatically; apply `--session "claude-$PPID"` and the state-file flag by hand for their commands too.
+Specialized skills do not know this environment: the session still comes from `AGENT_BROWSER_SESSION`, and their commands follow the `--state` rule above.

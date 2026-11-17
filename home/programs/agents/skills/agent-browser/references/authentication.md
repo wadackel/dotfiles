@@ -8,7 +8,7 @@ How this environment authenticates headless agent-browser runs: auth state impor
 
 - [Import Auth from Your Browser](#import-auth-from-your-browser)
 
-Generic login, OAuth, 2FA, profile, and saved-state patterns ship with the CLI: `agent-browser skills get core --full`. Add this environment's `--session` / `--state` flags to every command taken from there.
+Generic login, OAuth, 2FA, profile, and saved-state patterns ship with the CLI: `agent-browser skills get core --full`. Commands taken from there follow this environment's session and `--state` rules in [SKILL.md](../SKILL.md).
 
 ## Import Auth from Your Browser
 
@@ -22,7 +22,7 @@ User's Chrome (headed)
 abr               →  ~/.agent-browser-state/main.json (plaintext JSON, mode 600)
                                                   ↓ (--state "$HOME/.agent-browser-state/main.json" passed explicitly)
                           agent-browser open <url>  →  independent headless Chrome
-                                                  + --session "claude-$PPID" isolates the daemon to this Claude session
+                                                  + AGENT_BROWSER_SESSION (set at Claude Code session start) isolates the daemon
 ```
 
 `abr` speaks CDP directly (`home/programs/agents/scripts/abr.ts`, published at `~/.agents/scripts/`) and **never attaches to a target it did not create**. Do not "simplify" it back to `agent-browser connect`: that command attaches to every page target and calls `Page.enable` on one of them, and Chrome freezes background-tab renderers, so a frozen tab never answers and the daemon blocks forever (`Failed to read: Resource temporarily unavailable (os error 35)`). On a working day with 40+ tabs open, a third of them are typically frozen.
@@ -31,7 +31,7 @@ abr               →  ~/.agent-browser-state/main.json (plaintext JSON, mode 60
 
 **No env var is required.** The state file lives at the fixed path `$HOME/.agent-browser-state/main.json`, and skill commands reference it as a literal. An `AGENT_BROWSER_STATE_PATH` env var is not used because it does not propagate reliably from the user's zsh through Claude's shell-snapshot mechanism into Bash subshells.
 
-`AGENT_BROWSER_STATE` (the CLI's hardcoded auto-load env) **must not** be exported in this environment — exporting it makes the daemon navigate to `origins[0]` on the first command and reject any subsequent `--state` flag with `⚠ --state ignored: daemon already running`. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the call that may start the daemon (typically the first call of the session).
+`AGENT_BROWSER_STATE` (the CLI's auto-load env) **must not** be exported in this environment: agent-browser reads it on every command, and every command that carries a state relaunches the browser and discards its pages, exactly as an explicit `--state` does. Pass `--state "$HOME/.agent-browser-state/main.json"` explicitly on the command that starts the browser.
 
 No encryption key is involved. The state file matches the de facto convention for developer secrets on macOS (SSH keys, AWS credentials, npm tokens, GitHub tokens) — plaintext, mode 600, in a mode-700 directory. FileVault provides at-rest disk encryption.
 
@@ -81,18 +81,18 @@ Side effects:
 
 ### Step 2: Use agent-browser normally
 
-Pass the state file explicitly via `--state "$HOME/.agent-browser-state/main.json"` on the first call of each Claude session, plus `--session "claude-$PPID"` to use a daemon isolated to this Claude session:
+Pass the state file on the command that starts the session's browser, and on no other: `--state` relaunches a running browser and discards its pages. The session name comes from `AGENT_BROWSER_SESSION` (Codex: `--session "${AGENT_BROWSER_SESSION:-codex-$CODEX_THREAD_ID}"`):
 
 ```bash
-# First call: include both flags (the daemon starts here)
-agent-browser --session "claude-$PPID" --state "$HOME/.agent-browser-state/main.json" open https://github.com
+# The browser starts here, with the state
+agent-browser --state "$HOME/.agent-browser-state/main.json" open https://github.com
 
-# Subsequent calls within the same Claude session: --state can be omitted
-agent-browser --session "claude-$PPID" snapshot -i
-agent-browser --session "claude-$PPID" tab new https://app.linear.app
+# Later calls reuse it
+agent-browser snapshot -i
+agent-browser tab new https://app.linear.app
 ```
 
-The browser is independent and headless; the user's Chrome window is unaffected. See [SKILL.md](../SKILL.md) Default Flags for the rationale behind the two flags.
+The browser is independent and headless; the user's Chrome window is unaffected. A browser idle for 20 minutes shuts down, and the next command starts a fresh one without the state: a sign-in page after a pause is that, not an expired state, and passing `--state` once more fixes it. See [SKILL.md](../SKILL.md) for the session rules.
 
 ### State expiry and recovery
 
@@ -102,7 +102,7 @@ State files don't have a fixed lifetime — they fail when the SaaS rotates the 
 - `agent-browser get url` shows `/login` or `/signin` after `open <protected-url>`.
 - `No such file or directory: .../main.json` — the state file was never created or was deleted; run `abr` first.
 
-Recovery is always the same: re-run `abr` against a freshly-logged-in Chrome.
+First rule out a browser that started without the state (after an idle shutdown, or a first command that lacked `--state`): pass `--state` once and reload. If the login page persists on a browser just started with the state, the state has expired: re-run `abr` against a freshly-logged-in Chrome.
 
 ### Sites this approach does not cover
 
