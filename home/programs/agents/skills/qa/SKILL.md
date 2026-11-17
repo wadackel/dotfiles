@@ -13,6 +13,7 @@ Show, by running the changed thing where it runs, whether it does what it should
 - Work out what changed from the request and from the repository (`git status`, recent commits, the diff), and what it should do from the spec it answers to: the README, docs, the issue or plan, tests that pin behavior, the previous behavior. Expected results come from those, never from what the code happens to do.
 - Aim where this change can break: each new or changed behavior; each documented input rule at and just past its limit, broken one at a time while every other rule holds; the states a flow moves through (edit then cancel, delete while filtered, reload); what worked before and must still work. When the old behavior is the oracle, run the previous commit beside the new one and compare.
 - Size the work to the risk: a copy change needs one look, a new flow needs its paths and edges.
+- While aiming, decide whether the work also calls for exploratory testing, which looks for problems no planned check would: the request is to hunt for problems rather than to check a change; the change adds a feature or flow whose combinations of states and inputs your checks cannot cover, so whole areas would stay untested; or it changes something many screens or commands share, and you cannot read off how far the effect reaches. Decide this from the request and the change before running any check, and keep the decision whatever the checks then find: failures they turn up are bugs in the change, to be fixed and checked again, and neither add a reason nor take one away. When one holds, still run your own checks, and recommend it at the end (see Report).
 - When asked only what to test, return the checks with their expected results and stop.
 
 ## Run it for real
@@ -40,4 +41,11 @@ The report holds: one result line (passed / failed / questions / not tested), ho
 
 In chat, give only the digest: the result line, one line per failure and per question, what was not tested, and the report path. Do not repeat the report.
 
-When the request is open-ended bug hunting with no particular change to check, say that `/exploratory-testing` exists for that (the user starts it), and check what you can of the recent changes.
+When exploratory testing is called for, end both the report and the chat digest with which reason held and how, and the line that starts it, in this form:
+
+```
+探索的テストを勧めます（<which reason held, in terms of this change>）。変更を commit した後に、次の行を打ってください:
+/exploratory-testing <target> 起点: <report path>
+```
+
+The command stays alone on its line so that pasting it runs the skill. Drop `変更を commit した後に、` when nothing is uncommitted. When you were asked only what to test, give the reason with the checks and leave the line out, since there is no report to start from. Do not start it yourself: it runs long and unattended and can file issues, so the user picks when. The issues it files cite the commit it tested, so a run before the commit points their readers at code they cannot check out.
