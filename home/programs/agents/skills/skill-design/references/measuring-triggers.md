@@ -1,9 +1,20 @@
-# Description Optimization
+# Measuring triggers
 
-Step 2.5 measures whether a skill's `description` actually fires. A description
-is the only part of a skill that runs before the skill is chosen, so it cannot
-be reviewed by reading — the competitors it loses to are invisible from inside
-the file.
+`measure-trigger.ts` measures whether a skill's `description` fires on a set of
+requests. A description is the only part of a skill that runs before the skill
+is chosen, so reading it cannot tell you which neighbour it loses to.
+
+Measure when a skill misfired or failed to fire in real use, or when choosing
+between candidate descriptions. A single-turn fire rate is an upper bound: in a
+working session the model often reads files or runs commands before it looks
+at the listing. The 2026-11-15 description of skill-design fired 16/24 here
+and still loaded in only 2 of 6 real editing sessions.
+
+- Procedure: running the script and comparing a candidate
+- Designing the eval set: which queries to write
+- Reading the results: counts, ties, and when to stop revising
+- What the first measured skill showed: the measurements behind these rules
+- When every query returns zero: environment failures
 
 ## Procedure
 
@@ -12,7 +23,7 @@ sees `.claude/skills/` from there. A personal skill can be measured from
 anywhere.
 
 ```bash
-~/.claude/skills/skill-improver/scripts/measure-trigger.ts \
+~/.claude/skills/skill-design/scripts/measure-trigger.ts \
   --skill=<name> --eval=<eval.json> --runs=3
 ```
 
@@ -25,7 +36,7 @@ hand before measuring again.
 **Baseline first.** Measure the current description. If every query lands on
 its expected side more often than not — the same majority rule the exit code
 uses — the description is fine, so stop. Build candidates only for the queries
-that failed. The one skill measured so far needed six versions, and that was
+that failed. The first skill measured needed six versions, and that was
 because its baseline had a real defect; a healthy skill costs one run.
 
 To compare a candidate, put the replacement text in a file and pass
@@ -71,7 +82,12 @@ words, no description resolves it — the query only measures which one the mode
 happened to pick. Write the query so the intent is unambiguous instead.
 
 **Aim at the neighbours.** The should-not-trigger half is worth writing only if
-it contains the nearest plausible confusions, not obviously unrelated work.
+it contains the nearest plausible confusions (near misses that share the
+domain's nouns but want another tool), not obviously unrelated work.
+
+**Do not count trivial requests.** The model consults skills mainly for work it
+cannot do easily on its own, so a one-step request may fire nothing whatever the
+description says.
 
 ## Reading the results
 

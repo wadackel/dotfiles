@@ -1,109 +1,69 @@
 ---
 name: skill-design
-description: Conventions for writing and editing Claude Code and Codex skills (SKILL.md): invocation mode, a minimal description, body structure, and checks after writing. Use when creating, editing, or reviewing a skill.
-user-invocable: false
+description: Guidance for writing, editing, or reviewing a Claude Code or Codex skill (SKILL.md, its description, references, and scripts). Use when creating, changing, or evaluating a skill.
 ---
 
 # Skill Design
 
-Conventions for skills in this repository. Claude Code and Codex read the same `SKILL.md` for a shared skill; where each kind of skill lives is in `AGENTS.md` under "Skills layout".
+How skills are written in this repository. Claude Code and Codex read the same `SKILL.md` for a shared skill; where each kind lives is in `AGENTS.md` under "Skills layout". This guidance takes precedence over generic skill-authoring advice loaded next to it, such as skill-creator's advice to make descriptions "pushy", because that advice lost when it was measured here (see the description lesson below).
 
-These rules take precedence over generic skill-authoring advice loaded alongside them, including the skill-creator plugin's advice to make descriptions "pushy".
+## What the platform does
 
-## What each part costs
+Checked on 2026-11-18 against https://code.claude.com/docs/en/skills, https://developers.openai.com/codex/skills and https://agentskills.io/specification. These numbers change between releases. When you create or restructure a skill and this date is more than two months old, or a release note mentions skills, fetch the pages, update this section and its date, and only then rely on it.
 
 | Part | In context | Limit |
 |---|---|---|
-| `name` + `description` (+ `when_to_use`) | Every session, before any skill is chosen, for every skill the model may invoke | All entries share a listing budget: 1% of the context window in Claude Code, 2% in Codex. Claude Code cuts each entry at 1,536 characters and, on overflow, drops the descriptions of the least-invoked skills; Codex shortens descriptions first |
-| `SKILL.md` body | From invocation to the end of the session | Under 500 lines. After compaction Claude Code re-attaches only the first 5,000 tokens of each skill, 25,000 in total, so the rules that must survive go near the top |
+| `name` + `description` (+ `when_to_use`) | Every session, for every skill the model may invoke, before any is chosen | Claude Code: all entries share 1% of the context window (`skillListingBudgetFraction`, which this repository's `settings.json` raises), each entry is cut at 1,536 characters, and on overflow the least-invoked skills lose their descriptions first. Codex: 2% of the window, shortening descriptions first. The open spec caps `description` at 1,024 characters |
+| `SKILL.md` body | From invocation to the end of the session | Under 500 lines. After compaction Claude Code re-attaches the first 5,000 tokens of each invoked skill, 25,000 in total, most recent first, so what must survive goes near the top |
 | `references/`, `scripts/`, `assets/` | Only when read or run | None until used |
-
-The description is the most expensive text per character in a skill: every session pays for it, whether or not the skill runs.
-
-## Choose the invocation mode first
-
-The mode decides whether the description is routing text at all.
 
 | Who starts it | Frontmatter | The description is |
 |---|---|---|
-| The user only: side effects, or a timing the user picks | `disable-model-invocation: true`; for Codex also `policy.allow_implicit_invocation: false` in `agents/openai.yaml` | Not in the model's context. Write one short line for autocomplete |
+| The user only: side effects, cost, or a timing the user picks | `disable-model-invocation: true`; for Codex also `policy.allow_implicit_invocation: false` in `agents/openai.yaml` | Not in the model's context; one short line for the `/` menu |
 | The model only: background knowledge | `user-invocable: false` | Routing text |
 | Both (default) | none | Routing text |
 
-`paths` restricts automatic loading to matching files. The other Claude Code fields (`allowed-tools`, `model`, `effort`, `context: fork`, `agent`, `hooks`, `arguments`) are documented at https://code.claude.com/docs/en/skills; read it before using one, since the field set changes between releases.
+- `paths` hides a skill from the listing until a file matching its globs is read, then lists it; it does not load the body (observed 2026-11-18). The other Claude Code fields (`allowed-tools`, `disallowed-tools`, `model`, `effort`, `context: fork`, `agent`, `hooks`, `arguments`) are on the docs page; read it before using one.
+- `name` is lowercase letters, digits, and single hyphens, up to 64 characters, and matches the directory; every `/name` in `CLAUDE.md` or another skill uses the same spelling. Frontmatter that does not parse still loads the skill, with an empty description, so `claude plugin validate <dir>` after editing it is cheap insurance.
+- Codex reads only `name` and `description`, and `when_to_use` counts toward Claude Code's per-entry cap, so everything goes in `description`. Write `[arg]`, not `<arg>`: Claude Code shows angle brackets as `&lt;` and `&gt;`. Add `argument-hint` to any skill that takes arguments, so the `/` menu shows what to type. A skill's text goes through Claude Code's substitutions when it loads, so do not quote the arguments placeholder or the shell-command syntax literally in prose: the placeholder renders empty, and the shell form runs (or, without Bash permission, blocks the skill from loading).
+- `/skill-doctor` shows which skills go unused and what they cost in context; `/doctor prompt-audit` flags instructions written for older models.
 
-## Write the description
+## What has worked here
 
-The model decides from the description whether to open the skill, and it reads intent, not keywords. A description therefore needs the task and the nouns of its domain, and nothing it would recognize anyway.
+**Start from material, not from what the model already knows.** A skill earns its place with what the model would not do unaided: the user's decisions, this repository's conventions, sequences where only one order is safe, failures already seen. Before writing a new skill or restructuring one, gather that material: how the task went when it was done without the skill (past transcripts, memory, the Obsidian vault), how public skill collections handle the same job, and the domain's own sources. Skills written from general knowledge measured no better than none (SkillsBench, -1.3pp), and ui-design's first run, which named its references from memory, came out further from the real thing than a session without the skill that searched four times first. Not everything needs a skill: a one-line rule belongs in `CLAUDE.md` or `AGENTS.md`, a check that must hold every time in a hook or script, and a fix to an existing skill beats a new one.
 
-- **What it does, then when to use it**, in third person, in one or two sentences. Most fit in 100–250 characters; one past 300 needs a measured reason.
-- **Front-load the task and its domain nouns.** Hosts truncate from the end, and the first words carry the routing. Keep the proper nouns that users and files bring with them (`SKILL.md`, `terraform plan`, Obsidian vault, a PR): removing one such noun dropped a measured query from 4/5 fires to 1/5.
-- **No trigger-phrase lists, and no translations of them.** The model matches paraphrases and other languages to the stated intent; a list memorizes vocabulary and costs every session. Japanese requests route to an English description.
-- **No exclusion sentence** ("Do NOT use for …") until a measurement shows a false trigger. In skill-improver's measurement no should-not-trigger query fired with or without one.
-- **No inventory of the body** ("Covers A, B, C, and D"). The body says that once it is loaded.
-- **No emphasis** ("Make sure to use this whenever …"). When a skill undertriggers on a measured query, add the intent or noun that query carries.
-- Put everything in `description`. `when_to_use` counts toward the same Claude Code cap, and Codex reads only `name` and `description`.
-- Write `[arg]`, not `<arg>`: Claude Code shows angle brackets as `&lt;` and `&gt;`.
+**Write principles with their reasons, and fix a procedure only where one order is safe.** Current models follow a skill literally, so whatever it fixes is applied where it does not fit. ui-design's board and six fixed stages flattened its mockups until the skill was rewritten as lessons; consult's fixed steps and reply form read as formal, and the user stopped using it. State the outcome, the constraints, and how to check the result, each with its reason, and leave the plan to the model: a rule that carries its reason extends to cases it did not list, while capitals (MUST, NEVER) make it spill into neighboring ones. Numbered steps and exact commands belong to destructive operations, auth flows, and strings a script parses.
 
-Illustrative, this skill's own description before and after:
+**Choose the form by how the behavior fails.** What must hold every time does not belong in prose: written prohibitions did not keep exploratory-testing's sessions inside their sandbox, and a wrapper script and a hook did. Put such a rule in a script the skill runs, or in a hook (the skill's `hooks` frontmatter or `settings.json`). When the output comes out in the wrong shape, show the shape with several examples that differ, labeled illustrative, rather than forbidding the wrong one: in superpowers' tests a prohibition invited negotiation and did worse than no guidance, and a single example gets copied in length and tone. When the model skips a judgment, give the judgment its reason before reaching for louder words.
 
-```yaml
-# Before: 412 characters, an inventory of the body
-description: Design principles and conventions for creating Claude Code skills. Covers SKILL.md authoring rules (English content, argument-hint for $ARGUMENTS skills), interaction flow principles (present info before asking decisions), tool/skill delegation patterns (delegate details, don't duplicate), and mandatory skill-improver execution after creation. Auto-loads when creating, editing, or reviewing skill definitions.
+**Use the user's examples for their purpose.** Cases the user lists while describing a skill illustrate what they want; turning them into the skill's sections made dialogue chase the examples instead of the goal. Write down what the examples share.
 
-# After: 208 characters, the task and when
-description: Conventions for writing and editing Claude Code and Codex skills (SKILL.md): invocation mode, a minimal description, body structure, and checks after writing. Use when creating, editing, or reviewing a skill.
-```
+**Keep the description to what routing needs: one or two sentences, most under 250 characters.** It is the most expensive text per character, because every session pays for it whether or not the skill runs. Say what the skill does and when to use it, in the third person, front-loading the task and the nouns users and files bring with them (`SKILL.md`, `terraform plan`, a PR). Leave out what the body covers ("covering A, B, and C") and the workflow: the body says what it covers once it is loaded, and a model that reads a summary of the workflow follows the summary instead of opening the body. The model matches intent, paraphrase and other languages included, so trigger-phrase lists and their translations only cost characters, while removing one domain noun dropped a measured query from 4/5 fires to 1/5. Add an exclusion only after a measured false trigger; none appeared here with or without one. The body loads only after the description matched, so every situation the body handles must fall within the description's intent.
 
-## Write the body
+**Make the skill reach the moment it is for.** A reminder to invoke a skill, written inside that skill, is read only once the skill is already loaded; put it where it is seen first, or better, tie the skill to an event. Editing an existing skill rarely routed here by description alone, because the model reads the file before it chooses a skill, which is why this repository's `write-policy.ts` hook adds the core of this guidance on the first `SKILL.md` edit of a session. When moving content out of `CLAUDE.md` into a skill, leave the one-line rules in `CLAUDE.md` and move only the detail.
 
-- **Only what the model would not do unaided**: this repository's conventions, decisions already made, sequences where only one order is safe, and failures already observed. General knowledge costs tokens and dilutes the rest; skills written comprehensively measured worse than compact ones.
-- **English throughout.** Strings the agent prints verbatim to the user (confirmation prompts, option labels, report headings) may stay in the user's language inside code blocks or backticks, so they read apart from the instructions.
-- **Imperative voice**: "Run the test suite", not "You should run".
-- **Examples pin an output shape the reader must reproduce exactly.** Give several that differ and label them illustrative, because a single example gets copied in length, tone, and structure. For judgment, state the rule and its reason instead.
-- **`argument-hint`** on any skill that reads `$ARGUMENTS`, so autocomplete shows what to type. `$ARGUMENTS`, `${CLAUDE_SKILL_DIR}`, and `` !`command` `` are Claude Code substitutions; check the docs page above before relying on one in a shared skill.
+**Write instructions that agree with their surroundings.** A skill runs next to `CLAUDE.md`, the output style, and other skills. Of 196 corrections traced to the instructions in force at the time, 29 came from a line asking for the opposite of what another instruction or the user wanted, such as bundling questions against the output style's one decision per reply. Before adding a rule, look for one it contradicts in the instructions it runs beside. Name another skill or tool and let its own documentation carry the details, rather than restating its flags.
 
-### Instruction register
+**Check a skill against what it replaces.** Passing scenarios written for a skill did not predict its value: consult passed all three scenarios of its improvement loop and was dropped after real use, when sessions with and without it measured the same. Compare a new skill with the same task done without it, and an edit with the previous version; decide before looking what result would make you keep it, and read the transcripts as well as the outputs. The minimum after any change is one `claude -p` run (or `codex exec`) with a request the skill should handle, in a fresh session, since the context of writing the skill hides its gaps. Replays of past sessions cost minutes and dollars each and two runs per arm could not separate two wordings, so keep them for changes to how a skill behaves, and read `references/replay-pitfalls.md` first. Qualities the user judges by feel, such as a conversation's tone or a design's look, are judged in real use; say so rather than claiming a replay settled them. A skill that shows no lift over none gets folded.
 
-Current models follow a skill's text closely and literally, so its volume and granularity carry as much weight as its content.
+**Grow a skill from observed failures, and prune what lost its reason.** Add a rule when the failure it prevents has been seen, and count real use in transcripts before adding to a skill that already works. Remove rules whose reason no longer holds: accumulated cautions are followed faithfully and turn into needless confirmations and stiff text. A skill that dispatches subagents, replays sessions, or fetches pages on every run adds that cost to every use, so run heavy steps when the user asks or a stated trigger fires, not by default.
 
-- **State each rule once, at normal volume, with its reason.** Capitalized MUST / NEVER / CRITICAL makes a rule over-apply to neighboring cases, and a rule carrying its "because" extends correctly to cases it did not list. When a test shows one instruction being skipped, give it a reason or move the check into a script before raising its volume.
-- **Match specificity to fragility.** Numbered steps and exact commands belong where only one sequence is safe: destructive operations, auth flows, strings a script parses. For judgment work, state the outcome, the constraints, and how to check the result, and leave the plan to the model.
+**Present information before asking for a decision, and scope side effects to what the user acted on.** Show the data a choice rests on (commands, impact, rationale) before asking for it, and apply an irreversible operation only to the items the user explicitly chose.
 
-### Bundled files
+## Measuring a description
+
+`scripts/measure-trigger.ts` runs each query of an eval set through `claude -p`, stops at the first tool call, and counts how often the skill fired; `references/measuring-triggers.md` covers building the set and reading the counts. Use it to compare candidates after a skill misfired in real use. A single-turn fire rate overstates loading in a working session, where the model often reads files before it looks at the listing: the 2026-11-15 description of this skill fired 16/24 on its eval set and loaded in 2 of 6 real editing sessions.
+
+## Files
 
 ```
 skill-name/
-+-- SKILL.md          # Required: what to do and when to open the rest
-+-- references/       # Loaded on demand
-+-- scripts/          # Run as black boxes
-+-- *_test.ts         # Tests for scripts
++-- SKILL.md            # Required: what to do and when to open the rest
++-- references/         # Loaded on demand
++-- scripts/            # Run as black boxes; tests next to them as *_test.ts
 +-- agents/openai.yaml  # Codex only: invocation policy and UI metadata
 ```
 
-- Link each reference from `SKILL.md` with when to read it, one level deep: a reference that links to another gets read partially. Give a reference over 100 lines a table of contents.
-- Use a script for a deterministic operation, and say whether to run it or read it.
-
-## Interaction flow
-
-- **Present information before asking for decisions.** Show concrete data (command examples, impact scope, rationale) before asking the user to choose add/skip/approve.
-- **Scope side effects to user actions.** Irreversible operations (log deletion, data changes) apply only to items the user explicitly acted on. Do not touch skipped items.
-
-## Delegate to other skills and tools
-
-Do not document another skill's or tool's detailed usage (command flags, arguments, internal workflow) inside a skill. Name it and let its own documentation carry the details:
-
-```markdown
-Use the **repo-dive** skill to clone and explore a GitHub repository.
-```
-
-## After writing
-
-Run the skill once where it runs: a headless `claude -p` (or `codex exec` for a Codex skill) with a request it should handle, then read which skills loaded and what it produced. Use `/skill-improver <name>` only when that run or real use shows the skill misfiring or not firing, or when the user asks for it: it dispatches many subagents, and a skill that already works gains nothing from it. Its Step 2.5 measures the description; of two candidates that measure the same, keep the shorter.
-
-## Anti-patterns
-
-- **A reminder to invoke the skill, inside the skill.** A rule such as "always run gate after implementation" belongs in `CLAUDE.md`: inside the skill it is only seen once the skill is already loaded.
-- **Body situations the description cannot reach.** The body loads only after the description matched, so every kind of situation the body handles has to fall inside the description's intent. Plan-mode guidance in the body, for example, needs plan mode named in the description. Name the situation once, not a phrase per case.
-- **Name, directory, and references that disagree.** `name` is lowercase letters, digits, and hyphens, up to 64 characters, and matches the directory; every `/name` in `CLAUDE.md` or another skill uses the same spelling, or the reference does not invoke anything.
-- **Guardrails moved out of `CLAUDE.md`.** When moving content from `CLAUDE.md` into a skill, keep one-line rules ("use X for Y") in `CLAUDE.md`, and move only reference detail (multi-line patterns, examples, decision trees).
+- Write the skill in English. Strings the agent prints verbatim to the user (prompts, option labels, report headings) may stay in the user's language inside code blocks or backticks.
+- Link each reference from `SKILL.md` with when to read it ("read `references/x.md` when the API returns a non-200 status"), one level deep: a reference that links to another gets read partially. Give a reference over 100 lines a table of contents.
+- Bundle a script for a deterministic operation, or when every run reinvents the same helper, and say whether to run it or read it.

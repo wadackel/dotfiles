@@ -86,9 +86,9 @@ Not pure TDD but a "structural verification gate":
 
 ### Skill Definitions
 
-1. Define skill-tester test cases (positive/negative/edge triggers)
+1. Run the request once without the skill and note what goes wrong (the failing case)
 2. Create SKILL.md
-3. Run skill-tester
+3. Run the same request with the skill in a fresh `claude -p` (or `codex exec`) session and compare (skill-design covers how)
 
 ## Related
 

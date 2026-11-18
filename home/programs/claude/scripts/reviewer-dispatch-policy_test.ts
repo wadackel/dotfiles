@@ -46,7 +46,6 @@ test("isReviewerAgent matches the reviewers /impl's review dispatches", () => {
 test("isReviewerAgent leaves other workflows' reviewers alone", () => {
   // These end in -reviewer but belong to other workflows and have no template.
   assertEquals(isReviewerAgent("architect-reviewer"), false);
-  assertEquals(isReviewerAgent("skill-guide-reviewer"), false);
   // Language names are review cards, not guarded agents.
   assertEquals(isReviewerAgent("rust-reviewer"), false);
   assertEquals(isReviewerAgent("typescript-reviewer"), false);
@@ -119,7 +118,6 @@ test("lets other workflows' reviewers and former specialists through", async () 
   for (
     const subagent_type of [
       "architect-reviewer",
-      "skill-guide-reviewer",
       "typescript-reviewer",
     ]
   ) {

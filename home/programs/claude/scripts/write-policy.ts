@@ -6,7 +6,14 @@
 // on every edit, and the shared yaml / glob helpers would add startup cost for two
 // constant lists.
 
+// The skill hint rides on this hook instead of a hook of its own, so editing a
+// SKILL.md starts no extra process; a line in CLAUDE.md would be paid in every
+// session for an edit that a few sessions make.
+
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { text } from "node:stream/consumers";
 
 const IDENTIFIERS = [
@@ -21,7 +28,16 @@ const FIXTURE_DIR =
   /(^|\/)(tests?|__tests__|fixtures?|__fixtures__|testdata)\//;
 const FIXTURE_NAME = /(_test\.|\.test\.|\.spec\.)/;
 
+export const SKILL_HINT = [
+  "[skill-design] This edit touches a skill. Two points from skill-design matter at edit time:",
+  "- The description is paid in every session's skill listing: in one or two sentences, most under 250 characters, say what the skill does and when to use it, front-loading the task and the domain's nouns, with no trigger-phrase list, list of what the body covers, workflow summary, or exclusion sentence.",
+  "- The body states principles with their reasons; fixed steps, stage tables, and reply templates belong only where one order is safe (destructive operations, strings a script parses). A rule that must hold every time goes in a script or hook, not prose.",
+  "When creating or restructuring a skill, load the skill-design skill: it holds the platform limits, the lessons behind these points, and how to compare a skill against a baseline.",
+].join("\n");
+
 type HookInput = {
+  session_id?: string;
+  agent_id?: string;
   tool_name?: string;
   tool_input?: {
     file_path?: string;
@@ -38,6 +54,36 @@ export function isFixturePath(path: string): boolean {
 
 export function findIdentifiers(text: string): string[] {
   return IDENTIFIERS.filter((id) => text.includes(id));
+}
+
+export function isSkillFile(path: string): boolean {
+  return path === "SKILL.md" || path.endsWith("/SKILL.md");
+}
+
+// A subagent's hook input carries its parent's session_id, so the marker is keyed on
+// agent_id too, or a subagent editing after the main session would never see the hint.
+export function hintKey(input: HookInput): string | undefined {
+  if (!input.session_id) return undefined;
+  return `${input.session_id}-${input.agent_id ?? "main"}`;
+}
+
+// "wx" creates the marker exclusively, so concurrent edits show the hint once.
+export function takeSkillHint(
+  path: string,
+  key: string | undefined,
+  markerDir = join(tmpdir(), "claude-skill-hint"),
+): string | null {
+  if (!isSkillFile(path)) return null;
+  if (!key) return SKILL_HINT;
+  try {
+    mkdirSync(markerDir, { recursive: true });
+    closeSync(
+      openSync(join(markerDir, key.replace(/[^\w-]/g, "_")), "wx"),
+    );
+    return SKILL_HINT;
+  } catch {
+    return null;
+  }
 }
 
 export function newContent(input: HookInput): string {
@@ -63,11 +109,27 @@ if (import.meta.main) {
   }
   if (!input.tool_name || !TOOLS.has(input.tool_name)) process.exit(0);
   const filePath = input.tool_input?.file_path ?? "";
-  if (!isFixturePath(filePath)) process.exit(0);
+  const allow = (): never => {
+    // A replay that compares skill-design itself sets this, or its no-skill arm
+    // would receive the guidance it is meant to run without.
+    const hint = process.env.CLAUDE_SKILL_HINT_SKIP === "1"
+      ? null
+      : takeSkillHint(filePath, hintKey(input));
+    if (hint) {
+      console.log(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          additionalContext: hint,
+        },
+      }));
+    }
+    process.exit(0);
+  };
+  if (!isFixturePath(filePath)) allow();
   const content = newContent(input);
-  if (content.includes(ALLOW_MARKER)) process.exit(0);
+  if (content.includes(ALLOW_MARKER)) allow();
   const found = findIdentifiers(content);
-  if (found.length === 0) process.exit(0);
+  if (found.length === 0) allow();
   // The path comes straight from the tool call; only a regular file of sane size is
   // read, so a FIFO or a device cannot stall the hook.
   let existing = "";
@@ -80,7 +142,7 @@ if (import.meta.main) {
     existing = "";
   }
   const missing = found.filter((id) => !existing.includes(id));
-  if (missing.length === 0) process.exit(0);
+  if (missing.length === 0) allow();
   console.error(
     [
       `[write-policy] Personal identifier "${missing[0]}" in a test fixture`,

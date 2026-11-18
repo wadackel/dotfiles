@@ -5,17 +5,26 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../../agents/lib/proc.ts";
-import { findIdentifiers, isFixturePath, newContent } from "./write-policy.ts";
+import {
+  findIdentifiers,
+  hintKey,
+  isFixturePath,
+  newContent,
+  SKILL_HINT,
+  takeSkillHint,
+} from "./write-policy.ts";
 
 const HOOK_SCRIPT = join(import.meta.dirname, "write-policy.ts");
 
 async function invokeHook(
   hookInput: Record<string, unknown>,
-): Promise<{ code: number; stderr: string }> {
-  const { code, stderr } = await run(HOOK_SCRIPT, [], {
+  env: Record<string, string> = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const { code, stdout, stderr } = await run(HOOK_SCRIPT, [], {
     stdin: JSON.stringify(hookInput),
+    env,
   });
-  return { code, stderr };
+  return { code, stdout, stderr };
 }
 
 test("isFixturePath matches test directories and test file names", () => {
@@ -150,4 +159,146 @@ test("entry point: other tools and malformed input are ignored (exit 0)", async 
   assertEquals(other.code, 0);
   const malformed = await run(HOOK_SCRIPT, [], { stdin: "not json" });
   assertEquals(malformed.code, 0);
+});
+
+test("takeSkillHint returns the hint once per session, only for a SKILL.md", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skill-hint-"));
+  try {
+    assertEquals(takeSkillHint("/r/src/a.ts", "s1", dir), null);
+    assertEquals(takeSkillHint("/r/skills/x/SKILL.md.bak", "s1", dir), null);
+    assertEquals(takeSkillHint("/r/skills/x/MYSKILL.md", "s1", dir), null);
+    assertEquals(takeSkillHint("/r/skills/x/SKILL.md", "s1", dir), SKILL_HINT);
+    assertEquals(takeSkillHint("/r/skills/y/SKILL.md", "s1", dir), null);
+    assertEquals(takeSkillHint("/r/skills/y/SKILL.md", "s2", dir), SKILL_HINT);
+    assertEquals(takeSkillHint("SKILL.md", undefined, dir), SKILL_HINT);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test("entry point: the first SKILL.md edit of a session gets the hint as context", async () => {
+  const session_id = `write-policy-test-${crypto.randomUUID()}`;
+  const marker = join(tmpdir(), "claude-skill-hint", `${session_id}-main`);
+  const input = {
+    session_id,
+    tool_name: "Edit",
+    tool_input: {
+      file_path: "/tmp/nonexistent-repo/skills/x/SKILL.md",
+      old_string: "a",
+      new_string: "b",
+    },
+  };
+  try {
+    const first = await invokeHook(input);
+    assertEquals(first.code, 0, first.stderr);
+    const out = JSON.parse(first.stdout);
+    assertEquals(out.hookSpecificOutput.hookEventName, "PreToolUse");
+    assertEquals(out.hookSpecificOutput.additionalContext, SKILL_HINT);
+    const second = await invokeHook(input);
+    assertEquals(second.code, 0, second.stderr);
+    assertEquals(second.stdout, "");
+  } finally {
+    await rm(marker, { force: true });
+  }
+});
+
+test("entry point: a blocked SKILL.md fixture write gets no hint and keeps it for later", async () => {
+  const session_id = `write-policy-test-${crypto.randomUUID()}`;
+  const marker = join(tmpdir(), "claude-skill-hint", `${session_id}-main`);
+  try {
+    const blocked = await invokeHook({
+      session_id,
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/nonexistent-repo/tests/fixtures/SKILL.md",
+        content: "home: /Users/wadackel",
+      },
+    });
+    assertEquals(blocked.code, 2, blocked.stderr);
+    assertEquals(blocked.stdout, "");
+    const later = await invokeHook({
+      session_id,
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/nonexistent-repo/skills/x/SKILL.md",
+        content: "body",
+      },
+    });
+    assertEquals(later.code, 0, later.stderr);
+    assertStringIncludes(later.stdout, "additionalContext");
+  } finally {
+    await rm(marker, { force: true });
+  }
+});
+
+test("hintKey separates the main session from each subagent", () => {
+  assertEquals(hintKey({ session_id: "s1" }), "s1-main");
+  assertEquals(hintKey({ session_id: "s1", agent_id: "a9" }), "s1-a9");
+  assertEquals(hintKey({}), undefined);
+});
+
+test("entry point: a subagent gets its own hint after the main session took one", async () => {
+  const session_id = `write-policy-test-${crypto.randomUUID()}`;
+  const markers = [`${session_id}-main`, `${session_id}-a1`].map((k) =>
+    join(tmpdir(), "claude-skill-hint", k)
+  );
+  const edit = (agent: Record<string, string>) =>
+    invokeHook({
+      session_id,
+      ...agent,
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/nonexistent-repo/skills/x/SKILL.md",
+        content: "body",
+      },
+    });
+  try {
+    assertStringIncludes((await edit({})).stdout, "additionalContext");
+    const sub = await edit({ agent_id: "a1", agent_type: "general-purpose" });
+    assertEquals(sub.code, 0, sub.stderr);
+    assertStringIncludes(sub.stdout, "additionalContext");
+    assertEquals((await edit({ agent_id: "a1" })).stdout, "");
+  } finally {
+    for (const m of markers) await rm(m, { force: true });
+  }
+});
+
+test("entry point: a SKILL.md fixture write that passes still gets the hint", async () => {
+  const session_id = `write-policy-test-${crypto.randomUUID()}`;
+  const marker = join(tmpdir(), "claude-skill-hint", `${session_id}-main`);
+  try {
+    const { code, stdout, stderr } = await invokeHook({
+      session_id,
+      tool_name: "Write",
+      tool_input: {
+        file_path: "/tmp/nonexistent-repo/tests/fixtures/SKILL.md",
+        content: "home: /Users/me",
+      },
+    });
+    assertEquals(code, 0, stderr);
+    assertStringIncludes(stdout, "additionalContext");
+  } finally {
+    await rm(marker, { force: true });
+  }
+});
+
+test("entry point: CLAUDE_SKILL_HINT_SKIP=1 suppresses the hint and keeps it for later", async () => {
+  const session_id = `write-policy-test-${crypto.randomUUID()}`;
+  const marker = join(tmpdir(), "claude-skill-hint", `${session_id}-main`);
+  const input = {
+    session_id,
+    tool_name: "Write",
+    tool_input: {
+      file_path: "/tmp/nonexistent-repo/skills/x/SKILL.md",
+      content: "body",
+    },
+  };
+  try {
+    const skipped = await invokeHook(input, { CLAUDE_SKILL_HINT_SKIP: "1" });
+    assertEquals(skipped.code, 0, skipped.stderr);
+    assertEquals(skipped.stdout, "");
+    assertStringIncludes((await invokeHook(input)).stdout, "additionalContext");
+  } finally {
+    await rm(marker, { force: true });
+  }
 });

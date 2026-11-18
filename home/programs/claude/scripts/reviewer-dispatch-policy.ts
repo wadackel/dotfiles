@@ -24,8 +24,8 @@ export const DO_TEMPLATE = "~/.claude/skills/do/references/reviewer-prompt.md";
 
 /**
  * The reviewers the reviews of /impl and /do dispatch, listed explicitly. A `-reviewer$`
- * pattern would also catch `architect-reviewer` and `skill-guide-reviewer`,
- * which belong to other workflows and have no template to satisfy the check.
+ * pattern would also catch `architect-reviewer`, which belongs to another
+ * workflow and has no template to satisfy the check.
  * Language checklists ride inside `code-reviewer`'s prompt as review cards,
  * so no language agent needs guarding.
  */

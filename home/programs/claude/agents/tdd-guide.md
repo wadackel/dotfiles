@@ -49,11 +49,10 @@ Nix has no unit test concept, so the RED-GREEN cycle of TDD cannot be strictly a
 
 ### Skill Definitions
 ```bash
-# 1. Define trigger test cases first, in skill-tester's scenario format
-#    - positive: prompts that should trigger the skill
-#    - negative: prompts that should not trigger the skill
+# 1. Run the request once without the skill and record what goes wrong (RED)
 # 2. Create SKILL.md
-# 3. Run tests and confirm expected trigger/non-trigger behavior
+# 3. Run the same request with the skill in a fresh claude -p session and compare
+#    (skill-design covers the comparison and trigger measurement)
 ```
 
 ## Test Quality Checklist
