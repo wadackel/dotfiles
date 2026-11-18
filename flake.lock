@@ -7,11 +7,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794598050,
-        "narHash": "sha256-AdcnPNXF6jRo4JGzjHSGCJ7VGqPiknfOu1gNx2qubmk=",
+        "lastModified": 1795030039,
+        "narHash": "sha256-CeA/rzWtm658Nz6313GnFSXr+nXNw62IysDNrLlAkgU=",
         "owner": "wadackel",
         "repo": "codex-nix",
-        "rev": "de1f7e4d6dea005e553e05901f40851ade495d94",
+        "rev": "6b081b985bbd077f3415da14ffff20d1b75320f2",
         "type": "github"
       },
       "original": {
@@ -134,11 +134,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794857132,
-        "narHash": "sha256-eJyOtBXUDZn6Z119FXFTs9ww8wqH9bOwHOrwmbL21PU=",
+        "lastModified": 1795029917,
+        "narHash": "sha256-PGQdts5Ye/Bkqa2JaH+fFtDHDivtT3YQ72wK3n4FNMY=",
         "owner": "wadackel",
         "repo": "mise-nix",
-        "rev": "c73000c1a37387628cfb5dfb17a65f138d58607b",
+        "rev": "8f8b3dfe8a48df4366f411bffd739c09ef7ca6d3",
         "type": "github"
       },
       "original": {
