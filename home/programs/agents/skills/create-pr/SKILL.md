@@ -153,16 +153,10 @@ After creating the PR:
    ```bash
    rm /tmp/pr-body-<random>.md
    ```
-4. **Watch CI once** (skip when `no-watch` was passed). Validate the current branch name against `^[A-Za-z0-9._][A-Za-z0-9._/-]*$`, the PR URL's owner and repo against `^[A-Za-z0-9._][A-Za-z0-9._-]*$`, and the PR number against `^[0-9]+$` (the base was validated in Gather Context step 2; all are embedded in commands; refuse and report otherwise), then compute the base inputs:
-   ```bash
-   git fetch origin <base>
-   git rev-list --count HEAD..origin/<base>                                            # {behind_count}
-   git diff --name-only "$(git merge-base HEAD origin/<base>)" origin/<base> | head -150   # {base_changed_files}; append "… and N more" with the total when truncated
-   ```
-   Fill [references/ci-watch-prompt.md](references/ci-watch-prompt.md) with `{owner}`, `{repo}`, `{pr_number}` (from the PR URL shown in step 1), `{branch_name}` (the current branch), `{base_branch}` (Gather Context step 2), `{behind_count}`, `{base_changed_files}` and dispatch it once as an **unnamed** Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`). The Agent runs in the background and its result arrives as a completion notification, so do not wait on it: tell the user in one line that CI is being watched, that the classified report will follow when it completes, and that the report only arrives while this session is open. Then end the turn.
+4. **Watch CI once** (skip when `no-watch` was passed): run `/iterate-pr report-only`. In Claude Code it runs in a separate context in the background, so do not wait on it: tell the user in one line that CI is being watched, that the classified report will follow when it completes, and that the report only arrives while this session is open. Then end the turn.
 
-   When the notification arrives, relay the verdict, each failure's `CLASS:` / `run-id` / `facts` lines, and the Recommendation verbatim. Do not fix anything and do not rerun anything:
-   - `NEEDS_FIX` or `NEEDS_REBASE` → add "run `/iterate-pr` to enter the fix loop"
+   When the report arrives, relay its `VERDICT`, `Failures`, and review lines as they are. Do not fix anything and do not rerun anything:
+   - `NEEDS_FIX` → add "run `/iterate-pr` to enter the fix loop"
    - `PENDING` → "the checks had not finished; run `/iterate-pr` later"
    - `NO_CHECKS` → "no check was registered for this PR"
    - `ALL_PASS` / `BLOCKED` → relay as-is

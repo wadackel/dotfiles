@@ -120,7 +120,7 @@ After the final gate's `REVIEW_VERDICT: PASS`, ship as `## Delivery` says; while
 
 - `none`: leave the change uncommitted. `commit`: the commit stands. `push`: push the current branch.
 - `pr`: follow `Via` (`$create-pr` with `no-watch`, since the next step watches CI, or the repository's PR skill), as a draft when `Draft: yes`. `stack`: follow `$gh-stack` to submit the stack (`gh stack submit --auto` opens drafts; `--open` when `Draft: no`).
-- Then follow `$iterate-pr` on each PR until CI passes, fixing failures and pushing again; with `Draft: yes` the PR stays a draft, so skip its step that marks the PR ready. A layer above the bottom that reports no checks waits until it becomes the bottom.
+- Then follow `$iterate-pr` on each PR until CI passes, fixing what its report returns and pushing again; with `Draft: yes` the PR stays a draft, so follow it with `keep-draft`. A layer above the bottom that reports no checks waits until it becomes the bottom.
 - Merge only with `Merge: yes` and when no hunk meets `~/.agents/skills/plan/references/human-review.md`: in its own tool call; with an `ALL_PASS` whose head, recorded with `gh pr view --json headRefOid`, still matches right before merging; with no review comment triaged `ask` left open; a stack one layer at a time from the bottom with `gh stack merge <PR> --yes`, each followed by `gh stack sync` and `$iterate-pr` on the new bottom. When a hunk meets it, the PRs stay open and the merge goes to the user.
 - After a merge that a Verification Grant covers, wait for the deploy and run the `live` items that observe production; a failure there is fixed through a new PR that sets a new start ref and goes through the final gate and these steps again.
 
