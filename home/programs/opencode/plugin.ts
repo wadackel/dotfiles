@@ -114,7 +114,7 @@ async function dispatch(
   const pane = paneIdOrNull();
   if (!pane) return;
   // Skip pane writes when this opencode is running embedded under another
-  // agent's process tree (e.g. spawned via Claude's /codex-cli skill or a
+  // agent's process tree (e.g. started from another agent's shell tool or a
   // shell that inherited TMUX_PANE from a wrapping agent). Only the main
   // session for the pane should drive @pane_* state.
   if (await isEmbedded(process.pid, fetchParent)) return;

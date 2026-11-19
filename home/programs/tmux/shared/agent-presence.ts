@@ -2,7 +2,7 @@
 //
 // When a Claude / Codex / opencode hook fires, the writer must skip pane writes
 // if the firing process is itself running under a different agent's process tree
-// (e.g. codex spawned via Claude's `/codex-cli` skill). Without this gate the
+// (e.g. `codex exec` run from a Claude session). Without this gate the
 // embedded session's lifecycle hooks overwrite @pane_* options that belong to
 // the outer agent, and Agentower shows the wrong status.
 //
