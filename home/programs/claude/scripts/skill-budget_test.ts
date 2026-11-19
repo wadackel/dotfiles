@@ -14,7 +14,10 @@ const BUDGETS: Record<string, number> = {
   // 3050 -> 3200: the question bullets name the forms that were asked back in 50
   // /plan, /impl and /do questions from 10-17 to 11-15 (options as words only, no
   // plain problem, labels coined mid-work), e.g. sessions 7faee790, f8d3c40b, c38512a1.
-  "home/programs/claude/skills/do": 3200,
+  // 3200 -> 3260: security-auditor's own Task paragraph. With one sentence swapped, 5 of
+  // the 18 findings it shared with code-reviewer (11-13 to 19) were stale words and
+  // unrecorded departures, e.g. sessions 423b48ee, 1857e656, 9e5f038b.
+  "home/programs/claude/skills/do": 3260,
 };
 
 const root = join(import.meta.dirname, "../../../..");

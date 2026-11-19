@@ -72,7 +72,7 @@ GIT_INDEX_FILE=<scratchpad>/<slug>.index git add -A
 git diff -D --no-ext-diff --no-textconv --no-color <start> "$(GIT_INDEX_FILE=<scratchpad>/<slug>.index git write-tree)" > <scratchpad>/<slug>.gate.diff
 ```
 
-Dispatch `code-reviewer` with `references/reviewer-prompt.md`; at a boundary, or when the user asked to break it, also `security-auditor` and, per `references/breaker-prompt.md`, `breaker-reviewer`, all in one message. Fix what blocks, and have the same reviewer check the fix once; a breaker finding counts only after you re-ran its command yourself, and its fix is checked by re-running that command. What stays open goes to the user. Delete the index copy and the breaker worktree when the review ends.
+Dispatch `code-reviewer` with `references/reviewer-prompt.md`; at a boundary, or when the user asked to break it, also `security-auditor` and, per `references/breaker-prompt.md`, `breaker-reviewer`, all in one message. Fix what blocks, and have `code-reviewer` check the fixes once, `security-auditor` only a fix to its own MUST_FIX; a breaker finding counts only after you re-ran its command yourself, and its fix is checked by re-running that command. What stays open goes to the user. Delete the index copy and the breaker worktree when the review ends.
 
 ## Ship
 

@@ -28,4 +28,8 @@ or `None`.
 VERDICT: PASS if there is no MUST_FIX finding, FAIL otherwise
 ```
 
-For `security-auditor`, replace the Task paragraph's third sentence with: "Before judging the code, list the ways someone could get what this change is meant to stop past it, by varying every input the changed code reads and every feature of the formats it parses. Then check each against the code, and report the ones that get through. Report what lets data, credentials, or permissions cross a boundary they should not."
+For `security-auditor`, replace the whole Task paragraph with the one below, `{boundaries}` being the `human-review.md` labels the diff crosses:
+
+```
+This change crosses: {boundaries}. `code-reviewer` reviews correctness, callers, and stale text in parallel; leave those to it. Read beyond the diff wherever a boundary depends on the code around it. Before judging, list the ways someone could get what this change is meant to stop past it, by varying every input the changed code reads and every feature of the formats it parses. Check each against the code, and report the ones that get through: what lets data, credentials, or permissions cross a boundary they should not. No findings is a valid result. Do not create, modify, or delete files.
+```
