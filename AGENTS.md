@@ -240,7 +240,7 @@ Each subsystem keeps its notes in an `AGENTS.md` next to its code. Claude Code l
 - `home/programs/codex/skills/`: public Codex skills exposed as `~/.agents/skills`
 - `home/programs/agents/skills/`: common skill implementations shared by multiple agents
 - `home/programs/agents/memo/`: shared memo libraries used by Claude / Codex / opencode
-  - The summary `claude -p` that all three memo scripts spawn runs with `~/.cache/claude-memo` as its cwd, so its transcripts collect under `~/.claude/projects/-Users-<name>--cache-claude-memo/` instead of the session's working directory, and are removed by the default 30-day cleanup
+  - The summary `claude -p` that all three memo scripts spawn runs with `~/.cache/claude-memo` as its cwd, so its transcripts collect under `~/.claude/projects/-Users-<name>--cache-claude-memo/` instead of the session's working directory, and are removed with every other transcript after `cleanupPeriodDays` (90 days, set in `home/programs/claude/settings.json` so that weekly and monthly transcript analyses have the history to work from; about 460 MB of these per 30 days)
 - `home/programs/agents/shared/`: shared non-public skill assets such as plan reference prompts
 - Agent-specific skills with the same public name (for example `plan` and `impl`) live directly under each agent's public skill root
 - Generic skills used by multiple agents keep their implementation under `home/programs/agents/skills/`; each agent public root exposes them with symlinks

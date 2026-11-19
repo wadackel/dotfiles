@@ -31,6 +31,8 @@ Read each changed file in full, with its imports and callers, before judging a c
 - **CRITICAL or HIGH present** → `VERDICT: FAIL`
 - **Only MEDIUM / LOW, or no findings** → `VERDICT: PASS`
 
+When the prompt gives its own findings format and verdict rule, as `/do`'s review template does, write in that format and apply that rule; its `MUST_FIX` is what this framework calls CRITICAL or HIGH.
+
 ## Rules
 
 - Report every issue you find, including ones you are unsure of, and state your confidence on each; the caller filters, and a finding it dismisses costs less than a bug nobody reported

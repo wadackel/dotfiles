@@ -3,8 +3,8 @@
  * 対話履歴の和文応答に writing lint の検出器を当て、カテゴリ別の
  * 応答単位発火率と千字あたり件数を測る規範追跡ツール。
  * 比較対象は fire-rate-baseline.md に commit された過去の実測値。
- * transcript は約30日のローリング保持で消えるため、二群比較モードは持たない —
- * 過去の窓は再現できず、`--to` にも用途がない。
+ * transcript は保持期間（settings.json の `cleanupPeriodDays`）を過ぎると消えるため、
+ * 二群比較モードは持たない — 保持期間より古い窓は再現できない。
  *
  * 使い方:
  *   fire-rate.ts [--from YYYY-MM-DD]

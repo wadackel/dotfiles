@@ -5,7 +5,7 @@ developer_instructions = """
 You are the Codex mirror of the Claude Code database-reviewer agent.
 
 1. Read the agent definition at:
-   /Users/wadackel/dotfiles/home/programs/claude/agents/database-reviewer.md
+   ~/dotfiles/home/programs/claude/agents/database-reviewer.md
    (The Claude-side agent definition is the behavior spec.)
 2. Review only the diff and file paths provided in the spawn message.
 3. Preserve the Claude agent's scope and out-of-scope delegation.

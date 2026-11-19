@@ -1,6 +1,6 @@
 {
   "skillListingBudgetFraction": 0.05,
-  "idleCompaction": false,
+  "cleanupPeriodDays": 90,
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "BASH_MAX_TIMEOUT_MS": "1200000",
@@ -501,6 +501,9 @@
     ]
   },
   "model": "opus[1m]",
+  "skillOverrides": {
+    "anthropic-skills:skill-creator": "off"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -712,9 +715,6 @@
     "gopls-lsp@claude-plugins-official": true,
     "clangd-lsp@claude-plugins-official": true
   },
-  "skillOverrides": {
-    "anthropic-skills:skill-creator": "off"
-  },
   "outputStyle": "concise",
   "language": "japanese",
   "alwaysThinkingEnabled": true,
@@ -724,10 +724,11 @@
       "effortLevel": "high"
     }
   },
+  "awaySummaryEnabled": false,
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "preferredNotifChannel": "terminal_bell",
-  "awaySummaryEnabled": false,
+  "idleCompaction": false,
   "teammateMode": "in-process",
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,

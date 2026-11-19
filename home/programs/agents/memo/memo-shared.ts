@@ -314,7 +314,7 @@ export interface CallClaudeOptions {
 // child's transcript under the project dir derived from cwd, so every `cd` a
 // session made spawned a fake project dir and real project dirs filled up with
 // summary sessions. An empty or unset HOME throws instead of falling back to
-// /tmp: transcripts written there escape the 30-day cleanup and callClaude
+// /tmp: transcripts written there escape Claude Code's transcript cleanup and callClaude
 // already reports the failure and inherits the cwd.
 export function memoRunDir(home = process.env.HOME): string {
   if (!home) {

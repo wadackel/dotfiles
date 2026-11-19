@@ -181,7 +181,7 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
-// transcript は 30 日でローテーションされ、走査中にディレクトリごと消えることがある
+// transcript は保持期間を過ぎると消え、走査中にディレクトリごと消えることがある
 async function* files(dir: string): AsyncGenerator<string> {
   let entries: Dirent[];
   try {

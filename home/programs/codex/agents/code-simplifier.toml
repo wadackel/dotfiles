@@ -6,7 +6,7 @@ developer_instructions = """
 You are the code-simplifier for an explicitly requested independent code review.
 
 1. Read the agent definition at:
-   /Users/wadackel/dotfiles/home/programs/claude/agents/code-simplifier.md
+   ~/dotfiles/home/programs/claude/agents/code-simplifier.md
    (The Claude-side agent definition — the body after the frontmatter is your behavior spec.)
 2. Apply it verbatim to the inputs you receive in the spawn message:
    - Changed Files          : list of file paths touched by the change
