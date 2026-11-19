@@ -1,11 +1,11 @@
 ---
 name: plan
-description: Codex design-first planning skill. Mirrors Claude `/plan`'s eight named phases (PARSE → SURVEY → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan` with a request. Auto-loading is disabled by agents/openai.yaml.
+description: Codex design-first planning skill. Runs eight named phases (PARSE → SURVEY → AGREE → EXPLORE → DRAFT → DEEPEN → DECOMPOSE → ACTIVATE) and runs only when the user explicitly invokes `$plan` with a request. Auto-loading is disabled by agents/openai.yaml.
 ---
 
 # $plan
 
-Creates an implementation plan in Codex CLI. This skill mirrors Claude Code's `/plan` (`~/.claude/skills/plan/SKILL.md`, worktree path `home/programs/claude/skills/plan/SKILL.md`) with eight named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for Agentower. `$impl` promotes `.pending-` to `.active-` at the start of its run.
+Creates an implementation plan in Codex CLI. This skill runs in eight named phases. It is started explicitly with `$plan <request>`. When it finishes, it creates `~/.codex/plans/.pending-<cwd-hash>` as a UI-pointer marker for Agentower. `$impl` promotes `.pending-` to `.active-` at the start of its run.
 
 Resolve consequential user-intent decisions before drafting. Existing choices in the conversation or an accepted Issue count as agreement; a fully specified request does not need another confirmation. Do not implement code while planning.
 
@@ -268,7 +268,7 @@ A plan that changes behavior a user can observe (UI, CLI output, hook or config 
 
 ### Requires User Confirmation item format
 
-Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl`, the Claude-side `/impl`, and the final report read them as written:
+Every item under `### Requires User Confirmation` — `[live]` or `[orchestrator-only]` — is one logical bullet (no blank lines inside, no code span) with these five fields in this order, labels in English even when the plan body is Japanese, so `$impl` and the final report read them as written:
 
 ```
 - [live] Observe: <what the user will see> / Why not autonomous: <one line> / Needs: <sudo | auth | dialog | role switch | real PR | device> / Your steps: <command, URL, role> / Needed by: <task N | final gate | next real run <trigger>>
@@ -381,7 +381,7 @@ Link the plan artifact and report complexity and `PENDING APPROVAL — $impl [pl
 
 ## Integration with existing tooling
 
-- `home/programs/agents/shared/plan/references/contract.md` and `interview.md` (Codex public path `~/.agents/skills/plan/references/`, Claude public path `~/.claude/skills/plan/references/`): shared with the Claude version through whole-dir linking. Fixed strings and the interview judgment.
+- `home/programs/agents/shared/plan/references/contract.md` and `interview.md` (public path `~/.agents/skills/plan/references/`): fixed strings and the interview judgment.
 - `home/programs/agents/shared/plan/references/critic-prompt.md`: shared Critic contract, extended by the Codex `plan-critic` adapter for combined factual verification. The separate adversarial prompt is for explicit dedicated reviews.
 - `~/.codex/agents/plan-critic.toml`: selected independent reviewer. Dedicated `plan-adversarial`, `plan-simplifier`, and `code-simplifier` remain available for explicit independent-review requests. Dotfiles source is `home/programs/codex/agents/`.
 - `$impl` skill: executes the `update_plan` task list registered in DECOMPOSE, observes the criteria again on the final tree as the audit, and emits `^(SECTION|REVIEW)_VERDICT: (PASS|FAIL)(\s|$)` from its risk-selected review phase.

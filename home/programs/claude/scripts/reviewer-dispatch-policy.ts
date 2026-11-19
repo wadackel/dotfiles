@@ -7,7 +7,7 @@
 // listing blocker-severity findings in 45% of cases — the review then advanced
 // past findings that were never fixed.
 //
-// The prose instruction in the impl skill's review is what failed to land, so
+// The prose instruction in the review skill is what failed to land, so
 // a stronger prose instruction is not the fix; this check is.
 
 import { text } from "node:stream/consumers";
@@ -17,13 +17,10 @@ interface HookInput {
   tool_input: { subagent_type?: string; prompt?: string };
 }
 
-export const TEMPLATE =
-  "~/.claude/skills/impl/references/domain-reviewer-prompt.md";
-
 export const DO_TEMPLATE = "~/.claude/skills/do/references/reviewer-prompt.md";
 
 /**
- * The reviewers the reviews of /impl and /do dispatch, listed explicitly. A `-reviewer$`
+ * The reviewers that end in a PASS / FAIL verdict, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer`, which belongs to another
  * workflow and has no template to satisfy the check.
  * Language checklists ride inside `code-reviewer`'s prompt as review cards,
@@ -65,7 +62,7 @@ export function isReviewerAgent(subagentType: string | undefined): boolean {
   return GUARDED.has(subagentType);
 }
 
-/** The review templates of /impl and /do end their VERDICT line with "FAIL otherwise". */
+/** The review templates of /do end their VERDICT line with "FAIL otherwise". */
 export function hasVerdictRule(prompt: string | undefined): boolean {
   if (!prompt) return false;
   return /FAIL otherwise/i.test(prompt);
@@ -102,7 +99,7 @@ export function requirementMessage(
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without ${missing}.`,
     "",
-    "Add this line to the prompt (it comes from the review template of /impl or /do):",
+    "Add this line to the prompt (it comes from the review template of /do):",
     line,
   ].join("\n");
 }
@@ -111,12 +108,11 @@ export function denialMessage(subagentType: string): string {
   return [
     `[reviewer-dispatch-policy] ${subagentType} dispatched without the verdict rule.`,
     "",
-    "The prompt must state how PASS and FAIL are decided. For /impl's review,",
-    "load the template and paste its `## Template` block verbatim — do not",
-    "summarise it and do not rewrite the VERDICT line:",
-    `  ${TEMPLATE}`,
-    "For a re-review after a blocker fix, use rereview-diagnostic-prompt.md; for breaker-reviewer, breaker-prompt.md.",
-    `For /do's review, use ${DO_TEMPLATE} and, for breaker-reviewer, the breaker-prompt.md beside it.`,
+    "The prompt must state how PASS and FAIL are decided. Load the template and",
+    "paste its block verbatim — do not summarise it and do not rewrite the",
+    "VERDICT line:",
+    `  ${DO_TEMPLATE}`,
+    "For breaker-reviewer, use the breaker-prompt.md beside it.",
   ].join("\n");
 }
 

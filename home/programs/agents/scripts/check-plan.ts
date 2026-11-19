@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
-// Deterministic lint for /plan output. Both plan skills run it right after DRAFT
-// and again before ACTIVATE.
+// Deterministic lint for Codex $plan output. $plan runs it right after DRAFT and
+// again before ACTIVATE.
 //
 // Usage:
 //   check-plan.ts <plan.md> [--json]

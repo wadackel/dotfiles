@@ -26,8 +26,8 @@ before moving on.
 ## Scope
 
 After Phase 1, present both the minimal workaround and the root-cause fix when
-both exist. /do and /plan settle what a request should change; finding the
-cause of a failure belongs to this skill, inside a /do run as well.
+both exist. /do settles what a request should change; finding the cause of a
+failure belongs to this skill, inside a /do run as well.
 
 ## The Four Phases
 

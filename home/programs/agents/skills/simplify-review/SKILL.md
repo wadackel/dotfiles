@@ -8,7 +8,7 @@ argument-hint: "[plan|code|auto]"
 
 Detects over-engineering in plans and code by spawning a fresh subagent (`plan-simplifier` / `code-simplifier`) that reviews from a clean perspective. The reviewer has no knowledge of the design journey — only the artifact and its context — so it naturally spots complexity that feels justified to the author but isn't justified by the requirements.
 
-This skill is the entry point for an independent simplification review. `/impl` reviews simplification in the main session, `/do` picks the smallest option there and has its reviewer, when it dispatches one, flag what the intent did not ask for; neither dispatches these subagents on its own, so a plan or diff gets a fresh-context simplification pass only through this skill.
+This skill is the entry point for an independent simplification review. `/do` picks the smallest option in the main session and has its reviewer, when it dispatches one, flag what the intent did not ask for; it does not dispatch these subagents on its own, so a plan or diff gets a fresh-context simplification pass only through this skill.
 
 ## Why This Matters
 
@@ -28,7 +28,7 @@ Iterative plan deepening improves quality, but each round can also **add** compl
 |---|---|
 | User says "simplify", "YAGNI check", "過剰設計をレビュー" | Manual |
 | Re-running simplify on an already-iterated plan / diff | Manual |
-| Independent review of a plan or diff before `/impl`'s review, or before a `/do` change ships | Manual |
+| Independent review of a plan or diff before a `/do` change ships | Manual |
 | User review feedback says "too complex" | Reactive |
 
 ## Manual Workflow
@@ -66,7 +66,7 @@ When auto-applying, log what was applied and why; surface MEDIUM / LOW proposals
 
 ## Integration Points
 
-- `/impl`'s review is complementary: it audits evidence and checks spec compliance + code quality + domain + security at the final gate. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/impl`'s review.
+- `/do`'s review is complementary: its reviewer checks the change for correctness against its intent, the callers it breaks, and the consumers it leaves stale. `simplify-review` targets unnecessary complexity specifically. Run order when both apply: implementation → `simplify-review` (code-simplifier) → `/do`'s review.
 
 ## Design Decisions
 

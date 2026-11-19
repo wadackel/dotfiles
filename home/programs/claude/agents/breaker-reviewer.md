@@ -1,6 +1,6 @@
 ---
 name: breaker-reviewer
-description: Tries to break a change by running it, for the review of /impl and /do. Works only inside the breaker worktree that review prepares (a `git worktree` holding the change) and its own temp directory, and reports only findings it proved with a command and its output. Dispatched by those reviews on request (`--break`, "壊して") or when the diff crosses a human-review boundary. Do NOT use for reading-only review (code-reviewer), security audits (security-auditor), or plan review.
+description: Tries to break a change by running it, for the review of /do. Works only inside the breaker worktree that review prepares (a `git worktree` holding the change) and its own temp directory, and reports only findings it proved with a command and its output. Dispatched by that review when the user asks to break the change ("壊して") or when the diff crosses a human-review boundary. Do NOT use for reading-only review (code-reviewer), security audits (security-auditor), or plan review.
 tools: Read, Grep, Glob, Bash
 model: opus
 color: red

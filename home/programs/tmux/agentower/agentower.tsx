@@ -597,7 +597,7 @@ export async function readTaskProgress(
           if ((raw as { status: string }).status === "completed") done++;
         }
       } catch {
-        // skip malformed — tolerates concurrent /impl writes
+        // skip malformed — tolerates a file caught mid-write
       }
     }
   } catch {

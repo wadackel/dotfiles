@@ -1,6 +1,6 @@
 ---
 name: do
-description: Takes a request from understanding to a verified, shipped change in one skill, with verification sized to what can go wrong and a reviewer where the diff calls for one. Asks the user only what they alone can decide, one question at a time, and otherwise proceeds without waiting for approval. On trial alongside /plan and /impl. Use for "/do <request>".
+description: Takes a request from understanding to a verified, shipped change in one skill, with verification sized to what can go wrong and a reviewer where the diff calls for one. Asks the user only what they alone can decide, one question at a time, and otherwise proceeds without waiting for approval. Use for "/do <request>".
 argument-hint: "<request or issue>"
 disable-model-invocation: true
 ---

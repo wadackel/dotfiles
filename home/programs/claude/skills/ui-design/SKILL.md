@@ -43,4 +43,4 @@ Write each decision down when it is made, with what it was chosen over, somewher
 
 ## Ending
 
-Hand off the decisions with what each was chosen over, what is still open and how to settle it, and the links to the pages. Suggest `/plan` or `/do` for the implementation; this skill does not implement.
+Hand off the decisions with what each was chosen over, what is still open and how to settle it, and the links to the pages. Suggest `/do` for the implementation; this skill does not implement.

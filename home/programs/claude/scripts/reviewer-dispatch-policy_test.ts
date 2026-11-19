@@ -9,7 +9,6 @@ import {
   GUARDED,
   hasVerdictRule,
   isReviewerAgent,
-  TEMPLATE,
 } from "./reviewer-dispatch-policy.ts";
 
 const SCRIPT = join(import.meta.dirname, "reviewer-dispatch-policy.ts");
@@ -29,7 +28,7 @@ const READ_ONLY =
 const RULE =
   "VERDICT: [PASS if there are no MUST_FIX and no SHOULD_FIX items (no CRITICAL and no HIGH items for the 4-tier schema), FAIL otherwise]";
 
-test("isReviewerAgent matches the reviewers /impl's review dispatches", () => {
+test("isReviewerAgent matches the guarded reviewers", () => {
   assertEquals(GUARDED.size, 6);
   assertEquals(isReviewerAgent("breaker-reviewer"), true);
   assertEquals(isReviewerAgent("database-reviewer"), true);
@@ -64,7 +63,6 @@ test("hasVerdictRule detects the rule regardless of case", () => {
 test("denialMessage names the agent and points at the template", () => {
   const msg = denialMessage("database-reviewer");
   assertStringIncludes(msg, "database-reviewer");
-  assertStringIncludes(msg, "domain-reviewer-prompt.md");
   assertStringIncludes(msg, "do/references/reviewer-prompt.md");
   assertStringIncludes(msg, "how PASS and FAIL are decided");
 });
@@ -226,7 +224,6 @@ test("template path and every guarded reviewer exist in the repository", async (
   const repoRoot = join(import.meta.dirname, "../../../..");
   for (
     const path of [
-      TEMPLATE,
       DO_TEMPLATE,
       DO_TEMPLATE.replace(/reviewer-prompt\.md$/, "breaker-prompt.md"),
     ]

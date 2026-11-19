@@ -23,7 +23,7 @@ class ResultsTest(unittest.TestCase):
             "home/programs/agents/shared/plan/references/adversarial-prompt.md": "adversarial prompt",
             "home/programs/agents/skills/spec/SKILL.md": "spec",
             "home/programs/agents/scripts/check-plan.ts": "snapshot linter",
-            "home/programs/claude/skills/impl/references/comments-card.md": "comments card",
+            "home/programs/agents/shared/plan/references/comments-card.md": "comments card",
             "home/programs/claude/global-instructions.md": "comment conventions",
         }
         for role in ("code-reviewer", "security-auditor"):
@@ -52,7 +52,7 @@ class ResultsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             source, _, _, home = self.setup_fixture(temp)
             for origin, destination in (
-                ("home/programs/claude/skills/impl/references/comments-card.md", ".claude/skills/impl/references/comments-card.md"),
+                ("home/programs/agents/shared/plan/references/comments-card.md", ".agents/skills/plan/references/comments-card.md"),
                 ("home/programs/claude/global-instructions.md", ".claude/CLAUDE.md"),
             ):
                 with self.subTest(destination=destination):

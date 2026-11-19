@@ -13,8 +13,8 @@ publish changes or invoke external task services.
 Freeze a source tree containing `home/programs/codex`, shared plan references,
 `spec`, `home/programs/agents/scripts/check-plan.ts`, and the
 Claude reviewer definitions referenced by the Codex adapters. Include Claude's
-`skills/impl/references/comments-card.md` and `global-instructions.md`: the
-runner publishes them under the isolated home's `.claude/`. Preserve file modes
+`global-instructions.md`: the runner publishes it as the isolated home's
+`.claude/CLAUDE.md`. Preserve file modes
 and resolve the skill-directory links within that snapshot. Use separate
 immutable trees for each variant, outside any repository or project instruction
 ancestor.

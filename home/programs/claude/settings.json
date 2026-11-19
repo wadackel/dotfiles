@@ -28,7 +28,6 @@
       "Bash(*/.agents/scripts/abr.ts)",
       "Bash(*/.agents/scripts/abr.ts *)",
       "Bash(*rebase-guard*)",
-      "Bash(*check-plan*)",
       "Bash(*/.agents/scripts/vocab.ts*)",
       "Bash(*home/programs/agents/scripts/vocab-lib_test.ts*)",
       "Bash(*home/programs/agents/scripts/vocab-propose_test.ts*)",

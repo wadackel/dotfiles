@@ -149,11 +149,7 @@ def run(args):
             copy_tree(codex_source / "skills" / skill, skills / skill)
         shared = source / "home/programs/agents/shared/plan/references"
         copy_tree(shared, skills / "plan/references")
-        claude = source / "home/programs/claude"
-        comment_card = home / ".claude/skills/impl/references/comments-card.md"
-        comment_card.parent.mkdir(parents=True)
-        shutil.copy2(claude / "skills/impl/references/comments-card.md", comment_card)
-        shutil.copy2(claude / "global-instructions.md", home / ".claude/CLAUDE.md")
+        shutil.copy2(source / "home/programs/claude/global-instructions.md", home / ".claude/CLAUDE.md")
         (codex_home / "scripts").mkdir()
         for script in (codex_source / "scripts").glob("codex-plan-*.ts"):
             shutil.copy2(script, codex_home / "scripts" / script.name)

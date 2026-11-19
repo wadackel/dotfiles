@@ -5,7 +5,6 @@ import { readFile } from "node:fs/promises";
 const CWD_ROOT = new URL(`file://${process.cwd().replace(/\/$/, "")}/`);
 const MODULE_ROOT = new URL("../../../../", import.meta.url);
 const CODEX_PLAN = "home/programs/codex/skills/plan/SKILL.md";
-const CLAUDE_PLAN = "home/programs/claude/skills/plan/SKILL.md";
 const CONTRACT = "home/programs/agents/shared/plan/references/contract.md";
 const INTERVIEW = "home/programs/agents/shared/plan/references/interview.md";
 const CRITIC_PROMPT =
@@ -13,29 +12,12 @@ const CRITIC_PROMPT =
 const ADVERSARIAL_PROMPT =
   "home/programs/agents/shared/plan/references/adversarial-prompt.md";
 const CHECK_PLAN_SCRIPT = "home/programs/agents/scripts/check-plan.ts";
-const CLAUDE_IMPL = "home/programs/claude/skills/impl/SKILL.md";
 const CODEX_IMPL = "home/programs/codex/skills/impl/SKILL.md";
 const HUMAN_REVIEW =
   "home/programs/agents/shared/plan/references/human-review.md";
 
-// Codex may reuse prior agreement; imposing Claude's fixed cadence on both
-// would silently reintroduce redundant approval turns.
 const AGENT_PLANS: ReadonlyArray<readonly [string, string]> = [
   ["Codex", CODEX_PLAN],
-  ["Claude", CLAUDE_PLAN],
-];
-
-// Needles are joined with their neighbouring text rather than kept as short
-// phrases: assertIncludesAll does not check adjacency, so a bare "(not a gate)"
-// would still match after A7 was re-gated and the phrase survived elsewhere.
-const AGREE_GATE_NEEDLES = [
-  "A1 Direction check",
-  "concrete options and a marked recommendation",
-  'Never ask a bare "is this right?" yes/no',
-  "**A5 Approve approach** (one question)",
-  "go with recommended / pick another / modify",
-  "**A7 Direction statement** (not a gate)",
-  "Proceeding with:",
 ];
 
 const AGREE_LEGACY_NEEDLES = [
@@ -128,7 +110,6 @@ const INTERVIEW_LEGACY_NEEDLES = [
 ];
 const INTERVIEW_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ["Codex plan", CODEX_PLAN],
-  ["Claude plan", CLAUDE_PLAN],
 ];
 
 // Contract entries: the string, and every file that must carry it verbatim.
@@ -143,11 +124,6 @@ const DELIVERY_LEVEL_TEMPLATE = "- Level: <none | commit | push | pr | stack>";
 const SELF_RESOLVED_SOURCE_TEMPLATE =
   "source: [Direct|Supported|Inferred] <probe command + file:lines>";
 const FINAL_TASK_SUBJECT = "Final Audit + Review";
-const PLAN_READY_LINES = [
-  "## Plan ready",
-  "- File: <plan path>",
-  "- Status: PENDING APPROVAL — type `/impl` to approve and execute",
-];
 const REQUIRED_SECTIONS = [
   "## Context",
   "## Files to Change",
@@ -172,25 +148,13 @@ const REVIEWER_VOCAB = [
 const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
   [LIVE_TAG_DEFINITION, [CONTRACT, CODEX_PLAN]],
   [RUC_ITEM_TEMPLATE, [CONTRACT]],
-  [SELF_RESOLVED_SOURCE_TEMPLATE, [
-    CONTRACT,
-    CLAUDE_PLAN,
-    CODEX_PLAN,
-    CHECK_PLAN_SCRIPT,
-  ]],
-  [FINAL_TASK_SUBJECT, [CONTRACT, CODEX_PLAN, CLAUDE_PLAN]],
+  [SELF_RESOLVED_SOURCE_TEMPLATE, [CONTRACT, CODEX_PLAN, CHECK_PLAN_SCRIPT]],
+  [FINAL_TASK_SUBJECT, [CONTRACT, CODEX_PLAN]],
   ["`Your steps` must not inline tokens, passwords, or credentialed URLs", [
     CONTRACT,
   ]],
-  ["<redacted:", [CONTRACT, CLAUDE_PLAN, CRITIC_PROMPT]],
-  ["## 完了の条件", [CONTRACT, CLAUDE_PLAN]],
-  ["## レビューしてほしい変更", [CONTRACT, CLAUDE_PLAN]],
-  ["レビューしてほしい N か所", [
-    CONTRACT,
-    HUMAN_REVIEW,
-    CLAUDE_IMPL,
-    CODEX_IMPL,
-  ]],
+  ["<redacted:", [CONTRACT, CRITIC_PROMPT]],
+  ["レビューしてほしい N か所", [CONTRACT, HUMAN_REVIEW, CODEX_IMPL]],
   ["権限・信頼境界", [HUMAN_REVIEW]],
   ["秘密情報・認証", [HUMAN_REVIEW]],
   ["外部への書き込み・送信", [HUMAN_REVIEW]],
@@ -199,29 +163,21 @@ const CONTRACT_MIRRORS: ReadonlyArray<readonly [string, string[]]> = [
     CONTRACT,
     INTERVIEW,
     CRITIC_PROMPT,
-    CLAUDE_PLAN,
     CODEX_PLAN,
   ]],
   ["scope: <the boundary: what is in or out>", [CONTRACT, INTERVIEW]],
-  ["→ <output excerpt>", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN]],
-  ["観測:", [CONTRACT, CLAUDE_PLAN, CODEX_PLAN, CLAUDE_IMPL, CODEX_IMPL]],
+  ["→ <output excerpt>", [CONTRACT, CODEX_PLAN]],
+  ["観測:", [CONTRACT, CODEX_PLAN, CODEX_IMPL]],
 ];
 // Only the plan skills have a `references/` that links to the shared
 // directory; the impl skills must name the public path, or a bare
 // `references/human-review.md` would resolve to their own directory.
 const HUMAN_REVIEW_REFERRERS: ReadonlyArray<readonly [string, string]> = [
-  [CLAUDE_PLAN, "references/human-review.md"],
-  [CLAUDE_IMPL, "~/.claude/skills/plan/references/human-review.md"],
   [CODEX_PLAN, "references/human-review.md"],
   [CODEX_IMPL, "~/.agents/skills/plan/references/human-review.md"],
 ];
-const CONTRACT_REFERRERS = [
-  CLAUDE_PLAN,
-  CODEX_PLAN,
-  CRITIC_PROMPT,
-  ADVERSARIAL_PROMPT,
-];
-const INTERVIEW_REFERRERS = [CLAUDE_PLAN, CODEX_PLAN];
+const CONTRACT_REFERRERS = [CODEX_PLAN, CRITIC_PROMPT, ADVERSARIAL_PROMPT];
+const INTERVIEW_REFERRERS = [CODEX_PLAN];
 
 const REPRESENTATIVE_ARTIFACTS = [
   {
@@ -358,32 +314,25 @@ test("Codex Requirement Clarification enforces blocking interview contract", asy
   ]);
 });
 
-for (const [agent, path] of AGENT_PLANS) {
-  test(`${agent} AGREE keeps A1/A5 blocking and A7 non-blocking`, async () => {
-    const skill = await readRepoFile(path);
-
-    if (agent === "Claude") {
-      assertIncludesAll(section(skill, "## AGREE"), AGREE_GATE_NEEDLES);
-    } else {
-      assertIncludesAll(section(skill, "## AGREE"), [
-        "**A1 Direction check**",
-        "**A5 Approve approach**",
-        "**A7 Direction statement** (not a gate)",
-        "Existing explicit scope satisfies this step",
-        "Carry prior authorization forward",
-        "no answer or elapsed time does not establish approval",
-      ]);
-      assertExcludesAll(skill, [
-        "single mandatory gate",
-        "Codex CLI has no structured question tool",
-      ]);
-    }
-    // Scoped to the whole file, not the AGREE section: legacy gate wording
-    // reintroduced under Phase overview or Design notes would slip past a
-    // section-scoped exclusion while still re-establishing the gate.
-    assertExcludesAll(skill, AGREE_LEGACY_NEEDLES);
-  });
-}
+test("Codex AGREE keeps A1/A5 blocking and A7 non-blocking", async () => {
+  const skill = await readRepoFile(CODEX_PLAN);
+  assertIncludesAll(section(skill, "## AGREE"), [
+    "**A1 Direction check**",
+    "**A5 Approve approach**",
+    "**A7 Direction statement** (not a gate)",
+    "Existing explicit scope satisfies this step",
+    "Carry prior authorization forward",
+    "no answer or elapsed time does not establish approval",
+  ]);
+  assertExcludesAll(skill, [
+    "single mandatory gate",
+    "Codex CLI has no structured question tool",
+  ]);
+  // Scoped to the whole file, not the AGREE section: legacy gate wording
+  // reintroduced under Phase overview or Design notes would slip past a
+  // section-scoped exclusion while still re-establishing the gate.
+  assertExcludesAll(skill, AGREE_LEGACY_NEEDLES);
+});
 
 test("interview.md carries the shared interview rules and no round caps", async () => {
   const interview = await readRepoFile(INTERVIEW);
@@ -406,25 +355,17 @@ for (const [name, path] of INTERVIEW_SKILLS) {
   });
 }
 
-for (
-  const [path, reference] of [
-    [CLAUDE_IMPL, "~/.claude/skills/plan/references/interview.md"],
-    [CODEX_IMPL, "~/.agents/skills/plan/references/interview.md"],
-  ] as const
-) {
-  test(`${path} references interview.md by its public path`, async () => {
-    const skill = await readRepoFile(path);
-    assertStringIncludes(skill, reference);
-    assertExcludesAll(skill, INTERVIEW_LEGACY_NEEDLES);
-  });
-}
+test(`${CODEX_IMPL} references interview.md by its public path`, async () => {
+  const skill = await readRepoFile(CODEX_IMPL);
+  assertStringIncludes(skill, "~/.agents/skills/plan/references/interview.md");
+  assertExcludesAll(skill, INTERVIEW_LEGACY_NEEDLES);
+});
 
 test("contract.md defines every fixed string once", async () => {
   const contract = await readRepoFile(CONTRACT);
   assertIncludesAll(contract, [
     ...REQUIRED_SECTIONS,
     ...CC_TAGS,
-    ...PLAN_READY_LINES,
     ...REVIEWER_VOCAB,
     "PENDING APPROVAL — $impl [plan-path]",
     "refs/impl-base",
@@ -582,7 +523,7 @@ test("Codex final gate includes repository checks absent from the plan", async (
   assertExcludesAll(gate, ["run every Autonomous Verification command again"]);
 });
 
-test("Codex and Claude impl write the same final report", async () => {
+test("Codex impl writes the final report headings in order", async () => {
   const headings = [
     "**使う人から見て変わること**",
     "**変更したファイル**",
@@ -591,15 +532,13 @@ test("Codex and Claude impl write the same final report", async () => {
     "**次に進められること**",
     "**あなたに決めてほしいこと**",
   ];
-  for (const path of [CODEX_IMPL, CLAUDE_IMPL]) {
-    const skill = await readRepoFile(path);
-    assertInOrder(skill, headings);
-    assertExcludesAll(skill, [
-      "**何が起きたか**",
-      "at most 90 characters",
-      "runs every check as a plain command",
-    ]);
-  }
+  const skill = await readRepoFile(CODEX_IMPL);
+  assertInOrder(skill, headings);
+  assertExcludesAll(skill, [
+    "**何が起きたか**",
+    "at most 90 characters",
+    "runs every check as a plain command",
+  ]);
 });
 
 test("Codex added regression tests establish missing behavior before source edits", async () => {
@@ -624,11 +563,14 @@ test("Codex routes the existing comments card through its selected reviewer", as
   const skill = await readRepoFile(CODEX_IMPL);
   const card = section(skill, "#### Comment Review Card");
   const reference = card.match(
-    /`(~\/\.claude\/skills\/impl\/references\/[^`]+)`/,
+    /`(~\/\.agents\/skills\/plan\/references\/[^`]+)`/,
   );
   assert(reference, "comments card needs a resolvable public reference");
   const contents = await readRepoFile(
-    reference[1].replace("~/.claude/", "home/programs/claude/"),
+    reference[1].replace(
+      "~/.agents/skills/plan/references/",
+      "home/programs/agents/shared/plan/references/",
+    ),
   );
   assertStringIncludes(contents.split("\n")[1], "Trigger:");
   assertIncludesAll(contents, ["## Check", "## Do not flag"]);

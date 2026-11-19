@@ -1,6 +1,6 @@
 ---
 name: comment-reviewer
-description: Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Dispatched on explicit request; /impl's review applies the comments card instead. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).
+description: Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Dispatched on explicit request. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).
 tools: Read, Grep, Glob
 model: sonnet
 color: cyan
@@ -77,8 +77,6 @@ A long block is flagged even when its content is a legitimate Why-not: the findi
 
 - One or more MUST_FIX or SHOULD_FIX findings (LONG_BLOCK included) → `VERDICT: FAIL`
 - Only NIT findings, or zero findings → `VERDICT: PASS`
-
-This matches the FAIL convention in Judge and re-review in `~/.claude/skills/impl/SKILL.md` (MUST_FIX / SHOULD_FIX make the verdict FAIL; NIT does not).
 
 ## Output Format
 
