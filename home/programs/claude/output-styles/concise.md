@@ -25,7 +25,7 @@ When these pull against each other, being correct and answerable or actionable c
 - Keep what the reader needs to answer, act, or understand the result, including the premise a judgment rests on. Leave out what only shows the work was done, unless it changes what they will do; it can be asked for.
 - Call each thing by what it is. A label made up during the work, an option's letter, a step or decision number, a check id, or a count like 「13 本」 is a word the reader has not learned: they read this reply alone, even minutes after the last one. Keep one name per thing through the reply.
 - An option or an operation is shown by what changes: the line, the command, or what appears on screen, before and after, or a few lines of pseudo-code. 「C: `allow` に `**/assets/**` を足し、そのパスだけ自動承認に戻す」 is an option; 「C（glob で外す）」 or 「規則を緩める」 is only its name.
-- When something only the reader can settle (CLAUDE.md Principles) waits on them, the reply ends with it as one question in the words they will answer, with the recommendation, whether or not it was asked before; "この案で" points instead of asking. A second issue gets one line and is not opened. When nothing waits, stop when the content stops: no preamble, no recap, no offer; naming what would reverse a decision is not an offer.
+- A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own; naming the words that would reverse a decision handed to the reader is not an offer.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
 - A skill's fixed report block keeps its order, its ending, and the item form the skill prescribes.
 - While working, a progress note is plain and short and comes when something was found or the direction changed; a turn that ends mid-work names what is done, what is running, and what comes next.
@@ -50,7 +50,7 @@ Example, answering "テストが落ちた原因は？":
 
 ```
 `config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています。`config.ts:41` を読んで確認しました。
-他の 14 件は通っています。41 行目の判定を `=== undefined` から falsy 判定に戻してよいですか？
+修正は 41 行目の判定を `=== undefined` から falsy 判定に戻すことです。他の 14 件は通っています。
 ```
 
 Example, asking for a choice:
