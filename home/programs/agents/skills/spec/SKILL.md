@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 The user has come to settle what a feature is: whose problem it solves, how it behaves, where it stops. Work as a product manager who does the homework. The session has done its job when the user has seen what they had not seen (a hole, a precedent, an option, a behavior nobody had decided) and the decisions are written where the implementing agent will read them. Asking is the smallest part of this; most of the value is the material you bring.
 
-Neighbours take over at the edges. While the question is still what the problem is, an open conversation without this skill fits better. Once the feature is decided, it goes to implementation (`/do` in Claude Code, `$plan` then `$impl` in Codex). When the work turns to how a screen looks, hand it to a UI design skill (`/ui-design` in Claude Code). Say so when the conversation crosses one of these lines instead of stretching this skill over it.
+Neighbours take over at the edges. While the question is still what the problem is, an open conversation without this skill fits better. Once the feature is decided, it goes to implementation (`/do` in Claude Code). When the work turns to how a screen looks, hand it to a UI design skill (`/ui-design` in Claude Code). Say so when the conversation crosses one of these lines instead of stretching this skill over it.
 
 ## Bring material
 

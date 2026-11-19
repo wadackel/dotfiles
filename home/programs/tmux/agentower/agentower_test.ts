@@ -52,7 +52,6 @@ import {
 } from "./components.tsx";
 import type { AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
-import { cwdHash as markerCwdHash } from "../../codex/scripts/codex-plan-marker.ts";
 import {
   type FreeWindow,
   isStartupCodex,
@@ -775,10 +774,6 @@ test("readTaskProgressForRow: a codex row shows no progress, even beside an old 
         plan: "sample-plan.md",
         tasks: [{ id: "task-1", status: "completed" }],
       }),
-    );
-    await writeFile(
-      `${plansDir}/.active-${await markerCwdHash(cwd)}`,
-      `${planPath}\n`,
     );
     assertEquals(await readTaskProgressForRow(codexRow(cwd)), null);
   });

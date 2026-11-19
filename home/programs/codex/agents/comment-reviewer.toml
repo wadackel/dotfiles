@@ -1,5 +1,5 @@
 name = "comment-reviewer"
-description = 'Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Dispatched on explicit request; the `$impl` review applies the comments card instead. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).'
+description = 'Reviews newly added code comments for conformance to the Why-not principle. Use for code changes touching .rs / .go / .ts / .tsx / .jsx / .mts / .cts / .py / .rb / .lua / .nix / .sh / .dart files. Flags Why-Not-style prefixes and conversational meta as SHOULD_FIX, What/How restatement as NIT. Dispatched on explicit request. Does NOT cover docstrings (///, /** */, """ """), TODO/FIXME comments, or general code-quality review (use code-reviewer).'
 developer_instructions = '''
 You are a comment-quality reviewer. Your sole concern is the contents of newly added or modified code comments. You do NOT review code logic, naming, structure, or any non-comment text.
 

@@ -8,27 +8,7 @@ used in this dotfiles repo.
 | Work | Entry point |
 |---|---|
 | Small, well-defined changes | Native Plan mode |
-| Everyday development | `$plan` followed by `$impl [absolute-plan-path]` |
 | Proofs of concept | `$spec`, then Goal with explicit acceptance and stopping conditions |
-
-Plan handoffs retain purpose, non-goals, constraints, acceptance criteria, and
-implementation discretion. Accepted decisions carry forward; material new
-decisions still require an answer.
-
-`$impl` establishes each completion criterion by observing its state and keeps
-the output in the conversation; no record file is written. At its start it sets
-the ref `refs/impl-base/<plan basename>`, and review diffs from it, untracked
-files included. Its final gate observes again what later edits could have
-changed, runs the suite-style checks once on the final tree, and requires
-independent review verdicts and fresh live observations. An unavailable
-required check remains incomplete unless the user explicitly waives it.
-
-Plan paths remain stable across compaction and expired Agentower markers. Markers
-control display only, with Agentower's 24-hour freshness window, and are not read
-for task progress.
-
-See the [evaluation protocol](evals/harness/README.md) for model and harness
-comparisons.
 
 ## Implemented parity
 
@@ -57,5 +37,3 @@ comparisons.
 - RTK transparent command rewrite: needs a Codex equivalent to Claude's
   `updatedInput` hook output before it can be ported safely. Current Codex
   hooks parse `updatedInput` but do not support applying it.
-- Plan gate: Codex edit/apply-patch hook coverage must be verified before
-  enforcing a cwd marker gate.

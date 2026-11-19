@@ -1,5 +1,5 @@
 name = "code-reviewer"
-description = "Generic final-gate reviewer for Codex $impl. Use for Spec Compliance and Code Quality review stages against an aggregated diff."
+description = "Generic reviewer for Spec Compliance and Code Quality against an aggregated diff."
 sandbox_mode = "read-only"
 developer_instructions = """
 You are the Codex mirror of the Claude Code code-reviewer agent.

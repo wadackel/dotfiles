@@ -45,7 +45,7 @@ test("isReviewerAgent matches the guarded reviewers", () => {
 test("isReviewerAgent leaves other workflows' reviewers alone", () => {
   // These end in -reviewer but belong to other workflows and have no template.
   assertEquals(isReviewerAgent("architect-reviewer"), false);
-  // Language names are review cards, not guarded agents.
+  // There are no language-specialist agents to guard.
   assertEquals(isReviewerAgent("rust-reviewer"), false);
   assertEquals(isReviewerAgent("typescript-reviewer"), false);
 });

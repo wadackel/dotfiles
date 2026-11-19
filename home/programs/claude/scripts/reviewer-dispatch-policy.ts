@@ -23,8 +23,7 @@ export const DO_TEMPLATE = "~/.claude/skills/do/references/reviewer-prompt.md";
  * The reviewers that end in a PASS / FAIL verdict, listed explicitly. A `-reviewer$`
  * pattern would also catch `architect-reviewer`, which belongs to another
  * workflow and has no template to satisfy the check.
- * Language checklists ride inside `code-reviewer`'s prompt as review cards,
- * so no language agent needs guarding.
+ * There are no language-specialist agents, so none needs guarding.
  */
 export const GUARDED: ReadonlySet<string> = new Set([
   "code-reviewer",

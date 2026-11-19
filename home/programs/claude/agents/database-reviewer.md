@@ -13,7 +13,7 @@ Specialist for SQL, schema design, and DB access patterns. Catches issues that g
 ## Out of Scope (delegated)
 
 - App-layer code quality → `code-reviewer`
-- Language-specific bugs in ORM calling code → `code-reviewer` (with the matching review card)
+- Language-specific bugs in ORM calling code → `code-reviewer`
 - Hardcoded connection strings with secrets → `security-auditor` (heuristic)
 
 ## Focus Areas
