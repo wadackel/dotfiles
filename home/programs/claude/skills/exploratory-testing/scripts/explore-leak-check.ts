@@ -23,12 +23,20 @@ const WATCH_LIMIT = 2000;
 
 async function gitLines(repo: string, args: string[]): Promise<string[]> {
   const result = await run("git", ["-C", repo, ...args]);
-  if (result.code !== 0) throw new Error(`git ${args.join(" ")} in ${repo}: ${result.stderr.trim()}`);
+  if (result.code !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} in ${repo}: ${result.stderr.trim()}`,
+    );
+  }
   return result.stdout.split("\n").filter((line) => line !== "");
 }
 
 async function gitState(repo: string): Promise<Record<GitItem, string[]>> {
-  const commonDir = (await gitLines(repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"]))[0]!;
+  const commonDir = (await gitLines(repo, [
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-common-dir",
+  ]))[0]!;
   const config = await readFile(join(commonDir, "config"), "utf8");
   return {
     status: await gitLines(repo, ["status", "--porcelain=v1", "-uall"]),
@@ -46,7 +54,9 @@ async function gitState(repo: string): Promise<Record<GitItem, string[]>> {
   };
 }
 
-async function hashTree(dir: string): Promise<{ files: Record<string, string>; truncated: boolean }> {
+async function hashTree(
+  dir: string,
+): Promise<{ files: Record<string, string>; truncated: boolean }> {
   const out: Record<string, string> = {};
   let truncated = false;
   const walk = async (current: string): Promise<void> => {
@@ -64,7 +74,9 @@ async function hashTree(dir: string): Promise<{ files: Record<string, string>; t
       const path = join(current, entry.name);
       if (entry.isDirectory()) await walk(path);
       else if (entry.isFile()) {
-        out[relative(dir, path)] = createHash("sha256").update(await readFile(path)).digest("hex").slice(0, 16);
+        out[relative(dir, path)] = createHash("sha256").update(
+          await readFile(path),
+        ).digest("hex").slice(0, 16);
       }
     }
   };
@@ -83,7 +95,10 @@ async function listeningPorts(): Promise<string[]> {
   return [...ports].sort();
 }
 
-export async function takeBaseline(real: string, watch: string[]): Promise<Baseline> {
+export async function takeBaseline(
+  real: string,
+  watch: string[],
+): Promise<Baseline> {
   const watched: Record<string, Record<string, string>> = {};
   const truncated: string[] = [];
   for (const dir of watch) {
@@ -101,10 +116,16 @@ export async function takeBaseline(real: string, watch: string[]): Promise<Basel
   };
 }
 
-function lineDiff(before: string[], after: string[]): { added: string[]; removed: string[] } {
+function lineDiff(
+  before: string[],
+  after: string[],
+): { added: string[]; removed: string[] } {
   const b = new Set(before);
   const a = new Set(after);
-  return { added: after.filter((l) => !b.has(l)), removed: before.filter((l) => !a.has(l)) };
+  return {
+    added: after.filter((l) => !b.has(l)),
+    removed: before.filter((l) => !a.has(l)),
+  };
 }
 
 export type CheckOptions = {
@@ -118,7 +139,10 @@ export type Report = {
   stop: boolean;
   leaks: string[];
   git: Partial<Record<GitItem, { added: string[]; removed: string[] }>>;
-  watch: Record<string, { added: string[]; removed: string[]; changed: string[] }>;
+  watch: Record<
+    string,
+    { added: string[]; removed: string[]; changed: string[] }
+  >;
   processes: Array<{ pid: number; command: string; cwd: string }>;
   portsNew: string[];
   issuesNew: Array<{ number: number; title: string }> | null;
@@ -127,14 +151,25 @@ export type Report = {
 
 /** A shell records the logical path (/var/folders/...), lsof and realpath the physical one. */
 export function pathForms(paths: string[]): string[] {
-  return [...new Set(paths.flatMap((p) => [p, p.replace(/^\/private\/(tmp|var|etc)\//, "/$1/")]))];
+  return [
+    ...new Set(
+      paths.flatMap((
+        p,
+      ) => [p, p.replace(/^\/private\/(tmp|var|etc)\//, "/$1/")]),
+    ),
+  ];
 }
 
 function pathsHits(lines: string[], paths: string[], label: string): string[] {
-  return lines.filter((line) => paths.some((p) => line.includes(p))).map((line) => `${label}: ${line}`);
+  return lines.filter((line) => paths.some((p) => line.includes(p))).map((
+    line,
+  ) => `${label}: ${line}`);
 }
 
-export async function check(baseline: Baseline, opts: CheckOptions): Promise<Report> {
+export async function check(
+  baseline: Baseline,
+  opts: CheckOptions,
+): Promise<Report> {
   const report: Report = {
     stop: false,
     leaks: [],
@@ -154,30 +189,48 @@ export async function check(baseline: Baseline, opts: CheckOptions): Promise<Rep
     "-F",
     "#{session_name}\t#{window_id}\t#{pane_current_path}\t#{pane_start_command}",
   ];
-  const tmux = await run("tmux", tmuxArgs).catch((error: Error) => ({ code: -1, stdout: "", stderr: error.message }));
-  if (tmux.code === 0) report.leaks.push(...pathsHits(tmux.stdout.split("\n"), paths, "tmux pane"));
-  else report.notes.push(`tmux not searched: ${tmux.stderr.trim() || `exit ${tmux.code}`}`);
+  const tmux = await run("tmux", tmuxArgs).catch((error: Error) => ({
+    code: -1,
+    stdout: "",
+    stderr: error.message,
+  }));
+  if (tmux.code === 0) {
+    report.leaks.push(
+      ...pathsHits(tmux.stdout.split("\n"), paths, "tmux pane"),
+    );
+  } else {report.notes.push(
+      `tmux not searched: ${tmux.stderr.trim() || `exit ${tmux.code}`}`,
+    );}
 
   const zoxide = await run("zoxide", ["query", "-l"]).catch(() => null);
-  if (zoxide && zoxide.code === 0) report.leaks.push(...pathsHits(zoxide.stdout.split("\n"), paths, "zoxide"));
-  else report.notes.push("zoxide not searched");
+  if (zoxide && zoxide.code === 0) {
+    report.leaks.push(...pathsHits(zoxide.stdout.split("\n"), paths, "zoxide"));
+  } else report.notes.push("zoxide not searched");
 
   const now = await gitState(baseline.real);
-  report.leaks.push(...pathsHits(now.worktrees, paths, "worktree of the real repository"));
+  report.leaks.push(
+    ...pathsHits(now.worktrees, paths, "worktree of the real repository"),
+  );
   for (const item of Object.keys(now) as GitItem[]) {
     const diff = lineDiff(baseline.git[item], now[item]);
     if (diff.added.length || diff.removed.length) report.git[item] = diff;
   }
 
   for (const dir of baseline.truncated ?? []) {
-    report.notes.push(`watch ${dir} holds more than ${WATCH_LIMIT} files; changes past them are not seen`);
+    report.notes.push(
+      `watch ${dir} holds more than ${WATCH_LIMIT} files; changes past them are not seen`,
+    );
   }
   for (const [dir, before] of Object.entries(baseline.watch)) {
     const after = (await hashTree(dir)).files;
     const added = Object.keys(after).filter((k) => !(k in before));
     const removed = Object.keys(before).filter((k) => !(k in after));
-    const changed = Object.keys(after).filter((k) => k in before && before[k] !== after[k]);
-    if (added.length || removed.length || changed.length) report.watch[dir] = { added, removed, changed };
+    const changed = Object.keys(after).filter((k) =>
+      k in before && before[k] !== after[k]
+    );
+    if (added.length || removed.length || changed.length) {
+      report.watch[dir] = { added, removed, changed };
+    }
   }
 
   report.processes = await sandboxProcesses(paths);
@@ -198,8 +251,11 @@ export async function check(baseline: Baseline, opts: CheckOptions): Promise<Rep
       "--json",
       "number,title",
     ]);
-    if (issues.code === 0) report.issuesNew = JSON.parse(issues.stdout) as Array<{ number: number; title: string }>;
-    else report.notes.push(`issues not listed: ${issues.stderr.trim()}`);
+    if (issues.code === 0) {
+      report.issuesNew = JSON.parse(issues.stdout) as Array<
+        { number: number; title: string }
+      >;
+    } else report.notes.push(`issues not listed: ${issues.stderr.trim()}`);
   }
 
   report.stop = report.leaks.length > 0;
@@ -216,7 +272,9 @@ const HELP = `explore-leak-check.ts <command> ...
 
 function flagValues(args: string[], name: string): string[] {
   const values: string[] = [];
-  for (let i = 0; i < args.length; i++) if (args[i] === name && args[i + 1]) values.push(args[++i]!);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name && args[i + 1]) values.push(args[++i]!);
+  }
   return values;
 }
 
@@ -231,10 +289,16 @@ export async function main(argv: string[]): Promise<number> {
     }
     const watch: string[] = [];
     for (const dir of flagValues(rest, "--watch")) {
-      if ((await stat(dir).catch(() => null))?.isDirectory()) watch.push(await realpath(dir));
-      else process.stderr.write(`explore-leak-check: --watch ${dir} is not a directory; skipped\n`);
+      if ((await stat(dir).catch(() => null))?.isDirectory()) {
+        watch.push(await realpath(dir));
+      } else {process.stderr.write(
+          `explore-leak-check: --watch ${dir} is not a directory; skipped\n`,
+        );}
     }
-    await writeFile(out, `${JSON.stringify(await takeBaseline(real, watch))}\n`);
+    await writeFile(
+      out,
+      `${JSON.stringify(await takeBaseline(real, watch))}\n`,
+    );
     return 0;
   }
   if (command === "check") {
@@ -245,7 +309,9 @@ export async function main(argv: string[]): Promise<number> {
       return 2;
     }
     const sb = await loadSandbox(root);
-    const baseline = JSON.parse(await readFile(baselinePath, "utf8")) as Baseline;
+    const baseline = JSON.parse(
+      await readFile(baselinePath, "utf8"),
+    ) as Baseline;
     const report = await check(baseline, {
       sandboxPaths: [sb.root, sb.shortDir],
       github: flagValues(rest, "--github")[0],
@@ -262,7 +328,11 @@ if (import.meta.main) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error: unknown) => {
-      process.stderr.write(`explore-leak-check: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(
+        `explore-leak-check: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      );
       process.exit(1);
     },
   );

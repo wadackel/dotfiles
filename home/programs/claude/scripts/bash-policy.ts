@@ -129,7 +129,10 @@ function tmuxReachesDefault(
   return true;
 }
 
-type Decide = (head: string, words: string[]) => string | null | Promise<string | null>;
+type Decide = (
+  head: string,
+  words: string[],
+) => string | null | Promise<string | null>;
 
 /** Where an explorer's command runs, so a script it starts can be found and read. */
 type Follow = { cwd: string; depth: number };
@@ -170,10 +173,26 @@ const GH_READ: Record<string, ReadonlySet<string>> = {
   cache: new Set(["list"]),
   auth: new Set(["status"]),
 };
-const GH_FREE = new Set(["", "search", "status", "help", "version", "--version", "-h", "--help"]);
+const GH_FREE = new Set([
+  "",
+  "search",
+  "status",
+  "help",
+  "version",
+  "--version",
+  "-h",
+  "--help",
+]);
 // Options of git itself that take the next word as their value.
 const GIT_VALUE_OPTIONS = new Set([
-  "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env", "--super-prefix",
+  "-C",
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--exec-path",
+  "--config-env",
+  "--super-prefix",
 ]);
 const SCRIPT_LIMIT = 256 * 1024;
 
@@ -182,7 +201,9 @@ function ghRefusal(args: string[]): string | null {
   if (group === "api") {
     const m = args.findIndex((a) => a === "-X" || a === "--method");
     const inline = args.find((a) => /^(-X|--method=)./.test(a));
-    const method = (m >= 0 ? args[m + 1] : inline?.replace(/^(-X|--method=)/, ""))?.toUpperCase();
+    const method =
+      (m >= 0 ? args[m + 1] : inline?.replace(/^(-X|--method=)/, ""))
+        ?.toUpperCase();
     const hasFields = args.some((a) =>
       ["-f", "-F", "--field", "--raw-field", "--input"].includes(a) ||
       /^-[fF]./.test(a) || /^--(raw-field|field|input)=/.test(a)
@@ -194,7 +215,9 @@ function ghRefusal(args: string[]): string | null {
   }
   if (GH_FREE.has(group)) return null;
   if (GH_READ[group]?.has(verb)) {
-    if (group === "auth" && args.some((a) => a === "--show-token" || a === "-t")) {
+    if (
+      group === "auth" && args.some((a) => a === "--show-token" || a === "-t")
+    ) {
       return "gh auth status --show-token prints the user's token";
     }
     return null;
@@ -213,18 +236,26 @@ function gitArgs(words: string[]): string[] {
   return [];
 }
 
-async function gitRefusal(words: string[], cwd: string): Promise<string | null> {
+async function gitRefusal(
+  words: string[],
+  cwd: string,
+): Promise<string | null> {
   const [sub = "", next = ""] = gitArgs(words);
-  if (sub === "push") return "git push is the main session's; record the finding instead";
+  if (sub === "push") {
+    return "git push is the main session's; record the finding instead";
+  }
   if (sub === "worktree" && next === "add") {
     return "git worktree add creates a branch in the real repository; clone into the sandbox instead";
   }
   if (!/^[\w-]+$/.test(sub)) return null;
   // The user's own aliases (`pushf = push --force-with-lease`) reach push under another name.
-  const alias = await run("git", ["config", "--get", `alias.${sub}`], { cwd }).catch(() => null);
+  const alias = await run("git", ["config", "--get", `alias.${sub}`], { cwd })
+    .catch(() => null);
   const value = alias?.code === 0 ? alias.stdout.trim() : "";
   if (!value) return null;
-  if (value.startsWith("!")) return explorerRefusal(await getSegments(value.slice(1)), cwd);
+  if (value.startsWith("!")) {
+    return explorerRefusal(await getSegments(value.slice(1)), cwd);
+  }
   return gitRefusal(["git", ...value.split(/\s+/)], cwd);
 }
 
@@ -237,7 +268,11 @@ function sandboxedRefusal(words: string[]): string | null {
   const head = basenameOf(inner[0] ?? "");
   const valueOf = (names: string[]) => {
     const i = inner.findIndex((w) => names.includes(w));
-    return i >= 0 ? inner[i + 1] : inner.find((w) => names.some((n) => w.startsWith(`${n}=`)))?.split("=")[1];
+    return i >= 0
+      ? inner[i + 1]
+      : inner.find((w) => names.some((n) => w.startsWith(`${n}=`)))?.split(
+        "=",
+      )[1];
   };
   if (head === "tmux") {
     const socket = valueOf(["-S"]);
@@ -255,7 +290,11 @@ function sandboxedRefusal(words: string[]): string | null {
 }
 
 /** The script a command runs: `sh file`, `source file`, `. file`, or a path to a shell script. */
-async function scriptOf(head: string, words: string[], cwd: string): Promise<string | null> {
+async function scriptOf(
+  head: string,
+  words: string[],
+  cwd: string,
+): Promise<string | null> {
   let path: string | undefined;
   if (SHELLS.has(head)) path = words.slice(1).find((w) => !w.startsWith("-"));
   else if (head === "source" || head === ".") path = words[1];
@@ -267,7 +306,9 @@ async function scriptOf(head: string, words: string[], cwd: string): Promise<str
   const text = await readFile(full, "utf8");
   if (text.includes("\u0000")) return null;
   const shebang = /^#!.*\b(ba|z|da)?sh\b/.test(text.split("\n", 1)[0] ?? "");
-  if (!SHELLS.has(head) && head !== "source" && head !== "." && !shebang) return null;
+  if (!SHELLS.has(head) && head !== "source" && head !== "." && !shebang) {
+    return null;
+  }
   return text;
 }
 
@@ -280,9 +321,15 @@ async function scriptOf(head: string, words: string[], cwd: string): Promise<str
  * Shell scripts it runs are read too, because its definition has it write multi-line
  * commands to files.
  */
-export function explorerRefusal(segments: string[], cwd: string): Promise<string | null> {
+export function explorerRefusal(
+  segments: string[],
+  cwd: string,
+): Promise<string | null> {
   return refusalIn(segments, async (head, words) => {
-    if (head === "tmux" && tmuxReachesDefault(words.slice(1), (p) => SANDBOX_SOCKET.test(p))) {
+    if (
+      head === "tmux" &&
+      tmuxReachesDefault(words.slice(1), (p) => SANDBOX_SOCKET.test(p))
+    ) {
       return "tmux without a global -L or -S would reach the user's tmux server; name the sandbox socket (tmux -S <socket> <command>)";
     }
     if (head === "launchctl") return "launchctl reaches the user's launchd";
@@ -325,8 +372,15 @@ async function refusalIn(
     } else if (follow && follow.depth < 3) {
       const script = await scriptOf(head, words, follow.cwd);
       if (script !== null) {
-        const inner = await refusalIn(await getSegments(script), decide, { ...follow, depth: follow.depth + 1 });
-        if (inner) return `${inner} (in the script ${words[SHELLS.has(head) || head === "source" || head === "." ? 1 : 0]})`;
+        const inner = await refusalIn(await getSegments(script), decide, {
+          ...follow,
+          depth: follow.depth + 1,
+        });
+        if (inner) {
+          return `${inner} (in the script ${
+            words[SHELLS.has(head) || head === "source" || head === "." ? 1 : 0]
+          })`;
+        }
       }
     }
     const refusal = await decide(head, words);
@@ -402,7 +456,11 @@ function ghCommand(args: string[]): [string, string, string[]] {
     else if (!args[i].startsWith("-")) positional.push(i);
   }
   const [g, v] = positional;
-  return [args[g] ?? "", args[v] ?? "", v === undefined ? [] : args.slice(v + 1)];
+  return [
+    args[g] ?? "",
+    args[v] ?? "",
+    v === undefined ? [] : args.slice(v + 1),
+  ];
 }
 
 // The segments lose their quotes (`--title "Add --dry-run"` becomes three words), so
@@ -423,7 +481,9 @@ export function publishesText(
     const [group, verb, rest] = ghCommand(words.slice(1));
     if (group !== "pr" && group !== "issue") return null;
     if (verb === "create" || verb === "new") return "publishes";
-    if (verb === "edit" && rest.some((w) => TEXT_FLAGS.test(w))) return "publishes";
+    if (verb === "edit" && rest.some((w) => TEXT_FLAGS.test(w))) {
+      return "publishes";
+    }
     return null;
   }).then((hit) => hit !== null);
 }
@@ -453,7 +513,11 @@ export function ownTranscript(
 ): string | undefined {
   const t = input.transcript_path;
   if (!t || !input.agent_id) return t;
-  return join(t.replace(/\.jsonl$/, ""), "subagents", `agent-${input.agent_id}.jsonl`);
+  return join(
+    t.replace(/\.jsonl$/, ""),
+    "subagents",
+    `agent-${input.agent_id}.jsonl`,
+  );
 }
 
 // A subagent's hook input carries its parent's session_id, so the key adds agent_id;
@@ -463,7 +527,10 @@ export function takeDeliverableHint(
   markerDir = join(tmpdir(), "claude-deliverable-hint"),
 ): boolean {
   if (!input.session_id) return false;
-  const key = `${input.session_id}-${input.agent_id ?? "main"}`.replace(/[^\w-]/g, "_");
+  const key = `${input.session_id}-${input.agent_id ?? "main"}`.replace(
+    /[^\w-]/g,
+    "_",
+  );
   try {
     mkdirSync(markerDir, { recursive: true });
     closeSync(openSync(join(markerDir, key), "wx"));

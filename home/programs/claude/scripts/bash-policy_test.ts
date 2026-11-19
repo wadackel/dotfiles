@@ -312,24 +312,51 @@ for (
 }
 
 test("the exploratory-session refusal does not apply to the main session or the breaker's network rule", async () => {
-  assertEquals((await asAgent("gh issue create -R o/r --title t --body b", {})).code, 0);
-  assertEquals((await asAgent("curl -s http://127.0.0.1:3000", EXPLORER)).code, 0);
-  assertEquals((await asAgent("tmux -S /private/tmp/xs-AbC123/tmux-501/default kill-server", BREAKER)).code, 2);
+  assertEquals(
+    (await asAgent("gh issue create -R o/r --title t --body b", {})).code,
+    0,
+  );
+  assertEquals(
+    (await asAgent("curl -s http://127.0.0.1:3000", EXPLORER)).code,
+    0,
+  );
+  assertEquals(
+    (await asAgent(
+      "tmux -S /private/tmp/xs-AbC123/tmux-501/default kill-server",
+      BREAKER,
+    )).code,
+    2,
+  );
 });
 
 test("exploratory-session: a shell script it runs is read and its commands refused", async () => {
   const bareTmux = async (dir: string) => {
-    await writeFile(join(dir, "drive.sh"), "#!/bin/sh\nset -e\ntmux new -d -s app 'sleep 5'\n");
+    await writeFile(
+      join(dir, "drive.sh"),
+      "#!/bin/sh\nset -e\ntmux new -d -s app 'sleep 5'\n",
+    );
     await chmod(join(dir, "drive.sh"), 0o755);
     await writeFile(join(dir, "outer.sh"), "#!/bin/bash\nsh ./drive.sh\n");
   };
-  for (const command of ["bash drive.sh", "sh -e drive.sh", "./drive.sh", "source drive.sh", ". ./drive.sh", "bash outer.sh"]) {
+  for (
+    const command of [
+      "bash drive.sh",
+      "sh -e drive.sh",
+      "./drive.sh",
+      "source drive.sh",
+      ". ./drive.sh",
+      "bash outer.sh",
+    ]
+  ) {
     const { code, stderr } = await asAgent(command, EXPLORER, bareTmux);
     assertEquals(code, 2, `${command}: ${stderr}`);
     assertStringIncludes(stderr, "in the script");
   }
   const sandboxed = async (dir: string) => {
-    await writeFile(join(dir, "ok.sh"), "#!/bin/sh\ntmux -S /private/tmp/xs-AbC123/tmux-501/default capture-pane -p -t app\n");
+    await writeFile(
+      join(dir, "ok.sh"),
+      "#!/bin/sh\ntmux -S /private/tmp/xs-AbC123/tmux-501/default capture-pane -p -t app\n",
+    );
   };
   assertEquals((await asAgent("bash ok.sh", EXPLORER, sandboxed)).code, 0);
   assertEquals((await asAgent("bash drive.sh", {}, bareTmux)).code, 0);
@@ -370,10 +397,16 @@ for (
 }
 
 test("exploratory-session: a git alias that expands to push is refused", async () => {
-  const { code, stderr } = await asAgent("git pf origin main", EXPLORER, async (dir) => {
-    await run("git", ["init", "-q"], { cwd: dir });
-    await run("git", ["config", "alias.pf", "push --force-with-lease"], { cwd: dir });
-  });
+  const { code, stderr } = await asAgent(
+    "git pf origin main",
+    EXPLORER,
+    async (dir) => {
+      await run("git", ["init", "-q"], { cwd: dir });
+      await run("git", ["config", "alias.pf", "push --force-with-lease"], {
+        cwd: dir,
+      });
+    },
+  );
   assertEquals(code, 2, stderr);
 });
 
@@ -409,7 +442,11 @@ test("publishesText: creating a PR or an Issue, or editing its text, publishes",
     ['gh release create v1 --notes "issue create"', false],
   ];
   for (const [command, expected] of cases) {
-    assertEquals(await publishesText(await getSegments(command), command), expected, command);
+    assertEquals(
+      await publishesText(await getSegments(command), command),
+      expected,
+      command,
+    );
   }
 });
 
@@ -419,7 +456,10 @@ test("takeDeliverableHint: once per session and subagent, never without a sessio
   try {
     assertEquals(takeDeliverableHint({ session_id: "s1" }, dir), true);
     assertEquals(takeDeliverableHint({ session_id: "s1" }, dir), false);
-    assertEquals(takeDeliverableHint({ session_id: "s1", agent_id: "a1" }, dir), true);
+    assertEquals(
+      takeDeliverableHint({ session_id: "s1", agent_id: "a1" }, dir),
+      true,
+    );
     assertEquals(takeDeliverableHint({ session_id: "s2" }, dir), true);
     assertEquals(takeDeliverableHint({}, dir), false);
   } finally {
@@ -434,7 +474,9 @@ test("entry point: the first PR creation of a session is held back with the hint
       run(HOOK_SCRIPT, [], {
         stdin: JSON.stringify({
           tool_name: "Bash",
-          tool_input: { command: "gh pr create --title x --body-file /tmp/b.md" },
+          tool_input: {
+            command: "gh pr create --title x --body-file /tmp/b.md",
+          },
           session_id: "entry-session",
         }),
         env: { TMPDIR: dir },
@@ -454,9 +496,15 @@ test("alreadyRevised: a transcript that loaded the writing skill counts as revis
   const dir = await mkdtemp(join(tmpdir(), "deliverable-transcript-"));
   try {
     const loaded = join(dir, "loaded.jsonl");
-    await writeFile(loaded, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"writing"}}]}}\n');
+    await writeFile(
+      loaded,
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"writing"}}]}}\n',
+    );
     const other = join(dir, "other.jsonl");
-    await writeFile(other, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"create-pr"}}]}}\n{"type":"user","message":{"content":[{"type":"tool_result","content":"return t.includes(\'\\"input\\":{\\"skill\\":\\"writing\\"\'); <command-name>/writing</command-name>"}]}}\n');
+    await writeFile(
+      other,
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"create-pr"}}]}}\n{"type":"user","message":{"content":[{"type":"tool_result","content":"return t.includes(\'\\"input\\":{\\"skill\\":\\"writing\\"\'); <command-name>/writing</command-name>"}]}}\n',
+    );
     assertEquals(await alreadyRevised(loaded), true);
     assertEquals(await alreadyRevised(other), false);
     assertEquals(await alreadyRevised(join(dir, "missing.jsonl")), false);
@@ -509,7 +557,10 @@ test("entry point: CLAUDE_DELIVERABLE_HINT_SKIP=1 lets the first PR creation thr
 
 test("ownTranscript: a subagent reads its own transcript beside the session's", async () => {
   const { ownTranscript } = await import("./bash-policy.ts");
-  assertEquals(ownTranscript({ transcript_path: "/p/s1.jsonl" }), "/p/s1.jsonl");
+  assertEquals(
+    ownTranscript({ transcript_path: "/p/s1.jsonl" }),
+    "/p/s1.jsonl",
+  );
   assertEquals(
     ownTranscript({ transcript_path: "/p/s1.jsonl", agent_id: "a7" }),
     "/p/s1/subagents/agent-a7.jsonl",

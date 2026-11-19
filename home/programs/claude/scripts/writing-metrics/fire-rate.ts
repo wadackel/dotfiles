@@ -240,9 +240,9 @@ console.log("\n語の選び方（1 万字あたり）");
 for (const p of WORD_PAIRS) {
   const per10k = (k: number) => (k / chars * 10000).toFixed(2);
   console.log(
-    `${p.coined} ${per10k(coinedCounts.get(p.coined) ?? 0)} / ${p.established} ${
-      per10k(establishedCounts.get(p.established) ?? 0)
-    }`,
+    `${p.coined} ${
+      per10k(coinedCounts.get(p.coined) ?? 0)
+    } / ${p.established} ${per10k(establishedCounts.get(p.established) ?? 0)}`,
   );
 }
 console.log("\nスキル文脈別 文字数（応答数 / 中央値）");

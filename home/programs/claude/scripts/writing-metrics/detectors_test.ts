@@ -437,7 +437,10 @@ test("replyKind: 質問・報告・Plan ready・その他を見出しと固定�
     "report",
   );
   // 2026-11-19 より前の見出しも報告として数える
-  assertEquals(replyKind("依頼どおり。\n\n**確かめたこと**\n- テスト 12 件"), "report");
+  assertEquals(
+    replyKind("依頼どおり。\n\n**確かめたこと**\n- テスト 12 件"),
+    "report",
+  );
   assertEquals(
     replyKind("## Plan ready\n- Status: PENDING APPROVAL"),
     "plan-ready",
@@ -460,7 +463,17 @@ test("wordChoice: ソフトウェアの「版」と「確かめ」を、定着�
     "```",
   ].join("\n");
   assertEquals(wordChoice(text), [
-    { coined: "版", established: "バージョン", coinedCount: 1, establishedCount: 1 },
-    { coined: "確かめ", established: "確認", coinedCount: 1, establishedCount: 1 },
+    {
+      coined: "版",
+      established: "バージョン",
+      coinedCount: 1,
+      establishedCount: 1,
+    },
+    {
+      coined: "確かめ",
+      established: "確認",
+      coinedCount: 1,
+      establishedCount: 1,
+    },
   ]);
 });

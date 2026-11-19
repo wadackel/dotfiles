@@ -59,7 +59,9 @@ const isProtected = (key: string) =>
 const SHORT_DIR = /^\/private\/tmp\/xs-[^/]+$/;
 
 const sshOptions = (state: string) =>
-  `-F /dev/null -o IdentitiesOnly=yes -o IdentityFile=/dev/null -o BatchMode=yes -o UserKnownHostsFile=${join(state, "home", ".ssh", "known_hosts")}`;
+  `-F /dev/null -o IdentitiesOnly=yes -o IdentityFile=/dev/null -o BatchMode=yes -o UserKnownHostsFile=${
+    join(state, "home", ".ssh", "known_hosts")
+  }`;
 
 const metaPath = (root: string) => join(root, "sandbox.json");
 
@@ -69,11 +71,16 @@ const metaPath = (root: string) => join(root, "sandbox.json");
  */
 export async function loadSandbox(rootArg: string): Promise<Sandbox> {
   const root = await realpath(rootArg);
-  const meta = JSON.parse(await readFile(metaPath(root), "utf8")) as Partial<Sandbox>;
+  const meta = JSON.parse(await readFile(metaPath(root), "utf8")) as Partial<
+    Sandbox
+  >;
   const shortDir = String(meta.shortDir ?? "");
   // A link named like one (/private/tmp/xs-q -> /private/tmp) would point tmux at the user's server.
-  const st = SHORT_DIR.test(shortDir) ? lstatSync(shortDir, { throwIfNoEntry: false }) : undefined;
-  const owned = st?.isDirectory() && !st.isSymbolicLink() && st.uid === process.getuid?.();
+  const st = SHORT_DIR.test(shortDir)
+    ? lstatSync(shortDir, { throwIfNoEntry: false })
+    : undefined;
+  const owned = st?.isDirectory() && !st.isSymbolicLink() &&
+    st.uid === process.getuid?.();
   if (!owned || (await realpath(shortDir)) !== shortDir) {
     throw new Error(`sandbox.json names an unexpected shortDir: ${shortDir}`);
   }
@@ -120,7 +127,9 @@ export async function initSandbox(rootArg: string): Promise<Sandbox> {
     env: {},
     created: new Date().toISOString(),
   };
-  for (const dir of ["home", "xdg/config", "xdg/data", "xdg/state", "xdg/cache"]) {
+  for (
+    const dir of ["home", "xdg/config", "xdg/data", "xdg/state", "xdg/cache"]
+  ) {
     await mkdir(join(state, dir), { recursive: true });
   }
   await mkdir(join(shortDir, "tmp"), { recursive: true });
@@ -147,7 +156,10 @@ export async function initSandbox(rootArg: string): Promise<Sandbox> {
   return sb;
 }
 
-export function sandboxEnv(sb: Sandbox, parent: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function sandboxEnv(
+  sb: Sandbox,
+  parent: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
   const env: Record<string, string> = {
     TERM: parent.TERM ?? "xterm-256color",
     LANG: parent.LANG ?? "en_US.UTF-8",
@@ -161,7 +173,9 @@ export function sandboxEnv(sb: Sandbox, parent: NodeJS.ProcessEnv = process.env)
   }
   // Applied after the recorded variables, so none of them can undo the isolation.
   Object.assign(env, {
-    PATH: `${join(sb.shortDir, "bin")}:${env.PATH ?? parent.PATH ?? "/usr/bin:/bin"}`,
+    PATH: `${join(sb.shortDir, "bin")}:${
+      env.PATH ?? parent.PATH ?? "/usr/bin:/bin"
+    }`,
     // The user's zsh rebuilds PATH from nix-darwin's set-environment unless told it already ran,
     // which dropped the ssh shim in a pane or a `$SHELL -c`; /bin/sh reads no such file.
     SHELL: "/bin/sh",
@@ -181,12 +195,20 @@ export function sandboxEnv(sb: Sandbox, parent: NodeJS.ProcessEnv = process.env)
   return env;
 }
 
-export async function addEnv(sb: Sandbox, assignment: string, reason: string): Promise<Sandbox> {
+export async function addEnv(
+  sb: Sandbox,
+  assignment: string,
+  reason: string,
+): Promise<Sandbox> {
   const eq = assignment.indexOf("=");
   if (eq <= 0) throw new Error(`expected KEY=VALUE, got ${assignment}`);
   const key = assignment.slice(0, eq);
-  if (isProtected(key)) throw new Error(`${key} is part of the isolation and cannot be set`);
-  if (!reason.trim()) throw new Error("--reason is required: say why the target needs it");
+  if (isProtected(key)) {
+    throw new Error(`${key} is part of the isolation and cannot be set`);
+  }
+  if (!reason.trim()) {
+    throw new Error("--reason is required: say why the target needs it");
+  }
   sb.env[key] = { value: assignment.slice(eq + 1), reason };
   await saveSandbox(sb);
   return sb;
@@ -195,14 +217,27 @@ export async function addEnv(sb: Sandbox, assignment: string, reason: string): P
 export type ExecOptions = { timeoutSec: number; cwd?: string };
 
 /** Runs the command in its own process group so a timeout also stops what it started. */
-export async function sandboxCwd(sb: Sandbox, cwdArg?: string): Promise<string> {
+export async function sandboxCwd(
+  sb: Sandbox,
+  cwdArg?: string,
+): Promise<string> {
   const cwd = await realpath(cwdArg ? resolve(sb.state, cwdArg) : sb.state);
-  const inside = [sb.root, sb.shortDir].some((p) => cwd === p || cwd.startsWith(`${p}/`));
-  if (!inside) throw new Error(`--cwd ${cwd} is outside the sandbox; clone or copy what the product needs into it`);
+  const inside = [sb.root, sb.shortDir].some((p) =>
+    cwd === p || cwd.startsWith(`${p}/`)
+  );
+  if (!inside) {
+    throw new Error(
+      `--cwd ${cwd} is outside the sandbox; clone or copy what the product needs into it`,
+    );
+  }
   return cwd;
 }
 
-export async function execInSandbox(sb: Sandbox, cmd: string[], opts: ExecOptions): Promise<number> {
+export async function execInSandbox(
+  sb: Sandbox,
+  cmd: string[],
+  opts: ExecOptions,
+): Promise<number> {
   const cwd = await sandboxCwd(sb, opts.cwd);
   return new Promise((resolvePromise, reject) => {
     const child = spawn(cmd[0]!, cmd.slice(1), {
@@ -240,7 +275,11 @@ export async function execInSandbox(sb: Sandbox, cmd: string[], opts: ExecOption
       // The group is not killed on a normal exit: a daemon the product starts must survive it,
       // or "start, then status" fails only inside the sandbox. destroy stops what is left.
       if (timedOut) {
-        process.stderr.write(`explore-sandbox: timed out after ${opts.timeoutSec}s: ${cmd.join(" ")}\n`);
+        process.stderr.write(
+          `explore-sandbox: timed out after ${opts.timeoutSec}s: ${
+            cmd.join(" ")
+          }\n`,
+        );
         resolvePromise(124);
         return;
       }
@@ -250,13 +289,23 @@ export async function execInSandbox(sb: Sandbox, cmd: string[], opts: ExecOption
 }
 
 async function git(sb: Sandbox, args: string[], cwd?: string): Promise<string> {
-  const result = await run("git", args, { cwd: cwd ?? sb.state, env: sandboxEnv(sb), clearEnv: true });
-  if (result.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim()}`);
+  const result = await run("git", args, {
+    cwd: cwd ?? sb.state,
+    env: sandboxEnv(sb),
+    clearEnv: true,
+  });
+  if (result.code !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.trim()}`);
+  }
   return result.stdout;
 }
 
 /** A clone whose origin is a bare repository inside the sandbox, so a push or sync never reaches the source. */
-export async function cloneInto(sb: Sandbox, source: string, name: string): Promise<{ clone: string; origin: string }> {
+export async function cloneInto(
+  sb: Sandbox,
+  source: string,
+  name: string,
+): Promise<{ clone: string; origin: string }> {
   const src = await realpath(source);
   const clone = join(sb.state, name);
   const origin = join(sb.state, `${name}.origin.git`);
@@ -270,7 +319,8 @@ export async function cloneInto(sb: Sandbox, source: string, name: string): Prom
 /** Sockets and FIFOs are runtime artifacts of a running process; cp cannot copy them. */
 const regularTree = (src: string) => {
   const st = lstatSync(src);
-  return !st.isSocket() && !st.isFIFO() && !st.isCharacterDevice() && !st.isBlockDevice();
+  return !st.isSocket() && !st.isFIFO() && !st.isCharacterDevice() &&
+    !st.isBlockDevice();
 };
 
 /** Copies beside the destination and swaps it in, so a failed copy leaves the old one whole. */
@@ -278,7 +328,11 @@ async function replaceTree(from: string, to: string): Promise<void> {
   const next = `${to}.next`;
   const old = `${to}.old`;
   await rm(next, { recursive: true, force: true });
-  await cp(from, next, { recursive: true, verbatimSymlinks: true, filter: regularTree });
+  await cp(from, next, {
+    recursive: true,
+    verbatimSymlinks: true,
+    filter: regularTree,
+  });
   await rm(old, { recursive: true, force: true });
   if (await exists(to)) await rename(to, old);
   await rename(next, to);
@@ -290,7 +344,9 @@ export async function snapshotState(sb: Sandbox): Promise<void> {
 }
 
 export async function resetState(sb: Sandbox): Promise<void> {
-  if (!(await exists(sb.template))) throw new Error("no template: run snapshot first");
+  if (!(await exists(sb.template))) {
+    throw new Error("no template: run snapshot first");
+  }
   await replaceTree(sb.template, sb.state);
 }
 
@@ -302,7 +358,11 @@ async function ancestors(): Promise<Set<number>> {
     if (pid) parent.set(pid, ppid ?? 0);
   }
   const mine = new Set<number>();
-  for (let pid = process.pid; pid > 1 && !mine.has(pid); pid = parent.get(pid) ?? 0) mine.add(pid);
+  for (
+    let pid = process.pid;
+    pid > 1 && !mine.has(pid);
+    pid = parent.get(pid) ?? 0
+  ) mine.add(pid);
   return mine;
 }
 
@@ -312,12 +372,25 @@ async function ancestors(): Promise<Set<number>> {
  * finds a daemon that moved its cwd to /. This process and its ancestors are left out: the
  * shell that ran `destroy <root>` carries the root in its command line.
  */
-export async function sandboxProcesses(paths: string[]): Promise<Array<{ pid: number; command: string; cwd: string }>> {
-  const inside = (p: string) => paths.some((root) => p === root || p.startsWith(`${root}/`));
+export async function sandboxProcesses(
+  paths: string[],
+): Promise<Array<{ pid: number; command: string; cwd: string }>> {
+  const inside = (p: string) =>
+    paths.some((root) => p === root || p.startsWith(`${root}/`));
   const skip = await ancestors();
-  const found = new Map<number, { pid: number; command: string; cwd: string }>();
+  const found = new Map<
+    number,
+    { pid: number; command: string; cwd: string }
+  >();
   const uid = process.getuid?.() ?? 0;
-  const lsof = await run("lsof", ["-a", "-d", "cwd", "-u", String(uid), "-Fpcn"]);
+  const lsof = await run("lsof", [
+    "-a",
+    "-d",
+    "cwd",
+    "-u",
+    String(uid),
+    "-Fpcn",
+  ]);
   let pid = 0;
   let command = "";
   for (const line of lsof.stdout.split("\n")) {
@@ -332,8 +405,14 @@ export async function sandboxProcesses(paths: string[]): Promise<Array<{ pid: nu
     const match = /^\s*(\d+)\s+(.*)$/.exec(line);
     if (!match) continue;
     const id = Number(match[1]);
-    if (skip.has(id) || found.has(id) || !paths.some((p) => match[2]!.includes(p))) continue;
-    found.set(id, { pid: id, command: basename(match[2]!.split(/\s+/)[0] ?? ""), cwd: "(command line or environment)" });
+    if (
+      skip.has(id) || found.has(id) || !paths.some((p) => match[2]!.includes(p))
+    ) continue;
+    found.set(id, {
+      pid: id,
+      command: basename(match[2]!.split(/\s+/)[0] ?? ""),
+      cwd: "(command line or environment)",
+    });
   }
   return [...found.values()];
 }
@@ -341,9 +420,17 @@ export async function sandboxProcesses(paths: string[]): Promise<Array<{ pid: nu
 export async function destroySandbox(sb: Sandbox): Promise<string[]> {
   const done: string[] = [];
   const socketDir = join(sb.shortDir, `tmux-${process.getuid?.() ?? 0}`);
-  for (const name of (await exists(socketDir)) ? await readdir(socketDir) : []) {
+  for (
+    const name of (await exists(socketDir)) ? await readdir(socketDir) : []
+  ) {
     const socket = join(socketDir, name);
-    const who = await run("tmux", ["-S", socket, "display", "-p", "#{socket_path}"]).catch(() => null);
+    const who = await run("tmux", [
+      "-S",
+      socket,
+      "display",
+      "-p",
+      "#{socket_path}",
+    ]).catch(() => null);
     if (who?.code === 0 && who.stdout.trim().startsWith(sb.shortDir)) {
       await run("tmux", ["-S", socket, "kill-server"]);
       done.push(`killed tmux server ${socket}`);
@@ -366,7 +453,9 @@ export async function destroySandbox(sb: Sandbox): Promise<string[]> {
     }
   }
   const settle = async (rounds: number) => {
-    for (let i = 0; i < rounds && procs.some((p) => alive(p.pid)); i++) await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < rounds && procs.some((p) => alive(p.pid)); i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
   };
   await settle(30);
   for (const proc of procs) {
@@ -379,7 +468,11 @@ export async function destroySandbox(sb: Sandbox): Promise<string[]> {
   }
   await settle(10);
   for (const proc of procs) {
-    done.push(`${alive(proc.pid) ? "could not stop" : "stopped"} ${proc.command} (${proc.pid}) in ${proc.cwd}`);
+    done.push(
+      `${
+        alive(proc.pid) ? "could not stop" : "stopped"
+      } ${proc.command} (${proc.pid}) in ${proc.cwd}`,
+    );
   }
   await rm(sb.shortDir, { recursive: true, force: true });
   await rm(sb.root, { recursive: true, force: true });
@@ -413,7 +506,15 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (command === "init") {
     const sb = await initSandbox(rootArg);
-    process.stdout.write(`${JSON.stringify({ root: sb.root, state: sb.state, shortDir: sb.shortDir })}\n`);
+    process.stdout.write(
+      `${
+        JSON.stringify({
+          root: sb.root,
+          state: sb.state,
+          shortDir: sb.shortDir,
+        })
+      }\n`,
+    );
     return 0;
   }
   const sb = await loadSandbox(rootArg);
@@ -436,8 +537,13 @@ export async function main(argv: string[]): Promise<number> {
         }
       }
       // setTimeout holds a signed 32-bit millisecond count; past it the timer fires at once.
-      if (!Number.isFinite(timeoutSec) || timeoutSec <= 0 || timeoutSec > 2_147_483) {
-        process.stderr.write("--timeout must be between 1 and 2147483 seconds\n");
+      if (
+        !Number.isFinite(timeoutSec) || timeoutSec <= 0 ||
+        timeoutSec > 2_147_483
+      ) {
+        process.stderr.write(
+          "--timeout must be between 1 and 2147483 seconds\n",
+        );
         return 2;
       }
       try {
@@ -454,7 +560,9 @@ export async function main(argv: string[]): Promise<number> {
         process.stderr.write("clone <root> <source-repo> <name>\n");
         return 2;
       }
-      process.stdout.write(`${JSON.stringify(await cloneInto(sb, source, name))}\n`);
+      process.stdout.write(
+        `${JSON.stringify(await cloneInto(sb, source, name))}\n`,
+      );
       return 0;
     }
     case "env-add": {
@@ -467,7 +575,9 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
     case "env":
-      for (const [key, value] of Object.entries(sandboxEnv(sb))) process.stdout.write(`${key}=${value}\n`);
+      for (const [key, value] of Object.entries(sandboxEnv(sb))) {
+        process.stdout.write(`${key}=${value}\n`);
+      }
       return 0;
     case "snapshot":
       await snapshotState(sb);
@@ -479,7 +589,9 @@ export async function main(argv: string[]): Promise<number> {
       process.stdout.write(`${JSON.stringify(sb, null, 2)}\n`);
       return 0;
     case "destroy":
-      for (const line of await destroySandbox(sb)) process.stdout.write(`${line}\n`);
+      for (const line of await destroySandbox(sb)) {
+        process.stdout.write(`${line}\n`);
+      }
       return 0;
     default:
       process.stderr.write(`unknown command ${command}\n${HELP}\n`);
@@ -491,7 +603,11 @@ if (import.meta.main) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (error: unknown) => {
-      process.stderr.write(`explore-sandbox: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(
+        `explore-sandbox: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      );
       process.exit(1);
     },
   );

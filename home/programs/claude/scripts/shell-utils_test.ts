@@ -503,7 +503,9 @@ test("parseCommand: process substitution falls back gracefully", async () => {
 
 test("getSegments: a command run inside an assignment is a segment", async () => {
   assertEquals(
-    await getSegments("URL=$(gh pr create --title x --body-file f) && echo $URL"),
+    await getSegments(
+      "URL=$(gh pr create --title x --body-file f) && echo $URL",
+    ),
     ["gh pr create --title x --body-file f", "echo $URL"],
   );
 });
