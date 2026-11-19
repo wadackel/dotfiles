@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
- * 対話履歴の和文応答に writing-clarity 検出器を当て、カテゴリ別の
+ * 対話履歴の和文応答に writing lint の検出器を当て、カテゴリ別の
  * 応答単位発火率と千字あたり件数を測る規範追跡ツール。
  * 比較対象は fire-rate-baseline.md に commit された過去の実測値。
  * transcript は約30日のローリング保持で消えるため、二群比較モードは持たない —

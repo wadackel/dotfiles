@@ -48,6 +48,6 @@ Record what to build, not how:
 
 File paths, step-by-step changes, lists of callers, and test names stay out. The implementer reads the code again anyway, and a recorded procedure goes stale and pulls the implementer toward it.
 
-Do not add a review pass over the draft. Holes are found during the conversation, where the user can decide them; a separate reviewer after the draft costs time and tokens for findings that arrive too late to discuss. Wording is another matter: before filing, revise the text with the writing-clarity skill, which changes how the decisions read and leaves the decisions alone.
+Do not add a review pass over the draft. Holes are found during the conversation, where the user can decide them; a separate reviewer after the draft costs time and tokens for findings that arrive too late to discuss. Wording is another matter: before filing, revise the text with the writing skill, which changes how the decisions read and leaves the decisions alone.
 
 When the feature will not fit one pull request, say where it can be cut and whether each part can be run and checked without the others. How the parts are run (one per session with human review, or several at once) is for the repository's instructions and the user.

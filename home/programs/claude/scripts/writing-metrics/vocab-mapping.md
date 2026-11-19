@@ -4,7 +4,7 @@
 497,339字 括弧内は出現回数。10回以上の語のみ。
 
 分類の原則 (現行の正本は `~/.claude/CLAUDE.md` の `### Writing` と
-`writing-clarity/references/protected-terms.md`):
+`writing/references/protected-terms.md`):
 
 - 固有名詞は原語のまま残す。定義した側が名前として扱う語は訳さない
 - 英語の専門用語は動作に書き下す

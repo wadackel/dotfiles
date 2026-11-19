@@ -377,14 +377,14 @@ export function matchRule(rules: Rule[], segment: string): Rule | null {
 
 // --- Deliverable hint ---
 
-// The writing-clarity description fired on 4 of 24 requests to draft a PR or an
+// The writing skill's description fired on 4 of 24 requests to draft a PR or an
 // Issue, because the model runs git or reads files before it looks at the skill
 // listing, and half of the PRs and Issues created here came from sessions that never
 // loaded create-pr. Publishing is the moment every route shares, so the first such
 // command of a session (or of a subagent) is held back once with a pointer to the skill.
 export const DELIVERABLE_HINT = [
   "[bash-policy] This command publishes the title or body of a PR or an Issue.",
-  "Load the writing-clarity skill and revise that text with it (the --body-file in place, or the --title and --body values), then run the command again.",
+  "Load the writing skill and revise that text with it (the --body-file in place, or the --title and --body values), then run the command again.",
   "If the user gave this exact text to publish, run the command again unchanged. This check stops only the first such command of a session; the next one runs.",
 ].join("\n");
 
@@ -428,7 +428,7 @@ export function publishesText(
   }).then((hit) => hit !== null);
 }
 
-// create-pr and spec revise with writing-clarity before they publish; holding their
+// create-pr and spec revise with the writing skill before they publish; holding their
 // command back as well would only cost a turn, so a transcript that already shows the
 // skill being called counts as revised. Only the tool call's own JSON is matched: in a
 // tool result the same text has its quotes escaped, so reading this file does not count.
@@ -440,7 +440,7 @@ export async function alreadyRevised(
     const info = await stat(transcriptPath);
     if (!info.isFile() || info.size > 64_000_000) return false;
     const t = await readFile(transcriptPath, "utf8");
-    return t.includes('"input":{"skill":"writing-clarity"');
+    return t.includes('"input":{"skill":"writing"');
   } catch {
     return false;
   }

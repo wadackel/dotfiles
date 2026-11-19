@@ -1,9 +1,9 @@
 ---
-name: writing-clarity
+name: writing
 description: Makes a document meant for other people (a PR description, an Issue, a design doc, an internal document, a README, a commit message or a code comment) clear and concise for a reader who never saw the conversation. Use when writing or revising one, when asked to make text readable, shorter, or less AI-sounding, or to audit writing.
 ---
 
-# Writing Clarity
+# Writing
 
 Clarity here means: a reader who never saw the conversation that produced the
 text reads it once, understands it, and can act on it. For a deliverable (a PR

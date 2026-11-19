@@ -1,9 +1,9 @@
 /**
- * writing-clarity lint の検出層。
+ * writing lint の検出層。
  * CLAUDE.md `### Writing` 規範の違反候補を和文 Markdown から決定的に検出する。
  * 検出は疑いの提示であり、直すかどうかの判断は AI/人間に委ねる。
  * 許可辞書とワークフロー語彙の正本は
- * `home/programs/agents/skills/writing-clarity/references/protected-terms.md`。
+ * `home/programs/agents/skills/writing/references/protected-terms.md`。
  */
 
 import { stat } from "node:fs/promises";
@@ -48,7 +48,7 @@ export async function resolveRepoRoot(): Promise<string> {
 
 export async function resolveProtectedTermsPath(): Promise<string> {
   const repo = await resolveRepoRoot();
-  return `${repo}/home/programs/agents/skills/writing-clarity/references/protected-terms.md`;
+  return `${repo}/home/programs/agents/skills/writing/references/protected-terms.md`;
 }
 
 const WORD_LIST_LINE = /^[A-Za-z][A-Za-z-]*(?:,\s*[A-Za-z-]+)*,?$/;

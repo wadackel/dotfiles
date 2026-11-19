@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 /**
- * writing-clarity lint — CLAUDE.md `### Writing` 規範の違反候補を検出する。
+ * writing lint — CLAUDE.md `### Writing` 規範の違反候補を検出する。
  * 対象は和文 Markdown 1ファイル。検出は疑いの提示であり、修正判断は AI/人間が行う。
  *
  * 使い方:

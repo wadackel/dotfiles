@@ -441,7 +441,7 @@ test("entry point: the first PR creation of a session is held back with the hint
       });
     const first = await call();
     assertEquals(first.code, 2, first.stderr);
-    assertStringIncludes(first.stderr, "writing-clarity");
+    assertStringIncludes(first.stderr, "Load the writing skill");
     const second = await call();
     assertEquals(second.code, 0, second.stderr);
   } finally {
@@ -449,14 +449,14 @@ test("entry point: the first PR creation of a session is held back with the hint
   }
 });
 
-test("alreadyRevised: a transcript that loaded writing-clarity counts as revised", async () => {
+test("alreadyRevised: a transcript that loaded the writing skill counts as revised", async () => {
   const { alreadyRevised } = await import("./bash-policy.ts");
   const dir = await mkdtemp(join(tmpdir(), "deliverable-transcript-"));
   try {
     const loaded = join(dir, "loaded.jsonl");
-    await writeFile(loaded, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"writing-clarity"}}]}}\n');
+    await writeFile(loaded, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"writing"}}]}}\n');
     const other = join(dir, "other.jsonl");
-    await writeFile(other, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"create-pr"}}]}}\n{"type":"user","message":{"content":[{"type":"tool_result","content":"return t.includes(\'\\"input\\":{\\"skill\\":\\"writing-clarity\\"\'); <command-name>/writing-clarity</command-name>"}]}}\n');
+    await writeFile(other, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"create-pr"}}]}}\n{"type":"user","message":{"content":[{"type":"tool_result","content":"return t.includes(\'\\"input\\":{\\"skill\\":\\"writing\\"\'); <command-name>/writing</command-name>"}]}}\n');
     assertEquals(await alreadyRevised(loaded), true);
     assertEquals(await alreadyRevised(other), false);
     assertEquals(await alreadyRevised(join(dir, "missing.jsonl")), false);

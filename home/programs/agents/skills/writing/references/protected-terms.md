@@ -85,7 +85,7 @@ agent-browser
 agentower
 agentower-verify
 llm-wiki
-writing-clarity
+writing
 writing-metrics
 # established dev terms (A-5, A-6)
 lint
