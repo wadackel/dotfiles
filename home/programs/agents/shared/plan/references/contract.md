@@ -37,7 +37,7 @@ How far `/impl` or `$impl` ships the change after its review passes. Five lines,
 - Basis: <the words or rule the level rests on, quoted, or no signal>
 ```
 
-`none` leaves the change uncommitted; `commit` commits on the current branch; `push` also pushes it, for a repository whose rule is to commit on the default branch; `pr` opens one PR; `stack` opens a gh-stack stack, one layer per task group. `Draft` and `Merge` matter only for `pr` and `stack`; `Draft: yes` keeps the PRs drafts after CI passes; `check-plan.ts` refuses `Merge: yes` below `pr` or with `Draft: yes` (`delivery-merge`) and a line given twice. The handoff shows the Delivery, marked 仮置き when `Basis` is `no signal`.
+`none` leaves the change uncommitted; `commit` commits on the current branch; `push` also pushes it, for a repository whose rule is to commit on the default branch; `pr` opens one PR; `stack` opens a gh-stack stack, one layer per task group. `Draft` and `Merge` matter only for `pr` and `stack`; `Draft: yes` keeps the PRs drafts after CI passes; `check-plan.ts` refuses `Merge: yes` below `pr` or with `Draft: yes` (`delivery-merge`) and a line given twice. The handoff shows the Delivery, marked `（仮）` when `Basis` is `no signal`.
 
 ## Verification Grants
 
@@ -53,7 +53,7 @@ Operations outside the local machine and dev environments that verification need
 
 Written immediately before `## Overview`. The critic parses them by structure.
 
-- `### Assumptions` — `observation` / `value` / `reason`, plus `user-overridden: true` when the user chose the value, or `user-overridden: default` when the plan adopted the recommendation for a scope boundary as a provisional default (shown in the handoff and the final report as 仮置き). A `user-overridden: default` entry also carries `scope: <the boundary: what is in or out>`; `check-plan.ts` refuses one without it (`assumption-scope`), because a behavior or design value is asked, never provisional.
+- `### Assumptions` — `observation` / `value` / `reason`, plus `user-overridden: true` when the user chose the value, or `user-overridden: default` when the plan adopted the recommendation for a scope boundary as a provisional default (shown in the handoff and the final report as `（仮）`). A `user-overridden: default` entry also carries `scope: <the boundary: what is in or out>`; `check-plan.ts` refuses one without it (`assumption-scope`), because a behavior or design value is asked, never provisional.
 - `### Self-resolved` — entries with `observation` / `value` and a closing line `source: [Direct|Supported|Inferred] <probe command + file:lines>`, a `[Direct]` one followed by `→ <output excerpt>` (the lines the claim rests on), e.g. `source: [Direct] sed -n '12,14p' src/app.ts → 12:const limit = 5` or `source: [Supported] adversarial agent report, round 1`. `[Unknown]` never appears here. A claim the Approach relies on is `[Direct]`, or `[Supported]` only by an observed mechanism whose target does not exist yet or by a delegate observation recorded verbatim with secrets, tokens, credentialed URLs, and personal data replaced by `<redacted: what it is>`.
 - `### Unresolved Items` — `item` / `reason` / `next`; `(none)` when empty. User-only questions never go here.
 
@@ -106,7 +106,7 @@ Codex ends `$plan` with an Approval Summary and `PENDING APPROVAL — $impl [pla
 
 ## Final report
 
-The final report of `/impl` (and its reply under `--review`) and of `$impl` is defined in each impl skill with the same headings and order. Fixed strings: `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `仮置き` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` when Claude's review escalated.
+The final report of `/impl` (and its reply under `--review`) and of `$impl` is defined in each impl skill with the same headings and order. Fixed strings: `レビューしてほしい N か所` for the human-review hunks (line form in `human-review.md`); `（仮）` for an assumption implemented as `user-overridden: default`; `[BLOCKED: gate escalated]` when Claude's review escalated.
 
 ## Reviewer output
 

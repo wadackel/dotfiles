@@ -2,14 +2,14 @@
 
 Read before writing the `/plan` handoff or the `/impl` final report. The handoff examples show how a shape follows from the material: a change that fits in a sentence gets a sentence, parts that act on each other get a diagram. The report example shows the fixed headings and their order from `impl/SKILL.md`; a report keeps only the sections that have content, and what goes in each comes from the request in front of you. Copy neither the subjects nor the wording, and build the content again from the plan.
 
-What stays the same is what approval and the review read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's headings and their order, the marks in its tree, `レビューしてほしい N か所`, and `仮置き` for a provisional assumption. The block is written with its placeholders here so that it is never taken for a real plan.
+What stays the same is what approval and the review read: the closing order of the handoff, its two heading names, the `## Plan ready` block, the report's headings and their order, the marks in its tree, `レビューしてほしい N か所`, and `（仮）` for a provisional assumption. The block is written with its placeholders here so that it is never taken for a real plan.
 
 ## Handoff: a small change
 
 Two files and one behavior, so sentences carry it. No diagram, no tree, no table.
 
 ````
-`greet` に `--version` フラグを足し、指定されたらバージョン文字列を出して終了するようにします。触るのは `src/cli.ts` の引数処理と、そのテスト `src/cli_test.ts` の 2 ファイルです。出荷は手がかりがないので commit しないまま終えます（仮置き。`/impl PR まで` で PR も出します）。
+`greet` に `--version` フラグを足し、指定されたらバージョン文字列を出して終了するようにします。触るのは `src/cli.ts` の引数処理と、そのテスト `src/cli_test.ts` の 2 ファイルです。commit や PR まで進めるかは手がかりがないので、commit しないまま終えます（仮）。`/impl PR まで` と打てば PR も出します。
 
 ## 完了の条件
 
@@ -53,8 +53,8 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 |---|---|---|
 | Slack への送信が失敗しても、端末の通知は出す | 失敗したら全体をエラーにする | 通知の失敗でビルドの結果を見失わない |
 | Webhook の URL は環境変数から読む | 設定ファイルに書く | 設定ファイルはリポジトリに入る |
-| （仮置き）通知の宛先は Slack の既定チャンネル | 設定で選べるようにする | 1 チャンネルで足りる間は設定を増やさない。`/impl` の前に覆せる |
-| 出荷: draft PR を 1 本、CI 通過まで。merge しない | commit で止める | 依頼文の「PR まで出して」。`/impl merge まで` で merge も行う |
+| （仮）通知の宛先は Slack の既定チャンネル | 設定で選べるようにする | 1 チャンネルで足りる間は設定を増やさない。`/impl` の前に覆せる |
+| 出す範囲: draft PR を 1 本、CI 通過まで。merge しない | commit で止める | 依頼文の「PR まで出して」。`/impl merge まで` で merge も行う |
 
 ほかの前提 2 件は計画ファイルにあります。
 
@@ -80,7 +80,7 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 
 - 外部への書き込み・送信 — ビルド失敗時に Slack の Webhook へ POST する処理を足す(`src/slack_sender.ts`)
 
-レビューしてほしい変更を確かめたうえで、上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。
+レビューしてほしい変更を確認したうえで、上の条件が通れば、diff を読まずに受け入れられる状態です。条件を足すなら直す点を伝えてください。
 
 `<plan path>`
 
@@ -118,11 +118,11 @@ frontend/share/Dialog.tsx   保存時のエラー表示を削除（削除あり�
 レビューしてほしい 1 か所
 - `migrations/0042_sharing.sql` — 取り消せない操作。既存の null を「共有しない」に書き換える。残すと元の未指定は区別できない。戻すなら down migration で null に戻す
 
-**確かめたこと**
+**確認したこと**
 - dev のブラウザで、未指定のまま保存して一覧に「共有しない」と出た（375px / 1280px）
 - 型検査、lint、全テスト
 
-**確かめていないこと**
+**確認していないこと**
 - 本番の既存データに null が何件あるか
   - なぜ: 本番の DB を読む権限がこのセッションに無い
   - 外れていたら: 件数が多いと、migration の実行に時間がかかる

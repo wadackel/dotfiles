@@ -369,8 +369,8 @@ Re-run `~/.agents/scripts/check-plan.ts <plan path>`. A plan with any `error` ca
 The user must be able to decide whether to approve `$impl` from a compact Approval Summary. Include:
 
 - **Overview**: intended outcome and non-goals.
-- **Approach**: key decisions, constraints, and implementation discretion; assumptions marked `user-overridden: default` are listed as 仮置き.
-- **Delivery**: level, draft, merge, and the basis, marked 仮置き when the basis is `no signal`, with the words after `$impl` that override it (`$impl PR まで`, `$impl stack`, `$impl merge まで`); granted operations on their own line.
+- **Approach**: key decisions, constraints, and implementation discretion; assumptions marked `user-overridden: default` are listed as `（仮）`.
+- **Delivery**: level, draft, merge, and the basis, marked `（仮）` when the basis is `no signal`, with the words after `$impl` that override it (`$impl PR まで`, `$impl stack`, `$impl merge まで`); granted operations on their own line.
 - **Files to Change**: affected components and representative paths.
 - **Completion Criteria**: observable acceptance, required live checks, and unresolved user participation, each stated as the fact to be established rather than a command, closed by one sentence that once they pass the change can be accepted without reading the diff, apart from the Human Review items.
 - **Human Review**: the Files to Change entries that meet `references/human-review.md`, one line each with the label and what changes, or none.

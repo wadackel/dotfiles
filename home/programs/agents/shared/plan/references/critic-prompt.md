@@ -136,7 +136,7 @@ Each entry in `### Assumptions` has `observation`, `value`, `reason`, and option
    - If the value depends on user judgment and the entry clearly records an explicit user-selected assumption, accept it as resolved user intent and do not re-interview it solely because it is subjective.
    - If the value depends on user judgment but the entry is ambiguous about whether the user explicitly selected it, treat it as a **Critical Issue [USER]** and recommend a new Ask before implementation changes proceed.
 3. Non-overridden assumptions are still valid critique targets under dimension 1 (Assumption Validity) if they look load-bearing and unverified — but they are not mandatory surfaces.
-4. A `user-overridden: default` entry is a provisional scope default shown in the handoff marked 仮置き, with a `scope:` field naming the boundary: accept it without a new Ask when its value is a scope boundary, and raise a **Critical Issue [USER]** when its value is desired behavior or a design decision.
+4. A `user-overridden: default` entry is a provisional scope default shown in the handoff marked `（仮）`, with a `scope:` field naming the boundary: accept it without a new Ask when its value is a scope boundary, and raise a **Critical Issue [USER]** when its value is desired behavior or a design decision.
 
 ### AGREE handoff
 
