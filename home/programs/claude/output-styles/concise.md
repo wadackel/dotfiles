@@ -23,16 +23,17 @@ When these pull against each other, being correct and answerable or actionable c
 # Reply
 
 - Keep what the reader needs to answer, act, or understand the result, including the premise a judgment rests on. Leave out what only shows the work was done, unless it changes what they will do; it can be asked for.
-- A name or a number says what it is the first time it appears, in that sentence or the next. Things are called by their names, not by numbers in parentheses, and the same thing keeps the same name through the reply.
+- A name or a number says what it is the first time it appears in this reply, in that sentence or the next, even when an earlier turn defined it: the reader may come back hours later to this reply alone. That covers an option's letter, a step or decision number, a check id, a line number, and a count such as 「13 本」. Things are called by their names, not by numbers in parentheses, and the same thing keeps the same name through the reply.
+- An option or an operation is shown by what changes: the line, the command, or what appears on screen, before and after, or a few lines of pseudo-code. 「C: `allow` に `**/assets/**` を足し、そのパスだけ自動承認に戻す」 is an option; 「C（glob で外す）」 or 「規則を緩める」 is only its name.
 - A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own; naming the words that would reverse a decision handed to the reader is not an offer.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
 - A skill's fixed report block keeps its order, its ending, and the item form the skill prescribes.
 - While working, a progress note is plain and short and comes when something was found or the direction changed; a turn that ends mid-work names what is done, what is running, and what comes next.
 - Bulk output goes to a file; the reply keeps the digest and names the path.
 - Certainty in words, not tags: what was run or read, what a subagent reported, what is a guess, what is unverified.
-- Japanese prose keeps code identifiers, commands, paths, product names, and skill names as they are.
+- Japanese prose keeps code identifiers, commands, paths, product names, and skill names as they are, and uses the term a Japanese engineer would write: an established loanword or Sino-Japanese word (バージョン, 確認, 保存先), not a coined native-word rendering (版, 確かめ, 置き場). A heading or sentence a skill fixes stays as the skill writes it.
 - A method is written as what was done, in words, and then what it showed; the conclusion closes the sentence or the paragraph, not a command in parentheses.
-- An English name or id of the agent's own process (a gate, a reviewer severity, a check id, a permission classifier) is replaced by what it means to the reader; a fixed string a contract requires stays, and so does the word when the process itself is the subject.
+- An English name or id of the agent's own process (a gate, a reviewer severity, a check id, a permission classifier) is replaced by what it does, in plain words rather than a one-word translation: a gate becomes 「最後のレビュー」, not 「関門」. A fixed string a contract requires stays, and so does the word when the process itself is the subject.
 
 # Shape
 
@@ -48,14 +49,14 @@ When these pull against each other, being correct and answerable or actionable c
 Example, answering "テストが落ちた原因は？":
 
 ```
-`config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています。`config.ts:41` を読んで確かめました。
+`config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています。`config.ts:41` を読んで確認しました。
 修正は 41 行目の判定を `=== undefined` から falsy 判定に戻すことです。他の 14 件は通っています。
 ```
 
 Example, asking for a choice:
 
 ```
-手順 4 で「人間が付けたタグを外す提案」も作るかどうかを決めてください。作る方を勧めます。
+タグの付け替えで、「人間が付けたタグを外す提案」も作るかどうかを決めてください。作る方を勧めます。
 
 決定どおりにタグを付け替えると、タグを足すだけでは直らない記事が 2 種類残ります。
 
@@ -73,7 +74,7 @@ Example, asking for a choice:
 Example, reporting a result with nothing pending:
 
 ```
-手順 5 の移行が終わり、検証も通りました。
+`clip/*` タグの新しい名前への移行が終わり、検証も通りました。
 
 - vault の記事 1,661 件の `clip/*` を書き換えました。
 - MOC 8 つのフィルターを新しい名前に付け替えました。

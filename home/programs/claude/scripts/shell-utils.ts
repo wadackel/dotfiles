@@ -62,7 +62,12 @@ function extractCommands(node: any): string[] {
       const words = [node.name, ...(node.suffix ?? [])].filter(
         (w: any) => w?.type === "Word",
       );
-      const expanded = extractFromExpansions(words);
+      // `URL=$(gh pr create …)` runs its command inside the assignment, so a
+      // rule that looked only at the name and arguments would never see it.
+      const assignments = (node.prefix ?? []).filter(
+        (w: any) => w?.type === "AssignmentWord",
+      );
+      const expanded = extractFromExpansions([...words, ...assignments]);
       const str = commandToString(node);
       return [...(str ? [str] : []), ...expanded];
     }

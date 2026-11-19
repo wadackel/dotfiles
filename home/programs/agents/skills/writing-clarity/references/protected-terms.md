@@ -31,18 +31,20 @@ Japanese:
 | Word | In prose, prefer |
 |---|---|
 | task | タスク / 作業 |
-| gate | 最終確認 / 関門 |
+| gate | 最後のレビュー / レビューを通す（「関門」とは書かない） |
 | step / phase | 手順 / 段階 |
 | baseline | 基準値 / 変更前の状態 |
-| evidence | 記録 / 根拠 |
+| evidence | 確認した結果 / 根拠 |
 | criteria | 条件 / 基準 |
-| deviation | 逸脱 / 計画との差分 |
-| escalation | 引き上げ / 追加確認 |
-| self-audit | 自己点検 |
+| deviation | 計画と違う点 |
+| escalation | 利用者に判断を求める / 上の担当に回す |
+| self-audit | 自分で見直す |
 | orchestrator | メインセッション |
 
-The right column is a starting point, not a fixed mapping — pick the word the
-sentence needs. When neither fits, keep the original (the norm's default).
+The right column is a starting point, not a fixed mapping — pick the words the
+sentence needs, and prefer a phrase that says what happens over a one-word
+translation, which tends to become a coined word the reader has never seen.
+When nothing fits, keep the original (the norm's default).
 
 ## Additional allowlist
 

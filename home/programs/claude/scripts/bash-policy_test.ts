@@ -376,3 +376,143 @@ test("exploratory-session: a git alias that expands to push is refused", async (
   });
   assertEquals(code, 2, stderr);
 });
+
+// --- Deliverable hint ---
+
+test("publishesText: creating a PR or an Issue, or editing its text, publishes", async () => {
+  const { publishesText } = await import("./bash-policy.ts");
+  const { getSegments } = await import("./shell-utils.ts");
+  const cases: [string, boolean][] = [
+    ["gh pr create --title x --body-file /tmp/b.md", true],
+    ["gh issue create -t bug -b body", true],
+    ["gh -R owner/repo pr create --fill", true],
+    ["gh pr edit 12 --body-file /tmp/b.md", true],
+    ["gh issue edit 3 --title=new", true],
+    ["env GH_PROMPT_DISABLED=1 gh pr create -F /tmp/b.md", true],
+    ['bash -c "gh issue create -t x -b y"', true],
+    ["gh issue edit 3 --add-label bug", false],
+    ["gh pr view 12", false],
+    ["gh pr list --state open", false],
+    ["git commit -m 'gh pr create'", false],
+    ["URL=$(gh pr create --title x --body-file /tmp/b.md)", true],
+    ["url=$(gh issue create -t a -b b) && echo $url", true],
+    ["gh pr new --title x --body-file /tmp/b.md", true],
+    ["gh issue new -t x -b y", true],
+    ["gh pr edit 12 -tNewTitle", true],
+    ["gh issue edit 3 -F/tmp/b.md", true],
+    ['gh pr create --title "Add --dry-run option" --body-file /tmp/b.md', true],
+    ["gh pr create --help", false],
+    ["gh issue create -h", false],
+    ["gh pr create --title x --body y --dry-run", false],
+    ["gh help pr create", false],
+    ['gh search issues "pr create fails"', false],
+    ['gh release create v1 --notes "issue create"', false],
+  ];
+  for (const [command, expected] of cases) {
+    assertEquals(await publishesText(await getSegments(command), command), expected, command);
+  }
+});
+
+test("takeDeliverableHint: once per session and subagent, never without a session", async () => {
+  const { takeDeliverableHint } = await import("./bash-policy.ts");
+  const dir = await mkdtemp(join(tmpdir(), "deliverable-hint-"));
+  try {
+    assertEquals(takeDeliverableHint({ session_id: "s1" }, dir), true);
+    assertEquals(takeDeliverableHint({ session_id: "s1" }, dir), false);
+    assertEquals(takeDeliverableHint({ session_id: "s1", agent_id: "a1" }, dir), true);
+    assertEquals(takeDeliverableHint({ session_id: "s2" }, dir), true);
+    assertEquals(takeDeliverableHint({}, dir), false);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test("entry point: the first PR creation of a session is held back with the hint, the retry passes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "deliverable-hint-entry-"));
+  try {
+    const call = () =>
+      run(HOOK_SCRIPT, [], {
+        stdin: JSON.stringify({
+          tool_name: "Bash",
+          tool_input: { command: "gh pr create --title x --body-file /tmp/b.md" },
+          session_id: "entry-session",
+        }),
+        env: { TMPDIR: dir },
+      });
+    const first = await call();
+    assertEquals(first.code, 2, first.stderr);
+    assertStringIncludes(first.stderr, "writing-clarity");
+    const second = await call();
+    assertEquals(second.code, 0, second.stderr);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test("alreadyRevised: a transcript that loaded writing-clarity counts as revised", async () => {
+  const { alreadyRevised } = await import("./bash-policy.ts");
+  const dir = await mkdtemp(join(tmpdir(), "deliverable-transcript-"));
+  try {
+    const loaded = join(dir, "loaded.jsonl");
+    await writeFile(loaded, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"writing-clarity"}}]}}\n');
+    const other = join(dir, "other.jsonl");
+    await writeFile(other, '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"create-pr"}}]}}\n{"type":"user","message":{"content":[{"type":"tool_result","content":"return t.includes(\'\\"input\\":{\\"skill\\":\\"writing-clarity\\"\'); <command-name>/writing-clarity</command-name>"}]}}\n');
+    assertEquals(await alreadyRevised(loaded), true);
+    assertEquals(await alreadyRevised(other), false);
+    assertEquals(await alreadyRevised(join(dir, "missing.jsonl")), false);
+    assertEquals(await alreadyRevised(undefined), false);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+test("entry point: a project rule that refuses the command shows its own reason before the hint", async () => {
+  await withProjectRules(
+    'rules:\n  - pattern: "gh pr create*"\n    message: "PROJECT RULE"\n',
+    async (dir) => {
+      const tmp = await mkdtemp(join(tmpdir(), "deliverable-rule-"));
+      try {
+        const { code, stderr } = await run(HOOK_SCRIPT, [], {
+          stdin: JSON.stringify({
+            tool_name: "Bash",
+            tool_input: { command: "gh pr create -t x -b y" },
+            session_id: "rule-session",
+            cwd: dir,
+          }),
+          env: { TMPDIR: tmp },
+        });
+        assertEquals(code, 2, stderr);
+        assertStringIncludes(stderr, "PROJECT RULE");
+      } finally {
+        await rm(tmp, { recursive: true });
+      }
+    },
+  );
+});
+
+test("entry point: CLAUDE_DELIVERABLE_HINT_SKIP=1 lets the first PR creation through", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "deliverable-skip-"));
+  try {
+    const { code, stderr } = await run(HOOK_SCRIPT, [], {
+      stdin: JSON.stringify({
+        tool_name: "Bash",
+        tool_input: { command: "gh pr create -t x -b y" },
+        session_id: "skip-session",
+      }),
+      env: { TMPDIR: tmp, CLAUDE_DELIVERABLE_HINT_SKIP: "1" },
+    });
+    assertEquals(code, 0, stderr);
+  } finally {
+    await rm(tmp, { recursive: true });
+  }
+});
+
+test("ownTranscript: a subagent reads its own transcript beside the session's", async () => {
+  const { ownTranscript } = await import("./bash-policy.ts");
+  assertEquals(ownTranscript({ transcript_path: "/p/s1.jsonl" }), "/p/s1.jsonl");
+  assertEquals(
+    ownTranscript({ transcript_path: "/p/s1.jsonl", agent_id: "a7" }),
+    "/p/s1/subagents/agent-a7.jsonl",
+  );
+  assertEquals(ownTranscript({ agent_id: "a7" }), undefined);
+});

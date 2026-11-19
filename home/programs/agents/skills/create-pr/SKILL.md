@@ -131,7 +131,7 @@ Write the PR body to a temporary file using the **Write** tool:
 
 - File path: `/tmp/pr-body-<random>.md` (use a short random suffix, e.g. 6 alphanumeric chars, to avoid conflicts across parallel sessions)
 
-Before creating the PR, self-check the body with the **writing-clarity** residue judgment (would it read naturally to someone who never saw the conversation?) and fix any conversation residue.
+Before creating the PR, load the **writing-clarity** skill and revise the title and the body file with it: it removes conversation residue, checks the body against the diff, and fixes the wording for a reader who never saw the conversation.
 
 Then create the PR referencing the file:
 

@@ -13,7 +13,7 @@ Two files and one behavior, so sentences carry it. No diagram, no tree, no table
 
 ## 完了の条件
 
-- [live] `greet --version` が `greet 1.4.0` を出して exit 0 で終わる(ビルドした `dist/greet` を実行して確かめる)
+- [live] `greet --version` が `greet 1.4.0` を出して exit 0 で終わる(ビルドした `dist/greet` を実行して確認する)
 - `--version` をほかの引数と一緒に渡しても、バージョンだけを出して終わる(`cli_test.ts` の新しいテスト)
 - 既存のテストがすべて通る(`bun test`)
 
@@ -60,18 +60,18 @@ build 失敗 ──▶ notifier ──┬──▶ 端末の通知(今までど�
 
 ## 完了の条件
 
-**動かして確かめる**
+**動かして確認する**
 
 - [live] `notify.slack` を on にしてビルドを失敗させると、テスト用の Webhook に失敗したターゲット名が届く(手元の受信サーバーのログを読む)
 - [live] off のままなら、Webhook へのリクエストは 1 件も出ない(同じ受信サーバーのログ)
 
-**自動で確かめる**
+**自動で確認する**
 
 - Webhook が 500 を返しても、端末の通知は出て、終了コードはビルドの結果のまま(`notifier_test.ts`)
 - 環境変数がないまま on にすると、起動時に設定エラーで止まる(`config_test.ts`)
 - 既存のテストがすべて通る(`bun test`)
 
-**あなたが確かめる**
+**あなたが確認する**
 
 - [live] 実際のチャンネルに通知が 1 件届き、文面が読める
     - 本物の Webhook の URL を `NOTIFY_SLACK_URL` に入れ、`build --fail-fixture` を 1 回実行して、届いた文面を知らせる。レビューの前に必要
@@ -97,7 +97,7 @@ A change a user can see, one hunk the reader must read, one thing not establishe
 
 ````
 #157479 の「共有設定の未指定」を「共有しない」に揃えた。依頼どおりで、
-気にしていた service.ts の既存の記述は残した。確かめていないことが 1 つある。
+気にしていた service.ts の既存の記述は残した。確認していないことが 1 つある。
 draft PR #160301、CI 通過
 
 **使う人から見て変わること**
@@ -126,7 +126,7 @@ frontend/share/Dialog.tsx   保存時のエラー表示を削除（削除あり�
 - 本番の既存データに null が何件あるか
   - なぜ: 本番の DB を読む権限がこのセッションに無い
   - 外れていたら: 件数が多いと、migration の実行に時間がかかる
-  - 確かめ方: 本番の読み取りを許可してもらえれば、件数を数えて報告できる
+  - 確認の方法: 本番の読み取りを許可してもらえれば、件数を数えて報告できる
 
 **次に進められること**
 - #157479 は、この PR の merge で close できる（受け入れ条件 3 つすべて満たした）

@@ -21,6 +21,8 @@ import {
   type ReplyKind,
   replyKind,
   resolveProtectedTermsPath,
+  WORD_PAIRS,
+  wordChoice,
 } from "./detectors.ts";
 
 function fail(msg: string): never {
@@ -69,8 +71,15 @@ let labelFragmentLines = 0;
 // 文体の差はスキル文脈に集中していた（plan 790 字 vs 文脈なし 191 字）ので、
 // 全体平均だけでは施策の効果が見えない。/plan や /impl が現れた時点から次の
 // マーカーまでを同じ文脈として数える: スキル実行中の質問応答も同じ文脈に属する
-type Context = "plan" | "impl" | "none";
-const byContext: Record<Context, number[]> = { plan: [], impl: [], none: [] };
+type Context = "plan" | "impl" | "do" | "none";
+const byContext: Record<Context, number[]> = {
+  plan: [],
+  impl: [],
+  do: [],
+  none: [],
+};
+const coinedCounts = new Map<string, number>();
+const establishedCounts = new Map<string, number>();
 // 箇条書きの長さは文脈（スキル実行中か）と返答種別（質問 / 報告 / Plan ready）の
 // 両方で偏るので、別軸で溜める
 type Lengths = ItemLengths;
@@ -79,6 +88,7 @@ const itemsAll = emptyLengths();
 const itemsByContext: Record<Context, Lengths> = {
   plan: emptyLengths(),
   impl: emptyLengths(),
+  do: emptyLengths(),
   none: emptyLengths(),
 };
 const itemsByKind: Record<ReplyKind, Lengths> = {
@@ -152,6 +162,7 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
     if (u !== null) {
       if (/(^|\s|>)\/plan(\s|$|<)/.test(u)) context = "plan";
       else if (/(^|\s|>)\/impl(\s|$|<)/.test(u)) context = "impl";
+      else if (/(^|\s|>)\/do(\s|$|<)/.test(u)) context = "do";
       continue;
     }
     if (r.type !== "assistant") continue;
@@ -186,6 +197,16 @@ for await (const path of files(`${HOME}/.claude/projects`)) {
       findings.set(f.category, (findings.get(f.category) ?? 0) + 1);
     }
     for (const c of cats) fired.set(c, (fired.get(c) ?? 0) + 1);
+    for (const w of wordChoice(text)) {
+      coinedCounts.set(
+        w.coined,
+        (coinedCounts.get(w.coined) ?? 0) + w.coinedCount,
+      );
+      establishedCounts.set(
+        w.established,
+        (establishedCounts.get(w.established) ?? 0) + w.establishedCount,
+      );
+    }
   }
 }
 
@@ -215,6 +236,15 @@ console.log(
     itemLines ? (labelFragmentLines / itemLines * 100).toFixed(1) : "0.0"
   }%（${labelFragmentLines.toLocaleString()}/${itemLines.toLocaleString()} 行）`,
 );
+console.log("\n語の選び方（1 万字あたり）");
+for (const p of WORD_PAIRS) {
+  const per10k = (k: number) => (k / chars * 10000).toFixed(2);
+  console.log(
+    `${p.coined} ${per10k(coinedCounts.get(p.coined) ?? 0)} / ${p.established} ${
+      per10k(establishedCounts.get(p.established) ?? 0)
+    }`,
+  );
+}
 console.log("\nスキル文脈別 文字数（応答数 / 中央値）");
 for (const [ctx, xs] of Object.entries(byContext)) {
   console.log(

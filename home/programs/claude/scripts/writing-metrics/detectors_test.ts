@@ -16,6 +16,7 @@ import {
   proseStats,
   replyKind,
   resolveProtectedTermsPath,
+  wordChoice,
 } from "./detectors.ts";
 
 const realDict = loadDictionaries(
@@ -442,4 +443,22 @@ test("replyKind: 質問・報告・Plan ready・その他を見出しと固定�
   assertEquals(replyKind("ふつうの返答です。"), "other");
   // ^### が行頭一致になるのは m フラグがあるときだけ
   assertEquals(replyKind("前置き\n### 進めますか？\n> 推奨: B。"), "question");
+});
+
+// --- 語の選び方 --------------------------------------------------------------
+
+test("wordChoice: ソフトウェアの「版」と「確かめ」を、定着した語と対で数える", () => {
+  const text = [
+    "前の版では落ちていました。新しいバージョンで直っています。",
+    "初版と日本語版、最新版と更新版は数えません。",
+    "**確かめたこと**",
+    "`確かめる` はコードなので数えません。動かして確かめ、ログも確認しました。",
+    "```",
+    "確認 確認",
+    "```",
+  ].join("\n");
+  assertEquals(wordChoice(text), [
+    { coined: "版", established: "バージョン", coinedCount: 1, establishedCount: 1 },
+    { coined: "確かめ", established: "確認", coinedCount: 1, establishedCount: 1 },
+  ]);
 });

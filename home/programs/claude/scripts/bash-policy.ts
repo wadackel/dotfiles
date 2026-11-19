@@ -13,7 +13,9 @@
 //     - pattern: "git push *renovate/*"
 //       message: "This push closes the Renovate PR; add the stop-updating label and push from a terminal"
 
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parse } from "@std/yaml";
@@ -38,7 +40,10 @@ interface HookInput {
   tool_name: string;
   tool_input: { command: string };
   cwd?: string;
+  session_id?: string;
+  transcript_path?: string;
   /** Set on a tool call made inside a subagent; absent for the main session. */
+  agent_id?: string;
   agent_type?: string;
 }
 
@@ -370,6 +375,104 @@ export function matchRule(rules: Rule[], segment: string): Rule | null {
   return null;
 }
 
+// --- Deliverable hint ---
+
+// The writing-clarity description fired on 4 of 24 requests to draft a PR or an
+// Issue, because the model runs git or reads files before it looks at the skill
+// listing, and half of the PRs and Issues created here came from sessions that never
+// loaded create-pr. Publishing is the moment every route shares, so the first such
+// command of a session (or of a subagent) is held back once with a pointer to the skill.
+export const DELIVERABLE_HINT = [
+  "[bash-policy] This command publishes the title or body of a PR or an Issue.",
+  "Load the writing-clarity skill and revise that text with it (the --body-file in place, or the --title and --body values), then run the command again.",
+  "If the user gave this exact text to publish, run the command again unchanged. This check stops only the first such command of a session; the next one runs.",
+].join("\n");
+
+// pflag accepts a short flag's value attached (`-tTitle`, `-F/tmp/b.md`).
+const TEXT_FLAGS =
+  /^(--title|--body|--body-file|--fill|--fill-first|--fill-verbose)(=|$)|^-[tbF]/;
+// gh's own options that take a value come before the command group.
+const GH_VALUE_OPTIONS = new Set(["-R", "--repo", "--hostname"]);
+
+/** gh's command group and verb, skipping gh's own options (`gh -R o/r pr create`). */
+function ghCommand(args: string[]): [string, string, string[]] {
+  const positional: number[] = [];
+  for (let i = 0; i < args.length && positional.length < 2; i++) {
+    if (GH_VALUE_OPTIONS.has(args[i])) i++;
+    else if (!args[i].startsWith("-")) positional.push(i);
+  }
+  const [g, v] = positional;
+  return [args[g] ?? "", args[v] ?? "", v === undefined ? [] : args.slice(v + 1)];
+}
+
+// The segments lose their quotes (`--title "Add --dry-run"` becomes three words), so
+// the flags that publish nothing are looked for in the command with quoted text removed.
+const NO_PUBLISH = /(^|\s)(--help|-h|--dry-run)(?=\s|=|$)/;
+function withoutQuoted(command: string): string {
+  return command.replace(/"(?:[^"\\]|\\.)*"|'[^']*'/g, '""');
+}
+
+export function publishesText(
+  segments: string[],
+  command = "",
+): Promise<boolean> {
+  // Looking up the flags first is common, and it must not use up the one hint.
+  if (NO_PUBLISH.test(withoutQuoted(command))) return Promise.resolve(false);
+  return refusalIn(segments, (head, words) => {
+    if (head !== "gh") return null;
+    const [group, verb, rest] = ghCommand(words.slice(1));
+    if (group !== "pr" && group !== "issue") return null;
+    if (verb === "create" || verb === "new") return "publishes";
+    if (verb === "edit" && rest.some((w) => TEXT_FLAGS.test(w))) return "publishes";
+    return null;
+  }).then((hit) => hit !== null);
+}
+
+// create-pr and spec revise with writing-clarity before they publish; holding their
+// command back as well would only cost a turn, so a transcript that already shows the
+// skill being called counts as revised. Only the tool call's own JSON is matched: in a
+// tool result the same text has its quotes escaped, so reading this file does not count.
+export async function alreadyRevised(
+  transcriptPath: string | undefined,
+): Promise<boolean> {
+  if (!transcriptPath) return false;
+  try {
+    const info = await stat(transcriptPath);
+    if (!info.isFile() || info.size > 64_000_000) return false;
+    const t = await readFile(transcriptPath, "utf8");
+    return t.includes('"input":{"skill":"writing-clarity"');
+  } catch {
+    return false;
+  }
+}
+
+// A subagent's hook input names the session's transcript; its own calls are kept
+// beside it under subagents/, so that is the file that shows whether it ran the skill.
+export function ownTranscript(
+  input: Pick<HookInput, "transcript_path" | "agent_id">,
+): string | undefined {
+  const t = input.transcript_path;
+  if (!t || !input.agent_id) return t;
+  return join(t.replace(/\.jsonl$/, ""), "subagents", `agent-${input.agent_id}.jsonl`);
+}
+
+// A subagent's hook input carries its parent's session_id, so the key adds agent_id;
+// "wx" creates the marker exclusively, so two commands at once are held back only once.
+export function takeDeliverableHint(
+  input: Pick<HookInput, "session_id" | "agent_id">,
+  markerDir = join(tmpdir(), "claude-deliverable-hint"),
+): boolean {
+  if (!input.session_id) return false;
+  const key = `${input.session_id}-${input.agent_id ?? "main"}`.replace(/[^\w-]/g, "_");
+  try {
+    mkdirSync(markerDir, { recursive: true });
+    closeSync(openSync(join(markerDir, key), "wx"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- Entry point ---
 
 if (import.meta.main) {
@@ -412,7 +515,10 @@ if (import.meta.main) {
     }
   }
 
-  if (rules.length === 0) process.exit(0);
+  // Parsing costs more than the rest of this hook, and with no rules most commands
+  // used to skip it; only a command that names gh can publish.
+  const namesGh = /\bgh\b/.test(command);
+  if (rules.length === 0 && !namesGh) process.exit(0);
 
   const segments = await getSegments(command);
   if (segments.length === 0) process.exit(0);
@@ -427,6 +533,17 @@ if (import.meta.main) {
         `Blocked: ${command}`,
       ].join("\n"),
     );
+    process.exit(2);
+  }
+
+  // After the rules, so a command a rule refuses shows the rule's reason first.
+  if (
+    namesGh && process.env.CLAUDE_DELIVERABLE_HINT_SKIP !== "1" &&
+    await publishesText(segments, command) &&
+    // The marker first, so the transcript is read at most once a session.
+    takeDeliverableHint(input) && !(await alreadyRevised(ownTranscript(input)))
+  ) {
+    console.error([DELIVERABLE_HINT, `Blocked once: ${command}`].join("\n"));
     process.exit(2);
   }
 }

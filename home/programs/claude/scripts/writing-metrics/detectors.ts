@@ -499,6 +499,53 @@ export function proseStats(text: string): ProseStats {
 }
 
 // ---------------------------------------------------------------------------
+// 語の選び方
+
+// 語の出現数は話題で上下するので、定着した語との対で数えて比率を見る。
+// 2026-11 の transcript では Claude の返信だけが「版」「確かめ」に偏っていた
+export const WORD_PAIRS = [
+  {
+    coined: "版",
+    established: "バージョン",
+    // 「初版」「日本語版」「最新版」のような定着した言い方を数えないよう、
+    // ソフトウェアの版を指す前置きのある形だけを拾う
+    coinedRe:
+      /(?:(?<![最更])新|前の|今の|この|次の|古い|新しい|つ目の|元の|最新の|現行の)版/g,
+    establishedRe: /バージョン/g,
+  },
+  {
+    coined: "確かめ",
+    established: "確認",
+    coinedRe: /確かめ/g,
+    establishedRe: /確認/g,
+  },
+] as const;
+
+export interface WordChoiceCount {
+  coined: string;
+  established: string;
+  coinedCount: number;
+  establishedCount: number;
+}
+
+// `**確かめたこと**` のような skill の固定見出しは返信の語の選び方ではないので、
+// 太字だけの行は数えない
+const BOLD_ONLY = /^\s*\*\*[^*]+\*\*\s*$/;
+
+export function wordChoice(text: string): WordChoiceCount[] {
+  const prose = analyzeLines(text)
+    .filter((l) => !BOLD_ONLY.test(l.raw))
+    .map((l) => l.prose)
+    .join("\n");
+  return WORD_PAIRS.map((p) => ({
+    coined: p.coined,
+    established: p.established,
+    coinedCount: (prose.match(p.coinedRe) ?? []).length,
+    establishedCount: (prose.match(p.establishedRe) ?? []).length,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // 箇条書きの長さ
 
 export interface ItemLengths {
