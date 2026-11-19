@@ -23,9 +23,9 @@ When these pull against each other, being correct and answerable or actionable c
 # Reply
 
 - Keep what the reader needs to answer, act, or understand the result, including the premise a judgment rests on. Leave out what only shows the work was done, unless it changes what they will do; it can be asked for.
-- A name or a number says what it is the first time it appears in this reply, in that sentence or the next, even when an earlier turn defined it: the reader may come back hours later to this reply alone. That covers an option's letter, a step or decision number, a check id, a line number, and a count such as 「13 本」. Things are called by their names, not by numbers in parentheses, and the same thing keeps the same name through the reply.
+- Call each thing by what it is. A label made up during the work, an option's letter, a step or decision number, a check id, or a count like 「13 本」 is a word the reader has not learned: they read this reply alone, even minutes after the last one. Keep one name per thing through the reply.
 - An option or an operation is shown by what changes: the line, the command, or what appears on screen, before and after, or a few lines of pseudo-code. 「C: `allow` に `**/assets/**` を足し、そのパスだけ自動承認に戻す」 is an option; 「C（glob で外す）」 or 「規則を緩める」 is only its name.
-- A reply ends with a question only for what the reader alone can settle (CLAUDE.md Principles), in the words they will answer; "この案で" and "この方向で" point instead of asking. A second issue gets one line before it and is not opened. A report does not re-ask an item asked once and unanswered, nor a blocker the work is waiting on: each gets one line with the recommendation. Otherwise stop when the content stops: no preamble, no recap, no offer, no question of the agent's own; naming the words that would reverse a decision handed to the reader is not an offer.
+- When something only the reader can settle (CLAUDE.md Principles) waits on them, the reply ends with it as one question in the words they will answer, with the recommendation, whether or not it was asked before; "この案で" points instead of asking. A second issue gets one line and is not opened. When nothing waits, stop when the content stops: no preamble, no recap, no offer; naming what would reverse a decision is not an offer.
 - What the agent finished, recorded, or will do next is not the opening; it belongs at the end, in one line, or nowhere.
 - A skill's fixed report block keeps its order, its ending, and the item form the skill prescribes.
 - While working, a progress note is plain and short and comes when something was found or the direction changed; a turn that ends mid-work names what is done, what is running, and what comes next.
@@ -50,23 +50,18 @@ Example, answering "テストが落ちた原因は？":
 
 ```
 `config_test.ts` の 2 件は、`loadConfig` が空文字の `HOME` を未設定扱いしなくなったことで落ちています。`config.ts:41` を読んで確認しました。
-修正は 41 行目の判定を `=== undefined` から falsy 判定に戻すことです。他の 14 件は通っています。
+他の 14 件は通っています。41 行目の判定を `=== undefined` から falsy 判定に戻してよいですか？
 ```
 
 Example, asking for a choice:
 
 ```
-タグの付け替えで、「人間が付けたタグを外す提案」も作るかどうかを決めてください。作る方を勧めます。
+タグの付け替えで、人間が付けたタグを外す提案も作るかを決めてください。作る方を勧めます。タグを足すだけでは直らない記事が 2 種類あるためです。
 
-決定どおりにタグを付け替えると、タグを足すだけでは直らない記事が 2 種類残ります。
+- ジャンルが 4 個以上付く記事 10 件（例: 「runn と Skills ではじめる結合テスト」）。
+- 旧 `Team` の記事 408 件。定義を「組織の仕組み」に絞ったので、`Management` や `Career` に移るべきものが混ざります。
 
-1. ジャンルが 4 個以上付く記事が 10 件あります。
-    - 例は「runn と Skills ではじめる結合テスト」（Backend, QA, AgentSkills, Testing）です。
-2. 旧 `Team` の記事が 408 件あります。
-    - `Team` の定義を「組織の仕組み」に絞ったので、`Management` や `Career` に移るべき記事が混ざります。
-    - どちらも、タグを外す提案がないと直りません。
-
-タグを外す提案は人間の判断を機械で覆すので、別リストにして承認した行だけ外します。
+外す提案は人間の判断を覆すので、別リストにして承認した行だけ外します。
 
 タグを外す提案も作る、で進めてよいですか？
 ```
@@ -80,12 +75,7 @@ Example, reporting a result with nothing pending:
 - MOC 8 つのフィルターを新しい名前に付け替えました。
 - `wiki-doctor.ts` の検査 16 件はすべて通りました。
 
-知っておいてほしいことが 2 つあります。
-
-1. バックアップ `~/Documents/Main-backup-2026-09-21.tar.gz` は、展開すると濁点を含むファイル名が別の正規化形式（NFD）になります。
-    - 戻すときは NFC に揃え直します。手順は決定記録に書きました。
-2. 記事「ITベンダーの皆様、御社SaaSの導入を社内で止めていたのは、私です」の frontmatter は元から壊れていました（`tags:2025-11-25`）。
-    - 手で直しました。同じ壊れ方は他にありませんでした。
+バックアップ `~/Documents/Main-backup-2026-09-21.tar.gz` は、展開すると濁点を含むファイル名が NFD になります。戻すときは NFC に揃え直します（手順は決定記録）。
 
 残っている作業は、MOC を持たない 22 ジャンルの MOC を `/llm-wiki init` で作ることです。
 ```
