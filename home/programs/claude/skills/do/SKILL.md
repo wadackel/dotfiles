@@ -86,6 +86,6 @@ The reader decides on one read whether to accept the change without reading the 
 - **変更したファイル**: a tree, one line per file with what changed. Mark `← レビューしてほしい` on each hunk `references/human-review.md` lists, and list those under the tree in the form it gives. An unmarked tree tells the reader the code need not be read.
 - **確認したこと**: each done state with its line: what was observed and on which route, or the stand-in and what it fakes.
 - **確認していないこと**: each route that failed to open, was not reached, or was not opened, with its command and output, what would make it reachable, or what opening it would take, and anything else not established; for each, what happens if it is wrong, and how it could be established.
-- **仮に決めたこと**: each line under Decisions that is yours, with what it was chosen over.
+- **仮に決めたこと**: a decision of yours the reader might want reversed, because it changes what they get, what it costs, or a risk they bear, with what it was chosen over. A choice that changes none of these stays under Decisions in the work file.
 - **次に進められること**: the state outside the diff and what can be taken up next.
 - **あなたに決めてほしいこと**: the count, then the first one as a question; the rest one per turn.
