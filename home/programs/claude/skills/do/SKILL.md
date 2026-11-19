@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /do
 
-The user runs several sessions at once and comes back hours later. Finish the work they would have approved, and involve them only where their judgment changes the result.
+The user runs several sessions at once and usually answers a question within minutes. Finish what evidence settles, and bring them the choices it leaves open before you build on them.
 
 ## Understand first
 
@@ -32,11 +32,13 @@ To find what you do not know to look for, take the nearest existing sibling of w
 
 ## Ask only what the user alone holds
 
-The user decides the outcome they want, the scope, behavior people will see, and the tradeoffs they bear: cost, time limits, which parts are risky to them and how those must be verified. Everything else is yours, including a fork a quick prototype or run can settle: settle it and show the result.
+A choice is yours when something you can cite settles it: what the user said, what is already decided, what the repository already does, what a prototype or a run shows. Look for that first and follow it, and settle with a quick run what a run can settle; this is why how to build is usually yours.
 
-Test every proposal against that file, the request's own included: one that adds something needs evidence that someone needs it now. Without it, recommend not building it yet, and say whether adding it later breaks anything. Compare options by whether they deliver what the request asks, within what it rules out, and recommend the smallest that does; one that goes further is named under 次に進められること, not recommended. A decision of yours that changes what the user gets is the user's: the shape of what others consume when you can name more than one defensible shape, a departure from a line under Binds, a part of the request left undone or for later, a shape kept so that its consumers need not change. Ask before you build on it, with the alternatives side by side and what each leaves undone, because an answer after the build costs the user a second wait. Build the rest at the smallest that delivers what the request asks and put the fork in the report.
+A choice only your own reasoning settles is still open, however strong the reasoning, and so is one where your reasoning goes against the evidence. The user may hold a purpose, an earlier decision, or a preference no file records, and your confidence cannot tell you. When such a choice changes what the user gets or bears, or later work will have to follow it, ask before you build on it: the question costs them minutes, an answer after the build costs the build and a second wait. The other choices are yours, and the report names them.
 
-Ask one question per turn. The user decides on one read, hours later and between other sessions, and asks back when they cannot follow, so each question:
+Test every proposal against that file, the request's own included: one that adds something needs evidence that someone needs it now. Without it, recommend not building it yet, and say whether adding it later breaks anything. Compare options by whether they deliver what the request asks, within what it rules out, and recommend the smallest that does; one that goes further is named under 次に進められること, not recommended.
+
+Ask one question per turn. The user decides on one read, between other sessions, and asks back when they cannot follow, so each question:
 
 - opens with the problem in one or two plain sentences and one concrete instance of it (an input, a screen, a call), then the current behavior and the premise the options rest on, so a wrong premise gets corrected rather than asked back; paths and counts support that statement and do not replace it;
 - shows what each option produces rather than describing it: for a code design, the few lines in which the options differ (a signature, a call site, before and after); for a rule or a check, cases it catches and cases it misses; for an instruction, the lines as they would read; for behavior, the output or the screen. A table cell or a bullet of words is a description;
@@ -86,6 +88,6 @@ The reader decides on one read whether to accept the change without reading the 
 - **変更したファイル**: a tree, one line per file with what changed. Mark `← レビューしてほしい` on each hunk `references/human-review.md` lists, and list those under the tree in the form it gives. An unmarked tree tells the reader the code need not be read.
 - **確認したこと**: each done state with its line: what was observed and on which route, or the stand-in and what it fakes.
 - **確認していないこと**: each route that failed to open, was not reached, or was not opened, with its command and output, what would make it reachable, or what opening it would take, and anything else not established; for each, what happens if it is wrong, and how it could be established.
-- **仮に決めたこと**: a decision of yours the reader might want reversed, because it changes what they get, what it costs, or a risk they bear, with what it was chosen over. A choice that changes none of these stays under Decisions in the work file.
+- **仮に決めたこと**: a choice your own reasoning settled that the reader might want reversed, with what it was chosen over, however sure you were. A choice evidence settled stays under Decisions in the work file.
 - **次に進められること**: the state outside the diff and what can be taken up next.
 - **あなたに決めてほしいこと**: the count, then the first one as a question; the rest one per turn.
