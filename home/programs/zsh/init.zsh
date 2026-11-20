@@ -61,6 +61,12 @@ function _emit_osc7_cwd() {
 }
 add-zsh-hook precmd _emit_osc7_cwd
 
+# tmux のウィンドウ名は先頭ペインのディレクトリで決まるが、tmux には cd を知らせる hook がないので zsh から呼ぶ。
+function _tmux_window_name() {
+  [[ -n "$TMUX" ]] && tmux run-shell -b "$HOME/.local/bin/tmux-window-name.ts" 2>/dev/null
+}
+add-zsh-hook chpwd _tmux_window_name
+
 # ====================================================
 # Git Workflow Functions
 # ====================================================

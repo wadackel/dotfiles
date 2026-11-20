@@ -92,6 +92,9 @@ in
   # Dev layout script
   home.file.".local/bin/dev-layout.sh".source = dotfiles.linkHere ./. "scripts/dev-layout.sh";
 
+  # Window names (tmux.conf's hooks and zsh's chpwd run it)
+  home.file.".local/bin/tmux-window-name.ts".source = dotfiles.linkHere ./. "scripts/window-name.ts";
+
   # Evaluating the React+Ink module graph dominates Agentower's startup, so it
   # is compiled ahead of time. The build reads the worktree, not a store copy:
   # it needs the node_modules that installDotfilesDeps puts there. The stamp is
