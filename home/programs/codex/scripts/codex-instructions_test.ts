@@ -94,6 +94,8 @@ function communicationBullets(markdown: string): string[] {
 
 // The Codex copy is concatenated into ~/.codex/AGENTS.md by Nix; a reader
 // line added to one side only would leave the other agent writing blind.
+// Codex has no output style, so its copy also carries the wording lines that
+// Claude keeps in the concise output style.
 test("the reader model is in Communication and its Codex mirror alike", async () => {
   const claude = communicationBullets(
     await readRepoFile("home/programs/claude/global-instructions.md"),
@@ -101,7 +103,16 @@ test("the reader model is in Communication and its Codex mirror alike", async ()
   const codex = communicationBullets(
     await readRepoFile("home/programs/agents/shared/communication.md"),
   );
-  assertEquals(codex, claude);
+  assertEquals(codex.filter((line) => claude.includes(line)), claude);
+  const codexOnly = codex.filter((line) => !claude.includes(line));
+  assertEquals(codexOnly.length, 5);
+  assertIncludesAll(codexOnly.join("\n"), [
+    "necessary and sufficient",
+    "excessive empathy",
+    "preambles, contrasts",
+    "decorative phrasing",
+    "human persona",
+  ]);
   assertIncludesAll(claude.join("\n"), [
     "decides with little attention",
     "data flow, module boundaries and their inputs and outputs",

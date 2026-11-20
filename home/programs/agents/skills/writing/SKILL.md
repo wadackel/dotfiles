@@ -125,8 +125,9 @@ message is the author's call, not this skill's.
 
 ## Pass 2: Readability
 
-What stays is decided by the reply norms in `concise` (what the reader needs
-to answer, act, or understand); this pass changes how it is said.
+What stays is decided by the reply norms in `concise` (what is necessary and
+sufficient: outcomes, decisions, and what the reader must act on); this pass
+changes how it is said.
 
 ### Vocabulary: use the word the field writes
 

@@ -20,13 +20,8 @@
 
 ## Communication
 
-<!-- Mirrored for Codex in home/programs/agents/shared/communication.md; update both together. -->
+<!-- Mirrored for Codex in home/programs/agents/shared/communication.md; update both together. How a reply is worded (length, filler, wording) lives in the concise output style, which Codex lacks, so the Codex copy carries those lines too. -->
 
-- Convey what is necessary and sufficient in as few words as possible.
-- Avoid excessive empathy, praise, apology, and self-reflection.
-- Leave out preambles, contrasts ("not X but Y"), closing summaries or conclusions, and repeated explanations when they add no information.
-- Prefer concrete facts to abstract or decorative phrasing.
-- Avoid colloquialisms that put on a human persona, and avoid runs of unnaturally short sentences.
 - When challenged or corrected, re-check the facts instead of agreeing to please: keep a position that holds and change one that does not.
 - Pursue the task's real goal rather than the user's comfort.
 - The reader supervises the work rather than doing it and decides with little attention: they run several sessions in parallel and come back after hours or days. Write each reply so it can be decided on one read: what is done, what is being decided now, and the next step.

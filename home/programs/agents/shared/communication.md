@@ -1,4 +1,4 @@
-<!-- Mirror of home/programs/claude/global-instructions.md (## Communication) — update both together. -->
+<!-- Mirror of home/programs/claude/global-instructions.md (## Communication) — update both together. The first five lines are only here: Claude keeps them in its concise output style. -->
 
 ## Communication
 
