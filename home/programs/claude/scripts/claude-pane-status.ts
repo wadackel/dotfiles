@@ -362,6 +362,16 @@ const TERMINAL_TASK_STATUSES = new Set([
   "stopped",
 ]);
 
+// Publishing an artifact arms a comment watch that the payload lists as a
+// monitor with no command, server or tool. It resumes Claude only when the
+// user comments, so the pane is waiting for the user, not for work. A ws
+// Monitor looks the same and goes with it: only the description text, which
+// Claude Code does not promise, would tell the two apart.
+function isArtifactWatch(task: Record<string, unknown>): boolean {
+  return str(task.type) === "monitor" && !str(task.command) &&
+    !str(task.server) && !str(task.tool);
+}
+
 // A question at the end of the turn wants the user even while work runs on.
 function asksUser(message: string): boolean {
   return /[?？][\s*_`」』)）]*$/.test(message);
@@ -388,6 +398,7 @@ export function backgroundWait(
     const task = raw as Record<string, unknown>;
     if (TERMINAL_TASK_STATUSES.has(str(task.status))) continue;
     const type = str(task.type);
+    if (isArtifactWatch(task)) continue;
     if (type === "shell" || type === "monitor") {
       const p = probe.get(str(task.id));
       if (p?.listening) continue;

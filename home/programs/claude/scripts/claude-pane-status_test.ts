@@ -3083,6 +3083,56 @@ test("backgroundWait: shell missing from the process table is capped from now", 
   );
 });
 
+test("backgroundWait: an artifact comment watch is not counted", () => {
+  const watch = {
+    id: "w1",
+    type: "monitor",
+    status: "running",
+    description:
+      "live updates for artifact https://claude.ai/artifact/x (auto-armed on publish)",
+  };
+  assertEquals(
+    backgroundWait({ background_tasks: [watch] }, new Map(), 100),
+    null,
+  );
+  assertEquals(
+    backgroundWait(
+      {
+        background_tasks: [watch, {
+          id: "a1",
+          type: "subagent",
+          status: "running",
+        }],
+      },
+      new Map(),
+      100,
+    ),
+    { summary: "agent 1", untilSec: null },
+  );
+});
+
+test("backgroundWait: a Monitor command or an MCP monitor still counts", () => {
+  const monitor = {
+    id: "b1",
+    type: "monitor",
+    status: "running",
+    description: "CI",
+    command: "gh run watch 1",
+  };
+  const mcp = {
+    id: "m1",
+    type: "monitor",
+    status: "running",
+    description: "",
+    server: "s",
+    tool: "t",
+  };
+  assertEquals(
+    backgroundWait({ background_tasks: [monitor, mcp] }, new Map(), 100),
+    { summary: "monitor 2", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
+  );
+});
+
 test("backgroundWait: a cron keeps the pane waiting without a deadline", () => {
   assertEquals(
     backgroundWait(
