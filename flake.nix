@@ -35,9 +35,6 @@
       url = "github:wadackel/ctx-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # nixpkgs is deliberately not followed: upstream builds its uv2nix Python
-    # set against its own lock, and aarch64-darwin is not built in its CI.
-    hermes-agent.url = "github:NousResearch/hermes-agent/v2026.9.21";
   };
 
   outputs =
@@ -52,7 +49,6 @@
       mise-nix,
       codex-nix,
       ctx-nix,
-      hermes-agent,
       ...
     }:
     let
@@ -74,7 +70,6 @@
           mise-nix
           codex-nix
           ctx-nix
-          hermes-agent
           ;
       };
 

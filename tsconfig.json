@@ -24,7 +24,6 @@
     "home/programs/codex/scripts/*.ts",
     "home/programs/opencode/plugin_logic*.ts",
     "home/programs/opencode/scripts/*.ts",
-    "home/programs/hermes/scripts/*.ts",
     ".claude/skills/agentower-verify/*.ts",
     ".agents/skills/agentower-verify/*.ts"
   ],

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --no-install --config=/dev/null
 
 // Entry point for the vocabulary ontology in the Obsidian vault. The library
-// (`vocab-lib.ts`) is shared with the memo scripts and the Hermes task runner;
+// (`vocab-lib.ts`) is shared with the memo scripts;
 // only this entry reads the environment.
 
 import { text as readText } from "node:stream/consumers";

@@ -3,8 +3,8 @@ name: vocab
 description: >-
   Registers and maintains the owner's vocabulary: the short words and workflow
   names they use in instructions, kept in the Obsidian vault's 06_Vocabulary/
-  and injected into every Claude Code, Codex, opencode, and Hermes !claude
-  session. Use when the owner defines a term or asks to remember what a word
+  and injected into every Claude Code, Codex, and opencode session. Use when
+  the owner defines a term or asks to remember what a word
   means ("この語を登録して", "語彙に追加", "〜は〜のこと、覚えておいて",
   "register this term", "add to vocabulary"), or asks to check or apply the
   vocabulary ("語彙を反映して", "語彙をチェックして", "vocab apply", "vocab lint").
