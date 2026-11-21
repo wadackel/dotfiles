@@ -2074,10 +2074,10 @@ test("previewFooterTokens: a run waiting on background work names it", () => {
   );
 });
 
-test("previewFooterTokens: the background summary uses the auxiliary text color", () => {
+test("previewFooterTokens: the background summary uses the running tool color", () => {
   const tokens = previewFooterTokens(mkFooterRow({ background: "agent 1" }));
   assertEquals(
     tokens.find((t) => t.text === "bg: agent 1")?.color,
-    DOGRUN.fgDim,
+    DOGRUN.sandy,
   );
 });
