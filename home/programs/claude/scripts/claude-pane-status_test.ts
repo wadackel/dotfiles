@@ -1098,6 +1098,74 @@ test("eventToOps: SubagentStop drains pending teardown when list becomes empty",
   assertEquals(ops.every((o) => o.kind === "unset"), true);
 });
 
+// web-fetch fires neither SubagentStart nor SubagentStop; its WebFetch call
+// self-heals it into the list, and SubagentHandback is its only end signal.
+test("eventToOps: subagent SubagentHandback after main Stop → list drained + idle", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "web-fetch",
+      tool_name: "SubagentHandback",
+    },
+    stateWith({ status: "running", subagents: "web-fetch:a1", mainStopped: true }),
+  );
+  assertEquals(ops.find((o) => o.key === "@pane_subagents")?.kind, "unset");
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "idle");
+});
+
+test("eventToOps: subagent SubagentHandback removes only that id", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "web-fetch",
+      tool_name: "SubagentHandback",
+    },
+    stateWith({ status: "running", subagents: "web-fetch:a1|Explore:b2" }),
+  );
+  const listOp = ops.find((o) => o.key === "@pane_subagents");
+  assertEquals(listOp?.kind === "set" ? listOp.value : "", "Explore:b2");
+  assertEquals(ops.some((o) => o.key === "@pane_status"), false);
+});
+
+test("eventToOps: subagent SubagentHandback leaves no entry for a later Stop to wait on", () => {
+  const handback = eventToOps(
+    "PostToolUse",
+    {
+      session_id: "s1",
+      agent_id: "a1",
+      agent_type: "web-fetch",
+      tool_name: "SubagentHandback",
+    },
+    stateWith({ status: "running", subagents: "web-fetch:a1" }),
+  );
+  assertEquals(handback.find((o) => o.key === "@pane_subagents")?.kind, "unset");
+  const stop = eventToOps(
+    "Stop",
+    { session_id: "s1" },
+    stateWith({ status: "running" }),
+  );
+  const status = stop.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "idle");
+});
+
+// For a general-purpose agent SubagentStop follows the handback; after a
+// handback drain that SubagentStop must not self-heal @pane_agent back.
+test("eventToOps: SubagentStop for an id no longer listed → no-op", () => {
+  assertEquals(
+    eventToOps(
+      "SubagentStop",
+      { session_id: "s1", agent_id: "a1" },
+      emptyState,
+    ),
+    [],
+  );
+});
+
 test("eventToOps: unknown event → no-op", () => {
   assertEquals(eventToOps("NotARealEvent", {}, emptyState), []);
   assertEquals(eventToOps("", {}, emptyState), []);

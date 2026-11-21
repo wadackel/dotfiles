@@ -349,10 +349,25 @@ export function selfHealOps(data: HookData): Op[] {
 // --- Event → Op mapping (pure, exported for tests) ---
 
 export function eventToOps(
-  event: string,
+  rawEvent: string,
   data: HookData,
   state: PaneState,
 ): Op[] {
+  // Every subagent ends with a SubagentHandback call, but web-fetch fires no
+  // SubagentStop: waiting for SubagentStop alone left its self-healed entry
+  // in the list for good, and every later Stop deferred on it.
+  const event = rawEvent === "PostToolUse" && str(data.agent_id) &&
+      str(data.tool_name) === "SubagentHandback"
+    ? "SubagentStop"
+    : rawEvent;
+  // SubagentStop also follows the handback for most agent types. The entry is
+  // gone by then, and running the body would self-heal @pane_agent back onto
+  // a pane the handback already tore down.
+  if (
+    event === "SubagentStop" && !hasSubagent(state.subagents, str(data.agent_id))
+  ) {
+    return [];
+  }
   // Drain paths: full teardown. Short-circuit before self-heal so the teardown
   // is not followed by self-heal reinstating @pane_agent.
   if (event === "SessionEnd" && count(state.subagents) === 0) {

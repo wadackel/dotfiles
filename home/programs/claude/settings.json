@@ -554,7 +554,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*|AskUserQuestion|ExitPlanMode",
+        "matcher": "Bash|Edit|Write|MultiEdit|WebFetch|mcp__.*|AskUserQuestion|ExitPlanMode|SubagentHandback",
         "hooks": [
           {
             "type": "command",
