@@ -2,6 +2,10 @@
 
 Notes for `home/programs/tmux/agentower/`.
 
+## Display language
+
+Everything Agentower shows is English: labels, states, wait reasons, messages and errors, in the popup, the dashboard, the sidebar and `--restore`. This holds whatever language the request or the conversation is in, and it covers the wording of mockups and previews shown while a change is being decided, since a label approved there is built as written. Japanese on screen comes only from the user's own data (prompts, task lines). A Japanese label has shipped twice (the `--restore` screen, then the background-wait label); `ui_language_test.ts` now fails on any Japanese character in these sources and in the pane-status writers.
+
 ## agentower-verify (Agentower e2e)
 
 After changing `home/programs/tmux/agentower/agentower-main.ts`, `home/programs/tmux/agentower/agentower.tsx`, `home/programs/tmux/agentower/restore.ts`, `home/programs/tmux/agentower/agentower_e2e_harness.ts`, or `home/programs/tmux/agentower/agentower_e2e_test.ts`, run `.claude/skills/agentower-verify/agentower-verify.ts` (or invoke the `/agentower-verify` skill). It spins up an isolated `tmux -L agentower-e2e-$PID` server, runs every e2e scenario in `agentower_e2e_test.ts` under `bun test`, and emits a JSON verdict. It counts the `(pass)` / `(fail)` lines of the report and fails when they disagree with the summary, so a run that printed no per-test lines cannot read as green. The sandbox replaces `HOME`, so the harness points `BUN_RUNTIME_TRANSPILER_CACHE_PATH` back at the real cache; otherwise Bun writes its transpiler cache under the sandbox, one of which is the tracked `fixtures/task-progress-home`. Most popup scenarios exit through Escape and the rest through a jump or prefix+e; the dashboard scenarios exit through `q`. A broken quit path therefore fails CI-style rather than leaking a stuck Agentower into the sandbox. Do not claim Agentower changes are complete while `ok: false`.
