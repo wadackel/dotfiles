@@ -71,6 +71,8 @@ export interface PaneState {
   lastActivityAt: string;
   // @pane_background mirror: what the pane waits for after Stop, "" = nothing.
   background: string;
+  // @pane_background_until mirror (epoch seconds), "" = the wait has no cap.
+  backgroundUntil: string;
 }
 
 // --- Constants ---
@@ -422,6 +424,53 @@ export function backgroundWait(
   };
 }
 
+export function inBackgroundWait(state: PaneState): boolean {
+  return state.status === "running" && state.background !== "";
+}
+
+// A subagent that ends its turn to wait for its own shell drops out of
+// background_tasks, and no main Stop follows while it works, so its events
+// move the cap: it counts from the later of the newest shell start and the
+// subagent's last tool call.
+function extendBackgroundOps(state: PaneState, nowSec: number): Op[] {
+  if (!inBackgroundWait(state) || !state.backgroundUntil) return [];
+  return [{
+    kind: "set",
+    key: "@pane_background_until",
+    value: String(nowSec + BACKGROUND_SHELL_CAP_SECONDS),
+  }];
+}
+
+// SubagentStop carries the session's background_tasks too, so the summary
+// follows shells a subagent started after the main Stop. Its last message is
+// the subagent's, not a question to the user. When nothing is left, the main
+// agent is about to be notified, and the wait stays until it resumes.
+function refreshBackgroundOps(
+  data: HookData,
+  state: PaneState,
+  probe: BackgroundProbe,
+  nowSec: number,
+): Op[] {
+  if (!inBackgroundWait(state)) return [];
+  const wait = backgroundWait(
+    { ...data, last_assistant_message: "" },
+    probe,
+    nowSec,
+  );
+  if (!wait) return [];
+  const extended = Number(state.backgroundUntil) || 0;
+  return [
+    { kind: "set", key: "@pane_background", value: wait.summary },
+    wait.untilSec === null
+      ? { kind: "unset", key: "@pane_background_until" }
+      : {
+        kind: "set",
+        key: "@pane_background_until",
+        value: String(Math.max(wait.untilSec, extended)),
+      },
+  ];
+}
+
 // Re-assert the pane belongs to a live Claude session. Called at the head of
 // every event except drain paths. session_id-guarded so non-Claude events
 // (e.g. stray CwdChanged without a session) never create phantom Claude panes.
@@ -460,11 +509,12 @@ export function eventToOps(
   // SubagentStop also follows the handback for most agent types. The entry is
   // gone by then, and running the body would self-heal @pane_agent back onto
   // a pane the handback already tore down.
+  const nowSec = Math.floor(Date.now() / 1000);
   if (
     event === "SubagentStop" &&
     !hasSubagent(state.subagents, str(data.agent_id))
   ) {
-    return [];
+    return refreshBackgroundOps(data, state, probe, nowSec);
   }
   // Drain paths: full teardown. Short-circuit before self-heal so the teardown
   // is not followed by self-heal reinstating @pane_agent.
@@ -482,6 +532,8 @@ export function eventToOps(
   const body: Op[] = (() => {
     switch (event) {
       case "SessionStart": {
+        // Compaction keeps the session and its turn or background wait going.
+        if (str(data.source) === "compact") return [];
         // agent / session_id / cwd are set by selfHealOps below.
         // sessionStartBody = unsetOps(STALE) + status=idle + last_activity_at=now.
         // Seed activity_at so a fresh session shows `idle Ns` in Agentower's row 2
@@ -626,7 +678,6 @@ export function eventToOps(
             // exactly that leak. Keep the recovery: no recent activity means
             // the list is a ghost — discard it and fall through to waiting.
             const last = Number(state.lastActivityAt);
-            const nowSec = Math.floor(Date.now() / 1000);
             const fresh = Number.isFinite(last) && last > 0 &&
               nowSec - last < SUBAGENT_STALE_SECONDS;
             if (fresh) return [];
@@ -651,6 +702,10 @@ export function eventToOps(
       }
 
       case "PermissionDenied": {
+        // An auto-mode denial goes back to the agent, which carries on. The
+        // main agent's next tool call clears the wait; a subagent's never
+        // does while the main agent waits on it.
+        if (str(data.agent_id)) return [];
         return [
           { kind: "set", key: "@pane_status", value: "waiting" },
           {
@@ -888,7 +943,10 @@ export function eventToOps(
             { kind: "unset", key: "@pane_main_stopped" },
           ];
         }
-        return [subagentOp];
+        return [
+          subagentOp,
+          ...refreshBackgroundOps(data, state, probe, nowSec),
+        ];
       }
 
       default:
@@ -900,7 +958,15 @@ export function eventToOps(
   // Skip self-heal so a defer/unknown call stays a true no-op.
   if (body.length === 0) return [];
 
-  return [...selfHealOps(data), ...body];
+  const subagentActivity = event === "SubagentStart" ||
+    (str(data.agent_id) !== "" &&
+      (event === "PreToolUse" || event === "PostToolUse" ||
+        event === "PostToolUseFailure"));
+  return [
+    ...selfHealOps(data),
+    ...body,
+    ...(subagentActivity ? extendBackgroundOps(state, nowSec) : []),
+  ];
 }
 
 // --- Observability (JSONL log) ---
@@ -1279,6 +1345,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     waitReason: get("@pane_wait_reason"),
     lastActivityAt: get("@pane_last_activity_at"),
     background: get("@pane_background"),
+    backgroundUntil: get("@pane_background_until"),
   };
 }
 
@@ -1393,7 +1460,8 @@ async function main(): Promise<void> {
 
     const state = await readPaneState(tmuxPane);
     ctx.pre_state = state;
-    const probe = ctx.argv_event === "Stop"
+    const probe = ctx.argv_event === "Stop" ||
+        (ctx.argv_event === "SubagentStop" && inBackgroundWait(state))
       ? await probeBackgroundShells(hookData)
       : new Map<string, ShellProbe>();
     const ops = eventToOps(ctx.argv_event, hookData, state, probe);

@@ -174,6 +174,7 @@ const emptyState: PaneState = {
   waitReason: "",
   lastActivityAt: "",
   background: "",
+  backgroundUntil: "",
 };
 
 function stateWithSubagents(list: string): PaneState {
@@ -186,6 +187,7 @@ function stateWithSubagents(list: string): PaneState {
     waitReason: "",
     lastActivityAt: "",
     background: "",
+    backgroundUntil: "",
   };
 }
 
@@ -720,6 +722,7 @@ test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -741,6 +744,7 @@ test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when payload
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const currentOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -768,6 +772,7 @@ test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -789,6 +794,7 @@ test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_last_
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -816,6 +822,7 @@ test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", () => 
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
@@ -839,6 +846,7 @@ test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + stores r
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
@@ -872,6 +880,7 @@ test("eventToOps: PostToolUse (Write) stores file_path", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -895,6 +904,7 @@ test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -914,6 +924,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_file", 
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastTool = ops.find((o) => o.key === "@pane_last_tool");
@@ -938,6 +949,7 @@ test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no last_
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   assertEquals(
@@ -974,6 +986,7 @@ test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -1000,6 +1013,7 @@ test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_edit_
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -1136,6 +1150,7 @@ test("eventToOps: SubagentStop drains pending teardown when list becomes empty",
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1315,6 +1330,7 @@ test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1976,6 +1992,7 @@ test("main_stopped: SubagentStop drain path (pendingTeardown=true + last subagen
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1997,6 +2014,7 @@ test("resume: SubagentStop drain with status=waiting still returns ALL_PANE_OPTI
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -2292,6 +2310,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool_subject, unsets last_tool_er
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2318,6 +2337,7 @@ test("eventToOps: PostToolUse (Bash failure) sets last_tool_error from string re
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const error = ops.find((o) => o.key === "@pane_last_tool_error");
@@ -2342,6 +2362,7 @@ test("eventToOps: PostToolUse (Edit-family) unsets last_tool_subject (delegates 
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2369,6 +2390,7 @@ test("eventToOps: PostToolUse matching current tool also unsets @pane_current_to
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const currentSubject = ops.find(
@@ -2398,6 +2420,7 @@ test("eventToOps: PostToolUse NOT matching current tool leaves @pane_current_too
       waitReason: "",
       lastActivityAt: "",
       background: "",
+      backgroundUntil: "",
     },
   );
   const currentSubjectOps = ops.filter(
@@ -2430,6 +2453,7 @@ test("eventToOps: SessionEnd drain includes new 3 options", () => {
     waitReason: "",
     lastActivityAt: "",
     background: "",
+    backgroundUntil: "",
   });
   const keys = ops.map((o) => o.key);
   assertEquals(keys.includes("@pane_current_tool_subject"), true);
@@ -2548,6 +2572,7 @@ test("buildLogRecord: pre_state and stdin_event_mismatch preserved", () => {
     waitReason: "",
     lastActivityAt: "",
     background: "",
+    backgroundUntil: "",
   };
   ctx.pre_state = state;
   const rec = buildLogRecord(ctx, FIXED_NOW, 1);
@@ -2597,6 +2622,7 @@ const b1State: PaneState = {
   waitReason: "",
   lastActivityAt: "",
   background: "",
+  backgroundUntil: "",
 };
 
 test("Phase B.1 fixture: SessionStart with cwd", () => {
@@ -3315,4 +3341,154 @@ test("matchShells: finds the wrapper through Claude Code's re-quoting", () => {
 
 test("commandKey: drops quotes, backslashes, whitespace and ps's \\012", () => {
   assertEquals(commandKey(`a 'b'\\012c`), commandKey(`a b\nc`));
+});
+
+// --- Background wait while subagents work after the main Stop ---
+
+const waiting = (until = "1000") =>
+  stateWith({
+    status: "running",
+    background: "shell 1",
+    backgroundUntil: until,
+  });
+const opValue = (
+  ops: { kind: string; key: string; value?: string }[],
+  key: string,
+) => ops.find((o) => o.key === key);
+
+test("SubagentStop during a wait recounts the session's background tasks", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    {
+      session_id: "s",
+      agent_id: "fork1",
+      last_assistant_message: "Shall I continue?",
+      background_tasks: [shell("b1"), shell("b2")],
+    },
+    waiting("1000"),
+    new Map([["b2", { listening: false, startedAtSec: nowS() - 100 }]]),
+  );
+  assertEquals(opValue(ops, "@pane_background")?.value, "shell 2");
+  const until = Number(opValue(ops, "@pane_background_until")?.value);
+  assertEquals(until >= nowS() + BACKGROUND_SHELL_CAP_SECONDS - 5, true);
+});
+
+test("SubagentStop during a wait keeps a later deadline that activity set", () => {
+  const later = String(nowS() + 2 * BACKGROUND_SHELL_CAP_SECONDS);
+  const ops = eventToOps(
+    "SubagentStop",
+    { session_id: "s", agent_id: "fork1", background_tasks: [shell("b1")] },
+    waiting(later),
+    new Map([["b1", { listening: false, startedAtSec: nowS() - 100 }]]),
+  );
+  assertEquals(opValue(ops, "@pane_background_until")?.value, later);
+});
+
+test("SubagentStop during a wait with a running agent drops the deadline", () => {
+  const ops = eventToOps(
+    "SubagentStop",
+    {
+      session_id: "s",
+      agent_id: "fork1",
+      background_tasks: [shell("b1"), {
+        id: "a1",
+        type: "subagent",
+        status: "running",
+      }],
+    },
+    waiting(),
+  );
+  assertEquals(opValue(ops, "@pane_background")?.value, "shell 1 · agent 1");
+  assertEquals(opValue(ops, "@pane_background_until")?.kind, "unset");
+});
+
+test("SubagentStop with nothing left in flight leaves the wait as it is", () => {
+  assertEquals(
+    eventToOps(
+      "SubagentStop",
+      { session_id: "s", agent_id: "fork1", background_tasks: [] },
+      waiting(),
+    ),
+    [],
+  );
+});
+
+test("SubagentStop outside a wait does not touch the background options", () => {
+  assertEquals(
+    eventToOps(
+      "SubagentStop",
+      { session_id: "s", agent_id: "fork1", background_tasks: [shell("b1")] },
+      stateWith({ status: "idle" }),
+    ),
+    [],
+  );
+});
+
+test("a subagent's tool call during a capped wait moves the deadline", () => {
+  for (const event of ["PreToolUse", "PostToolUse", "PostToolUseFailure"]) {
+    const ops = eventToOps(
+      event,
+      { session_id: "s", agent_id: "a1", tool_name: "Bash", tool_input: {} },
+      waiting("1000"),
+    );
+    const until = Number(opValue(ops, "@pane_background_until")?.value);
+    assertEquals(
+      until >= nowS() + BACKGROUND_SHELL_CAP_SECONDS - 5,
+      true,
+      event,
+    );
+  }
+  const start = eventToOps(
+    "SubagentStart",
+    { session_id: "s", agent_id: "a1", agent_type: "x" },
+    waiting("1000"),
+  );
+  assertEquals(opValue(start, "@pane_background_until")?.kind, "set");
+});
+
+test("main tool calls and uncapped waits leave the deadline alone", () => {
+  const main = eventToOps(
+    "PreToolUse",
+    { session_id: "s", tool_name: "Bash", tool_input: {} },
+    waiting("1000"),
+  );
+  assertEquals(opValue(main, "@pane_background_until"), undefined);
+  const uncapped = eventToOps(
+    "PreToolUse",
+    { session_id: "s", agent_id: "a1", tool_name: "Bash", tool_input: {} },
+    stateWith({
+      status: "running",
+      background: "agent 1",
+      backgroundUntil: "",
+    }),
+  );
+  assertEquals(opValue(uncapped, "@pane_background_until"), undefined);
+});
+
+test("PermissionDenied from a subagent leaves the pane as it is", () => {
+  assertEquals(
+    eventToOps(
+      "PermissionDenied",
+      { session_id: "s", agent_id: "a1" },
+      waiting(),
+    ),
+    [],
+  );
+});
+
+test("SessionStart after compaction keeps the turn and its wait", () => {
+  assertEquals(
+    eventToOps(
+      "SessionStart",
+      { session_id: "s", source: "compact" },
+      waiting(),
+    ),
+    [],
+  );
+  const startup = eventToOps(
+    "SessionStart",
+    { session_id: "s", source: "startup" },
+    waiting(),
+  );
+  assertEquals(opValue(startup, "@pane_status")?.value, "idle");
 });
