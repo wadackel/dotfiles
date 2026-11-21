@@ -2070,6 +2070,6 @@ test("expireBackground: a wait without a deadline (an agent, a cron) never lapse
 test("previewFooterTokens: a run waiting on background work names it", () => {
   assertEquals(
     rowText(previewFooterTokens(mkFooterRow({ background: "agent 1" }))),
-    "claude · run · agent 1 待ち",
+    "claude · run · bg: agent 1",
   );
 });

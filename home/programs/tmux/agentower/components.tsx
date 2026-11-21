@@ -266,7 +266,7 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
     segs.push({
       key: "background",
       icon: ROW2_ICONS.tool,
-      body: `${row.background} 待ち`,
+      body: `bg: ${row.background}`,
       color: STATUS_META.running.color,
     });
   } else if (row.currentTool) {
@@ -890,7 +890,7 @@ export function previewFooterTokens(row: PaneRow): UsageToken[] {
   const state = attention && row.waitReason ? row.waitReason : meta.short;
   if (state) out.push(sep, { text: state, color: meta.color });
   if (row.status === "running" && row.background) {
-    out.push(sep, { text: `${row.background} 待ち`, color: meta.color });
+    out.push(sep, { text: `bg: ${row.background}`, color: meta.color });
   }
   if (row.contextUsedPct !== null) {
     out.push(sep, {

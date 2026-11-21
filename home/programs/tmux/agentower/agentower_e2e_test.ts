@@ -5073,12 +5073,12 @@ test("S117: a pane waiting on background work stays run; a lapsed shell wait rea
     const live = lines.findIndex((line) => line.includes("bg-live-S117"));
     assertEquals(live >= 0, true, out);
     assertStringIncludes(lines[live], "run");
-    assertStringIncludes(lines[live + 1], "agent 1 · shell 1 待ち");
+    assertStringIncludes(lines[live + 1], "bg: agent 1 · shell 1");
     const lapsed = lines.findIndex((line) => line.includes("bg-lapsed-S117"));
     assertEquals(lapsed >= 0, true, out);
     assertStringIncludes(lines[lapsed], "wait");
     assertStringIncludes(lines[lapsed + 1], "idle prompt");
-    assertFalse(lines[lapsed + 1].includes("待ち"));
+    assertFalse(lines[lapsed + 1].includes("bg:"));
     await sendKey(agentower, "Escape");
     await waitForExit();
   } finally {
