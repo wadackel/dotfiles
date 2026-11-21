@@ -277,14 +277,12 @@ export function resumeOpsIfStuck(state: PaneState): Op[] {
   ];
 }
 
-// Threshold for the idle_prompt liveness check. toolStartOps does NOT bump
-// @pane_last_activity_at (only PostToolUse/PostToolUseFailure and the
-// subagent-origin PreToolUse bump do), so a subagent inside a single tool call
-// longer than this window is misjudged stale and its list entry discarded —
-// the next PostToolUse self-heals, but the waiting display persists until the
-// tool completes. Lower values shrink ghost-entry retention; higher values
-// widen this misjudgment window.
-const SUBAGENT_STALE_SECONDS = 120;
+// Threshold for the idle_prompt liveness check. A subagent inside one tool
+// call longer than this looks stale and drops out of the list until its next
+// PostToolUse self-heals it (toolStartOps does not bump activity_at). Kept
+// under the 60–66 s observed between Stop and idle_prompt: at 120 the main
+// agent's own last tool event always looked fresh, and the cleanup never ran.
+const SUBAGENT_STALE_SECONDS = 45;
 
 // Observed subagent activity flips the pane back to running only from
 // idle-like states. waiting for permission / elicitation / question /

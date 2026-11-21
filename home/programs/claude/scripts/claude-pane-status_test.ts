@@ -379,6 +379,23 @@ test("eventToOps: Notification(idle_prompt) + subagents but stale activity → g
   ]);
 });
 
+// idle_prompt arrives about 60 s after Stop (observed 60–66 s), so a ghost
+// must already count as stale at that point or the cleanup never runs.
+test("eventToOps: Notification(idle_prompt) 60 s after last activity → ghost cleanup", () => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "idle_prompt" },
+    stateWith({
+      subagents: "web-fetch:zz",
+      status: "running",
+      mainStopped: true,
+      lastActivityAt: String(nowSec - 60),
+    }),
+  );
+  assertEquals(ops.find((o) => o.key === "@pane_subagents")?.kind, "unset");
+});
+
 test("eventToOps: Notification(idle_prompt) + subagents + empty lastActivityAt → treated as stale", () => {
   const ops = eventToOps(
     "Notification",
