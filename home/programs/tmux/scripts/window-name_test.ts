@@ -38,7 +38,7 @@ function names(places: Place[]): string[] {
   return [...sessionNames(windows).values()];
 }
 
-test("a window alone takes the head of its first word", () => {
+test("a window alone takes its first word when it fits, else every word's head", () => {
   assertEquals(
     names([
       repo("/Users/me/dotfiles"),
@@ -49,8 +49,23 @@ test("a window alone takes the head of its first word", () => {
       repo(`${GH}/me/eda.nvim`),
       repo(`${GH}/me/blog.example.me`),
       dir("/Users/me/Documents/Main"),
+      repo(`${GH}/me/storycap-testrun`),
+      repo(`${GH}/me/personal-feed`),
+      repo(`${GH}/me/zmk-config-dax5`),
     ]),
-    ["dot", "ofs", "mfl", "vit", "vim", "eda", "blog", "main"],
+    [
+      "dot",
+      "ofs",
+      "mfu",
+      "vmt",
+      "vim",
+      "eda",
+      "blog",
+      "main",
+      "stt",
+      "pef",
+      "zmk",
+    ],
   );
 });
 
@@ -72,21 +87,28 @@ test("repositories sharing a head are told apart by their last word", () => {
     names([repo(`${GH}/me/zmk-config-dax5`), repo(`${GH}/me/zmk-dax-modules`)]),
     ["dax5", "mod"],
   );
+  assertEquals(
+    names([
+      repo(`${GH}/me/vitant-yaml-proof`),
+      repo(`${GH}/me/vitant-yaml-progress`),
+      repo(`${GH}/me/vitant-yaml-speed`),
+    ]),
+    ["proo", "prog", "vys"],
+  );
+  // daxial cuts to dax but daxial-p5 spreads to dap, so the two never meet.
   assertEquals(names([repo(`${GH}/me/daxial`), repo(`${GH}/me/daxial-p5`)]), [
     "dax",
-    "p5",
+    "dap",
   ]);
 });
 
 test("different first words are lengthened instead", () => {
   assertEquals(
     names([
-      repo(`${GH}/me/vitant-yaml-proof`),
-      repo(`${GH}/me/vitant-yaml-speed`),
-      repo(`${GH}/me/vitant-yaml-progress`),
+      repo(`${GH}/me/vitant-mutation-trace`),
       repo(`${GH}/me/vitest-mutation-testing-sandbox`),
     ]),
-    ["proo", "spe", "prog", "vite"],
+    ["vita", "vite"],
   );
 });
 
@@ -103,7 +125,7 @@ test("a worktree shows its own name only beside its repository", () => {
       repo(`${GH}/me/obsidian-dashboard`),
       dir("/Users/me/Documents/Main"),
     ]),
-    ["clip", "plan", "pst", "das", "main"],
+    ["owc", "plan", "pst", "obd", "main"],
   );
 });
 
@@ -121,7 +143,7 @@ test("worktrees of one repository are told apart by the same word rules", () => 
       worktree("vitant-yaml-speed"),
       worktree("vitant-yaml-progress"),
     ]),
-    ["vit", "proo", "spe", "prog"],
+    ["vmt", "proo", "spe", "prog"],
   );
 });
 
@@ -131,7 +153,7 @@ test("forks are told apart by their owner's initial", () => {
       repo(`${GH}/reg-viz/storycap-testrun`),
       repo(`${GH}/me/storycap-testrun`),
     ]),
-    ["rsto", "msto"],
+    ["rstt", "mstt"],
   );
 });
 

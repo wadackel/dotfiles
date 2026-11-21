@@ -42,10 +42,16 @@ export function words(label: string): string[] {
 const shortWord = (word: string) =>
   word.length <= MAX_LENGTH ? word : word.slice(0, 3);
 
+// A first word that fits is what the name is called by (vim, zmk). One that
+// has to be cut (sto for storycap-testrun) reads as another word and drops
+// the rest, so the letters go to every word instead: stt, owc.
 function baseName(place: Place): string {
   if (place.home) return "~";
-  const first = words(place.label)[0];
-  return first ? shortWord(first) : place.label.slice(0, MAX_LENGTH);
+  const ws = words(place.label);
+  if (ws.length === 0) return place.label.slice(0, MAX_LENGTH);
+  if (ws.length === 1 || ws[0].length <= MAX_LENGTH) return shortWord(ws[0]);
+  if (ws.length === 2) return ws[0].slice(0, 2) + ws[1][0];
+  return ws.slice(0, 3).map((w) => w[0]).join("");
 }
 
 // The shortest head of `word` (3 or 4 letters, or the whole word when it fits)
