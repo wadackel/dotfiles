@@ -87,6 +87,8 @@ export interface PaneOpts {
   lastActivityAtSec?: number;
   sessionId?: string;
   subagents?: string;
+  background?: string;
+  backgroundUntilSec?: number;
   cwd?: string;
   // The pane's start directory, so pane_current_path. Defaults to `cwd`: pass
   // it to reproduce an agent whose @pane_cwd moved away from where it started.
@@ -301,6 +303,12 @@ export async function createClaudePane(opts: PaneOpts = {}): Promise<string> {
   }
   if (opts.cwd !== undefined) {
     pairs.push(["@pane_cwd", opts.cwd]);
+  }
+  if (opts.background !== undefined) {
+    pairs.push(["@pane_background", opts.background]);
+  }
+  if (opts.backgroundUntilSec !== undefined) {
+    pairs.push(["@pane_background_until", String(opts.backgroundUntilSec)]);
   }
   if (opts.userLabel !== undefined) {
     pairs.push(["@pane_user_label", opts.userLabel]);

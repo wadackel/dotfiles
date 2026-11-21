@@ -3,15 +3,21 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { run } from "../../agents/lib/proc.ts";
 import {
   appendSubagent,
+  BACKGROUND_SHELL_CAP_SECONDS,
+  backgroundWait,
   buildLogRecord,
   chainSetArgs,
+  commandKey,
   count,
   eventToOps,
   extractToolError,
   extractToolSubject,
   formatElapsed,
   hasSubagent,
+  matchShells,
   type PaneState,
+  parseEtime,
+  parseProcRows,
   parseShowOptions,
   removeSubagent,
   type RunContext,
@@ -167,6 +173,7 @@ const emptyState: PaneState = {
   mainStopped: false,
   waitReason: "",
   lastActivityAt: "",
+  background: "",
 };
 
 function stateWithSubagents(list: string): PaneState {
@@ -178,6 +185,7 @@ function stateWithSubagents(list: string): PaneState {
     mainStopped: false,
     waitReason: "",
     lastActivityAt: "",
+    background: "",
   };
 }
 
@@ -267,6 +275,8 @@ test("eventToOps: UserPromptSubmit with empty prompt → unset @pane_prompt", ()
 test("eventToOps: Stop with no subagents → idle + defensive unset @pane_main_stopped", () => {
   const ops = eventToOps("Stop", {}, emptyState);
   assertEquals(ops, [
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
     { kind: "set", key: "@pane_status", value: "idle" },
     { kind: "unset", key: "@pane_main_stopped" },
   ]);
@@ -277,7 +287,11 @@ test("eventToOps: Stop with live subagents → sets @pane_main_stopped (no statu
   // @pane_main_stopped=1 is set so that when the last subagent stops we can
   // transition to idle. No session_id → selfHeal adds nothing.
   const ops = eventToOps("Stop", {}, stateWithSubagents("Explore:x1"));
-  assertEquals(ops, [{ kind: "set", key: "@pane_main_stopped", value: "1" }]);
+  assertEquals(ops, [
+    { kind: "set", key: "@pane_main_stopped", value: "1" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
+  ]);
 });
 
 test("eventToOps: Stop with no subagents also unsets @pane_main_stopped defensively", () => {
@@ -705,6 +719,7 @@ test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -725,6 +740,7 @@ test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when payload
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const currentOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -751,6 +767,7 @@ test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -771,6 +788,7 @@ test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_last_
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -797,6 +815,7 @@ test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", () => 
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
@@ -819,6 +838,7 @@ test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + stores r
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
@@ -851,6 +871,7 @@ test("eventToOps: PostToolUse (Write) stores file_path", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -873,6 +894,7 @@ test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -891,6 +913,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_file", 
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastTool = ops.find((o) => o.key === "@pane_last_tool");
@@ -914,6 +937,7 @@ test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no last_
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   assertEquals(
@@ -949,6 +973,7 @@ test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -974,6 +999,7 @@ test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_edit_
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -1109,6 +1135,7 @@ test("eventToOps: SubagentStop drains pending teardown when list becomes empty",
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1126,7 +1153,11 @@ test("eventToOps: subagent SubagentHandback after main Stop → list drained + i
       agent_type: "web-fetch",
       tool_name: "SubagentHandback",
     },
-    stateWith({ status: "running", subagents: "web-fetch:a1", mainStopped: true }),
+    stateWith({
+      status: "running",
+      subagents: "web-fetch:a1",
+      mainStopped: true,
+    }),
   );
   assertEquals(ops.find((o) => o.key === "@pane_subagents")?.kind, "unset");
   const status = ops.find((o) => o.key === "@pane_status");
@@ -1160,7 +1191,10 @@ test("eventToOps: subagent SubagentHandback leaves no entry for a later Stop to 
     },
     stateWith({ status: "running", subagents: "web-fetch:a1" }),
   );
-  assertEquals(handback.find((o) => o.key === "@pane_subagents")?.kind, "unset");
+  assertEquals(
+    handback.find((o) => o.key === "@pane_subagents")?.kind,
+    "unset",
+  );
   const stop = eventToOps(
     "Stop",
     { session_id: "s1" },
@@ -1280,6 +1314,7 @@ test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1940,6 +1975,7 @@ test("main_stopped: SubagentStop drain path (pendingTeardown=true + last subagen
       mainStopped: true,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1960,6 +1996,7 @@ test("resume: SubagentStop drain with status=waiting still returns ALL_PANE_OPTI
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -2254,6 +2291,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool_subject, unsets last_tool_er
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2279,6 +2317,7 @@ test("eventToOps: PostToolUse (Bash failure) sets last_tool_error from string re
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const error = ops.find((o) => o.key === "@pane_last_tool_error");
@@ -2302,6 +2341,7 @@ test("eventToOps: PostToolUse (Edit-family) unsets last_tool_subject (delegates 
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2328,6 +2368,7 @@ test("eventToOps: PostToolUse matching current tool also unsets @pane_current_to
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const currentSubject = ops.find(
@@ -2356,6 +2397,7 @@ test("eventToOps: PostToolUse NOT matching current tool leaves @pane_current_too
       mainStopped: false,
       waitReason: "",
       lastActivityAt: "",
+      background: "",
     },
   );
   const currentSubjectOps = ops.filter(
@@ -2387,6 +2429,7 @@ test("eventToOps: SessionEnd drain includes new 3 options", () => {
     mainStopped: false,
     waitReason: "",
     lastActivityAt: "",
+    background: "",
   });
   const keys = ops.map((o) => o.key);
   assertEquals(keys.includes("@pane_current_tool_subject"), true);
@@ -2504,6 +2547,7 @@ test("buildLogRecord: pre_state and stdin_event_mismatch preserved", () => {
     mainStopped: false,
     waitReason: "",
     lastActivityAt: "",
+    background: "",
   };
   ctx.pre_state = state;
   const rec = buildLogRecord(ctx, FIXED_NOW, 1);
@@ -2552,6 +2596,7 @@ const b1State: PaneState = {
   mainStopped: false,
   waitReason: "",
   lastActivityAt: "",
+  background: "",
 };
 
 test("Phase B.1 fixture: SessionStart with cwd", () => {
@@ -2582,6 +2627,8 @@ test("Phase B.1 fixture: SessionStart with cwd", () => {
     { kind: "unset", key: "@pane_last_tool_error" },
     { kind: "unset", key: "@pane_main_stopped" },
     { kind: "unset", key: "@pane_context_used_pct" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
     { kind: "set", key: "@pane_status", value: "idle" },
     { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
   ]);
@@ -2599,6 +2646,8 @@ test("Phase B.1 fixture: UserPromptSubmit with prompt", () => {
     { kind: "set", key: "@pane_agent", value: "claude" },
     { kind: "set", key: "@pane_session_id", value: "test-sid" },
     { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
     { kind: "set", key: "@pane_status", value: "running" },
     { kind: "set", key: "@pane_started_at", value: "<NORMALIZED>" },
     { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
@@ -2681,6 +2730,8 @@ test("Phase B.1 fixture: Stop with no subagents", () => {
     { kind: "set", key: "@pane_agent", value: "claude" },
     { kind: "set", key: "@pane_session_id", value: "test-sid" },
     { kind: "set", key: "@pane_cwd", value: "/repo" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
     { kind: "set", key: "@pane_status", value: "idle" },
     { kind: "unset", key: "@pane_main_stopped" },
   ]);
@@ -2711,6 +2762,8 @@ test("Phase B.1 fixture: SessionEnd drain", () => {
     { kind: "unset", key: "@pane_last_tool_error" },
     { kind: "unset", key: "@pane_main_stopped" },
     { kind: "unset", key: "@pane_context_used_pct" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
   ]);
 });
 
@@ -2947,4 +3000,269 @@ test("chainSetArgs joins ops with a lone ; and escapes a value ending in ;", () 
       "ls\\;",
     ],
   );
+});
+
+// --- Background wait ---
+
+const nowS = () => Math.floor(Date.now() / 1000);
+const shell = (id: string, command = "sleep 60") => ({
+  id,
+  type: "shell",
+  status: "running",
+  description: "",
+  command,
+});
+
+test("backgroundWait: nothing in flight → null", () => {
+  assertEquals(
+    backgroundWait({ background_tasks: [], session_crons: [] }, new Map(), 100),
+    null,
+  );
+});
+
+test("backgroundWait: agent and shell → summary, no deadline", () => {
+  const out = backgroundWait(
+    {
+      background_tasks: [
+        {
+          id: "a1",
+          type: "subagent",
+          status: "running",
+          agent_type: "Explore",
+        },
+        shell("b1"),
+      ],
+    },
+    new Map([["b1", { listening: false, startedAtSec: 90 }]]),
+    100,
+  );
+  assertEquals(out, { summary: "agent 1 · shell 1", untilSec: null });
+});
+
+test("backgroundWait: shell alone is capped from its start", () => {
+  const out = backgroundWait(
+    { background_tasks: [shell("b1"), shell("b2")] },
+    new Map([
+      ["b1", { listening: false, startedAtSec: 50 }],
+      ["b2", { listening: false, startedAtSec: 90 }],
+    ]),
+    100,
+  );
+  assertEquals(out, {
+    summary: "shell 2",
+    untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS,
+  });
+});
+
+test("backgroundWait: listening shell (a server left for the user) is not counted", () => {
+  assertEquals(
+    backgroundWait(
+      { background_tasks: [shell("b1", "pnpm dev")] },
+      new Map([["b1", { listening: true, startedAtSec: 90 }]]),
+      100,
+    ),
+    null,
+  );
+});
+
+test("backgroundWait: shell past the cap is not counted", () => {
+  assertEquals(
+    backgroundWait(
+      { background_tasks: [shell("b1")] },
+      new Map([["b1", { listening: false, startedAtSec: 0 }]]),
+      BACKGROUND_SHELL_CAP_SECONDS,
+    ),
+    null,
+  );
+});
+
+test("backgroundWait: shell missing from the process table is capped from now", () => {
+  assertEquals(
+    backgroundWait({ background_tasks: [shell("b1")] }, new Map(), 100),
+    { summary: "shell 1", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
+  );
+});
+
+test("backgroundWait: a cron keeps the pane waiting without a deadline", () => {
+  assertEquals(
+    backgroundWait(
+      {
+        background_tasks: [],
+        session_crons: [{ id: "c1", schedule: "*/5 * * * *", recurring: true }],
+      },
+      new Map(),
+      100,
+    ),
+    { summary: "cron 1", untilSec: null },
+  );
+});
+
+test("backgroundWait: finished tasks are skipped", () => {
+  assertEquals(
+    backgroundWait(
+      {
+        background_tasks: [{ ...shell("b1"), status: "completed" }],
+      },
+      new Map(),
+      100,
+    ),
+    null,
+  );
+});
+
+test("backgroundWait: a turn ending in a question waits for the user", () => {
+  for (const last of ["どちらにしますか？", "Which one?", "進めますか？**"]) {
+    assertEquals(
+      backgroundWait(
+        {
+          background_tasks: [{ id: "a1", type: "subagent", status: "running" }],
+          last_assistant_message: last,
+        },
+        new Map(),
+        100,
+      ),
+      null,
+    );
+  }
+});
+
+test("eventToOps: Stop with background work → running + summary, main_stopped unset", () => {
+  const ops = eventToOps(
+    "Stop",
+    { background_tasks: [{ id: "a1", type: "subagent", status: "running" }] },
+    stateWith({ status: "running", subagents: "Explore:a1" }),
+  );
+  assertEquals(ops, [
+    { kind: "set", key: "@pane_status", value: "running" },
+    { kind: "unset", key: "@pane_wait_reason" },
+    { kind: "unset", key: "@pane_main_stopped" },
+    { kind: "set", key: "@pane_background", value: "agent 1" },
+    { kind: "unset", key: "@pane_background_until" },
+  ]);
+});
+
+test("eventToOps: Stop with a capped shell records the deadline", () => {
+  const started = nowS() - 10;
+  const ops = eventToOps(
+    "Stop",
+    { background_tasks: [shell("b1")] },
+    stateWith({ status: "running" }),
+    new Map([["b1", { listening: false, startedAtSec: started }]]),
+  );
+  const until = ops.find((o) => o.key === "@pane_background_until");
+  assertEquals(
+    until?.kind === "set" ? until.value : "",
+    String(started + BACKGROUND_SHELL_CAP_SECONDS),
+  );
+});
+
+test("eventToOps: Stop with only a listening shell → idle", () => {
+  const ops = eventToOps(
+    "Stop",
+    { background_tasks: [shell("b1", "pnpm dev")] },
+    stateWith({ status: "running", background: "shell 1" }),
+    new Map([["b1", { listening: true, startedAtSec: nowS() }]]),
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "idle");
+  assertEquals(ops.find((o) => o.key === "@pane_background")?.kind, "unset");
+});
+
+test("eventToOps: idle_prompt while waiting on background work → no-op", () => {
+  assertEquals(
+    eventToOps(
+      "Notification",
+      { notification_type: "idle_prompt", session_id: "s1" },
+      stateWith({ status: "running", background: "shell 1" }),
+    ),
+    [],
+  );
+});
+
+test("eventToOps: permission_prompt while waiting on background work still waits", () => {
+  const ops = eventToOps(
+    "Notification",
+    { notification_type: "permission_prompt" },
+    stateWith({ status: "running", background: "agent 1" }),
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+});
+
+test("eventToOps: self-resume keeps the user's prompt and start time", () => {
+  for (
+    const prompt of [
+      "<task-notification>\n<task-id>b1</task-id>",
+      '<agent-message from="a1">\n[Subagent hand-back]',
+    ]
+  ) {
+    const ops = eventToOps(
+      "UserPromptSubmit",
+      { prompt },
+      stateWith({ status: "running", background: "shell 1" }),
+    );
+    const keys = ops.map((o) => `${o.kind} ${o.key}`);
+    assertEquals(keys.includes("set @pane_prompt"), false);
+    assertEquals(keys.includes("unset @pane_prompt"), false);
+    assertEquals(keys.includes("set @pane_started_at"), false);
+    assertEquals(keys.includes("unset @pane_background"), true);
+    const status = ops.find((o) => o.key === "@pane_status");
+    assertEquals(status?.kind === "set" ? status.value : "", "running");
+  }
+});
+
+test("eventToOps: a user prompt clears the background summary", () => {
+  const ops = eventToOps(
+    "UserPromptSubmit",
+    { prompt: "next" },
+    stateWith({ status: "running", background: "shell 1" }),
+  );
+  assertEquals(ops.find((o) => o.key === "@pane_background")?.kind, "unset");
+  const prompt = ops.find((o) => o.key === "@pane_prompt");
+  assertEquals(prompt?.kind === "set" ? prompt.value : "", "next");
+});
+
+test("parseEtime: mm:ss, hh:mm:ss, dd-hh:mm:ss", () => {
+  assertEquals(parseEtime("00:02"), 2);
+  assertEquals(parseEtime("01:06:57"), 4017);
+  assertEquals(parseEtime("2-01:00:00"), 2 * 86400 + 3600);
+  assertEquals(parseEtime("garbage"), null);
+});
+
+// The wrapper line as ps printed it for `timeout 20 sh -c 'echo "it'"'"'s"; sleep 15'`
+// followed by a second line `echo second`.
+const WRAPPER =
+  `/bin/zsh -c source /x/snapshot-zsh.sh 2>/dev/null || true && eval 'timeout 20 sh -c '"'"'echo "it'"'"'"'"'"'"'"'"'s"; sleep 15'"'"'\\012echo second' < /dev/null && pwd -P >| /tmp/claude-4b5e-cwd`;
+
+test("matchShells: finds the wrapper through Claude Code's re-quoting", () => {
+  const procs = parseProcRows(
+    [
+      `  100     1  01:00:00 claude claude`,
+      `  200   100     00:30 zsh ${WRAPPER}`,
+      `  201   200     00:30 timeout timeout 20 sh -c echo`,
+      `  300   100     00:05 zsh /bin/zsh -c eval 'pnpm dev'`,
+      `  301   300     00:05 node node vite`,
+    ].join("\n"),
+  );
+  const probe = matchShells(
+    [
+      {
+        id: "b1",
+        command: `timeout 20 sh -c 'echo "it'"'"'s"; sleep 15'\necho second`,
+      },
+      { id: "b2", command: "pnpm dev" },
+      { id: "b3", command: "not running" },
+    ],
+    procs,
+    100,
+    new Set([301]),
+    1000,
+  );
+  assertEquals(probe.get("b1"), { listening: false, startedAtSec: 970 });
+  assertEquals(probe.get("b2"), { listening: true, startedAtSec: 995 });
+  assertEquals(probe.has("b3"), false);
+});
+
+test("commandKey: drops quotes, backslashes, whitespace and ps's \\012", () => {
+  assertEquals(commandKey(`a 'b'\\012c`), commandKey(`a b\nc`));
 });

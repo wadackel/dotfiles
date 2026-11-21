@@ -5048,3 +5048,40 @@ test("S116: the picker restores the generation chosen with j, after a step back"
     await teardown();
   }
 });
+
+test("S117: a pane waiting on background work stays run; a lapsed shell wait reads as waiting", async () => {
+  await setupServer();
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    await createClaudePane({
+      status: "running",
+      prompt: "bg-live-S117",
+      lastTool: "Bash",
+      background: "agent 1 · shell 1",
+    });
+    await createClaudePane({
+      status: "running",
+      prompt: "bg-lapsed-S117",
+      lastTool: "Bash",
+      lastActivityAtSec: now - 3700,
+      background: "shell 1",
+      backgroundUntilSec: now - 100,
+    });
+    const agentower = await spawnAgentower();
+    const out = await captureOutput(agentower);
+    const lines = listColumn(out);
+    const live = lines.findIndex((line) => line.includes("bg-live-S117"));
+    assertEquals(live >= 0, true, out);
+    assertStringIncludes(lines[live], "run");
+    assertStringIncludes(lines[live + 1], "agent 1 · shell 1 待ち");
+    const lapsed = lines.findIndex((line) => line.includes("bg-lapsed-S117"));
+    assertEquals(lapsed >= 0, true, out);
+    assertStringIncludes(lines[lapsed], "wait");
+    assertStringIncludes(lines[lapsed + 1], "idle prompt");
+    assertFalse(lines[lapsed + 1].includes("待ち"));
+    await sendKey(agentower, "Escape");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

@@ -66,6 +66,10 @@ export interface PaneRow {
   lastToolError: string;
   contextUsedPct: number | null;
   userLabel: UserLabel;
+  // What a running pane waits for between turns ("shell 1 · agent 1"), and
+  // when its last capped shell runs out; "" / null when nothing is pending.
+  background: string;
+  backgroundUntilSec: number | null;
   // Filled by agentower.tsx's fetchPanes from a git lookup, never by parseRow:
   // the tmux row carries only the cwd, and parseRow stays a pure parser that
   // agentower-doctor shares.
@@ -124,7 +128,7 @@ export function nextUserLabel(current: UserLabel, step: 1 | -1 = 1): UserLabel {
 
 // Format string passed to `tmux list-panes -a -F ...`. US (\x1f) separates fields
 // because tmux format output can contain tabs/spaces and @pane_* values may be empty.
-// Field count = 23; parseRow's malformed-check below must match.
+// Field count = 25; parseRow's malformed-check below must match.
 export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{session_name}:#{window_index}.#{pane_index}\x1f" +
   "#{pane_current_command}\x1f" +
@@ -147,7 +151,9 @@ export const TMUX_FORMAT = "#{pane_id}\x1f" +
   "#{@pane_last_tool_error}\x1f" +
   "#{@pane_context_used_pct}\x1f" +
   "#{@pane_user_label}\x1f" +
-  "#{@pane_user_label_session}";
+  "#{@pane_user_label_session}\x1f" +
+  "#{@pane_background}\x1f" +
+  "#{@pane_background_until}";
 
 const NUMERIC = /^\d+$/;
 
@@ -171,7 +177,7 @@ function normalizeUserLabel(raw: string): UserLabel {
 //
 // `\x1f` (US, field separator) is intentionally out of scope: it is excluded
 // from the strip set so injecting it into a value would still desync the
-// 23-field layout (parseRow returns null on `fields.length < 23`).
+// 25-field layout (parseRow returns null on `fields.length < 25`).
 const CONTROL_BYTE_RE = /[\x00-\x1e\x7f]/g;
 
 function stripControlBytes(raw: string): string {
@@ -179,10 +185,10 @@ function stripControlBytes(raw: string): string {
 }
 
 // Parse one line of `tmux list-panes -a -F TMUX_FORMAT` output into a PaneRow.
-// Returns null when the line is malformed (< 23 fields or empty pane_id).
+// Returns null when the line is malformed (< 25 fields or empty pane_id).
 export function parseRow(line: string): PaneRow | null {
   const fields = line.split("\x1f");
-  if (fields.length < 23) return null;
+  if (fields.length < 25) return null;
   const [
     paneId,
     target,
@@ -207,6 +213,8 @@ export function parseRow(line: string): PaneRow | null {
     contextUsedPct,
     userLabel,
     userLabelSession,
+    background,
+    backgroundUntil,
   ] = fields;
   if (!paneId) return null;
   // Gate the user label on session identity: only honor it when the session
@@ -242,6 +250,24 @@ export function parseRow(line: string): PaneRow | null {
     lastToolError: stripControlBytes(lastToolError),
     contextUsedPct: parseIntOrNull(contextUsedPct),
     userLabel: effectiveUserLabel,
+    background: stripControlBytes(background),
+    backgroundUntilSec: parseIntOrNull(backgroundUntil),
+  };
+}
+
+// The hook writes a shell-only wait once, at Stop, and nothing runs when its
+// time is up; the reader turns it into the idle-prompt wait it stands for.
+export function expireBackground(row: PaneRow, nowSec: number): PaneRow {
+  if (
+    row.status !== "running" || !row.background ||
+    row.backgroundUntilSec === null || nowSec < row.backgroundUntilSec
+  ) return row;
+  return {
+    ...row,
+    status: "waiting",
+    waitReason: "idle prompt",
+    background: "",
+    backgroundUntilSec: null,
   };
 }
 
@@ -325,6 +351,8 @@ function blankRow(row: PaneRow): PaneRow {
     lastActivityAtSec: null,
     contextUsedPct: null,
     userLabel: "",
+    background: "",
+    backgroundUntilSec: null,
   };
 }
 

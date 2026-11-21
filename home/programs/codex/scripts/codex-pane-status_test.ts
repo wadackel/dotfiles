@@ -1556,6 +1556,8 @@ test("Phase B.1 fixture: SessionStart resume", async () => {
     { kind: "unset", key: "@pane_main_stopped" },
     { kind: "unset", key: "@pane_worktree_branch" },
     { kind: "unset", key: "@pane_worktree_path" },
+    { kind: "unset", key: "@pane_background" },
+    { kind: "unset", key: "@pane_background_until" },
     { kind: "unset", key: "@pane_current_tool" },
     { kind: "unset", key: "@pane_current_tool_use_id" },
     { kind: "unset", key: "@pane_wait_reason" },

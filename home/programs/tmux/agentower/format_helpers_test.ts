@@ -47,6 +47,8 @@ function mkRow(overrides: Partial<PaneRow> = {}): PaneRow {
     lastToolError: "",
     contextUsedPct: null,
     userLabel: "",
+    background: "",
+    backgroundUntilSec: null,
     ...overrides,
   };
 }

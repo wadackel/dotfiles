@@ -53,6 +53,7 @@ import {
 import type { AgentUsage } from "../shared/agent-usage.ts";
 import { stringCells } from "./cell_width.ts";
 import {
+  expireBackground,
   type FreeWindow,
   isStartupCodex,
   type PaneSnapshot,
@@ -64,7 +65,7 @@ import { parseProcesses } from "../shared/agent-presence.ts";
 
 const STARTUP_ID = "11111111-1111-4111-8111-111111111111";
 function startupSnapshot(overrides: Partial<PaneRow> = {}): PaneSnapshot {
-  const fields = Array(23).fill("");
+  const fields = Array(25).fill("");
   fields[0] = "%10";
   fields[1] = "test:0.0";
   fields[2] = "codex";
@@ -83,7 +84,7 @@ function startupSnapshot(overrides: Partial<PaneRow> = {}): PaneSnapshot {
 }
 
 test("startup snapshot preserves the existing row format and adds title and pid", () => {
-  const fields = Array(23).fill("");
+  const fields = Array(25).fill("");
   fields[0] = "%10";
   const snapshot = parsePaneSnapshot(
     [
@@ -112,7 +113,7 @@ test("startup snapshot preserves the existing row format and adds title and pid"
 });
 
 test("parsePaneSnapshot: session name is stripped and a blank activity is null", () => {
-  const fields = Array(23).fill("");
+  const fields = Array(25).fill("");
   fields[0] = "%10";
   const snapshot = parsePaneSnapshot(
     [...fields, "100", "@3", "s\x1bname", "0", "0", "", "t"].join("\x1f"),
@@ -133,7 +134,7 @@ function freeSnapshot(
   },
 ): PaneSnapshot {
   const session = opts.session ?? "s";
-  const fields = Array(23).fill("");
+  const fields = Array(25).fill("");
   fields[0] = opts.paneId;
   fields[1] = `${session}:${opts.window}.0`;
   fields[2] = "zsh";
@@ -195,6 +196,8 @@ test("selectFreeWindows: a stale agent pane leaves the window free and drops its
         worktreeBranch: "old-branch",
         sessionId: "abc",
         userLabel: "review",
+        background: "",
+        backgroundUntilSec: null,
       },
     }),
   ];
@@ -288,6 +291,8 @@ test("unregistered Codex is idle with no previous session data", () => {
     lastActivityAtSec: 20,
     contextUsedPct: 90,
     userLabel: "review",
+    background: "",
+    backgroundUntilSec: null,
     cwd: "/tmp/old",
     worktreeBranch: "old",
   });
@@ -361,9 +366,9 @@ test("startup rows never read old task progress from their directory", async () 
   assertEquals(await readTaskProgressForRow(row), null);
 });
 
-test("TMUX_FORMAT contains 23 US-separated field tokens", () => {
+test("TMUX_FORMAT contains 25 US-separated field tokens", () => {
   const fields = TMUX_FORMAT.split("\x1f");
-  assertEquals(fields.length, 23);
+  assertEquals(fields.length, 25);
 });
 
 test("parseRow: full row with all fields present", () => {
@@ -391,6 +396,8 @@ test("parseRow: full row with all fields present", () => {
     "42",
     "review",
     "sess-abc",
+    "agent 1 · shell 1",
+    "1700009999",
   ].join("\x1f");
   const row = parseRow(line);
   const expected: PaneRow = {
@@ -416,12 +423,14 @@ test("parseRow: full row with all fields present", () => {
     lastToolError: "Exit code 1",
     contextUsedPct: 42,
     userLabel: "review",
+    background: "agent 1 · shell 1",
+    backgroundUntilSec: 1700009999,
   };
   assertEquals(row, expected);
 });
 
 test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : (i === 3 ? "/home/me" : v)
   )
     .join("\x1f");
@@ -445,14 +454,14 @@ test("parseRow: empty @pane_* fields stay as empty strings / null", () => {
 });
 
 test("parseRow: unknown status normalized to empty string", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 2 ? "zsh" : i === 5 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.status, "");
 });
 
 test("parseRow: unknown userLabel normalized to empty string", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 21 ? "bogus" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.userLabel, "");
@@ -460,7 +469,7 @@ test("parseRow: unknown userLabel normalized to empty string", () => {
 
 test("parseRow: valid userLabel preserved", () => {
   for (const label of ["review", "parked", "feedback", "pending"] as const) {
-    const line = Array(23).fill("").map((v, i) =>
+    const line = Array(25).fill("").map((v, i) =>
       i === 0 ? "%1" : i === 21 ? label : v
     ).join("\x1f");
     assertEquals(parseRow(line)?.userLabel, label);
@@ -477,7 +486,7 @@ function rowWithLabelSession(
   userLabel: string,
   userLabelSession: string,
 ): string {
-  return Array(23).fill("").map((v, i) =>
+  return Array(25).fill("").map((v, i) =>
     i === 0
       ? "%1"
       : i === 13
@@ -507,28 +516,28 @@ test("parseRow: userLabel none when both session ids empty", () => {
 });
 
 test("parseRow: non-numeric started_at → null (safe parse)", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 1 ? "0:0.0" : i === 5 ? "idle" : i === 6 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.startedAtSec, null);
 });
 
 test("parseRow: non-numeric last_activity_at → null (safe parse)", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 16 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.lastActivityAtSec, null);
 });
 
 test("parseRow: non-numeric context_used_pct → null (safe parse)", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "nope" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, null);
 });
 
 test("parseRow: valid context_used_pct parsed as integer", () => {
-  const line = Array(23).fill("").map((v, i) =>
+  const line = Array(25).fill("").map((v, i) =>
     i === 0 ? "%1" : i === 20 ? "75" : v
   ).join("\x1f");
   assertEquals(parseRow(line)?.contextUsedPct, 75);
@@ -579,12 +588,15 @@ test("parseRow: control bytes (ESC/BEL/NUL) in string fields are stripped to spa
     "10", // 20 contextUsedPct
     "review", // 21 userLabel
     "sid-001", // 22 userLabelSession (matches sessionId → label honored)
+    "shell\x1b[A 1", // 23 background
+    "", // 24 backgroundUntil
   ];
   const row = parseRow(fields.join("\x1f"));
   // All ESC / BEL / NUL bytes replaced with " ". \x1f is excluded from the
   // strip set (it is the separator) but never appears within field values
   // because split() consumed it.
   assertEquals(row?.currentPath, "/tmp/ ]0;pwn /dir");
+  assertEquals(row?.background, "shell [A 1");
   assertEquals(row?.cwd, "/repo/ [2Jproject");
   assertEquals(row?.worktreeBranch, "feat branch");
   assertEquals(row?.subagents, "Type:id x");
@@ -604,7 +616,7 @@ test("parseRow: malformed input returns null", () => {
   const twentyTwo = Array(22).fill("x").join("\x1f");
   assertEquals(parseRow(twentyTwo), null);
   // 23 fields but paneId empty → null (matches bash SELF_PANE_ID skip logic)
-  const emptyId = Array(23).fill("").join("\x1f");
+  const emptyId = Array(25).fill("").join("\x1f");
   assertEquals(parseRow(emptyId), null);
 });
 
@@ -705,6 +717,8 @@ function codexRow(cwd: string): PaneRow {
     lastToolError: "",
     contextUsedPct: null,
     userLabel: "",
+    background: "",
+    backgroundUntilSec: null,
   };
 }
 
@@ -1427,6 +1441,8 @@ function mkFooterRow(overrides: Partial<PaneRow> = {}): PaneRow {
     lastToolError: "",
     contextUsedPct: null,
     userLabel: "",
+    background: "",
+    backgroundUntilSec: null,
     ...overrides,
   };
 }
@@ -1559,7 +1575,7 @@ test("clampUsageTokens: a row one cell over budget is truncated, not wrapped", (
 
 function statusRows(...statuses: PaneRow["status"][]): PaneRow[] {
   return statuses.map((status, i) => ({
-    ...parseRow(`%${i}${"\x1f".repeat(22)}`)!,
+    ...parseRow(`%${i}${"\x1f".repeat(24)}`)!,
     status,
   }));
 }
@@ -2026,4 +2042,34 @@ test("clampPreview: capture-pane's final newline does not take a row", () => {
 
 test("clampPreview: blank rows the pane itself ends with are kept", () => {
   assertEquals(clampPreview("L1\n\n\n", 80, 3), "L1\n\n");
+});
+
+// --- Background wait ---
+
+test("expireBackground: a running pane keeps its wait until the deadline", () => {
+  const row = mkFooterRow({ background: "shell 1", backgroundUntilSec: 200 });
+  assertEquals(expireBackground(row, 199), row);
+});
+
+test("expireBackground: past the deadline the pane reads as the idle-prompt wait", () => {
+  const out = expireBackground(
+    mkFooterRow({ background: "shell 1", backgroundUntilSec: 200 }),
+    200,
+  );
+  assertEquals(
+    [out.status, out.waitReason, out.background, out.backgroundUntilSec],
+    ["waiting", "idle prompt", "", null],
+  );
+});
+
+test("expireBackground: a wait without a deadline (an agent, a cron) never lapses", () => {
+  const row = mkFooterRow({ background: "agent 1", backgroundUntilSec: null });
+  assertEquals(expireBackground(row, 9_999_999_999), row);
+});
+
+test("previewFooterTokens: a run waiting on background work names it", () => {
+  assertEquals(
+    rowText(previewFooterTokens(mkFooterRow({ background: "agent 1" }))),
+    "claude · run · agent 1 待ち",
+  );
 });

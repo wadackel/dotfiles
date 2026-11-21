@@ -15,6 +15,7 @@ import { run } from "../../agents/lib/proc.ts";
 // without dragging in React + Ink at import time.
 import {
   type Agent,
+  expireBackground,
   type FreeWindow,
   isLivePaneCommand,
   isStartupCodex,
@@ -650,7 +651,10 @@ async function fetchPanes(
       // An unavailable process snapshot cannot establish ownership of an unregistered pane.
     }
   }
-  const rows = selectPaneRows(snapshots, procs);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const rows = selectPaneRows(snapshots, procs).map((row) =>
+    expireBackground(row, nowSec)
+  );
   const free = withFree
     ? selectFreeWindows(snapshots, rows, process.env.TMUX_PANE ?? null)
     : null;

@@ -69,6 +69,8 @@ export interface PaneState {
   // @pane_last_activity_at mirror (epoch seconds, "" when unset). Freshness
   // input for the subagent liveness heuristic in the idle_prompt branch.
   lastActivityAt: string;
+  // @pane_background mirror: what the pane waits for after Stop, "" = nothing.
+  background: string;
 }
 
 // --- Constants ---
@@ -94,7 +96,14 @@ const STALE_AT_SESSION_START = [
   "@pane_last_tool_error",
   "@pane_main_stopped",
   "@pane_context_used_pct",
+  "@pane_background",
+  "@pane_background_until",
 ] as const satisfies readonly PaneOptionKey[];
+
+// Prompts Claude Code submits on its own: a background task reporting back, a
+// message from another agent or teammate.
+const SELF_RESUME_RE =
+  /^\s*<(?:task-notification|agent-message|teammate-message)\b/;
 
 // Tools that pause for user input. PreToolUse for these flips status to
 // "waiting" so Agentower no longer shows "run" while the agent is paused.
@@ -324,6 +333,84 @@ export function subagentSelfHealOps(state: PaneState, data: HookData): Op[] {
   return ops;
 }
 
+// --- Background wait ---
+
+// A background shell or monitor, as the process table shows it at Stop.
+export interface ShellProbe {
+  listening: boolean;
+  startedAtSec: number;
+}
+// Keyed by the background task id from the Stop payload.
+export type BackgroundProbe = ReadonlyMap<string, ShellProbe>;
+
+// A shell or monitor counts as work Claude waits for only this long after it
+// started: a long-lived one without a TCP listener (tail -f, a watcher) would
+// otherwise keep the pane at running for good.
+export const BACKGROUND_SHELL_CAP_SECONDS = 3600;
+
+const BACKGROUND_LABELS: Record<string, string> = {
+  shell: "shell",
+  monitor: "monitor",
+  subagent: "agent",
+  workflow: "workflow",
+  teammate: "teammate",
+};
+const TERMINAL_TASK_STATUSES = new Set([
+  "completed",
+  "failed",
+  "killed",
+  "stopped",
+]);
+
+// A question at the end of the turn wants the user even while work runs on.
+function asksUser(message: string): boolean {
+  return /[?？][\s*_`」』)）]*$/.test(message);
+}
+
+// What the pane waits for after Stop, or null when Claude waits for nobody
+// but the user. `untilSec` is when the last counted shell or monitor passes
+// the cap; null when something without a cap (an agent, a cron) is counted.
+export function backgroundWait(
+  data: HookData,
+  probe: BackgroundProbe,
+  nowSec: number,
+): { summary: string; untilSec: number | null } | null {
+  if (asksUser(str(data.last_assistant_message))) return null;
+  const tasks = Array.isArray(data.background_tasks)
+    ? data.background_tasks
+    : [];
+  const crons = Array.isArray(data.session_crons) ? data.session_crons : [];
+  const counts = new Map<string, number>();
+  let capped = 0;
+  let uncapped = false;
+  for (const raw of tasks) {
+    if (!raw || typeof raw !== "object") continue;
+    const task = raw as Record<string, unknown>;
+    if (TERMINAL_TASK_STATUSES.has(str(task.status))) continue;
+    const type = str(task.type);
+    if (type === "shell" || type === "monitor") {
+      const p = probe.get(str(task.id));
+      if (p?.listening) continue;
+      const end = (p?.startedAtSec ?? nowSec) + BACKGROUND_SHELL_CAP_SECONDS;
+      if (end <= nowSec) continue;
+      capped = Math.max(capped, end);
+    } else {
+      uncapped = true;
+    }
+    const label = BACKGROUND_LABELS[type] ?? "task";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  if (crons.length > 0) {
+    uncapped = true;
+    counts.set("cron", crons.length);
+  }
+  if (counts.size === 0) return null;
+  return {
+    summary: [...counts].map(([label, n]) => `${label} ${n}`).join(" · "),
+    untilSec: uncapped ? null : capped,
+  };
+}
+
 // Re-assert the pane belongs to a live Claude session. Called at the head of
 // every event except drain paths. session_id-guarded so non-Claude events
 // (e.g. stray CwdChanged without a session) never create phantom Claude panes.
@@ -350,6 +437,7 @@ export function eventToOps(
   rawEvent: string,
   data: HookData,
   state: PaneState,
+  probe: BackgroundProbe = new Map(),
 ): Op[] {
   // Every subagent ends with a SubagentHandback call, but web-fetch fires no
   // SubagentStop: waiting for SubagentStop alone left its self-healed entry
@@ -362,7 +450,8 @@ export function eventToOps(
   // gone by then, and running the body would self-heal @pane_agent back onto
   // a pane the handback already tore down.
   if (
-    event === "SubagentStop" && !hasSubagent(state.subagents, str(data.agent_id))
+    event === "SubagentStop" &&
+    !hasSubagent(state.subagents, str(data.agent_id))
   ) {
     return [];
   }
@@ -398,9 +487,25 @@ export function eventToOps(
       }
 
       case "UserPromptSubmit": {
-        const prompt = maskPrompt(data.prompt);
         const now = String(Math.floor(Date.now() / 1000));
+        const endWait: Op[] = [
+          { kind: "unset", key: "@pane_background" },
+          { kind: "unset", key: "@pane_background_until" },
+        ];
+        // A finished background task or another agent's message resumes the
+        // turn through this event too; the row keeps the user's own prompt
+        // and the time it was sent.
+        if (SELF_RESUME_RE.test(str(data.prompt))) {
+          return [
+            { kind: "set", key: "@pane_status", value: "running" },
+            { kind: "set", key: "@pane_last_activity_at", value: now },
+            { kind: "unset", key: "@pane_main_stopped" },
+            ...endWait,
+          ];
+        }
+        const prompt = maskPrompt(data.prompt);
         const ops: Op[] = [
+          ...endWait,
           ...promptStartTrio({ nowSec: now }),
           // New main invocation — clear any pending main-stopped marker so
           // the next SubagentStop does not spuriously flip us to idle.
@@ -413,13 +518,44 @@ export function eventToOps(
       }
 
       case "Stop": {
+        const wait = backgroundWait(
+          data,
+          probe,
+          Math.floor(Date.now() / 1000),
+        );
+        if (wait) {
+          // Claude resumes on its own when this work reports, so the pane is
+          // still running. main_stopped stays unset: a SubagentStop draining
+          // the list must not flip the pane to idle while shells still run.
+          return [
+            { kind: "set", key: "@pane_status", value: "running" },
+            { kind: "unset", key: "@pane_wait_reason" },
+            { kind: "unset", key: "@pane_main_stopped" },
+            { kind: "set", key: "@pane_background", value: wait.summary },
+            wait.untilSec === null
+              ? { kind: "unset", key: "@pane_background_until" }
+              : {
+                kind: "set",
+                key: "@pane_background_until",
+                value: String(wait.untilSec),
+              },
+          ];
+        }
+        const endWait: Op[] = [
+          { kind: "unset", key: "@pane_background" },
+          { kind: "unset", key: "@pane_background_until" },
+        ];
         if (count(state.subagents) > 0) {
           // Main stopped but subagents are still running. Status must stay
           // `running` so the pane does not falsely report idle. Mark
           // main_stopped=1 so the last SubagentStop can transition to idle.
-          return [{ kind: "set", key: "@pane_main_stopped", value: "1" }];
+          return [
+            { kind: "set", key: "@pane_main_stopped", value: "1" },
+            ...endWait,
+          ];
         }
         return [
+          ...endWait,
           { kind: "set", key: "@pane_status", value: "idle" },
           // Defensive: in the normal running→Stop path main_stopped is already
           // unset, but explicitly unset so a stale `1` from an earlier race
@@ -463,6 +599,9 @@ export function eventToOps(
               { kind: "set", key: "@pane_wait_reason", value: "permission" },
             ];
           case "idle_prompt": {
+            // The notification comes once, about 60 s after Stop. While the
+            // pane waits for background work it must not read as waiting.
+            if (state.background && state.status === "running") return [];
             if (count(state.subagents) === 0) {
               return [
                 { kind: "set", key: "@pane_status", value: "waiting" },
@@ -912,6 +1051,144 @@ async function fetchParent(pid: number): Promise<PsRow | null> {
   return (await psTable).get(pid) ?? null;
 }
 
+// --- Background shells ---
+
+export interface ProcRow {
+  pid: number;
+  ppid: number;
+  etimeSec: number;
+  name: string;
+  command: string;
+}
+
+// `ps -o etime`: [[dd-]hh:]mm:ss.
+export function parseEtime(raw: string): number | null {
+  const m = raw.trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/);
+  if (!m) return null;
+  const [, d, h, min, s] = m.map((v) => Number(v ?? 0));
+  return ((d * 24 + h) * 60 + min) * 60 + s;
+}
+
+export function parseProcRows(output: string): ProcRow[] {
+  return output.split("\n").flatMap((line) => {
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s?(.*)$/);
+    const etimeSec = m ? parseEtime(m[3]) : null;
+    if (!m || etimeSec === null) return [];
+    const name = m[4].replace(/^\.(.+)-wrapp(?:ed)?$/, "$1");
+    return [{
+      pid: Number(m[1]),
+      ppid: Number(m[2]),
+      etimeSec,
+      name,
+      command: m[5],
+    }];
+  });
+}
+
+// Claude Code runs a background command as `eval '<command>'` in a zsh child,
+// re-quoted (a quote becomes '"'"', a newline shows as \012 in ps). Comparing
+// with quotes, backslashes and whitespace removed survives a change in that
+// quoting; commands that differ only in quoting collide, which costs a wrong
+// start time or listener, not a lost task.
+export function commandKey(command: string): string {
+  return command.replace(/\\012/g, " ").replace(/['"\\\s]/g, "");
+}
+
+export function matchShells(
+  tasks: ReadonlyArray<{ id: string; command: string }>,
+  procs: readonly ProcRow[],
+  claudePid: number,
+  listening: ReadonlySet<number>,
+  nowSec: number,
+): Map<string, ShellProbe> {
+  const children = new Map<number, ProcRow[]>();
+  for (const p of procs) {
+    children.set(p.ppid, [...(children.get(p.ppid) ?? []), p]);
+  }
+  const tree = (root: ProcRow): ProcRow[] => {
+    const out = [root];
+    for (let i = 0; i < out.length && i < 4096; i++) {
+      out.push(...(children.get(out[i].pid) ?? []));
+    }
+    return out;
+  };
+  const wrappers = children.get(claudePid) ?? [];
+  const probe = new Map<string, ShellProbe>();
+  for (const task of tasks) {
+    const key = commandKey(task.command);
+    if (!key) continue;
+    const wrapper = wrappers.find((w) => commandKey(w.command).includes(key));
+    if (!wrapper) continue;
+    probe.set(task.id, {
+      listening: tree(wrapper).some((p) => listening.has(p.pid)),
+      startedAtSec: nowSec - wrapper.etimeSec,
+    });
+  }
+  return probe;
+}
+
+async function probeBackgroundShells(data: HookData): Promise<BackgroundProbe> {
+  const tasks =
+    (Array.isArray(data.background_tasks) ? data.background_tasks : []).flatMap(
+      (raw) => {
+        const t = raw && typeof raw === "object"
+          ? raw as Record<string, unknown>
+          : {};
+        return (t.type === "shell" || t.type === "monitor") && str(t.command)
+          ? [{ id: str(t.id), command: str(t.command) }]
+          : [];
+      },
+    );
+  if (tasks.length === 0) return new Map();
+  try {
+    const ps = await capture(
+      "ps",
+      ["-ww", "-A", "-o", "pid=,ppid=,etime=,ucomm=,command="],
+      "stdout",
+    );
+    if (ps.code !== 0) return new Map();
+    const procs = parseProcRows(ps.output);
+    const byPid = new Map(procs.map((p) => [p.pid, p]));
+    let claude = byPid.get(process.pid);
+    for (let i = 0; claude && claude.name !== "claude" && i < 32; i++) {
+      claude = byPid.get(claude.ppid);
+    }
+    if (claude?.name !== "claude") return new Map();
+    const candidates = [claude.pid];
+    for (let i = 0; i < candidates.length && i < 4096; i++) {
+      for (const p of procs) {
+        if (p.ppid === candidates[i]) candidates.push(p.pid);
+      }
+    }
+    candidates.shift();
+    if (candidates.length === 0) return new Map();
+    // lsof exits 1 when nothing listens; the output is still the answer.
+    const lsof = await capture("lsof", [
+      "-nP",
+      "-a",
+      "-iTCP",
+      "-sTCP:LISTEN",
+      "-p",
+      candidates.join(","),
+      "-Fp",
+    ], "stdout");
+    const listening = new Set(
+      lsof.output.split("\n").flatMap((l) =>
+        /^p\d+$/.test(l) ? [Number(l.slice(1))] : []
+      ),
+    );
+    return matchShells(
+      tasks,
+      procs,
+      claude.pid,
+      listening,
+      Math.floor(Date.now() / 1000),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
 // --- tmux I/O ---
 
 async function tmuxRun(
@@ -990,6 +1267,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     mainStopped: get("@pane_main_stopped") === "1",
     waitReason: get("@pane_wait_reason"),
     lastActivityAt: get("@pane_last_activity_at"),
+    background: get("@pane_background"),
   };
 }
 
@@ -1104,7 +1382,10 @@ async function main(): Promise<void> {
 
     const state = await readPaneState(tmuxPane);
     ctx.pre_state = state;
-    const ops = eventToOps(ctx.argv_event, hookData, state);
+    const probe = ctx.argv_event === "Stop"
+      ? await probeBackgroundShells(hookData)
+      : new Map<string, ShellProbe>();
+    const ops = eventToOps(ctx.argv_event, hookData, state, probe);
     ctx.ops = ops;
     if (ops.length === 0) {
       ctx.early_exit = "no-ops";

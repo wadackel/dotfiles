@@ -40,7 +40,9 @@ export type PaneOptionKey =
   | "@pane_last_tool_subject"
   | "@pane_last_tool_error"
   | "@pane_main_stopped"
-  | "@pane_context_used_pct";
+  | "@pane_context_used_pct"
+  | "@pane_background"
+  | "@pane_background_until";
 
 // Per-agent flat key arrays. Used by writers for full-teardown unset on
 // SessionEnd. Order matches each writer's pre-refactor ALL_PANE_OPTIONS so
@@ -67,6 +69,8 @@ export const ALL_PANE_OPTIONS_FOR_CLAUDE = [
   "@pane_last_tool_error",
   "@pane_main_stopped",
   "@pane_context_used_pct",
+  "@pane_background",
+  "@pane_background_until",
 ] as const satisfies readonly PaneOptionKey[];
 
 export const ALL_PANE_OPTIONS_FOR_CODEX = [
@@ -116,6 +120,8 @@ export const CLAUDE_ONLY_KEYS = [
   "@pane_main_stopped",
   "@pane_worktree_branch",
   "@pane_worktree_path",
+  "@pane_background",
+  "@pane_background_until",
 ] as const satisfies readonly PaneOptionKey[];
 
 // Keys owned by Agentower itself (read AND written by agentower.tsx, not by

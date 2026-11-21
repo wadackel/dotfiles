@@ -62,7 +62,7 @@ interface PaneFields {
 function paneLine(f: PaneFields = {}): string {
   const session = f.session ?? "0";
   const windowIndex = String(f.windowIndex ?? 1);
-  const row = Array<string>(23).fill("");
+  const row = Array<string>(25).fill("");
   row[0] = f.paneId ?? "%1";
   row[1] = `${session}:${windowIndex}.${f.paneIndex ?? 1}`;
   row[2] = f.command ?? "zsh";

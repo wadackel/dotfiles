@@ -262,6 +262,13 @@ export const PaneRowLine: React.FC<PaneRowLineProps> = (
       body: row.waitReason,
       color: STATUS_META[row.status].color,
     });
+  } else if (row.status === "running" && row.background) {
+    segs.push({
+      key: "background",
+      icon: ROW2_ICONS.tool,
+      body: `${row.background} 待ち`,
+      color: STATUS_META.running.color,
+    });
   } else if (row.currentTool) {
     segs.push({
       key: "tool",
@@ -882,6 +889,9 @@ export function previewFooterTokens(row: PaneRow): UsageToken[] {
   const attention = row.status === "waiting" || row.status === "error";
   const state = attention && row.waitReason ? row.waitReason : meta.short;
   if (state) out.push(sep, { text: state, color: meta.color });
+  if (row.status === "running" && row.background) {
+    out.push(sep, { text: `${row.background} 待ち`, color: meta.color });
+  }
   if (row.contextUsedPct !== null) {
     out.push(sep, {
       text: `${row.contextUsedPct}%`,
