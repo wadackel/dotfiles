@@ -343,16 +343,38 @@ export function subagentSelfHealOps(state: PaneState, data: HookData): Op[] {
 
 // A background shell or monitor, as the process table shows it at Stop.
 export interface ShellProbe {
-  listening: boolean;
+  // TCP ports the shell's process tree listens on.
+  ports: readonly number[];
+  // A headless browser in the tree that does not listen itself: a client the
+  // job drives, as Playwright's browsers are for its webServer.
+  headlessClient: boolean;
   startedAtSec: number;
 }
-// Keyed by the background task id from the Stop payload.
-export type BackgroundProbe = ReadonlyMap<string, ShellProbe>;
+export interface BackgroundProbe {
+  // Keyed by the background task id from the Stop payload.
+  shells: ReadonlyMap<string, ShellProbe>;
+  // The next fire time (epoch seconds) per cron id, for the schedules that
+  // parsed.
+  cronNextSec: ReadonlyMap<string, number>;
+}
+export const NO_PROBE: BackgroundProbe = {
+  shells: new Map(),
+  cronNextSec: new Map(),
+};
 
 // A shell or monitor counts as work Claude waits for only this long after it
 // started: a long-lived one without a TCP listener (tail -f, a watcher) would
-// otherwise keep the pane at running for good.
-export const BACKGROUND_SHELL_CAP_SECONDS = 3600;
+// otherwise keep the pane at running for good. Not one hour: CI wait loops
+// ran past it in 29 of 426 background jobs over 30 days, 4 past four hours.
+export const BACKGROUND_SHELL_CAP_SECONDS = 4 * 3600;
+
+// macOS answers a bind to port 0 from net.inet.ip.portrange.first (49152) up;
+// servers started for the user name a port below it.
+const EPHEMERAL_PORT_FIRST = 49152;
+
+// A cron fires once Claude is idle and can fire minutes late, so its wait
+// outlasts the scheduled time by this much before Agentower gives up on it.
+const CRON_GRACE_SECONDS = 15 * 60;
 
 const BACKGROUND_LABELS: Record<string, string> = {
   shell: "shell",
@@ -378,53 +400,141 @@ function isArtifactWatch(task: Record<string, unknown>): boolean {
     !str(task.server) && !str(task.tool);
 }
 
+// A dev server or preview keeps listening on the port it was given, and
+// Claude waits for nobody while it runs. A job that serves itself binds port
+// 0 or drives a headless browser, and ends.
+function leftForUser(p: ShellProbe): boolean {
+  return !p.headlessClient &&
+    p.ports.some((port) => port < EPHEMERAL_PORT_FIRST);
+}
+
 // A question at the end of the turn wants the user even while work runs on.
 function asksUser(message: string): boolean {
   return /[?？][\s*_`」』)）]*$/.test(message);
 }
 
+// How one background task or cron was judged at Stop. It goes to the hook log
+// as well, without the command text, so a pane in the wrong state can be
+// traced from the log alone.
+export interface BackgroundDecision {
+  id: string;
+  kind: string;
+  status: string;
+  counted: boolean;
+  why: string;
+  // When this entry stops holding the pane; null = no limit.
+  untilSec: number | null;
+  ports?: readonly number[];
+  headlessClient?: boolean;
+  startedAtSec?: number;
+}
+
+export function backgroundDecisions(
+  data: HookData,
+  probe: BackgroundProbe,
+  nowSec: number,
+): BackgroundDecision[] {
+  const tasks = Array.isArray(data.background_tasks)
+    ? data.background_tasks
+    : [];
+  const crons = Array.isArray(data.session_crons) ? data.session_crons : [];
+  const out: BackgroundDecision[] = [];
+  for (const raw of tasks) {
+    if (!raw || typeof raw !== "object") continue;
+    const task = raw as Record<string, unknown>;
+    const base = {
+      id: str(task.id),
+      kind: BACKGROUND_LABELS[str(task.type)] ?? "task",
+      status: str(task.status),
+    };
+    const skip = (why: string): BackgroundDecision => ({
+      ...base,
+      counted: false,
+      why,
+      untilSec: null,
+    });
+    if (TERMINAL_TASK_STATUSES.has(base.status)) {
+      out.push(skip("finished"));
+      continue;
+    }
+    if (isArtifactWatch(task)) {
+      out.push(skip("artifact watch"));
+      continue;
+    }
+    const type = str(task.type);
+    if (type !== "shell" && type !== "monitor") {
+      out.push({ ...base, counted: true, why: "no limit", untilSec: null });
+      continue;
+    }
+    const p = probe.shells.get(base.id);
+    const seen = p
+      ? {
+        ports: p.ports,
+        headlessClient: p.headlessClient,
+        startedAtSec: p.startedAtSec,
+      }
+      : {};
+    const untilSec = (p?.startedAtSec ?? nowSec) + BACKGROUND_SHELL_CAP_SECONDS;
+    if (p && leftForUser(p)) {
+      out.push({ ...skip("server"), ...seen });
+    } else if (untilSec <= nowSec) {
+      out.push({ ...skip("past the cap"), ...seen });
+    } else {
+      out.push({
+        ...base,
+        ...seen,
+        counted: true,
+        why: p ? "job" : "not in the process table",
+        untilSec,
+      });
+    }
+  }
+  for (const raw of crons) {
+    const cron = raw && typeof raw === "object"
+      ? raw as Record<string, unknown>
+      : {};
+    const id = str(cron.id);
+    const base = { id, kind: "cron", status: "" };
+    const next = probe.cronNextSec.get(id);
+    if (next === undefined) {
+      out.push({
+        ...base,
+        counted: true,
+        why: "schedule not parsed",
+        untilSec: nowSec + BACKGROUND_SHELL_CAP_SECONDS,
+      });
+    } else if (next > nowSec + BACKGROUND_SHELL_CAP_SECONDS) {
+      out.push({ ...base, counted: false, why: "fires later", untilSec: null });
+    } else {
+      out.push({
+        ...base,
+        counted: true,
+        why: "fires soon",
+        untilSec: next + CRON_GRACE_SECONDS,
+      });
+    }
+  }
+  return out;
+}
+
 // What the pane waits for after Stop, or null when Claude waits for nobody
-// but the user. `untilSec` is when the last counted shell or monitor passes
-// the cap; null when something without a cap (an agent, a cron) is counted.
+// but the user. `untilSec` is when the last counted entry with a limit runs
+// out; null when an entry without one (an agent) is counted.
 export function backgroundWait(
   data: HookData,
   probe: BackgroundProbe,
   nowSec: number,
 ): { summary: string; untilSec: number | null } | null {
-  if (asksUser(str(data.last_assistant_message))) return null;
-  const tasks = Array.isArray(data.background_tasks)
-    ? data.background_tasks
-    : [];
-  const crons = Array.isArray(data.session_crons) ? data.session_crons : [];
+  const counted = backgroundDecisions(data, probe, nowSec).filter((d) =>
+    d.counted
+  );
+  if (counted.length === 0) return null;
   const counts = new Map<string, number>();
-  let capped = 0;
-  let uncapped = false;
-  for (const raw of tasks) {
-    if (!raw || typeof raw !== "object") continue;
-    const task = raw as Record<string, unknown>;
-    if (TERMINAL_TASK_STATUSES.has(str(task.status))) continue;
-    const type = str(task.type);
-    if (isArtifactWatch(task)) continue;
-    if (type === "shell" || type === "monitor") {
-      const p = probe.get(str(task.id));
-      if (p?.listening) continue;
-      const end = (p?.startedAtSec ?? nowSec) + BACKGROUND_SHELL_CAP_SECONDS;
-      if (end <= nowSec) continue;
-      capped = Math.max(capped, end);
-    } else {
-      uncapped = true;
-    }
-    const label = BACKGROUND_LABELS[type] ?? "task";
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  if (crons.length > 0) {
-    uncapped = true;
-    counts.set("cron", crons.length);
-  }
-  if (counts.size === 0) return null;
+  for (const d of counted) counts.set(d.kind, (counts.get(d.kind) ?? 0) + 1);
+  const limits = counted.map((d) => d.untilSec);
   return {
     summary: [...counts].map(([label, n]) => `${label} ${n}`).join(" · "),
-    untilSec: uncapped ? null : capped,
+    untilSec: limits.includes(null) ? null : Math.max(...limits as number[]),
   };
 }
 
@@ -446,9 +556,9 @@ function extendBackgroundOps(state: PaneState, nowSec: number): Op[] {
 }
 
 // SubagentStop carries the session's background_tasks too, so the summary
-// follows shells a subagent started after the main Stop. Its last message is
-// the subagent's, not a question to the user. When nothing is left, the main
-// agent is about to be notified, and the wait stays until it resumes.
+// follows shells a subagent started after the main Stop. When nothing is
+// left, the main agent is about to be notified, and the wait stays until it
+// resumes.
 function refreshBackgroundOps(
   data: HookData,
   state: PaneState,
@@ -456,11 +566,7 @@ function refreshBackgroundOps(
   nowSec: number,
 ): Op[] {
   if (!inBackgroundWait(state)) return [];
-  const wait = backgroundWait(
-    { ...data, last_assistant_message: "" },
-    probe,
-    nowSec,
-  );
+  const wait = backgroundWait(data, probe, nowSec);
   if (!wait) return [];
   const extended = Number(state.backgroundUntil) || 0;
   return [
@@ -644,7 +750,7 @@ export function eventToOps(
   rawEvent: string,
   data: HookData,
   state: PaneState,
-  probe: BackgroundProbe = new Map(),
+  probe: BackgroundProbe = NO_PROBE,
 ): Op[] {
   const ops = statusEventOps(rawEvent, data, state, probe);
   // The handback ends the subagent like SubagentStop does.
@@ -659,7 +765,7 @@ function statusEventOps(
   rawEvent: string,
   data: HookData,
   state: PaneState,
-  probe: BackgroundProbe = new Map(),
+  probe: BackgroundProbe = NO_PROBE,
 ): Op[] {
   // Every subagent ends with a SubagentHandback call, but web-fetch fires no
   // SubagentStop: waiting for SubagentStop alone left its self-healed entry
@@ -743,11 +849,25 @@ function statusEventOps(
       }
 
       case "Stop": {
-        const wait = backgroundWait(
-          data,
-          probe,
-          Math.floor(Date.now() / 1000),
-        );
+        const wait = backgroundWait(data, probe, nowSec);
+        const endWait: Op[] = [
+          { kind: "unset", key: "@pane_background" },
+          { kind: "unset", key: "@pane_background_until" },
+        ];
+        // Work left running does not answer the question. The reason is one
+        // subagent activity cannot turn back to running, and no main_stopped
+        // marker lets the last SubagentStop drop it to idle.
+        if (
+          asksUser(str(data.last_assistant_message)) &&
+          (wait || count(state.subagents) > 0)
+        ) {
+          return [
+            { kind: "set", key: "@pane_status", value: "waiting" },
+            { kind: "set", key: "@pane_wait_reason", value: "question" },
+            { kind: "unset", key: "@pane_main_stopped" },
+            ...endWait,
+          ];
+        }
         if (wait) {
           // Claude resumes on its own when this work reports, so the pane is
           // still running. main_stopped stays unset: a SubagentStop draining
@@ -766,10 +886,6 @@ function statusEventOps(
               },
           ];
         }
-        const endWait: Op[] = [
-          { kind: "unset", key: "@pane_background" },
-          { kind: "unset", key: "@pane_background_until" },
-        ];
         if (count(state.subagents) > 0) {
           // Main stopped but subagents are still running. Status must stay
           // `running` so the pane does not falsely report idle. Mark
@@ -827,6 +943,10 @@ function statusEventOps(
             // The notification comes once, about 60 s after Stop. While the
             // pane waits for background work it must not read as waiting.
             if (state.background && state.status === "running") return [];
+            // A question asked while work runs is still unanswered.
+            if (state.status === "waiting" && state.waitReason === "question") {
+              return [];
+            }
             if (count(state.subagents) === 0) {
               return [
                 { kind: "set", key: "@pane_status", value: "waiting" },
@@ -1165,6 +1285,9 @@ export interface RunContext {
   apply_results: ApplyResult[];
   early_exit: EarlyExit;
   stdin_event_mismatch: boolean;
+  // How each background task and cron was judged, on Stop and on a
+  // SubagentStop during a background wait; null on other events.
+  background: BackgroundDecision[] | null;
 }
 
 export interface LogRecord {
@@ -1181,6 +1304,7 @@ export interface LogRecord {
   apply_results: ApplyResult[];
   early_exit: EarlyExit;
   stdin_event_mismatch: boolean;
+  background: BackgroundDecision[] | null;
 }
 
 // Pure, for test. Values in `ops` are intentionally dropped — @pane_prompt and
@@ -1207,6 +1331,7 @@ export function buildLogRecord(
     apply_results: ctx.apply_results,
     early_exit: ctx.early_exit,
     stdin_event_mismatch: ctx.stdin_event_mismatch,
+    background: ctx.background,
   };
 }
 
@@ -1337,7 +1462,7 @@ export function matchShells(
   tasks: ReadonlyArray<{ id: string; command: string }>,
   procs: readonly ProcRow[],
   claudePid: number,
-  listening: ReadonlySet<number>,
+  listeners: ReadonlyMap<number, readonly number[]>,
   nowSec: number,
 ): Map<string, ShellProbe> {
   const children = new Map<number, ProcRow[]>();
@@ -1351,22 +1476,54 @@ export function matchShells(
     }
     return out;
   };
-  const wrappers = children.get(claudePid) ?? [];
+  // One wrapper per task, the longest command first and the shortest wrapper
+  // that contains it: `pnpm build` must not take the wrapper of
+  // `pnpm build && pnpm preview`, nor two runs of one command the same start.
+  const free = (children.get(claudePid) ?? []).map((w) => ({
+    w,
+    key: commandKey(w.command),
+  }));
+  const keyed = tasks.map((t) => ({ id: t.id, key: commandKey(t.command) }))
+    .filter((t) => t.key)
+    .sort((a, b) => b.key.length - a.key.length);
   const probe = new Map<string, ShellProbe>();
-  for (const task of tasks) {
-    const key = commandKey(task.command);
-    if (!key) continue;
-    const wrapper = wrappers.find((w) => commandKey(w.command).includes(key));
-    if (!wrapper) continue;
+  for (const task of keyed) {
+    let best = -1;
+    free.forEach((f, i) => {
+      if (
+        f.key.includes(task.key) &&
+        (best < 0 || f.key.length < free[best].key.length)
+      ) best = i;
+    });
+    if (best < 0) continue;
+    const [{ w }] = free.splice(best, 1);
+    const members = tree(w);
     probe.set(task.id, {
-      listening: tree(wrapper).some((p) => listening.has(p.pid)),
-      startedAtSec: nowSec - wrapper.etimeSec,
+      ports: members.flatMap((p) => listeners.get(p.pid) ?? []),
+      headlessClient: members.some((p) =>
+        p !== w && !listeners.has(p.pid) && /headless/i.test(p.command)
+      ),
+      startedAtSec: nowSec - w.etimeSec,
     });
   }
   return probe;
 }
 
-async function probeBackgroundShells(data: HookData): Promise<BackgroundProbe> {
+// `lsof -F pn`: a `p<pid>` line, then an `n<addr>:<port>` line per socket.
+export function parseListeners(output: string): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  let pid = 0;
+  for (const line of output.split("\n")) {
+    if (/^p\d+$/.test(line)) pid = Number(line.slice(1));
+    const port = line.startsWith("n") ? line.match(/:(\d+)$/) : null;
+    if (pid && port) out.set(pid, [...(out.get(pid) ?? []), Number(port[1])]);
+  }
+  return out;
+}
+
+async function probeShells(
+  data: HookData,
+): Promise<ReadonlyMap<string, ShellProbe>> {
   const tasks =
     (Array.isArray(data.background_tasks) ? data.background_tasks : []).flatMap(
       (raw) => {
@@ -1409,23 +1566,55 @@ async function probeBackgroundShells(data: HookData): Promise<BackgroundProbe> {
       "-sTCP:LISTEN",
       "-p",
       candidates.join(","),
-      "-Fp",
+      "-Fpn",
     ], "stdout");
-    const listening = new Set(
-      lsof.output.split("\n").flatMap((l) =>
-        /^p\d+$/.test(l) ? [Number(l.slice(1))] : []
-      ),
-    );
     return matchShells(
       tasks,
       procs,
       claude.pid,
-      listening,
+      parseListeners(lsof.output),
       Math.floor(Date.now() / 1000),
     );
   } catch {
     return new Map();
   }
+}
+
+// croner is loaded only for a Stop that lists a cron: every hook event
+// starts this script.
+async function probeCrons(
+  data: HookData,
+): Promise<ReadonlyMap<string, number>> {
+  const crons = Array.isArray(data.session_crons) ? data.session_crons : [];
+  const out = new Map<string, number>();
+  if (crons.length === 0) return out;
+  try {
+    const { Cron } = await import("croner");
+    for (const raw of crons) {
+      const cron = raw && typeof raw === "object"
+        ? raw as Record<string, unknown>
+        : {};
+      try {
+        const next = new Cron(str(cron.schedule), { paused: true }).nextRun();
+        if (next) out.set(str(cron.id), Math.floor(next.getTime() / 1000));
+      } catch {
+        // An unparsed schedule is counted with the shell cap.
+      }
+    }
+  } catch {
+    // Without the parser every cron is counted with the shell cap.
+  }
+  return out;
+}
+
+export async function probeBackground(
+  data: HookData,
+): Promise<BackgroundProbe> {
+  const [shells, cronNextSec] = await Promise.all([
+    probeShells(data),
+    probeCrons(data),
+  ]);
+  return { shells, cronNextSec };
 }
 
 // --- tmux I/O ---
@@ -1563,6 +1752,7 @@ async function main(): Promise<void> {
     apply_results: [],
     early_exit: null,
     stdin_event_mismatch: false,
+    background: null,
   };
 
   try {
@@ -1623,10 +1813,16 @@ async function main(): Promise<void> {
 
     const state = await readPaneState(tmuxPane);
     ctx.pre_state = state;
-    const probe = ctx.argv_event === "Stop" ||
-        (ctx.argv_event === "SubagentStop" && inBackgroundWait(state))
-      ? await probeBackgroundShells(hookData)
-      : new Map<string, ShellProbe>();
+    const probed = ctx.argv_event === "Stop" ||
+      (ctx.argv_event === "SubagentStop" && inBackgroundWait(state));
+    const probe = probed ? await probeBackground(hookData) : NO_PROBE;
+    if (probed) {
+      ctx.background = backgroundDecisions(
+        hookData,
+        probe,
+        Math.floor(Date.now() / 1000),
+      );
+    }
     const ops = eventToOps(ctx.argv_event, hookData, state, probe);
     ctx.ops = ops;
     if (ops.length === 0) {

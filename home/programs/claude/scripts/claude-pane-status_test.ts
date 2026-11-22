@@ -15,13 +15,16 @@ import {
   formatElapsed,
   hasSubagent,
   matchShells,
+  NO_PROBE,
   type PaneState,
   parseEtime,
+  parseListeners,
   parseProcRows,
   parseShowOptions,
   removeSubagent,
   type RunContext,
   selfHealOps,
+  type ShellProbe,
 } from "./claude-pane-status.ts";
 import {
   ALL_PANE_OPTIONS_FOR_CLAUDE as ALL_PANE_OPTIONS,
@@ -2507,6 +2510,7 @@ function baseCtx(): RunContext {
     apply_results: [],
     early_exit: null,
     stdin_event_mismatch: false,
+    background: null,
   };
 }
 
@@ -3059,6 +3063,10 @@ test("chainSetArgs joins ops with a lone ; and escapes a value ending in ;", () 
 // --- Background wait ---
 
 const nowS = () => Math.floor(Date.now() / 1000);
+const shellsProbe = (entries: [string, ShellProbe][]) => ({
+  shells: new Map(entries),
+  cronNextSec: new Map<string, number>(),
+});
 const shell = (id: string, command = "sleep 60") => ({
   id,
   type: "shell",
@@ -3069,7 +3077,7 @@ const shell = (id: string, command = "sleep 60") => ({
 
 test("backgroundWait: nothing in flight → null", () => {
   assertEquals(
-    backgroundWait({ background_tasks: [], session_crons: [] }, new Map(), 100),
+    backgroundWait({ background_tasks: [], session_crons: [] }, NO_PROBE, 100),
     null,
   );
 });
@@ -3087,7 +3095,11 @@ test("backgroundWait: agent and shell → summary, no deadline", () => {
         shell("b1"),
       ],
     },
-    new Map([["b1", { listening: false, startedAtSec: 90 }]]),
+    shellsProbe([["b1", {
+      ports: [],
+      headlessClient: false,
+      startedAtSec: 90,
+    }]]),
     100,
   );
   assertEquals(out, { summary: "agent 1 · shell 1", untilSec: null });
@@ -3096,9 +3108,9 @@ test("backgroundWait: agent and shell → summary, no deadline", () => {
 test("backgroundWait: shell alone is capped from its start", () => {
   const out = backgroundWait(
     { background_tasks: [shell("b1"), shell("b2")] },
-    new Map([
-      ["b1", { listening: false, startedAtSec: 50 }],
-      ["b2", { listening: false, startedAtSec: 90 }],
+    shellsProbe([
+      ["b1", { ports: [], headlessClient: false, startedAtSec: 50 }],
+      ["b2", { ports: [], headlessClient: false, startedAtSec: 90 }],
     ]),
     100,
   );
@@ -3112,7 +3124,11 @@ test("backgroundWait: listening shell (a server left for the user) is not counte
   assertEquals(
     backgroundWait(
       { background_tasks: [shell("b1", "pnpm dev")] },
-      new Map([["b1", { listening: true, startedAtSec: 90 }]]),
+      shellsProbe([["b1", {
+        ports: [5173],
+        headlessClient: false,
+        startedAtSec: 90,
+      }]]),
       100,
     ),
     null,
@@ -3123,7 +3139,11 @@ test("backgroundWait: shell past the cap is not counted", () => {
   assertEquals(
     backgroundWait(
       { background_tasks: [shell("b1")] },
-      new Map([["b1", { listening: false, startedAtSec: 0 }]]),
+      shellsProbe([["b1", {
+        ports: [],
+        headlessClient: false,
+        startedAtSec: 0,
+      }]]),
       BACKGROUND_SHELL_CAP_SECONDS,
     ),
     null,
@@ -3132,7 +3152,7 @@ test("backgroundWait: shell past the cap is not counted", () => {
 
 test("backgroundWait: shell missing from the process table is capped from now", () => {
   assertEquals(
-    backgroundWait({ background_tasks: [shell("b1")] }, new Map(), 100),
+    backgroundWait({ background_tasks: [shell("b1")] }, NO_PROBE, 100),
     { summary: "shell 1", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
   );
 });
@@ -3146,7 +3166,7 @@ test("backgroundWait: an artifact comment watch is not counted", () => {
       "live updates for artifact https://claude.ai/artifact/x (auto-armed on publish)",
   };
   assertEquals(
-    backgroundWait({ background_tasks: [watch] }, new Map(), 100),
+    backgroundWait({ background_tasks: [watch] }, NO_PROBE, 100),
     null,
   );
   assertEquals(
@@ -3158,7 +3178,7 @@ test("backgroundWait: an artifact comment watch is not counted", () => {
           status: "running",
         }],
       },
-      new Map(),
+      NO_PROBE,
       100,
     ),
     { summary: "agent 1", untilSec: null },
@@ -3182,22 +3202,51 @@ test("backgroundWait: a Monitor command or an MCP monitor still counts", () => {
     tool: "t",
   };
   assertEquals(
-    backgroundWait({ background_tasks: [monitor, mcp] }, new Map(), 100),
+    backgroundWait({ background_tasks: [monitor, mcp] }, NO_PROBE, 100),
     { summary: "monitor 2", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
   );
 });
 
-test("backgroundWait: a cron keeps the pane waiting without a deadline", () => {
+test("backgroundWait: a cron counts until shortly after its next fire", () => {
+  const crons = {
+    background_tasks: [],
+    session_crons: [{ id: "c1", schedule: "*/5 * * * *", recurring: true }],
+  };
   assertEquals(
     backgroundWait(
-      {
-        background_tasks: [],
-        session_crons: [{ id: "c1", schedule: "*/5 * * * *", recurring: true }],
-      },
-      new Map(),
+      crons,
+      { shells: new Map(), cronNextSec: new Map([["c1", 400]]) },
       100,
     ),
-    { summary: "cron 1", untilSec: null },
+    { summary: "cron 1", untilSec: 400 + 15 * 60 },
+  );
+});
+
+test("backgroundWait: a cron that fires after the cap is not counted", () => {
+  const crons = {
+    session_crons: [{ id: "c1", schedule: "0 9 * * *", recurring: true }],
+  };
+  assertEquals(
+    backgroundWait(
+      crons,
+      {
+        shells: new Map(),
+        cronNextSec: new Map([["c1", 100 + BACKGROUND_SHELL_CAP_SECONDS + 1]]),
+      },
+      100,
+    ),
+    null,
+  );
+});
+
+test("backgroundWait: a cron whose schedule did not parse counts with the cap", () => {
+  assertEquals(
+    backgroundWait(
+      { session_crons: [{ id: "c1", schedule: "bogus" }] },
+      NO_PROBE,
+      100,
+    ),
+    { summary: "cron 1", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
   );
 });
 
@@ -3207,27 +3256,132 @@ test("backgroundWait: finished tasks are skipped", () => {
       {
         background_tasks: [{ ...shell("b1"), status: "completed" }],
       },
-      new Map(),
+      NO_PROBE,
       100,
     ),
     null,
   );
 });
 
-test("backgroundWait: a turn ending in a question waits for the user", () => {
+test("eventToOps: Stop asking the user while work runs → waiting / question", () => {
   for (const last of ["どちらにしますか？", "Which one?", "進めますか？**"]) {
+    const ops = eventToOps(
+      "Stop",
+      {
+        background_tasks: [{ id: "a1", type: "subagent", status: "running" }],
+        last_assistant_message: last,
+      },
+      stateWith({ status: "running" }),
+    );
+    const value = (key: string) => {
+      const op = ops.find((o) => o.key === key);
+      return op?.kind === "set" ? op.value : "";
+    };
     assertEquals(
-      backgroundWait(
-        {
-          background_tasks: [{ id: "a1", type: "subagent", status: "running" }],
-          last_assistant_message: last,
-        },
-        new Map(),
-        100,
-      ),
-      null,
+      [value("@pane_status"), value("@pane_wait_reason")],
+      ["waiting", "question"],
+      last,
+    );
+    assertEquals(ops.find((o) => o.key === "@pane_background")?.kind, "unset");
+    assertEquals(
+      ops.find((o) => o.key === "@pane_main_stopped")?.kind,
+      "unset",
     );
   }
+});
+
+test("eventToOps: Stop asking the user while only a listed subagent runs → waiting / question", () => {
+  const ops = eventToOps(
+    "Stop",
+    { last_assistant_message: "Keep both?" },
+    stateWith({ status: "running", subagents: "Explore:a1" }),
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "waiting");
+  assertEquals(
+    ops.some((o) => o.kind === "set" && o.key === "@pane_main_stopped"),
+    false,
+  );
+});
+
+test("eventToOps: Stop asking the user with nothing running → idle as before", () => {
+  const ops = eventToOps(
+    "Stop",
+    { background_tasks: [], last_assistant_message: "Commit?" },
+    stateWith({ status: "running" }),
+  );
+  const status = ops.find((o) => o.key === "@pane_status");
+  assertEquals(status?.kind === "set" ? status.value : "", "idle");
+});
+
+test("eventToOps: the question survives idle_prompt and subagent activity", () => {
+  const asked = stateWith({
+    status: "waiting",
+    waitReason: "question",
+    subagents: "Explore:a1",
+    lastActivityAt: "1",
+  });
+  assertEquals(
+    eventToOps("Notification", { notification_type: "idle_prompt" }, asked),
+    [],
+  );
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s", agent_id: "a1", tool_name: "Read", tool_input: {} },
+    asked,
+  );
+  assertEquals(ops.some((o) => o.key === "@pane_status"), false);
+  const stop = eventToOps(
+    "SubagentStop",
+    { session_id: "s", agent_id: "a1" },
+    asked,
+  );
+  assertEquals(stop.some((o) => o.key === "@pane_status"), false);
+});
+
+test("backgroundWait: a shell listening on an ephemeral port is a job", () => {
+  assertEquals(
+    backgroundWait(
+      { background_tasks: [shell("b1", "bun render.ts")] },
+      shellsProbe([["b1", {
+        ports: [59487],
+        headlessClient: false,
+        startedAtSec: 90,
+      }]]),
+      100,
+    ),
+    { summary: "shell 1", untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS },
+  );
+});
+
+test("backgroundWait: a fixed port with a headless browser client is a job", () => {
+  assertEquals(
+    backgroundWait(
+      { background_tasks: [shell("b1", "pnpm test:e2e")] },
+      shellsProbe([["b1", {
+        ports: [8787],
+        headlessClient: true,
+        startedAtSec: 90,
+      }]]),
+      100,
+    ),
+    { summary: "shell 1", untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS },
+  );
+});
+
+test("backgroundWait: a fixed port beside an ephemeral one is a server", () => {
+  assertEquals(
+    backgroundWait(
+      { background_tasks: [shell("b1", "wrangler dev")] },
+      shellsProbe([["b1", {
+        ports: [8787, 59000],
+        headlessClient: false,
+        startedAtSec: 90,
+      }]]),
+      100,
+    ),
+    null,
+  );
 });
 
 test("eventToOps: Stop with background work → running + summary, main_stopped unset", () => {
@@ -3251,7 +3405,11 @@ test("eventToOps: Stop with a capped shell records the deadline", () => {
     "Stop",
     { background_tasks: [shell("b1")] },
     stateWith({ status: "running" }),
-    new Map([["b1", { listening: false, startedAtSec: started }]]),
+    shellsProbe([["b1", {
+      ports: [],
+      headlessClient: false,
+      startedAtSec: started,
+    }]]),
   );
   const until = ops.find((o) => o.key === "@pane_background_until");
   assertEquals(
@@ -3265,7 +3423,11 @@ test("eventToOps: Stop with only a listening shell → idle", () => {
     "Stop",
     { background_tasks: [shell("b1", "pnpm dev")] },
     stateWith({ status: "running", background: "shell 1" }),
-    new Map([["b1", { listening: true, startedAtSec: nowS() }]]),
+    shellsProbe([["b1", {
+      ports: [5173],
+      headlessClient: false,
+      startedAtSec: nowS(),
+    }]]),
   );
   const status = ops.find((o) => o.key === "@pane_status");
   assertEquals(status?.kind === "set" ? status.value : "", "idle");
@@ -3359,12 +3521,109 @@ test("matchShells: finds the wrapper through Claude Code's re-quoting", () => {
     ],
     procs,
     100,
-    new Set([301]),
+    new Map([[301, [5173]]]),
     1000,
   );
-  assertEquals(probe.get("b1"), { listening: false, startedAtSec: 970 });
-  assertEquals(probe.get("b2"), { listening: true, startedAtSec: 995 });
+  assertEquals(probe.get("b1"), {
+    ports: [],
+    headlessClient: false,
+    startedAtSec: 970,
+  });
+  assertEquals(probe.get("b2"), {
+    ports: [5173],
+    headlessClient: false,
+    startedAtSec: 995,
+  });
   assertEquals(probe.has("b3"), false);
+});
+
+test("matchShells: a command contained in another takes its own wrapper", () => {
+  const procs = parseProcRows(
+    [
+      `  100     1  01:00:00 claude claude`,
+      `  200   100     00:40 zsh /bin/zsh -c eval 'pnpm build && pnpm preview' < /dev/null`,
+      `  201   200     00:40 node node vite preview`,
+      `  300   100     00:10 zsh /bin/zsh -c eval 'pnpm build' < /dev/null`,
+    ].join("\n"),
+  );
+  const probe = matchShells(
+    [
+      { id: "short", command: "pnpm build" },
+      { id: "long", command: "pnpm build && pnpm preview" },
+    ],
+    procs,
+    100,
+    new Map([[201, [4173]]]),
+    1000,
+  );
+  assertEquals(probe.get("short"), {
+    ports: [],
+    headlessClient: false,
+    startedAtSec: 990,
+  });
+  assertEquals(probe.get("long"), {
+    ports: [4173],
+    headlessClient: false,
+    startedAtSec: 960,
+  });
+});
+
+test("matchShells: two runs of one command take one wrapper each", () => {
+  const procs = parseProcRows(
+    [
+      `  100     1  01:00:00 claude claude`,
+      `  200   100     00:40 zsh /bin/zsh -c eval 'sleep 300'`,
+      `  300   100     00:10 zsh /bin/zsh -c eval 'sleep 300'`,
+    ].join("\n"),
+  );
+  const probe = matchShells(
+    [{ id: "b1", command: "sleep 300" }, { id: "b2", command: "sleep 300" }],
+    procs,
+    100,
+    new Map(),
+    1000,
+  );
+  assertEquals(
+    [probe.get("b1")?.startedAtSec, probe.get("b2")?.startedAtSec].sort(),
+    [960, 990],
+  );
+});
+
+test("matchShells: a headless browser that listens itself is not a client", () => {
+  const procs = parseProcRows(
+    [
+      `  100     1  01:00:00 claude claude`,
+      `  200   100     00:40 zsh /bin/zsh -c eval 'bun render.ts'`,
+      `  201   200     00:40 bun bun render.ts`,
+      `  202   201     00:40 chrome-headless- /x/chrome-headless-shell --headless=old`,
+      `  300   100     00:40 zsh /bin/zsh -c eval 'chromium --headless --remote-debugging-port=9222'`,
+      `  301   300     00:40 chromium chromium --headless --remote-debugging-port=9222`,
+    ].join("\n"),
+  );
+  const probe = matchShells(
+    [
+      { id: "job", command: "bun render.ts" },
+      {
+        id: "cdp",
+        command: "chromium --headless --remote-debugging-port=9222",
+      },
+    ],
+    procs,
+    100,
+    new Map([[201, [59487]], [301, [9222]]]),
+    1000,
+  );
+  assertEquals(probe.get("job")?.headlessClient, true);
+  assertEquals(probe.get("cdp")?.headlessClient, false);
+});
+
+test("parseListeners: ports per pid from lsof -F pn", () => {
+  assertEquals(
+    parseListeners(
+      "p72368\nf7\nn*:59487\np301\nf3\nn127.0.0.1:5173\nf4\nn[::1]:5173\n",
+    ),
+    new Map([[72368, [59487]], [301, [5173, 5173]]]),
+  );
 });
 
 test("commandKey: drops quotes, backslashes, whitespace and ps's \\012", () => {
@@ -3395,7 +3654,11 @@ test("SubagentStop during a wait recounts the session's background tasks", () =>
       background_tasks: [shell("b1"), shell("b2")],
     },
     waiting("1000"),
-    new Map([["b2", { listening: false, startedAtSec: nowS() - 100 }]]),
+    shellsProbe([["b2", {
+      ports: [],
+      headlessClient: false,
+      startedAtSec: nowS() - 100,
+    }]]),
   );
   assertEquals(opValue(ops, "@pane_background")?.value, "shell 2");
   const until = Number(opValue(ops, "@pane_background_until")?.value);
@@ -3408,7 +3671,11 @@ test("SubagentStop during a wait keeps a later deadline that activity set", () =
     "SubagentStop",
     { session_id: "s", agent_id: "fork1", background_tasks: [shell("b1")] },
     waiting(later),
-    new Map([["b1", { listening: false, startedAtSec: nowS() - 100 }]]),
+    shellsProbe([["b1", {
+      ports: [],
+      headlessClient: false,
+      startedAtSec: nowS() - 100,
+    }]]),
   );
   assertEquals(opValue(ops, "@pane_background_until")?.value, later);
 });
