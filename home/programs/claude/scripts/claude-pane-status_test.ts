@@ -175,6 +175,7 @@ const emptyState: PaneState = {
   lastActivityAt: "",
   background: "",
   backgroundUntil: "",
+  permissionAgents: "",
 };
 
 function stateWithSubagents(list: string): PaneState {
@@ -188,6 +189,7 @@ function stateWithSubagents(list: string): PaneState {
     lastActivityAt: "",
     background: "",
     backgroundUntil: "",
+    permissionAgents: "",
   };
 }
 
@@ -723,6 +725,7 @@ test("eventToOps: PostToolUse → unset @pane_current_tool (last-wins)", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const toolOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -745,6 +748,7 @@ test("eventToOps: PostToolUse (concurrent tools) keeps current_tool when payload
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const currentOp = ops.find((o) => o.key === "@pane_current_tool");
@@ -773,6 +777,7 @@ test("eventToOps: PostToolUse (Bash) clears stale @pane_last_edit_file", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -795,6 +800,7 @@ test("eventToOps: PostToolUse (Edit, missing file_path) clears stale @pane_last_
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -823,6 +829,7 @@ test("eventToOps: PreToolUse → PostToolUse round trip on current_tool", () => 
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const postToolOp = postOps.find((o) => o.key === "@pane_current_tool");
@@ -847,6 +854,7 @@ test("eventToOps: PostToolUse (Edit) moves current_tool → last_tool + stores r
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const currentUnset = ops.find((o) => o.key === "@pane_current_tool");
@@ -881,6 +889,7 @@ test("eventToOps: PostToolUse (Write) stores file_path", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -905,6 +914,7 @@ test("eventToOps: PostToolUse (MultiEdit) stores file_path", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -925,6 +935,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool and clears last_edit_file", 
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastTool = ops.find((o) => o.key === "@pane_last_tool");
@@ -950,6 +961,7 @@ test("eventToOps: PostToolUse with empty tool_name is attribution-safe (no last_
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   assertEquals(
@@ -987,6 +999,7 @@ test("eventToOps: PostToolUse (Edit) strips TAB/CR/LF from file_path", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -1014,6 +1027,7 @@ test("eventToOps: PostToolUse (Edit) with non-string file_path clears last_edit_
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const lastFile = ops.find((o) => o.key === "@pane_last_edit_file");
@@ -1151,6 +1165,7 @@ test("eventToOps: SubagentStop drains pending teardown when list becomes empty",
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1331,6 +1346,7 @@ test("eventToOps: SubagentStop drain does NOT include self-heal", () => {
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -1993,6 +2009,7 @@ test("main_stopped: SubagentStop drain path (pendingTeardown=true + last subagen
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -2015,6 +2032,7 @@ test("resume: SubagentStop drain with status=waiting still returns ALL_PANE_OPTI
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   assertEquals(ops.length, ALL_PANE_OPTIONS.length);
@@ -2311,6 +2329,7 @@ test("eventToOps: PostToolUse (Bash) sets last_tool_subject, unsets last_tool_er
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2338,6 +2357,7 @@ test("eventToOps: PostToolUse (Bash failure) sets last_tool_error from string re
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const error = ops.find((o) => o.key === "@pane_last_tool_error");
@@ -2363,6 +2383,7 @@ test("eventToOps: PostToolUse (Edit-family) unsets last_tool_subject (delegates 
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const subject = ops.find((o) => o.key === "@pane_last_tool_subject");
@@ -2391,6 +2412,7 @@ test("eventToOps: PostToolUse matching current tool also unsets @pane_current_to
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const currentSubject = ops.find(
@@ -2421,6 +2443,7 @@ test("eventToOps: PostToolUse NOT matching current tool leaves @pane_current_too
       lastActivityAt: "",
       background: "",
       backgroundUntil: "",
+      permissionAgents: "",
     },
   );
   const currentSubjectOps = ops.filter(
@@ -2454,6 +2477,7 @@ test("eventToOps: SessionEnd drain includes new 3 options", () => {
     lastActivityAt: "",
     background: "",
     backgroundUntil: "",
+    permissionAgents: "",
   });
   const keys = ops.map((o) => o.key);
   assertEquals(keys.includes("@pane_current_tool_subject"), true);
@@ -2573,6 +2597,7 @@ test("buildLogRecord: pre_state and stdin_event_mismatch preserved", () => {
     lastActivityAt: "",
     background: "",
     backgroundUntil: "",
+    permissionAgents: "",
   };
   ctx.pre_state = state;
   const rec = buildLogRecord(ctx, FIXED_NOW, 1);
@@ -2623,6 +2648,7 @@ const b1State: PaneState = {
   lastActivityAt: "",
   background: "",
   backgroundUntil: "",
+  permissionAgents: "",
 };
 
 test("Phase B.1 fixture: SessionStart with cwd", () => {
@@ -2655,6 +2681,7 @@ test("Phase B.1 fixture: SessionStart with cwd", () => {
     { kind: "unset", key: "@pane_context_used_pct" },
     { kind: "unset", key: "@pane_background" },
     { kind: "unset", key: "@pane_background_until" },
+    { kind: "unset", key: "@pane_permission_agents" },
     { kind: "set", key: "@pane_status", value: "idle" },
     { kind: "set", key: "@pane_last_activity_at", value: "<NORMALIZED>" },
   ]);
@@ -2790,6 +2817,7 @@ test("Phase B.1 fixture: SessionEnd drain", () => {
     { kind: "unset", key: "@pane_context_used_pct" },
     { kind: "unset", key: "@pane_background" },
     { kind: "unset", key: "@pane_background_until" },
+    { kind: "unset", key: "@pane_permission_agents" },
   ]);
 });
 
@@ -3350,6 +3378,7 @@ const waiting = (until = "1000") =>
     status: "running",
     background: "shell 1",
     backgroundUntil: until,
+    permissionAgents: "",
   });
 const opValue = (
   ops: { kind: string; key: string; value?: string }[],
@@ -3460,6 +3489,7 @@ test("main tool calls and uncapped waits leave the deadline alone", () => {
       status: "running",
       background: "agent 1",
       backgroundUntil: "",
+      permissionAgents: "",
     }),
   );
   assertEquals(opValue(uncapped, "@pane_background_until"), undefined);
@@ -3491,4 +3521,248 @@ test("SessionStart after compaction keeps the turn and its wait", () => {
     waiting(),
   );
   assertEquals(opValue(startup, "@pane_status")?.value, "idle");
+});
+
+// --- Permission wait across main-thread turns ---
+
+function applyPaneOps(state: PaneState, ops: Op[]): PaneState {
+  const next = { ...state };
+  for (const op of ops) {
+    const v = op.kind === "set" ? op.value : "";
+    if (op.key === "@pane_status") next.status = v;
+    if (op.key === "@pane_subagents") next.subagents = v;
+    if (op.key === "@pane_main_stopped") next.mainStopped = v === "1";
+    if (op.key === "@pane_wait_reason") next.waitReason = v;
+    if (op.key === "@pane_background") next.background = v;
+    if (op.key === "@pane_background_until") next.backgroundUntil = v;
+    if (op.key === "@pane_permission_agents") next.permissionAgents = v;
+  }
+  return next;
+}
+
+const bgAgent = {
+  id: "a1",
+  type: "subagent",
+  status: "running",
+  agent_type: "general-purpose",
+};
+
+test("permission wait: a subagent's dialog survives a task notification and the Stop after it", () => {
+  // The order observed in a real session: the main thread waits on a
+  // background agent and a shell, the agent asks, then the shell reports.
+  let state = stateWith({
+    status: "running",
+    subagents: "general-purpose:a1",
+    background: "agent 1 · shell 1",
+  });
+  const step = (event: string, data: Record<string, unknown>) => {
+    state = applyPaneOps(
+      state,
+      eventToOps(event, { session_id: "s1", ...data }, state),
+    );
+  };
+  step("PreToolUse", { agent_id: "a1", tool_name: "Bash" });
+  step("PermissionRequest", { agent_id: "a1", tool_name: "Bash" });
+  assertEquals([state.status, state.waitReason], ["waiting", "permission"]);
+  assertEquals(state.permissionAgents, "a1");
+
+  step("Notification", { notification_type: "permission_prompt" });
+  step("UserPromptSubmit", { prompt: "<task-notification>\n<task-id>b1" });
+  assertEquals([state.status, state.waitReason], ["waiting", "permission"]);
+  step("Stop", { background_tasks: [bgAgent] });
+  assertEquals([state.status, state.waitReason], ["waiting", "permission"]);
+  assertEquals(state.background, "agent 1");
+
+  // Another subagent's work does not close a1's dialog.
+  step("PostToolUse", { agent_id: "b2", tool_name: "Read" });
+  assertEquals(state.status, "waiting");
+
+  step("PostToolUse", { agent_id: "a1", tool_name: "Bash" });
+  assertEquals([state.status, state.waitReason], ["running", ""]);
+  assertEquals(state.permissionAgents, "");
+});
+
+test("permission wait: a denied call ends at the agent's next tool call", () => {
+  let state = stateWith({
+    status: "waiting",
+    waitReason: "permission",
+    permissionAgents: "a1",
+  });
+  const ops = eventToOps(
+    "PreToolUse",
+    { session_id: "s1", agent_id: "a1", tool_name: "Bash" },
+    state,
+  );
+  state = applyPaneOps(state, ops);
+  assertEquals([state.status, state.permissionAgents], ["running", ""]);
+});
+
+test("permission wait: SubagentStop of the asking agent closes its dialog", () => {
+  const state = stateWith({
+    status: "waiting",
+    waitReason: "permission",
+    subagents: "general-purpose:a1|general-purpose:b2",
+    permissionAgents: "a1|b2",
+  });
+  const after = applyPaneOps(
+    state,
+    eventToOps("SubagentStop", { session_id: "s1", agent_id: "a1" }, state),
+  );
+  assertEquals([after.status, after.permissionAgents], ["waiting", "b2"]);
+});
+
+test("permission wait: the main thread's own dialog closes on its tool result", () => {
+  let state = stateWith({ status: "running" });
+  state = applyPaneOps(
+    state,
+    eventToOps(
+      "PermissionRequest",
+      { session_id: "s1", tool_name: "Bash" },
+      state,
+    ),
+  );
+  assertEquals([state.status, state.permissionAgents], ["waiting", "main"]);
+  state = applyPaneOps(
+    state,
+    eventToOps("PostToolUse", { session_id: "s1", tool_name: "Bash" }, state),
+  );
+  assertEquals([state.status, state.permissionAgents], ["running", ""]);
+});
+
+test("permission wait: a Stop that leaves the pane idle drops what is left", () => {
+  const state = stateWith({
+    status: "waiting",
+    waitReason: "permission",
+    permissionAgents: "a1",
+  });
+  const after = applyPaneOps(
+    state,
+    eventToOps("Stop", { session_id: "s1" }, state),
+  );
+  assertEquals([after.status, after.permissionAgents], ["idle", ""]);
+});
+
+test("permission wait: no extra writes while the wait already shows", () => {
+  const ops = eventToOps(
+    "PostToolUse",
+    { session_id: "s1", agent_id: "b2", tool_name: "Read" },
+    stateWith({
+      status: "waiting",
+      waitReason: "permission",
+      subagents: "general-purpose:b2",
+      permissionAgents: "a1",
+    }),
+  );
+  assertEquals(
+    ops.filter((o) =>
+      o.key === "@pane_status" || o.key === "@pane_wait_reason" ||
+      o.key === "@pane_permission_agents"
+    ),
+    [],
+  );
+});
+
+test("permission wait: the main thread's question shows, and the subagent's approval does not hide it", () => {
+  let state = stateWith({
+    status: "waiting",
+    waitReason: "permission",
+    subagents: "general-purpose:a1",
+    permissionAgents: "a1",
+  });
+  const step = (event: string, data: Record<string, unknown>) => {
+    state = applyPaneOps(
+      state,
+      eventToOps(event, { session_id: "s1", ...data }, state),
+    );
+  };
+  step("PreToolUse", { tool_name: "AskUserQuestion" });
+  assertEquals([state.status, state.waitReason], ["waiting", "question"]);
+  step("PostToolUse", { agent_id: "a1", tool_name: "Bash" });
+  assertEquals([state.status, state.waitReason], ["waiting", "question"]);
+  assertEquals(state.permissionAgents, "");
+});
+
+test("permission wait: an answered question falls back to the dialog still open", () => {
+  let state = stateWith({
+    status: "waiting",
+    waitReason: "question",
+    subagents: "general-purpose:a1",
+    permissionAgents: "a1",
+  });
+  state = applyPaneOps(
+    state,
+    eventToOps(
+      "PostToolUse",
+      { session_id: "s1", tool_name: "AskUserQuestion" },
+      state,
+    ),
+  );
+  assertEquals([state.status, state.waitReason], ["waiting", "permission"]);
+});
+
+test("permission wait: a main-thread turn starting or ending closes the main dialog", () => {
+  for (
+    const [event, data] of [
+      ["UserPromptSubmit", { prompt: "<task-notification>\n<task-id>b1" }],
+      ["Stop", { background_tasks: [bgAgent] }],
+    ] as const
+  ) {
+    const state = stateWith({
+      status: "waiting",
+      waitReason: "permission",
+      permissionAgents: "main",
+    });
+    const after = applyPaneOps(
+      state,
+      eventToOps(event, { session_id: "s1", ...data }, state),
+    );
+    assertEquals([after.status, after.permissionAgents], ["running", ""]);
+  }
+});
+
+test("permission wait: a main-thread elicitation outlasts a subagent's dialog", () => {
+  let state = stateWith({ status: "running", subagents: "general-purpose:a1" });
+  const step = (event: string, data: Record<string, unknown>) => {
+    state = applyPaneOps(
+      state,
+      eventToOps(event, { session_id: "s1", ...data }, state),
+    );
+  };
+  step("Notification", { notification_type: "elicitation_dialog" });
+  step("PermissionRequest", { agent_id: "a1", tool_name: "Bash" });
+  step("Notification", { notification_type: "permission_prompt" });
+  assertEquals([state.status, state.waitReason], ["waiting", "elicitation"]);
+  step("PostToolUse", { agent_id: "a1", tool_name: "Bash" });
+  assertEquals([state.status, state.waitReason], ["waiting", "elicitation"]);
+});
+
+test("permission wait: a subagent asking during the main thread's question leaves the question", () => {
+  let state = stateWith({ status: "running", subagents: "general-purpose:a1" });
+  const step = (event: string, data: Record<string, unknown>) => {
+    state = applyPaneOps(
+      state,
+      eventToOps(event, { session_id: "s1", ...data }, state),
+    );
+  };
+  step("PreToolUse", { tool_name: "AskUserQuestion" });
+  step("PermissionRequest", { agent_id: "a1", tool_name: "Bash" });
+  step("Notification", { notification_type: "permission_prompt" });
+  assertEquals([state.status, state.waitReason], ["waiting", "question"]);
+  step("PostToolUse", { agent_id: "a1", tool_name: "Bash" });
+  assertEquals([state.status, state.waitReason], ["waiting", "question"]);
+});
+
+test("permission wait: the idle prompt does not replace an open dialog", () => {
+  const ops = eventToOps(
+    "Notification",
+    { session_id: "s1", notification_type: "idle_prompt" },
+    stateWith({
+      status: "waiting",
+      waitReason: "permission",
+      subagents: "general-purpose:a1",
+      background: "agent 1",
+      permissionAgents: "a1",
+    }),
+  );
+  assertEquals(ops, []);
 });

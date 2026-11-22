@@ -73,6 +73,9 @@ export interface PaneState {
   background: string;
   // @pane_background_until mirror (epoch seconds), "" = the wait has no cap.
   backgroundUntil: string;
+  // @pane_permission_agents mirror: pipe-sep agent ids ("main" for the main
+  // thread) whose permission dialog is open, "" = none.
+  permissionAgents: string;
 }
 
 // --- Constants ---
@@ -100,6 +103,7 @@ const STALE_AT_SESSION_START = [
   "@pane_context_used_pct",
   "@pane_background",
   "@pane_background_until",
+  "@pane_permission_agents",
 ] as const satisfies readonly PaneOptionKey[];
 
 // Prompts Claude Code submits on its own: a background task reporting back, a
@@ -491,9 +495,167 @@ export function selfHealOps(data: HookData): Op[] {
   return ops;
 }
 
+// --- Permission wait ---
+
+// Notification(permission_prompt) carries no agent_id, but PermissionRequest
+// does, so the dialogs still open are tracked per agent. A subagent's dialog
+// stays open while the main thread starts and ends turns of its own.
+const MAIN_PERMISSION_KEY = "main";
+
+function permissionKey(data: HookData): string {
+  return sanitizeListToken(str(data.agent_id)) || MAIN_PERMISSION_KEY;
+}
+
+function withoutPermissionKey(list: string, key: string): string {
+  return list.split("|").filter((k) => k && k !== key).join("|");
+}
+
+// What closes a dialog: the agent's tool finishing (allowed), its next tool
+// call (denied with "No", which fires no tool event of its own), an auto-mode
+// denial, or the subagent ending (Escape stops it). The main thread's turn
+// starting or ending closes its own. A Stop that leaves the pane idle means
+// no agent is alive to hold one. PermissionRequest has no tool_use_id, so two
+// dialogs of one agent count as one.
+export function nextPermissionAgents(
+  event: string,
+  data: HookData,
+  state: PaneState,
+  ops: Op[],
+): string {
+  const list = state.permissionAgents;
+  switch (event) {
+    case "PermissionRequest": {
+      const key = permissionKey(data);
+      return list.split("|").includes(key)
+        ? list
+        : list
+        ? `${list}|${key}`
+        : key;
+    }
+    case "PreToolUse":
+    case "PostToolUse":
+    case "PostToolUseFailure":
+    case "PermissionDenied":
+      return withoutPermissionKey(list, permissionKey(data));
+    case "SubagentStop":
+      return withoutPermissionKey(list, sanitizeListToken(str(data.agent_id)));
+    case "UserPromptSubmit":
+      return withoutPermissionKey(list, MAIN_PERMISSION_KEY);
+    case "Stop":
+      return ops.some((o) =>
+          o.kind === "set" && o.key === "@pane_status" && o.value === "idle"
+        )
+        ? ""
+        : withoutPermissionKey(list, MAIN_PERMISSION_KEY);
+    case "SessionStart":
+      return str(data.source) === "compact" ? list : "";
+    default:
+      return list;
+  }
+}
+
+// While a dialog is open nothing else an event writes proves it closed, so
+// the writes that would show the pane running are held back; a wait the event
+// starts itself (a question, an error) still shows. Once the last dialog
+// closes and the event writes no status, the pane runs again.
+export function permissionWaitOps(
+  event: string,
+  data: HookData,
+  state: PaneState,
+  ops: Op[],
+): Op[] {
+  if (ops.some((o) => o.kind === "unset" && o.key === "@pane_agent")) {
+    return ops;
+  }
+  // The notification repeats a dialog PermissionRequest already recorded;
+  // overwriting another open wait with it would let the dialog's close end
+  // that wait too. With none showing it still restores the wait, which a
+  // concurrent Stop may have overwritten. An idle prompt says nothing while
+  // a dialog waits for the user.
+  if (
+    event === "Notification" &&
+    str(data.notification_type) === "idle_prompt" &&
+    state.permissionAgents !== ""
+  ) return [];
+  if (
+    event === "Notification" &&
+    str(data.notification_type) === "permission_prompt" &&
+    state.permissionAgents !== "" &&
+    (state.status === "error" ||
+      (state.status === "waiting" && state.waitReason !== "permission"))
+  ) {
+    return ops.filter((o) =>
+      o.key !== "@pane_status" && o.key !== "@pane_wait_reason"
+    );
+  }
+  const before = state.permissionAgents;
+  const after = nextPermissionAgents(event, data, state, ops);
+  const touchesList = ops.some((o) => o.key === "@pane_permission_agents");
+  const listOps: Op[] = after === before || touchesList
+    ? []
+    : after
+    ? [{ kind: "set", key: "@pane_permission_agents", value: after }]
+    : [{ kind: "unset", key: "@pane_permission_agents" }];
+  if (after) {
+    const kept = ops.filter((o) =>
+      !(o.key === "@pane_status" &&
+        (o.kind === "unset" || o.value === "running" || o.value === "idle")) &&
+      !(o.key === "@pane_wait_reason" && o.kind === "unset")
+    );
+    const ownWait = kept.some((o) => o.key === "@pane_status");
+    const released = kept.length !== ops.length;
+    const showsWait = state.status === "waiting" || state.status === "error";
+    const showsPermission = state.status === "waiting" &&
+      state.waitReason === "permission";
+    const show = !ownWait && !showsPermission && (released || !showsWait);
+    return [
+      ...kept,
+      ...listOps,
+      ...(show
+        ? [
+          { kind: "set", key: "@pane_status", value: "waiting" } as const,
+          {
+            kind: "set",
+            key: "@pane_wait_reason",
+            value: "permission",
+          } as const,
+        ]
+        : []),
+    ];
+  }
+  const resume = before !== "" && state.status === "waiting" &&
+    state.waitReason === "permission" &&
+    !ops.some((o) => o.key === "@pane_status");
+  return [
+    ...ops,
+    ...listOps,
+    ...(resume
+      ? [
+        { kind: "set", key: "@pane_status", value: "running" } as const,
+        { kind: "unset", key: "@pane_wait_reason" } as const,
+      ]
+      : []),
+  ];
+}
+
 // --- Event → Op mapping (pure, exported for tests) ---
 
 export function eventToOps(
+  rawEvent: string,
+  data: HookData,
+  state: PaneState,
+  probe: BackgroundProbe = new Map(),
+): Op[] {
+  const ops = statusEventOps(rawEvent, data, state, probe);
+  // The handback ends the subagent like SubagentStop does.
+  const event = rawEvent === "PostToolUse" && str(data.agent_id) &&
+      str(data.tool_name) === "SubagentHandback"
+    ? "SubagentStop"
+    : rawEvent;
+  return permissionWaitOps(event, data, state, ops);
+}
+
+function statusEventOps(
   rawEvent: string,
   data: HookData,
   state: PaneState,
@@ -1346,6 +1508,7 @@ async function readPaneState(pane: string): Promise<PaneState> {
     lastActivityAt: get("@pane_last_activity_at"),
     background: get("@pane_background"),
     backgroundUntil: get("@pane_background_until"),
+    permissionAgents: get("@pane_permission_agents"),
   };
 }
 

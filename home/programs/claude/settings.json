@@ -668,6 +668,17 @@
         ]
       }
     ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/scripts/claude-pane-status.ts PermissionRequest"
+          }
+        ]
+      }
+    ],
     "CwdChanged": [
       {
         "matcher": "",
