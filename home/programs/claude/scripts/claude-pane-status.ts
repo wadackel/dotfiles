@@ -362,11 +362,12 @@ export const NO_PROBE: BackgroundProbe = {
   cronNextSec: new Map(),
 };
 
-// A shell or monitor counts as work Claude waits for only this long after it
-// started: a long-lived one without a TCP listener (tail -f, a watcher) would
-// otherwise keep the pane at running for good. Not one hour: CI wait loops
-// ran past it in 29 of 426 background jobs over 30 days, 4 past four hours.
-export const BACKGROUND_SHELL_CAP_SECONDS = 4 * 3600;
+// A cron counts when it fires within this long. A shell or monitor has no
+// such limit: Claude Code lists it until it ends, and it resumes Claude then.
+// A four-hour cap from its start cut real waits (CI runs of 4 to 13 hours, 27
+// of 1779 background jobs over 36 days) to guard against a forgotten process
+// without a listener, which came up at most twice in that time.
+export const CRON_HORIZON_SECONDS = 4 * 3600;
 
 // macOS answers a bind to port 0 from net.inet.ip.portrange.first (49152) up;
 // servers started for the user name a port below it.
@@ -474,18 +475,15 @@ export function backgroundDecisions(
         startedAtSec: p.startedAtSec,
       }
       : {};
-    const untilSec = (p?.startedAtSec ?? nowSec) + BACKGROUND_SHELL_CAP_SECONDS;
     if (p && leftForUser(p)) {
       out.push({ ...skip("server"), ...seen });
-    } else if (untilSec <= nowSec) {
-      out.push({ ...skip("past the cap"), ...seen });
     } else {
       out.push({
         ...base,
         ...seen,
         counted: true,
         why: p ? "job" : "not in the process table",
-        untilSec,
+        untilSec: null,
       });
     }
   }
@@ -501,9 +499,9 @@ export function backgroundDecisions(
         ...base,
         counted: true,
         why: "schedule not parsed",
-        untilSec: nowSec + BACKGROUND_SHELL_CAP_SECONDS,
+        untilSec: nowSec + CRON_HORIZON_SECONDS,
       });
-    } else if (next > nowSec + BACKGROUND_SHELL_CAP_SECONDS) {
+    } else if (next > nowSec + CRON_HORIZON_SECONDS) {
       out.push({ ...base, counted: false, why: "fires later", untilSec: null });
     } else {
       out.push({
@@ -542,19 +540,6 @@ export function inBackgroundWait(state: PaneState): boolean {
   return state.status === "running" && state.background !== "";
 }
 
-// A subagent that ends its turn to wait for its own shell drops out of
-// background_tasks, and no main Stop follows while it works, so its events
-// move the cap: it counts from the later of the newest shell start and the
-// subagent's last tool call.
-function extendBackgroundOps(state: PaneState, nowSec: number): Op[] {
-  if (!inBackgroundWait(state) || !state.backgroundUntil) return [];
-  return [{
-    kind: "set",
-    key: "@pane_background_until",
-    value: String(nowSec + BACKGROUND_SHELL_CAP_SECONDS),
-  }];
-}
-
 // SubagentStop carries the session's background_tasks too, so the summary
 // follows shells a subagent started after the main Stop. When nothing is
 // left, the main agent is about to be notified, and the wait stays until it
@@ -568,7 +553,6 @@ function refreshBackgroundOps(
   if (!inBackgroundWait(state)) return [];
   const wait = backgroundWait(data, probe, nowSec);
   if (!wait) return [];
-  const extended = Number(state.backgroundUntil) || 0;
   return [
     { kind: "set", key: "@pane_background", value: wait.summary },
     wait.untilSec === null
@@ -576,7 +560,7 @@ function refreshBackgroundOps(
       : {
         kind: "set",
         key: "@pane_background_until",
-        value: String(Math.max(wait.untilSec, extended)),
+        value: String(wait.untilSec),
       },
   ];
 }
@@ -1240,15 +1224,7 @@ function statusEventOps(
   // Skip self-heal so a defer/unknown call stays a true no-op.
   if (body.length === 0) return [];
 
-  const subagentActivity = event === "SubagentStart" ||
-    (str(data.agent_id) !== "" &&
-      (event === "PreToolUse" || event === "PostToolUse" ||
-        event === "PostToolUseFailure"));
-  return [
-    ...selfHealOps(data),
-    ...body,
-    ...(subagentActivity ? extendBackgroundOps(state, nowSec) : []),
-  ];
+  return [...selfHealOps(data), ...body];
 }
 
 // --- Observability (JSONL log) ---
@@ -1598,11 +1574,11 @@ async function probeCrons(
         const next = new Cron(str(cron.schedule), { paused: true }).nextRun();
         if (next) out.set(str(cron.id), Math.floor(next.getTime() / 1000));
       } catch {
-        // An unparsed schedule is counted with the shell cap.
+        // An unparsed schedule is counted for the cron horizon.
       }
     }
   } catch {
-    // Without the parser every cron is counted with the shell cap.
+    // Without the parser every cron is counted for the cron horizon.
   }
   return out;
 }

@@ -3,12 +3,12 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { run } from "../../agents/lib/proc.ts";
 import {
   appendSubagent,
-  BACKGROUND_SHELL_CAP_SECONDS,
   backgroundWait,
   buildLogRecord,
   chainSetArgs,
   commandKey,
   count,
+  CRON_HORIZON_SECONDS,
   eventToOps,
   extractToolError,
   extractToolSubject,
@@ -3105,7 +3105,7 @@ test("backgroundWait: agent and shell → summary, no deadline", () => {
   assertEquals(out, { summary: "agent 1 · shell 1", untilSec: null });
 });
 
-test("backgroundWait: shell alone is capped from its start", () => {
+test("backgroundWait: shells count without a deadline", () => {
   const out = backgroundWait(
     { background_tasks: [shell("b1"), shell("b2")] },
     shellsProbe([
@@ -3114,10 +3114,7 @@ test("backgroundWait: shell alone is capped from its start", () => {
     ]),
     100,
   );
-  assertEquals(out, {
-    summary: "shell 2",
-    untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS,
-  });
+  assertEquals(out, { summary: "shell 2", untilSec: null });
 });
 
 test("backgroundWait: listening shell (a server left for the user) is not counted", () => {
@@ -3135,25 +3132,25 @@ test("backgroundWait: listening shell (a server left for the user) is not counte
   );
 });
 
-test("backgroundWait: shell past the cap is not counted", () => {
+test("backgroundWait: a CI watch hours after its start still counts", () => {
   assertEquals(
     backgroundWait(
-      { background_tasks: [shell("b1")] },
+      { background_tasks: [shell("b1", "gh run watch 1")] },
       shellsProbe([["b1", {
         ports: [],
         headlessClient: false,
         startedAtSec: 0,
       }]]),
-      BACKGROUND_SHELL_CAP_SECONDS,
+      13 * 3600,
     ),
-    null,
+    { summary: "shell 1", untilSec: null },
   );
 });
 
-test("backgroundWait: shell missing from the process table is capped from now", () => {
+test("backgroundWait: shell missing from the process table still counts", () => {
   assertEquals(
     backgroundWait({ background_tasks: [shell("b1")] }, NO_PROBE, 100),
-    { summary: "shell 1", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
+    { summary: "shell 1", untilSec: null },
   );
 });
 
@@ -3203,7 +3200,7 @@ test("backgroundWait: a Monitor command or an MCP monitor still counts", () => {
   };
   assertEquals(
     backgroundWait({ background_tasks: [monitor, mcp] }, NO_PROBE, 100),
-    { summary: "monitor 2", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
+    { summary: "monitor 2", untilSec: null },
   );
 });
 
@@ -3222,7 +3219,7 @@ test("backgroundWait: a cron counts until shortly after its next fire", () => {
   );
 });
 
-test("backgroundWait: a cron that fires after the cap is not counted", () => {
+test("backgroundWait: a cron that fires after the horizon is not counted", () => {
   const crons = {
     session_crons: [{ id: "c1", schedule: "0 9 * * *", recurring: true }],
   };
@@ -3231,7 +3228,7 @@ test("backgroundWait: a cron that fires after the cap is not counted", () => {
       crons,
       {
         shells: new Map(),
-        cronNextSec: new Map([["c1", 100 + BACKGROUND_SHELL_CAP_SECONDS + 1]]),
+        cronNextSec: new Map([["c1", 100 + CRON_HORIZON_SECONDS + 1]]),
       },
       100,
     ),
@@ -3239,14 +3236,14 @@ test("backgroundWait: a cron that fires after the cap is not counted", () => {
   );
 });
 
-test("backgroundWait: a cron whose schedule did not parse counts with the cap", () => {
+test("backgroundWait: a cron whose schedule did not parse counts for the horizon", () => {
   assertEquals(
     backgroundWait(
       { session_crons: [{ id: "c1", schedule: "bogus" }] },
       NO_PROBE,
       100,
     ),
-    { summary: "cron 1", untilSec: 100 + BACKGROUND_SHELL_CAP_SECONDS },
+    { summary: "cron 1", untilSec: 100 + CRON_HORIZON_SECONDS },
   );
 });
 
@@ -3350,7 +3347,7 @@ test("backgroundWait: a shell listening on an ephemeral port is a job", () => {
       }]]),
       100,
     ),
-    { summary: "shell 1", untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS },
+    { summary: "shell 1", untilSec: null },
   );
 });
 
@@ -3365,7 +3362,7 @@ test("backgroundWait: a fixed port with a headless browser client is a job", () 
       }]]),
       100,
     ),
-    { summary: "shell 1", untilSec: 90 + BACKGROUND_SHELL_CAP_SECONDS },
+    { summary: "shell 1", untilSec: null },
   );
 });
 
@@ -3399,7 +3396,7 @@ test("eventToOps: Stop with background work → running + summary, main_stopped 
   ]);
 });
 
-test("eventToOps: Stop with a capped shell records the deadline", () => {
+test("eventToOps: Stop with a shell sets no deadline", () => {
   const started = nowS() - 10;
   const ops = eventToOps(
     "Stop",
@@ -3411,10 +3408,9 @@ test("eventToOps: Stop with a capped shell records the deadline", () => {
       startedAtSec: started,
     }]]),
   );
-  const until = ops.find((o) => o.key === "@pane_background_until");
   assertEquals(
-    until?.kind === "set" ? until.value : "",
-    String(started + BACKGROUND_SHELL_CAP_SECONDS),
+    ops.find((o) => o.key === "@pane_background_until")?.kind,
+    "unset",
   );
 });
 
@@ -3661,23 +3657,7 @@ test("SubagentStop during a wait recounts the session's background tasks", () =>
     }]]),
   );
   assertEquals(opValue(ops, "@pane_background")?.value, "shell 2");
-  const until = Number(opValue(ops, "@pane_background_until")?.value);
-  assertEquals(until >= nowS() + BACKGROUND_SHELL_CAP_SECONDS - 5, true);
-});
-
-test("SubagentStop during a wait keeps a later deadline that activity set", () => {
-  const later = String(nowS() + 2 * BACKGROUND_SHELL_CAP_SECONDS);
-  const ops = eventToOps(
-    "SubagentStop",
-    { session_id: "s", agent_id: "fork1", background_tasks: [shell("b1")] },
-    waiting(later),
-    shellsProbe([["b1", {
-      ports: [],
-      headlessClient: false,
-      startedAtSec: nowS() - 100,
-    }]]),
-  );
-  assertEquals(opValue(ops, "@pane_background_until")?.value, later);
+  assertEquals(opValue(ops, "@pane_background_until")?.kind, "unset");
 });
 
 test("SubagentStop during a wait with a running agent drops the deadline", () => {
@@ -3720,46 +3700,23 @@ test("SubagentStop outside a wait does not touch the background options", () => 
   );
 });
 
-test("a subagent's tool call during a capped wait moves the deadline", () => {
+test("tool calls and SubagentStart during a wait leave a cron's deadline alone", () => {
   for (const event of ["PreToolUse", "PostToolUse", "PostToolUseFailure"]) {
-    const ops = eventToOps(
-      event,
-      { session_id: "s", agent_id: "a1", tool_name: "Bash", tool_input: {} },
-      waiting("1000"),
-    );
-    const until = Number(opValue(ops, "@pane_background_until")?.value);
-    assertEquals(
-      until >= nowS() + BACKGROUND_SHELL_CAP_SECONDS - 5,
-      true,
-      event,
-    );
+    for (const agent of [{ agent_id: "a1" }, {}]) {
+      const ops = eventToOps(
+        event,
+        { session_id: "s", ...agent, tool_name: "Bash", tool_input: {} },
+        waiting("1000"),
+      );
+      assertEquals(opValue(ops, "@pane_background_until"), undefined, event);
+    }
   }
   const start = eventToOps(
     "SubagentStart",
     { session_id: "s", agent_id: "a1", agent_type: "x" },
     waiting("1000"),
   );
-  assertEquals(opValue(start, "@pane_background_until")?.kind, "set");
-});
-
-test("main tool calls and uncapped waits leave the deadline alone", () => {
-  const main = eventToOps(
-    "PreToolUse",
-    { session_id: "s", tool_name: "Bash", tool_input: {} },
-    waiting("1000"),
-  );
-  assertEquals(opValue(main, "@pane_background_until"), undefined);
-  const uncapped = eventToOps(
-    "PreToolUse",
-    { session_id: "s", agent_id: "a1", tool_name: "Bash", tool_input: {} },
-    stateWith({
-      status: "running",
-      background: "agent 1",
-      backgroundUntil: "",
-      permissionAgents: "",
-    }),
-  );
-  assertEquals(opValue(uncapped, "@pane_background_until"), undefined);
+  assertEquals(opValue(start, "@pane_background_until"), undefined);
 });
 
 test("PermissionDenied from a subagent leaves the pane as it is", () => {
