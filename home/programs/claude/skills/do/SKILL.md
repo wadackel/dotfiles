@@ -82,7 +82,7 @@ Ship as far as the repository's shipping default goes, and leave the change unco
 
 ## Report
 
-The reader decides on one read whether to accept the change without reading the diff. Open with whether the request is met and how far it shipped. Then these headings, in this order, each only when it has content:
+The reader decides on one read whether to accept the change without reading the diff. Open with whether the request is met and how far it shipped, in one or two short sentences. Then these headings, in this order, each only when it has content:
 
 - **使う人から見て変わること**: before and after, for whoever uses the changed surface.
 - **変更したファイル**: a tree, one line per file with what changed. Mark `← レビューしてほしい` on each hunk `references/human-review.md` lists, and list those under the tree in the form it gives. An unmarked tree tells the reader the code need not be read.
@@ -91,3 +91,12 @@ The reader decides on one read whether to accept the change without reading the 
 - **仮に決めたこと**: a choice your own reasoning settled that the reader might want reversed, with what it was chosen over, however sure you were. A choice evidence settled stays under Decisions in the work file.
 - **次に進められること**: the state outside the diff and what can be taken up next.
 - **あなたに決めてほしいこと**: the count, then the first one as a question; the rest one per turn.
+
+Under a heading, each item is a bullet whose first line gives its subject and its point in a few words, so that the first lines alone give the section; what supports or follows from it (the reason, the effect if it is wrong, how to establish it, what it was chosen over) goes on indented lines under it, one fact each. Lines under a heading read as labels and values, without です／ます; the opening and a question to the user stay ordinary sentences. Write nothing the heading already says: under 確認していないこと no line says that something was not checked or is unknown, under 確認したこと none says that something was checked or seen, and under 仮に決めたこと none says that something was chosen.
+
+```
+**確認していないこと**
+- **Linux での動作**：macOS の zsh だけ
+  - 外れていたら：`sed -i` の書き方の違いで置換が失敗する
+  - 確かめ方：Linux のコンテナでスクリプトを走らせる
+```

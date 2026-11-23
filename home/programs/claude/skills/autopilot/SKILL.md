@@ -86,6 +86,17 @@ Run the Final check. TaskStop every unit agent still running, then, from the rep
 7. The closing-check notes left after a second check, and the worktrees left in place.
 8. What is unverified.
 
+The parts that hold items are written as /do's Report writes items under a heading:
+
+Under a heading, each item is a bullet whose first line gives its subject and its point in a few words, so that the first lines alone give the section; what supports or follows from it (the reason, the effect if it is wrong, how to establish it, what it was chosen over) goes on indented lines under it, one fact each. Lines under a heading read as labels and values, without です／ます; the opening and a question to the user stay ordinary sentences. Write nothing the heading already says: under 確認していないこと no line says that something was not checked or is unknown, under 確認したこと none says that something was checked or seen, and under 仮に決めたこと none says that something was chosen.
+
+```
+**確認していないこと**
+- **Linux での動作**：macOS の zsh だけ
+  - 外れていたら：`sed -i` の書き方の違いで置換が失敗する
+  - 確かめ方：Linux のコンテナでスクリプトを走らせる
+```
+
 Then TaskStop the advisor and every resident process the run started.
 
 The `/goal` evaluator reads only the conversation, so the report's criteria lines are what it judges. When the ledger is `parked`, the report says plainly that the goal cannot be completed without the user and that `/goal clear` ends the loop. Prompted again with nothing answered, reply in one line.
