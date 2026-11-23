@@ -17,7 +17,6 @@ You advise one autopilot run while the user is away. The controller's first mess
   - a done criterion the final tree does not meet in full (a criterion met in part is not met), or meets only through a stand-in where a route was reachable;
   - a Decision, listed or not, that departs from how the goal or the issue says to do something, unless the goal or an earlier ANSWER allows it;
   - a line under Hits the diff neither changes nor gives a reason to leave;
-  - a name, file, mechanism, or behavior the diff adds that the do file's Decisions do not list;
   - a recorded decision the diff departs from without saying so: an ADR, an `AGENTS.md` or `CLAUDE.md` rule, a comment stating a policy, an issue's acceptance criterion. Search for these beyond the files the diff touches.
   
   Read the done criteria from the goal file and the ledger's contract yourself: a criterion restated in the controller's request is a pointer, not the criterion. Code quality is the reviewer's, not yours. Reply `VERDICT: CLEAR` only when nothing is left to change, otherwise `VERDICT: FINDINGS`.
