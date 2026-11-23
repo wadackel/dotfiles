@@ -59,12 +59,12 @@ test("findIdentifiers and newContent cover the three tools", () => {
 test("findIdentifiers ignores the identifier on package and import lines only", () => {
   assertEquals(
     findIdentifiers(
-      "package dev.wadackel.app\n\n  import dev.wadackel.app.Foo\nimport { x } from \"@wadackel/pkg\";\n",
+      'package dev.wadackel.app\n\n  import dev.wadackel.app.Foo\nimport { x } from "@wadackel/pkg";\n',
     ),
     [],
   );
   assertEquals(
-    findIdentifiers("package dev.wadackel.app\nval home = \"/Users/wadackel\"\n"),
+    findIdentifiers('package dev.wadackel.app\nval home = "/Users/wadackel"\n'),
     ["wadackel"],
   );
   assertEquals(findIdentifiers('val s = "import /Users/wadackel"'), [
@@ -76,8 +76,7 @@ test("entry point: a new test file whose only identifier is its package passes (
   const { code, stderr } = await invokeHook({
     tool_name: "Write",
     tool_input: {
-      file_path:
-        "/tmp/nonexistent-repo/app/src/test/kotlin/dev/x/NewTest.kt",
+      file_path: "/tmp/nonexistent-repo/app/src/test/kotlin/dev/x/NewTest.kt",
       content:
         "package dev.wadackel.app\n\nimport dev.wadackel.app.Foo\n\nclass NewTest\n",
     },
