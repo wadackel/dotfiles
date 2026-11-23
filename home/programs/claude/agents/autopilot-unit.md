@@ -27,7 +27,7 @@ Every subagent you dispatch and every forked skill you run (a reviewer, `/iterat
 
 Read the `## Run rules` section of the brief's ledger before your review and again before your report, and follow what it adds: facts another unit found that bind your work too.
 
-Never join commands with `;` when `git` appears anywhere in them, a path under `github.com` included: worktree isolation refuses that shape. Read a command's exit status from the tool, not from `; echo exit=$?`. Run a long command (install, build, type check, test) in the foreground with a timeout of up to 20 minutes. One that may take longer runs in the background and you end your turn; its completion wakes you. Never wait for a process in a loop: `pgrep -f` matches the loop's own command line.
+Never join commands with `;` when `git` appears anywhere in them, a path under `github.com` included: worktree isolation refuses that shape. Read a command's exit status from the tool, not from `; echo exit=$?`. Run a long command (install, build, type check, test) in the foreground with a timeout of up to 20 minutes. One that may take longer runs in the background and you end your turn; its completion or its limit wakes you. Never wait for a process in a loop: `pgrep -f` matches the loop's own command line.
 
 Ending your turn can remove a worktree you have not changed yet (worktree isolation does that). When you resume and the directory is gone, recreate it with `git worktree add <path> <branch>` run in the main repository (`git -C <main repository>`) (`-b <branch> <start sha>` when the branch does not exist yet) and continue there. Recreating it, and the branch name it takes, is routine, not a Decision: it stays out of the report.
 
