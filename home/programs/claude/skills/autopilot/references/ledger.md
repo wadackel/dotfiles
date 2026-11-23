@@ -1,6 +1,6 @@
 # Ledger format
 
-One Markdown file per run at `~/.claude/plans/YYYYMMDDTHHmm-<slug>.autopilot.md`, prose in the user's language, headings as below. It is the run's state: after compaction it is read before the conversation summary is trusted. Edit it with the Edit tool or by rewriting it whole.
+One Markdown file per run at `~/.claude/plans/YYYYMMDDTHHmm-<slug>.autopilot.md`, prose in the user's language, headings as below. It is the run's state: after compaction it is read before the conversation summary is trusted. Edit it by its absolute path, never after a `cd` out of the repository.
 
 ```markdown
 # Autopilot: <goal in one line>

@@ -24,7 +24,7 @@ Before changing anything, read the goal and write down:
 
 Each unit's `Delivery` follows from this: `Level` `pr` or `stack` by its PR shape, `Merge: no` (the controller merges), `Draft: no`, `Basis: autopilot contract`. Its `Verification Grants` are the granted side effects its verification needs.
 
-Write the ledger (`references/ledger.md`) at `~/.claude/plans/YYYYMMDDTHHmm-<slug>.autopilot.md`, with the time from `date +%Y%m%dT%H%M`, and edit it only with Edit or Write: a `cd` out of the repository breaks the next worktree dispatch. Then start the advisor. End each message that moves a unit with `Ledger: <path>`.
+Write the ledger (`references/ledger.md`) at `~/.claude/plans/YYYYMMDDTHHmm-<slug>.autopilot.md`, with the time from `date +%Y%m%dT%H%M`, and edit it by its absolute path without a `cd` out of the repository, which breaks the next worktree dispatch. Then start the advisor. End each message that moves a unit with `Ledger: <path>`.
 
 ## 2. Advisor
 
