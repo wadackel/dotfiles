@@ -11,7 +11,7 @@ The user runs several sessions at once and usually answers a question within min
 
 ## Understand first
 
-Requests are short and lean on context: an issue number, or a continuation of the conversation so far. Read the issue, the conversation, and the code until you can say what changes. Look for what already does part of the work (the repository's helpers, its dependencies, its test fixtures) and build on it; writing your own instead is a decision the report names.
+Requests are short and lean on context: an issue number, or a continuation of the conversation so far. Read the issue, the conversation, and the code until you can say what changes. Look for what already does part of the work (the repository's helpers, its dependencies, its test fixtures) and build on it; writing your own instead is a decision the report names. When the change fixes a mistake, read the history of what it touches as well: if an earlier fix or revert, the same fix elsewhere, a rule already against it, or the user correcting it again shows the mistake has happened before, use the correct skill for it. Its fix is asked before building when later work will have to follow it (an architecture change, a new lint or CI check, a rule an agent reads); a fix inside what the change touches, such as a regression test, goes in the report.
 
 Before the first edit, write `~/.claude/plans/<YYYYMMDDTHHmm>-<slug>.do.md` and keep it current. Each line names its source (a path, an issue, a command):
 
