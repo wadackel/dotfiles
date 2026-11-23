@@ -52,8 +52,14 @@ export function isFixturePath(path: string): boolean {
   return FIXTURE_DIR.test(path) || FIXTURE_NAME.test(base);
 }
 
+// A package or import line names the code's own namespace (dev.wadackel.app, @wadackel/pkg),
+// which ships with the code rather than being a value a test pins; without this every new test
+// file in such a repository is refused. A home path or hostname on any other line still counts.
+const DECLARATION_LINE = /^[ \t]*(package|import)\b.*$/gm;
+
 export function findIdentifiers(text: string): string[] {
-  return IDENTIFIERS.filter((id) => text.includes(id));
+  const body = text.replace(DECLARATION_LINE, "");
+  return IDENTIFIERS.filter((id) => body.includes(id));
 }
 
 export function isSkillFile(path: string): boolean {
