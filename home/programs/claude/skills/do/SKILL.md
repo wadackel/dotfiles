@@ -16,7 +16,7 @@ Requests are short and lean on context: an issue number, or a continuation of th
 Before the first edit, write `~/.claude/plans/<YYYYMMDDTHHmm>-<slug>.do.md` and keep it current. Each line names its source (a path, an issue, a command):
 
 - Start: the output of `git rev-parse HEAD`, taken before the first edit.
-- Why: the problem behind the request, traced upstream until it is no longer a means.
+- Why: what the user asked, in their own words, replaced when they restate it; then the problem behind it, traced upstream until it is no longer a means.
 - Binds: what is already decided that the change must follow or knowingly departs from: ADRs, a schema or parser that rejects what it does not know, tests that pin wording.
 - Hits: everything that consumes the behavior you change (callers, docs, tests, downstream repositories), counted on real inputs where they exist.
 - Routes: where that behavior is met when it runs (the screen of the running product, the built command, the fired hook), one line for each distinct input it receives from its consumers (the type passed in, the hook event and its payload, the subcommand and flags); consumers that pass the same input share a line. How far a line goes follows what can go wrong and what the look costs, and what the request or the repository's instructions say about it comes first, quoted on the line.
