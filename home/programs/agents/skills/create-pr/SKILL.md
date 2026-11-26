@@ -117,6 +117,10 @@ cat .github/pull_request_template.md 2>/dev/null || echo "NO_TEMPLATE"
 
 <Concise description of the changes and their purpose>
 
+## Verification
+
+<What was checked and where, one statement per check, each with the image that shows it (see Images). Leave the section out when nothing was checked.>
+
 ## References
 
 - <Related issues (e.g., closes #123), PRs, or external links>
@@ -124,6 +128,39 @@ cat .github/pull_request_template.md 2>/dev/null || echo "NO_TEMPLATE"
 ```
 
 Write in English unless `ja` is in `$ARGUMENTS`; the language of the conversation does not change this. If the project's CLAUDE.md has a Language section, follow its rules.
+
+### Images
+
+The reader should see what changed and what each check showed without opening the diff. So an image captured while checking goes next to the statement it shows: in `## Verification`, or wherever the template or the repository's own PR format reports checks. A template with no place for checks gets no new section; the statement and its image go in the section that describes the change, since an image gh appends at the end is tied to nothing.
+
+- **Which images**: those this session's records tie to a check — the `route:` and `real:` lines of a `/do` work file, a qa report, or an image the conversation names as showing a check. Attach only images tied to a statement in the body: a baseline goes in only beside its after image, and a failed attempt or a shot of something the body does not state stays out. With no such record (the PR is opened from a session that did not do the work), attach nothing rather than searching old scratchpads, since an image tied to no statement tells the reader nothing they can rely on. Choose from the records' text; an image you open stays in context for the rest of the session, so open one only when its record does not say what it shows.
+- **Layout**: the change visible at a glance, the rest one click away. Illustrative, not a format to copy:
+
+  ```markdown
+  - The Save button renders green with white text at 1280px.
+
+    | Before | After |
+    |---|---|
+    | ![Save button, blue](/abs/shots/base-save.png) | ![Save button, green](/abs/shots/new-save.png) |
+  ```
+
+  ```markdown
+  - Dropping a key onto a group moves it into the group (emulator, cover width).
+
+    ![The key listed inside the group after the drop](/abs/shots/drag-pair.png)
+
+    <details><summary>The same drop at the inner width</summary>
+
+    ![The key inside the group at 933dp](/abs/shots/drag-inner.png)
+
+    </details>
+  ```
+- **Images already in the diff** (a re-recorded docs screenshot): name the file in the statement instead of uploading it again; GitHub shows it in the diff.
+- **Public repositories** (`gh repo view --json visibility`): an uploaded image is readable by anyone with its URL, without signing in, and stays readable after the body drops it (checked 2026-11-26). Before attaching an image taken in a real signed-in session or in production, list those images and ask the user. A session is signed in when the browser carried the user's own sign-ins (`--state` with a file under `~/.agent-browser-state/`, which `abr` fills, a `--profile`, `--auto-connect`) or any real account, on any host, staging and local servers included; production is a production URL, or a local server reading production data. When the record does not say which, ask. Only the user answers this question: an autopilot unit parks it rather than taking the advisor's answer. An image the user declines leaves both the body and the `--attach` list, since gh uploads and appends every attached file. Images of test data on an emulator or a local server without those sign-ins, and every image in a private repository, go in without asking.
+- **Attaching**: reference each image in the body by its absolute path, `![alt](/abs/path.png)`, and pass the identical string as `--attach '/abs/path.png#alt'`; gh uploads it and rewrites the reference to the uploaded URL, and appends any attached file the body does not reference. gh compares the two paths as written, without resolving links, so `/tmp/...` in one and `/private/tmp/...` in the other do not match. Size limits and unsupported hosts are in `gh pr create --help`.
+- **When some uploads fail**, `gh pr create` or `gh pr edit` still writes the body, prints the PR's URL and exits non-zero, and the body keeps the local path of each image that failed, which shows the user's name and directories to every reader. Do not create the PR again: remove those references or replace them with a sentence, update the body with `gh pr edit <number> --body-file <file>`, and report which images are missing and why. When every upload fails, `gh pr create` creates no PR (`no pull request was created`): create it without those images, and report them.
+- **A PR opened by `gh stack submit`** gets its images afterwards: `gh pr edit <number> --body-file <file> --attach ...`.
+- **After the PR exists**, a push that changes what an attached image shows (a CI fix, a review fix) leaves that image showing the old behavior. Take it again. Start from the PR's current body (`gh pr view <number> --json body -q .body` into a file), replace only that image's reference with the new file's absolute path, and run `gh pr edit <number> --body-file <file> --attach '<that path>#alt'` with only that file; the other images already point at uploaded URLs.
 
 ### Create PR with gh CLI
 
@@ -136,7 +173,7 @@ Before creating the PR, load the **writing** skill and revise the title and the 
 Then create the PR referencing the file:
 
 ```bash
-gh pr create --title "PR_TITLE" --body-file /tmp/pr-body-<random>.md --base <base>
+gh pr create --title "PR_TITLE" --body-file /tmp/pr-body-<random>.md --base <base> [--attach '/abs/path.png#alt' ...]
 ```
 
 - If `draft` was passed in `$ARGUMENTS`, add the `--draft` flag
