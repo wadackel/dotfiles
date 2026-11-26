@@ -5085,3 +5085,43 @@ test("S117: a pane waiting on background work stays run; a lapsed shell wait rea
     await teardown();
   }
 });
+
+// S118: Ink rewrites only the lines that changed since its last frame, so a
+// cell the terminal changed behind it stays wrong until a full repaint. The
+// bytes written to the pane's tty stand in for the rewrap a narrowed WezTerm
+// pane does. They go on a blank row no tick rewrites, and the resize widens
+// the window, because Ink erases its own frame on a narrowing one.
+test("S118: sidebar repaints a dirtied screen on Ctrl+L and after a resize", async () => {
+  await setupServer(SIDEBAR);
+  try {
+    await createClaudePane({ status: "idle", prompt: "task-S118" });
+    const agentower = await spawnAgentower({ args: ["--sidebar"] });
+    await waitFor(agentower, (o) => o.includes("task-S118"));
+    const tty = (await tmux([
+      "display-message",
+      "-p",
+      "-t",
+      agentower,
+      "#{pane_tty}",
+    ])).trim();
+    const dirty = async () => {
+      await writeFile(tty, "\x1b[30;1HDIRTY-S118");
+      await waitFor(agentower, (o) => o.includes("DIRTY-S118"));
+    };
+    const clean = (o: string) =>
+      !o.includes("DIRTY-S118") && o.includes("task-S118");
+
+    await dirty();
+    await sendKey(agentower, "C-l");
+    await waitFor(agentower, clean);
+
+    await dirty();
+    await tmux(["resize-window", "-t", agentower, "-x", "56", "-y", "60"]);
+    await waitFor(agentower, clean);
+
+    await sendKey(agentower, "q");
+    await waitForExit();
+  } finally {
+    await teardown();
+  }
+});

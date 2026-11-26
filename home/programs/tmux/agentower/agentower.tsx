@@ -95,6 +95,17 @@ import { parseProcesses } from "../shared/agent-presence.ts";
 // already evaluated by the time this line runs.
 trace("ink-module-eval-done");
 
+// ---- Full repaint ----
+
+// incrementalRendering rewrites only the lines that differ from the last frame
+// Ink wrote, but a resize lets the terminal rewrap the lines already on screen
+// (WezTerm does on a narrowed pane), and what it left there is never written
+// again. useStdout().write repaints the whole last frame after its payload, so
+// this payload clears the screen first. The repaint waits for the resizes to
+// stop because the frame for the final size is drawn up to a throttle later.
+const CLEAR_SCREEN = "\x1b[2J\x1b[3J\x1b[H";
+const RESIZE_SETTLE_MS = 150;
+
 // ---- Usage footer layout gates ----
 
 // The preview card keeps at least this many rows under the Usage card; below
@@ -918,7 +929,7 @@ function App({
   initialClientPane: string | null;
 }) {
   const { exit } = useApp();
-  const { stdout } = useStdout();
+  const { stdout, write } = useStdout();
   // No dependency array: this runs after every commit, which is what the bench
   // counts to tell one repaint per tick from three.
   const commits = useRef(0);
@@ -935,14 +946,18 @@ function App({
   });
   useEffect(() => {
     if (!stdout) return;
+    let settle: ReturnType<typeof setTimeout> | undefined;
     const handler = () => {
       setSize({ columns: stdout.columns, rows: stdout.rows });
+      clearTimeout(settle);
+      settle = setTimeout(() => write(CLEAR_SCREEN), RESIZE_SETTLE_MS);
     };
     stdout.on("resize", handler);
     return () => {
       stdout.off("resize", handler);
+      clearTimeout(settle);
     };
-  }, [stdout]);
+  }, [stdout, write]);
   // Written to the stream directly: useStdout().write erases and redraws the
   // whole frame around its payload, undoing incrementalRendering for bytes
   // that draw nothing. tmux forwards popup mouse events only while this is on.
@@ -1394,6 +1409,10 @@ function App({
       }
     } else if (key.ctrl && input === prefixKey) {
       prefixPending.current = true;
+      return;
+    }
+    if (key.ctrl && input === "l") {
+      write(CLEAR_SCREEN);
       return;
     }
     // Peeled input, not the raw chunk: the prefix byte is already off, and the
