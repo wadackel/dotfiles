@@ -15,6 +15,7 @@ Lane: <k>
 Setup: you run in a fresh worktree with nothing installed; first run <the repository's dependency install command, or "nothing to install">, then <a command that points this worktree's build output at lane k's cache, which units of lane k reuse one after another (for Cargo, only when `git check-ignore -q target` succeeds, so the link stays out of commits and `git worktree remove`: mkdir -p ~/.cache/autopilot/<repo>/lane-<k>/target && ln -s ~/.cache/autopilot/<repo>/lane-<k>/target target), or "no build cache">
 Ledger (read only, never edit; read its Run rules before your review and your report, and the rows of the units you depend on): <ledger path>
 Do file: ~/.claude/plans/<the ledger's basename without .autopilot.md>-u<n>.do.md
+Scratch: /tmp/autopilot-<the ledger's YYYYMMDDTHHmm>-u<n>
 PR body: <what the body must carry beyond the PR skill's form (a link to another PR, a line the goal asks for), or nothing beyond it>
 <only for a PR on a branch the agent did not create: Foreign PR: <url>; read ~/.claude/skills/autopilot/references/foreign-prs.md first>
 

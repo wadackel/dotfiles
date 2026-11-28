@@ -69,10 +69,13 @@ The work is done when every opened route has its `real:` line on the final tree,
 A reviewer is dispatched only when the diff crosses a boundary in `references/human-review.md`, when the user asked, or when consumers remain that you have not read: you changed only the ones a type error or a failing test flagged, or a search could not list them all. A tool cannot flag a consumer it cannot see, and the checks you wrote share that list. Snapshot the tree with new files included and write the diff from the start, without touching the real index:
 
 ```
-cp -p "$(git rev-parse --path-format=absolute --git-path index)" <scratchpad>/<slug>.index
-GIT_INDEX_FILE=<scratchpad>/<slug>.index git add -A
-git diff -D --no-ext-diff --no-textconv --no-color <start> "$(GIT_INDEX_FILE=<scratchpad>/<slug>.index git write-tree)" > <scratchpad>/<slug>.gate.diff
+git rev-parse --path-format=absolute --git-path index
+cp -p <the index path it printed> <scratchpad>/<slug>.index
+GIT_INDEX_FILE=<scratchpad>/<slug>.index git add -A && GIT_INDEX_FILE=<scratchpad>/<slug>.index git write-tree
+git diff -D --no-ext-diff --no-textconv --no-color <start> <the tree it printed> > <scratchpad>/<slug>.gate.diff
 ```
+
+Run each line as its own command: worktree isolation refuses a `$(git …)` inside a command, and the printed tree is the one the breaker is built from.
 
 Dispatch `code-reviewer` with `references/reviewer-prompt.md`; at a boundary, or when the user asked to break it, also `security-auditor` and, per `references/breaker-prompt.md`, `breaker-reviewer`, all in one message. Fix what blocks, and have `code-reviewer` check the fixes once, `security-auditor` only a fix to its own MUST_FIX; a breaker finding counts only after you re-ran its command yourself, and its fix is checked by re-running that command. What stays open goes to the user. Delete the index copy and the breaker worktree when the review ends.
 
