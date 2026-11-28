@@ -1,0 +1,8 @@
+agent-browser
+Tool: npm:agent-browser
+Verified version: 0.45.0
+
+Written for this dotfiles repository, on top of the skills the CLI bundles
+(`agent-browser skills get core`). It states CLI behaviors (the session name
+taken from AGENT_BROWSER_SESSION, when `--state` relaunches the browser, the
+idle timeout) that were checked on the version above.

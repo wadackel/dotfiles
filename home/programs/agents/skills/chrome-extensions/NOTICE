@@ -1,4 +1,5 @@
 chrome-extensions
+Tool: npm:modern-web-guidance
 Source: https://github.com/GoogleChrome/modern-web-guidance (skills/chrome-extensions)
 Vendored version: 1.0.2
 License: Apache-2.0
