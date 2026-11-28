@@ -20,7 +20,7 @@
         node = "26.13.1";
         python = "3.15.2";
         rust = {
-          version = "nightly-2026-09-23";
+          version = "nightly-2026-11-28";
           components = [
             "rust-analyzer"
             "rust-src"
