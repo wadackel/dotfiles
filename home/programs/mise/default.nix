@@ -29,7 +29,7 @@
         uv = "latest";
         yamllint = "latest";
         "npm:agent-browser" = "latest";
-        "npm:modern-web-guidance" = "0.0.169";
+        "npm:modern-web-guidance" = "1.0.2";
         "npm:@playwright/cli" = "latest";
         "npm:@googleworkspace/cli" = "latest";
       };
