@@ -16,7 +16,7 @@
       # latest や lts はインストールした時点の版で止まり、private と work で版がずれるため完全な版を書く
       tools = {
         actionlint = "1.7.12";
-        go = "1.27.1";
+        go = "1.27.4";
         node = "26.13.1";
         python = "3.13.17";
         rust = {
