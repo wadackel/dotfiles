@@ -31,7 +31,7 @@
         yamllint = "1.38.0";
         "npm:agent-browser" = "0.45.0";
         "npm:modern-web-guidance" = "1.0.2";
-        "npm:@playwright/cli" = "0.1.21";
+        "npm:@playwright/cli" = "0.1.25";
         "npm:@googleworkspace/cli" = "0.22.5";
       };
       settings = {
