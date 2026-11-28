@@ -27,7 +27,7 @@
           ];
         };
         usage = "7.4.1";
-        uv = "0.12.17";
+        uv = "0.13.10";
         yamllint = "1.38.0";
         "npm:agent-browser" = "0.45.0";
         "npm:modern-web-guidance" = "1.0.2";
