@@ -13,25 +13,26 @@
     enableBashIntegration = lib.mkIf (config.programs.bash.enable or false) true;
 
     globalConfig = {
+      # latest や lts はインストールした時点の版で止まり、private と work で版がずれるため完全な版を書く
       tools = {
-        actionlint = "latest";
-        go = "latest";
-        node = "lts";
-        python = "3.13";
+        actionlint = "1.7.12";
+        go = "1.27.1";
+        node = "26.13.1";
+        python = "3.13.17";
         rust = {
-          version = "nightly";
+          version = "nightly-2026-09-23";
           components = [
             "rust-analyzer"
             "rust-src"
           ];
         };
-        usage = "latest";
-        uv = "latest";
-        yamllint = "latest";
-        "npm:agent-browser" = "latest";
+        usage = "6.11.0";
+        uv = "0.12.17";
+        yamllint = "1.38.0";
+        "npm:agent-browser" = "0.45.0";
         "npm:modern-web-guidance" = "1.0.2";
-        "npm:@playwright/cli" = "latest";
-        "npm:@googleworkspace/cli" = "latest";
+        "npm:@playwright/cli" = "0.1.21";
+        "npm:@googleworkspace/cli" = "0.22.5";
       };
       settings = {
         idiomatic_version_file_enable_tools = [ "node" ];

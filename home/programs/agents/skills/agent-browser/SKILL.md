@@ -6,7 +6,7 @@ allowed-tools: Bash(npx agent-browser:*), Bash(agent-browser:*)
 
 # Browser Automation with agent-browser
 
-Fast native Rust CLI for browser automation. Managed by `mise` (`npm:agent-browser = "latest"`). This SKILL keeps only what is specific to this dotfiles environment; all workflow / command / troubleshooting content is served by the CLI itself.
+Fast native Rust CLI for browser automation. Managed by `mise`, pinned to an exact version in `home/programs/mise/default.nix`. This SKILL keeps only what is specific to this dotfiles environment; all workflow / command / troubleshooting content is served by the CLI itself.
 
 ## Load first before any command
 
